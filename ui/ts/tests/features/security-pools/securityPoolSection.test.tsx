@@ -490,8 +490,8 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = forkedRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Pool Creation Locked', 'Security pools cannot be created after Zoltar has forked.')
-		expect(within(document.body).getByText('Security pools cannot be created after Zoltar has forked.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Pool Creation Locked', 'Security pools cannot be created after this universe has forked.')
+		expect(within(document.body).getByText('Security pools cannot be created after this universe has forked.')).not.toBeNull()
 	})
 
 	test('wires created pool action buttons to callbacks', async () => {

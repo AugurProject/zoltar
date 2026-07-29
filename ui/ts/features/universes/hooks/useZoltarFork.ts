@@ -102,7 +102,7 @@ function toBigIntReadResult(result: { error?: unknown; result?: unknown; status:
 			}
 		}
 		return {
-			error: new Error('Unexpected non-bigint Zoltar fork access value'),
+			error: new Error('Unexpected non-bigint universe fork access value'),
 			status: 'failure',
 		}
 	}
@@ -171,9 +171,9 @@ export function useZoltarFork(
 	const forkAccessScopeGeneration = currentForkAccessScope.current.generation
 	const loadedForkAccessScopeGeneration = useRef<number | undefined>(undefined)
 	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
-	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking Zoltar')
-	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Zoltar fork submitted')
-	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Zoltar fork failed')
+	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking universe')
+	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Universe fork submitted')
+	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Universe fork failed')
 
 	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = zoltarUniverse) => {
 		const isCurrent = nextForkAccessLoad()
@@ -249,7 +249,7 @@ export function useZoltarFork(
 				message => {
 					zoltarForkError.value = message
 				},
-				'using Zoltar fork actions',
+				'using universe fork actions',
 			)
 		)
 			return
@@ -292,7 +292,7 @@ export function useZoltarFork(
 				}
 				await loadZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
-				const message = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'Universe fork transaction succeeded, but refreshing the UI failed')
 				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
 				onTransactionPresented(createZoltarForkWarningPresentation(result, message))
 			}
@@ -311,7 +311,7 @@ export function useZoltarFork(
 					const approvalAmount = amount ?? universe.forkThreshold
 					return await dependencies.approveForkRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.reputationToken, approvalAmount, questionId, universe.universeId)
 				},
-				'Failed to approve REP for Zoltar fork',
+				'Failed to approve REP for the universe fork',
 				false,
 			),
 		[runZoltarForkAction, onTransactionPrepared, onTransactionSubmitted, dependencies],
@@ -321,17 +321,17 @@ export function useZoltarFork(
 		await runZoltarForkAction(
 			'fork',
 			async (walletAddress, universe, questionId) => {
-				if (universe.hasForked) throw new Error('Zoltar has already forked')
+				if (universe.hasForked) throw new Error('This universe has already forked')
 				return await dependencies.forkZoltarUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.universeId, questionId)
 			},
-			'Failed to fork Zoltar',
+			'Failed to fork the universe',
 			true,
 		)
 
 	useEffect(() => {
 		if (!shouldAutoLoadForkAccess) return
 		void loadZoltarForkAccess().catch(error => {
-			zoltarForkError.value = getErrorMessage(error, 'Failed to load Zoltar fork access')
+			zoltarForkError.value = getErrorMessage(error, 'Failed to load universe fork access')
 			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
 	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])

@@ -39,7 +39,7 @@ test('transaction actions and pending labels use sentence case independently of 
 	expect(liquidationCopy.liquidateVault).toBe('Liquidate vault')
 	expect(liquidationCopy.liquidateVaultTitle).toBe('Liquidate Vault')
 	expect(reportingCopy.reportOnSelectedSide).toBe('Report on selected side')
-	expect(reportingCopy.triggerZoltarFork).toBe('Trigger Zoltar fork')
+	expect(reportingCopy.triggerZoltarFork).toBe('Trigger universe fork')
 	expect(reportingCopy.formatSettleSelectedDepositsLabel('Yes')).toBe('Settle selected Yes deposits')
 	expect(reportingCopy.formatSettleAllDepositsLabel('Yes')).toBe('Settle all Yes deposits')
 	expect(securityPoolCopy.requestNewPrice).toBe('Request new price')

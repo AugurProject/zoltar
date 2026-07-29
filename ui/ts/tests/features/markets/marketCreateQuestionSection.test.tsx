@@ -177,6 +177,44 @@ describe('MarketCreateQuestionSection', () => {
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
 	})
 
+	test('associates chronology errors with both time fields and explains the disabled action', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ title: '', startTime: '2000', endTime: '1000' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const startTimeInput = documentQueries.getByLabelText('Start Time')
+		const endTimeInput = documentQueries.getByLabelText('End Time')
+		await act(() => {
+			startTimeInput.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getAllByText('End time must be after start time')).toHaveLength(1)
+		expect(startTimeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(endTimeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
+		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
+		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Fix invalid fields: End time must be after start time')
+	})
+
 	test('warns but allows creation when the question end time has passed', async () => {
 		let createCount = 0
 		const renderedComponent = await renderIntoDocument(

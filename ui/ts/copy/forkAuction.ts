@@ -77,7 +77,7 @@ export const estimatedRepClaimed = 'Estimated REP Claimed'
 export const formatEstimatedValue = (label: CopyTemplateValue) => `Estimated ${label}`
 export const estimatedEthRefunded = 'Estimated ETH Refunded'
 export const ownEscalationFork = 'Own escalation fork'
-export const parentZoltarFork = 'Parent/Zoltar fork'
+export const parentZoltarFork = 'Parent universe fork'
 export const childSecurityPools = 'Child Security Pools'
 export const pendingOutcome = 'Pending outcome'
 export const openSecurityPool = 'Open security pool'

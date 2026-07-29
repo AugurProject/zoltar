@@ -90,6 +90,7 @@ function getOpenOracleCreateAddressValidationMessage(addressInput: string, role:
 
 export const OPEN_ORACLE_CREATE_FIELD_ORDER: ReadonlyArray<keyof OpenOracleCreateFormState> = ['token1Address', 'token2Address', 'exactToken1Report', 'initialToken2Amount', 'escalationHalt', 'ethValue', 'settlerReward', 'settlementTime', 'disputeDelay', 'multiplier', 'feePercentage', 'protocolFee']
 export type OpenOracleCreateField = (typeof OPEN_ORACLE_CREATE_FIELD_ORDER)[number]
+export type OpenOracleCreateContractFieldErrors = Partial<Record<'token1Address' | 'token2Address', string>>
 export type OpenOracleCreateValidation = {
 	fieldErrors: Partial<Record<OpenOracleCreateField, string>>
 	firstInvalidField: OpenOracleCreateField | undefined
