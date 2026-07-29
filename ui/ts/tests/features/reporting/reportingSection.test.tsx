@@ -1074,10 +1074,10 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
-		const forkTriggeredReason = 'Escalation reached non-decision. Trigger Zoltar fork here if this pool should fork the universe.'
+		const forkTriggeredReason = 'Escalation reached non-decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
-		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar fork')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Report Yes', forkTriggeredReason)
 		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
@@ -1103,9 +1103,9 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
-		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar fork')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
 
 	test('auto-refreshes reporting once when the live timestamp passes an unresolved timeout boundary', async () => {
@@ -1601,7 +1601,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger Zoltar fork here if this pool should fork the universe.'
+		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
 		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', settlementReason)
@@ -1663,7 +1663,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
 
-	test('shows a Trigger Zoltar Fork action when non-decision blocks escalation deposits', async () => {
+	test('shows a Trigger universe fork action when non-decision blocks escalation deposits', async () => {
 		let triggerZoltarForkCalls = 0
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1683,7 +1683,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger universe fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
@@ -1707,12 +1707,12 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar fork' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
 	})
 
-	test('shows a Trigger Zoltar Fork action when non-decision blocks reporting', async () => {
+	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
 		let triggerZoltarForkCalls = 0
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1734,16 +1734,16 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expectTransactionButtonEnabled(document.body, 'Trigger Zoltar fork')
+		expectTransactionButtonEnabled(document.body, 'Trigger universe fork')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger universe fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
-	test('triggers Zoltar fork directly from reporting', async () => {
+	test('triggers the universe fork directly from reporting', async () => {
 		let triggerZoltarForkCalls = 0
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1766,7 +1766,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger universe fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)

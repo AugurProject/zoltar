@@ -55,7 +55,7 @@ import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
-import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../types.js'
@@ -107,6 +107,11 @@ function renderOpenOracleFieldError(id: string, message: string | undefined) {
 			{message}
 		</p>
 	)
+}
+function formatOpenOracleReviewDuration(value: string) {
+	const seconds = tryParseBigIntInput(value)
+	if (seconds === undefined) return commonCopy.metricUnavailablePlaceholder
+	return `${formatDuration(seconds)} (${openOracleCopy.formatExactSeconds(seconds.toString())})`
 }
 function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, reportId: string) {
 	switch (field) {
@@ -886,6 +891,7 @@ export function OpenOracleSection({
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
 	openOracleCreateForm,
+	openOracleCreateFieldErrors = {},
 	openOracleDisputeSubmission,
 	openOracleError,
 	openOracleForm,
@@ -919,6 +925,7 @@ export function OpenOracleSection({
 	const isConnected = accountState.address !== undefined
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })
+	const hasCreateContractFieldErrors = openOracleCreateFieldErrors.token1Address !== undefined || openOracleCreateFieldErrors.token2Address !== undefined
 	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({
 		ethValueInput: openOracleCreateForm.ethValue,
 		isMainnet,
@@ -928,10 +935,15 @@ export function OpenOracleSection({
 	})
 	const createGuardMessage = !isConnected || !isMainnet || createValidation.isValid ? rawCreateGuardMessage : undefined
 	const markCreateFieldTouched = (field: OpenOracleCreateField) => setTouchedCreateFields(current => new Set([...current, field]))
-	const getVisibleCreateFieldError = (field: OpenOracleCreateField) => (touchedCreateFields.has(field) ? createValidation.fieldErrors[field] : undefined)
+	const getCreateContractFieldError = (field: OpenOracleCreateField) => {
+		if (field === 'token1Address') return openOracleCreateFieldErrors.token1Address
+		if (field === 'token2Address') return openOracleCreateFieldErrors.token2Address
+		return undefined
+	}
+	const getVisibleCreateFieldError = (field: OpenOracleCreateField) => getCreateContractFieldError(field) ?? (touchedCreateFields.has(field) ? createValidation.fieldErrors[field] : undefined)
 	const firstVisibleInvalidCreateField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => getVisibleCreateFieldError(field) !== undefined)
 	const createDisabledReasonElementId = createGuardMessage === undefined && firstVisibleInvalidCreateField !== undefined ? getOpenOracleCreateFieldErrorId(firstVisibleInvalidCreateField) : undefined
-	const createAvailabilityMessage = createGuardMessage ?? createValidation.message
+	const createAvailabilityMessage = createGuardMessage ?? openOracleCreateFieldErrors.token1Address ?? openOracleCreateFieldErrors.token2Address ?? createValidation.message
 	const disputeDelayError = getVisibleCreateFieldError('disputeDelay')
 	const escalationHaltError = getVisibleCreateFieldError('escalationHalt')
 	const ethValueError = getVisibleCreateFieldError('ethValue')
@@ -1325,8 +1337,8 @@ export function OpenOracleSection({
 								]}
 								details={[
 									{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
-									{ label: openOracleCopy.settlementDelaySeconds, value: openOracleCreateForm.settlementTime || commonCopy.metricUnavailablePlaceholder },
-									{ label: openOracleCopy.disputeDelaySeconds, value: openOracleCreateForm.disputeDelay || commonCopy.metricUnavailablePlaceholder },
+									{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
+									{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
 									{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
 									{ label: commonCopy.multiplier, value: formatOpenOracleMultiplier(tryParseBigIntInput(openOracleCreateForm.multiplier)) },
 									{ label: openOracleCopy.escalationHalt, value: openOracleCreateForm.escalationHalt || commonCopy.metricUnavailablePlaceholder },
@@ -1341,7 +1353,7 @@ export function OpenOracleSection({
 									pendingLabel={openOracleCopy.creating}
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
-									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || !createValidation.isValid, reason: createAvailabilityMessage }}
+									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
 									disabledReasonElementId={createDisabledReasonElementId}
 									showDisabledReason={createDisabledReasonElementId === undefined}
 								/>

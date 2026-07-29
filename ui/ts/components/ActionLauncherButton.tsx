@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { LoadingAwareText, LoadingText } from './LoadingText.js'
 import type { ActionAvailability } from '../types/components.js'
+import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
 type ActionLauncherButtonProps = {
 	availability?: ActionAvailability
@@ -17,12 +18,13 @@ type ActionLauncherButtonProps = {
 }
 
 export function ActionLauncherButton({ availability, className = '', describedBy, disabled = false, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = false, tone = 'primary', type = 'button' }: ActionLauncherButtonProps) {
+	const globalTransaction = useGlobalTransactionPresentation()
 	const isDisabled = disabled || pending || availability?.disabled === true
 	const disabledReason = isDisabled ? availability?.reason : undefined
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<button aria-describedby={describedBy} className={`tx-action-button ${tone}`} type={type} onClick={onClick} disabled={isDisabled} title={disabledReason}>
-				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
+				{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{(() => {
 				if (showDisabledReason && disabledReason === undefined) return undefined

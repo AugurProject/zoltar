@@ -159,6 +159,11 @@ export function MarketCreateQuestionSection({
 	const draftTitle = marketForm.title.trim() === '' ? marketCopy.untitledQuestion : marketForm.title
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
+	const timingRelationshipError = marketFormValidation.fieldErrors.startTime !== undefined && marketFormValidation.fieldErrors.startTime === marketFormValidation.fieldErrors.endTime && (touchedFields.has('startTime') || touchedFields.has('endTime')) ? marketFormValidation.fieldErrors.startTime : undefined
+	const startTimeError = timingRelationshipError ?? getVisibleFieldError('startTime')
+	const endTimeError = timingRelationshipError ?? getVisibleFieldError('endTime')
+	const timingRelationshipErrorId = 'market-create-timing-error'
+	const hasVisibleValidationError = timingRelationshipError !== undefined || Array.from(touchedFields).some(field => marketFormValidation.fieldErrors[field] !== undefined)
 	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
 	const showEndedQuestionWarning = marketFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(marketForm, currentTimestamp)
 	useEffect(() => {
@@ -282,23 +287,23 @@ export function MarketCreateQuestionSection({
 								<label>
 									<span>{marketCopy.startTime}</span>
 									<FormInput
-										aria-describedby={getFieldErrorDescribedBy('startTime', getVisibleFieldError('startTime'))}
-										invalid={getVisibleFieldError('startTime') !== undefined}
+										aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('startTime', startTimeError) : timingRelationshipErrorId}
+										invalid={startTimeError !== undefined}
 										type='datetime-local'
 										value={marketForm.startTime}
 										onBlur={() => markFieldTouched('startTime')}
 										onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })}
 									/>
 								</label>
-								{renderFieldError('startTime', getVisibleFieldError('startTime'))}
+								{timingRelationshipError === undefined ? renderFieldError('startTime', startTimeError) : undefined}
 							</div>
 							<div className='field'>
 								<label>
 									<span>{renderRequiredFieldLabel(marketCopy.endTime)}</span>
 									<FormInput
 										aria-label={marketCopy.endTime}
-										aria-describedby={getFieldErrorDescribedBy('endTime', getVisibleFieldError('endTime'))}
-										invalid={getVisibleFieldError('endTime') !== undefined}
+										aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('endTime', endTimeError) : timingRelationshipErrorId}
+										invalid={endTimeError !== undefined}
 										type='datetime-local'
 										value={marketForm.endTime}
 										required
@@ -306,9 +311,14 @@ export function MarketCreateQuestionSection({
 										onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })}
 									/>
 								</label>
-								{renderFieldError('endTime', getVisibleFieldError('endTime'))}
+								{timingRelationshipError === undefined ? renderFieldError('endTime', endTimeError) : undefined}
 							</div>
 						</div>
+						{timingRelationshipError === undefined ? undefined : (
+							<p className='field-error' id={timingRelationshipErrorId}>
+								{timingRelationshipError}
+							</p>
+						)}
 						<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
 						{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
@@ -458,7 +468,9 @@ export function MarketCreateQuestionSection({
 										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
 										if (!isMainnet) return commonCopy.mainnetRequiredReason
 
-										return marketFormValidation.isValid ? undefined : marketCopy.completeRequiredQuestionFields
+										if (marketFormValidation.isValid) return undefined
+										if (timingRelationshipError !== undefined) return marketCopy.formatInvalidQuestionFieldsReason(timingRelationshipError)
+										return hasVisibleValidationError ? (marketFormValidation.notice ?? marketCopy.completeRequiredQuestionFields) : marketCopy.completeRequiredQuestionFields
 									})(),
 								}}
 							/>
