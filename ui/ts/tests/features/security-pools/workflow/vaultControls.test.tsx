@@ -129,7 +129,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
 	})
 
-	test('caps REP withdrawals to the oracle-backed amount in the seeded security-pool shape', async () => {
+	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -144,13 +144,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 10_000n * 10n ** 18n,
+							totalRepDeposit: 20_000n * 10n ** 18n,
 							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 10_000n * 10n ** 18n,
+							repDepositShare: 20_000n * 10n ** 18n,
 							securityBondAllowance: 2_500n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
@@ -175,7 +176,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		})
 
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 2 500 REP or less.')
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000 REP or less.')
 	})
 
 	test('fills the set bond allowance input from the backed Max amount', async () => {

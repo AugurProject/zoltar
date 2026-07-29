@@ -204,6 +204,7 @@ void describe('security vault helpers', () => {
 				repDepositShare: undefined,
 				repPerEthPrice: 0n,
 				securityBondAllowance: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				totalRepDeposit: undefined,
 				totalSecurityBondAllowance: undefined,
 			}),
@@ -213,6 +214,7 @@ void describe('security vault helpers', () => {
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
 				securityBondAllowance: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				totalRepDeposit: undefined,
 				totalSecurityBondAllowance: undefined,
 			}),
@@ -276,10 +278,11 @@ void describe('security vault helpers', () => {
 				repDepositShare: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
 				securityBondAllowance: 3n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				totalRepDeposit: 10n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
-		).toBe(6_000_000_000_000_000_000n)
+		).toBe(2_000_000_000_000_000_000n)
 	})
 
 	void test('respects allowance-backed floors and zero-balance constraints', () => {
@@ -288,19 +291,42 @@ void describe('security vault helpers', () => {
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
 				securityBondAllowance: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				totalRepDeposit: 50n * 10n ** 18n,
 				totalSecurityBondAllowance: 1n * 10n ** 18n,
 			}),
-		).toBe(8_000_000_000_000_000_000n)
+		).toBe(6_000_000_000_000_000_000n)
 
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 5n * 10n ** 18n,
 				securityBondAllowance: 10n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				totalRepDeposit: 100n * 10n ** 18n,
 				totalSecurityBondAllowance: 20n * 10n ** 18n,
 			}),
 		).toBe(0n)
+	})
+
+	void test('requires multiplier context and rounds the required REP backing up', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+				securityBondAllowance: 1n * 10n ** 18n + 1n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalRepDeposit: 10n * 10n ** 18n,
+				totalSecurityBondAllowance: 1n * 10n ** 18n + 1n,
+			}),
+		).toBe(3_999_999_999_999_999_994n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+				securityBondAllowance: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: undefined,
+			}),
+		).toBe(undefined)
 	})
 })

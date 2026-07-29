@@ -121,7 +121,7 @@
 						<tr>
 							<td><code>EscalationGameProofVerifier.sol</code></td>
 							<td>Storage-free Merkle Mountain Range, nullifier proof, and logarithm helpers.</td>
-							<td>Proof and attrition helpers can be reused and audited separately because they do not mutate game state.</td>
+							<td>Proof and attrition helpers can be reused and audited separately because they do not mutate game state. Logarithm normalization preserves extracted powers of two even when the residual term is exactly zero.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -316,7 +316,7 @@
 						<tbody>
 							<tr>
 								<td>Creation bytecode</td>
-								<td><code>32,114</code> bytes</td>
+								<td><code>32,138</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Deployed bytecode</td>

@@ -45,13 +45,15 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(
 			address(child) != address(0x0) &&
 				address(truthAuction) != address(0x0) &&
+				address(truthAuction).code.length != 0 &&
+				!trustedAuctionAddresses[address(truthAuction)] &&
 				address(forkDataByPool[child].truthAuction) == address(0x0) &&
 				address(child.parent()) == address(parent) &&
 				child.universeId() == childUniverseId &&
 				address(child.securityPoolFactory()) == parentFactory &&
 				child.securityPoolForker() == address(this) &&
 				child.truthAuction() == address(truthAuction),
-			'Invalid child deployment'
+			'Invalid child'
 		);
 	}
 
