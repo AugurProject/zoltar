@@ -98,7 +98,7 @@ describe('AddressValue', () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
 		const clipboard = {
 			writeText: async () => {
-				throw new Error('clipboard unavailable')
+				throw new DOMException('clipboard unavailable', 'NotAllowedError')
 			},
 		}
 		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
@@ -115,5 +115,6 @@ describe('AddressValue', () => {
 		expect(copyButton.textContent).toBe(address)
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
+		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe(address)
 	})
 })

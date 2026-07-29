@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../../testUtils/queries'
+import { fireEvent, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { DeploymentRouteContent } from '../../../features/deployment/components/DeploymentRouteContent.js'
@@ -28,6 +28,8 @@ function createProps(): DeploymentRouteContentProps {
 	return {
 		accountAddress: zeroAddress,
 		busyStepId: undefined,
+		deploymentStateReady: true,
+		deploymentStatusError: undefined,
 		deployNextMissingPending: false,
 		deploymentSections: [
 			{ title: 'Utilities', steps: deploymentStatuses.slice(0, 3) },
@@ -38,6 +40,7 @@ function createProps(): DeploymentRouteContentProps {
 		isMainnet: true,
 		onDeploy: async () => undefined,
 		onDeployNextMissing: () => undefined,
+		onRetryDeploymentStatus: () => undefined,
 	}
 }
 
@@ -98,6 +101,49 @@ describe('DeploymentRouteContent', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Deploy next missing')
+	})
+
+	test('disables all deployment actions while the deployment snapshot is unavailable', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(DeploymentRouteContent, {
+				...createProps(),
+				deploymentStateReady: false,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Deployment status is unavailable.')
+		expectTransactionButtonDisabled(document.body, 'Deploy Scalar Outcomes', 'Deployment status is unavailable.')
+		expect(document.body.textContent).not.toContain('Not Deployed')
+		expect(document.body.textContent).not.toContain('Can deploy now.')
+		expect(document.body.textContent).not.toContain('Requires ')
+		expect(document.body.textContent).toContain('Unavailable')
+		expect(document.body.textContent).not.toContain('Loading deployment status…')
+		const scalarDeployButton = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
+		const describedById = scalarDeployButton.getAttribute('aria-describedby')
+		if (describedById === null) throw new Error('Expected unavailable deployment action to reference the shared recovery reason')
+		expect(document.getElementById(describedById)?.textContent).toBe('Deployment status is unavailable.')
+	})
+
+	test('shows a completed deployment load failure with retry instead of a loading state', async () => {
+		let retryCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(DeploymentRouteContent, {
+				...createProps(),
+				deploymentStateReady: false,
+				deploymentStatusError: 'Deployment RPC unavailable',
+				onRetryDeploymentStatus: () => {
+					retryCalls += 1
+				},
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert').textContent).toContain('Deployment RPC unavailable')
+		expect(document.body.textContent).not.toContain('Loading deployment status…')
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		expect(retryCalls).toBe(1)
 	})
 
 	test('replaces deployment controls with a clear next destination when setup is complete', async () => {

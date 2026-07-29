@@ -794,6 +794,24 @@ button .loading-value {
 	overflow-wrap: anywhere;
 }
 
+.copy-error-recovery {
+	display: grid;
+	gap: var(--space-1);
+	width: min(24rem, 100%);
+	margin-top: var(--space-1);
+}
+
+.copy-error-recovery .copy-error-message {
+	margin-top: 0;
+}
+
+.copy-manual-value {
+	width: 100%;
+	min-height: var(--touch-target-min);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+}
+
 .currency-value {
 	display: inline-block;
 	max-width: 100%;

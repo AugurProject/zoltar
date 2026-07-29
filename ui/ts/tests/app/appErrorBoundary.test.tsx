@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '../testUtils/queries.js'
 import { AppErrorBoundary } from '../../app/components/AppErrorBoundary.js'
 import { createAppRoot, mountApp } from '../../app/appRoot.js'
@@ -18,9 +18,14 @@ function createDeferred<T>() {
 describe('AppErrorBoundary', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let restoreDomEnvironment: (() => void) | undefined
+	let originalConsoleError: typeof console.error
+	let consoleError: ReturnType<typeof mock>
 
 	beforeEach(() => {
 		restoreDomEnvironment = installDomEnvironment().cleanup
+		originalConsoleError = console.error
+		consoleError = mock(() => undefined)
+		console.error = consoleError
 	})
 
 	afterEach(async () => {
@@ -28,6 +33,7 @@ describe('AppErrorBoundary', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+		console.error = originalConsoleError
 	})
 
 	test('replaces a crashed render with a visible recovery screen', async () => {
@@ -46,11 +52,12 @@ describe('AppErrorBoundary', () => {
 		const documentQueries = within(document.body)
 
 		expect(documentQueries.getByRole('heading', { name: 'Application error' })).not.toBeNull()
-		expect(documentQueries.getByText('The application encountered an unexpected error. Reason: render exploded')).not.toBeNull()
+		expect(documentQueries.getByText('The current screen could not be displayed. Reason: render exploded')).not.toBeNull()
 
 		shouldThrow = false
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 		expect(documentQueries.getByText('Recovered application')).not.toBeNull()
+		expect(consoleError).toHaveBeenCalledWith('[ui] application render failed', expect.any(Error))
 	})
 
 	test('wraps the shared production and development app root in the recovery boundary', async () => {
@@ -82,6 +89,7 @@ describe('AppErrorBoundary', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 		expect(await waitFor(() => documentQueries.getByText('Initialized application'))).not.toBeNull()
 		expect(initializeAttempts).toBe(2)
+		expect(consoleError).toHaveBeenCalledWith('[ui] failed to initialize or mount application', expect.any(Error))
 	})
 
 	test('keeps initialization retry single-flight while recovery is pending', async () => {

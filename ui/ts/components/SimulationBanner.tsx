@@ -33,6 +33,7 @@ type SimulationBannerProps = {
 }
 
 type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
+type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'save'
 
 function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(getRouteHashSearch())
@@ -42,8 +43,12 @@ function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
-function navigateToSimulationSearch(nextSearch: string) {
-	window.history.pushState({}, '', buildRouteHref(getCurrentRouteHash(), nextSearch))
+function getSimulationLocation(nextSearch: string) {
+	return new URL(buildRouteHref(getCurrentRouteHash(), nextSearch), window.location.href).toString()
+}
+
+function stageSimulationLocation(nextUrl: string) {
+	window.history.replaceState({}, '', nextUrl)
 	window.dispatchEvent(new window.PopStateEvent('popstate'))
 }
 
@@ -52,20 +57,25 @@ function restoreSimulationLocation(previousUrl: string) {
 	window.dispatchEvent(new window.PopStateEvent('popstate'))
 }
 
-function navigateToBuiltInScenario(scenario: string) {
+function commitSimulationLocation(previousUrl: string, nextUrl: string) {
+	window.history.replaceState({}, '', previousUrl)
+	window.history.pushState({}, '', nextUrl)
+}
+
+function getBuiltInScenarioLocation(scenario: string) {
 	const nextSearch = buildSimulationSearch(params => {
 		params.set('simScenario', scenario)
 		params.delete('simState')
 	})
-	navigateToSimulationSearch(nextSearch)
+	return getSimulationLocation(nextSearch)
 }
 
-function navigateToSavedSimulationState(stateId: string) {
+function getSavedSimulationStateLocation(stateId: string) {
 	const nextSearch = buildSimulationSearch(params => {
 		params.delete('simScenario')
 		params.set('simState', stateId)
 	})
-	navigateToSimulationSearch(nextSearch)
+	return getSimulationLocation(nextSearch)
 }
 
 function hasSavedSimulationStateRoute() {
@@ -118,6 +128,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const saveName = useSignal('')
 	const exportName = useSignal('')
 	const exportStateText = useSignal('')
+	const exportInProgress = useSignal(false)
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exportStateText.value)
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
@@ -132,6 +143,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const operationRequestGeneration = useRef(0)
 	const navigationRequestGeneration = useRef(0)
 	const navigationInProgress = useRef(false)
+	const navigationOperation = useSignal<NavigationOperation | undefined>(undefined)
 	if (currentController.current !== controller) {
 		currentController.current = controller
 		operationRequestGeneration.current += 1
@@ -143,6 +155,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		modal.value = undefined
 		savedStateError.value = undefined
 		exportStateText.value = ''
+		exportInProgress.value = false
+		if (!navigationInProgress.current) navigationOperation.value = undefined
 	}, [controller])
 
 	const reloadSavedStateRecords = () => {
@@ -233,10 +247,11 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 			if (isCurrentRequest()) busy.value = false
 		}
 	}
-	const runNavigationControl = async (work: (ownership: ReturnType<typeof startNavigationOperation>) => Promise<void>) => {
+	const runNavigationControl = async (operation: NavigationOperation, work: (ownership: ReturnType<typeof startNavigationOperation>) => Promise<void>) => {
 		if (busy.value) return
 		const ownership = startNavigationOperation()
 		navigationInProgress.current = true
+		navigationOperation.value = operation
 		busy.value = true
 		savedStateError.value = undefined
 		try {
@@ -248,43 +263,45 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		} finally {
 			if (ownership.isCurrentRequest()) {
 				navigationInProgress.current = false
+				navigationOperation.value = undefined
 				busy.value = false
 			}
 		}
 	}
 
-	const refreshEnvironmentWithRollback = async (previousUrl: string) => {
+	const refreshEnvironmentAtLocation = async (nextUrl: string) => {
+		const previousUrl = window.location.href
+		stageSimulationLocation(nextUrl)
 		try {
 			await onEnvironmentChanged()
 		} catch (error) {
 			restoreSimulationLocation(previousUrl)
 			throw error
 		}
+		commitSimulationLocation(previousUrl, nextUrl)
 	}
 
-	const navigateAndRefreshEnvironment = async (navigate: () => void) => {
-		const previousUrl = window.location.href
-		await runNavigationControl(async () => {
-			navigate()
-			await refreshEnvironmentWithRollback(previousUrl)
+	const navigateAndRefreshEnvironment = async (getNextLocation: () => string) => {
+		await runNavigationControl('navigation', async () => {
+			await refreshEnvironmentAtLocation(getNextLocation())
 		})
 	}
 
 	const persistAndNavigateToSavedState = async (serialized: string) => {
-		const previousUrl = window.location.href
 		const record = persistSavedSimulationState(serialized, savedStateStorage)
 		reloadSavedStateRecords()
-		navigateToSavedSimulationState(record.id)
-		await refreshEnvironmentWithRollback(previousUrl)
+		await refreshEnvironmentAtLocation(getSavedSimulationStateLocation(record.id))
 	}
 
 	const showExportModal = async () => {
+		if (exportInProgress.value) return
 		const isCurrentRequest = startOperation()
 		const nextName = getDefaultSavedStateName()
 		exportName.value = nextName
 		exportStateText.value = ''
 		savedStateError.value = undefined
 		modal.value = 'export'
+		exportInProgress.value = true
 		try {
 			const serialized = await controller.exportState(nextName)
 			if (!isCurrentRequest()) return
@@ -292,12 +309,16 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		} catch (error) {
 			if (!isCurrentRequest()) return
 			savedStateError.value = getErrorMessage(error, simulationCopy.stateExportError)
+		} finally {
+			if (isCurrentRequest()) exportInProgress.value = false
 		}
 	}
 
 	const refreshExport = async () => {
+		if (exportInProgress.value) return
 		const isCurrentRequest = startOperation()
 		savedStateError.value = undefined
+		exportInProgress.value = true
 		try {
 			const serialized = await controller.exportState(exportName.value)
 			if (!isCurrentRequest()) return
@@ -305,6 +326,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		} catch (error) {
 			if (!isCurrentRequest()) return
 			savedStateError.value = getErrorMessage(error, simulationCopy.stateExportError)
+		} finally {
+			if (isCurrentRequest()) exportInProgress.value = false
 		}
 	}
 
@@ -371,14 +394,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							onChange={event => {
 								const nextSelection = event.currentTarget.value
 								if (nextSelection.startsWith('saved:')) {
-									void navigateAndRefreshEnvironment(() => {
-										navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
-									})
+									void navigateAndRefreshEnvironment(() => getSavedSimulationStateLocation(nextSelection.slice('saved:'.length)))
 									return
 								}
-								void navigateAndRefreshEnvironment(() => {
-									navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
-								})
+								void navigateAndRefreshEnvironment(() => getBuiltInScenarioLocation(nextSelection.slice('scenario:'.length)))
 							}}
 						>
 							<optgroup label={simulationCopy.builtInScenarios}>
@@ -558,7 +577,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										>
 											{simulationCopy.saveState}
 										</button>
-										<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
+										<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || exportInProgress.value || !isBootstrapped.value}>
 											{simulationCopy.exportState}
 										</button>
 										<button
@@ -613,67 +632,69 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</details>
 				</div>
 			</details>
-			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-save-name'>{simulationCopy.stateName}</label>
-					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} onInput={event => (saveName.value = event.currentTarget.value)} />
+					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} disabled={busy.value} onInput={event => (saveName.value = event.currentTarget.value)} />
 				</div>
 				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
+						disabled={busy.value}
 						onClick={() =>
-							void runNavigationControl(async ownership => {
+							void runNavigationControl('save', async ownership => {
 								const serialized = await controller.exportState(saveName.value)
 								if (!ownership.isCurrentRequest() || !ownership.isOriginControllerCurrent()) return
 								await persistAndNavigateToSavedState(serialized)
 							})
 						}
 					>
-						{simulationCopy.save}
+						{navigationOperation.value === 'save' ? simulationCopy.savingState : simulationCopy.save}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
+			<OperationModal closeDisabled={exportInProgress.value} isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-export-name'>{simulationCopy.exportName}</label>
-					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} onInput={event => (exportName.value = event.currentTarget.value)} />
+					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} disabled={exportInProgress.value} onInput={event => (exportName.value = event.currentTarget.value)} />
 				</div>
 				<div className='field'>
 					<label htmlFor='simulation-export-json'>{simulationCopy.jsonState}</label>
-					<textarea id='simulation-export-json' rows={14} value={exportStateText.value} readOnly />
+					<textarea id='simulation-export-json' aria-busy={exportInProgress.value || undefined} rows={14} value={exportStateText.value} readOnly />
 				</div>
 				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
-					<button type='button' className='secondary' onClick={() => void refreshExport()}>
-						{simulationCopy.refreshExport}
+					<button type='button' className='secondary' disabled={exportInProgress.value} onClick={() => void refreshExport()}>
+						{exportInProgress.value ? simulationCopy.exportingState : simulationCopy.refreshExport}
 					</button>
-					<button type='button' className='secondary' disabled={exportStateText.value.trim() === ''} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => void copyText(exportStateText.value)}>
+					<button type='button' className='secondary' disabled={exportInProgress.value || exportStateText.value.trim() === ''} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => void copyText(exportStateText.value)}>
 						{copied.value ? commonCopy.copied : simulationCopy.copyJson}
 					</button>
 				</div>
 				<CopyErrorMessage id={copyErrorId} message={copyError.value} />
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title={simulationCopy.importSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'import'} onClose={closeModal} title={simulationCopy.importSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-import-json'>{simulationCopy.jsonState}</label>
-					<textarea id='simulation-import-json' rows={14} value={importStateText.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
+					<textarea id='simulation-import-json' rows={14} value={importStateText.value} disabled={busy.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
 				</div>
 				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
+						disabled={busy.value}
 						onClick={() =>
-							void runNavigationControl(async () => {
+							void runNavigationControl('import', async () => {
 								await persistAndNavigateToSavedState(importStateText.value)
 							})
 						}
 					>
-						{simulationCopy.importAndLoad}
+						{navigationOperation.value === 'import' ? simulationCopy.importingState : simulationCopy.importAndLoad}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title={simulationCopy.deleteSavedSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'delete'} onClose={closeModal} title={simulationCopy.deleteSavedSimulationState}>
 				<p className='detail'>{currentSource.value.kind === 'saved-state' ? simulationCopy.formatDeleteSavedSimulationStateDetail(currentSource.value.name) : simulationCopy.builtInScenarioDeletionReason}</p>
 				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
@@ -682,14 +703,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						className='destructive'
 						disabled={busy.value || currentSource.value.kind !== 'saved-state'}
 						onClick={() =>
-							void runNavigationControl(async () => {
+							void runNavigationControl('delete', async () => {
 								if (currentSource.value.kind !== 'saved-state') return
-								const previousUrl = window.location.href
 								const stateId = currentSource.value.stateId
 								const stateName = currentSource.value.name
 								const baseScenario = currentSource.value.baseScenario
-								navigateToBuiltInScenario(baseScenario)
-								await refreshEnvironmentWithRollback(previousUrl)
+								await refreshEnvironmentAtLocation(getBuiltInScenarioLocation(baseScenario))
 								if (!deleteSavedSimulationState(stateId, savedStateStorage)) throw new Error(simulationCopy.formatMissingSavedStateError(stateName))
 								reloadSavedStateRecords()
 							})
@@ -710,14 +729,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						onClick={() => {
 							closeModal()
 							savedStateStorageWarning.value = undefined
-							void runNavigationControl(async () => {
+							void runNavigationControl('cleanup', async () => {
 								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
 								if (removedCount === 0) throw new Error(simulationCopy.corruptedSavesEmptyError)
 								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
-									const previousUrl = window.location.href
-									navigateToBuiltInScenario(currentScenario.value)
-									await refreshEnvironmentWithRollback(previousUrl)
+									await refreshEnvironmentAtLocation(getBuiltInScenarioLocation(currentScenario.value))
 									return
 								}
 							})

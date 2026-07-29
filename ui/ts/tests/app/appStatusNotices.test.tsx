@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../testUtils/queries'
+import { fireEvent, within } from '../testUtils/queries'
 import { h } from 'preact'
 import { AppStatusNotices } from '../../app/components/AppStatusNotices.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
@@ -198,5 +198,42 @@ describe('AppStatusNotices', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Deployment failed')).not.toBeNull()
 		expect(documentQueries.getByText('Wallet refresh failed')).not.toBeNull()
+	})
+
+	test('offers a retry for Zoltar universe load failures', async () => {
+		let retryCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				onRetryZoltarUniverse: () => {
+					retryCalls += 1
+				},
+				readBackendMessage: undefined,
+				showAugurStatoblastDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+				zoltarUniverseError: 'Universe service unavailable',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Universe service unavailable')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		expect(retryCalls).toBe(1)
+	})
+
+	test('disables the Zoltar universe retry while it is loading', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				loadingZoltarUniverse: true,
+				onRetryZoltarUniverse: () => undefined,
+				readBackendMessage: undefined,
+				showAugurStatoblastDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+				zoltarUniverseError: 'Universe service unavailable',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('button', { name: 'Retrying…' }).hasAttribute('disabled')).toBe(true)
 	})
 })

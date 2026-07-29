@@ -115,6 +115,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 			setAccountState({ ...getAccountState(), ethBalance })
 		} catch (error) {
 			if (!isCurrent()) return
+			setAccountState({ ...getAccountState(), ethBalance: undefined })
 			ethBalanceError(getErrorMessage(error, setEthBalanceErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh ETH balance'))
 		}
 	})
@@ -126,6 +127,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 			setAccountState({ ...getAccountState(), wethBalance })
 		} catch (error) {
 			if (!isCurrent()) return
+			setAccountState({ ...getAccountState(), wethBalance: undefined })
 			wethBalanceError(getErrorMessage(error, setWethBalanceErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh WETH balance'))
 		}
 	})
@@ -232,6 +234,14 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		deploymentStatuses.value = updated
 		if (updated.every(step => step.deployed)) augurStatoblastDeployed.value = true
 	}
+	const invalidateDeploymentState = () => {
+		deploymentStatuses.value = dependencies.getDeploymentSteps().map(step => ({
+			...step,
+			deployed: false,
+		}))
+		deploymentStatusesLoaded.value = false
+		augurStatoblastDeployed.value = undefined
+	}
 	const refreshChainClock = async (backend: ChainBackend) => {
 		const isCurrent = nextChainClockRefresh()
 		const requestEnvironmentNonce = activeEnvironmentNonce
@@ -270,6 +280,33 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		isManagingWallet.value = false
 	}, [activeEnvironmentNonce, renderedBackend])
 
+	useLayoutEffect(() => {
+		nextRefresh()
+		walletStateLoad.invalidate()
+		deploymentStatusLoad.invalidate()
+		environmentReadyLoad.invalidate()
+		accountState.value = {
+			address: undefined,
+			chainId: undefined,
+			ethBalance: undefined,
+			wethBalance: undefined,
+		}
+		invalidateDeploymentState()
+		clearChainClock()
+		walletBootstrapComplete.value = false
+		errorMessage.value = undefined
+		deploymentStatusError.value = undefined
+		ethBalanceError.value = undefined
+		wethBalanceError.value = undefined
+		chainClockError.value = undefined
+		readBackendMessage.value = undefined
+		readBackendValidated.value = false
+		environmentBootstrapError.value = undefined
+		environmentBootstrapLabel.value = renderedBackend.bootstrapLabel
+		environmentBootstrapProgress.value = renderedBackend.bootstrapProgress
+		environmentReady.value = renderedBackend.isBootstrapped ?? true
+	}, [activeEnvironmentNonce, renderedBackend])
+
 	const refreshState = async (options: RefreshStateOptions = {}) => {
 		const shouldLoadChainClock = enableChainClock && (options.loadChainClock ?? true)
 		const shouldLoadDeploymentState = options.loadDeploymentState ?? true
@@ -277,11 +314,15 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		const backend = getActiveBackend()
 		updateReadBackendStatus(backend)
 		const isCurrent = nextRefresh()
+		if (shouldLoadWalletState) walletStateLoad.invalidate()
+		if (shouldLoadDeploymentState) deploymentStatusLoad.invalidate()
 		let connectedAddress: Address | undefined
 		let connectedChainId: string | undefined
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
-		if (shouldLoadDeploymentState) deploymentStatusError.value = undefined
+		if (shouldLoadDeploymentState) {
+			deploymentStatusError.value = undefined
+		}
 		if (shouldLoadWalletState) {
 			ethBalanceError.value = undefined
 			wethBalanceError.value = undefined
@@ -289,6 +330,19 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadChainClock) chainClockError.value = undefined
 		readBackendMessage.value = undefined
 		readBackendValidated.value = false
+		const invalidateWalletDiscoveryState = () => {
+			accountState.value = {
+				address: undefined,
+				chainId: undefined,
+				ethBalance: undefined,
+				wethBalance: undefined,
+			}
+			if (shouldLoadDeploymentState) {
+				invalidateDeploymentState()
+				deploymentStatusError.value = 'Deployment status could not be refreshed because wallet discovery failed.'
+			}
+			clearChainClock()
+		}
 		if (shouldLoadWalletState) {
 			try {
 				const accounts = await backend.getAccounts()
@@ -296,6 +350,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				connectedAddress = normalizeAccount(accounts[0])
 			} catch (error) {
 				if (!isCurrent()) return
+				invalidateWalletDiscoveryState()
 				walletBootstrapComplete.value = true
 				errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 				return
@@ -307,6 +362,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				if (!isCurrent()) return
 			} catch (error) {
 				if (!isCurrent()) return
+				invalidateWalletDiscoveryState()
 				walletBootstrapComplete.value = true
 				errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 				return
@@ -322,9 +378,15 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				readBackendMessage.value = validation.readBackendMessage
 				readBackendValidated.value = validation.validated
 				updateReadBackendStatus(backend)
-				if (validation.readBackendMessage !== undefined) clearChainClock()
+				if (validation.readBackendMessage !== undefined) {
+					clearChainClock()
+					invalidateDeploymentState()
+					deploymentStatusError.value = 'Deployment status could not be refreshed because read RPC validation failed.'
+				}
 			} catch (error) {
 				if (!isCurrent()) return
+				invalidateDeploymentState()
+				deploymentStatusError.value = 'Deployment status could not be refreshed because read RPC validation failed.'
 				errorMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
 			}
 		} else {
@@ -334,16 +396,16 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadChainClock && isReadBackendReady()) void refreshChainClock(backend)
 
 		if (backend.isBootstrapped === false) {
-			deploymentStatusesLoaded.value = false
-			augurStatoblastDeployed.value = undefined
+			invalidateDeploymentState()
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = false
 			environmentBootstrapError.value = undefined
 		}
 
-		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && readBackendMessage.value === undefined)
-			void deploymentStatusLoad.track(async () => {
+		let deploymentStatePromise: Promise<void> | undefined
+		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && isReadBackendReady())
+			deploymentStatePromise = deploymentStatusLoad.track(async () => {
 				try {
 					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 					if (!isCurrent()) return
@@ -352,19 +414,23 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 					deploymentStatusesLoaded.value = true
 				} catch (error) {
 					if (!isCurrent()) return
+					invalidateDeploymentState()
 					deploymentStatusError.value = getErrorMessage(error, 'Failed to refresh deployment status')
 				}
 			})
 
-		if (!shouldLoadWalletState) return
+		if (!shouldLoadWalletState) {
+			await deploymentStatePromise
+			return
+		}
 
 		await walletStateLoad.track(async () => {
 			try {
 				accountState.value = {
 					address: connectedAddress,
 					chainId: accountState.value.chainId,
-					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
-					wethBalance: connectedAddress === accountState.value.address ? accountState.value.wethBalance : undefined,
+					ethBalance: undefined,
+					wethBalance: undefined,
 				}
 
 				walletBootstrapComplete.value = true
@@ -562,10 +628,12 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		chainClockError: chainClockError.value,
 		currentBlockNumber: currentBlockNumber.value,
 		currentTimestamp: currentTimestamp.value,
+		deploymentStatusError: deploymentStatusError.value,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		errorMessages: [errorMessage.value, deploymentStatusError.value, ethBalanceError.value, wethBalanceError.value].filter((message): message is string => message !== undefined),
 		readBackendMessage: readBackendMessage.value,
+		readBackendValidated: readBackendValidated.value,
 		readBackendStatus: readBackendStatus.value,
 		environmentBootstrapError: environmentBootstrapError.value,
 		environmentBootstrapLabel: environmentBootstrapLabel.value,

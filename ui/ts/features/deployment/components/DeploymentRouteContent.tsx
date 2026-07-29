@@ -1,34 +1,65 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { ComponentChildren } from 'preact'
+import { useId } from 'preact/hooks'
 import { LoadableValue } from '../../../components/LoadableValue.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { DeploymentSection } from './DeploymentSection.js'
 import { RouteHeader } from '../../../components/RouteHeader.js'
 import { DataGrid } from '../../../components/DataGrid.js'
+import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { buildRouteHref, getTopLevelRouteSearch, ZOLTAR_ROUTE } from '../../../lib/routing.js'
 import { writeZoltarViewQueryParam } from '../../../lib/urlParams.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
+export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
+	const deploymentStatusReasonId = useId()
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
-	const deploymentComplete = !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount
+	const deploymentComplete = deploymentStateReady && !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount
 	const questionsHref = buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
-	const deployNextAvailability = getDeployNextMissingAvailability({
-		accountAddress,
-		busyStepId,
-		deployNextMissingPending,
-		isMainnet,
-		nextMissingStep,
-	})
+	const deployNextAvailability = deploymentStateReady
+		? getDeployNextMissingAvailability({
+				accountAddress,
+				busyStepId,
+				deployNextMissingPending,
+				isMainnet,
+				nextMissingStep,
+			})
+		: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
 	let buttonContent: ComponentChildren = deploymentCopy.deployNextMissing
 	if (deployNextMissingPending) {
 		buttonContent = deploymentCopy.deploying
 	} else if (busyStepId !== undefined) buttonContent = deploymentCopy.deploymentRunningStatusLabel
+	let nextDeployableContent: ComponentChildren = commonCopy.unavailable
+	if (isLoadingDeploymentStatuses) nextDeployableContent = <LoadingText />
+	else if (deploymentStateReady) nextDeployableContent = nextMissingStep?.label ?? deploymentCopy.allDeployed
+	let deploymentStatusNotice: ComponentChildren
+	if (!deploymentStateReady && isLoadingDeploymentStatuses)
+		deploymentStatusNotice = (
+			<p id={deploymentStatusReasonId} className='detail'>
+				<LoadingText>{deploymentCopy.loadingDeploymentStatus}</LoadingText>
+			</p>
+		)
+	else if (!deploymentStateReady)
+		deploymentStatusNotice = (
+			<>
+				<p id={deploymentStatusReasonId} className='detail'>
+					{deploymentCopy.deploymentStatusUnavailableReason}
+				</p>
+				<ErrorNotice message={deploymentStatusError} />
+				{deploymentStatusError === undefined ? undefined : (
+					<div className='actions'>
+						<button className='secondary' type='button' onClick={onRetryDeploymentStatus}>
+							{commonCopy.retry}
+						</button>
+					</div>
+				)}
+			</>
+		)
 
 	return (
 		<>
@@ -43,7 +74,15 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 							{deploymentCopy.browseQuestions}
 						</a>
 					) : (
-						<TransactionActionButton idleLabel={buttonContent} pendingLabel={deploymentCopy.deploying} onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />
+						<TransactionActionButton
+							disabledReasonElementId={deploymentStateReady ? undefined : deploymentStatusReasonId}
+							idleLabel={buttonContent}
+							pendingLabel={deploymentCopy.deploying}
+							onClick={onDeployNextMissing}
+							pending={deployNextMissingPending}
+							availability={deployNextAvailability}
+							showDisabledReason={deploymentStateReady}
+						/>
 					)
 				}
 				summary={
@@ -52,17 +91,18 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 							<p className='detail'>{deploymentCopy.contractsDeployed}</p>
 							<strong>
 								<LoadableValue loading={isLoadingDeploymentStatuses} placeholder={deploymentCopy.loadingDeploymentStatus}>
-									{deployedContractCount} / {totalContractCount}
+									{deploymentStateReady ? `${deployedContractCount.toString()} / ${totalContractCount.toString()}` : commonCopy.unavailable}
 								</LoadableValue>
 							</strong>
 						</div>
 						<div>
 							<p className='detail'>{deploymentCopy.nextDeployable}</p>
-							<strong>{isLoadingDeploymentStatuses ? <LoadingText /> : (nextMissingStep?.label ?? deploymentCopy.allDeployed)}</strong>
+							<strong>{nextDeployableContent}</strong>
 						</div>
 					</DataGrid>
 				}
 			/>
+			{deploymentStatusNotice}
 			<details className='deployment-contract-details'>
 				<summary>
 					<span>{deploymentCopy.allContracts}</span>
@@ -70,7 +110,20 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				<div className='workflow-stack deployment-contract-groups'>
 					{deploymentSections.map(section => {
 						const allDeployed = section.steps.length > 0 && section.steps.every(step => step.deployed)
-						const sectionContent = <DeploymentSection title={section.title} completedGroup={allDeployed} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
+						const sectionContent = (
+							<DeploymentSection
+								title={section.title}
+								completedGroup={allDeployed}
+								steps={section.steps}
+								allSteps={deploymentStatuses}
+								accountAddress={accountAddress}
+								isMainnet={isMainnet}
+								busyStepId={busyStepId}
+								deploymentStateReady={deploymentStateReady}
+								deploymentStatusReasonElementId={deploymentStateReady ? undefined : deploymentStatusReasonId}
+								onDeploy={onDeploy}
+							/>
+						)
 						return <div key={section.title}>{sectionContent}</div>
 					})}
 				</div>

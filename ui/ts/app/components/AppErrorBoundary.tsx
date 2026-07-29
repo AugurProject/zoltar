@@ -17,6 +17,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 	}
 
 	override componentDidCatch(error: unknown) {
+		console.error('[ui] application render failed', error)
 		this.setState({
 			errorMessage: getErrorMessage(error, appCopy.applicationErrorFallback),
 		})

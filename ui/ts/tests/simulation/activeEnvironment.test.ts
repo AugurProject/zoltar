@@ -14,6 +14,15 @@ import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTr
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
+}
+
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
@@ -134,6 +143,103 @@ void describe('active environment', () => {
 
 		expect(getActiveBackend()).toBe(currentBackend)
 		expect(disposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('keeps the newest environment when overlapping replacements resolve out of order', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const firstReplacement = createDeferred<SimulationBackend>()
+		const secondReplacement = createDeferred<SimulationBackend>()
+		let replacementRequestCount = 0
+		let initialDisposeCalls = 0
+		let firstDisposeCalls = 0
+		let secondDisposeCalls = 0
+		const createReplacement = (dispose: () => void) =>
+			Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+				bootstrap: async () => undefined,
+				dispose: async () => dispose(),
+			}) as SimulationBackend
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => {
+					initialDisposeCalls += 1
+				},
+			}) as SimulationBackend,
+		)
+		const dependencies = {
+			createSimulationBackend: async () => {
+				replacementRequestCount += 1
+				return await (replacementRequestCount === 1 ? firstReplacement.promise : secondReplacement.promise)
+			},
+		}
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, dependencies)
+		const secondInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, dependencies)
+		const newestBackend = createReplacement(() => {
+			secondDisposeCalls += 1
+		})
+		secondReplacement.resolve(newestBackend)
+		await secondInitialization
+		expect(getActiveBackend()).toBe(newestBackend)
+
+		const staleBackend = createReplacement(() => {
+			firstDisposeCalls += 1
+		})
+		firstReplacement.resolve(staleBackend)
+		await firstInitialization
+
+		expect(getActiveBackend()).toBe(newestBackend)
+		expect(initialDisposeCalls).toBe(1)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondDisposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('does not bootstrap a replacement superseded while disposing the previous environment', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const initialDispose = createDeferred<void>()
+		let firstBootstrapCalls = 0
+		let firstDisposeCalls = 0
+		let secondBootstrapCalls = 0
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => await initialDispose.promise,
+			}) as SimulationBackend,
+		)
+		const firstBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				firstBootstrapCalls += 1
+			},
+			dispose: async () => {
+				firstDisposeCalls += 1
+			},
+		}) as SimulationBackend
+		const secondBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				secondBootstrapCalls += 1
+			},
+			dispose: async () => undefined,
+		}) as SimulationBackend
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, { createSimulationBackend: async () => firstBackend })
+		await Promise.resolve()
+		expect(getActiveBackend()).toBe(firstBackend)
+
+		const secondResult = await initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, { createSimulationBackend: async () => secondBackend })
+		expect(secondResult).toBe(secondBackend)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondBootstrapCalls).toBe(1)
+
+		initialDispose.resolve()
+		const firstResult = await firstInitialization
+
+		expect(firstResult).toBe(secondBackend)
+		expect(getActiveBackend()).toBe(secondBackend)
+		expect(firstBootstrapCalls).toBe(0)
 		resetEnvironment()
 	})
 

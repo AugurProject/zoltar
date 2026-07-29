@@ -17,6 +17,7 @@ const injectedBackend = createInjectedBackend()
 
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
+let initializeActiveEnvironmentGeneration = 0
 
 const SIMULATION_QUERY_PARAM = 'simulate'
 const SIMULATION_QUERY_VALUE = '1'
@@ -62,6 +63,8 @@ function getSimulationStateId(location: LocationLike) {
 }
 
 export async function initializeActiveEnvironment(location: LocationLike = window.location, dependencies: InitializeActiveEnvironmentDependencies = defaultInitializeActiveEnvironmentDependencies) {
+	initializeActiveEnvironmentGeneration += 1
+	const requestGeneration = initializeActiveEnvironmentGeneration
 	const previousSimulationController = activeSimulationController
 
 	if (!shouldUseSimulationLocation(location)) {
@@ -74,7 +77,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 				console.error('[simulation] failed to dispose previous environment', error)
 			}
 		}
-		return injectedBackend
+		return getActiveBackend()
 	}
 
 	const savedStateId = getSimulationStateId(location)
@@ -100,6 +103,14 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 				})
+	if (requestGeneration !== initializeActiveEnvironmentGeneration) {
+		try {
+			await simulationBackend.dispose()
+		} catch (error) {
+			console.error('[simulation] failed to dispose stale replacement environment', error)
+		}
+		return getActiveBackend()
+	}
 	activeBackend = simulationBackend
 	activeSimulationController = simulationBackend
 	if (previousSimulationController !== undefined && previousSimulationController !== simulationBackend) {
@@ -109,6 +120,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 			console.error('[simulation] failed to dispose previous environment', error)
 		}
 	}
+	if (activeBackend !== simulationBackend || activeSimulationController !== simulationBackend) return getActiveBackend()
 	void simulationBackend.bootstrap().catch(error => {
 		console.error('[simulation] bootstrap failed', error)
 	})
@@ -140,6 +152,7 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 }
 
 export function resetActiveEnvironmentForTesting() {
+	initializeActiveEnvironmentGeneration += 1
 	activeBackend = undefined
 	activeSimulationController = undefined
 }

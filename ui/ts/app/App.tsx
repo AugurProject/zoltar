@@ -103,11 +103,13 @@ export function App() {
 		connectWallet,
 		currentBlockNumber,
 		currentTimestamp,
+		deploymentStatusError,
 		deploymentStatuses,
 		environmentBootstrapError,
 		environmentReady,
 		errorMessages: onchainErrorMessages,
 		readBackendMessage,
+		readBackendValidated,
 		readBackendStatus,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
@@ -120,8 +122,8 @@ export function App() {
 		switchNetwork,
 		walletBootstrapComplete,
 	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
-	const readBackendReady = readBackendMessage === undefined
-	const canReadOnchainData = environmentReady && readBackendReady
+	const readBackendReady = readBackendValidated && readBackendMessage === undefined
+	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
 	const isMainnet = isSupportedAppChain(accountState.chainId)
 	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
 	const baseHookConfig = {
@@ -153,6 +155,7 @@ export function App() {
 		loadingZoltarUniverse,
 		loadZoltarQuestionPage,
 		loadZoltarQuestions,
+		loadZoltarUniverse,
 		marketCreating,
 		marketError,
 		marketForm,
@@ -330,9 +333,9 @@ export function App() {
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
-	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages, chainClockError, zoltarUniverseError, zoltarQuestionsError].filter((message): message is string => message !== undefined)
+	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
 	const augurStatoblastDeploymentMissing = canReadOnchainData && augurStatoblastDeployed === false
-	const showDeployTab = augurStatoblastDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
+	const showDeployTab = deploymentStatusError !== undefined || augurStatoblastDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurStatoblastDeploymentWarning = augurStatoblastDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
@@ -470,6 +473,8 @@ export function App() {
 	const deployRouteContentProps: DeploymentRouteContentProps = {
 		accountAddress: accountState.address,
 		busyStepId,
+		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
+		deploymentStatusError,
 		deployNextMissingPending: deployNextMissingPending.value,
 		deploymentSections,
 		deploymentStatuses,
@@ -477,6 +482,7 @@ export function App() {
 		isMainnet,
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
+		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	}
 	const marketRouteContentProps: MarketRouteContentProps = {
 		accountState,
@@ -529,6 +535,7 @@ export function App() {
 		zoltarMigrationPending,
 		zoltarMigrationPreparedRepBalance,
 		zoltarQuestions,
+		zoltarQuestionsError,
 		zoltarUniverse,
 		onZoltarForkQuestionIdChange: (questionId: string) => setZoltarForkQuestionId(questionId),
 	}
@@ -826,7 +833,16 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading pageTitle={pageTitle} />
-					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
+					<AppStatusNotices
+						errorMessages={errorMessages}
+						loadingZoltarUniverse={loadingZoltarUniverse}
+						onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
+						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
+						simulationBootstrapError={environmentBootstrapError}
+						showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning}
+						zoltarUniverseError={zoltarUniverseError}
+					/>
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
 						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />

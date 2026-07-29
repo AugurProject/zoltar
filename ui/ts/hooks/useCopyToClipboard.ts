@@ -2,6 +2,8 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useId, useLayoutEffect, useRef } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 
+class ClipboardUnavailableError extends Error {}
+
 export function useCopyToClipboard(valueKey?: string) {
 	const copied = useSignal(false)
 	const copyError = useSignal<string | undefined>(undefined)
@@ -42,7 +44,7 @@ export function useCopyToClipboard(valueKey?: string) {
 		}
 		try {
 			const clipboard = navigator.clipboard
-			if (clipboard === undefined || typeof clipboard.writeText !== 'function') throw new Error('Clipboard API is unavailable')
+			if (clipboard === undefined || typeof clipboard.writeText !== 'function') throw new ClipboardUnavailableError('Clipboard API is unavailable')
 			await clipboard.writeText(text)
 			if (!isCurrentRequest()) return
 			copied.value = true
@@ -51,8 +53,9 @@ export function useCopyToClipboard(valueKey?: string) {
 				copied.value = false
 				copyResetTimeout.current = undefined
 			}, 1200)
-		} catch {
+		} catch (error) {
 			if (!isCurrentRequest()) return
+			if (!(error instanceof DOMException) && !(error instanceof ClipboardUnavailableError)) throw error
 			copied.value = false
 			copyError.value = commonCopy.copyFailed
 			if (copyResetTimeout.current !== undefined) {

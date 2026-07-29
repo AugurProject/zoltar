@@ -58,6 +58,7 @@ function createBackend({
 	hasWallet = true,
 	requestAccounts,
 	getAccounts,
+	getChainId,
 	waitUntilReady,
 	profile = MAINNET_NETWORK_PROFILE,
 	readClient = createReadClient(),
@@ -70,6 +71,7 @@ function createBackend({
 	hasWallet?: boolean
 	requestAccounts?: () => Promise<readonly Address[]>
 	getAccounts?: () => Promise<readonly Address[]>
+	getChainId?: () => Promise<string>
 	waitUntilReady?: () => Promise<void>
 	profile?: NetworkProfile
 	readClient?: ReadClient
@@ -95,7 +97,7 @@ function createBackend({
 			throw new Error('write client is unavailable in this test')
 		},
 		getAccounts: getAccounts ?? (async () => accounts),
-		getChainId: async () => profile.chainIdHex,
+		getChainId: getChainId ?? (async () => profile.chainIdHex),
 		getProvider: () => undefined,
 		hasWallet: () => hasWallet,
 		id: 'injected',
@@ -449,6 +451,46 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('invalidates a loaded deployment snapshot when read-RPC validation becomes blocking', async () => {
+		let readChainId = 1
+		const readClient = {
+			...createReadClient(),
+			getChainId: async () => readChainId,
+		} as ReadClient
+		const { backend } = createBackend({ hasWallet: false, readClient })
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurStatoblastDeployed: true,
+			deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+		}))
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot,
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+
+		readChainId = 11155111
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+
+		expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')
+		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because read RPC validation failed.')
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).augurStatoblastDeployed).toBeUndefined()
+		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+		resetEnvironment()
+	})
+
 	test('keeps RPC-backed reads active when a connected wallet is on the wrong chain', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a3')
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
@@ -554,6 +596,133 @@ describe('useOnchainState (integration)', () => {
 
 		await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh deployment status. Reason: deployment status RPC failed'))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		resetEnvironment()
+	})
+
+	test('invalidates previously loaded deployment and balance state when a refresh fails', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a2')
+		let failRefresh = false
+		const readClient = {
+			...createReadClient(),
+			getBalance: async () => {
+				if (failRefresh) throw new Error('ETH balance refresh failed')
+				return 123n
+			},
+		} as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => {
+				if (failRefresh) throw new Error('deployment refresh failed')
+				return {
+					augurStatoblastDeployed: true,
+					deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+				}
+			}),
+			loadErc20Balance: mock(async () => {
+				if (failRefresh) throw new Error('WETH balance refresh failed')
+				return 456n
+			}),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.wethBalance).toBe(456n))
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+		expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true)
+
+		failRefresh = true
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+		await waitFor(() => expect(requireHookState(hookState).errorMessages).toHaveLength(3))
+
+		expect(requireHookState(hookState).accountState.ethBalance).toBeUndefined()
+		expect(requireHookState(hookState).accountState.wethBalance).toBeUndefined()
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).augurStatoblastDeployed).toBeUndefined()
+		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+		resetEnvironment()
+	})
+
+	test('invalidates trusted state when wallet account or chain discovery fails', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a2')
+		let failureMode: 'accounts' | 'chain' | undefined
+		const { backend } = createBackend({
+			getAccounts: async () => {
+				if (failureMode === 'accounts') throw new Error('account discovery failed')
+				return [account]
+			},
+			getChainId: async () => {
+				if (failureMode === 'chain') throw new Error('chain discovery failed')
+				return MAINNET_NETWORK_PROFILE.chainIdHex
+			},
+			readClient: createReadClient({ ethBalance: 123n }),
+		})
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: true,
+				deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+			})),
+			loadErc20Balance: mock(async () => 456n),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const waitForTrustedState = async () => {
+			await waitFor(() => expect(requireHookState(hookState).accountState.wethBalance).toBe(456n))
+			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+			expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true)
+		}
+		const expectTrustedStateInvalidated = () => {
+			expect(requireHookState(hookState).accountState).toEqual({
+				address: undefined,
+				chainId: undefined,
+				ethBalance: undefined,
+				wethBalance: undefined,
+			})
+			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+			expect(requireHookState(hookState).augurStatoblastDeployed).toBeUndefined()
+			expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+		}
+
+		await waitForTrustedState()
+		failureMode = 'accounts'
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: account discovery failed')
+		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because wallet discovery failed.')
+		expectTrustedStateInvalidated()
+
+		await act(async () => {
+			await requireHookState(hookState).refreshState({ loadWalletState: false })
+		})
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(requireHookState(hookState).deploymentStatusError).toBeUndefined()
+
+		failureMode = undefined
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+		await waitForTrustedState()
+
+		failureMode = 'chain'
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: chain discovery failed')
+		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because wallet discovery failed.')
+		expectTrustedStateInvalidated()
 		resetEnvironment()
 	})
 
@@ -963,6 +1132,206 @@ describe('useOnchainState (integration)', () => {
 		await failureRender.cleanup()
 		cleanupRenderedComponent = undefined
 		resetFailureEnvironment()
+	})
+
+	test('invalidates deployment state when the replacement environment is still bootstrapping', async () => {
+		const readySignal = createDeferred<void>()
+		const { backend: readyBackend } = createBackend({})
+		const { backend: bootstrappingBackend } = createBackend({
+			isBootstrapped: false,
+			waitUntilReady: async () => {
+				await readySignal.promise
+			},
+		})
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: true,
+				deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+			})),
+		})
+		let resetEnvironment = installActiveEnvironmentForTesting(readyBackend)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ activeEnvironmentNonce }: { activeEnvironmentNonce: number }) {
+			hookState = useOnchainState({ activeEnvironmentNonce }, dependencies)
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { activeEnvironmentNonce: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).deploymentStatuses.every(step => step.deployed)).toBe(true))
+		resetEnvironment = installActiveEnvironmentForTesting(bootstrappingBackend)
+		await act(() => {
+			render(h(Harness, { activeEnvironmentNonce: 1 }), renderedComponent.container)
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true))
+		expect(requireHookState(hookState).environmentReady).toBe(false)
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+
+		readySignal.reject(new Error('replacement bootstrap failed'))
+		await waitFor(() => expect(requireHookState(hookState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: replacement bootstrap failed'))
+		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+		resetEnvironment()
+	})
+
+	test('invalidates trusted state while an already-ready replacement environment loads', async () => {
+		const firstAccount = getAddress('0x00000000000000000000000000000000000000b1')
+		const replacementAccount = getAddress('0x00000000000000000000000000000000000000b2')
+		const replacementAccounts = createDeferred<readonly Address[]>()
+		const replacementSnapshot = createDeferred<{
+			augurStatoblastDeployed: boolean
+			deploymentStatuses: typeof deploymentStatuses
+		}>()
+		const { backend: firstBackend } = createBackend({
+			accountAddress: firstAccount,
+			readClient: createReadClient({ ethBalance: 11n }),
+		})
+		const { backend: replacementBackend } = createBackend({
+			getAccounts: async () => await replacementAccounts.promise,
+			readClient: createReadClient({ ethBalance: 22n }),
+		})
+		let snapshotLoadCount = 0
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => {
+				snapshotLoadCount += 1
+				if (snapshotLoadCount === 1)
+					return {
+						augurStatoblastDeployed: true,
+						deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+					}
+				return await replacementSnapshot.promise
+			}),
+			loadErc20Balance: mock(async () => 33n),
+		})
+		let resetEnvironment = installActiveEnvironmentForTesting(firstBackend)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ activeEnvironmentNonce }: { activeEnvironmentNonce: number }) {
+			hookState = useOnchainState({ activeEnvironmentNonce }, dependencies)
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { activeEnvironmentNonce: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.address).toBe(firstAccount))
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(requireHookState(hookState).deploymentStatuses.every(step => step.deployed)).toBe(true)
+
+		resetEnvironment = installActiveEnvironmentForTesting(replacementBackend)
+		await act(() => {
+			render(h(Harness, { activeEnvironmentNonce: 1 }), renderedComponent.container)
+		})
+
+		expect(requireHookState(hookState).accountState).toEqual({
+			address: undefined,
+			chainId: undefined,
+			ethBalance: undefined,
+			wethBalance: undefined,
+		})
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+
+		replacementAccounts.resolve([replacementAccount])
+		await act(async () => {
+			await replacementAccounts.promise
+		})
+		await waitFor(() => expect(requireHookState(hookState).accountState.address).toBe(replacementAccount))
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+
+		replacementSnapshot.resolve({
+			augurStatoblastDeployed: false,
+			deploymentStatuses,
+		})
+		await act(async () => {
+			await replacementSnapshot.promise
+		})
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		resetEnvironment()
+	})
+
+	test('does not let an old deployment load hide a replacement environment failure', async () => {
+		const staleSnapshot = createDeferred<{
+			augurStatoblastDeployed: boolean
+			deploymentStatuses: typeof deploymentStatuses
+		}>()
+		const { backend: firstBackend } = createBackend({})
+		const { backend: replacementBackend } = createBackend({})
+		let snapshotLoadCount = 0
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => {
+				snapshotLoadCount += 1
+				if (snapshotLoadCount === 1) return await staleSnapshot.promise
+				throw new Error('replacement deployment RPC failed')
+			}),
+		})
+		let resetEnvironment = installActiveEnvironmentForTesting(firstBackend)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ activeEnvironmentNonce }: { activeEnvironmentNonce: number }) {
+			hookState = useOnchainState({ activeEnvironmentNonce }, dependencies)
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { activeEnvironmentNonce: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).isLoadingDeploymentStatuses).toBe(true))
+
+		resetEnvironment = installActiveEnvironmentForTesting(replacementBackend)
+		await act(() => {
+			render(h(Harness, { activeEnvironmentNonce: 1 }), renderedComponent.container)
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).deploymentStatusError).toContain('replacement deployment RPC failed'))
+		expect(requireHookState(hookState).isLoadingDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+
+		staleSnapshot.resolve({
+			augurStatoblastDeployed: true,
+			deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+		})
+		await act(async () => {
+			await staleSnapshot.promise
+		})
+		expect(requireHookState(hookState).deploymentStatusError).toContain('replacement deployment RPC failed')
+		expect(requireHookState(hookState).isLoadingDeploymentStatuses).toBe(false)
+		resetEnvironment()
+	})
+
+	test('invalidates deployment truth and skips its read when read-RPC validation fails', async () => {
+		let validationFails = false
+		const readClient = {
+			...createReadClient(),
+			getChainId: async () => {
+				if (validationFails) throw new Error('read RPC unavailable')
+				return 1
+			},
+		} as ReadClient
+		const { backend } = createBackend({ hasWallet: false, readClient })
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurStatoblastDeployed: true,
+			deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+		}))
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot,
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+
+		validationFails = true
+		await act(async () => {
+			await requireHookState(hookState).refreshState()
+		})
+
+		expect(requireHookState(hookState).readBackendValidated).toBe(false)
+		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because read RPC validation failed.')
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+		resetEnvironment()
 	})
 
 	test('supports state refresh without wallet state loading', async () => {

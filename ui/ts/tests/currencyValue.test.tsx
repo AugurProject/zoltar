@@ -179,7 +179,7 @@ describe('CurrencyValue', () => {
 	test('keeps the value visible and associates an announced clipboard error', async () => {
 		const clipboard = {
 			writeText: async () => {
-				throw new Error('clipboard unavailable')
+				throw new DOMException('clipboard unavailable', 'NotAllowedError')
 			},
 		}
 		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
@@ -194,5 +194,6 @@ describe('CurrencyValue', () => {
 		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
+		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe('999 999 990 000')
 	})
 })

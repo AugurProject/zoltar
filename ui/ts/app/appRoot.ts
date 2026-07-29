@@ -24,6 +24,7 @@ export async function mountApp(options: MountAppOptions = {}) {
 		await initialize()
 		render(root(), target)
 	} catch (error) {
+		console.error('[ui] failed to initialize or mount application', error)
 		const errorMessage = getErrorMessage(error, appCopy.applicationInitializationErrorFallback)
 		render(createElement(ApplicationErrorNotice, { errorMessage, onRetry: () => mountApp(options) }), target)
 	}

@@ -41,6 +41,7 @@ export function MarketSection({
 	onCreateChildUniverseForOutcomeIndex,
 	onCreateMarket,
 	onForkZoltar,
+	onLoadZoltarQuestions,
 	onLoadZoltarQuestionPage,
 	onLoadSecurityPools,
 	onMarketFormChange,
@@ -67,6 +68,7 @@ export function MarketSection({
 	zoltarQuestionCount,
 	zoltarQuestionPage,
 	zoltarQuestions,
+	zoltarQuestionsError,
 	zoltarUniverse,
 	zoltarUniverseState,
 	securityPoolsLoadError,
@@ -149,6 +151,7 @@ export function MarketSection({
 							environmentRefreshKey={environmentRefreshKey}
 							hasForked={hasForked}
 							onCreateQuestion={() => onActiveViewChange('create')}
+							onLoadZoltarQuestions={onLoadZoltarQuestions}
 							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}
 							loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 							loadingZoltarQuestions={loadingZoltarQuestions}
@@ -160,6 +163,7 @@ export function MarketSection({
 							onUseQuestionForPool={onUseQuestionForPool}
 							zoltarQuestionCount={zoltarQuestionCount}
 							zoltarQuestionPage={zoltarQuestionPage}
+							zoltarQuestionsError={zoltarQuestionsError}
 							securityPools={securityPools}
 							securityPoolsLoadError={securityPoolsLoadError}
 						/>

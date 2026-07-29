@@ -55,7 +55,7 @@ describe('IdentifierValue', () => {
 	test('keeps the identifier visible and associates an announced clipboard error', async () => {
 		const value = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		clipboardWriteText.mockImplementation(async () => {
-			throw new Error('clipboard unavailable')
+			throw new DOMException('clipboard unavailable', 'NotAllowedError')
 		})
 		const renderedComponent = await renderIntoDocument(<IdentifierValue value={value} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -69,13 +69,14 @@ describe('IdentifierValue', () => {
 		expect(copyButton.textContent).toBe(value)
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
+		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe(value)
 	})
 
 	test('clears a clipboard error when the identifier changes', async () => {
 		const firstValue = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const secondValue = '0x0000000000000000000000000000000000000000000000000000000000000002'
 		clipboardWriteText.mockImplementation(async () => {
-			throw new Error('clipboard unavailable')
+			throw new DOMException('clipboard unavailable', 'NotAllowedError')
 		})
 		const renderedComponent = await renderIntoDocument(<IdentifierValue value={firstValue} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -112,7 +113,7 @@ describe('IdentifierValue', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: `Copy identifier ${firstValue}` }))
 		await act(async () => {
 			render(<IdentifierValue value={secondValue} />, renderedComponent.container)
-			rejectFirstCopy(new Error('old clipboard failure'))
+			rejectFirstCopy(new DOMException('old clipboard failure', 'NotAllowedError'))
 			await Promise.resolve()
 		})
 
@@ -143,7 +144,7 @@ describe('IdentifierValue', () => {
 		})
 		await waitFor(() => expect(copyButton.textContent).toBe('Copied'))
 		await act(async () => {
-			rejectFirstCopy(new Error('older clipboard failure'))
+			rejectFirstCopy(new DOMException('older clipboard failure', 'NotAllowedError'))
 			await Promise.resolve()
 		})
 

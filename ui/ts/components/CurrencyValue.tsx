@@ -100,7 +100,7 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactValue)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(exactValue)}>
 				{copiedValue ? commonCopy.copied : resolvedDisplayValue}
 			</button>
-			<CopyErrorMessage id={copyErrorId} message={copyError.value} />
+			<CopyErrorMessage id={copyErrorId} manualValue={exactValue} message={copyError.value} />
 			<span ref={measureRef} aria-hidden='true' className={measureClassName} />
 		</span>
 	)

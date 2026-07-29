@@ -707,6 +707,60 @@ describe('SimulationBanner', () => {
 		}
 	})
 
+	test('disables save controls and shows pending feedback while a save is in progress', async () => {
+		const domEnvironment = installDomEnvironment()
+		const exportedState = createDeferred<string>()
+		const environmentChanged = createDeferred<void>()
+		const exportState = mock(async () => await exportedState.promise)
+		const controller = createSimulationController({ exportState })
+		const onEnvironmentChanged = mock(async () => await environmentChanged.promise)
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={async () => undefined} />)
+
+		try {
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Save state' }))
+			const saveDialog = await waitFor(() => within(renderedComponent.container).getByRole('dialog'))
+			const dialogQueries = within(saveDialog)
+			const saveButton = dialogQueries.getByRole('button', { name: 'Save' })
+			fireEvent.click(saveButton)
+			fireEvent.click(saveButton)
+
+			const pendingButton = await waitFor(() => dialogQueries.getByRole('button', { name: 'Saving…' }))
+			expect(pendingButton.hasAttribute('disabled')).toBe(true)
+			expect((dialogQueries.getByLabelText('State name') as HTMLInputElement).disabled).toBe(true)
+			expect(dialogQueries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+			expect(exportState).toHaveBeenCalledTimes(1)
+
+			exportedState.resolve(
+				serializeSavedSimulationStateEnvelope({
+					baseScenario: 'baseline',
+					name: 'Pending save',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					state: {
+						blockCountSinceReset: 0n,
+						currentTimestamp: 1n,
+						queryDelayMilliseconds: 0,
+						repPerEthPrice: 10n ** 18n,
+						repPerUsdcPrice: 10n ** 6n,
+						selectedAccount: controller.selectedAccount,
+						snapshot: {},
+						transactionCountSinceReset: 0n,
+						transactionDelayMilliseconds: 0,
+					},
+					version: 1,
+				}),
+			)
+			await waitFor(() => expect(onEnvironmentChanged).toHaveBeenCalledTimes(1))
+			expect(dialogQueries.getByRole('button', { name: 'Saving…' })).not.toBeNull()
+
+			environmentChanged.resolve()
+			await waitFor(() => expect(dialogQueries.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false))
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('switches scenarios through route-state navigation without a full-page reload', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
 		const onRefresh = mock(async () => undefined)
@@ -754,6 +808,7 @@ describe('SimulationBanner', () => {
 
 	test('restores the route and shows an alert when scenario navigation fails', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
+		const initialHistoryLength = domEnvironment.window.history.length
 		const mineBlock = mock(async () => undefined)
 		const controller = createSimulationController({ mineBlock })
 		const onEnvironmentChanged = mock(async () => {
@@ -773,6 +828,7 @@ describe('SimulationBanner', () => {
 			const error = await waitFor(() => documentQueries.getByRole('alert'))
 			expect(error.textContent).toContain('replacement environment failed')
 			expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
+			expect(domEnvironment.window.history.length).toBe(initialHistoryLength)
 			expect(getElementValue(picker)).toBe('scenario:baseline')
 
 			const advancedControls = openAdvancedControls(renderedComponent.container)

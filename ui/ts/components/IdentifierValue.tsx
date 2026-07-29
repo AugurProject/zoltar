@@ -16,7 +16,7 @@ export function IdentifierValue({ className = '', value }: IdentifierValueProps)
 			<button className={classes} type='button' title={value} aria-label={commonCopy.formatCopyIdentifierValue(value)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(value)}>
 				{copied.value ? commonCopy.copied : value}
 			</button>
-			<CopyErrorMessage id={copyErrorId} message={copyError.value} />
+			<CopyErrorMessage id={copyErrorId} manualValue={value} message={copyError.value} />
 		</span>
 	)
 }

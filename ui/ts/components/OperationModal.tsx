@@ -20,7 +20,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	}
 }
 
-export function OperationModal({ children, closeOnSuccessKey, context = [], description, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const activeTransaction = useGlobalTransactionPresentation()
@@ -32,6 +32,9 @@ export function OperationModal({ children, closeOnSuccessKey, context = [], desc
 	const modalOperationKeysRef = useRef<Set<string>>(new Set())
 	const transactionOperationKeyAtOpenRef = useRef<string | undefined>()
 	const wasOpenRef = useRef(false)
+	const requestClose = () => {
+		if (!closeDisabled) onClose()
+	}
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -56,19 +59,19 @@ export function OperationModal({ children, closeOnSuccessKey, context = [], desc
 		dialogRef,
 		initialFocusRef: closeButtonRef,
 		isOpen,
-		onClose,
+		onClose: requestClose,
 	})
 
 	if (!isOpen) return undefined
 
 	return (
-		<div className='modal-backdrop' role='presentation' onClick={onClose}>
-			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
+		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
+			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' aria-busy={closeDisabled || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{title}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} onClick={onClose}>
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={closeDisabled} onClick={requestClose}>
 						×
 					</button>
 				</div>

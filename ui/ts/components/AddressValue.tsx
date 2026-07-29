@@ -51,7 +51,7 @@ export function AddressValue({ address, className = '', copyable = true, respons
 			<button type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
 				{copied.value ? commonCopy.copied : <AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />}
 			</button>
-			<CopyErrorMessage id={copyErrorId} message={copyError.value} />
+			<CopyErrorMessage id={copyErrorId} manualValue={address} message={copyError.value} />
 		</span>
 	)
 }
