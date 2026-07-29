@@ -37,17 +37,16 @@
 			<h2>Operational Lifecycle</h2>
 			<p class="security-assumption-ref">
 				<strong>Security assumptions:</strong>
-				<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-				<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
-				<a href="./security-model.html#assumption-a08">A08 independent bidders</a>,
-				<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
-				<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-				<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
-				<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
-				<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
-				<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
+				<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+				<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
+				<a href="./security-model.html#assumption-a03">A03 independent bidders</a>,
+				<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+				<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+				<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
+				<a href="./security-model.html#assumption-a20">A20 bid-data availability</a>,
+				<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
 				and
-				<a href="./security-model.html#assumption-a28">A28 native-ETH recipient compatibility</a>.
+				<a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
 			</p>
 
 			<p>
@@ -78,7 +77,10 @@
 				The child activates with legitimate migration collateral plus retained bid
 				ETH, even when that total is below the original fork snapshot. Full repair
 				is not guaranteed, and the remaining impairment is borne by the affected
-				child's open-interest holders. Finalization rejects caller contribution ETH,
+				child's open-interest holders. This is the security model's
+				<a href="./security-model.html#excluded-guarantee-eg02"
+					>EG02 full-repair exclusion</a
+				>. Finalization rejects caller contribution ETH,
 				and forced ETH remains unaccounted surplus. On the underfunded path,
 				qualifying bidders collectively receive <code>maxRepBeingSold</code>; when
 				no bid qualifies, no REP is sold. Any unsold REP remains behind inherited
@@ -97,35 +99,10 @@
 			</p>
 
 			<figure class="diagram diagram-wide" id="fig-auction-lifecycle">
-				<svg viewBox="0 0 880 180" role="img" aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting.">
-					<defs>
-						<marker id="auction-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-							<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-						</marker>
-					</defs>
-
-					<rect class="svg-red" x="20" y="50" width="150" height="70" rx="8"></rect>
-					<text class="svg-label" x="95" y="80" text-anchor="middle">Shortfall</text>
-					<text class="svg-small" x="95" y="103" text-anchor="middle">child pool lacks ETH</text>
-
-					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
-
-					<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
-					<text class="svg-label" x="305" y="80" text-anchor="middle">Start Auction</text>
-					<text class="svg-small" x="305" y="103" text-anchor="middle">repair target set</text>
-
-					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
-
-					<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
-					<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
-					<text class="svg-small" x="515" y="103" text-anchor="middle">ETH supplied</text>
-
-					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 590 85 H 650"></path>
-
-					<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
-					<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
-					<text class="svg-small" x="745" y="103" text-anchor="middle">bids settle → operational</text>
-				</svg>
+				<div class="plot-chart" data-plot-chart="fig-auction-lifecycle" data-plot-width="880" data-plot-height="180" role="img" aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting."><span class="plot-chart-fallback">Auction Lifecycle
+					After migration closes, a child-pool shortfall can be repaired through auction. ETH bids restore collateral, while winning
+					claims are settled into vault accounting. REP doesn't leave the system. Finalization accounts the ETH actually raised and
+					rejects contribution-only ETH, so bidder settlement never depends on a donor.</span></div>
 
 				<p class="diagram-caption">
 					<span class="figure-label">Auction Lifecycle</span>
@@ -254,9 +231,9 @@
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
-					<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
+					<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
 					and
-					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>.
+					<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>.
 				</p>
 				<p>
 					Bidders submit ETH at discrete price ticks, where each tick encodes an
@@ -352,47 +329,14 @@
 						</p>
 				</div>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
-					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
-						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
-						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</desc>
-						<defs>
-							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<text class="svg-small" x="40" y="34">higher ETH/REP limit</text>
-						<rect class="svg-green" x="40" y="52" width="230" height="64" rx="8"></rect>
-						<text class="svg-label" x="155" y="80" text-anchor="middle">High tick bids</text>
-						<text class="svg-small" x="155" y="101" text-anchor="middle">evaluated first</text>
-						<rect class="svg-gold" x="40" y="142" width="230" height="64" rx="8"></rect>
-						<text class="svg-label" x="155" y="170" text-anchor="middle">Binding tick</text>
-						<text class="svg-small" x="155" y="191" text-anchor="middle">marginal fill boundary</text>
-						<rect class="svg-red" x="40" y="232" width="230" height="64" rx="8"></rect>
-						<text class="svg-label" x="155" y="260" text-anchor="middle">Lower tick bids</text>
-						<text class="svg-small" x="155" y="281" text-anchor="middle">refunded below boundary</text>
-						<text class="svg-small" x="40" y="326">lower ETH/REP limit</text>
-						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 84 C 330 84 330 120 390 120"></path>
-						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 174 H 390"></path>
-						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 264 C 330 264 330 228 390 228"></path>
-						<rect class="svg-blue" x="390" y="110" width="220" height="128" rx="8"></rect>
-						<text class="svg-label" x="500" y="150" text-anchor="middle">Descending demand</text>
-						<text class="svg-small" x="500" y="177" text-anchor="middle">accumulate ETH and REP</text>
-						<text class="svg-small" x="500" y="201" text-anchor="middle">until a cap binds</text>
-						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 610 146 H 700"></path>
-						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 610 214 H 700"></path>
-						<rect class="svg-green" x="700" y="64" width="240" height="94" rx="8"></rect>
-						<text class="svg-label" x="820" y="98" text-anchor="middle">Uniform clearing</text>
-						<text class="svg-small" x="820" y="124" text-anchor="middle">first ETH or REP cap reached</text>
-						<rect class="svg-gold" x="700" y="198" width="240" height="108" rx="8"></rect>
-						<text class="svg-label" x="820" y="232" text-anchor="middle">Underfunded clearing</text>
-						<text class="svg-small" x="820" y="258" text-anchor="middle">cap-implied qualification tick</text>
-						<text class="svg-small" x="820" y="280" text-anchor="middle">complete REP cap shared pro rata</text>
-					</svg>
+					<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
 					<p class="diagram-caption">
-						<span class="figure-label">Clearing Price Ladder</span>The contract always
-						walks demand from expensive REP to cheap REP. What changes is the stopping
-						rule: a binding cap gives normal uniform clearing, while weak demand uses
-						the cap-implied qualification threshold and a uniform weak-demand allocation of the REP cap.
+						<span class="figure-label">Interactive Demand Curve</span>The stepped
+						curve accumulates bids from the highest limit price to the lowest. The
+						vertical rule is available REP, the horizontal rule is the current
+						clearing or qualification price, and colored bid points distinguish
+						accepted demand from demand below the boundary. The chart follows the
+						auction controls below.
 					</p>
 				</figure>
 				<p>
@@ -544,6 +488,12 @@
 
 			<section id="gas-and-spam">
 				<h2>Gas and Spam Bounds</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumption:</strong>
+					<a href="./security-model.html#assumption-a02"
+						>A02 viable operating costs</a
+					>.
+				</p>
 				<p>
 					The main spam risk is a bidder trying to fill bid slots or tick levels
 					cheaply enough to block later demand. The auction avoids that failure
@@ -582,8 +532,8 @@
 				<h2>Settlement Modes</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumption:</strong>
-					<a href="./security-model.html#assumption-a28"
-						>A28 native-ETH recipient compatibility</a
+					<a href="./security-model.html#assumption-a22"
+						>A22 native-ETH recipient compatibility</a
 					>.
 				</p>
 				<p>
@@ -833,6 +783,8 @@
 		</main>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
+
+		<script src="./chartRuntime.js"></script>
 		<script>
 			const formatFixed = (value, digits = 2) => {
 				if (!Number.isFinite(value)) {

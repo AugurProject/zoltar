@@ -9,13 +9,12 @@
 	<body class="doc-openoracle security-model">
 		<main>
 			<header>
-				<p class="security-model-kicker">Normative external trust boundary</p>
 				<h1>Statoblast Protocol Security Model</h1>
 				<p class="security-model-lede">
-					Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules
-					onchain. Their economic safety and practical liveness still depend on the
-					participant, market, asset, deployment, client, data, Ethereum, and cryptographic
-					assumptions below.
+					Statoblast and Zoltar enforce accounting, authorization, and lifecycle
+					rules onchain. Their economic safety and practical liveness still depend
+					on the participant, market, asset, deployment, client, data, Ethereum, and
+					cryptographic assumptions below.
 				</p>
 				<p>
 					An assumption is not a contract guarantee. Each entry names the boundary
@@ -32,19 +31,6 @@
 					<a href="#excluded-guarantees">Excluded guarantees</a>
 				</nav>
 			</header>
-
-			<section id="core-assumptions">
-				<h2>How to apply these assumptions</h2>
-				<p>
-					Review assumptions at the same system scope and time as the protected
-					action. For an economic claim, identify the attacker objective, the honest
-					participant expected to respond, required capital, transaction-inclusion
-					window, and maximum exposure if the response does not occur. Operators and
-					integrators should monitor the measurable boundaries—liquidity, gas,
-					participation, canonical addresses, and data availability—rather than treat
-					the list as a one-time launch checklist.
-				</p>
-			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
 				<h2 id="assumptions-value">Participation and coordination</h2>
@@ -75,7 +61,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a05" value="5" data-assumption="A05">
+					<li id="assumption-a02" value="2" data-assumption="A02">
 						<h3>Required actions remain worth their operating costs</h3>
 						<p>
 							For each time-sensitive action, transaction fees, opportunity cost,
@@ -97,7 +83,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a08" value="8" data-assumption="A08">
+					<li id="assumption-a03" value="3" data-assumption="A03">
 						<h3>Each economic role has enough independent participants</h3>
 						<p>
 							Trading, liquidation, escalation, migration, auction bidding, price
@@ -117,7 +103,7 @@
 							<a href="./truth-auction.html#lifecycle">auction participation</a>.
 						</p>
 					</li>
-					<li id="assumption-a10" value="10" data-assumption="A10">
+					<li id="assumption-a04" value="4" data-assumption="A04">
 						<h3>Participants can mobilize REP to raise an alarm</h3>
 						<p>
 							Market participants can mobilize enough vault-backed REP through
@@ -142,7 +128,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a13" value="13" class="assumption-wide" data-assumption="A13">
+					<li id="assumption-a05" value="5" data-assumption="A05">
 						<h3>Participants value continued access to the supported Statoblast lineage</h3>
 						<p>
 							The participants whose coordination determines durable use value
@@ -194,12 +180,14 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a21" value="21" data-assumption="A21">
+					<li id="assumption-a06" value="6" data-assumption="A06">
 						<h3>At least one executor advances every required public transition</h3>
 						<p>
 							An adequately funded participant or service monitors and calls each
-							needed permissionless transition, including fork activation, child
-							creation, auction start and finalization, bid settlement, report
+							needed permissionless transition, including liquidation initiation,
+							local escalation deposits and settlement, fork activation, child
+							creation, vault and share migration, auction start and finalization,
+							bid settlement, OpenOracle report settlement, settled-report callback
 							recovery, overflow operation execution, and proof-based claims.
 						</p>
 						<p class="assumption-failure">
@@ -227,7 +215,7 @@
 					truth judgments, asset value, liquidity, and migration.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a02" value="2" class="assumption-wide" data-assumption="A02">
+					<li id="assumption-a07" value="7" data-assumption="A07">
 						<h3>A supported lineage preserves enough aggregate child value</h3>
 						<p>
 							For each protected Statoblast origin lineage, evaluate the parent and
@@ -286,7 +274,7 @@
 							<a href="./statoblast-whitepaper.html#migration">pool migration</a>.
 						</p>
 					</li>
-					<li id="assumption-a03" value="3" data-assumption="A03">
+					<li id="assumption-a08" value="8" data-assumption="A08">
 						<h3>REP market capitalization approximates economic value</h3>
 						<p>
 							At the stated valuation time and system scope, REP market
@@ -305,12 +293,12 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a04" value="4" class="assumption-wide" data-assumption="A04">
+					<li id="assumption-a09" value="9" data-assumption="A09">
 						<h3>Users value the universes they judge truthful</h3>
 						<p>
 							Users prefer the universe or universes they judge truthful, so
 							economic activity and durable asset value concentrate there. Unlike
-							A02’s fork-security decision horizon, this assumption describes the
+							A07’s fork-security decision horizon, this assumption describes the
 							later, durable allocation of value after users coordinate.
 						</p>
 						<div
@@ -350,12 +338,11 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a06" value="6" data-assumption="A06">
+					<li id="assumption-a10" value="10" data-assumption="A10">
 						<h3>Participants can access timely outcome evidence</h3>
 						<p>
 							Users can obtain enough reliable real-world evidence before the
-							relevant protocol deadline to judge <code>Invalid</code>,
-							<code>Yes</code>, <code>No</code>, or another Zoltar branch.
+							relevant protocol deadline to judge which universe is truthfull.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> Missing, delayed, or conflicting
@@ -371,7 +358,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a07" value="7" data-assumption="A07">
+					<li id="assumption-a11" value="11" data-assumption="A11">
 						<h3>Migration is operationally practical</h3>
 						<p>
 							Users, exchanges, interfaces, custodians, and other integrations are
@@ -393,7 +380,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a09" value="9" data-assumption="A09">
+					<li id="assumption-a12" value="12" data-assumption="A12">
 						<h3>Truth auctions can convert supported child REP efficiently</h3>
 						<p>
 							When repair is needed, enough demand can buy some supported-child REP
@@ -411,7 +398,7 @@
 							<a href="./statoblast-whitepaper.html#auction">repair accounting</a>.
 						</p>
 					</li>
-					<li id="assumption-a11" value="11" data-assumption="A11">
+					<li id="assumption-a13" value="13" data-assumption="A13">
 						<h3>REP is sufficiently liquid</h3>
 						<p>
 							Participants can acquire or sell the required REP quantities without
@@ -431,7 +418,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a12" value="12" class="assumption-wide" data-assumption="A12">
+					<li id="assumption-a14" value="14" data-assumption="A14">
 						<h3>REP economic value exceeds the open interest it secures</h3>
 						<p>
 							For a stated pool, lineage, or system scope at one timestamp, open
@@ -441,7 +428,7 @@
 							protocol-accounted ETH collateral unless the analysis explicitly
 							names a broader exposure measure. The REP supply and price basis must
 							also be stated; market capitalization is the observable proxy in
-							<a href="#assumption-a03">A03</a>. This external relationship is
+							<a href="#assumption-a08">A08</a>. This external relationship is
 							separate from each pool’s onchain multiplier-adjusted REP backing
 							check.
 						</p>
@@ -458,9 +445,9 @@
 								data-source="commonNumeraire(openInterest) < commonNumeraire(repDiscountedCashFlow)"
 							>
 								<mrow>
-									<mi>OpenInterest</mi>
+									<mi>Open Interest</mi>
 									<mo>&lt;</mo>
-									<msub><mi>DCF</mi><mi>REP</mi></msub>
+									<msub><mi>Discounted Cash Flow</mi><mi>REP</mi></msub>
 								</mrow>
 							</math>
 							<p class="equation-caption">
@@ -483,7 +470,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a25" value="25" class="assumption-wide" data-assumption="A25">
+					<li id="assumption-a15" value="15" data-assumption="A15">
 						<h3>Question selection remains aligned with user intent</h3>
 						<p>
 							Interfaces and users verify the immutable question ID and metadata
@@ -503,33 +490,6 @@
 							<a href="./statoblast-whitepaper.html#pools">pool selection</a>.
 						</p>
 					</li>
-					<li id="assumption-a27" value="27" class="assumption-wide" data-assumption="A27">
-						<h3>Permissionless fork selection remains aligned with user coordination</h3>
-						<p>
-							Any caller that funds the fork threshold may select any registered,
-							ended global question to fork an initialized, supply-bearing, unforked
-							universe; Zoltar does not enforce relevance or user consent. The model
-							assumes such callers do not expect a risk-adjusted payoff from an
-							irrelevant or ambiguous fork and that users and integrations can
-							recognize it and coordinate on one supported child branch if it occurs.
-						</p>
-						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A threshold-funded caller can force
-							an unrelated or ambiguous fork that fragments liquidity, migration, or
-							user coordination even though every Zoltar admission guard passes.
-						</p>
-						<p class="assumption-links">
-							Mechanics:
-							<a href="./zoltar-whitepaper.html#global-question-scope"
-								>global question scope</a
-							>,
-							<a href="./statoblast-whitepaper.html#migration">fork migration</a>,
-							and
-							<a href="./operator-reference.md#security-review-orientation"
-								>operator orientation</a
-							>.
-						</p>
-					</li>
 				</ol>
 			</section>
 
@@ -541,7 +501,7 @@
 					act.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a14" value="14" data-assumption="A14">
+					<li id="assumption-a16" value="16" data-assumption="A16">
 						<h3>Deadline transactions can obtain Ethereum inclusion</h3>
 						<p>
 							Honest users can submit competitively priced Ethereum transactions
@@ -562,39 +522,21 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a15" value="15" data-assumption="A15">
-						<h3>Honest reporters can access sufficient capital</h3>
+					<li id="assumption-a17" value="17" data-assumption="A17">
+						<h3>OpenOracle has an available, adequately capitalized corrector</h3>
 						<p>
-							Honest reporters hold or can acquire enough REP for local escalation.
-							Price-oracle correction additionally requires the scenario-dependent
-							WETH and REP replacement position plus transaction costs.
-						</p>
-						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A participant can identify a wrong
-							outcome or price but remain unable to fund the correcting action.
-						</p>
-						<p class="assumption-links">
-							Mechanics:
-							<a href="./statoblast-whitepaper.html#escalation">escalation capital</a>,
-							<a href="./liquidation.html#rule">liquidation execution</a>, and
-							<a href="./open-oracle-integration.html#security-guarantee"
-								>oracle position sizing</a
-							>.
-						</p>
-					</li>
-					<li id="assumption-a16" value="16" data-assumption="A16">
-						<h3>OpenOracle has an always-available profitable arbitrager</h3>
-						<p>
-							At least one rational, adequately capitalized OpenOracle participant
-							continuously monitors pending REP/ETH reports, corrects every
-							security-relevant report covered by the profitability boundary in
-							<a href="#assumption-a20">A20</a>, and can obtain inclusion before
-							settlement.
+							At least one OpenOracle participant continuously monitors pending
+							REP/ETH reports, can identify candidate errors using the reference
+							market in <a href="#assumption-a19">A19</a>, can fund the
+							scenario-dependent WETH and REP replacement position plus transaction
+							costs, and can obtain inclusion before settlement. The participant's
+							net incentive to perform the correction is the separate boundary in
+							<a href="#assumption-a18">A18</a>.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> An incorrect report can settle and
-							authorize price-sensitive pool actions when no arbitrager detects,
-							funds, and includes the correction.
+							authorize price-sensitive pool actions when no capable participant
+							detects, funds, and includes a correction.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -605,18 +547,21 @@
 							<a href="./open-oracle-integration.html#attack-model">attack model</a>.
 						</p>
 					</li>
-					<li id="assumption-a17" value="17" data-assumption="A17">
-						<h3>The sponsor and at least one corrector are economically independent</h3>
+					<li id="assumption-a18" value="18" data-assumption="A18">
+						<h3>At least one available corrector has an independent net incentive</h3>
 						<p>
-							The sponsor-funded coordinator reporting path and at least one
-							correcting OpenOracle participant are not under common control, do
-							not share the manipulation payoff, and do not collude. Two external
-							submissions are not required for every request.
+							At least one participant satisfying <a href="#assumption-a17">A17</a>
+							is not under common control with the sponsor-funded coordinator
+							reporting path, does not share the manipulation payoff, and is not
+							bribed or compensated. The participant's net payoff from correcting
+							is strictly greater than its net payoff from leaving the harmful
+							report uncorrected. Two external submissions are not required for
+							every request.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A sponsor-controlled or bribed
-							corrector can make the contestable report path behave like a single
-							trusted reporter.
+							<strong>Failure boundary:</strong> A sponsor-controlled, bribed, or
+							economically indifferent corrector can make the contestable report
+							path behave like a single trusted reporter.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -630,7 +575,7 @@
 							<a href="./invariants.html#oracle">oracle invariants</a>.
 						</p>
 					</li>
-					<li id="assumption-a20" value="20" class="assumption-wide" data-assumption="A20">
+					<li id="assumption-a19" value="19" data-assumption="A19">
 						<h3>A robust reference market makes harmful REP/ETH errors correctable</h3>
 						<p>
 							Independent participants can observe a manipulation-resistant
@@ -658,7 +603,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a22" value="22" data-assumption="A22">
+					<li id="assumption-a20" value="20" data-assumption="A20">
 						<h3>Canonical chain data and proof construction remain available</h3>
 						<p>
 							Participants can access reorg-aware Ethereum history, recognized
@@ -689,21 +634,24 @@
 					onchain guards.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a18" value="18" class="assumption-wide" data-assumption="A18">
-						<h3>Canonical REP and WETH obey the accounting model</h3>
+					<li id="assumption-a21" value="21" data-assumption="A21">
+						<h3>Genesis REP and configured WETH obey the external accounting model</h3>
 						<p>
-							Genesis REP, child REP, and configured WETH move exactly the requested
-							base units, use 18 decimals, return supported ERC-20 values, and do not
-							rebase, charge transfer fees, invoke unexpected callbacks, blacklist
-							protocol contracts, pause required transfers, or permit unauthorized
-							minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical
-							supply is accurate, and the configured genesis REP burn sink remains
-							inaccessible.
+							Genesis REP and configured WETH move exactly the requested base units,
+							use 18 decimals, return supported ERC-20 values, and do not rebase,
+							charge transfer fees, invoke unexpected callbacks, blacklist protocol
+							contracts, pause required transfers, or permit unauthorized minting.
+							WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is
+							accurate, and the configured genesis REP burn sink remains
+							inaccessible. Canonical child REP is implemented by the reviewed
+							<code>ReputationToken</code> contract and is a protocol-enforced
+							property under A23 and A26, not an additional external-token
+							assumption.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> Pool, fork, auction, or oracle
-							accounting can overstate balances, backing, burned supply, or WETH
-							value.
+							<strong>Failure boundary:</strong> Origin-pool, genesis-fork, or
+							oracle accounting can overstate balances, backing, burned supply, or
+							WETH value.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -715,7 +663,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a28" value="28" class="assumption-wide" data-assumption="A28">
+					<li id="assumption-a22" value="22" data-assumption="A22">
 						<h3>Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>
 							Vaults, bidders, oracle sponsors, traders, share holders, and other
@@ -751,19 +699,23 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a19" value="19" class="assumption-wide" data-assumption="A19">
+					<li id="assumption-a23" value="23" data-assumption="A23">
 						<h3>Users select verified canonical deployments</h3>
 						<p>
-							Users and integrations verify runtime bytecode, constructor-installed
-							dependencies, factory and forker provenance, pool lineage, question
-							ID, and the reviewed release manifest. Constructor admission is not a
-							safety proof.
+							The reviewed release is built reproducibly with its pinned compiler
+							and toolchain configuration. Release artifacts identify the manifest
+							addresses and reviewed bytecode hashes. Users and integrations compare
+							locally rebuilt and deployed runtime bytecode with those reviewed
+							hashes, then verify constructor-installed dependencies, factory and
+							forker provenance, pool lineage, question ID, and manifest.
+							Constructor admission is not a safety proof.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> Permissionless lookalike instances,
-							wrong dependencies, or unintended lineage and question wiring can
-							bypass the reviewed protocol even when the selected bytecode functions
-							as configured.
+							<strong>Failure boundary:</strong> Toolchain drift, unavailable or
+							mismatched reviewed hashes, permissionless lookalike instances, wrong
+							dependencies, or unintended lineage and question wiring can bypass the
+							reviewed protocol even when the selected bytecode functions as
+							configured.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -771,13 +723,17 @@
 								>release posture</a
 							>,
 							<a href="./deployment-status.html">deployment status</a>,
+							<a href="../solidity/ts/compile.ts">compiler configuration</a>,
+							<a href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md"
+								>OpenOracle build provenance</a
+							>,
 							<a href="./invariants.html#authority">authority invariants</a>, and
 							<a href="./escalation-game-architecture.html#deployment-bytecode"
 								>deployment bytecode</a
 							>.
 						</p>
 					</li>
-					<li id="assumption-a29" value="29" class="assumption-wide" data-assumption="A29">
+					<li id="assumption-a24" value="24" data-assumption="A24">
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>
 							Interfaces, indexers, RPC providers, and wallet software return
@@ -802,7 +758,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a26" value="26" class="assumption-wide" data-assumption="A26">
+					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
 						<p>
 							The selected parameter relationships keep the fork threshold and
@@ -833,7 +789,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a23" value="23" class="assumption-wide" data-assumption="A23">
+					<li id="assumption-a26" value="26" data-assumption="A26">
 						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
 						<p>
 							Ethereum continues to provide correct EVM execution and atomic
@@ -858,26 +814,79 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a24" value="24" data-assumption="A24">
+					<li id="assumption-a27" value="27" data-assumption="A27">
 						<h3>Ethereum cryptographic primitives remain secure</h3>
 						<p>
 							Keccak-256 remains collision- and preimage-resistant at the truncated
-							widths used by the protocol, CREATE2 identity remains sound, and users
-							retain control of the private keys authorizing their accounts.
+							widths used by the protocol, and CREATE2 identity remains sound.
+							secp256k1 ECDSA signatures remain unforgeable with correct EOA signer
+							recovery for Ethereum transactions and EIP-712 authorizations.
+							OpenOracle's fixed Permit2 singleton additionally validates either an
+							EOA signature or an ERC-1271 contract-account signature correctly.
+						</p>
+						<p>
+							OpenOracle fixes the Permit2 address, requires the exact permitted
+							amount, sends the requested tokens to itself, and constructs the
+							witness from the beneficiary, relayer, token owner, and intent.
+							Canonical Permit2 owns the EIP-712 domain, deadline, permitted-amount
+							ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature
+							validation. Verification under <a href="#assumption-a23">A23</a> must
+							cover the pinned Permit2 implementation at that fixed address.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> Forged identities, colliding
-							questions or universes, false carry proofs, or stolen account
-							authority can violate otherwise-correct guards.
+							questions or universes, false carry proofs, forged EOA transactions,
+							incorrect EOA recovery or ERC-1271 acceptance, or broken domain and
+							nonce enforcement can violate otherwise-correct guards or authorize
+							an unintended token transfer.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./zoltar-whitepaper.html#universe-model"
 								>universe identity</a
 							>,
-							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>, and
+							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+								>Permit2 deposit authorization</a
+							>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol"
+								>Permit2 signature interface</a
+							>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md#permit2-dependency"
+								>pinned Permit2 implementation provenance</a
+							>,
+							and
 							<a href="./operator-reference.md#security-pool-guardrails"
 								>deterministic deployments</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a28" value="28" data-assumption="A28">
+						<h3>Participants retain control of account authority</h3>
+						<p>
+							Participants protect the private keys, signing devices, session
+							permissions, and delegated ERC-20 or ERC-1155 approvals that authorize
+							their accounts. Account recovery and custody arrangements do not give
+							an unintended party effective control during a security-sensitive
+							window.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A stolen key, compromised signer, or
+							overbroad approval can authorize valid but unwanted transfers,
+							deposits, bids, migrations, or configuration changes without
+							violating a contract guard.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./contract-interaction-reference.md">transaction authority</a>,
+							<a href="./operator-reference.md#security-pool-guardrails"
+								>vault and pool operations</a
+							>, and
+							<a href="./operator-reference.md#assumption-monitoring"
+								>account-authority monitoring</a
 							>.
 						</p>
 					</li>
@@ -891,25 +900,31 @@
 					They should be included in user, operator, and integration risk disclosures.
 				</p>
 				<ul class="excluded-guarantee-list">
-					<li>
-						Zoltar creates valid branches but does not identify the objectively
-						truthful branch or force users to coordinate there.
+					<li id="excluded-guarantee-eg01">
+						<strong>EG01.</strong>
+						Zoltar creates valid branches but does not enforce that the fork question
+						is relevant to a user, establish the objectively truthful branch, obtain
+						user consent to a fork, or force users to coordinate on one branch.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg02">
+						<strong>EG02.</strong>
 						A truth auction may raise less than its repair target; the child then
 						activates with migrated collateral plus accepted auction ETH.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg03">
+						<strong>EG03.</strong>
 						OpenOracle report liquidity does not cap the notional value of operations
 						using an accepted price, and settlement does not prove external price
 						correctness.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg04">
+						<strong>EG04.</strong>
 						A participant with unbounded capital can keep funding valid disputes and
 						delay the sponsor lane indefinitely; no bounded coordinator-availability
 						claim is made.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg05">
+						<strong>EG05.</strong>
 						The immutable protocol has no administrator who can pause, upgrade, roll
 						back, or rescue an unsafe deployment after launch.
 					</li>

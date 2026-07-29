@@ -455,6 +455,72 @@ test('Chromium DevTools connection reports a browser signal during its WebSocket
 	expect(startupError.message).toContain('Chromium stderr:\nfatal handshake signal startup')
 })
 
+type ChromiumDevToolsSocket = Pick<WebSocket, 'addEventListener' | 'send'>
+
+function createChromiumDevToolsCommandSender(socket: ChromiumDevToolsSocket, browserProcess: BrowserProcess, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS) {
+	let requestId = 0
+	const pendingRequests = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
+	const rejectPendingRequests = (message: string) => {
+		for (const pending of pendingRequests.values()) pending.reject(new Error(message))
+		pendingRequests.clear()
+	}
+
+	socket.addEventListener('message', event => {
+		if (typeof event.data !== 'string') return
+		const message: unknown = JSON.parse(event.data)
+		if (typeof message !== 'object' || message === null || !('id' in message) || typeof message.id !== 'number') return
+		const pending = pendingRequests.get(message.id)
+		if (pending === undefined) return
+		pendingRequests.delete(message.id)
+		if ('error' in message) pending.reject(new Error(`Chromium DevTools command failed: ${JSON.stringify(message.error)}`))
+		else pending.resolve('result' in message ? message.result : undefined)
+	})
+	socket.addEventListener('close', () => rejectPendingRequests('Chromium DevTools connection closed while commands were pending'))
+	socket.addEventListener('error', () => rejectPendingRequests('Chromium DevTools connection failed while commands were pending'))
+
+	return async (method: string, params: Record<string, unknown> = {}) => {
+		requestId += 1
+		const currentRequestId = requestId
+		const response = new Promise<unknown>((resolve, reject) => {
+			pendingRequests.set(currentRequestId, { reject, resolve })
+		})
+		try {
+			socket.send(JSON.stringify({ id: currentRequestId, method, params }))
+			return await Promise.race([
+				response,
+				rejectWhenBrowserExits(browserProcess, `completing DevTools command ${method}`),
+				Bun.sleep(timeoutMilliseconds).then(() => {
+					throw new Error(`Chromium DevTools command ${method} did not complete within ${timeoutMilliseconds.toString()}ms`)
+				}),
+			])
+		} finally {
+			pendingRequests.delete(currentRequestId)
+		}
+	}
+}
+
+test('Chromium DevTools commands report a browser exit while awaiting a response', async () => {
+	const browserController = createControllableBrowserProcess()
+	const socket: ChromiumDevToolsSocket = Object.assign(new EventTarget(), { send: () => undefined })
+	const send = createChromiumDevToolsCommandSender(socket, browserController.browserProcess)
+	const commandFailure = send('Runtime.evaluate').then(
+		() => new Error('Chromium DevTools command unexpectedly succeeded'),
+		error => error,
+	)
+
+	browserController.terminate({ exitCode: 25, exitStatus: 25, signalCode: null, stderr: '' })
+
+	await expect(commandFailure).resolves.toThrow('Chromium exited with code 25 before completing DevTools command Runtime.evaluate')
+})
+
+test('Chromium DevTools commands bound a stalled response', async () => {
+	const browserController = createControllableBrowserProcess()
+	const socket: ChromiumDevToolsSocket = Object.assign(new EventTarget(), { send: () => undefined })
+	const send = createChromiumDevToolsCommandSender(socket, browserController.browserProcess, 25)
+
+	await expect(send('Page.navigate')).rejects.toThrow('Chromium DevTools command Page.navigate did not complete within 25ms')
+})
+
 function readEvaluationString(response: unknown) {
 	if (typeof response !== 'object' || response === null || !('result' in response)) throw new Error('Chromium evaluation result was missing')
 	const result = response.result
@@ -489,28 +555,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 		await waitForChromiumWebSocketOpen(socket, browser)
 		devToolsConnected = true
 
-		let requestId = 0
-		const pendingRequests = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
-		socket.addEventListener('message', event => {
-			if (typeof event.data !== 'string') return
-			const message = JSON.parse(event.data)
-			if (typeof message !== 'object' || message === null || !('id' in message) || typeof message.id !== 'number') return
-			const pending = pendingRequests.get(message.id)
-			if (pending === undefined) return
-			pendingRequests.delete(message.id)
-			if ('error' in message) pending.reject(new Error(`Chromium DevTools command failed: ${JSON.stringify(message.error)}`))
-			else pending.resolve('result' in message ? message.result : undefined)
-		})
-		const send = async (method: string, params: Record<string, unknown> = {}) => {
-			if (socket === undefined) throw new Error('Chromium DevTools connection was unavailable')
-			requestId += 1
-			const currentRequestId = requestId
-			const result = new Promise<unknown>((resolve, reject) => {
-				pendingRequests.set(currentRequestId, { reject, resolve })
-			})
-			socket.send(JSON.stringify({ id: currentRequestId, method, params }))
-			return await result
-		}
+		const send = createChromiumDevToolsCommandSender(socket, browser)
 		const evaluate = async (expression: string) => {
 			const response = await send('Runtime.evaluate', { expression, returnByValue: true })
 			if (typeof response !== 'object' || response === null || !('result' in response)) throw new Error('Chromium evaluation result was missing')
