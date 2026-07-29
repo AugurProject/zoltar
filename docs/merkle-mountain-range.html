@@ -85,29 +85,8 @@
 					Any leaf count from <code>0</code> up to but not including <code>2^64</code> is
 					valid because its binary decomposition fits inside 64 peak slots.
 				</p>
-				<figure class="diagram diagram-wide" id="fig-mmr-peaks" aria-labelledby="mmr-peaks-title">
-					<svg
-						viewBox="0 0 920 250"
-						role="img"
-						aria-labelledby="mmr-peaks-title mmr-peaks-desc"
-					>
-						<title id="mmr-peaks-title">Merkle Mountain Range peaks are determined by set bits in the leaf count</title>
-						<desc id="mmr-peaks-desc">A leaf count of thirteen is shown as binary one one zero one, corresponding to occupied peaks at heights zero, two, and three which are later bagged into one root.</desc>
-						<rect class="svg-box" x="44" y="52" width="260" height="140" rx="10"></rect>
-						<text class="svg-label" x="174" y="88" text-anchor="middle">leafCount = 13</text>
-						<text class="svg-small" x="174" y="116" text-anchor="middle">binary 1101</text>
-						<text class="svg-small" x="174" y="146" text-anchor="middle">set bits at heights 0, 2, 3</text>
-						<rect class="svg-gold" x="380" y="146" width="92" height="34" rx="8"></rect>
-						<rect class="svg-gold" x="504" y="112" width="92" height="68" rx="8"></rect>
-						<rect class="svg-gold" x="628" y="78" width="92" height="102" rx="8"></rect>
-						<text class="svg-label" x="426" y="168" text-anchor="middle">peak 0</text>
-						<text class="svg-label" x="550" y="152" text-anchor="middle">peak 2</text>
-						<text class="svg-label" x="674" y="136" text-anchor="middle">peak 3</text>
-						<text class="svg-small" x="550" y="46" text-anchor="middle">occupied peaks</text>
-						<path class="svg-line" d="M 720 128 H 806"></path>
-						<rect class="svg-blue" x="806" y="96" width="72" height="64" rx="8"></rect>
-						<text class="svg-label" x="842" y="135" text-anchor="middle">root</text>
-					</svg>
+				<figure class="diagram diagram-wide" id="fig-mmr-peaks">
+					<div class="plot-chart" data-plot-chart="fig-mmr-peaks" data-plot-width="920" data-plot-height="250" role="img" aria-label="Merkle Mountain Range peaks are determined by set bits in the leaf count"><span class="plot-chart-fallback">A leaf count of thirteen is shown as binary one one zero one, corresponding to occupied peaks at heights zero, two, and three which are later bagged into one root.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">MMR Peaks</span>The occupied peak heights are exactly
 						the set bits in the snapshot leaf count. Those occupied peaks are later bagged
@@ -175,49 +154,8 @@
 						</tr>
 					</tbody>
 				</table>
-				<figure class="diagram diagram-wide" id="fig-mmr-proof-anatomy" aria-labelledby="mmr-proof-title">
-					<svg viewBox="0 0 940 390" role="img" aria-labelledby="mmr-proof-title mmr-proof-desc">
-						<title id="mmr-proof-title">A carried-deposit proof has an MMR membership lane and a separate nullifier lane</title>
-						<desc id="mmr-proof-desc">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane hashes the stable parent deposit index and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</desc>
-						<defs>
-							<marker id="mmr-proof-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<text class="svg-small" x="28" y="34">MMR membership lane</text>
-						<rect class="svg-blue" x="28" y="52" width="178" height="70" rx="8"></rect>
-						<text class="svg-label" x="117" y="82" text-anchor="middle">Deposit leaf</text>
-						<text class="svg-small" x="117" y="104" text-anchor="middle">peak-local leafIndex</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 206 87 H 246"></path>
-						<rect class="svg-gold" x="246" y="52" width="206" height="70" rx="8"></rect>
-						<text class="svg-label" x="349" y="80" text-anchor="middle">In-peak siblings</text>
-						<text class="svg-small" x="349" y="99" text-anchor="middle">bottom-up</text>
-						<text class="svg-small" x="349" y="115" text-anchor="middle">count = peak height</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 452 87 H 492"></path>
-						<rect class="svg-green" x="492" y="52" width="178" height="70" rx="8"></rect>
-						<text class="svg-label" x="581" y="82" text-anchor="middle">Selected peak</text>
-						<text class="svg-small" x="581" y="104" text-anchor="middle">peakIndex is its height</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 670 87 H 710"></path>
-						<rect class="svg-gold" x="710" y="42" width="202" height="90" rx="8"></rect>
-						<text class="svg-label" x="811" y="72" text-anchor="middle">Other peak roots</text>
-						<text class="svg-small" x="811" y="96" text-anchor="middle">ascending height order</text>
-						<text class="svg-small" x="811" y="116" text-anchor="middle">then bag right to left</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 811 132 V 172"></path>
-						<rect class="svg-green" x="710" y="172" width="202" height="64" rx="8"></rect>
-						<text class="svg-label" x="811" y="210" text-anchor="middle">Snapshot root</text>
-						<text class="svg-small" x="28" y="274">nullifier lane</text>
-						<rect class="svg-blue" x="28" y="292" width="220" height="64" rx="8"></rect>
-						<text class="svg-label" x="138" y="318" text-anchor="middle">parentDepositIndex</text>
-						<text class="svg-small" x="138" y="340" text-anchor="middle">stable replay identity</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 248 324 H 316"></path>
-						<rect class="svg-gold" x="316" y="292" width="228" height="64" rx="8"></rect>
-						<text class="svg-label" x="430" y="318" text-anchor="middle">Nullifier siblings</text>
-						<text class="svg-small" x="430" y="340" text-anchor="middle">fixed depth = 64</text>
-						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 544 324 H 612"></path>
-						<rect class="svg-green" x="612" y="292" width="230" height="64" rx="8"></rect>
-						<text class="svg-label" x="727" y="318" text-anchor="middle">Current nullifier root</text>
-						<text class="svg-small" x="727" y="340" text-anchor="middle">empty leaf proves unspent</text>
-					</svg>
+				<figure class="diagram diagram-wide" id="fig-mmr-proof-anatomy">
+					<div class="plot-chart" data-plot-chart="fig-mmr-proof-anatomy" data-plot-width="940" data-plot-height="390" role="img" aria-label="A carried-deposit proof has an MMR membership lane and a separate nullifier lane"><span class="plot-chart-fallback">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane hashes the stable parent deposit index and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">Carry Proof Anatomy</span>The MMR sibling array
 						first reconstructs one selected peak and then supplies every other occupied
@@ -310,5 +248,7 @@
 				</ul>
 			</section>
 		</main>
+
+		<script src="./chartRuntime.js"></script>
 	</body>
 </html>

@@ -43,6 +43,15 @@
 	},
 	"overrides": [
 		{
+			"includes": ["docs/chartRuntime.js"],
+			"formatter": {
+				"enabled": false
+			},
+			"linter": {
+				"enabled": false
+			}
+		},
+		{
 			"includes": ["solidity/ts/testSupport/simulator/types/wire-types.js"],
 			"formatter": {
 				"enabled": false
