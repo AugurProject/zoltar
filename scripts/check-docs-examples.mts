@@ -1012,8 +1012,13 @@ assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-ti
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\)"/i,
-	'whitepaper should document the fork-specific migrated REP denominator and Solidity floor',
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\); migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator \? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"/i,
+	'whitepaper should document the fork-specific migrated REP denominator, provisional Solidity floor, and final full-ownership reconciliation',
+)
+assert.match(
+	statoblastHtml,
+	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>provisionalMigratedRepDelta<\/mi>[\s\S]*Unlocked vault migration normally floors[\s\S]*completes the parent ownership denominator[\s\S]*exact remaining REP delta[\s\S]*tracks cumulative migrated parent ownership independently\s+for every child/i,
+	'whitepaper visible migration equation, caption, and prose should distinguish provisional per-vault floors from child-specific final REP reconciliation',
 )
 assert.match(statoblastHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')

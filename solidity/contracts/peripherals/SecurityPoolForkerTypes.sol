@@ -31,6 +31,7 @@ struct SecurityPoolForkerForkData {
 	bytes32 escalationSnapshotId;
 	uint256 forkCollateralReceived;
 	uint256 forkActivationTime;
+	uint256 migratedPoolOwnership;
 }
 
 struct OwnForkChildRepAllocation {
