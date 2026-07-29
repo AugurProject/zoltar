@@ -577,8 +577,9 @@
 						<span class="term" tabindex="0">liquidation threshold</span>.
 					</li>
 					<li>
-						The callback rejects zero reports, computed zero prices, unexpected
-						report ids, and settlements during excessive base fee.
+						The callback rejects zero or saturated report counters, final reports
+						that are uneconomic to dispute, computed zero prices, unexpected report
+						ids, and settlements during excessive base fee.
 					</li>
 				</ul>
 				<p>
@@ -854,8 +855,11 @@
 					Coordinator-level price rejections are separate from low-level
 					callback failures. After a callback successfully enters the
 					coordinator, a settlement with base fee above the request-time cap,
+					a saturated <code>uint24</code> report counter, reported as
+					<code>Counter saturated</code>,
 					a final history record whose WETH amount is too small for another
 					dispute at its recorded base fee plus the configured priority fee,
+					reported as <code>Report uneconomic</code>,
 					zero amounts, or a computed zero price clears the pending id, emits
 					<code>PriceReportRejected</code>, and does not update the price cache
 					or replay pending operations. Those pending settlement operations
@@ -1441,10 +1445,13 @@
 						and does not compare the final price with an external truth source.
 						OpenOracle records each report block's base fee when dispute tracking
 						is enabled. The callback reads
-						<code>storedGame(reportId).numReports</code>, selects history index
-						<code>numReports - 1</code>, and requires the final WETH amount to
-						cover the configured security formula at that record's base fee plus
-						the configured priority fee. It also checks the request-time
+						<code>storedGame(reportId).numReports</code>. If that
+						<code>uint24</code> counter is saturated, the callback rejects the
+						price with <code>Counter saturated</code> because a later dispute can overwrite history index
+						<code>type(uint24).max</code> without advancing the counter. Otherwise
+						it selects history index <code>numReports - 1</code> and requires the
+						final WETH amount to cover the configured security formula at that
+						record's base fee plus the configured priority fee. It also checks the request-time
 						settlement base-fee cap, requires nonzero final WETH and REP amounts
 						and a nonzero integer REP/ETH ratio, then records that ratio. This
 						check proves only that the final WETH position meets the modeled
@@ -1656,7 +1663,8 @@
 							<td>
 								Uses timestamps. Coordinator reports always enable dispute
 								history so settlement can validate the final report's recorded
-								base fee.
+								base fee. Settlement rejects the price if the
+								<code>uint24</code> report counter is saturated.
 							</td>
 						</tr>
 						<tr>

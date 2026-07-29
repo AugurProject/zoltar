@@ -1999,9 +1999,25 @@ assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-ti
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\)"/i,
-	'whitepaper should document the fork-specific migrated REP denominator and Solidity floor',
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\); migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator \? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"/i,
+	'whitepaper should document the fork-specific migrated REP denominator, provisional Solidity floor, and final full-ownership reconciliation',
 )
+assert.match(
+	statoblastHtml,
+	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>provisionalMigratedRepDelta<\/mi>[\s\S]*Unlocked vault migration normally floors[\s\S]*completes the parent ownership denominator[\s\S]*exact remaining REP delta[\s\S]*tracks cumulative migrated parent ownership independently\s+for every child/i,
+	'whitepaper visible migration equation, caption, and prose should distinguish provisional per-vault floors from child-specific final REP reconciliation',
+)
+assert.match(
+	statoblastHtml,
+	/id="fig-statoblast-proportional-migration"[\s\S]*normally determines a floored migrated REP[\s\S]*completes a child's ownership receives[\s\S]*cumulative routed REP determines child[\s\S]*normally floors each ownership-based REP delta[\s\S]*reconciles every remaining REP unit/i,
+	'whitepaper migration figure fallback and caption should distinguish provisional floors from final full-ownership reconciliation',
+)
+assert.match(
+	statoblastHtml,
+	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDelta<\/mi>[\s\S]*<mi>migrationRepDenominatorAtFork<\/mi>[\s\S]*<mi>priorMigratedRep<\/mi>[\s\S]*<mi>resultingMigratedPoolOwnership<\/mi>[\s\S]*<mi>parentPoolOwnershipDenominator<\/mi>[\s\S]*<mi>provisionalMigratedRepDelta<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
+	'whitepaper visible migration equation should render the final full-ownership reconciliation branch',
+)
+assert.match(diagramSpecsSource, /"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*cumulative routed REP target[\s\S]*cumulative ceiling target/i, 'proportional migration diagram should show provisional REP flooring, final reconciliation, and cumulative collateral routing')
 assert.match(statoblastHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
