@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'da3d00a6406448921b5acb1b630c0f77f400e1a8ed16b68eb324d3386d233fc4'
+const expectedProductionSoliditySourceFingerprint = '6f29c7128599413f5ffdef9dcc8259c8ff12cdcc22dc1229f5f5f0f3261341af'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -1430,7 +1430,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Configured `OpenOracle` only',
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
-				preconditions: 'Callback report matches the pending report; excessive settlement basefee, an uneconomic final history record at its recorded base fee plus configured priority fee, or zero values reject the price after clearing pending report state.',
+				preconditions: 'Callback report matches the pending report; excessive settlement basefee, a saturated `uint24` report counter, an uneconomic final history record at its recorded base fee plus configured priority fee, or zero values reject the price after clearing pending report state.',
 				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{

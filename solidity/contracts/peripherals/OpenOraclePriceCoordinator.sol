@@ -493,7 +493,7 @@ contract OpenOraclePriceCoordinator {
 
 	function _wasFinalReportProfitableToDispute(uint256 reportId, uint256 finalAmount1) private view returns (bool) {
 		(, , , , , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
-		if (numReports == 0) return false;
+		if (numReports == 0 || numReports == type(uint24).max) return false;
 		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
 		uint256 minimumProfitableReport =
 			_minimumToken1ReportForGasPrice(initialReportPriorityFeeWeiPerGas) +

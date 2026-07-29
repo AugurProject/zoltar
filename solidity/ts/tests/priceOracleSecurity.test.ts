@@ -59,6 +59,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
 const OPEN_ORACLE_GAME_MAPPING_SLOT = 1n
+const MAX_OPEN_ORACLE_REPORT_COUNT = (1n << 24n) - 1n
 
 const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -1377,6 +1378,43 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
 		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'the uniquely expensive final dispute record must drive settlement rejection')
+	})
+
+	test('oracle settlement rejects a saturated dispute-history counter', async () => {
+		await requestPrice(client, priceOracle)
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		const eventState = await loadOpenOracleEventState(client, reportId)
+		const saturatedPreimage: OpenOracleStatePreimage = {
+			...eventState.latest,
+			game: {
+				...eventState.latest.game,
+				numReports: MAX_OPEN_ORACLE_REPORT_COUNT,
+			},
+		}
+		const gameSlot = getMappingStorageSlot(reportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
+		await mockWindow.addStateOverrides({
+			[getInfraContractAddresses().openOracle]: {
+				stateDiff: {
+					[formatStorageSlot(gameSlot)]: BigInt(hashOpenOracleStatePreimage(saturatedPreimage)),
+				},
+			},
+		})
+
+		await mockWindow.advanceTime(reportMeta.settlementTime + 1n)
+		const settlementHash = await client.writeContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			address: getInfraContractAddresses().openOracle,
+			functionName: 'settle',
+			args: [reportId, getOpenOracleGameTuple(saturatedPreimage.game), getOpenOracleHelperTuple(saturatedPreimage.helper)],
+		})
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'a saturated history counter must not publish a price')
+		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'saturated settlement should clear the pending report')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'saturated settlement must leave the cached price invalid')
 	})
 
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {

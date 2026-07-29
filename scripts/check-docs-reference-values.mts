@@ -406,6 +406,8 @@ function assertRecursiveForkGasStatusDocs(): void {
 function assertCoordinatorRecoveryBranch(): void {
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
+		'a saturated <code>uint24</code> report counter, a final history record whose WETH amount is too small for another dispute',
+		'zero amounts, or a computed zero price clears the pending id, emits <code>PriceReportRejected</code>, and does not update the price cache or replay pending operations. Those pending settlement operations remain queued for a later valid price report.',
 		'If the pending settlement list is empty, another staged request can fund a replacement report.',
 		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
 	]) {
@@ -425,7 +427,8 @@ function assertCoordinatorSettlementEconomics(): void {
 		"The constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
 		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
 		"OpenOracle records each report block's base fee when dispute tracking is enabled.",
-		"The callback reads <code>storedGame(reportId).numReports</code>, selects history index <code>numReports - 1</code>, and requires the final WETH amount to cover the configured security formula at that record's base fee plus the configured priority fee.",
+		'If that <code>uint24</code> counter is saturated, the callback rejects the price because a later dispute can overwrite history index <code>type(uint24).max</code> without advancing the counter.',
+		"Otherwise it selects history index <code>numReports - 1</code> and requires the final WETH amount to cover the configured security formula at that record's base fee plus the configured priority fee.",
 		'This check proves only that the final WETH position meets the modeled security-sizing floor.',
 		'A correction is modeled as profitable only when the price is wrong by at least the configured target error and the configured priority-fee, gas-unit, fee, and transaction-inclusion assumptions hold; the check does not prove that an accepted price is externally correct.',
 	]) {
