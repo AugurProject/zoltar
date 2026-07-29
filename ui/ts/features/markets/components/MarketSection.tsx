@@ -78,7 +78,7 @@ export function MarketSection({
 	const [forkModalOpen, setForkModalOpen] = useState(false)
 	const localForkQuestionId = zoltarForkQuestionId.trim()
 	const canonicalForkQuestion = zoltarUniverse?.forkQuestionDetails
-	const selectedForkQuestionId = localForkQuestionId || canonicalForkQuestion?.questionId
+	const selectedForkQuestionId = hasForked ? canonicalForkQuestion?.questionId : localForkQuestionId || canonicalForkQuestion?.questionId
 	const selectedForkQuestion =
 		selectedForkQuestionId === undefined ? undefined : (zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase()) ?? (canonicalForkQuestion?.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase() ? canonicalForkQuestion : undefined))
 	const forkQuestionMetadataFallback = loadingZoltarQuestions ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
@@ -264,7 +264,7 @@ export function MarketSection({
 								zoltarForkApproval={zoltarForkApproval}
 								zoltarForkError={zoltarForkError}
 								zoltarForkPending={zoltarForkPending}
-								zoltarForkQuestionId={zoltarForkQuestionId}
+								zoltarForkQuestionId={selectedForkQuestionId ?? ''}
 								zoltarForkRepBalance={zoltarForkRepBalance}
 								zoltarQuestions={zoltarQuestions}
 								zoltarUniverse={zoltarUniverse}

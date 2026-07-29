@@ -970,6 +970,72 @@ describe('MarketSection', () => {
 		expect(within(summary).getByText('No')).not.toBeNull()
 		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
 		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'View fork details' }))
+		})
+		const modal = documentQueries.getByRole('dialog', { name: 'View Fork Details' })
+		const modalQueries = within(modal)
+		const questionIdInput = modalQueries.getByLabelText('Fork Question ID') as HTMLInputElement
+		expect(questionIdInput.value).toBe(question.questionId)
+		expect(questionIdInput.disabled).toBe(true)
+		expect(modalQueries.getByText('Fork question title')).not.toBeNull()
+		expect(modal.textContent).toContain('Yes')
+		expect(modal.textContent).toContain('No')
+	})
+
+	test('uses the forked universe canonical question across summary and modal after a universe transition', async () => {
+		const localQuestion = createBinaryForkQuestion()
+		const canonicalQuestion = {
+			...createBinaryForkQuestion(),
+			questionId: '0x02',
+			title: 'Canonical fork question',
+		}
+		const initialProps = createMarketSectionProps({
+			activeView: 'fork',
+			zoltarForkQuestionId: localQuestion.questionId,
+			zoltarQuestionCount: 1n,
+			zoltarQuestions: [localQuestion],
+			zoltarUniverse: createZoltarUniverse({ universeId: 1n }),
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						...initialProps,
+						activeUniverseId: 2n,
+						zoltarUniverse: createZoltarUniverse({
+							forkQuestionDetails: canonicalQuestion,
+							hasForked: true,
+							universeId: 2n,
+						}),
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected transitioned fork question summary')
+		const summaryQueries = within(summary)
+		expect(summaryQueries.getByText('Canonical fork question')).not.toBeNull()
+		expect(summaryQueries.queryByText('Fork question title')).toBeNull()
+		expect(summaryQueries.getByText('Universe 0x2')).not.toBeNull()
+		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${canonicalQuestion.questionId}` })).not.toBeNull()
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'View fork details' }))
+		})
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'View Fork Details' }))
+		expect((modalQueries.getByLabelText('Fork Question ID') as HTMLInputElement).value).toBe(canonicalQuestion.questionId)
+		expect(modalQueries.getByText('Canonical fork question')).not.toBeNull()
+		expect(modalQueries.queryByText('Fork question title')).toBeNull()
 	})
 
 	test('keeps every required fork-question field visible while selected metadata is unavailable', async () => {
