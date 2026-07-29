@@ -560,6 +560,79 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest, 'settlement should return the coordinator reporter REP to the sponsor')
 	})
 
+	test('oracle settlement distinguishes direct coordinator balances from OpenOracle beneficiary credits', async () => {
+		const donor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const donatedWeth = 3n * 10n ** 15n
+		const donatedRep = 5n * 10n ** 18n
+		const openOracleDonatedWeth = 2n * 10n ** 15n
+		const openOracleDonatedRep = 4n * 10n ** 18n
+		const openOracle = getInfraContractAddresses().openOracle
+		await wrapWeth(donor, donatedWeth)
+		const wethDonationHash = await donor.writeContract({
+			abi: peripherals_WETH9_WETH9.abi,
+			functionName: 'transfer',
+			address: WETH_ADDRESS,
+			args: [priceOracle, donatedWeth],
+		})
+		await donor.waitForTransactionReceipt({ hash: wethDonationHash })
+		const repDonationHash = await donor.writeContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'transfer',
+			address: addressString(GENESIS_REPUTATION_TOKEN),
+			args: [priceOracle, donatedRep],
+		})
+		await donor.waitForTransactionReceipt({ hash: repDonationHash })
+
+		const coordinatorWethSurplus = await getERC20Balance(client, WETH_ADDRESS, priceOracle)
+		const coordinatorRepSurplus = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		assert.strictEqual(coordinatorWethSurplus, donatedWeth, 'the coordinator should hold the unsolicited WETH outside OpenOracle')
+		assert.strictEqual(coordinatorRepSurplus, donatedRep, 'the coordinator should hold the unsolicited REP outside OpenOracle')
+
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialWeth = calculateOracleMinimumWethReport() * 2n
+		await wrapWeth(client, requestedInitialWeth)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		const sponsorWethBeforeRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		const sponsorRepBeforeRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		await requestPriceWithValue(client, priceOracle, await getRequestPriceEthCost(client, priceOracle), proposedRepPerEthPrice, requestedInitialWeth)
+		const reportId = await getPendingReportId(client, priceOracle)
+		const openOracleWethBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS)
+		const openOracleRepBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN))
+		assert.strictEqual(openOracleWethBeforeDonation, 1n, 'a pending report should leave only the coordinator WETH sentinel outside the game')
+		assert.strictEqual(openOracleRepBeforeDonation, 1n, 'a pending report should leave only the coordinator REP sentinel outside the game')
+
+		await wrapWeth(donor, openOracleDonatedWeth)
+		await approveToken(donor, WETH_ADDRESS, openOracle)
+		await approveToken(donor, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		for (const [token, amount] of [
+			[WETH_ADDRESS, openOracleDonatedWeth],
+			[addressString(GENESIS_REPUTATION_TOKEN), openOracleDonatedRep],
+		] as const) {
+			const depositHash = await donor.writeContract({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'deposit',
+				address: openOracle,
+				args: [token, amount, priceOracle],
+			})
+			await donor.waitForTransactionReceipt({ hash: depositHash })
+		}
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), openOracleWethBeforeDonation + openOracleDonatedWeth, 'permissionless OpenOracle deposits should credit the coordinator beneficiary balance')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), openOracleRepBeforeDonation + openOracleDonatedRep, 'permissionless OpenOracle REP deposits should credit the same coordinator beneficiary balance')
+
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, reportId)
+
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBeforeRequest + openOracleDonatedWeth, 'settlement should send the sponsor every withdrawable WETH credit held internally for the coordinator')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBeforeRequest + openOracleDonatedRep, 'settlement should send the sponsor every withdrawable REP credit held internally for the coordinator')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'settlement should drain the coordinator OpenOracle WETH credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'settlement should drain the coordinator OpenOracle REP credit to its sentinel')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, priceOracle), coordinatorWethSurplus, 'settlement must not sweep unsolicited coordinator WETH into sponsor proceeds')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle), coordinatorRepSurplus, 'settlement must not sweep unsolicited coordinator REP into sponsor proceeds')
+	})
+
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
 		const requestBaseFeeWeiPerGas = 45n * 10n ** 9n
 		const proposedRepPerEthPrice = 1000n * 10n ** 18n

@@ -493,6 +493,66 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(results[0], results[1], 'split migration results should not depend on outcome ordering')
 	})
 
+	test('child REP supply equals aggregate migrated balances and stays within its theoretical maximum', async () => {
+		const zoltar = getZoltarAddress()
+		const secondMigrator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(secondMigrator, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'child REP aggregate supply coherence',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+
+		const firstMigrationCredit = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		const secondMigrationCredit = 7n * 10n ** 18n
+		await addRepToMigrationBalance(secondMigrator, genesisUniverse, secondMigrationCredit)
+		strictEqualTypeSafe(await getMigrationRepBalance(secondMigrator, genesisUniverse, secondMigrator.account.address), secondMigrationCredit, 'the second migrator should receive exactly the REP it contributes')
+
+		const childOutcome = 1n
+		const firstMint = firstMigrationCredit / 3n
+		await splitMigrationRep(client, genesisUniverse, firstMint, [childOutcome])
+		await splitMigrationRep(secondMigrator, genesisUniverse, secondMigrationCredit, [childOutcome])
+
+		const childUniverseId = getChildUniverseId(genesisUniverse, childOutcome)
+		const childRepToken = getRepTokenAddress(childUniverseId)
+		const firstChildBalance = await getERC20Balance(client, childRepToken, client.account.address)
+		const secondChildBalance = await getERC20Balance(client, childRepToken, secondMigrator.account.address)
+		const childTotalSupply = await client.readContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'totalSupply',
+			address: childRepToken,
+			args: [],
+		})
+		const childTheoreticalSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
+
+		strictEqualTypeSafe(firstChildBalance, firstMint, 'the first migrator child balance should equal its selected migration amount')
+		strictEqualTypeSafe(secondChildBalance, secondMigrationCredit, 'the second migrator child balance should equal its selected migration amount')
+		strictEqualTypeSafe(childTotalSupply, firstChildBalance + secondChildBalance, 'child REP total supply should equal the aggregate balances minted into that child')
+		assert.ok(childTotalSupply <= childTheoreticalSupply, 'child REP total supply must not exceed the child theoretical maximum')
+		strictEqualTypeSafe(await getTotalTheoreticalSupply(client, childRepToken), childTheoreticalSupply, 'the REP token and universe should expose the same theoretical supply')
+
+		await splitMigrationRep(client, genesisUniverse, firstMigrationCredit - firstMint, [childOutcome])
+		const finalChildTotalSupply = await client.readContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'totalSupply',
+			address: childRepToken,
+			args: [],
+		})
+		strictEqualTypeSafe(finalChildTotalSupply, firstMigrationCredit + secondMigrationCredit, 'later migration should increase supply by exactly the newly minted balance')
+		assert.ok(finalChildTotalSupply <= childTheoreticalSupply, 'later migration must preserve the child theoretical maximum')
+		strictEqualTypeSafe(await getUniverseTheoreticalSupply(client, childUniverseId), childTheoreticalSupply, 'minting migration REP must not change the child theoretical maximum')
+	})
+
 	test('deployChild creates a child universe without requiring migration balance', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
