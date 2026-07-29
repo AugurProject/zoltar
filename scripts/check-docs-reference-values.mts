@@ -406,7 +406,8 @@ function assertRecursiveForkGasStatusDocs(): void {
 function assertCoordinatorRecoveryBranch(): void {
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
-		'a saturated <code>uint24</code> report counter, a final history record whose WETH amount is too small for another dispute',
+		'a saturated <code>uint24</code> report counter, reported as <code>Counter saturated</code>, a final history record whose WETH amount is too small for another dispute',
+		'reported as <code>Report uneconomic</code>',
 		'zero amounts, or a computed zero price clears the pending id, emits <code>PriceReportRejected</code>, and does not update the price cache or replay pending operations. Those pending settlement operations remain queued for a later valid price report.',
 		'If the pending settlement list is empty, another staged request can fund a replacement report.',
 		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
@@ -427,7 +428,7 @@ function assertCoordinatorSettlementEconomics(): void {
 		"The constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
 		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
 		"OpenOracle records each report block's base fee when dispute tracking is enabled.",
-		'If that <code>uint24</code> counter is saturated, the callback rejects the price because a later dispute can overwrite history index <code>type(uint24).max</code> without advancing the counter.',
+		'If that <code>uint24</code> counter is saturated, the callback rejects the price with <code>Counter saturated</code> because a later dispute can overwrite history index <code>type(uint24).max</code> without advancing the counter.',
 		"Otherwise it selects history index <code>numReports - 1</code> and requires the final WETH amount to cover the configured security formula at that record's base fee plus the configured priority fee.",
 		'This check proves only that the final WETH position meets the modeled security-sizing floor.',
 		'A correction is modeled as profitable only when the price is wrong by at least the configured target error and the configured priority-fee, gas-unit, fee, and transaction-inclusion assumptions hold; the check does not prove that an accepted price is externally correct.',
@@ -446,7 +447,7 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.ok(correctionGasBudget * 3n >= settlementGasCostAtAssumption * 10n, 'positive configured priority must preserve the base-fee-only 10/3 lower bound when actual priority matches')
 	assert.notEqual(correctionGasBudget * 3n, settlementGasCostAtAssumption * 10n, 'positive configured priority makes the settlement-cap ratio larger than, rather than exactly, 10/3')
 	assert.ok(correctionGasBudget * 3n < settlementGasCostAboveAssumption * 10n, 'an actual priority fee above configuration can weaken the 10/3 base-fee-only bound')
-	assert.match(priceCoordinator, /if \(block\.basefee > pendingReportMaxSettlementBaseFee\)/, 'coordinator must accept settlement base fee equal to the request-time cap')
+	assert.match(priceCoordinator, /uint256 maxSettlementBaseFee = pendingReportMaxSettlementBaseFee;\s*pendingReportMaxSettlementBaseFee = 0;\s*if \(block\.basefee > maxSettlementBaseFee\)/, 'coordinator must preserve the request-time cap before clearing it and accept an equal settlement base fee')
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
 	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
 	assert.match(priceCoordinator, /uint256 ethCost = getRequestPriceEthCost\(\)/, 'coordinator must derive the request bounty from getRequestPriceEthCost')
@@ -825,6 +826,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	assert.match(securityPoolForkerVaultMigrationDelegate, /require\(address\(childrenByPoolAndOutcome\[parent\]\[outcomeIndex\]\) == address\(0x0\), 'Child pool exists'\)/)
 	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Base fee too high'\);\s*return;/)
+	assert.match(priceCoordinator, /finalReportDisputeStatus == FINAL_REPORT_COUNTER_SATURATED\s*\? 'Counter saturated'\s*: 'Report uneconomic'/)
 	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Empty oracle settlement'\);\s*return;/)
 	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Oracle price is zero'\);\s*return;/)
 	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor,\s*'Only the pending report sponsor can queue more operations until settlement'/)

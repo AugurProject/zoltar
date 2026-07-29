@@ -16,6 +16,9 @@ uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
 uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
 uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
 uint8 constant OPEN_ORACLE_FLAG_STORE_ALL = 1 << 2;
+uint256 constant FINAL_REPORT_UNECONOMIC = 0;
+uint256 constant FINAL_REPORT_PROFITABLE = 1;
+uint256 constant FINAL_REPORT_COUNTER_SATURATED = 2;
 
 interface IStoredOpenOracleGame {
 	function storedGame(
@@ -451,19 +454,23 @@ contract OpenOraclePriceCoordinator {
 		address,
 		address
 	) external {
-		require(msg.sender == address(openOracle), 'Only OpenOracle can call the security pool oracle callback');
+		require(msg.sender == address(openOracle), 'Only OpenOracle');
 		require(reportId == pendingReportId, 'Oracle callback report id does not match the pending request');
 		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
-		if (block.basefee > pendingReportMaxSettlementBaseFee) {
-			pendingReportMaxSettlementBaseFee = 0;
+		uint256 maxSettlementBaseFee = pendingReportMaxSettlementBaseFee;
+		pendingReportMaxSettlementBaseFee = 0;
+		if (block.basefee > maxSettlementBaseFee) {
 			_emitPriceReportRejected(reportId, 'Base fee too high');
 			return;
 		}
-		pendingReportMaxSettlementBaseFee = 0;
-		if (!_wasFinalReportProfitableToDispute(reportId, amount1)) {
-			_emitPriceReportRejected(reportId, 'Final report was not profitable to dispute');
+		uint256 finalReportDisputeStatus = _getFinalReportDisputeStatus(reportId, amount1);
+		if (finalReportDisputeStatus != FINAL_REPORT_PROFITABLE) {
+			_emitPriceReportRejected(
+				reportId,
+				finalReportDisputeStatus == FINAL_REPORT_COUNTER_SATURATED ? 'Counter saturated' : 'Report uneconomic'
+			);
 			return;
 		}
 		if (amount1 == 0 || amount2 == 0) {
@@ -491,14 +498,15 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
 	}
 
-	function _wasFinalReportProfitableToDispute(uint256 reportId, uint256 finalAmount1) private view returns (bool) {
+	function _getFinalReportDisputeStatus(uint256 reportId, uint256 finalAmount1) private view returns (uint256) {
 		(, , , , , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
-		if (numReports == 0 || numReports == type(uint24).max) return false;
+		if (numReports == type(uint24).max) return FINAL_REPORT_COUNTER_SATURATED;
+		if (numReports == 0) return FINAL_REPORT_UNECONOMIC;
 		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
 		uint256 minimumProfitableReport =
 			_minimumToken1ReportForGasPrice(initialReportPriorityFeeWeiPerGas) +
 				_minimumToken1ReportForGasPrice(uint256(finalReportBaseFee));
-		return finalAmount1 >= minimumProfitableReport;
+		return finalAmount1 >= minimumProfitableReport ? FINAL_REPORT_PROFITABLE : FINAL_REPORT_UNECONOMIC;
 	}
 
 	function _withdrawOpenOracleReporterBalances(address sponsor) private {

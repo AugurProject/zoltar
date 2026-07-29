@@ -875,7 +875,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'openOracleCallback',
 				args: [1n, 1n, 1n, 0n, zeroAddress, zeroAddress],
 			}),
-			/Only OpenOracle can call the security pool oracle callback/,
+			/Only OpenOracle/,
 		)
 
 		const openOracleAddress = getInfraContractAddresses().openOracle
@@ -1300,7 +1300,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
-		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
 		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'an uneconomic final dispute round must not publish a price')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'an uneconomic final dispute round must leave the price invalid')
 	})
@@ -1376,12 +1376,14 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
-		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
 		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'the uniquely expensive final dispute record must drive settlement rejection')
 	})
 
 	test('oracle settlement rejects a saturated dispute-history counter', async () => {
-		await requestPrice(client, priceOracle)
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const stagedAllowance = repDeposit / 4n
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, stagedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		const eventState = await loadOpenOracleEventState(client, reportId)
@@ -1411,10 +1413,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
-		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(rejectedLog.args.reason, 'Counter saturated', 'saturation should be distinguishable from an uneconomic final report')
 		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'a saturated history counter must not publish a price')
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'saturated settlement should clear the pending report')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'saturated settlement must leave the cached price invalid')
+		assert.strictEqual(findExecutedStagedOperationLog(settlementReceipt.logs), undefined, 'saturated settlement must not execute the staged operation')
+		assert.strictEqual(await getPendingOperationSlotId(client, priceOracle), 1n, 'saturated settlement should preserve the compatibility pending-operation slot')
+		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n], 'saturated settlement should leave the operation queued for a later valid price path')
+		assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 1n, 'saturated settlement should leave the queued operation active')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, 1n))[1], client.account.address, 'saturated settlement must not consume the queued operation')
+		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, 0n, 'saturated settlement must not apply the staged allowance')
 	})
 
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
