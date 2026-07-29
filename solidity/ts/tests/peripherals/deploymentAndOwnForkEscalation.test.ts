@@ -424,10 +424,114 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			})
 			strictEqualTypeSafe(factoryCanonicalPool, childPool, 'factory should retain one canonical child collateral ledger')
 			strictEqualTypeSafe(tokenCanonicalPool, childPool, 'share token namespace should retain the same canonical child ledger')
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+					functionName: 'getSecurityPoolOriginId',
+					address: factory,
+					args: [childPool],
+				}),
+				inheritedOriginId,
+				'child-to-origin reverse lookup should match the inherited lineage',
+			)
+			assert.strictEqual(
+				await client.readContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'isAuthorized',
+					address: securityPoolAddresses.shareToken,
+					args: [childPool],
+				}),
+				true,
+				'every canonical child pool should be authorized by its share token',
+			)
 			await deployOriginSecurityPool(client, childUniverse, questionId, statoblastSecurityMultiplierBps)
 			const independentOrigin = getSecurityPoolAddresses(addressString(0n), childUniverse, questionId, statoblastSecurityMultiplierBps, childUniverse)
 			assert.notStrictEqual(independentOrigin.securityPool, childPool, 'an independent origin should not replace the inherited child')
 			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, statoblastSecurityMultiplierBps), /Security pool origin and universe already claimed/)
+		}
+
+		const deploymentCount = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentCount',
+			address: factory,
+			args: [],
+		})
+		const deployments = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentsRange',
+			address: factory,
+			args: [0n, deploymentCount],
+		})
+		const deployedPoolAddresses = deployments.map(deployment => deployment.securityPool)
+		assert.strictEqual(new Set(deployedPoolAddresses).size, deployments.length, 'the factory deployment registry should contain each pool exactly once')
+
+		for (const deployment of deployments) {
+			const originId = await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getSecurityPoolOriginId',
+				address: factory,
+				args: [deployment.securityPool],
+			})
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+					functionName: 'getSecurityPool',
+					address: factory,
+					args: [originId, deployment.universeId],
+				}),
+				deployment.securityPool,
+				'each deployment record should resolve through the forward canonical lookup',
+			)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'parent',
+					address: deployment.securityPool,
+					args: [],
+				}),
+				deployment.parent,
+				'each deployment record should match the pool parent stored at runtime',
+			)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'shareToken',
+					address: deployment.securityPool,
+					args: [],
+				}),
+				deployment.shareToken,
+				'each deployment record should match the pool share token stored at runtime',
+			)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'universeId',
+					address: deployment.securityPool,
+					args: [],
+				}),
+				deployment.universeId,
+				'each deployment record should match the pool universe stored at runtime',
+			)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'questionId',
+					address: deployment.securityPool,
+					args: [],
+				}),
+				deployment.questionId,
+				'each deployment record should match the pool question stored at runtime',
+			)
+			assert.strictEqual(
+				await client.readContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'isAuthorized',
+					address: deployment.shareToken,
+					args: [deployment.securityPool],
+				}),
+				true,
+				'each deployment record should refer to a pool authorized by its recorded share token',
+			)
 		}
 	})
 

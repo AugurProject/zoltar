@@ -190,6 +190,7 @@ export function MarketCreateQuestionSection({
 					actions={
 						<div className='actions'>
 							<button
+								aria-label={hasForked ? marketCopy.formatAlreadyForkedLabel(selectedQuestionTitle, marketResult.questionId) : marketCopy.formatUseForForkLabel(selectedQuestionTitle, marketResult.questionId)}
 								className='secondary'
 								disabled={hasForked}
 								onClick={() => {
@@ -200,7 +201,7 @@ export function MarketCreateQuestionSection({
 							>
 								{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
 							</button>
-							<button className='secondary' onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
+							<button aria-label={marketCopy.formatCreatePoolFromQuestionLabel(selectedQuestionTitle, marketResult.questionId)} className='secondary' onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
 								{marketCopy.createPoolFromQuestion}
 							</button>
 							<button className='secondary' onClick={onResetMarket}>
@@ -446,7 +447,7 @@ export function MarketCreateQuestionSection({
 
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={commonCopy.createQuestion}
+								idleLabel={commonCopy.createQuestionAction}
 								pendingLabel={marketCopy.createQuestionPendingLabel}
 								onClick={() => undefined}
 								pending={marketCreating}

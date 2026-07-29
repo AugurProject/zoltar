@@ -400,7 +400,7 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle selected bids' }))
 		})
 
 		expect(documentQueries.queryByRole('dialog', { name: 'Review Finalized Refund Settlement' })).toBeNull()

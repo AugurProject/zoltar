@@ -719,6 +719,68 @@ describe('Escalation Game Test Suite', () => {
 	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
 	const oneHash = () => `0x${'0'.repeat(63)}1` as Hex
 
+	const bagCarryPeaks = (peaks: readonly Hex[], leafCount: bigint) => {
+		if (leafCount === 0n) return zeroHash()
+		const occupiedPeaks: Hex[] = []
+		for (let peakHeight = 0; peakHeight < 64; peakHeight += 1) {
+			if (((leafCount >> BigInt(peakHeight)) & 1n) === 0n) continue
+			const peak = peaks[peakHeight]
+			if (peak === undefined) throw new Error(`missing carry peak ${peakHeight.toString()}`)
+			occupiedPeaks.push(peak)
+		}
+		const lastPeak = occupiedPeaks.at(-1)
+		if (lastPeak === undefined) throw new Error('nonzero leaf count has no occupied carry peak')
+		let root = lastPeak
+		for (let peakIndex = occupiedPeaks.length - 2; peakIndex >= 0; peakIndex -= 1) {
+			const peak = occupiedPeaks[peakIndex]
+			if (peak === undefined) throw new Error(`missing occupied carry peak ${peakIndex.toString()}`)
+			root = hashParent(peak, root)
+		}
+		return root
+	}
+
+	const assertCarryCommitmentStructure = async (escalationGameAddress: Address, label: string) => {
+		const snapshot = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getForkCarrySnapshot',
+			args: [],
+		})
+		const roots = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getForkCarryRoots',
+			args: [],
+		})
+		const outcomes = [
+			{ outcome: QuestionOutcome.Invalid, snapshotIndex: 0 },
+			{ outcome: QuestionOutcome.Yes, snapshotIndex: 1 },
+			{ outcome: QuestionOutcome.No, snapshotIndex: 2 },
+		] as const
+
+		for (const { outcome, snapshotIndex } of outcomes) {
+			const state = await readOutcomeState(escalationGameAddress, outcome)
+			const snapshotPeaks = snapshot[0][snapshotIndex]
+			const snapshotLeafCount = snapshot[1][snapshotIndex]
+			const snapshotCarryTotal = snapshot[2][snapshotIndex]
+			const snapshotNullifierRoot = snapshot[3][snapshotIndex]
+			const snapshotRoot = roots[snapshotIndex]
+			assert.deepStrictEqual(snapshotPeaks, state.currentPeaks, `${label}: exported peaks should match outcome ${outcome.toString()} state`)
+			assert.strictEqual(snapshotLeafCount, state.currentLeafCount, `${label}: exported leaf count should match outcome ${outcome.toString()} state`)
+			assert.strictEqual(snapshotCarryTotal, state.currentCarryTotal, `${label}: exported carry total should match outcome ${outcome.toString()} state`)
+			assert.strictEqual(snapshotNullifierRoot, state.currentNullifierRoot, `${label}: exported nullifier should match outcome ${outcome.toString()} state`)
+			assert.strictEqual(state.currentCarryTotal, state.inheritedUnresolvedTotal + state.localUnresolvedTotal, `${label}: carry total should equal inherited plus local unresolved REP`)
+
+			for (let peakHeight = 0; peakHeight < 64; peakHeight += 1) {
+				if (((state.currentLeafCount >> BigInt(peakHeight)) & 1n) !== 0n) continue
+				assert.strictEqual(state.currentPeaks[peakHeight], zeroHash(), `${label}: unoccupied peak ${peakHeight.toString()} should be zero for outcome ${outcome.toString()}`)
+			}
+			const independentlyBaggedRoot = bagCarryPeaks(state.currentPeaks, state.currentLeafCount)
+			assert.strictEqual(state.currentCarryRoot, independentlyBaggedRoot, `${label}: outcome ${outcome.toString()} root should independently bag its occupied peaks`)
+			assert.strictEqual(snapshotRoot, independentlyBaggedRoot, `${label}: exported outcome ${outcome.toString()} root should match independent peak bagging`)
+		}
+	}
+
 	const readCarryLeafHash = async (escalationGameAddress: Address, nodeId: bigint) => await readCarryLeafHashFromHelpers(client, escalationGameAddress, nodeId)
 
 	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[], sourceNodeId?: bigint) =>
@@ -1286,16 +1348,22 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
 
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await assertCarryCommitmentStructure(escalationGameAddress, 'after first Yes deposit')
 
 		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
 		const rootAfterFirstDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own Merkle Mountain Range root')
 
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await assertCarryCommitmentStructure(escalationGameAddress, 'after second Yes deposit')
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n)
 		const expectedTwoLeafRoot = hashParent(firstLeafHash, secondLeafHash)
 		const rootAfterSecondDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
+
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 3n * reportBond)
+		await assertCarryCommitmentStructure(escalationGameAddress, 'after multi-peak and multi-outcome deposits')
 	})
 
 	test('fork carry leaf paging uses node cursors and skips consumed local leaves', async () => {
@@ -1424,19 +1492,24 @@ describe('Escalation Game Test Suite', () => {
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentCarryTotal, parentCarryTotal)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
+		await assertCarryCommitmentStructure(parent.escalationGameAddress, 'parent before inherited proof settlement')
+		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child before inherited proof settlement')
 
 		const nullifierTree = new SparseNullifierTree()
 		const firstProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, firstProof)
 		nullifierTree.consume(0n)
+		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child after first inherited proof settlement')
 
 		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash], nullifierTree.getProof(1n))
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, secondProof)
+		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child after all inherited proof settlements')
 
 		const remainingCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(remainingCarryTotal, 0n)
 		const consumedIndexes = await readProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)
 		assert.deepStrictEqual(consumedIndexes, [0n, 1n], 'max-count proof-consumed paging should return all consumed inherited indexes')
+		assert.strictEqual(new Set(consumedIndexes).size, consumedIndexes.length, 'consumed inherited proof indexes should remain unique')
 		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.None, 0n, 1n)
 		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 2n, 1n)
 		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)

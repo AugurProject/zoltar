@@ -74,4 +74,23 @@ describe('AddressValue', () => {
 		expect(copyButton.textContent).toBe(address)
 		expect(copyButton.querySelector('.address-value-measure')).toBeNull()
 	})
+
+	test('provides a start-and-end abbreviation without changing the accessible name or copied value', async () => {
+		const address = '0x1234567890abcdef1234567890abcdef12345678'
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} responsiveAbbreviation />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…345678')
+		expect(copyButton.querySelector('.address-value-abbreviated')?.getAttribute('aria-hidden')).toBe('true')
+
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
+		await waitFor(() => {
+			expect(copyButton.textContent).toBe('Copied')
+		})
+		expect(copyButton.getAttribute('title')).toBe(address)
+	})
 })

@@ -94,6 +94,14 @@ describe('TransactionActionButton', () => {
 		expect(callCount).toBe(1)
 	})
 
+	test('supports a contextual accessible name while retaining concise visible copy', async () => {
+		const renderedComponent = await renderIntoDocument(<TransactionActionButton ariaLabel='Deploy Scalar Outcomes' idleLabel='Deploy' onClick={() => undefined} pendingLabel='Deploying…' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const button = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
+		expect(button.textContent).toBe('Deploy')
+	})
+
 	test('blocks new actions while another transaction is still in flight', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(

@@ -8,7 +8,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 	if (actionMode === 'dispute') {
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({
-			actionLabel: 'Dispute & Swap',
+			actionLabel: 'Dispute & swap',
 			description: 'Challenge the current report and provide the replacement swap amounts.',
 			key: 'dispute-report',
 			readiness: disputeBlocker === undefined ? 'ready' : 'blocked',
@@ -17,7 +17,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		})
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle Report',
+			actionLabel: 'Settle report',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',
@@ -27,7 +27,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 	if (actionMode === 'settle') {
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle Report',
+			actionLabel: 'Settle report',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',

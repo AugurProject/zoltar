@@ -8,11 +8,11 @@ type StickyObjectContextProps = {
 	items: StickyContextItem[]
 	sticky?: boolean
 	title: string
-	variant?: 'context-strip' | 'default'
+	variant?: 'context-strip' | 'default' | 'embedded-context-strip'
 }
 
 export function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title, variant = 'default' }: StickyObjectContextProps) {
-	const classes = ['sticky-object-context', sticky ? '' : 'static', variant === 'context-strip' ? 'context-strip' : ''].filter(Boolean).join(' ')
+	const classes = ['sticky-object-context', sticky ? '' : 'static', variant === 'context-strip' || variant === 'embedded-context-strip' ? 'context-strip' : '', variant === 'embedded-context-strip' ? 'embedded-context-strip' : ''].filter(Boolean).join(' ')
 
 	return (
 		<section className={classes}>

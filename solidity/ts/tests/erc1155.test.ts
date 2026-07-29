@@ -936,6 +936,110 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 	})
 
+	test('ERC1155 supply equals modeled holder balances through mint, transfer, and burn churn', async () => {
+		const shareTokenAddress = await deployShareToken()
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const holders = [client.account.address, operatorClient.account.address, thirdClient.account.address] as const
+		const tokenIds = [await readTokenId(shareTokenAddress, 0), await readTokenId(shareTokenAddress, 1), await readTokenId(shareTokenAddress, 2)] as const
+		const modeledBalances: [[bigint, bigint, bigint], [bigint, bigint, bigint], [bigint, bigint, bigint]] = [
+			[0n, 0n, 0n],
+			[0n, 0n, 0n],
+			[0n, 0n, 0n],
+		]
+
+		const assertSupplyModel = async (label: string) => {
+			for (const [outcomeIndex, tokenId] of tokenIds.entries()) {
+				const holderBalances = await Promise.all(
+					holders.map(holder =>
+						client.readContract({
+							abi: peripherals_tokens_ShareToken_ShareToken.abi,
+							address: shareTokenAddress,
+							functionName: 'balanceOf',
+							args: [holder, tokenId],
+						}),
+					),
+				)
+				const expectedBalances = modeledBalances[outcomeIndex]
+				if (expectedBalances === undefined) throw new Error(`${label}: missing modeled outcome ${outcomeIndex.toString()}`)
+				assert.deepStrictEqual(holderBalances, expectedBalances, `${label}: holder balances should match the model for outcome ${outcomeIndex.toString()}`)
+				assert.strictEqual(
+					await client.readContract({
+						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						address: shareTokenAddress,
+						functionName: 'totalSupply',
+						args: [tokenId],
+					}),
+					expectedBalances.reduce((sum, balance) => sum + balance, 0n),
+					`${label}: total supply should equal modeled holder balances for outcome ${outcomeIndex.toString()}`,
+				)
+			}
+		}
+
+		await mintCompleteSets(shareTokenAddress, client.account.address, 5n)
+		for (const balances of modeledBalances) balances[0] = 5n
+		await assertSupplyModel('first complete-set mint')
+
+		await mintCompleteSets(shareTokenAddress, operatorClient.account.address, 3n)
+		for (const balances of modeledBalances) balances[1] = 3n
+		await assertSupplyModel('second complete-set mint')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'safeTransferFrom',
+					args: [client.account.address, operatorClient.account.address, tokenIds[1], 2n],
+				}),
+		)
+		modeledBalances[1][0] -= 2n
+		modeledBalances[1][1] += 2n
+		await assertSupplyModel('single transfer')
+
+		await writeContractAndWait(
+			operatorClient,
+			async () =>
+				await operatorClient.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'safeBatchTransferFrom',
+					args: [operatorClient.account.address, thirdClient.account.address, [tokenIds[0], tokenIds[2]], [1n, 2n], '0x'],
+				}),
+		)
+		modeledBalances[0][1] -= 1n
+		modeledBalances[0][2] += 1n
+		modeledBalances[2][1] -= 2n
+		modeledBalances[2][2] += 2n
+		await assertSupplyModel('batch transfer')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'burnCompleteSets',
+					args: [0n, client.account.address, 1n],
+				}),
+		)
+		for (const balances of modeledBalances) balances[0] -= 1n
+		await assertSupplyModel('complete-set burn')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'burnTokenIdAndGetRemainingSupply',
+					args: [tokenIds[2], thirdClient.account.address],
+				}),
+		)
+		modeledBalances[2][2] = 0n
+		await assertSupplyModel('single-token burn')
+	})
+
 	test('coverage instrumentation traces read-only ERC1155 and share-token helpers through transactions', async () => {
 		const shareTokenAddress = await deployShareToken()
 		await mintCompleteSets(shareTokenAddress, client.account.address, 1n)

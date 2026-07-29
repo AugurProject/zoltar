@@ -467,7 +467,8 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
 			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
-			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove Corrupted Saved States' }))
+			expect(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' })).toBeTruthy()
 			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
 
 			await waitFor(() => {

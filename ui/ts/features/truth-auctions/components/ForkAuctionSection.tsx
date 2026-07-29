@@ -1059,7 +1059,7 @@ export function ForkAuctionSection({
 		)
 	}
 	const renderSubmitBidSection = () => (
-		<SectionBlock title={forkAuctionCopy.submitBid} variant='embedded'>
+		<SectionBlock title={forkAuctionCopy.submitBidTitle} variant='embedded'>
 			<div className='form-grid'>
 				{submitBidPreviewTickSummary === undefined ? undefined : (
 					<p className='detail'>
@@ -1660,7 +1660,7 @@ export function ForkAuctionSection({
 										})}
 									</div>
 								</SectionBlock>
-								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVault} variant='embedded'>
+								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVaultTitle} variant='embedded'>
 									<p className='detail'>{forkAuctionCopy.vaultMigrationDetail}</p>
 									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{forkAuctionCopy.poolMigrationCapacityEmpty}</p> : undefined}
 									{loadingSelectedOutcomeMigrationSeedStatus ? (
@@ -1713,7 +1713,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						{hasStartedTruthAuction ? undefined : (
-							<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
+							<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
 								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
 								{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 								{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}

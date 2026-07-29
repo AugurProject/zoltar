@@ -122,6 +122,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse,
 					onTransactionFailed,
 					onTransactionFinished: () => undefined,
@@ -150,6 +151,55 @@ describe('useZoltarFork', () => {
 		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
 	})
 
+	test('scopes mutable pre-fork question selection by account, environment, and universe', async () => {
+		let hookState: UseZoltarForkState | undefined
+		const Harness = function ZoltarForkHarness({ accountAddress, activeUniverseId, environmentRefreshKey }: { accountAddress: Address | undefined; activeUniverseId: bigint; environmentRefreshKey: number }) {
+			hookState = useZoltarFork(
+				{
+					accountAddress,
+					activeUniverseId,
+					environmentRefreshKey,
+					ensureZoltarUniverse: async () => createUniverse({ universeId: activeUniverseId }),
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: false,
+					zoltarUniverse: createUniverse({ universeId: activeUniverseId }),
+				},
+				createZoltarForkDependencies(),
+			)
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 1n, environmentRefreshKey: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setZoltarForkQuestionId('0x01')
+		})
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('0x01')
+
+		await act(async () => {
+			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 0 }), renderedComponent.container)
+		})
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+
+		await act(async () => {
+			requireHookState(hookState).setZoltarForkQuestionId('0x02')
+			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
+		})
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+
+		await act(async () => {
+			requireHookState(hookState).setZoltarForkQuestionId('0x03')
+			render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
+		})
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+	})
+
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {
 		const universeLoad = createDeferred<ZoltarUniverseSummary>()
 		const forkZoltarUniverse = mock(async (_accountAddress: string, _callbacks: unknown, universeId: bigint, questionId: bigint) => {
@@ -174,6 +224,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => await universeLoad.promise,
 					onTransactionFailed: () => undefined,
 					onTransactionFinished: () => undefined,
@@ -239,6 +290,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
 					onTransactionFailed: () => undefined,
 					onTransactionFinished: () => undefined,
@@ -307,6 +359,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => forkedUniverse,
 					onTransactionFailed: () => undefined,
 					onTransactionFinished: () => undefined,
@@ -372,6 +425,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => universe,
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,
@@ -433,6 +487,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => universe,
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,
@@ -480,6 +535,7 @@ describe('useZoltarFork', () => {
 				{
 					accountAddress,
 					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
 					ensureZoltarUniverse: async () => universe,
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,

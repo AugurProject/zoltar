@@ -754,7 +754,7 @@ export function SecurityPoolWorkflowSection({
 								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
 							]
 				}
-				variant='context-strip'
+				variant='embedded-context-strip'
 			/>
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
@@ -825,10 +825,10 @@ export function SecurityPoolWorkflowSection({
 								{hasSelectedPoolAddress ? undefined : (
 									<div className='actions'>
 										<button className='primary' type='button' onClick={onBrowsePools}>
-											{commonCopy.browsePools}
+											{commonCopy.browsePoolsAction}
 										</button>
 										<button className='secondary' type='button' onClick={onCreatePool}>
-											{commonCopy.createPool}
+											{commonCopy.createPoolAction}
 										</button>
 									</div>
 								)}
@@ -938,7 +938,7 @@ export function SecurityPoolWorkflowSection({
 															description: securityPoolCopy.liquidationWorkflowDescription,
 															key: 'liquidate-vault',
 															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
-															title: securityPoolCopy.reviewLiquidation,
+															title: securityPoolCopy.reviewLiquidationTitle,
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
@@ -1151,7 +1151,7 @@ export function SecurityPoolWorkflowSection({
 				description={securityPoolCopy.requestPriceReviewDescription}
 				isOpen={requestPriceReview !== undefined}
 				onClose={() => setRequestPriceReview(undefined)}
-				title={securityPoolCopy.requestNewPrice}
+				title={securityPoolCopy.requestNewPriceTitle}
 			>
 				<TransactionReview
 					primary={[

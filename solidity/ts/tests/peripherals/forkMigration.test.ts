@@ -2267,6 +2267,12 @@ describe('Peripherals: fork migration', () => {
 			const holderAddress = addressString(TEST_ADDRESSES[2])
 			const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 			const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
+			const parentYesTokenId = await client.readContract({
+				address: securityPoolAddresses.shareToken,
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				functionName: 'getTokenId',
+				args: [genesisUniverse, QuestionOutcome.Yes],
+			})
 
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes)
 
@@ -2278,25 +2284,67 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(lowScalarBalances[0], 0n, 'invalid shares should stay at zero in the low scalar child universe')
 			strictEqualTypeSafe(lowScalarBalances[1], parentYesBalance, 'yes shares should migrate into the low scalar child universe')
 			strictEqualTypeSafe(lowScalarBalances[2], 0n, 'no shares should stay at zero in the low scalar child universe')
+			strictEqualTypeSafe(
+				await client.readContract({
+					address: securityPoolAddresses.shareToken,
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'getMigratedShareAmount',
+					args: [parentYesTokenId, lowScalarUniverse, holderAddress],
+				}),
+				parentYesBalance,
+				'the low child materialization should equal its persistent source entitlement',
+			)
 
 			const highScalarUniverse = getChildUniverseId(genesisUniverse, highScalarOutcome)
 			const highScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, highScalarUniverse, holderAddress)
 			strictEqualTypeSafe(highScalarBalances[0], 0n, 'invalid shares should stay at zero in the high scalar child universe')
 			strictEqualTypeSafe(highScalarBalances[1], parentYesBalance, 'yes shares should migrate into the high scalar child universe')
 			strictEqualTypeSafe(highScalarBalances[2], 0n, 'no shares should stay at zero in the high scalar child universe')
+			strictEqualTypeSafe(
+				await client.readContract({
+					address: securityPoolAddresses.shareToken,
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'getMigratedShareAmount',
+					args: [parentYesTokenId, highScalarUniverse, holderAddress],
+				}),
+				parentYesBalance,
+				'the high child materialization should equal its persistent source entitlement',
+			)
 
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome])
 			const middleScalarUniverse = getChildUniverseId(genesisUniverse, middleScalarOutcome)
 			const middleScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, middleScalarUniverse, holderAddress)
 			strictEqualTypeSafe(middleScalarBalances[1], parentYesBalance, 'a later child selection should materialize the source entitlement independently')
+			strictEqualTypeSafe(
+				await client.readContract({
+					address: securityPoolAddresses.shareToken,
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'getMigratedShareAmount',
+					args: [parentYesTokenId, middleScalarUniverse, holderAddress],
+				}),
+				parentYesBalance,
+				'the later child materialization should equal its persistent source entitlement',
+			)
+			for (const childUniverse of [lowScalarUniverse, middleScalarUniverse, highScalarUniverse]) {
+				const childYesTokenId = await client.readContract({
+					address: securityPoolAddresses.shareToken,
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'getTokenId',
+					args: [childUniverse, QuestionOutcome.Yes],
+				})
+				strictEqualTypeSafe(
+					await client.readContract({
+						address: securityPoolAddresses.shareToken,
+						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						functionName: 'totalSupply',
+						args: [childYesTokenId],
+					}),
+					parentYesBalance,
+					'each selected child supply should equal the independently materialized source entitlement',
+				)
+			}
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /ShareToken has no new shares to migrate/)
 
-			const parentYesTokenId = await client.readContract({
-				address: securityPoolAddresses.shareToken,
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				functionName: 'getTokenId',
-				args: [genesisUniverse, QuestionOutcome.Yes],
-			})
 			await assert.rejects(
 				openInterestHolder.writeContract({
 					address: securityPoolAddresses.shareToken,
