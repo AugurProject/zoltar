@@ -307,7 +307,7 @@ describe('ViewTabs', () => {
 					options={[
 						{ label: 'Questions', value: 'questions' },
 						{ label: 'Create Question', value: 'create' },
-						{ label: 'Fork Zoltar', value: 'fork' },
+						{ label: 'Fork Universe', value: 'fork' },
 						{ label: 'Migrate REP', value: 'migration' },
 					]}
 				/>,

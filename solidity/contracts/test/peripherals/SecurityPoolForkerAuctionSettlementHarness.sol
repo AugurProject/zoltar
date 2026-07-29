@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { SecurityPoolForker } from '../../peripherals/SecurityPoolForker.sol';
+import { SecurityPoolForkerAuctionSettlementBase } from '../../peripherals/SecurityPoolForkerAuctionSettlementBase.sol';
 import { ISecurityPool } from '../../peripherals/interfaces/ISecurityPool.sol';
 import { SecurityPoolForkerForkData } from '../../peripherals/SecurityPoolForkerTypes.sol';
 
@@ -37,21 +37,18 @@ contract AuctionSettlementPoolHarness {
 	}
 }
 
-contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForker {
-	constructor(Zoltar zoltar) SecurityPoolForker(zoltar) {}
+contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuctionSettlementBase {
+	constructor(Zoltar zoltar) SecurityPoolForkerAuctionSettlementBase(zoltar) {}
 
 	function creditAuctionProceeds(
 		ISecurityPool securityPool,
 		address vault,
 		uint256 amount,
-		uint256 newSecurityBondAllowance,
-		uint256 auctionPoolOwnershipPerRep,
-		uint256 totalRepPurchased,
-		uint256 auctionedSecurityBondAllowance
+		uint256 newSecurityBondAllowance
 	) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		data.auctionPoolOwnershipPerRep = auctionPoolOwnershipPerRep;
-		data.auctionedSecurityBondAllowance = auctionedSecurityBondAllowance;
-		_creditAuctionProceeds(securityPool, vault, data, amount, newSecurityBondAllowance, totalRepPurchased);
+		data.auctionPoolOwnershipPerRep = 10;
+		data.auctionedSecurityBondAllowance = 3;
+		_creditAuctionProceeds(securityPool, vault, data, amount, newSecurityBondAllowance, 1);
 	}
 }

@@ -236,6 +236,58 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.textContent?.match(/pool-managed/gi) ?? []).toHaveLength(1)
 	})
 
+	test('reviews lifecycle delays in human-readable and exact protocol units', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						disputeDelay: '3600',
+						exactToken1Report: '1',
+						initialToken2Amount: '1',
+						settlementTime: '86400',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('1d 0h 0m (86400 seconds)')).not.toBeNull()
+		expect(within(document.body).getByText('1h 0m (3600 seconds)')).not.toBeNull()
+	})
+
+	test('associates unreadable token contract preflight with the affected address field', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					openOracleCreateFieldErrors: {
+						token1Address: 'Base token address is not a readable ERC-20 contract.',
+					},
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						disputeDelay: '0',
+						exactToken1Report: '1',
+						initialToken2Amount: '1',
+						settlementTime: '1',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const baseTokenAddressInput = within(document.body).getByLabelText('Base Token Address')
+		expect(baseTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
+		expect(baseTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
+		expect(within(document.body).getByText('Base token address is not a readable ERC-20 contract.').getAttribute('role')).toBe('alert')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Base token address is not a readable ERC-20 contract.')
+	})
+
 	test('explains the first invalid field before the default create form is touched', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

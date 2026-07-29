@@ -48,10 +48,11 @@ function divideBigintRoundUp(value: bigint, divisor: bigint) {
 	return (value + divisor - 1n) / divisor
 }
 
-function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
+function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (securityBondAllowance === undefined || securityBondAllowance <= 0n) return 0n
-	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice, PRICE_PRECISION)
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
+	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
+	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
 }
 
 function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
@@ -65,21 +66,25 @@ export function getSecurityVaultWithdrawableRepAmount({
 	repDepositShare,
 	repPerEthPrice,
 	securityBondAllowance,
+	statoblastSecurityMultiplierBps,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
 	repDepositShare: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	securityBondAllowance: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
 	totalRepDeposit?: bigint | undefined
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
 	if (repDepositShare === undefined) return undefined
-	const requiredVaultRep = getAllowanceBackedRepFloor(securityBondAllowance, repPerEthPrice)
+	const requiredVaultRep = getAllowanceBackedRepFloor(securityBondAllowance, repPerEthPrice, statoblastSecurityMultiplierBps)
+	if (requiredVaultRep === undefined) return undefined
 	const maxLocalWithdrawal = repDepositShare > requiredVaultRep ? repDepositShare - requiredVaultRep : 0n
 	let maxWithdrawableRep = maxLocalWithdrawal
 	if (totalRepDeposit !== undefined && totalRepDeposit > 0n) {
-		const requiredPoolRep = getAllowanceBackedRepFloor(totalSecurityBondAllowance, repPerEthPrice)
+		const requiredPoolRep = getAllowanceBackedRepFloor(totalSecurityBondAllowance, repPerEthPrice, statoblastSecurityMultiplierBps)
+		if (requiredPoolRep === undefined) return undefined
 		const maxGlobalWithdrawal = totalRepDeposit > requiredPoolRep ? totalRepDeposit - requiredPoolRep : 0n
 		maxWithdrawableRep = maxWithdrawableRep < maxGlobalWithdrawal ? maxWithdrawableRep : maxGlobalWithdrawal
 	}
