@@ -22,9 +22,9 @@ void describe('security-pool simulation backends', () => {
 		securityPoolBackend = nextSecurityPoolBackend
 		securityPoolX2Backend = nextSecurityPoolX2Backend
 		securityPoolX2AuctionBackend = nextSecurityPoolX2AuctionBackend
-		securityPoolBackend.setTransactionDelayMilliseconds(0)
-		securityPoolX2Backend.setTransactionDelayMilliseconds(0)
-		securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
+		await securityPoolBackend.setTransactionDelayMilliseconds(0)
+		await securityPoolX2Backend.setTransactionDelayMilliseconds(0)
+		await securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	afterAll(async () => {

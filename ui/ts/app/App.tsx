@@ -99,13 +99,14 @@ export function App() {
 		accountState,
 		augurStatoblastDeployed,
 		changeWallet,
+		chainClockError,
 		connectWallet,
 		currentBlockNumber,
 		currentTimestamp,
 		deploymentStatuses,
 		environmentBootstrapError,
 		environmentReady,
-		errorMessage: walletErrorMessage,
+		errorMessages: onchainErrorMessages,
 		readBackendMessage,
 		readBackendStatus,
 		hasLoadedDeploymentStatuses,
@@ -179,7 +180,9 @@ export function App() {
 		zoltarQuestionCount,
 		zoltarQuestionPage,
 		zoltarQuestions,
+		zoltarQuestionsError,
 		zoltarUniverse,
+		zoltarUniverseError,
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
@@ -326,7 +329,7 @@ export function App() {
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
-	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
+	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages, chainClockError, zoltarUniverseError, zoltarQuestionsError].filter((message): message is string => message !== undefined)
 	const augurStatoblastDeploymentMissing = canReadOnchainData && augurStatoblastDeployed === false
 	const showDeployTab = augurStatoblastDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurStatoblastDeploymentWarning = augurStatoblastDeploymentMissing
@@ -815,7 +818,7 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading pageTitle={pageTitle} />
-					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
+					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
 						<GlobalTransactionTray transaction={transactionState.value.active} />

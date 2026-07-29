@@ -109,6 +109,34 @@ void describe('active environment', () => {
 		resetEnvironment()
 	})
 
+	void test('keeps the current simulation usable when replacement construction fails', async () => {
+		let disposeCalls = 0
+		const currentBackend = createFakeBackend({
+			profile: createFakeSimulationProfile(),
+		})
+		const currentController = {
+			dispose: async () => {
+				disposeCalls += 1
+			},
+		} as Awaited<ReturnType<typeof createSimulationBackend>>
+		const resetEnvironment = installActiveEnvironmentForTesting(currentBackend, currentController)
+
+		await expect(
+			initializeActiveEnvironment(
+				{ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' },
+				{
+					createSimulationBackend: async () => {
+						throw new Error('replacement construction failed')
+					},
+				},
+			),
+		).rejects.toThrow('replacement construction failed')
+
+		expect(getActiveBackend()).toBe(currentBackend)
+		expect(disposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
 	void test('initializes a saved simulation state from simState query params', async () => {
 		const domEnvironment = installDomEnvironment()
 		const record = persistSavedSimulationState(
@@ -202,7 +230,7 @@ void describe('simulation backend', () => {
 	beforeAll(async () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
 		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
-		warmBaselineBackend.setTransactionDelayMilliseconds(0)
+		await warmBaselineBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	beforeEach(async () => {
@@ -350,7 +378,7 @@ void describe('simulation backend', () => {
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -374,7 +402,7 @@ void describe('simulation backend', () => {
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -419,7 +447,7 @@ void describe('simulation backend', () => {
 			const toAccount = backend.accounts[1]
 			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
-			backend.setTransactionDelayMilliseconds(250)
+			await backend.setTransactionDelayMilliseconds(250)
 			expect(backend.transactionDelayMilliseconds).toBe(250)
 
 			const writeClient = backend.createWriteClient(fromAccount)
@@ -441,9 +469,9 @@ void describe('simulation backend', () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		await backend.setRepPerEthPrice(2n * 10n ** 18n)
 		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
-		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
+		await backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
@@ -459,9 +487,9 @@ void describe('simulation backend', () => {
 			const secondaryAccount = sourceBackend.accounts[1]
 			if (secondaryAccount === undefined) throw new Error('Expected a secondary simulation QA account')
 
-			sourceBackend.setQueryDelayMilliseconds(250)
-			sourceBackend.setTransactionDelayMilliseconds(0)
-			sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
+			await sourceBackend.setQueryDelayMilliseconds(250)
+			await sourceBackend.setTransactionDelayMilliseconds(0)
+			await sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
 			await sourceBackend.selectAccount(secondaryAccount)
 			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 

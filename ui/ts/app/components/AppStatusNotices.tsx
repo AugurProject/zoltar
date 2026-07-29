@@ -5,7 +5,8 @@ import type { NoticeItem } from '../../types/components.js'
 import type { ReadBackendStatus } from '../../lib/chainBackend.js'
 
 type AppStatusNoticesProps = {
-	errorMessage: string | undefined
+	errorMessage?: string | undefined
+	errorMessages?: readonly string[]
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
 	simulationBootstrapError: string | undefined
@@ -61,13 +62,14 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurStatoblastDeploymentWarning }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurStatoblastDeploymentWarning }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
 	if (showAugurStatoblastDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
 	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
-	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: commonCopy.error })
+	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
+	for (const [index, message] of distinctErrorMessages.entries()) items.push({ detail: message, id: `app-error-${index.toString()}`, tone: 'blocking', title: commonCopy.error })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)
 
 	return <NoticeStack items={items} />

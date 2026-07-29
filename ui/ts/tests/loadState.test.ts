@@ -131,6 +131,26 @@ void describe('load state helpers', () => {
 		expect(controller.isLoading.value).toBe(false)
 	})
 
+	void test('invalidates stale pending work without letting it affect newer loading state', async () => {
+		const controller = createLoadController()
+		const stale = createDeferred<number>()
+		const current = createDeferred<number>()
+		const staleTask = controller.track(async () => await stale.promise)
+
+		expect(controller.isLoading.value).toBe(true)
+		controller.invalidate()
+		expect(controller.isLoading.value).toBe(false)
+
+		const currentTask = controller.track(async () => await current.promise)
+		current.resolve(2)
+		await currentTask
+		expect(controller.isLoading.value).toBe(false)
+
+		stale.resolve(1)
+		await staleTask
+		expect(controller.isLoading.value).toBe(false)
+	})
+
 	void test('rethrows track errors after clearing loading state', async () => {
 		const controller = createLoadController()
 

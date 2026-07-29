@@ -183,4 +183,20 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
 	})
+
+	test('shows every concurrent top-level error', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessages: ['Deployment failed', 'Wallet refresh failed'],
+				readBackendMessage: undefined,
+				showAugurStatoblastDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Deployment failed')).not.toBeNull()
+		expect(documentQueries.getByText('Wallet refresh failed')).not.toBeNull()
+	})
 })

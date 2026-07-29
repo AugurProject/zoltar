@@ -4,7 +4,7 @@ import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/index.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../../../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../../../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation } from '../../transactionPresentations.js'
@@ -70,6 +70,7 @@ export function useZoltarUniverse(
 	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters,
 	dependencies: UseZoltarUniverseDependencies = defaultUseZoltarUniverseDependencies,
 ) {
+	const zoltarDeployed = hasDeployedStep(deploymentStatuses, 'zoltar')
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
@@ -82,30 +83,44 @@ export function useZoltarUniverse(
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
+	const zoltarQuestionsError = useSignal<string | undefined>(undefined)
+	const zoltarUniverseError = useSignal<string | undefined>(undefined)
 	const zoltarChildUniverseFeedback = useSignal<ActionFeedback<'createChildUniverse'> | undefined>(undefined)
 	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
 	const isMounted = useRef(true)
-	const currentEnvironmentRefreshKeyRef = useRef(environmentRefreshKey)
+	const currentZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed })
+	const previousZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed })
 	const questionLoadGenerationRef = useRef(0)
 	const nextUniverseLoad = useRequestGuard()
 	const nextQuestionCountLoad = useRequestGuard()
 	const nextQuestionsLoad = useRequestGuard()
-	currentEnvironmentRefreshKeyRef.current = environmentRefreshKey
+	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 
 	const resetZoltarUniverseState = () => {
+		universeLoad.invalidate()
+		questionCountLoad.invalidate()
+		questionsLoad.invalidate()
 		questionLoadGenerationRef.current += 1
 		zoltarUniverseMissing.value = false
 		zoltarUniverse.value = undefined
 		zoltarUniverseLoadedId.value = undefined
 		zoltarUniverseResolvedId.value = undefined
 		zoltarChildUniverseError.value = undefined
+		zoltarQuestionsError.value = undefined
+		zoltarUniverseError.value = undefined
 		zoltarChildUniversePendingOutcomeIndex.value = undefined
 		hasLoadedZoltarQuestions.value = false
 		zoltarQuestionCount.value = undefined
 		zoltarQuestionPage.value = undefined
 		zoltarQuestions.value = []
 	}
-	const isCurrentQuestionLoad = (generation: number, refreshKey: number) => questionLoadGenerationRef.current === generation && currentEnvironmentRefreshKeyRef.current === refreshKey
+	const isCurrentZoltarContext = (context: { activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean }) => {
+		const currentContext = currentZoltarContextRef.current
+		return currentContext.activeUniverseId === context.activeUniverseId && currentContext.environmentRefreshKey === context.environmentRefreshKey && currentContext.zoltarDeployed === context.zoltarDeployed
+	}
+	const isCurrentQuestionLoad = (generation: number, context: { activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean }) => {
+		return questionLoadGenerationRef.current === generation && isCurrentZoltarContext(context)
+	}
 
 	const ensureZoltarUniverse = async (): Promise<ZoltarUniverseSummary> => {
 		if (zoltarUniverse.value !== undefined && zoltarUniverseLoadedId.value === activeUniverseId) return zoltarUniverse.value
@@ -122,7 +137,9 @@ export function useZoltarUniverse(
 		const clearCurrentState = options.clearCurrentState ?? true
 		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
+		const universeLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 		if (clearCurrentState) resetZoltarUniverseState()
+		else zoltarUniverseError.value = undefined
 		return await universeLoad.run({
 			isCurrent,
 			load: async () => {
@@ -138,7 +155,7 @@ export function useZoltarUniverse(
 				return await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), requestedUniverseId)
 			},
 			onSuccess: universe => {
-				if (requestedUniverseId !== activeUniverseId) return
+				if (!isCurrentZoltarContext(universeLoadContext)) return
 				if (universe === undefined) {
 					zoltarUniverseResolvedId.value = requestedUniverseId
 					zoltarUniverseMissing.value = requestedUniverseId !== 0n
@@ -149,7 +166,10 @@ export function useZoltarUniverse(
 				zoltarUniverseLoadedId.value = requestedUniverseId
 				zoltarUniverseResolvedId.value = requestedUniverseId
 			},
-			onError: () => undefined,
+			onError: error => {
+				if (!isCurrentZoltarContext(universeLoadContext)) return
+				zoltarUniverseError.value = getErrorMessage(error, 'Failed to load Zoltar universe')
+			},
 		})
 	}
 
@@ -157,36 +177,48 @@ export function useZoltarUniverse(
 
 	const loadZoltarQuestionCountData = async () => {
 		if (!isMounted.current) return
+		if (!zoltarDeployed) {
+			zoltarQuestionsError.value = undefined
+			zoltarQuestionCount.value = undefined
+			return
+		}
 		const questionLoadGeneration = questionLoadGenerationRef.current
-		const questionLoadRefreshKey = environmentRefreshKey
+		const questionLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 		const isCurrent = nextQuestionCountLoad()
+		zoltarQuestionsError.value = undefined
 		await questionCountLoad.run({
 			isCurrent,
 			load: async () => await dependencies.loadZoltarQuestionCount(dependencies.createConnectedReadClient()),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionCount.value = questionCount
 			},
-			onError: () => undefined,
+			onError: error => {
+				if (!isMounted.current) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+				zoltarQuestionsError.value = getErrorMessage(error, 'Failed to load Zoltar question count')
+			},
 		})
 	}
 
 	const loadQuestions = async (): Promise<void> => {
 		if (!isMounted.current) return
+		if (!zoltarDeployed) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const questionLoadGeneration = questionLoadGenerationRef.current
-		const questionLoadRefreshKey = environmentRefreshKey
+		const questionLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 		const readClient = dependencies.createConnectedReadClient()
 		let loadError: unknown
+		zoltarQuestionsError.value = undefined
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
 			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionCount.value = questionCount
 			},
 			onError: error => {
@@ -199,7 +231,7 @@ export function useZoltarUniverse(
 			load: async () => await dependencies.loadAllZoltarQuestions(readClient),
 			onSuccess: questions => {
 				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestions.value = questions
 				hasLoadedZoltarQuestions.value = true
 				const currentQuestionPage = zoltarQuestionPage.value
@@ -213,24 +245,30 @@ export function useZoltarUniverse(
 		})
 
 		await Promise.allSettled([countTask, questionsTask])
-		if (loadError !== undefined) throw loadError
+		if (!isMounted.current || !isCountCurrent() || !isQuestionsCurrent() || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+		if (loadError !== undefined) {
+			zoltarQuestionsError.value = getErrorMessage(loadError, 'Failed to load Zoltar questions')
+			throw loadError
+		}
 	}
 
 	const loadQuestionsPage = async (pageIndex: number, pageSize: number): Promise<void> => {
 		if (!isMounted.current) return
+		if (!zoltarDeployed) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const questionLoadGeneration = questionLoadGenerationRef.current
-		const questionLoadRefreshKey = environmentRefreshKey
+		const questionLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 		const readClient = dependencies.createConnectedReadClient()
 		let loadError: unknown
+		zoltarQuestionsError.value = undefined
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
 			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionCount.value = questionCount
 			},
 			onError: error => {
@@ -243,7 +281,7 @@ export function useZoltarUniverse(
 			load: async () => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
 			onSuccess: page => {
 				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
+				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionPage.value = page
 				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, page.questions)
 			},
@@ -253,7 +291,11 @@ export function useZoltarUniverse(
 		})
 
 		await Promise.allSettled([countTask, questionsTask])
-		if (loadError !== undefined) throw loadError
+		if (!isMounted.current || !isCountCurrent() || !isQuestionsCurrent() || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+		if (loadError !== undefined) {
+			zoltarQuestionsError.value = getErrorMessage(loadError, 'Failed to load Zoltar question page')
+			throw loadError
+		}
 	}
 
 	const createChildUniverse = async (outcomeIndex: bigint) => {
@@ -311,10 +353,18 @@ export function useZoltarUniverse(
 		}
 	}
 
-	const zoltarDeployed = hasDeployedStep(deploymentStatuses, 'zoltar')
+	useLayoutEffect(() => {
+		const previousContext = previousZoltarContextRef.current
+		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed
+		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		if (contextChanged) resetZoltarUniverseState()
+	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed])
+
 	useLayoutEffect(() => {
 		if (!autoLoadInitialData) return
-		void Promise.allSettled([loadZoltarUniverse(), loadZoltarQuestionCountData()])
+		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse()]
+		if (zoltarDeployed) initialLoads.push(loadZoltarQuestionCountData())
+		void Promise.allSettled(initialLoads)
 	}, [activeUniverseId, autoLoadInitialData, environmentRefreshKey, zoltarDeployed])
 
 	useLayoutEffect(() => {
@@ -341,7 +391,9 @@ export function useZoltarUniverse(
 		zoltarQuestionPage: zoltarQuestionPage.value,
 		zoltarQuestionCount: zoltarQuestionCount.value,
 		zoltarQuestions: zoltarQuestions.value,
+		zoltarQuestionsError: zoltarQuestionsError.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,
+		zoltarUniverseError: zoltarUniverseError.value,
 		zoltarUniverseLoadedId: zoltarUniverseLoadedId.value,
 		zoltarUniverseResolvedId: zoltarUniverseResolvedId.value,
 		zoltarUniverseMissing: zoltarUniverseMissing.value,

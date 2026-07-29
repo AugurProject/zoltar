@@ -1,6 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
+import { CopyErrorMessage } from './CopyErrorMessage.js'
 
 type AddressValueProps = {
 	address: string | undefined
@@ -27,7 +28,7 @@ function AddressText({ address, responsiveAbbreviation }: { address: string; res
 }
 
 export function AddressValue({ address, className = '', copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
-	const { copied, copyText } = useCopyToClipboard()
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
 
 	if (address === undefined) {
 		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
@@ -46,8 +47,11 @@ export function AddressValue({ address, className = '', copyable = true, respons
 		)
 
 	return (
-		<button type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} onClick={() => copyText(address)}>
-			{copied.value ? commonCopy.copied : <AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />}
-		</button>
+		<span className='copy-value-wrap'>
+			<button type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
+				{copied.value ? commonCopy.copied : <AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />}
+			</button>
+			<CopyErrorMessage id={copyErrorId} message={copyError.value} />
+		</span>
 	)
 }

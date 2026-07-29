@@ -1,11 +1,13 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const deleteSave = 'Delete save'
+export const deletingSave = 'Deleting…'
 export const jsonState = 'JSON state'
 export const removeCorruptedSaves = 'Remove corrupted saves'
 export const corruptedSavesEmptyError = 'No corrupted saved simulation states were found.'
 export const formatMissingSavedStateError = (stateName: CopyTemplateValue) => `Saved simulation state "${stateName}" no longer exists.`
 export const savedStateUpdateError = 'Failed to update the saved simulation state.'
+export const simulationControlError = 'Failed to update the simulation.'
 export const stateExportError = 'Failed to export the current simulation state.'
 export const plus1Hour = '+1 hour'
 export const plus1Day = '+1 day'

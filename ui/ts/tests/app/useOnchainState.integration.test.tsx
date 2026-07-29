@@ -2,7 +2,7 @@
 
 import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
@@ -552,7 +552,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh deployment status. Reason: deployment status RPC failed'))
+		await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh deployment status. Reason: deployment status RPC failed'))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		resetEnvironment()
 	})
@@ -614,7 +614,7 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('treats recoverable chain-clock reads as missing block and timestamp data', async () => {
+	test('reports chain-clock read failures and clears block and timestamp data', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a4')
 		const readClient = {
 			getBalance: async () => 123n,
@@ -650,7 +650,14 @@ describe('useOnchainState (integration)', () => {
 
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
-		expect(requireHookState(hookState).errorMessage).toBeUndefined()
+		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed')
+		await act(async () => {
+			await requireHookState(hookState).refreshState({
+				loadChainClock: false,
+				loadDeploymentState: false,
+			})
+		})
+		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed')
 		resetEnvironment()
 	})
 
@@ -786,6 +793,102 @@ describe('useOnchainState (integration)', () => {
 
 		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Action canceled in wallet.'))
 		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+		resetEnvironment()
+	})
+
+	test('ignores a pending wallet connection failure after the environment changes', async () => {
+		const connection = createDeferred<readonly Address[]>()
+		const { backend: backendA } = createBackend({
+			requestAccounts: async () => await connection.promise,
+		})
+		const { backend: backendB } = createBackend({})
+		const dependencies = createOnchainStateDependencies()
+		let resetEnvironment = installActiveEnvironmentForTesting(backendA)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ activeEnvironmentNonce }: { activeEnvironmentNonce: number }) {
+			hookState = useOnchainState({ activeEnvironmentNonce }, dependencies)
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { activeEnvironmentNonce: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		void requireHookState(hookState).connectWallet()
+		await waitFor(() => expect(requireHookState(hookState).isConnectingWallet).toBe(true))
+		resetEnvironment = installActiveEnvironmentForTesting(backendB)
+		await act(() => {
+			render(h(Harness, { activeEnvironmentNonce: 1 }), renderedComponent.container)
+		})
+		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+
+		await act(async () => {
+			connection.reject(new Error('old connection failure'))
+			await connection.promise.catch(() => undefined)
+		})
+		expect(requireHookState(hookState).errorMessages).toEqual([])
+		resetEnvironment()
+	})
+
+	test('ignores a pending wallet management failure after the environment changes', async () => {
+		const accountSelection = createDeferred<readonly Address[]>()
+		const { backend: backendA } = createBackend({})
+		backendA.requestAccountSelection = async () => await accountSelection.promise
+		const { backend: backendB } = createBackend({})
+		const dependencies = createOnchainStateDependencies()
+		let resetEnvironment = installActiveEnvironmentForTesting(backendA)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ activeEnvironmentNonce }: { activeEnvironmentNonce: number }) {
+			hookState = useOnchainState({ activeEnvironmentNonce }, dependencies)
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { activeEnvironmentNonce: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		void requireHookState(hookState).changeWallet()
+		await waitFor(() => expect(requireHookState(hookState).isManagingWallet).toBe(true))
+		resetEnvironment = installActiveEnvironmentForTesting(backendB)
+		await act(() => {
+			render(h(Harness, { activeEnvironmentNonce: 1 }), renderedComponent.container)
+		})
+		expect(requireHookState(hookState).isManagingWallet).toBe(false)
+
+		await act(async () => {
+			accountSelection.reject(new Error('old management failure'))
+			await accountSelection.promise.catch(() => undefined)
+		})
+		expect(requireHookState(hookState).errorMessages).toEqual([])
+		resetEnvironment()
+	})
+
+	test('keeps simultaneous deployment, ETH, and WETH failures distinct', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a9')
+		const readClient = {
+			getBalance: async () => {
+				throw new Error('eth RPC failed')
+			},
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: async () => {
+				throw new Error('deployment RPC failed')
+			},
+			loadErc20Balance: async () => {
+				throw new Error('weth RPC failed')
+			},
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).errorMessages).toHaveLength(3))
+		expect(requireHookState(hookState).errorMessages).toEqual(['Failed to refresh deployment status. Reason: deployment RPC failed', 'Failed to refresh ETH balance. Reason: eth RPC failed', 'Failed to refresh WETH balance. Reason: weth RPC failed'])
 		resetEnvironment()
 	})
 
@@ -1129,6 +1232,50 @@ describe('useOnchainState (integration)', () => {
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 		expect(getBlockCalls).toBe(0)
 		expect(setIntervalMock).toHaveBeenCalledTimes(0)
+		resetEnvironment()
+	})
+
+	test('invalidates an in-flight chain-clock read when clock loading is disabled', async () => {
+		const block = createDeferred<{ number: bigint; timestamp: bigint }>()
+		const account = getAddress('0x00000000000000000000000000000000000000a8')
+		const readClient = {
+			getBalance: async () => 321n,
+			getBlock: async () => await block.promise,
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 654n),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		function Harness({ enableChainClock }: { enableChainClock: boolean }) {
+			const state = useOnchainState({ enableChainClock }, dependencies)
+			hookState = state
+			return h('div', {})
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { enableChainClock: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+
+		await act(() => {
+			render(h(Harness, { enableChainClock: false }), renderedComponent.container)
+		})
+		await act(async () => {
+			block.reject(new Error('late block failure'))
+			await block.promise.catch(() => undefined)
+		})
+
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		expect(requireHookState(hookState).chainClockError).toBeUndefined()
 		resetEnvironment()
 	})
 })

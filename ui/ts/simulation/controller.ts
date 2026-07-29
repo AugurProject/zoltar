@@ -25,12 +25,12 @@ export type SimulationController = {
 	selectAccount(address: Address): Promise<void>
 	selectedAccount: Address
 	simulationSource: SimulationSource
-	setRepPerEthPrice(value: bigint): void
-	setRepPerUsdcPrice(value: bigint): void
-	setQueryDelayMilliseconds(value: number): void
+	setRepPerEthPrice(value: bigint): Promise<void>
+	setRepPerUsdcPrice(value: bigint): Promise<void>
+	setQueryDelayMilliseconds(value: number): Promise<void>
 	subscribe(handler: () => void): () => void
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number
-	setTransactionDelayMilliseconds(value: number): void
+	setTransactionDelayMilliseconds(value: number): Promise<void>
 	waitUntilReady(): Promise<void>
 }

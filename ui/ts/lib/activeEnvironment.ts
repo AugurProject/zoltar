@@ -21,6 +21,14 @@ let activeSimulationController: SimulationController | undefined = undefined
 const SIMULATION_QUERY_PARAM = 'simulate'
 const SIMULATION_QUERY_VALUE = '1'
 
+type InitializeActiveEnvironmentDependencies = {
+	createSimulationBackend: typeof createSimulationBackend
+}
+
+const defaultInitializeActiveEnvironmentDependencies: InitializeActiveEnvironmentDependencies = {
+	createSimulationBackend,
+}
+
 function readLocationParams(location: LocationLike) {
 	const params = new URLSearchParams(location.search)
 	const hash = location.hash ?? ''
@@ -53,14 +61,19 @@ function getSimulationStateId(location: LocationLike) {
 	return stateId === null || stateId.trim() === '' ? undefined : stateId
 }
 
-export async function initializeActiveEnvironment(location: LocationLike = window.location) {
-	if (activeSimulationController !== undefined) {
-		await activeSimulationController.dispose()
-		activeSimulationController = undefined
-	}
+export async function initializeActiveEnvironment(location: LocationLike = window.location, dependencies: InitializeActiveEnvironmentDependencies = defaultInitializeActiveEnvironmentDependencies) {
+	const previousSimulationController = activeSimulationController
 
 	if (!shouldUseSimulationLocation(location)) {
 		activeBackend = injectedBackend
+		activeSimulationController = undefined
+		if (previousSimulationController !== undefined) {
+			try {
+				await previousSimulationController.dispose()
+			} catch (error) {
+				console.error('[simulation] failed to dispose previous environment', error)
+			}
+		}
 		return injectedBackend
 	}
 
@@ -79,16 +92,23 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 	const simulationBackend =
 		savedStateId !== undefined && savedState !== undefined
-			? await createSimulationBackend({
+			? await dependencies.createSimulationBackend({
 					savedState,
 					savedStateId,
 				})
-			: await createSimulationBackend({
+			: await dependencies.createSimulationBackend({
 					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 				})
 	activeBackend = simulationBackend
 	activeSimulationController = simulationBackend
+	if (previousSimulationController !== undefined && previousSimulationController !== simulationBackend) {
+		try {
+			await previousSimulationController.dispose()
+		} catch (error) {
+			console.error('[simulation] failed to dispose previous environment', error)
+		}
+	}
 	void simulationBackend.bootstrap().catch(error => {
 		console.error('[simulation] bootstrap failed', error)
 	})

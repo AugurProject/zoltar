@@ -13,6 +13,16 @@ import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
+
 function createSimulationController(overrides: Partial<SimulationController> = {}): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address
 
@@ -59,10 +69,10 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 			kind: 'scenario',
 			scenario: 'baseline',
 		},
-		setQueryDelayMilliseconds: () => undefined,
-		setRepPerEthPrice: () => undefined,
-		setRepPerUsdcPrice: () => undefined,
-		setTransactionDelayMilliseconds: () => undefined,
+		setQueryDelayMilliseconds: async () => undefined,
+		setRepPerEthPrice: async () => undefined,
+		setRepPerUsdcPrice: async () => undefined,
+		setTransactionDelayMilliseconds: async () => undefined,
 		subscribe: () => () => undefined,
 		transactionCountSinceReset: 0n,
 		transactionDelayMilliseconds: 0,
@@ -231,7 +241,7 @@ describe('SimulationBanner', () => {
 	test('refreshes the app after updating the REP/ETH mock price', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
-		const setRepPerEthPrice = mock(() => undefined)
+		const setRepPerEthPrice = mock(async () => undefined)
 		const controller = createSimulationController({ setRepPerEthPrice })
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
@@ -255,6 +265,99 @@ describe('SimulationBanner', () => {
 				expect(setRepPerEthPrice).toHaveBeenCalledWith(2n * 10n ** 18n)
 				expect(onRefresh).toHaveBeenCalledTimes(1)
 			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows a rejected simulation control error and does not refresh', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const setRepPerEthPrice = mock(async () => {
+			throw new Error('Simulation REP/ETH price must be greater than zero')
+		})
+		const controller = createSimulationController({ setRepPerEthPrice })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const repPerEthLabel = within(advancedControls).getByText('REP / ETH mock price')
+			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+
+			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
+			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
+
+			await waitFor(() => expect(within(advancedControls).getByRole('alert').textContent).toContain('Simulation REP/ETH price must be greater than zero'))
+			expect(getElementValue(repPerEthInput)).toBe('1')
+			expect(onRefresh).not.toHaveBeenCalled()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('clears a rejected control error when the controller is replaced', async () => {
+		const domEnvironment = installDomEnvironment()
+		const rejectingController = createSimulationController({
+			setRepPerEthPrice: async () => {
+				throw new Error('Old simulation rejected the price')
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={rejectingController} onRefresh={async () => undefined} />)
+
+		try {
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const repPerEthLabel = within(advancedControls).getByText('REP / ETH mock price')
+			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+
+			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
+			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
+			await waitFor(() => expect(within(advancedControls).getByRole('alert').textContent).toContain('Old simulation rejected the price'))
+
+			await act(() => {
+				render(<SimulationBanner controller={createSimulationController({ currentScenario: 'deployed' })} onRefresh={async () => undefined} />, renderedComponent.container)
+			})
+
+			expect(within(renderedComponent.container).queryByRole('alert')).toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('ignores an old control rejection after the controller is replaced', async () => {
+		const domEnvironment = installDomEnvironment()
+		const oldControl = createDeferred<void>()
+		const oldController = createSimulationController({
+			setRepPerEthPrice: async () => await oldControl.promise,
+		})
+		const replacementController = createSimulationController({
+			currentScenario: 'deployed',
+			repPerEthPrice: 2n * 10n ** 18n,
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={oldController} onRefresh={async () => undefined} />)
+
+		try {
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const oldInput = within(advancedControls).getByText('REP / ETH mock price').parentElement?.querySelector('input')
+			if (!(oldInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+			fireEvent.input(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
+			fireEvent.change(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
+
+			await act(() => {
+				render(<SimulationBanner controller={replacementController} onRefresh={async () => undefined} />, renderedComponent.container)
+			})
+			await act(async () => {
+				oldControl.reject(new Error('Old controller rejected after replacement'))
+				await oldControl.promise.catch(() => undefined)
+			})
+
+			const replacementInput = within(renderedComponent.container).getByText('REP / ETH mock price').parentElement?.querySelector('input')
+			expect(getElementValue(replacementInput ?? document.createElement('div'))).toBe('2')
+			expect(within(renderedComponent.container).queryByRole('alert')).toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -365,6 +468,50 @@ describe('SimulationBanner', () => {
 				const exportDialog = documentQueries.getByRole('dialog')
 				expect(within(exportDialog).getByLabelText('JSON state')).toBeTruthy()
 			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('does not let an old controller export replace newer controller state', async () => {
+		const domEnvironment = installDomEnvironment()
+		const oldExport = createDeferred<string>()
+		const oldController = createSimulationController({
+			exportState: async () => await oldExport.promise,
+		})
+		const replacementController = createSimulationController({
+			currentScenario: 'deployed',
+			exportState: async () => 'new controller state',
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={oldController} onRefresh={async () => undefined} />)
+
+		try {
+			let advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Export state' }))
+			await waitFor(() => expect(within(renderedComponent.container).getByRole('dialog')).not.toBeNull())
+
+			await act(() => {
+				render(<SimulationBanner controller={replacementController} onRefresh={async () => undefined} />, renderedComponent.container)
+			})
+			expect(within(renderedComponent.container).queryByRole('dialog')).toBeNull()
+
+			const advancedSummary = within(renderedComponent.container).getByText('QA controls, prices, and time travel')
+			const replacementAdvancedControls = advancedSummary.closest('details')
+			if (!isDetailsElement(replacementAdvancedControls)) throw new Error('Expected replacement simulation controls')
+			if (!replacementAdvancedControls.open) fireEvent.click(advancedSummary)
+			advancedControls = replacementAdvancedControls
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Export state' }))
+			const exportDialog = await waitFor(() => within(renderedComponent.container).getByRole('dialog'))
+			const exportText = within(exportDialog).getByLabelText('JSON state')
+			await waitFor(() => expect(getElementValue(exportText)).toBe('new controller state'))
+
+			await act(async () => {
+				oldExport.resolve('old controller state')
+				await oldExport.promise
+			})
+			expect(getElementValue(exportText)).toBe('new controller state')
+			expect(within(exportDialog).queryByText('old controller state')).toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -605,6 +752,75 @@ describe('SimulationBanner', () => {
 		}
 	})
 
+	test('restores the route and shows an alert when scenario navigation fails', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
+		const mineBlock = mock(async () => undefined)
+		const controller = createSimulationController({ mineBlock })
+		const onEnvironmentChanged = mock(async () => {
+			throw new Error('replacement environment failed')
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={async () => undefined} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const picker = documentQueries.getAllByRole('combobox')[0]
+			if (picker === undefined || picker.tagName !== 'SELECT') throw new Error('Expected the scenario picker')
+			fireEvent.change(picker, {
+				currentTarget: { value: 'scenario:securitypoolx2' },
+				target: { value: 'scenario:securitypoolx2' },
+			})
+
+			const error = await waitFor(() => documentQueries.getByRole('alert'))
+			expect(error.textContent).toContain('replacement environment failed')
+			expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
+			expect(getElementValue(picker)).toBe('scenario:baseline')
+
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Mine block' }))
+			await waitFor(() => expect(mineBlock).toHaveBeenCalledTimes(1))
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows cleanup navigation failures after its modal closes', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=broken-state')
+		domEnvironment.window.localStorage.setItem(
+			'zoltar.simulation.savedStates',
+			JSON.stringify([
+				{
+					baseScenario: 'baseline',
+					id: 'broken-state',
+					name: 'Broken state',
+					savedAt: '2026-06-02T12:35:56.000Z',
+					serialized: '{bad json',
+				},
+			]),
+		)
+		const controller = createSimulationController()
+		const onEnvironmentChanged = mock(async () => {
+			throw new Error('cleanup environment failed')
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={async () => undefined} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
+			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove Corrupted Saved States' }))
+			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
+
+			const error = await waitFor(() => documentQueries.getByRole('alert'))
+			expect(error.textContent).toContain('cleanup environment failed')
+			expect(documentQueries.queryByRole('dialog')).toBeNull()
+			expect(domEnvironment.window.location.hash).toContain('simState=broken-state')
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('shows inline import errors for malformed JSON', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
@@ -692,7 +908,6 @@ describe('SimulationBanner', () => {
 			]),
 		)
 		const onRefresh = mock(async () => undefined)
-		const onEnvironmentChanged = mock(async () => undefined)
 		const controller = createSimulationController({
 			simulationSource: {
 				baseScenario: 'baseline',
@@ -702,7 +917,17 @@ describe('SimulationBanner', () => {
 				stateId: 'saved-baseline-20260602123456',
 			},
 		})
+		const replacementController = createSimulationController()
+		let bannerContainer: Element | undefined
+		const onEnvironmentChanged = mock(async () => {
+			const target = bannerContainer
+			if (target === undefined) throw new Error('Expected the simulation banner container')
+			await act(() => {
+				render(<SimulationBanner controller={replacementController} onEnvironmentChanged={async () => undefined} onRefresh={onRefresh} />, target)
+			})
+		})
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
+		bannerContainer = renderedComponent.container
 
 		try {
 			const documentQueries = within(renderedComponent.container)
@@ -717,6 +942,157 @@ describe('SimulationBanner', () => {
 				expect(domEnvironment.window.location.hash).not.toContain('simState=')
 				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
 			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows a storage deletion failure after the environment controller is replaced', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=saved-baseline-20260602123456')
+		const serializedRecords = JSON.stringify([
+			{
+				baseScenario: 'baseline',
+				id: 'saved-baseline-20260602123456',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				serialized: serializeSavedSimulationStateEnvelope({
+					baseScenario: 'baseline',
+					name: 'Saved baseline',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					state: {
+						blockCountSinceReset: 0n,
+						currentTimestamp: 1n,
+						queryDelayMilliseconds: 0,
+						repPerEthPrice: 10n ** 18n,
+						repPerUsdcPrice: 10n ** 6n,
+						selectedAccount: '0x00000000000000000000000000000000000000a1',
+						snapshot: {},
+						transactionCountSinceReset: 0n,
+						transactionDelayMilliseconds: 0,
+					},
+					version: 1,
+				}),
+			},
+		])
+		const storage = domEnvironment.window.localStorage
+		storage.setItem('zoltar.simulation.savedStates', serializedRecords)
+		const controller = createSimulationController({
+			simulationSource: {
+				baseScenario: 'baseline',
+				kind: 'saved-state',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				stateId: 'saved-baseline-20260602123456',
+			},
+		})
+		const replacementController = createSimulationController()
+		let bannerContainer: Element | undefined
+		const onEnvironmentChanged = mock(async () => {
+			const target = bannerContainer
+			if (target === undefined) throw new Error('Expected the simulation banner container')
+			await act(() => {
+				render(<SimulationBanner controller={replacementController} onEnvironmentChanged={async () => undefined} onRefresh={async () => undefined} />, target)
+			})
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={async () => undefined} />)
+		bannerContainer = renderedComponent.container
+		const originalSetItem = storage.setItem.bind(storage)
+		Object.defineProperty(storage, 'setItem', {
+			configurable: true,
+			value: (key: string, value: string) => {
+				if (key === 'zoltar.simulation.savedStates') throw new Error('browser storage write failed')
+				originalSetItem(key, value)
+			},
+		})
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+
+			await waitFor(() => {
+				expect(documentQueries.getByRole('alert').textContent).toContain('browser storage write failed')
+				expect(storage.getItem('zoltar.simulation.savedStates')).toBe(serializedRecords)
+				expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
+				expect(domEnvironment.window.location.hash).not.toContain('simState=')
+				const details = documentQueries.getByText('QA controls, prices, and time travel').closest('details')
+				expect(isDetailsElement(details) && details.open).toBe(true)
+			})
+			expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('preserves a saved state and the active controller when deletion navigation fails', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=saved-baseline-20260602123456')
+		const serializedRecords = JSON.stringify([
+			{
+				baseScenario: 'baseline',
+				id: 'saved-baseline-20260602123456',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				serialized: serializeSavedSimulationStateEnvelope({
+					baseScenario: 'baseline',
+					name: 'Saved baseline',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					state: {
+						blockCountSinceReset: 0n,
+						currentTimestamp: 1n,
+						queryDelayMilliseconds: 0,
+						repPerEthPrice: 10n ** 18n,
+						repPerUsdcPrice: 10n ** 6n,
+						selectedAccount: '0x00000000000000000000000000000000000000a1',
+						snapshot: {},
+						transactionCountSinceReset: 0n,
+						transactionDelayMilliseconds: 0,
+					},
+					version: 1,
+				}),
+			},
+		])
+		domEnvironment.window.localStorage.setItem('zoltar.simulation.savedStates', serializedRecords)
+		const mineBlock = mock(async () => undefined)
+		const environmentReplacement = createDeferred<void>()
+		const controller = createSimulationController({
+			mineBlock,
+			simulationSource: {
+				baseScenario: 'baseline',
+				kind: 'saved-state',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				stateId: 'saved-baseline-20260602123456',
+			},
+		})
+		const onEnvironmentChanged = mock(async () => await environmentReplacement.promise)
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={async () => undefined} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+
+			const deletingButton = await waitFor(() => within(deleteDialog).getByRole('button', { name: 'Deleting…' }))
+			expect(deletingButton.hasAttribute('disabled')).toBe(true)
+			fireEvent.click(deletingButton)
+			expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
+			expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).toBe(serializedRecords)
+
+			environmentReplacement.reject(new Error('replacement environment failed'))
+			await waitFor(() => {
+				expect(within(deleteDialog).getByRole('alert').textContent).toContain('replacement environment failed')
+				expect(domEnvironment.window.location.hash).toContain('simState=saved-baseline-20260602123456')
+				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).toBe(serializedRecords)
+				expect(within(deleteDialog).getByRole('button', { name: 'Delete save' }).hasAttribute('disabled')).toBe(false)
+			})
+			await controller.mineBlock()
+			expect(mineBlock).toHaveBeenCalledTimes(1)
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
