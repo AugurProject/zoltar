@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { Window } from 'happy-dom'
 import { evaluateBuyRep, evaluateSellRep } from '../open-oracle-arbitrager/strategy.ts'
 import { calculateOracleMinimumWethReport, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '../shared/ts/oracleInitialReport.ts'
 
@@ -14,8 +16,13 @@ const fixture = {
 	},
 	cheapRepAmount: 2_227_204_424_255_513_151_233n,
 	expensiveRepAmount: 2_015_089_717_183_559_517_782n,
+	feePercentage: 10_000n,
+	gasCostWeth: 0n,
 	midReportRep: 2_121_147_070_719_536_334_508n,
+	poolFee: 10_000n,
+	protocolFee: 100_000n,
 	quoter: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+	reportDeviationBps: 500n,
 	rep: '0x221657776846890989a759BA2973e427DfF5C9bB',
 	sellRep: {
 		callData:
@@ -46,8 +53,12 @@ function minimumReport(baseFeeWeiPerGas: bigint) {
 function verifyRecordedEconomics() {
 	const minimumWeth = minimumReport(fixture.baseFeeWeiPerGas)
 	assert.equal(minimumWeth, 817_262_744_792_307_693n)
-	assert.equal((fixture.midReportRep * 105n) / 100n, fixture.cheapRepAmount)
-	assert.equal((fixture.midReportRep * 95n) / 100n, fixture.expensiveRepAmount)
+	assert.equal((fixture.midReportRep * (10_000n + fixture.reportDeviationBps)) / 10_000n, fixture.cheapRepAmount)
+	assert.equal((fixture.midReportRep * (10_000n - fixture.reportDeviationBps)) / 10_000n, fixture.expensiveRepAmount)
+	const encodedPoolFee = fixture.poolFee.toString(16).padStart(64, '0')
+	const feeWordStart = 2 + 8 + 64 * 3
+	assert.equal(fixture.sellRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
+	assert.equal(fixture.buyRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 
 	for (const [baseFeeGwei, expectedMinimumWeth] of gasStressExpectations) {
 		assert.equal(minimumReport(baseFeeGwei * 10n ** 9n), expectedMinimumWeth)
@@ -55,20 +66,52 @@ function verifyRecordedEconomics() {
 
 	const commonGame = {
 		currentAmount1: minimumWeth,
-		feePercentage: 10_000n,
-		protocolFee: 100_000n,
+		feePercentage: fixture.feePercentage,
+		protocolFee: fixture.protocolFee,
 		token1: fixture.weth,
 		token2: fixture.rep,
 	}
-	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], 0n)
+	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostWeth)
 	assert.equal(sell.hedgeCostWeth, 826_252_634_985_023_076n)
 	assert.equal(sell.profitBeforeGasWeth, -255_235_735_754_674_523n)
 
-	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], 0n)
+	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostWeth)
 	assert.equal(buy.hedgeAmountRep, 2_037_255_704_072_578_672_476n)
 	assert.equal(buy.profitBeforeGasWeth, -626_254_311_426_940_506n)
 	assert(sell.profitBeforeGasWeth < 0n)
 	assert(buy.profitBeforeGasWeth < 0n)
+
+	return { buy, minimumWeth, sell }
+}
+
+async function verifyDocumentedFixture() {
+	const { buy, minimumWeth, sell } = verifyRecordedEconomics()
+	const html = await readFile(new URL('../docs/security-model.html', import.meta.url), 'utf8')
+	const window = new Window()
+	window.document.write(html)
+	window.document.close()
+	const table = window.document.getElementById('open-oracle-market-fixture-inputs')
+	assert(table !== null, 'Security model must expose the OpenOracle fixture inputs')
+	const expected: Record<string, bigint> = {
+		baseFeeWeiPerGas: fixture.baseFeeWeiPerGas,
+		blockNumber: fixture.blockNumber,
+		buyProfitWeth: buy.profitBeforeGasWeth,
+		buyReportRep: fixture.expensiveRepAmount,
+		gasCostWeth: fixture.gasCostWeth,
+		midReportRep: fixture.midReportRep,
+		minimumWethReport: minimumWeth,
+		protocolFee: fixture.protocolFee,
+		reportDeviationBps: fixture.reportDeviationBps,
+		reporterFee: fixture.feePercentage,
+		sellProfitWeth: sell.profitBeforeGasWeth,
+		sellReportRep: fixture.cheapRepAmount,
+		uniswapPoolFee: fixture.poolFee,
+	}
+	for (const [name, value] of Object.entries(expected)) {
+		const attributeName = `data-${name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`
+		assert.equal(table.getAttribute(attributeName), value.toString(), `Security model OpenOracle fixture ${name} is stale`)
+	}
+	window.close()
 }
 
 async function rpcRequest(url: string, method: string, params: readonly unknown[]) {
@@ -115,7 +158,7 @@ async function verifyArchiveReplay(url: string) {
 	}
 }
 
-verifyRecordedEconomics()
+await verifyDocumentedFixture()
 const archiveRpcUrl = process.env['OPEN_ORACLE_ARCHIVE_RPC_URL']
 if (archiveRpcUrl !== undefined && archiveRpcUrl.trim() !== '') {
 	await verifyArchiveReplay(archiveRpcUrl)
