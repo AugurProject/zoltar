@@ -299,7 +299,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Forked')).toBeDefined()
-		expect(document.body.textContent?.includes('Zoltar forked on')).toBe(true)
+		expect(document.body.textContent?.includes('Universe forked on')).toBe(true)
 	})
 
 	test('renders the forked badge in the dedicated route-header badge slot', async () => {

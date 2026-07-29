@@ -3928,6 +3928,44 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	padding-right: 2.7rem;
 }
 
+.global-transaction-notice-compact {
+	width: min(32rem, 100%);
+	gap: 0.55rem;
+	padding: 0.5rem 0.85rem;
+}
+
+.global-transaction-notice-compact .global-transaction-notice-copy {
+	gap: 0;
+}
+
+.global-transaction-compact-details {
+	display: grid;
+	gap: 0.65rem;
+}
+
+.global-transaction-compact-details > summary {
+	display: flex;
+	align-items: center;
+	width: fit-content;
+	min-height: var(--touch-target-min);
+	margin-block: -0.5625rem;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: var(--font-caption);
+	font-weight: 700;
+}
+
+.global-transaction-compact-details > summary:hover,
+.global-transaction-compact-details > summary:focus-visible {
+	color: var(--text);
+}
+
+.global-transaction-compact-details-content {
+	display: grid;
+	gap: 0.65rem;
+	padding-top: 0.35rem;
+}
+
 .global-transaction-spinner {
 	margin-right: 0;
 }

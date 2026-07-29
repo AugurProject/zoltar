@@ -15,7 +15,7 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVaultMigrationDelegate.sol';
 import { EscalationGameForker } from './EscalationGameForker.sol';
-import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
+import { SecurityPoolForkerAuctionSettlementBase } from './SecurityPoolForkerAuctionSettlementBase.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
 import {
 	EscalationForkSnapshot,
@@ -23,7 +23,7 @@ import {
 	SecurityPoolForkerForkData
 } from './SecurityPoolForkerTypes.sol';
 
-contract SecurityPoolForker is SecurityPoolForkerBase {
+contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	using SafeERC20Ops for IERC20;
 	// These delegates keep fork/migration behavior under the EVM bytecode-size limit while
 	// sharing the same storage layout defined by `SecurityPoolForkerBase` and `SecurityPoolForkerStorage`.
@@ -60,15 +60,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 auctionableRepAtFork
 	);
 	event TruthAuctionFinalized(ISecurityPool indexed securityPool);
-	event ClaimAuctionProceeds(
-		ISecurityPool indexed securityPool,
-		address indexed vault,
-		uint256 amount,
-		uint256 poolOwnershipAmount,
-		uint256 poolOwnershipDenominator,
-		uint256 claimedAuctionRepPurchased,
-		uint256 claimedAuctionedSecurityBondAllowance
-	);
 	function forkData(
 		ISecurityPool securityPool
 	)
@@ -191,7 +182,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
-	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {
+	constructor(Zoltar _zoltar) SecurityPoolForkerAuctionSettlementBase(_zoltar) {
 		vaultMigrationDelegate = address(new SecurityPoolForkerVaultMigrationDelegate(_zoltar));
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
 		forkEventEmitter = address(new SecurityPoolEventEmitter());
@@ -317,6 +308,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		ISecurityPool securityPool,
 		EscalationGame escalationGame
 	) private returns (SecurityPoolForkerForkData storage data) {
+		if (!securityPool.shareToken().isAuthorized(address(securityPool))) revert();
 		uint248 universe = securityPool.universeId();
 		uint256 forkTime = zoltar.getForkTime(universe);
 		require(forkTime > 0, 'Unforked');
@@ -848,47 +840,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			amount,
 			newSecurityBondAllowance,
 			data.truthAuction.totalRepPurchased()
-		);
-	}
-
-	function _creditAuctionProceeds(
-		ISecurityPool securityPool,
-		address vault,
-		SecurityPoolForkerForkData storage data,
-		uint256 amount,
-		uint256 newSecurityBondAllowance,
-		uint256 totalRepPurchased
-	) internal {
-		if (amount == 0 && newSecurityBondAllowance == 0) return;
-		uint256 auctionPoolOwnershipPerRep = data.auctionPoolOwnershipPerRep;
-		if (amount > 0) require(auctionPoolOwnershipPerRep > 0, 'Rate');
-		uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep;
-		uint256 nextClaimedAuctionPoolOwnership = data.claimedAuctionPoolOwnership + poolOwnershipAmount;
-		require(nextClaimedAuctionPoolOwnership <= totalRepPurchased * auctionPoolOwnershipPerRep, 'REP');
-		uint256 nextClaimedAuctionedSecurityBondAllowance =
-			data.claimedAuctionedSecurityBondAllowance + newSecurityBondAllowance;
-		require(nextClaimedAuctionedSecurityBondAllowance <= data.auctionedSecurityBondAllowance, 'Allowance');
-		data.claimedAuctionRepPurchased += amount;
-		data.claimedAuctionedSecurityBondAllowance = nextClaimedAuctionedSecurityBondAllowance;
-		data.claimedAuctionPoolOwnership = nextClaimedAuctionPoolOwnership;
-		securityPool.updateVaultFees(vault);
-		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
-			.securityVaults(vault);
-		securityPool.configureVault(
-			vault,
-			poolOwnership + poolOwnershipAmount,
-			currentSecurityBondAllowance + newSecurityBondAllowance,
-			currentFeeIndex
-		);
-		securityPool.addFeeEligibleSecurityBondAllowance(vault, newSecurityBondAllowance);
-		emit ClaimAuctionProceeds(
-			securityPool,
-			vault,
-			amount,
-			poolOwnershipAmount,
-			securityPool.poolOwnershipDenominator(),
-			data.claimedAuctionRepPurchased,
-			data.claimedAuctionedSecurityBondAllowance
 		);
 	}
 

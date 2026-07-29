@@ -640,6 +640,9 @@ describe('SecurityVaultSection', () => {
 							priceValidUntilTimestamp: 10n,
 							requestPriceEthCost: 1n * 10n ** 18n,
 						}),
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 13n * 10n ** 18n,
+						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',

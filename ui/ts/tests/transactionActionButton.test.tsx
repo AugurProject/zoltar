@@ -8,6 +8,7 @@ import { TransactionActionButton, TransactionActionButtonLockProvider } from '..
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 
 describe('TransactionActionButton', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -27,18 +28,16 @@ describe('TransactionActionButton', () => {
 
 	test('renders pending button text while the action is in flight', async () => {
 		const renderedComponent = await renderIntoDocument(
-			h(TransactionActionButton, {
-				idleLabel: 'Submit',
-				onClick: () => undefined,
-				pending: true,
-				pendingLabel: 'Submitting...',
-			}),
+			<GlobalTransactionPresentationProvider transaction={{ title: 'Submitting transaction', tone: 'pending' }}>
+				<TransactionActionButton idleLabel='Submit' onClick={() => undefined} pending pendingLabel='Submitting...' />
+			</GlobalTransactionPresentationProvider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Submitting...' })).not.toBeNull()
 		expect(document.body.querySelector('.spinner')).not.toBeNull()
+		expect(documentQueries.queryByRole('status')).toBeNull()
 	})
 
 	test('renders the disabled reason when requested', async () => {
@@ -121,5 +120,16 @@ describe('TransactionActionButton', () => {
 		})
 
 		expect(callCount).toBe(0)
+	})
+
+	test('keeps a local pending announcement when the global tray only shows a terminal transaction', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={{ dismissKey: 'completed-action', title: 'Previous Action Complete', tone: 'success' }}>
+				<TransactionActionButton idleLabel='Submit' onClick={() => undefined} pending pendingLabel='Submitting…' />
+			</GlobalTransactionPresentationProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('status').textContent).toContain('Submitting…')
 	})
 })

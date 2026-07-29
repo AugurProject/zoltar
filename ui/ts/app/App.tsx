@@ -223,6 +223,7 @@ export function App() {
 		openOracleActiveAction,
 		openOracleActiveWithdrawalBalance,
 		openOracleCreateForm,
+		openOracleCreateFieldErrors,
 		openOracleDisputeSubmission,
 		openOracleError,
 		openOracleForm,
@@ -753,6 +754,7 @@ export function App() {
 		openOracleActiveWithdrawalBalance,
 		openOracleError,
 		openOracleCreateForm,
+		openOracleCreateFieldErrors,
 		openOracleDisputeSubmission,
 		openOracleForm,
 		openOracleReportLookupState,
@@ -812,6 +814,12 @@ export function App() {
 			/>
 		)
 	}
+	const transactionRouteKey = (() => {
+		if (route === 'zoltar') return `${route}:${activeZoltarView}`
+		if (route === 'security-pools') return `${route}:${activeSecurityPoolsView}`
+		if (route === 'open-oracle') return `${route}:${activeOpenOracleView}`
+		return route
+	})()
 
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
@@ -821,7 +829,7 @@ export function App() {
 					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray transaction={transactionState.value.active} />
+						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
 
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>

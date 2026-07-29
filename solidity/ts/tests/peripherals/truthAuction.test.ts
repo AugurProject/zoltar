@@ -2248,7 +2248,7 @@ describe('Peripherals: truth auction', () => {
 					address: forkerAddress,
 					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
 					functionName: 'creditAuctionProceeds',
-					args: [poolAddress, vault, repAmount, allowanceAmount, 10n, 1n, 3n],
+					args: [poolAddress, vault, repAmount, allowanceAmount],
 				})
 				await client.waitForTransactionReceipt({ hash })
 			}

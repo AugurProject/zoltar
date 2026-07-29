@@ -793,9 +793,9 @@
 									aggregate pool backing to independently satisfy the same
 									multiplier-adjusted inequality. Equality is permitted because
 									vault liquidation requires a strict shortfall; the pool itself
-									is not a liquidation target. Later REP
-									withdrawals and escalation deposits separately preserve at least
-									face-value coverage of the existing allowance.
+									is not a liquidation target. Later REP withdrawals and
+									escalation deposits preserve that same multiplier-adjusted
+									boundary for both the affected vault and aggregate pool.
 								</div>
 								<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH with a 2x security multiplier, setting a 1 ETH allowance requires at least 200 REP. Setting it with exactly 200 REP is permitted; setting it with 199 REP is rejected.</p>
 							<dl class="invariant-metadata">
@@ -1264,9 +1264,13 @@
 								must use the child universe derived from that parent's selected
 								branch. Its factory, forker, auction, share token, pool question,
 								and security multiplier must equal the values supplied or inherited
-								by the parent factory path.
+								by the parent factory path. External-universe fork initiation
+								requires the source pool to be authorized by its declared share
+								token; own-game initiation does not. That relationship is not proof
+								of configured-factory registration. The auction must have deployed
+								code and must not already be trusted for another child.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> The canonical factory installs the parent's share token, pool question, and multiplier in the child; the post-deployment guard then checks its parent, universe, factory, forker, and auction before linking it.</p>
+							<p class="invariant-example"><strong>Example:</strong> On the external-universe path, the forker first requires the source to be authorized by its declared share token without treating that check as factory registration. The configured canonical factory installs the parent's share token, pool question, and multiplier in the child; the post-deployment guard then checks deployed and unique auction assignment plus parent, universe, factory, forker, and auction relationships before linking it.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
