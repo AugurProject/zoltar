@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { STANDARD_UNISWAP_V4_POOLS } from '../open-oracle-arbitrager/uniswap-v4.js'
 
 const normalizeWhitespace = (text: string) => text.replace(/\s+/g, ' ')
 const htmlToVisibleText = (text: string) =>
@@ -380,6 +381,15 @@ assert.match(diagramSpecs, /≈5% of theoretical REP supply/)
 assert.match(diagramSpecs, /approximately 20 percent uncredited haircut/)
 assert.match(diagramSpecs, /approximately 80 percent migration balance/)
 assert.match(openOracleArbitragerReadme, /`closed-pending-finality` retains its risk slot and does not contribute\s+realized profit until every configured read RPC serves the same\s+twelfth-descendant block hash for its exact lifecycle evidence\./)
+for (const pool of STANDARD_UNISWAP_V4_POOLS) {
+	assert.ok(openOracleArbitragerReadme.includes(`| \`${pool.fee.toString()}\` | \`${pool.tickSpacing.toString()}\` |`), `OpenOracle arbitrager README must document V4 fee ${pool.fee.toString()} with tick spacing ${pool.tickSpacing.toString()}`)
+}
+assert.match(openOracleArbitragerReadme, /currency0 = native ETH[\s\S]*currency1 = report token[\s\S]*hooks = address\(0\)/)
+assert.match(openOracleArbitragerReadme, /`2\^127 - 1` atomic units/)
+assert.match(openOracleArbitragerReadme, /For a buy, `zeroForOne = true`[\s\S]*token\s+delta are positive[\s\S]*native input delta is negative/)
+assert.match(openOracleArbitragerReadme, /For a sell, `zeroForOne = false`[\s\S]*token\s+delta are negative[\s\S]*native output delta is\s+positive/)
+assert.match(operatorReference, /public execution surface is `dispute`, `hedgeAndDispute`, `settleAndWithdraw`, `withdrawReplacementCredit`, `assertParentBlock`, and the V4-only `unlockCallback`/)
+assert.match(operatorReference, /payable `receive\(\)` accepts native ETH only while an executor operation is active/)
 assert.equal(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation), undefined)
 assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same\s+twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
 const openOracleArbitragerReadmeRecovery = openOracleArbitragerReadme.match(/### `recovery-required` runbook([\s\S]*?)(?=\n## |\n### )/)?.[1]

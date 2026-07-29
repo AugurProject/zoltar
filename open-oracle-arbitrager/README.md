@@ -764,6 +764,8 @@ but it cannot establish the token's issuer, economic value, or pool legitimacy. 
 primary `--rep-address` remains the token used in the top-level REP portfolio
 summary.
 
+### Uniswap venue execution
+
 Market discovery checks all Uniswap V3 fee tiers (`0.01%`, `0.05%`, `0.3%`, and
 `1%`) plus mainnet Uniswap V2 and SushiSwap V2 WETH pairs. For V3, “Liquidity” is
 the pool contract’s raw in-range `liquidity()` value; for constant-product venues it
@@ -784,13 +786,30 @@ amount in  = floor(reserve in × amount out × 1000
 ```
 
 When both V4 flags are supplied, the bot also asks the authenticated V4 Quoter for
-exact-input and exact-output quotes against direct hookless native-ETH/token pools
-at the same four standard fee tiers. Every read RPC must return the same quote at
-the exact quorum block. The executor calls the authenticated PoolManager directly,
-requires the returned signed deltas to match the requested input or output, settles
-only those deltas, and converts native ETH to or from WETH before funding the
-OpenOracle dispute. Hooked and dynamically configured pools remain excluded because
-their hooks can alter swap deltas and require a separate reviewed trust policy.
+exact-input and exact-output quotes against these exact pool keys:
+
+| Fee units | Tick spacing |
+| --- | --- |
+| `100` | `1` |
+| `500` | `10` |
+| `3000` | `60` |
+| `10000` | `200` |
+
+Every supported key has `currency0 = native ETH`, `currency1 = report token`, and
+`hooks = address(0)`. The exact swap amount must be no greater than
+`2^127 - 1` atomic units so every PoolManager delta fits a signed `int128`.
+For a buy, `zeroForOne = true`: the requested exact token output and returned token
+delta are positive, while the native input delta is negative and cannot exceed the
+signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
+token input and returned token delta are negative, while the native output delta is
+positive and cannot fall below the signed minimum WETH output.
+
+Every read RPC must return the same quote at the exact quorum block. The executor
+calls the authenticated PoolManager directly, requires those signed deltas to match
+the requested input or output, settles only those deltas, and converts native ETH
+to or from WETH before funding the OpenOracle dispute. Hooked pools, dynamic-fee
+pools, and any other fee/tick-spacing pair remain excluded because they can alter
+swap behavior or require a separate reviewed trust policy.
 
 The bot compares complete strategy profit after its conservative gas and slippage
 reserves, not spot price alone. Every selected V2, V3, or V4 swap executes inside

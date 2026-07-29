@@ -398,6 +398,9 @@ for (const [chartId, value] of Object.entries(parsedSpecs)) {
 		throw new Error(`Chart ${chartId} has a merged accessible-description boundary`)
 	}
 	if (chartId === 'fig-open-oracle-arbitrager-lifecycle') {
+		if (!value['ariaDescription'].includes('Uniswap V2, V3, and hookless V4 liquidity') || !value['ariaDescription'].includes('Uniswap V3 TWAP anchor')) {
+			throw new Error('OpenOracle arbitrager lifecycle chart must describe V2/V3/V4 execution and the V3 TWAP anchor')
+		}
 		if (!value['ariaDescription'].includes('every configured read RPC serves the same twelfth-descendant block hash')) {
 			throw new Error('OpenOracle arbitrager lifecycle chart must describe the all-read-RPC finality quorum')
 		}

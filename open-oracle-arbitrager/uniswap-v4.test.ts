@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
-import { STANDARD_UNISWAP_FEES, v4QuoteParameters, v4TickSpacing } from './uniswap-v4.js'
+import { STANDARD_UNISWAP_FEES, STANDARD_UNISWAP_V4_POOLS, v4QuoteParameters, v4TickSpacing } from './uniswap-v4.js'
 
 describe('Uniswap V4 execution configuration', () => {
 	test('maps every supported fee to the canonical hookless tick spacing', () => {
+		expect(STANDARD_UNISWAP_V4_POOLS).toEqual([
+			{ fee: 100, tickSpacing: 1 },
+			{ fee: 500, tickSpacing: 10 },
+			{ fee: 3_000, tickSpacing: 60 },
+			{ fee: 10_000, tickSpacing: 200 },
+		])
 		expect(STANDARD_UNISWAP_FEES.map(fee => [fee, v4TickSpacing(fee)])).toEqual([
 			[100, 1],
 			[500, 10],

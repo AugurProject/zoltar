@@ -2,6 +2,13 @@ import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 
 export const STANDARD_UNISWAP_FEES = [100, 500, 3_000, 10_000] as const
 
+export const STANDARD_UNISWAP_V4_POOLS = [
+	{ fee: 100, tickSpacing: 1 },
+	{ fee: 500, tickSpacing: 10 },
+	{ fee: 3_000, tickSpacing: 60 },
+	{ fee: 10_000, tickSpacing: 200 },
+] as const
+
 export type StandardUniswapFee = (typeof STANDARD_UNISWAP_FEES)[number]
 
 export function v4TickSpacing(fee: StandardUniswapFee) {

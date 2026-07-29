@@ -10878,7 +10878,7 @@
 		"width": 900
 	},
 	"fig-open-oracle-arbitrager-lifecycle": {
-		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V2 and V3 liquidity while retaining a Uniswap V3 TWAP anchor, atomically hedges and disputes an eligible report, waits through later dispute rounds, then atomically settles and withdraws exact balances into a provisional finality state that retains risk and evidence. A receipt reorganization returns the position to open, contradictory evidence moves it to recovery, and closure realizes profit only when every configured read RPC serves the same twelfth-descendant block hash. An immediately replaced reporter follows the separately documented exact-credit path and remains a risk-consuming replaced position.",
+		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V2, V3, and hookless V4 liquidity while retaining a Uniswap V3 TWAP anchor, atomically hedges and disputes an eligible report, waits through later dispute rounds, then atomically settles and withdraws exact balances into a provisional finality state that retains risk and evidence. A receipt reorganization returns the position to open, contradictory evidence moves it to recovery, and closure realizes profit only when every configured read RPC serves the same twelfth-descendant block hash. An immediately replaced reporter follows the separately documented exact-credit path and remains a risk-consuming replaced position.",
 		"ariaLabel": "OpenOracle arbitrager execution and recovery lifecycle",
 		"height": 390,
 		"nodes": [
