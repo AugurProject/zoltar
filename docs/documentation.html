@@ -3,123 +3,141 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Zoltar Monorepo</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<meta
+			name="description"
+			content="A unified, searchable library for the complete Zoltar and Statoblast protocol documentation."
+		/>
+		<title>Zoltar Documentation</title>
+		<link rel="stylesheet" href="./docsReader.css" />
 	</head>
-	<body class="doc-openoracle">
-		<main>
-			<header>
-				<h1>Zoltar Monorepo</h1>
-					<p>
-						This monorepo contains three components. Project documentation is
-						available at
-						<a href="https://augurproject.github.io/zoltar">
-							augurproject.github.io/zoltar
-						</a>.
+	<body class="doc-reader">
+		<a class="skip-link" href="#reader-content">Skip to documentation</a>
+
+		<header class="reader-hero">
+			<div class="reader-hero-copy">
+				<p class="reader-eyebrow">Zoltar protocol library</p>
+				<h1>One library. One continuous read.</h1>
+				<p>
+					Move through the complete Zoltar and Statoblast documentation without
+					opening a trail of separate pages. Diagrams, examples, source links,
+					and deep references remain intact.
+				</p>
+			</div>
+			<div class="reader-overview" aria-label="Documentation overview">
+				<div>
+					<strong>14</strong>
+					<span>documents</span>
+				</div>
+				<div>
+					<strong>3</strong>
+					<span>reading paths</span>
+				</div>
+			</div>
+		</header>
+
+		<div class="reader-progress" aria-hidden="true">
+			<span data-reading-progress></span>
+		</div>
+
+		<div class="reader-shell">
+			<aside class="reader-sidebar" aria-label="Documentation navigation">
+				<div class="reader-sidebar-inner">
+					<a class="reader-brand" href="#reader-content" aria-label="Zoltar documentation top">
+						<span class="reader-brand-mark" aria-hidden="true">Z</span>
+						<span>
+							<strong>Zoltar</strong>
+							<small>Documentation</small>
+						</span>
+					</a>
+
+					<label class="reader-search">
+						<span>Search the library</span>
+						<input
+							type="search"
+							placeholder="Try “migration” or “oracle”"
+							autocomplete="off"
+							data-doc-search
+						/>
+						<kbd aria-hidden="true">/</kbd>
+					</label>
+					<p class="reader-search-status" aria-live="polite" data-search-status>
+						All 14 documents
 					</p>
-					<ul>
-						<li>
-							<strong>Zoltar Contracts</strong> —
-							<a href="./zoltar-whitepaper.html">Zoltar whitepaper</a>
-						</li>
-						<li>
-							<strong>Statoblast contracts</strong> —
-							<a href="./statoblast-whitepaper.html">Statoblast whitepaper</a>
-						</li>
-						<li><strong>Zoltar and Statoblast user interface</strong></li>
-					</ul>
-				<p>
-					Zoltar maintains the shared registries for questions, REP tokens, and
-					universe forks. It is neither a prediction market nor an
-					outcome-reporting oracle. A higher-level protocol can initiate a paid
-					Zoltar fork after an eligible question ends; that fork changes the
-					universe used by every application that chooses to continue from the
-					forked universe.
-				</p>
-				<p>
-					Statoblast is a binary prediction-market protocol built on Ethereum and
-					Zoltar. It creates security pools, issues transferable outcome shares,
-					coordinates local outcome reporting, and resolves or migrates markets.
-					Secondary-market trading is outside the current protocol.
-				</p>
-			</header>
 
-			<section id="documentation-map">
-				<h2>Documentation Index</h2>
-				<table>
-					<thead>
-						<tr>
-							<th>Goal</th>
-							<th>Document</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>
-								Review normative participant, market, asset, deployment, client,
-								data, Ethereum, account-authority, and cryptographic assumptions
-								A01–A28.
-							</td>
-							<td><a href="./security-model.html">Protocol security model</a></td>
-						</tr>
-						<tr>
-							<td>Understand the application layer from end to end.</td>
-							<td><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></td>
-						</tr>
-						<tr>
-							<td>Understand universes, question encoding, forks, and REP splitting.</td>
-							<td><a href="./zoltar-whitepaper.html">Zoltar whitepaper</a></td>
-						</tr>
-						<tr>
-							<td>Understand truth-auction clearing, settlement, and weak-demand loss allocation.</td>
-							<td><a href="./truth-auction.html">Auction design</a></td>
-						</tr>
-						<tr>
-							<td>Understand REP/ETH price requests, staging, attack model, and residual-loss analysis.</td>
-							<td><a href="./open-oracle-integration.html">OpenOracle integration</a></td>
-						</tr>
-						<tr>
-							<td>Understand punitive REP-seizure liquidation math, chunking limits, and incentives.</td>
-							<td><a href="./liquidation.html">Liquidation design</a></td>
-						</tr>
-						<tr>
-							<td>Look up edge cases and contract guardrails.</td>
-							<td><a href="./operator-reference.md">Operator reference</a></td>
-						</tr>
-						<tr>
-							<td>Review contract, cross-contract, lifecycle, and economic invariants.</td>
-							<td><a href="./invariants.html">Protocol invariants</a></td>
-						</tr>
-						<tr>
-							<td>Find transaction callers, prerequisites, effects, and events.</td>
-							<td><a href="./contract-interaction-reference.md">Contract interaction reference</a></td>
-						</tr>
-						<tr>
-							<td>See how the deployed contracts call, deploy, and move assets between one another.</td>
-							<td><a href="./contract-interactions.html">Contract interaction map</a></td>
-						</tr>
-						<tr>
-							<td>Build an event-only indexer with deterministic replay and reorg rollback.</td>
-							<td><a href="./event-stream.md">Zoltar event stream contract</a></td>
-						</tr>
-						<tr>
-							<td>Understand how the local dispute contract is split across Solidity modules.</td>
-							<td><a href="./escalation-game-architecture.html">EscalationGame architecture</a></td>
-						</tr>
-						<tr>
-							<td>Decode the deployment progress bitmask and its 256-step limit.</td>
-							<td><a href="./deployment-status.html">Deployment Status Oracle</a></td>
-						</tr>
-						<tr>
-							<td>Understand carry-proof hashing, snapshot peaks, and nullifier replay protection.</td>
-							<td><a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a></td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
+					<nav data-reader-navigation></nav>
+				</div>
+			</aside>
 
-		</main>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
+			<main id="reader-content" class="reader-content" tabindex="-1">
+				<section class="reader-intro" aria-labelledby="reader-intro-title">
+					<div>
+						<p class="reader-kicker">Start here</p>
+						<h2 id="reader-intro-title">Choose a path, or simply keep scrolling.</h2>
+					</div>
+					<div class="reader-paths">
+						<a href="./statoblast-whitepaper.html" data-reader-path="statoblast-whitepaper.html">
+							<span>01</span>
+							<strong>Learn the protocol</strong>
+							<small>Whitepapers → designs → security model</small>
+						</a>
+						<a href="./operator-reference.md" data-reader-path="operator-reference.md">
+							<span>02</span>
+							<strong>Operate the system</strong>
+							<small>Guardrails → transactions → events</small>
+						</a>
+						<a href="./contract-interactions.html" data-reader-path="contract-interactions.html">
+							<span>03</span>
+							<strong>Trace the implementation</strong>
+							<small>Architecture → contracts → deployment</small>
+						</a>
+					</div>
+				</section>
+
+				<div class="reader-empty" hidden data-reader-empty>
+					<p class="reader-kicker">No matches</p>
+					<h2>Try a broader search.</h2>
+					<p>Search checks document titles, summaries, and the full rendered text.</p>
+					<button type="button" data-clear-search>Clear search</button>
+				</div>
+
+				<div data-reader-documents></div>
+
+				<noscript>
+					<section class="reader-noscript">
+						<h2>JavaScript is required for the continuous reader.</h2>
+						<p>You can still open every source document directly:</p>
+						<ul>
+							<li><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></li>
+							<li><a href="./zoltar-whitepaper.html">Zoltar whitepaper</a></li>
+							<li><a href="./truth-auction.html">Truth auction</a></li>
+							<li><a href="./open-oracle-integration.html">OpenOracle integration</a></li>
+							<li><a href="./liquidation.html">Liquidation design</a></li>
+							<li><a href="./security-model.html">Protocol security model</a></li>
+							<li><a href="./invariants.html">Protocol invariants</a></li>
+							<li><a href="./operator-reference.md">Operator reference</a></li>
+							<li>
+								<a href="./contract-interaction-reference.md">
+									Contract interaction reference
+								</a>
+							</li>
+							<li><a href="./event-stream.md">Event stream contract</a></li>
+							<li><a href="./contract-interactions.html">Contract interaction map</a></li>
+							<li>
+								<a href="./escalation-game-architecture.html">
+									EscalationGame architecture
+								</a>
+							</li>
+							<li><a href="./deployment-status.html">Deployment status oracle</a></li>
+							<li>
+								<a href="./merkle-mountain-range.html">Merkle Mountain Range proofs</a>
+							</li>
+						</ul>
+					</section>
+				</noscript>
+			</main>
+		</div>
+
+		<script src="./docsReaderMarkdown.js"></script>
+		<script src="./docsReader.js"></script>
 	</body>
 </html>
