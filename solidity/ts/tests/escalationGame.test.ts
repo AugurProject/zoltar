@@ -1044,6 +1044,42 @@ describe('Escalation Game Test Suite', () => {
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 0n, 1n, []] }), /Bad MMR proof length/)
 	})
 
+	test('proof verifier preserves exact power-of-two logarithm components', async () => {
+		const { proofVerifierAddress } = await deployEscalationGameWithProofPool()
+		const verifierAbi = peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
+		const lowValue = 10n ** 18n
+		const ln2Scaled = 693_147n
+
+		for (let exponent = 1n; exponent <= 8n; exponent++) {
+			const highValue = lowValue << exponent
+			assert.strictEqual(
+				await client.readContract({
+					abi: verifierAbi,
+					address: proofVerifierAddress,
+					functionName: 'computeLnRatioScaled',
+					args: [lowValue, highValue],
+				}),
+				exponent * ln2Scaled,
+				`exact 2^${exponent} ratio should preserve its logarithm component`,
+			)
+		}
+
+		const belowBoundary = await client.readContract({
+			abi: verifierAbi,
+			address: proofVerifierAddress,
+			functionName: 'computeLnRatioScaled',
+			args: [lowValue, 2n * lowValue - 1n],
+		})
+		const aboveBoundary = await client.readContract({
+			abi: verifierAbi,
+			address: proofVerifierAddress,
+			functionName: 'computeLnRatioScaled',
+			args: [lowValue, 2n * lowValue + 1n],
+		})
+		assert.ok(belowBoundary > 0n && belowBoundary <= ln2Scaled, 'ratio immediately below two should remain positive and bounded')
+		assert.ok(aboveBoundary >= ln2Scaled, 'ratio immediately above two should retain the normalized ln(2) component')
+	})
+
 	test('carried proof verification rejects a zero amount before mutating the inherited snapshot', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)

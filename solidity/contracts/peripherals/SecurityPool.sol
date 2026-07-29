@@ -472,20 +472,17 @@ contract SecurityPool is ISecurityPool {
 		uint256 vaultRepAmount,
 		uint256 securityBondAllowance,
 		uint256 repEthPrice
-	) private pure {
-		require(
-			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * repEthPrice,
-			'Vault bond'
-		);
+	) private view {
+		require(_isAllowanceBackedByRep(vaultRepAmount, securityBondAllowance, repEthPrice), 'Vault bond');
 	}
 
 	function _requirePoolBondCoverage(
 		uint256 totalRepBalanceValue,
 		uint256 totalSecurityBondAllowanceValue,
 		uint256 repEthPrice
-	) private pure {
+	) private view {
 		require(
-			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowanceValue * repEthPrice,
+			_isAllowanceBackedByRep(totalRepBalanceValue, totalSecurityBondAllowanceValue, repEthPrice),
 			'Pool bond'
 		);
 	}

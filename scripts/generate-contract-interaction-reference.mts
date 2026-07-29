@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '55754133ee26a8e5a61bb5c0787136762e5af8977d1c695d10f74e4e91b0cb4b'
+const expectedProductionSoliditySourceFingerprint = 'da3d00a6406448921b5acb1b630c0f77f400e1a8ed16b68eb324d3386d233fc4'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -61,7 +61,7 @@ const eventSourceByName: Record<string, string> = {
 	ChildPoolLinked: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	ChildPoolRepSwept: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildRepSplit: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	ClaimAuctionProceeds: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
+	ClaimAuctionProceeds: 'solidity/contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol',
 	ClaimDeposit: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	CompleteSetCreated: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
@@ -806,7 +806,7 @@ const contractReferences: ContractReference[] = [
 					"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThreshold - 1` instead. Repeat deposits use the existing game's stored `startBond` and `nonDecisionThreshold`. Every accepted deposit removes enough vault ownership and escrows REP on the selected outcome.",
 				declarations: [{ name: 'depositToEscalationGame' }],
 				preconditions:
-					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one atomic REP unit; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero.',
+					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one atomic REP unit; outcome and amount accepted; remaining vault and aggregate pool REP preserve multiplier-adjusted allowance backing; fresh price when allowance is nonzero.',
 				signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 			},
 			{
@@ -856,7 +856,7 @@ const contractReferences: ContractReference[] = [
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect: 'Removes the requested proportional ownership, or the full ownership when the requested remainder would fall below the REP minimum, and transfers the resulting REP to `vault`.',
 				declarations: [{ name: 'performWithdrawRep' }],
-				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; sufficient vault and pool bond coverage after withdrawal.',
+				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool REP preserve multiplier-adjusted allowance backing.',
 				signals: 'REP `Transfer`, `PerformWithdrawRep`, and `VaultAccountingCheckpoint`, including a zero-value transfer/event path if the trusted coordinator supplies zero',
 			},
 			{
@@ -1024,7 +1024,7 @@ const contractReferences: ContractReference[] = [
 		],
 		readStorageDeclarations: [{ name: 'zoltar', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' }],
 		securityBoundary:
-			'### Child-game trust boundary\n\nFork entrypoints and child setup may receive contracts through unauthenticated pool lineages. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from `securityPool()` when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth-auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed `EscalationGame` instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.',
+			'### Child-game trust boundary\n\nFork entrypoints and child setup may receive contracts through unauthenticated pool lineages. External-universe initiation requires the supplied pool to be authorized by its declared share token, but that relationship alone does not prove factory registration; own-game initiation does not perform that authorization check. Canonicality comes from the configured `SecurityPoolFactory` registry. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from `securityPool()` when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth-auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed `EscalationGame` instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 		interactions: [
 			{
@@ -1033,7 +1033,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Freezes the supplied pool after an external universe fork, drains its pool and game REP, and records a migration snapshot keyed by that address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
 				preconditions:
-					'Pool operational with no inherited fixed outcome; its universe already forked; fork state not initialized; if an escalation game exists, it reports the supplied pool from `securityPool()` when validated and the universe fork occurred before that game settled. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
+					'Pool operational with no inherited fixed outcome; the pool is authorized by its declared share token; its universe already forked; fork state not initialized; if an escalation game exists, it reports the supplied pool from `securityPool()` when validated and the universe fork occurred before that game settled. Declared-token authorization is not configured-factory registration; see the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1042,7 +1042,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
 				preconditions:
-					'Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from `securityPool()` when validated and `canTriggerOwnFork()` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome; universe not already forked. The game-local predicate does not bypass the pool guard. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
+					'Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from `securityPool()` when validated and `canTriggerOwnFork()` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome; universe not already forked. The game-local predicate does not bypass the pool guard. Unlike external-universe initiation, this entrypoint does not require declared-share-token authorization; neither path authenticates the supplied address against the configured pool factory. See the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1060,7 +1060,8 @@ const contractReferences: ContractReference[] = [
 				effect:
 					"Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and initializes any continuation snapshot and materializes or sweeps child backing through that validated game.",
 				declarations: [{ name: 'createChildUniverse' }],
-				preconditions: "Parent in migration window; selected fork outcome is well formed; child pool is not already deployed; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
+				preconditions:
+					"Parent in migration window; selected fork outcome is well formed; child pool is not already deployed. The returned auction is nonzero, deployed, and has never been trusted by this forker; the child's fork-data slot is unused; and the child reports the expected parent, universe, source factory, forker, and auction. The selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). These relationship checks do not independently prove configured-factory registration.",
 				signals:
 					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `OwnershipDenominatorSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
 			},
@@ -1137,10 +1138,10 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
-				caller: 'The canonical child-pool truth auction registered by this forker during `ChildPoolLinked`',
+				caller: 'A child-pool truth auction trusted by this forker during `ChildPoolLinked`',
 				effect: 'Accepts auction ETH during forker-controlled auction finalization.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
-				preconditions: '`trustedAuctionAddresses[msg.sender]` was set when the forker linked that canonical child pool and emitted `ChildPoolLinked`.',
+				preconditions: '`trustedAuctionAddresses[msg.sender]` was set when the forker linked the child and emitted `ChildPoolLinked`; configured-factory registration determines whether that lineage is canonical.',
 				signals: 'No dedicated receive event; auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 		],
