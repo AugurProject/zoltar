@@ -90,6 +90,12 @@ export function SecurityPoolSection({
 	})
 	const createDisabledReason = loadingAvailableQuestions && securityPoolForm.marketId.trim() === '' ? securityPoolCopy.loadingAvailableQuestionsReason : guardedCreateDisabledReason
 	const isCreateDisabled = !isMainnet || createDisabledReason !== undefined
+	let visibleFieldErrorId: string | undefined = undefined
+	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
+		visibleFieldErrorId = 'security-pool-security-multiplier-error'
+	} else if (createDisabledReason === initialReportPriorityFeeValidationMessage) {
+		visibleFieldErrorId = 'security-pool-initial-report-priority-fee-error'
+	}
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined)
 		if (marketDetails?.questionId === securityPoolResult.questionId) {
@@ -263,7 +269,15 @@ export function SecurityPoolSection({
 							</div>
 
 							<div className='actions'>
-								<TransactionActionButton idleLabel={createButtonLabel} pendingLabel={securityPoolCopy.creatingPool} onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
+								<TransactionActionButton
+									idleLabel={createButtonLabel}
+									pendingLabel={securityPoolCopy.creatingPool}
+									onClick={onCreateSecurityPool}
+									pending={securityPoolCreating}
+									availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
+									disabledReasonElementId={visibleFieldErrorId}
+									showDisabledReason={visibleFieldErrorId === undefined}
+								/>
 							</div>
 						</div>
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}

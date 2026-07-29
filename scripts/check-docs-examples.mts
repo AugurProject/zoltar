@@ -3,7 +3,19 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
-import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateLiquidationHealth, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
+import {
+	calculateAnnualizedRetentionFeePercent,
+	calculateAuctionModel,
+	calculateCollateralRepairModel,
+	calculateEscalationDepositModel,
+	calculateForkThresholdSeries,
+	calculateLiquidationHealth,
+	calculateOracleSecurityModel,
+	calculateResolutionModel,
+	describeLiquidationHealth,
+	normalizedEscalationCost,
+	parseLiquidationMultiplierBps,
+} from '../docs/charts/chartModels'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -797,11 +809,24 @@ assert.equal(forkThresholdSeries.length, 21, 'fork-threshold Plot should include
 assert.deepEqual(forkThresholdSeries[0], { forkThreshold: 5, generation: 0, theoreticalSupply: 100 }, 'fork-threshold Plot should begin from the genesis theoretical supply and five-percent threshold')
 assert.ok((forkThresholdSeries[20]?.theoreticalSupply ?? 0) < (forkThresholdSeries[19]?.theoreticalSupply ?? 0), 'fork-threshold Plot should decay monotonically by generation')
 assert.equal(forkThresholdSeries[20]?.forkThreshold, (forkThresholdSeries[20]?.theoreticalSupply ?? 0) / 20, 'fork-threshold Plot should keep the threshold at five percent of theoretical supply')
-assert.deepEqual(calculateLiquidationHealth(1000, 75, 2, 4), { currentRequiredRep: 600, state: 'safe', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a safely backed vault')
-assert.deepEqual(calculateLiquidationHealth(1000, 50, 2, 10), { currentRequiredRep: 1000, state: 'safe', thresholdPrice: 10 }, 'liquidation Plot should keep exact threshold equality safe')
-assert.equal(calculateLiquidationHealth(1000, 50, 2, 10.01).state, 'liquidatable', 'liquidation Plot should become liquidatable immediately above the threshold')
-assert.deepEqual(calculateLiquidationHealth(1000, 75, 2, 10), { currentRequiredRep: 1500, state: 'liquidatable', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a vault above its price threshold')
-assert.equal(calculateLiquidationHealth(1000, 0, 2, 10).thresholdPrice, Number.POSITIVE_INFINITY, 'liquidation Plot should have no finite threshold without allowance')
+assert.deepEqual(calculateLiquidationHealth(1000n, 75n, 20_000n, 4n), { currentRequiredRep: 600, currentRequiredRepDisplay: '600', state: 'safe', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a safely backed vault')
+assert.deepEqual(calculateLiquidationHealth(1000n, 50n, 20_000n, 10n), { currentRequiredRep: 1000, currentRequiredRepDisplay: '1000', state: 'safe', thresholdPrice: 10 }, 'liquidation Plot should keep exact threshold equality safe')
+assert.equal(calculateLiquidationHealth(1000n, 50n, 20_000n, 11n).state, 'liquidatable', 'liquidation Plot should become liquidatable immediately above the threshold')
+for (const [multiplierInput, expectedState, expectedRequiredRep] of [
+	['1.0999', 'safe', '109.99'],
+	['1.1000', 'safe', '110'],
+	['1.1001', 'liquidatable', '110.01'],
+] as const) {
+	const multiplierBps = parseLiquidationMultiplierBps(multiplierInput)
+	assert.notEqual(multiplierBps, undefined, `liquidation Plot should parse ${multiplierInput}x as BPS`)
+	if (multiplierBps === undefined) throw new Error(`Missing parsed multiplier for ${multiplierInput}`)
+	const model = calculateLiquidationHealth(110n, 25n, multiplierBps, 4n)
+	assert.equal(model.state, expectedState, `liquidation Plot should classify the ${multiplierInput}x fractional boundary exactly`)
+	assert.equal(model.currentRequiredRepDisplay, expectedRequiredRep, `liquidation Plot should preserve the ${multiplierInput}x required REP precision`)
+	assert.match(describeLiquidationHealth('Liquidation threshold curve.', 110n, model), new RegExp(`required backing is ${expectedRequiredRep.replace('.', '\\.')} REP against 110 unlocked REP, so the vault is ${expectedState}`), `liquidation Plot accessible description should preserve the ${multiplierInput}x boundary`)
+}
+assert.deepEqual(calculateLiquidationHealth(1000n, 75n, 20_000n, 10n), { currentRequiredRep: 1500, currentRequiredRepDisplay: '1500', state: 'liquidatable', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a vault above its price threshold')
+assert.equal(calculateLiquidationHealth(1000n, 0n, 20_000n, 10n).thresholdPrice, Number.POSITIVE_INFINITY, 'liquidation Plot should have no finite threshold without allowance')
 
 const defaultAuction = calculateAuctionModel(12, 4, [
 	{ eth: 3, key: 'alice', name: 'Alice', price: 5 },

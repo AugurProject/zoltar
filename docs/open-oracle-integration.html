@@ -962,7 +962,8 @@
 					ETH-denominated payoff, and <code>oracleLiquidityRatio</code> compares
 					report liquidity with that payoff. The bound is useful when the
 					denominator is large enough that delaying honest correction costs more
-					than the liquidation can pay.
+					than the liquidation can pay. <code>BPS_DENOMINATOR = 10_000</code>
+					converts basis-point parameters into fractions in the formulas below.
 				</p>
 				<p>
 					The first boundary is how far the manipulated price must move before

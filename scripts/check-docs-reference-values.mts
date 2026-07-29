@@ -586,6 +586,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /setSecurityPool\(pool\)[\s\S]*Anyone while `securityPool` remains zero[\s\S]*zero value emits and checkpoints zero but leaves the setter callable/)
 	assert.match(contractInteractionReference, /setRepEthPrice\(price\)[\s\S]*Configured nonzero `SecurityPool` only/)
 	assert.match(openOracleIntegration, /setSecurityPool<\/code> once with that nonzero pool/)
+	assert.match(openOracleIntegration, /BPS_DENOMINATOR = 10_000[\s\S]*id="eq-openoracle-binary-threshold"/, 'OpenOracle integration must define BPS_DENOMINATOR before its first named-denominator formula')
 	assert.match(contractInteractionReference, /While a report is pending, only that report sponsor may stage more operations/)
 	assert.match(contractInteractionReference, /required only when this call opens a new report/)
 	assert.match(contractInteractionReference, /Genesis REP requires allowance; child REP is burned directly without allowance/)
