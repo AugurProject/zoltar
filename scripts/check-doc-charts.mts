@@ -11,26 +11,9 @@ const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
-const expectedChartCount = 42
+const expectedChartCount = 40
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
 const axisFreeNativeChartIds = new Set(['fig-contract-interaction-map'])
-const fullyCheckedFlowCharts = new Map([
-	[
-		'fig-open-oracle-arbitrager-lifecycle',
-		{
-			states: new Set(['AtomicEntry', 'AtomicExit', 'Final', 'Open', 'PendingFinality', 'PriceFilter', 'Recovery', 'SyncReports']),
-			transitions: new Set(['AtomicEntry->Open', 'AtomicEntry->Recovery', 'AtomicExit->PendingFinality', 'AtomicExit->Recovery', 'Open->AtomicExit', 'Open->Recovery', 'PendingFinality->Final', 'PendingFinality->Open', 'PendingFinality->Recovery', 'PriceFilter->AtomicEntry', 'SyncReports->PriceFilter']),
-		},
-	],
-	[
-		'fig-open-oracle-arbitrager-profit',
-		{
-			states: new Set(['EntryGas', 'ExitGas', 'HedgePnl', 'Net', 'Slippage']),
-			transitions: new Set(['EntryGas->Slippage', 'ExitGas->Net', 'HedgePnl->EntryGas', 'Slippage->ExitGas']),
-		},
-	],
-])
-const fullyCheckedFlowChartIds = new Set(fullyCheckedFlowCharts.keys())
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 const chartAxes: ('x' | 'y')[] = ['x', 'y']
 
@@ -205,152 +188,7 @@ function assertChartNode(value: unknown, chartId: string): void {
 	}
 }
 
-function collectChartText(nodes: unknown[]): string[] {
-	const text: string[] = []
-	for (const node of nodes) {
-		if (!isRecord(node)) continue
-		if (typeof node['text'] === 'string') text.push(node['text'])
-		if (Array.isArray(node['children'])) text.push(...collectChartText(node['children']))
-	}
-	return text
-}
-
-function numericAttribute(attributes: Record<string, unknown>, name: string, chartId: string): number {
-	const value = attributes[name]
-	if (typeof value !== 'string' || !Number.isFinite(Number(value))) throw new Error(`Chart ${chartId} checked geometry requires numeric ${name}`)
-	return Number(value)
-}
-
-function checkedPathEndpoints(path: string, chartId: string, transition: string): [{ x: number; y: number }, { x: number; y: number }] {
-	const tokens = path.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)/g)
-	if (tokens === null || tokens[0] !== 'M' || tokens.length < 5) {
-		throw new Error(`Chart ${chartId} checked transition ${transition} has an unsupported path`)
-	}
-	const start = { x: Number(tokens[1]), y: Number(tokens[2]) }
-	if (!Number.isFinite(start.x) || !Number.isFinite(start.y)) {
-		throw new Error(`Chart ${chartId} checked transition ${transition} has a non-numeric start`)
-	}
-	let current = { ...start }
-	let index = 3
-	while (index < tokens.length) {
-		const command = tokens[index]
-		if (command === 'H') {
-			const x = Number(tokens[index + 1])
-			if (!Number.isFinite(x)) throw new Error(`Chart ${chartId} checked transition ${transition} has a non-numeric horizontal segment`)
-			current = { x, y: current.y }
-			index += 2
-			continue
-		}
-		if (command === 'V') {
-			const y = Number(tokens[index + 1])
-			if (!Number.isFinite(y)) throw new Error(`Chart ${chartId} checked transition ${transition} has a non-numeric vertical segment`)
-			current = { x: current.x, y }
-			index += 2
-			continue
-		}
-		if (command === 'L') {
-			const x = Number(tokens[index + 1])
-			const y = Number(tokens[index + 2])
-			if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`Chart ${chartId} checked transition ${transition} has a non-numeric line segment`)
-			current = { x, y }
-			index += 3
-			continue
-		}
-		throw new Error(`Chart ${chartId} checked transition ${transition} uses unsupported command ${command ?? 'missing'}`)
-	}
-	return [start, current]
-}
-
-function pointTouchesStateBoundary(point: { x: number; y: number }, state: { height: number; width: number; x: number; y: number }): boolean {
-	const withinX = point.x >= state.x && point.x <= state.x + state.width
-	const withinY = point.y >= state.y && point.y <= state.y + state.height
-	return withinX && withinY && (point.x === state.x || point.x === state.x + state.width || point.y === state.y || point.y === state.y + state.height)
-}
-
-function assertCheckedFlowGeometry(nodes: unknown[], chartId: string): void {
-	const states = new Map<string, { height: number; width: number; x: number; y: number }>()
-	const checkedPaths: Array<{ attributes: Record<string, unknown>; transition: string }> = []
-	const checkedLabels: Array<{ attributes: Record<string, unknown>; transition: string }> = []
-	let arrowPathCount = 0
-	let rectangleCount = 0
-	for (const node of nodes) {
-		if (!isRecord(node) || !isRecord(node['attributes'])) continue
-		const attributes = node['attributes']
-		const state = attributes['data-state']
-		if (node['tag'] === 'rect' && typeof state === 'string') {
-			if (fullyCheckedFlowChartIds.has(chartId) && states.has(state)) throw new Error(`Chart ${chartId} has duplicate checked state ${state}`)
-			states.set(state, {
-				height: numericAttribute(attributes, 'height', chartId),
-				width: numericAttribute(attributes, 'width', chartId),
-				x: numericAttribute(attributes, 'x', chartId),
-				y: numericAttribute(attributes, 'y', chartId),
-			})
-		}
-		if (node['tag'] === 'rect') rectangleCount += 1
-		if (node['tag'] === 'path' && attributes['marker-end'] === 'arrow') arrowPathCount += 1
-		const transition = attributes['data-checked-transition']
-		if (node['tag'] === 'path' && typeof transition === 'string') checkedPaths.push({ attributes, transition })
-		const labelTransition = attributes['data-checked-transition-label']
-		if (node['tag'] === 'text' && typeof labelTransition === 'string') checkedLabels.push({ attributes, transition: labelTransition })
-	}
-	if (fullyCheckedFlowChartIds.has(chartId) && (states.size !== rectangleCount || checkedPaths.length !== arrowPathCount)) {
-		throw new Error(`Chart ${chartId} must mark every state rectangle and arrow path for semantic geometry validation`)
-	}
-	const requiredShape = fullyCheckedFlowCharts.get(chartId)
-	if (requiredShape !== undefined) {
-		const transitions = new Set(checkedPaths.map(({ transition }) => transition))
-		if (states.size !== requiredShape.states.size || [...requiredShape.states].some(state => !states.has(state)) || transitions.size !== requiredShape.transitions.size || [...requiredShape.transitions].some(transition => !transitions.has(transition))) {
-			throw new Error(`Chart ${chartId} does not match its complete semantic state and transition registry`)
-		}
-	}
-	for (const { attributes, transition } of checkedPaths) {
-		const [sourceId, receiverId, extra] = transition.split('->')
-		if (sourceId === undefined || receiverId === undefined || extra !== undefined) throw new Error(`Chart ${chartId} has invalid checked transition ${transition}`)
-		const source = states.get(sourceId)
-		const receiver = states.get(receiverId)
-		if (source === undefined || receiver === undefined) throw new Error(`Chart ${chartId} checked transition ${transition} is missing a state rectangle`)
-		const path = attributes['d']
-		if (typeof path !== 'string') throw new Error(`Chart ${chartId} checked transition ${transition} is missing a path`)
-		const [start, end] = checkedPathEndpoints(path, chartId, transition)
-		if (!pointTouchesStateBoundary(start, source) || !pointTouchesStateBoundary(end, receiver)) {
-			throw new Error(`Chart ${chartId} checked transition ${transition} does not terminate at visible state boundaries`)
-		}
-		const label = checkedLabels.find(candidate => candidate.transition === transition)
-		if (label !== undefined) {
-			const labelX = numericAttribute(label.attributes, 'x', chartId)
-			if (labelX <= Math.min(start.x, end.x) || labelX >= Math.max(start.x, end.x)) throw new Error(`Chart ${chartId} checked transition label ${transition} is not between its states`)
-		}
-	}
-}
-
-function assertCheckedFlowNegativeProbes(nodes: unknown[], chartId: string): void {
-	if (!fullyCheckedFlowChartIds.has(chartId)) return
-	const transitions = nodes.flatMap(node => {
-		if (!isRecord(node) || node['tag'] !== 'path' || !isRecord(node['attributes'])) return []
-		const transition = node['attributes']['data-checked-transition']
-		return typeof transition === 'string' ? [transition] : []
-	})
-	for (const transition of transitions) {
-		const changedNodes = structuredClone(nodes)
-		const changedPath = changedNodes.find(node => isRecord(node) && node['tag'] === 'path' && isRecord(node['attributes']) && node['attributes']['data-checked-transition'] === transition)
-		if (!isRecord(changedPath) || !isRecord(changedPath['attributes']) || typeof changedPath['attributes']['d'] !== 'string') {
-			throw new Error(`Chart ${chartId} could not construct the ${transition} geometry negative probe`)
-		}
-		const originalPath = changedPath['attributes']['d']
-		changedPath['attributes']['d'] = originalPath.replace(/(-?(?:\d+\.?\d*|\.\d+))$/, value => (Number(value) + 1).toString())
-		let rejected = false
-		try {
-			assertCheckedFlowGeometry(changedNodes, chartId)
-		} catch (error) {
-			if (!(error instanceof Error) || !error.message.includes(`checked transition ${transition} does not terminate at visible state boundaries`)) throw error
-			rejected = true
-		}
-		if (!rejected) throw new Error(`Chart ${chartId} geometry negative probe unexpectedly accepted a displaced ${transition} endpoint`)
-	}
-}
-
 const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
-htmlEntries.push('../open-oracle-arbitrager/documentation.html')
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
 if (nativeDispatchResult.issue !== undefined) {
@@ -397,25 +235,9 @@ for (const [chartId, value] of Object.entries(parsedSpecs)) {
 	if (mergedDescriptionBoundaryPattern.test(value['ariaDescription'])) {
 		throw new Error(`Chart ${chartId} has a merged accessible-description boundary`)
 	}
-	if (chartId === 'fig-open-oracle-arbitrager-lifecycle') {
-		if (!value['ariaDescription'].includes('Uniswap V2, V3, and hookless V4 liquidity') || !value['ariaDescription'].includes('Uniswap V3 TWAP anchor')) {
-			throw new Error('OpenOracle arbitrager lifecycle chart must describe V2/V3/V4 execution and the V3 TWAP anchor')
-		}
-		if (!value['ariaDescription'].includes('every configured read RPC serves the same twelfth-descendant block hash')) {
-			throw new Error('OpenOracle arbitrager lifecycle chart must describe the all-read-RPC finality quorum')
-		}
-		if (!collectChartText(value['nodes']).includes('all RPCs agree at +12')) {
-			throw new Error('OpenOracle arbitrager lifecycle chart must visibly identify the all-read-RPC finality quorum')
-		}
-	}
-	if (chartId === 'fig-open-oracle-arbitrager-profit' && !collectChartText(value['nodes']).includes('Modeled: conservative reserves · Tracked: actual hedge and gas so far · Realized: tracked + exact settler reward after finality')) {
-		throw new Error('OpenOracle arbitrager profit chart must include lifecycle gas in tracked profit and the exact settler reward in realized profit')
-	}
 	for (const node of value['nodes']) {
 		assertChartNode(node, chartId)
 	}
-	assertCheckedFlowGeometry(value['nodes'], chartId)
-	assertCheckedFlowNegativeProbes(value['nodes'], chartId)
 }
 const markDrivenFlowchartIds = Object.entries(parsedSpecs)
 	.filter(([chartId, value]) => !nativeChartIds.has(chartId) && isRecord(value) && Array.isArray(value['nodes']) && value['nodes'].length > 0)

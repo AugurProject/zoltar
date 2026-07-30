@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { STANDARD_UNISWAP_V4_POOLS } from '../open-oracle-arbitrager/uniswap-v4.js'
 
 const normalizeWhitespace = (text: string) => text.replace(/\s+/g, ' ')
 const htmlToVisibleText = (text: string) =>
@@ -88,23 +87,6 @@ const parsedHtmlFormulaSources = async (text: string) => {
 }
 
 const renderedMarkdownParagraphBodies = (text: string) => parsedHtmlParagraphBodies(Bun.markdown.html(text), 'script, style, template, noscript, pre, table, li')
-
-const arbitragerFinalityPhrase = 'every configured read RPC serves the same twelfth-descendant block hash'
-const narrowedArbitragerRpcEvidencePattern = /\b(?:both(?: configured)? RPCs|two RPCs)\b/i
-
-function arbitragerFinalityDocumentationIssue(documentation: string) {
-	for (const sectionId of ['architecture', 'math', 'recovery']) {
-		const section = documentation.match(new RegExp(`<section id="${sectionId}">([\\s\\S]*?)(?=<section id=|</main>)`))?.[1]
-		if (section === undefined || !normalizeWhitespace(htmlToVisibleText(section)).includes(arbitragerFinalityPhrase)) {
-			return `OpenOracle arbitrager ${sectionId} section must state the all-read-RPC fixed-height finality rule`
-		}
-	}
-	return undefined
-}
-
-function sectionBody(documentation: string, sectionId: string) {
-	return documentation.match(new RegExp(`<section id="${sectionId}">([\\s\\S]*?)(?=<section id=|</main>)`))?.[1]
-}
 
 const discouragedDocsPatterns = [
 	{
@@ -360,8 +342,6 @@ const whitepaper = await Bun.file('docs/statoblast-whitepaper.html').text()
 const zoltarWhitepaper = await Bun.file('docs/zoltar-whitepaper.html').text()
 const openOracleIntegration = await Bun.file('docs/open-oracle-integration.html').text()
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
-const openOracleArbitragerReadme = await Bun.file('open-oracle-arbitrager/README.md').text()
-const openOracleArbitragerDocumentation = await Bun.file('open-oracle-arbitrager/documentation.html').text()
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
 const escalationGameArchitecture = await Bun.file('docs/escalation-game-architecture.html').text()
 const invariantsHtml = await Bun.file('docs/invariants.html').text()
@@ -380,26 +360,6 @@ assert.match(zoltarWhitepaper, /data-rounding="integer-flooring"/)
 assert.match(diagramSpecs, /≈5% of theoretical REP supply/)
 assert.match(diagramSpecs, /approximately 20 percent uncredited haircut/)
 assert.match(diagramSpecs, /approximately 80 percent migration balance/)
-assert.match(openOracleArbitragerReadme, /`closed-pending-finality` retains its risk slot and does not contribute\s+realized profit until every configured read RPC serves the same\s+twelfth-descendant block hash for its exact lifecycle evidence\./)
-for (const pool of STANDARD_UNISWAP_V4_POOLS) {
-	assert.ok(openOracleArbitragerReadme.includes(`| \`${pool.fee.toString()}\` | \`${pool.tickSpacing.toString()}\` |`), `OpenOracle arbitrager README must document V4 fee ${pool.fee.toString()} with tick spacing ${pool.tickSpacing.toString()}`)
-}
-assert.match(openOracleArbitragerReadme, /currency0 = native ETH[\s\S]*currency1 = report token[\s\S]*hooks = address\(0\)/)
-assert.match(openOracleArbitragerReadme, /`2\^127 - 1` atomic units/)
-assert.match(openOracleArbitragerReadme, /For a buy, `zeroForOne = true`[\s\S]*token\s+delta are positive[\s\S]*native input delta is negative/)
-assert.match(openOracleArbitragerReadme, /For a sell, `zeroForOne = false`[\s\S]*token\s+delta are negative[\s\S]*native output delta is\s+positive/)
-assert.match(operatorReference, /public execution surface is `dispute`, `hedgeAndDispute`, `settleAndWithdraw`, `withdrawReplacementCredit`, `assertParentBlock`, and the V4-only `unlockCallback`/)
-assert.match(operatorReference, /payable `receive\(\)` accepts native ETH only while an executor operation is active/)
-assert.match(operatorReference, /executable Uniswap V2, V3, and configured\s+hookless V4 quotes, with V3 as the TWAP anchor/)
-assert.doesNotMatch(operatorReference, /executable Uniswap V3 quotes/)
-assert.equal(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation), undefined)
-assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same\s+twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
-const openOracleArbitragerReadmeRecovery = openOracleArbitragerReadme.match(/### `recovery-required` runbook([\s\S]*?)(?=\n## |\n### )/)?.[1]
-const openOracleArbitragerRenderedRecovery = sectionBody(openOracleArbitragerDocumentation, 'recovery')
-assert.ok(openOracleArbitragerReadmeRecovery !== undefined, 'OpenOracle arbitrager README recovery runbook is missing')
-assert.ok(openOracleArbitragerRenderedRecovery !== undefined, 'OpenOracle arbitrager rendered recovery section is missing')
-assert.doesNotMatch(openOracleArbitragerReadmeRecovery, narrowedArbitragerRpcEvidencePattern)
-assert.doesNotMatch(normalizeWhitespace(htmlToVisibleText(openOracleArbitragerRenderedRecovery)), narrowedArbitragerRpcEvidencePattern)
 assert.doesNotMatch(zoltarWhitepaper, /applies to every product built on the same Zoltar deployment/)
 assert.match(zoltarWhitepaper, /Forking affects applications and users relying on that parent universe/)
 assert.doesNotMatch(zoltarWhitepaper, /affects every application and user operating on the same Zoltar deployment/)

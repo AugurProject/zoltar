@@ -12,8 +12,6 @@ The codebase is split into these main areas:
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `scripts/` contains repository-wide build, validation, and test orchestration
-- `open-oracle-arbitrager/` contains the runnable OpenOracle arbitrager and local
-  operator dashboard
 
 Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-feature UI primitives remain in `components`, application composition belongs in `app`, and contract reads and writes belong in `protocol`.
 
@@ -80,23 +78,6 @@ If you are iterating on the app and want rebuilds, use:
 ```bash
 bun run app:watch
 ```
-
-## OpenOracle Arbitrager
-
-The `./open-oracle-arbitrager/run` command monitors WETH/token OpenOracle games. It
-defaults to dry-run and can serve a local operations dashboard:
-
-```bash
-ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager/run \
-  --open-oracle=0xYourOpenOracle \
-  --ui
-```
-
-See the [OpenOracle arbitrager guide](./open-oracle-arbitrager/README.md) for
-execution-key isolation, required ETH/WETH/token inventory, strategy controls,
-dry-run endpoint testing and multi-relay private bundle delivery, transaction tracking,
-ETH-denominated profit semantics, and operational limitations.
 
 ## RPC Configuration
 

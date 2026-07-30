@@ -20,7 +20,6 @@ type ValidationFailure = {
 
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
-const openOracleArbitragerGuidePath = path.join(repositoryRootPath, 'open-oracle-arbitrager', 'documentation.html')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
 const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/security-model.html'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
@@ -37,7 +36,7 @@ export async function assertDocsHtmlValid(): Promise<void> {
 
 export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
-	const htmlFilePaths = [...(await findDocsFiles('.html')), openOracleArbitragerGuidePath]
+	const htmlFilePaths = await findDocsFiles('.html')
 	const markdownFilePaths = await findDocsFiles('.md')
 	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(document => [document.filePath, document]))
@@ -204,9 +203,9 @@ function validatePlotMounts(parsedDocument: ParsedHtmlDocument, failures: Valida
 	if (chartMounts.length === 0) {
 		return
 	}
-	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="./chartRuntime.js"], script[src$="/chartRuntime.js"]'))
+	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="./chartRuntime.js"]'))
 	if (runtimeScripts.length !== 1) {
-		addFailure(parsedDocument, `must load the shared chartRuntime.js exactly once when Plot mounts are present`, failures)
+		addFailure(parsedDocument, `must load ./chartRuntime.js exactly once when Plot mounts are present`, failures)
 	}
 
 	for (const chartMount of chartMounts) {

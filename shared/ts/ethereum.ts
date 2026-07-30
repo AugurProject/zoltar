@@ -1,6 +1,6 @@
 import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
-import { addr, amounts, eip191Signer, Transaction } from 'micro-eth-signer'
+import { addr, amounts, Transaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
 
 export type Hex = `0x${string}`
@@ -260,7 +260,6 @@ type WaitForTransactionReceiptParameters = {
 	hash: Hash
 	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
 	pollingInterval?: number | undefined
-	transaction?: BlockTransaction | undefined
 	timeout?: number | undefined
 }
 
@@ -296,7 +295,6 @@ export type RpcLog<TArgs = unknown, TEventName extends string = string> = Transa
 
 export type Account = {
 	address: Address
-	signMessage?: (message: string | Uint8Array) => Promise<Hex>
 	signTransaction?: (parameters: SignTransactionParameters) => Promise<Hex>
 	type: 'json-rpc' | 'local' | string
 }
@@ -395,7 +393,6 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
-	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
 	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
@@ -556,11 +553,6 @@ function normalizeTransactionType(value: unknown) {
 
 function normalizeBlockTag(value: bigint | undefined) {
 	return value === undefined ? 'latest' : hexQuantity(value)
-}
-
-function transactionCountBlockTag(parameters: { blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) {
-	if (parameters.blockNumber !== undefined && parameters.blockTag !== undefined) throw new Error('Transaction count cannot specify both blockNumber and blockTag')
-	return parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
 }
 
 function normalizeNullableAddress(value: unknown) {
@@ -1208,7 +1200,7 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 	return typeof account === 'string' ? getAddress(account) : account.address
 }
 
-async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>, blockNumber?: bigint | undefined) {
+async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -1226,7 +1218,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(blockNumber),
+				parameters.blockTag ?? 'latest',
 			],
 		}),
 	)
@@ -1239,29 +1231,6 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 		abiItem,
 		data: rawResult,
 	}
-}
-
-export async function readContractAtBlock(transport: Transport, parameters: { abi: Abi; address: Address; args?: readonly unknown[] | undefined; functionName: string }, blockNumber: bigint): Promise<unknown> {
-	const { abiItem, data } = await readContractRaw(transport, parameters, blockNumber)
-	return decodeFunctionOutput(abiItem, data)
-}
-
-export async function getBalanceAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
-	return normalizeRpcBigInt(
-		await requestTransport<string>(transport, {
-			method: 'eth_getBalance',
-			params: [parameters.address, normalizeBlockTag(parameters.blockNumber)],
-		}),
-	)
-}
-
-export async function getTransactionCountAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
-	return normalizeRpcBigInt(
-		await requestTransport<string>(transport, {
-			method: 'eth_getTransactionCount',
-			params: [parameters.address, normalizeBlockTag(parameters.blockNumber)],
-		}),
-	)
 }
 
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
@@ -1292,13 +1261,6 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				await requestTransport<string>(transport, {
 					method: 'eth_getBalance',
 					params: [parameters.address, parameters.blockTag ?? 'latest'],
-				}),
-			),
-		getTransactionCount: async parameters =>
-			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
-					method: 'eth_getTransactionCount',
-					params: [parameters.address, transactionCountBlockTag(parameters)],
 				}),
 			),
 		getBlock: async parameters => {
@@ -1448,9 +1410,9 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport })
-			let originalTransaction = parameters.transaction
+			let originalTransaction: BlockTransaction | undefined
 			let lastScannedReplacementBlock: bigint | undefined
-			if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
+			if (parameters.onReplaced !== undefined) {
 				try {
 					originalTransaction = await actions.getTransaction({
 						hash: parameters.hash,
@@ -1883,7 +1845,6 @@ export async function recoverTransactionAddress(parameters: { serializedTransact
 export function privateKeyToAccount(privateKey: Hex) {
 	return {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
-		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
 			const transaction = Transaction.prepare({

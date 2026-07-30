@@ -6,7 +6,7 @@ modeled hedge remains profitable after OpenOracle fees and gas. It includes a lo
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
 
-The rendered [operator guide](./documentation.html) explains the UI and CLI,
+The rendered [operator guide](./docs/operator-guide.html) explains the UI and CLI,
 execution math, exchange support, recovery states, and includes populated dashboard
 screenshots. When the dashboard is running, select **Operator guide** or open
 `http://127.0.0.1:4173/documentation` (using the configured UI port).
@@ -19,9 +19,28 @@ restart settings, or the local dashboard when `--ui` is enabled.
 > references, not production approval. Rehearse on Sepolia with a dedicated
 > low-balance key, validate current executable liquidity, and supervise every
 > position; no automated strategy can guarantee a profit or prevent every loss.
-> The protocol security model records the
-> [latest pinned market fixture](../docs/security-model.html#open-oracle-market-fixture)
-> as dated historical evidence.
+> The [latest pinned market fixture](./docs/market-fixture.html#open-oracle-market-fixture)
+> is dated historical evidence, not a live liquidity or profitability claim.
+
+## Project layout
+
+The arbitrager is an independent project inside the monorepo:
+
+- `bin/` contains the operator-facing executables.
+- `config/` contains manifest examples and schemas.
+- `contracts/` contains the executor Solidity source and its local test harnesses.
+- `docs/` contains the rendered operator guide, market fixture, chart runtime, styles,
+  and screenshots.
+- `scripts/` owns contract generation, documentation checks, fixture replay, and
+  screenshot capture.
+- `src/` groups runtime code by configuration, contracts, core strategy, dashboard,
+  execution, monitoring, infrastructure, and durable state.
+- `tests/` mirrors the runtime areas and contains the executor contract suite.
+
+Its own `package.json`, lockfile, TypeScript configuration, test configuration, and
+generated contract artifacts define its build. The executor imports unchanged
+protocol ERC-20 utilities from the sibling Solidity project; it is not compiled into
+the protocol peripheral artifact set.
 
 ## How the flow works
 
@@ -52,13 +71,12 @@ internal allowances must also exist before either mode can enter a position. Dur
 authenticated V2 or V3 router and OpenOracle, then clears them before returning.
 V4 instead unlocks the authenticated PoolManager only for one hookless pool swap,
 settles its exact native-ETH/token deltas, and wraps or unwraps WETH inside the same
-transaction. See
-[OpenOracle integration](../docs/open-oracle-integration.html) for the protocol
-report lifecycle and economics.
+transaction. See [profit and history semantics](#profit-and-history-semantics)
+for the report lifecycle assumptions and economics used by the arbitrager.
 
 ## Requirements
 
-- Bun and this monorepo's frozen dependencies.
+- Bun and this project's frozen dependencies.
 - An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
   `--lookback-blocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
@@ -67,7 +85,7 @@ report lifecycle and economics.
   `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable for every coordinator
   whose games this wallet may dispute; execution is fail-closed without either.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor once per
-  network with `./open-oracle-arbitrager/deploy-executor`, then pass the printed
+  network with `./bin/deploy-executor`, then pass the printed
   address through `--executor-address` whenever execution mode is enabled.
 - The exact Uniswap V3 SwapRouter address supplied with `--uniswap-router`.
 - Optionally, the exact Uniswap V2 Router02 supplied with
@@ -119,8 +137,8 @@ end-user release. The commands below remain experimental operator references:
 1. Publish separate, reviewed mainnet and Sepolia **execution manifests** containing
    the deployed executor, OpenOracle, approved coordinators, router, factory,
    quoter, WETH, and executable tokens with runtime bytecode hashes. The protocol
-   address manifest in `docs/mainnet-deployment-addresses.json` is not a substitute
-   for this bot trust root.
+   deployment manifests for other projects are not a substitute for this bot trust
+   root.
 2. Deploy and source-verify the stateless executor on each supported network, then
    reproduce every manifest hash through at least two independently operated RPCs.
 3. Run a funded, low-limit Sepolia rehearsal covering entry, replacement, normal
@@ -147,16 +165,17 @@ end-user release. The commands below remain experimental operator references:
 
 ## Install
 
-From the monorepo root:
+From the monorepo root, enter the arbitrager project:
 
 ```bash
+cd open-oracle-arbitrager
 bun install --frozen-lockfile
 ```
 
-Run the executable directly from the monorepo:
+Run the executable from the arbitrager project:
 
 ```bash
-./open-oracle-arbitrager/run --help
+./bin/run --help
 ```
 
 ## Monitor without trading
@@ -165,7 +184,7 @@ Run one scan:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager/run \
+  ./bin/run \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --lookback-blocks=50000 \
@@ -176,7 +195,7 @@ Run continuously with the local dashboard:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager/run \
+  ./bin/run \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --ui
@@ -228,7 +247,7 @@ There is no canonical REP deployment, so the REP and OpenOracle addresses must b
 supplied explicitly:
 
 ```bash
-./open-oracle-arbitrager/run \
+./bin/run \
   --network=sepolia \
   --rpc-url=https://your-sepolia-rpc.example \
   --public-rpc-url=https://your-sepolia-rpc.example \
@@ -254,18 +273,19 @@ Deploy the stateless executor from the same selected network:
 ```bash
 PRIVATE_KEY=0xYourDeploymentPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./open-oracle-arbitrager/deploy-executor --network=mainnet
+  ./bin/deploy-executor --network=mainnet
 ```
 
 ### Executor ABI source
 
-The bot's executor ABI is generated from
-`solidity/artifacts/Contracts.json`. Never edit
-`executor-abi.generated.ts` directly. After compiling an executor contract change,
-run `bun run generate:open-oracle-arbitrager-abi`, review the generated diff, and
-verify freshness with `bun run check:open-oracle-arbitrager-abi`. The remaining
-minimal ABIs in `abi.ts` are maintained separately and checked against compiled
-artifacts by `abi.test.ts`.
+The project compiles `contracts/OpenOracleArbitrageExecutor.sol` into
+`src/contracts/artifacts.generated.ts` and derives
+`src/contracts/executor-abi.generated.ts` from that local artifact. Never edit either
+generated file directly. After an executor contract change, run
+`bun run compile-contracts && bun run generate:abi`, review the generated diff, and
+verify freshness with `bun run check:generated`. The remaining minimal ABIs in
+`src/contracts/abi.ts` are maintained separately and checked against compiled
+artifacts by `tests/contracts/abi.test.ts`.
 
 Verify the deployment address independently, then start an inventory-funded
 execution process:
@@ -273,7 +293,7 @@ execution process:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./open-oracle-arbitrager/run \
+  ./bin/run \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --executor-address=0xYourExecutor \
@@ -320,14 +340,14 @@ The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
 can verify the file.
 
 ```bash
-./open-oracle-arbitrager/execution-manifest generate \
+./bin/execution-manifest generate \
   --network=sepolia \
   --rpc-url=https://first-provider.example \
   --contract=executor:0x... \
   --contract=open-oracle:0x... \
   --output=/secure/operator/sepolia-deployments.json
 
-./open-oracle-arbitrager/execution-manifest verify \
+./bin/execution-manifest verify \
   --rpc-url=https://independent-provider.example \
   --manifest=/secure/operator/sepolia-deployments.json
 ```
@@ -349,7 +369,7 @@ dispute transaction to multiple bundle relays:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager/run \
+  ./bin/run \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --executor-address=0xYourExecutor \
@@ -453,8 +473,8 @@ There is no single fixed funding amount. OpenOracle contributions increase with 
 current round, while the executor also needs hedge inventory. The dashboard's
 **Open opportunities** table shows the total `Required WETH` and `Required token`
 that the executor pulls from the wallet, including both the OpenOracle contribution
-and the atomic hedge. The branch formulas and event fields are canonicalized in the
-[Operator Reference](../docs/operator-reference.md#support-module-inventory).
+and the atomic hedge. The branch formulas and event fields are explained in the
+[operator guide](./docs/operator-guide.html#math).
 
 The execution account needs:
 
@@ -551,7 +571,7 @@ can move sharply when REP/WETH liquidity is shallow.
 Start with `--ui` and optionally choose another local port:
 
 ```bash
-./open-oracle-arbitrager/run \
+./bin/run \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --ui-port=4180
@@ -625,8 +645,8 @@ token list, and the pause state are atomically saved after validation and restor
 and Sepolia use separate files by default:
 
 ```text
-.open-oracle-arbitrager/settings-mainnet.json
-.open-oracle-arbitrager/settings-sepolia.json
+.state/settings-mainnet.json
+.state/settings-sepolia.json
 ```
 
 Override the destination with `--settings-file=/secure/operator/settings.json`.
@@ -675,11 +695,11 @@ bundle or transaction.
 ## Profit and history semantics
 
 Successful dispute submissions are appended to
-`.open-oracle-arbitrager/history-mainnet.jsonl` or
-`.open-oracle-arbitrager/history-sepolia.jsonl` by default. Override the location with:
+`.state/history-mainnet.jsonl` or
+`.state/history-sepolia.jsonl` by default. Override the location with:
 
 ```bash
-./open-oracle-arbitrager/run \
+./bin/run \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --history-file=/secure/operator/open-oracle-history.jsonl
@@ -819,8 +839,8 @@ execution router in this release. The bot will not silently fall back to an
 unsupported venue.
 
 Price samples are stored in
-`.open-oracle-arbitrager/prices-mainnet.jsonl` or
-`.open-oracle-arbitrager/prices-sepolia.jsonl`. Use
+`.state/prices-mainnet.jsonl` or
+`.state/prices-sepolia.jsonl`. Use
 `--price-history-file=/secure/operator/open-oracle-prices.jsonl` to override the
 path. Keep files network-specific.
 
@@ -957,8 +977,8 @@ receipt, and both the execution limit and dashboard use that same ledger.
 
 ### Durable position journal
 
-The default journal is `.open-oracle-arbitrager/positions-mainnet.json` or
-`.open-oracle-arbitrager/positions-sepolia.json`. Before relay delivery, writes use
+The default journal is `.state/positions-mainnet.json` or
+`.state/positions-sepolia.json`. Before relay delivery, writes use
 an owner-only temporary file, sync its complete contents, atomically rename it, and
 sync the parent directory. A malformed journal stops startup rather than discarding
 recovery state. Back it up with the settings and history files, never share one
@@ -1080,8 +1100,8 @@ an independently calculated realized P&amp;L or an explicit declaration that P&a
 is unavailable:
 
 ```bash
-PRIVATE_KEY=0x... ./open-oracle-arbitrager/reconcile-position \
-  --position-file=.open-oracle-arbitrager/positions-sepolia.json \
+PRIVATE_KEY=0x... ./bin/reconcile-position \
+  --position-file=.state/positions-sepolia.json \
   --report-id=42 \
   --confirm-report-id=42 \
   --evidence='receipts and balance snapshots archived under incident-42' \
