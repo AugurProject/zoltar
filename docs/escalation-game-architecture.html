@@ -336,10 +336,12 @@
 				<p>
 					Any Solidity change can also move deterministic deployment addresses,
 					because address derivation uses init code. After contract changes,
-					regenerate and review deployment outputs with the normal artifact
-					workflow, and keep
-					<code>docs/mainnet-deployment-addresses.json</code> aligned when those
-					addresses intentionally change.
+					regenerate and review every network deployment manifest with the normal
+					artifact workflow. Follow the
+					<a href="./operator-reference.md#launch-release-checklist"
+						>Operator Reference launch release checklist</a
+					>
+					when those addresses intentionally change.
 				</p>
 				<p>
 					For gas-sensitive work, measure instead of assuming. Scenario tests are

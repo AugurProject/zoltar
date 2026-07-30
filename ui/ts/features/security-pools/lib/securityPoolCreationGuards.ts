@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import type { MarketDetails } from '../../../types/contracts.js'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { tryParseDecimalInput } from '../../../lib/decimal.js'
 import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 
@@ -29,7 +29,7 @@ export function getSecurityPoolCreateDisabledReason({
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
 	initialReportPriorityFeeGwei,
-	isMainnet,
+	isOnActiveAppChain,
 	marketDetails,
 	securityPoolCreating,
 	statoblastSecurityMultiplier,
@@ -39,13 +39,13 @@ export function getSecurityPoolCreateDisabledReason({
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	initialReportPriorityFeeGwei: string
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	marketDetails: MarketDetails | undefined
 	securityPoolCreating: boolean
 	statoblastSecurityMultiplier: string
 	zoltarUniverseHasForked: boolean
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before creating a security pool.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before creating a security pool.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier)
 	if (statoblastSecurityMultiplierValidationMessage !== undefined) return statoblastSecurityMultiplierValidationMessage

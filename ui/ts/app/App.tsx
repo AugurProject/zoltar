@@ -124,7 +124,7 @@ export function App() {
 	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
 	const readBackendReady = readBackendValidated && readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
-	const isMainnet = isSupportedAppChain(accountState.chainId)
+	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
 	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
 	const baseHookConfig = {
 		accountAddress: accountState.address,
@@ -318,7 +318,7 @@ export function App() {
 		startTruthAuction,
 		submitBid,
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices({ enabled: route !== 'deploy' })
+	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
@@ -362,9 +362,11 @@ export function App() {
 		onRefreshRepPrices: refreshRepPrices,
 		onSwitchNetwork: () => void switchNetwork(),
 		parentUniverseId: zoltarUniverse?.parentUniverseId,
+		repPerEthFailure,
 		repPerEthPrice,
 		repPerEthSource,
 		repPerEthSourceUrl,
+		repUsdcFailure,
 		repUsdcPrice,
 		repUsdcSource,
 		repUsdcSourceUrl,
@@ -479,7 +481,7 @@ export function App() {
 		deploymentSections,
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
-		isMainnet,
+		isOnActiveAppChain,
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),

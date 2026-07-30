@@ -11,9 +11,11 @@ import { LoadingText } from '../../components/LoadingText.js'
 import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
-import type { OverviewPanelsProps } from '../../features/types.js'
+import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
+import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
+import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
 
 function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainId === undefined) return appCopy.unknownNetwork
@@ -24,6 +26,15 @@ function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainName === undefined) return chainLabel
 	const decimalChainId = getChainIdDecimalLabel(chainId)
 	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
+}
+
+function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
+	if (failure === undefined) return undefined
+	return (
+		<span className='currency-value unavailable' role='status'>
+			{failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity}
+		</span>
+	)
 }
 
 export function OverviewPanels({
@@ -42,9 +53,11 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	parentUniverseId,
 	readBackendStatus,
+	repPerEthFailure,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	repUsdcFailure,
 	repUsdcPrice,
 	repUsdcSource,
 	repUsdcSourceUrl,
@@ -68,8 +81,11 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
-	const walletOnMainnet = isMainnetChain(accountState.chainId)
-	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
+	const activeNetworkProfile = getActiveNetworkProfile()
+	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
+	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
+	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
+	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
@@ -81,7 +97,12 @@ export function OverviewPanels({
 		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
-	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : getWalletNetworkLabel(accountState.chainId)
+	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
+	const walletNetworkLabel = (() => {
+		if (!walletOnActiveNetwork) return getWalletNetworkLabel(accountState.chainId)
+		if (activeNetworkProfile.id === 'sepolia') return appCopy.sepoliaNetwork
+		return appCopy.ethereumMainnet
+	})()
 	const accountActions = (() => {
 		if (accountState.address === undefined)
 			return (
@@ -103,7 +124,7 @@ export function OverviewPanels({
 					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{appCopy.switchToEthereumMainnet}
+							{appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(getActiveNetworkProfile()))}
 						</button>
 					) : undefined}
 					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
@@ -138,6 +159,7 @@ export function OverviewPanels({
 					actions={accountActions}
 					badge={
 						<span className='environment-badge-row'>
+							{activeNetworkBadge}
 							{environmentBadge}
 							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
@@ -181,13 +203,15 @@ export function OverviewPanels({
 								<span>
 									{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 								</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-									↻
-								</button>
+								{isRepPricingUnavailable ? undefined : (
+									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+										↻
+									</button>
+								)}
 							</span>
 						}
 					>
-						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
 					</MetricField>
 					<MetricField
 						className='overview-metric-secondary'
@@ -197,7 +221,7 @@ export function OverviewPanels({
 							</>
 						}
 					>
-						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
 					</MetricField>
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}

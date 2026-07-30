@@ -5,6 +5,7 @@ export const disconnectWallet = 'Disconnect'
 export const accountMenu = 'Account Menu'
 export const currentNetwork = 'Current Network'
 export const switchToEthereumMainnet = 'Switch to Ethereum mainnet'
+export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
 export const unknownNetwork = 'Unknown network'
@@ -12,6 +13,9 @@ export const sepoliaNetwork = 'Sepolia (11155111)'
 export const formatNetworkWithChainId = (networkLabel: string, chainId: string) => `${networkLabel} (${chainId})`
 export const oracleReports = 'Open Oracle'
 export const refreshRepPrices = 'Refresh REP prices'
+export const formatRepPricingUnavailable = (networkName: string) => `Not configured on ${networkName}`
+export const repPriceNoLiquidity = 'No pool quote'
+export const repPriceRequestFailed = 'Quote failed'
 export const repPerEthCompact = 'REP/ETH'
 export const skipToMainContent = 'Skip to main content'
 export const createOracleReport = 'Create Open Oracle Report'

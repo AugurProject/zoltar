@@ -342,7 +342,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					const bidGuardMessage = getTruthAuctionBidGuardMessage({
 						accountAddress: walletAddress,
 						currentTimestamp: details.currentTime,
-						isMainnet: true,
+						isOnActiveAppChain: true,
 						submitBidAmountInput: submittedBidAmountInput,
 						truthAuction: details.truthAuction,
 						walletEthBalance,

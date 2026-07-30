@@ -24,7 +24,7 @@ import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
@@ -228,7 +228,7 @@ export function ReportingSection({
 	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
@@ -368,7 +368,7 @@ export function ReportingSection({
 			actualDepositAmount: actualReportDepositAmount,
 			accountAddress: accountState.address,
 			contributionPreviewReason: reportContributionPreview?.reason,
-			isMainnet,
+			isOnActiveAppChain,
 			remainingSelectedOutcomeCapacity,
 			reportAmount: reportingForm.reportAmount,
 			reportingStatus,
@@ -378,12 +378,12 @@ export function ReportingSection({
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
-	const reportActionDisabledReason = !isMainnet ? commonCopy.mainnetRequiredReason : reportButtonGuardMessage
+	const reportActionDisabledReason = !isOnActiveAppChain ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : reportButtonGuardMessage
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({
 			accountAddress: accountState.address,
-			isMainnet,
+			isOnActiveAppChain,
 			reportingStatus,
 		})
 	let displayedWithdrawGuardMessage = withdrawGuardMessage
@@ -641,7 +641,7 @@ export function ReportingSection({
 								pendingLabel={reportingCopy.submittingReport}
 								onClick={onReportOutcome}
 								pending={reportingActiveAction === 'reportOutcome'}
-								availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
+								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
 								disabledReasonElementId={reportDisabledReasonElementId}
 								showDisabledReason={reportDisabledReasonElementId === undefined}
 							/>
@@ -722,7 +722,7 @@ export function ReportingSection({
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
 												showDisabledReason={!withdrawSelectedUsesSharedReason}
 											/>
 											<TransactionActionButton
@@ -733,7 +733,7 @@ export function ReportingSection({
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
 												showDisabledReason={!withdrawAllUsesSharedReason}
 											/>
 										</div>

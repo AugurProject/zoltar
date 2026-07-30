@@ -113,7 +113,7 @@ describe('Contract Test Suite', () => {
 		const invalidThresholdDeployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, 1n, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), 1n, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 
 		await assert.rejects(
@@ -133,7 +133,7 @@ describe('Contract Test Suite', () => {
 			const invalidBurnDeployment = encodeDeployData({
 				abi: Zoltar_Zoltar.abi,
 				bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-				args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, invalidBurnDivisor],
+				args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, invalidBurnDivisor],
 			})
 
 			await assert.rejects(
@@ -179,7 +179,7 @@ describe('Contract Test Suite', () => {
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 
 		await mockWindow.addStateOverrides({
@@ -204,7 +204,7 @@ describe('Contract Test Suite', () => {
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 
 		await mockWindow.addStateOverrides({

@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '0fa146651848ef51c9b7da5370ef6899cb13a24a607adf2d399ff8b146b24b23'
+const expectedProductionSoliditySourceFingerprint = 'ed39fb6eecfbeb5a2c682b38715a115af9692f915a91f4e3ee534898577300b7'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -522,12 +522,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'f7c46fef11823d944ae835cca01905b07e06e4396b834caf1c30fdd6736e2c87',
+		compiledAbiFingerprint: '85f2ab1d0cf3cfbfc5411671a1c5858ee548021d053d4dbabb1879fb1c78be63',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: '84e9d44350c2a27cc521f9525e34f385e810e0093aa0626ad64bcb490a925fe9',
+		readAbiFingerprint: 'd7c4966a405469df7438e594454842b4caa5864c9dda64c4098ef7a5309cada6',
 		readSurface:
-			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state. Construction requires `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -540,7 +540,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getDeployedChildUniverses' },
 			{ name: 'getMigrationRepBalance' },
 		],
-		readStorageDeclarations: [{ name: 'universes' }, { name: 'deployedChildOutcomeIndexes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }],
+		readStorageDeclarations: [{ name: 'universes' }, { name: 'deployedChildOutcomeIndexes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
@@ -692,7 +692,7 @@ const contractReferences: ContractReference[] = [
 		readSurface:
 			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
-			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 external token behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
+			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
 			{ name: 'securityPoolEventEmitter' },
 			{ name: 'getVaultCount' },
@@ -1794,7 +1794,7 @@ The main state-changing protocol calls map to caller authority, lifecycle prereq
 
 The tables focus on transaction entrypoints in the ten primary state-changing contracts that users and protocol components interact with directly. Each read surface names every read-only function and public storage getter in the deployed contract ABI; its hidden fingerprint pins the exact source declarations, including parameters, returns, visibility, and mutability. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator. Stateless helpers, deployment workers, factories used only for component construction, migration proxies, and event emitters are inventoried with their caller boundaries in the Operator Reference.
 
-The external boundaries most directly affecting these interactions are [A11 practical migration](./security-model.html#assumption-a11), [A16 timely inclusion](./security-model.html#assumption-a16), [A21 external token behavior](./security-model.html#assumption-a21), [A23 verified deployments](./security-model.html#assumption-a23), [A06 lifecycle executors](./security-model.html#assumption-a06), [A20 chain data and proof availability](./security-model.html#assumption-a20), [A26 Ethereum execution](./security-model.html#assumption-a26), [A27 cryptographic security](./security-model.html#assumption-a27), [A22 asset-recipient compatibility](./security-model.html#assumption-a22), [A24 client, RPC, and wallet integrity](./security-model.html#assumption-a24), and [A28 account authority](./security-model.html#assumption-a28).
+The security boundaries most directly affecting these interactions are [A11 practical migration](./security-model.html#assumption-a11), [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A23 verified deployments](./security-model.html#assumption-a23), [A06 lifecycle executors](./security-model.html#assumption-a06), [A20 chain data and proof availability](./security-model.html#assumption-a20), [A26 Ethereum execution](./security-model.html#assumption-a26), [A27 cryptographic security](./security-model.html#assumption-a27), [A22 asset-recipient compatibility](./security-model.html#assumption-a22), [A24 client, RPC, and wallet integrity](./security-model.html#assumption-a24), and [A28 account authority](./security-model.html#assumption-a28).
 
 Failure behavior follows Solidity transaction semantics: an uncaught revert rolls back the transaction. The coordinator is the important exception at the workflow level because it deliberately consumes several failed staged operations and records the result in \`ExecutedStagedOperation\`.
 

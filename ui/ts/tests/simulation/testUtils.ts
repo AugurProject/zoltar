@@ -1,12 +1,18 @@
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
+import { setRuntimeNetworkProfile } from '../../lib/networkProfile.js'
 import type { SimulationScenario } from '../../simulation/scenarios.js'
 
 export type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+
+export function activateSimulationBackendProfile(backend: SimulationBackend) {
+	setRuntimeNetworkProfile(backend.profile)
+}
 
 export async function createBootstrappedSimulationBackendWithRetry(scenario: SimulationScenario, maxAttempts = 2) {
 	let lastError: unknown = undefined
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		const backend = await createSimulationBackend({ scenario })
+		activateSimulationBackendProfile(backend)
 		try {
 			await backend.bootstrap()
 			return backend
@@ -19,6 +25,7 @@ export async function createBootstrappedSimulationBackendWithRetry(scenario: Sim
 }
 
 export async function resetSelectedAccountAndTransactionDelay(backend: SimulationBackend) {
+	activateSimulationBackendProfile(backend)
 	const primaryAccount = backend.accounts[0]
 	if (primaryAccount !== undefined && backend.selectedAccount !== primaryAccount) await backend.selectAccount(primaryAccount)
 	await backend.setTransactionDelayMilliseconds(0)

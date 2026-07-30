@@ -22,6 +22,7 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[43114n, 'Avalanche'],
 	[59144n, 'Linea'],
 	[81457n, 'Blast'],
+	[11155111n, 'Sepolia'],
 	[534352n, 'Scroll'],
 ])
 
@@ -58,7 +59,7 @@ export function isSupportedAppChain(chainId: string | undefined) {
 	return profile.isSupportedAppChain && chainId === profile.chainIdHex
 }
 
-export function isMainnetChain(chainId: string | undefined) {
+export function isActiveAppChain(chainId: string | undefined) {
 	return isSupportedAppChain(chainId)
 }
 
@@ -70,5 +71,6 @@ export function getWalletScopedAccountAddress(accountAddress: Address | undefine
 export function getWrongNetworkMessage() {
 	const profile = getActiveNetworkProfile()
 	if (profile.id === 'simulation') return undefined
-	return commonCopy.mainnetRequiredReason
+	if (profile.id === 'mainnet') return commonCopy.mainnetRequiredReason
+	return commonCopy.formatNetworkRequiredReason(profile.displayName)
 }
