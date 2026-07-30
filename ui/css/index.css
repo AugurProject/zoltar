@@ -7917,8 +7917,28 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		padding: 0.58rem 2rem 0.58rem 0.7rem;
 		border: 1px solid var(--control-border);
 		border-radius: var(--radius-control);
-		background-color: var(--control-bg);
+		appearance: none;
+		-webkit-appearance: none;
+		forced-color-adjust: none;
+		background-color: var(--bg-deep);
+		background-clip: padding-box;
+		background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+		background-position:
+			calc(100% - 1rem) calc(50% - 0.15rem),
+			calc(100% - 0.7rem) calc(50% - 0.15rem);
+		background-size:
+			0.35rem 0.35rem,
+			0.35rem 0.35rem;
+		background-repeat: no-repeat;
 		color: var(--text);
+		color-scheme: dark;
+	}
+
+	.mobile-route-select select option {
+		background-color: var(--bg-deep);
+		color: var(--text);
+		color-scheme: dark;
+		forced-color-adjust: none;
 	}
 
 	.protocol-guide-link {
@@ -7987,7 +8007,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.deployment-route-header {
-		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1fr);
 		align-items: start;
 	}
 
@@ -8009,10 +8029,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.deployment-route-header .route-summary-strip {
-		grid-column: 2;
-		padding: 0 0 0 var(--space-3);
-		border-top: 0;
-		border-left: 1px solid var(--divider-subtle);
+		grid-column: 1;
+		padding: var(--space-3) 0 0;
+		border-top: 1px solid var(--divider-subtle);
+		border-left: 0;
 	}
 
 	.deployment-route-header .route-summary-strip .data-grid {

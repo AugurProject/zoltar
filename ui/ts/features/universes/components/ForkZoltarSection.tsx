@@ -30,7 +30,7 @@ type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	currentTimestamp?: bigint | undefined
 	hasLoadedZoltarQuestions: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarQuestions: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
@@ -50,7 +50,7 @@ export function ForkZoltarSection({
 	accountAddress,
 	currentTimestamp,
 	hasLoadedZoltarQuestions,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingZoltarForkAccess,
 	loadingZoltarQuestions,
 	onApproveZoltarForkRep,
@@ -90,12 +90,12 @@ export function ForkZoltarSection({
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
-	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
+	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
 	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalance === undefined || zoltarForkRepBalance < rootUniverse.forkThreshold ? undefined : zoltarForkRepBalance - rootUniverse.forkThreshold
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThreshold / rootUniverse.forkBurnDivisor
 	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThreshold - permanentRepBurn
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return zoltarCopy.alreadyForkedReason
@@ -103,7 +103,7 @@ export function ForkZoltarSection({
 		return undefined
 	})()
 	const forkGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return getUniversePresentation(zoltarUniverseState)?.detail
 
@@ -144,7 +144,7 @@ export function ForkZoltarSection({
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
-						disabled={!isMainnet}
+						disabled={!isOnActiveAppChain}
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}

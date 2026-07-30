@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
@@ -9,7 +9,7 @@ export function getReportingReportGuardMessage({
 	actualDepositAmount,
 	accountAddress,
 	contributionPreviewReason,
-	isMainnet,
+	isOnActiveAppChain,
 	remainingSelectedOutcomeCapacity,
 	reportAmount,
 	reportingStatus,
@@ -21,7 +21,7 @@ export function getReportingReportGuardMessage({
 	actualDepositAmount: bigint | undefined
 	accountAddress: Address | undefined
 	contributionPreviewReason: string | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	remainingSelectedOutcomeCapacity: bigint | undefined
 	reportAmount: string
 	reportingStatus: ReportingStatus
@@ -30,7 +30,7 @@ export function getReportingReportGuardMessage({
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a question.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before reporting on a question.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a question.'
@@ -48,8 +48,8 @@ export function getReportingReportGuardMessage({
 	return undefined
 }
 
-export function getReportingWithdrawGuardMessage({ accountAddress, isMainnet, reportingStatus }: { accountAddress: Address | undefined; isMainnet: boolean; reportingStatus: ReportingStatus }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
+export function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, reportingStatus }: { accountAddress: Address | undefined; isOnActiveAppChain: boolean; reportingStatus: ReportingStatus }) {
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	return undefined

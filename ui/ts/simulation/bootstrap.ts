@@ -1,5 +1,4 @@
 import { createMemoryClient } from 'tevm'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import {
@@ -31,7 +30,7 @@ import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
 import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -65,7 +64,6 @@ const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const WETH_NAME_SLOT = 0n
 const WETH_SYMBOL_SLOT = 1n
 const WETH_DECIMALS_SLOT = 2n
-const ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
@@ -202,19 +200,6 @@ async function seedGenesisRepTokenState({
 	}
 }
 
-async function seedZoltarConstructorGenesisRepToken({ memoryClient, profileGenesisRepTokenAddress, theoreticalSupply }: { memoryClient: TevmLikeClient; profileGenesisRepTokenAddress: Address; theoreticalSupply: bigint }) {
-	if (profileGenesisRepTokenAddress.toLowerCase() === ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS.toLowerCase()) return
-	await memoryClient.setCode({
-		address: ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS,
-		bytecode: `0x${ReputationToken_ReputationToken.evm.deployedBytecode.object}`,
-	})
-	await memoryClient.setStorageAt({
-		address: ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS,
-		index: storageIndex(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT),
-		value: storageValue(theoreticalSupply),
-	})
-}
-
 export async function updateZoltarGenesisRepToken({ createWriteClient, memoryClient, repAddress, zoltarAddress }: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
 	const readClient = createWriteClient(zoltarAddress)
@@ -340,18 +325,13 @@ async function deploySimulationTokens({
 	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_SYMBOL_SLOT), value: shortStringStorageValue('WETH') })
 	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_DECIMALS_SLOT), value: storageValue(18n) })
 	await reportBootstrapProgress(onProgress, 'Installing simulation WETH token', 0.2)
-	const theoreticalSupply = await seedGenesisRepTokenState({
+	await seedGenesisRepTokenState({
 		accounts,
 		createWriteClient,
 		memoryClient,
 		onProgress,
 		repAddress: profile.genesisRepTokenAddress,
 		zoltarAddress,
-	})
-	await seedZoltarConstructorGenesisRepToken({
-		memoryClient,
-		profileGenesisRepTokenAddress: profile.genesisRepTokenAddress,
-		theoreticalSupply,
 	})
 }
 
@@ -374,8 +354,8 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 	}
 }
 
-async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
-	const steps = getDeploymentSteps()
+async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
+	const steps = getDeploymentSteps(profile)
 	for (const [index, step] of steps.entries()) {
 		const code = await memoryClient.getCode({ address: step.address })
 		if (code !== undefined && code !== '0x') {
@@ -1153,10 +1133,10 @@ async function applyScenario({
 			await reportBootstrapProgress(onProgress, 'Using baseline simulation scenario', 0.84)
 			return
 		case 'deployed':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.92 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.92 })
 			return
 		case 'security-pool':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.78 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 })
 			await seedSecurityPoolScenario({
 				accounts,
 				createReadClient,
@@ -1167,7 +1147,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2Scenario({
 				accounts,
 				createReadClient,
@@ -1178,7 +1158,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2-auction':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2AuctionScenario({
 				accounts,
 				createReadClient,
@@ -1212,12 +1192,13 @@ export async function bootstrapSimulationChain({
 	profile: NetworkProfile
 	scenario: SimulationScenario
 }) {
+	setRuntimeNetworkProfile(profile)
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
 	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Firefox may be struggling with main-thread simulation startup.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
-	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
+	const zoltarStep = getDeploymentSteps(profile).find(step => step.id === 'zoltar')
 	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step for simulation bootstrap')
 
 	await deploySimulationTokens({

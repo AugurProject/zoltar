@@ -160,6 +160,7 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 async function renderDeploymentMapping(
 	response: DeploymentManifestResponse,
 	retryResponse?: DeploymentManifestResponse,
+	sepoliaResponse?: DeploymentManifestResponse,
 ): Promise<{
 	busy: string | null
 	decoderDisabled: boolean
@@ -195,7 +196,24 @@ async function renderDeploymentMapping(
 
 		const responses = retryResponse === undefined ? [response] : [response, retryResponse]
 		let fetchCount = 0
-		const fetchManifest = async () => {
+		const requestedUrls: string[] = []
+		const fetchManifest = async (input: string | URL) => {
+			const requestedUrl = String(input)
+			requestedUrls.push(requestedUrl)
+			if (requestedUrl.endsWith('sepolia-deployment-addresses.json')) {
+				return (
+					sepoliaResponse ?? {
+						json: async () => ({
+							deploymentSteps: [
+								{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
+								{ id: 'weth', label: 'Wrapped Ether' },
+							],
+						}),
+						ok: true,
+						status: 200,
+					}
+				)
+			}
 			const selectedResponse = responses[Math.min(fetchCount, responses.length - 1)]
 			fetchCount += 1
 			return selectedResponse
@@ -210,6 +228,20 @@ async function renderDeploymentMapping(
 		const mappingBody = window.document.querySelector('#deployment-status-bit-mapping')
 		if (!(mappingBody instanceof window.HTMLTableSectionElement)) {
 			throw new Error(`${filePath} is missing its mapping tbody`)
+		}
+		const sepoliaMappingBody = window.document.querySelector('#sepolia-deployment-status-bit-mapping')
+		if (!(sepoliaMappingBody instanceof window.HTMLTableSectionElement)) {
+			throw new Error(`${filePath} is missing its Sepolia mapping tbody`)
+		}
+		assert.deepEqual(requestedUrls.slice(0, 2).sort(), ['../mainnet-deployment-addresses.json', '../sepolia-deployment-addresses.json'], 'the deployment page must load both canonical network manifests')
+		assert.equal(sepoliaMappingBody.getAttribute('aria-busy'), 'false', 'the Sepolia mapping must clear its busy state')
+		if (sepoliaResponse === undefined) {
+			assert.equal(sepoliaMappingBody.querySelectorAll(':scope > tr').length, 1, 'the Sepolia mapping must render its tracked steps')
+			assert.equal(sepoliaMappingBody.textContent.replaceAll(/\s+/g, ' ').trim(), '0wethWrapped Ether', 'the Sepolia mapping must preserve canonical manifest order')
+		} else {
+			assert.equal(sepoliaMappingBody.querySelectorAll(':scope > tr').length, 1, 'a failed Sepolia load must replace loading with one failure row')
+			assert.equal(sepoliaMappingBody.textContent.replaceAll(/\s+/g, ' ').trim(), 'Unable to load the deployment mapping. Open the canonical manifest.', 'a failed Sepolia load must show a visible recovery message')
+			assert.equal(sepoliaMappingBody.querySelector('a')?.getAttribute('href'), '../sepolia-deployment-addresses.json', 'a failed Sepolia load must link to its canonical manifest')
 		}
 		const decoderInput = window.document.querySelector('[data-tool-input="deploymentMask"]')
 		const decoderSummary = window.document.querySelector('[data-deployment-mask-summary]')
@@ -384,7 +416,7 @@ async function checkDeploymentMappingStates(): Promise<void> {
 		assert.equal(failure.busy, 'false', `${scenario} must clear the busy state`)
 		assert.equal(failure.rowCount, 1, `${scenario} must replace loading with one failure row`)
 		assert.equal(failure.text, 'Unable to load the deployment mapping. Open the canonical manifest.', `${scenario} must show a visible recovery message`)
-		assert.equal(failure.link, './mainnet-deployment-addresses.json', `${scenario} must link to the canonical manifest`)
+		assert.equal(failure.link, '../mainnet-deployment-addresses.json', `${scenario} must link to the canonical manifest`)
 		assert.equal(failure.decoderDisabled, true, `${scenario} must disable decoding without a canonical mapping`)
 		assert.deepEqual(failure.decoderTransitions, [], `${scenario} must not decode values without a canonical mapping`)
 		assert.equal(failure.decoderSummary, 'The canonical mapping is unavailable, so this mask cannot be decoded safely.', `${scenario} must explain why decoding is unavailable`)
@@ -435,6 +467,21 @@ async function checkDeploymentMappingStates(): Promise<void> {
 		},
 		'a successful retry must preserve the mask, restore the canonical rows, recompute results, and re-enable decoder controls',
 	)
+
+	await renderDeploymentMapping(
+		{
+			json: async () => ({
+				deploymentSteps: [
+					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
+					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
+				],
+			}),
+			ok: true,
+			status: 200,
+		},
+		undefined,
+		{ json: async () => ({}), ok: false, status: 503 },
+	)
 }
 
 async function checkDeploymentLinkedScenarioRace(): Promise<void> {
@@ -459,7 +506,21 @@ async function checkDeploymentLinkedScenarioRace(): Promise<void> {
 		const manifestResponse = new Promise<DeploymentManifestResponse>(resolve => {
 			resolveManifest = resolve
 		})
-		const fetchManifest = async () => manifestResponse
+		const fetchManifest = async (input: string | URL) => {
+			if (String(input).endsWith('sepolia-deployment-addresses.json')) {
+				return {
+					json: async () => ({
+						deploymentSteps: [
+							{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
+							{ id: 'weth', label: 'Wrapped Ether' },
+						],
+					}),
+					ok: true,
+					status: 200,
+				}
+			}
+			return manifestResponse
+		}
 		const runManifestScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
 		const loaderPromise = runManifestScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
 

@@ -65,7 +65,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={undefined}
 				childUniverses={[]}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Unexpected deployment request without question details')
 				}}
@@ -87,7 +87,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[]}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={outcomeIndex => {
 					createOutcome = outcomeIndex
 				}}
@@ -120,7 +120,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[]}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Unexpected deployment request before fork')
 				}}
@@ -144,7 +144,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[createChildUniverse({ outcomeIndex: deployedOutcome, outcomeLabel: 'Below $50', exists: true })]}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Should not deploy an already deployed outcome')
 				}}
@@ -166,7 +166,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[createChildUniverse({ outcomeIndex: selectedOutcome })]}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={() => undefined}
 				questionDetails={question}
 				zoltarChildUniverseError={undefined}

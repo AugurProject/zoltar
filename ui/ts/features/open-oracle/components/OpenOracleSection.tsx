@@ -52,7 +52,7 @@ import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount } from '../../../lib/pagination.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
@@ -234,7 +234,7 @@ export function renderSelectedReportActionSection({
 	actionMode,
 	disputeSubmission,
 	isConnected,
-	isMainnet,
+	isOnActiveAppChain,
 	onApproveToken1,
 	onApproveToken2,
 	onDisputeReport,
@@ -250,7 +250,7 @@ export function renderSelectedReportActionSection({
 	actionMode: Exclude<OpenOracleSelectedReportActionMode, 'read-only'>
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	isConnected: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
 	onDisputeReport: () => void
@@ -290,17 +290,17 @@ export function renderSelectedReportActionSection({
 			})()
 			const disputeToken1ApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token1Symbol)
-				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				return token1ApprovalGuardMessage
 			})()
 			const disputeToken2ApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token2Symbol)
-				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				return token2ApprovalGuardMessage
 			})()
 			const disputeActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
-				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
 			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
@@ -374,7 +374,7 @@ export function renderSelectedReportActionSection({
 										allowanceError={openOracleTokenAccessState.token1Approval.error}
 										allowanceLoading={openOracleTokenAccessState.token1Approval.loading}
 										approvedAmount={openOracleTokenAccessState.token1Approval.value}
-										disabled={!isConnected || !isMainnet}
+										disabled={!isConnected || !isOnActiveAppChain}
 										guardMessage={disputeToken1ApprovalGuardMessage}
 										onApprove={amount => onApproveToken1(amount)}
 										pending={openOracleActiveAction === 'approveToken1'}
@@ -391,7 +391,7 @@ export function renderSelectedReportActionSection({
 										allowanceError={openOracleTokenAccessState.token2Approval.error}
 										allowanceLoading={openOracleTokenAccessState.token2Approval.loading}
 										approvedAmount={openOracleTokenAccessState.token2Approval.value}
-										disabled={!isConnected || !isMainnet}
+										disabled={!isConnected || !isOnActiveAppChain}
 										guardMessage={disputeToken2ApprovalGuardMessage}
 										onApprove={amount => onApproveToken2(amount)}
 										pending={openOracleActiveAction === 'approveToken2'}
@@ -406,7 +406,7 @@ export function renderSelectedReportActionSection({
 						) : (
 							disputeInputBlockDetail
 						)}
-						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
+						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.disputeAndSwapAction}
@@ -415,7 +415,7 @@ export function renderSelectedReportActionSection({
 								pending={openOracleActiveAction === 'dispute'}
 								tone='secondary'
 								availability={{
-									disabled: !isConnected || !isMainnet || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
+									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
 									reason: disputeActionDisabledReason,
 								}}
 								disabledReasonElementId={disputeActionReasonUsesInputBlockMessage ? disputeInputBlockMessageId : undefined}
@@ -434,7 +434,7 @@ export function renderSelectedReportActionSection({
 			})()
 			const settleActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.settlementWalletRequiredReason
-				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				return settleDisabledMessage
 			})()
 			return (
@@ -480,7 +480,7 @@ export function renderSelectedReportActionSection({
 								pending={openOracleActiveAction === 'settle'}
 								tone='secondary'
 								availability={{
-									disabled: !isConnected || !isMainnet || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
+									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
 									reason: settleActionDisabledReason,
 								}}
 							/>
@@ -506,7 +506,7 @@ function renderReportDetailsCard(
 	openOracleWithdrawalReviewMessage: OpenOracleSectionProps['openOracleWithdrawalReviewMessage'],
 	accountAddress: string | undefined,
 	isConnected: boolean,
-	isMainnet: boolean,
+	isOnActiveAppChain: boolean,
 	selectedReportModal: SelectedReportModal,
 	onApproveToken1: (amount?: bigint) => void,
 	onApproveToken2: (amount?: bigint) => void,
@@ -587,7 +587,7 @@ function renderReportDetailsCard(
 	const selectedWithdrawalAmount = selectedWithdrawalItem?.amount
 	const selectedWithdrawalReviewMessage = openOracleWithdrawalReviewMessage !== undefined && openOracleWithdrawalReviewMessage.balance === selectedWithdrawalBalance ? openOracleWithdrawalReviewMessage.message : undefined
 	const withdrawalDisabledReason = (() => {
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 		if (selectedWithdrawalAmount !== undefined && selectedWithdrawalAmount <= 0n) return openOracleCopy.noWithdrawableBalanceForAsset
 		return undefined
 	})()
@@ -652,7 +652,7 @@ function renderReportDetailsCard(
 										onClick={() => onSelectedReportModalChange(getWithdrawalReportModal(item.key))}
 										pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === item.key}
 										tone='secondary'
-										availability={{ disabled: !isMainnet || openOracleActiveAction === 'withdrawBalance', reason: isMainnet ? undefined : commonCopy.mainnetRequiredReason }}
+										availability={{ disabled: !isOnActiveAppChain || openOracleActiveAction === 'withdrawBalance', reason: isOnActiveAppChain ? undefined : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
 									/>
 								))}
 						</div>
@@ -795,7 +795,7 @@ function renderReportDetailsCard(
 					actionMode: 'dispute',
 					disputeSubmission: openOracleDisputeSubmission,
 					isConnected,
-					isMainnet,
+					isOnActiveAppChain,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -815,7 +815,7 @@ function renderReportDetailsCard(
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,
 					isConnected,
-					isMainnet,
+					isOnActiveAppChain,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -861,7 +861,7 @@ function renderReportDetailsCard(
 							onClick={() => onWithdrawOpenOracleBalance(selectedWithdrawalItem.key, selectedWithdrawalAmount)}
 							pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === selectedWithdrawalItem.key}
 							availability={{
-								disabled: !isMainnet || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
+								disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
 								reason: withdrawalDisabledReason,
 							}}
 						/>
@@ -923,17 +923,17 @@ export function OpenOracleSection({
 	}
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })
 	const hasCreateContractFieldErrors = openOracleCreateFieldErrors.token1Address !== undefined || openOracleCreateFieldErrors.token2Address !== undefined
 	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({
 		ethValueInput: openOracleCreateForm.ethValue,
-		isMainnet,
+		isOnActiveAppChain,
 		settlerRewardInput: openOracleCreateForm.settlerReward,
 		walletConnected: isConnected,
 		walletEthBalance: accountState.ethBalance,
 	})
-	const createGuardMessage = !isConnected || !isMainnet || createValidation.isValid ? rawCreateGuardMessage : undefined
+	const createGuardMessage = !isConnected || !isOnActiveAppChain || createValidation.isValid ? rawCreateGuardMessage : undefined
 	const markCreateFieldTouched = (field: OpenOracleCreateField) => setTouchedCreateFields(current => new Set([...current, field]))
 	const getCreateContractFieldError = (field: OpenOracleCreateField) => {
 		if (field === 'token1Address') return openOracleCreateFieldErrors.token1Address
@@ -1353,7 +1353,7 @@ export function OpenOracleSection({
 									pendingLabel={openOracleCopy.creating}
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
-									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
+									availability={{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
 									disabledReasonElementId={createDisabledReasonElementId}
 									showDisabledReason={createDisabledReasonElementId === undefined}
 								/>
@@ -1379,7 +1379,7 @@ export function OpenOracleSection({
 						openOracleWithdrawalReviewMessage,
 						accountState.address,
 						isConnected,
-						isMainnet,
+						isOnActiveAppChain,
 						selectedReportModal,
 						onApproveToken1,
 						onApproveToken2,

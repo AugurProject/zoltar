@@ -5,6 +5,8 @@ export type { ReadClient, WriteClient } from '../lib/clients.js'
 export type DeploymentStepId =
 	| 'proxyDeployer'
 	| 'deploymentStatusOracle'
+	| 'weth'
+	| 'reputationToken'
 	| 'multicall3'
 	| 'uniformPriceDualCapBatchAuctionFactory'
 	| 'scalarOutcomes'

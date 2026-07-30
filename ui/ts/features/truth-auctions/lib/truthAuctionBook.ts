@@ -1,6 +1,6 @@
 import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_MIN_SUPPORTED_TICK } from '../../../protocol/truthAuctionMath.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../../markets/lib/marketForm.js'
@@ -491,19 +491,19 @@ export function getTruthAuctionBidPriceValidationMessage(submitBidPriceInput: st
 export function getTruthAuctionBidGuardMessage({
 	accountAddress,
 	currentTimestamp,
-	isMainnet,
+	isOnActiveAppChain,
 	submitBidAmountInput,
 	truthAuction,
 	walletEthBalance,
 }: {
 	accountAddress: string | undefined
 	currentTimestamp?: bigint | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	submitBidAmountInput: string
 	truthAuction: TruthAuctionMetrics | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (truthAuction === undefined) return 'Loading truth auction.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'

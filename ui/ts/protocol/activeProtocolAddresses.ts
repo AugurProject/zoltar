@@ -1,9 +1,9 @@
-import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
+import { getRuntimeNetworkProfile } from '../lib/networkProfile.js'
 
 export function getGenesisReputationTokenAddress() {
-	return getActiveNetworkProfile().genesisRepTokenAddress
+	return getRuntimeNetworkProfile().genesisRepTokenAddress
 }
 
 export function getWethAddress() {
-	return getActiveNetworkProfile().wethAddress
+	return getRuntimeNetworkProfile().wethAddress
 }

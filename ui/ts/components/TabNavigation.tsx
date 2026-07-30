@@ -7,7 +7,7 @@ import type { TabNavigationProps } from '../types/components.js'
 export function TabNavigation({ route, showDeployTab = true, augurStatoblastDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	const disabledTabReason = appCopy.deploymentRequiredDetail
 	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
-	if (showDeployTab) options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, getTopLevelRouteSearch('deploy')) })
+	if (showDeployTab || route === 'deploy' || route === 'not-found') options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, getTopLevelRouteSearch('deploy')) })
 	options.push({
 		value: 'zoltar',
 		label: commonCopy.zoltar,

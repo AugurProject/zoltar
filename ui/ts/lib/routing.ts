@@ -12,7 +12,7 @@ const ROUTE_HASHES: Record<Exclude<Route, 'not-found'>, string> = {
 	'security-pools': SECURITY_POOLS_ROUTE,
 	'open-oracle': OPEN_ORACLE_ROUTE,
 }
-const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['simScenario', 'simState', 'simulate', 'universe'])
+const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['network', 'simScenario', 'simState', 'simulate', 'universe'])
 const ROUTE_QUERY_PARAMETERS: Record<Exclude<Route, 'not-found'>, ReadonlySet<string>> = {
 	deploy: new Set(),
 	zoltar: new Set(['zoltarView']),

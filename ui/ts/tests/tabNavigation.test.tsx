@@ -71,6 +71,25 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual(['security-pools'])
 	})
 
+	test('keeps Deploy visible as the current compact route while deployment status is loading', async () => {
+		const rendered = await renderIntoDocument(
+			h(
+				TabNavigation,
+				createProps({
+					route: 'deploy',
+					showDeployTab: false,
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+
+		const routeSelector = within(document.body).getByRole('combobox', { name: 'Current application section' })
+		if (!(routeSelector instanceof window.HTMLSelectElement)) throw new Error('Expected compact route selector')
+		expect(routeSelector.value).toBe('deploy')
+		expect(routeSelector.selectedOptions[0]?.textContent).toBe('Deploy')
+		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
+	})
+
 	test('uses the deployment prerequisite copy for disabled application sections', async () => {
 		const routeChanges: string[] = []
 		const rendered = await renderIntoDocument(
