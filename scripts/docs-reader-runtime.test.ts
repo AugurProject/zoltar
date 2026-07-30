@@ -196,11 +196,16 @@ test('narrow navigation collapses and transfers focus before loading settles', a
 		expect(document.activeElement?.id).toBe('reader-content')
 		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
 		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		const pendingFrame = document.querySelector<HTMLIFrameElement>('.reader-document-frame')
+		expect(pendingFrame?.hidden).toBeTrue()
+		expect(pendingFrame?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
 
 		if (resolveDocument === undefined) throw new Error('Pending document request did not start')
 		resolveDocument(new Response('<!doctype html><html><body><main><h1>Zoltar</h1></main></body></html>'))
 		await waitForHistory()
 		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+		expect(pendingFrame?.hidden).toBeFalse()
+		expect(pendingFrame?.getAttribute('srcdoc')).toContain('<h1>Zoltar</h1>')
 	} finally {
 		pendingReader.cleanup()
 	}

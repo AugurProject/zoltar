@@ -252,7 +252,6 @@ function writeFrameSource(path, frame, source) {
 	if (!frame.isConnected) return false
 	frame.dataset.readerSourceReady = 'true'
 	frame.dataset.readerSourceUrl = path
-	frame.hidden = false
 	frame.srcdoc = source
 	initializeFrame(path)
 	return true
@@ -686,6 +685,7 @@ function initializeFrame(path) {
 	}
 	if (frame.dataset.readerSourceReady !== 'true' || frame.dataset.readerSourceUrl !== path || frameDocument.baseURI !== sourceUrl(path)) return
 
+	frame.hidden = false
 	loadingPaths.delete(path)
 	loadedPaths.add(path)
 	failedPaths.delete(path)
