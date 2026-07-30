@@ -757,7 +757,7 @@ export async function createSimulationEngine({ initialization }: { initializatio
 				throw new Error('Simulation REP token is unavailable')
 			}
 
-			const zoltarAddress = getZoltarAddress()
+			const zoltarAddress = getZoltarAddress(profile)
 			const zoltarCode = await memoryClient.getCode({
 				address: zoltarAddress,
 			})

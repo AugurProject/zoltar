@@ -1,9 +1,9 @@
 /// <reference types="bun-types" />
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { loadAllSecurityPools, loadSecurityVaultDetails } from '../../protocol/index.js'
 import type { SimulationScenario } from '../../simulation/scenarios.js'
-import { createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
 
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
@@ -26,6 +26,10 @@ void describe('security-pool simulation backends', () => {
 		await securityPoolX2Backend.setTransactionDelayMilliseconds(0)
 		await securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
+
+	beforeEach(() => {
+		activateSimulationBackendProfile(securityPoolBackend)
+	})
 
 	afterAll(async () => {
 		if (securityPoolBackend !== undefined) await securityPoolBackend.dispose()

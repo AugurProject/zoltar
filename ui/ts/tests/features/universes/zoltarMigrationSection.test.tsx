@@ -54,7 +54,7 @@ function createForm(overrides: Partial<ZoltarMigrationFormState> = {}): ZoltarMi
 function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): ZoltarMigrationSectionProps {
 	return {
 		accountAddress: zeroAddress,
-		isMainnet: true,
+		isOnActiveAppChain: true,
 		loadingZoltarForkAccess: false,
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
@@ -160,7 +160,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					isMainnet: false,
+					isOnActiveAppChain: false,
 					zoltarForkApproval: {
 						error: undefined,
 						loading: false,
@@ -185,7 +185,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					isMainnet: false,
+					isOnActiveAppChain: false,
 				}),
 			),
 		)

@@ -26,8 +26,9 @@
 					configured deployment-step addresses currently contain runtime bytecode.
 				</p>
 				<p>
-					The mainnet manifest lists this contract directly, so operators and frontends need a
-					precise explanation of the returned bitmask and the built-in 256-step ceiling.
+				The canonical mainnet and Sepolia manifests list this contract directly, so operators
+				and frontends need a precise explanation of the returned bitmask and the built-in
+				256-step ceiling.
 				</p>
 			</header>
 
@@ -107,9 +108,11 @@
 					out-of-band and starts consuming mask bits from the remaining addresses.
 				</p>
 				<p>
-					The table below renders the complete bit mapping directly from the canonical
-					<a href="./mainnet-deployment-addresses.json">mainnet deployment manifest</a>,
-					excluding <code>deploymentStatusOracle</code>.
+					The tables below render the complete bit mappings directly from the canonical
+					<a href="./mainnet-deployment-addresses.json">mainnet</a> and
+					<a href="./sepolia-deployment-addresses.json">Sepolia</a> deployment manifests,
+					excluding <code>deploymentStatusOracle</code>. Each manifest's ordered
+					<code>deploymentSteps</code> array is the canonical mapping for that network.
 				</p>
 				<table aria-label="Current mainnet deployment-status bit mapping">
 					<thead>
@@ -132,11 +135,12 @@
 					data-tool-unavailable="true"
 					open
 				>
-					<summary>Decode a deployment mask</summary>
+					<summary>Decode a mainnet deployment mask</summary>
 					<p>
-						Paste the decimal or hexadecimal <code>uint256</code> returned by
+						Paste the decimal or hexadecimal <code>uint256</code> returned by the mainnet
 						<code>getDeploymentMask()</code>. The status column above updates against the
-						canonical constructor order.
+						mainnet constructor order. Sepolia has a different order; use the Sepolia table
+						below instead of this decoder when interpreting its mask.
 					</p>
 					<div class="example-grid">
 						<label>
@@ -170,6 +174,20 @@
 						</button>
 					</div>
 				</details>
+				<table aria-label="Current Sepolia deployment-status bit mapping">
+					<thead>
+						<tr>
+							<th>Bit</th>
+							<th>Sepolia step id</th>
+							<th>Label</th>
+						</tr>
+					</thead>
+					<tbody id="sepolia-deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
+						<tr>
+							<td colspan="3">Loading the canonical manifest…</td>
+						</tr>
+					</tbody>
+				</table>
 				<p>
 					If the manifest's constructor order changes, the rendered bit meanings change
 					with it; this page does not maintain a second list.
@@ -202,6 +220,7 @@
 					<li><a href="../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
 					<li><a href="../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
 					<li><a href="./mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
+					<li><a href="./sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a></li>
 				</ul>
 			</section>
 		</main>
@@ -222,6 +241,11 @@
 			}
 
 			const manifestUrl = './mainnet-deployment-addresses.json'
+			const sepoliaManifestUrl = './sepolia-deployment-addresses.json'
+			const sepoliaMappingBody = document.querySelector('#sepolia-deployment-status-bit-mapping')
+			if (!(sepoliaMappingBody instanceof HTMLTableSectionElement)) {
+				throw new Error('Missing Sepolia deployment-status mapping tbody')
+			}
 			let trackedSteps = []
 
 			const setToolUnavailable = (unavailable) => {
@@ -292,6 +316,52 @@
 					return row
 				})
 				mappingBody.replaceChildren(...rows)
+			}
+			const renderSepoliaMessageRow = (message, includeManifestLink = false) => {
+				const row = document.createElement('tr')
+				const cell = document.createElement('td')
+				cell.colSpan = 3
+				cell.append(message)
+				if (includeManifestLink) {
+					cell.append(document.createElement('br'))
+					const link = document.createElement('a')
+					link.href = sepoliaManifestUrl
+					link.textContent = 'Open the canonical manifest.'
+					cell.append(link)
+				}
+				row.append(cell)
+				sepoliaMappingBody.replaceChildren(row)
+			}
+			const loadSepoliaMapping = async () => {
+				sepoliaMappingBody.setAttribute('aria-busy', 'true')
+				renderSepoliaMessageRow('Loading the canonical manifest…')
+				try {
+					const response = await fetch(sepoliaManifestUrl)
+					if (!response.ok) {
+						throw new Error(`Could not load deployment manifest: ${response.status}`)
+					}
+					const steps = validateManifest(await response.json())
+					const rows = steps.map((step, bit) => {
+						const row = document.createElement('tr')
+						for (const value of [String(bit), step.id, step.label]) {
+							const cell = document.createElement('td')
+							if (value === step.label) {
+								cell.textContent = value
+							} else {
+								const code = document.createElement('code')
+								code.textContent = value
+								cell.append(code)
+							}
+							row.append(cell)
+						}
+						return row
+					})
+					sepoliaMappingBody.replaceChildren(...rows)
+				} catch {
+					renderSepoliaMessageRow('Unable to load the deployment mapping. ', true)
+				} finally {
+					sepoliaMappingBody.setAttribute('aria-busy', 'false')
+				}
 			}
 			const markStatusesUnavailable = () => {
 				for (const statusCell of mappingBody.querySelectorAll('[data-deployment-bit-status]')) {
@@ -372,7 +442,7 @@
 			}
 			maskInput.addEventListener('input', updateDecoder)
 			retryButton.addEventListener('click', () => void loadMapping())
-			await loadMapping()
+			await Promise.all([loadMapping(), loadSepoliaMapping()])
 		</script>
 		<script type="module" src="./interactiveTools.js"></script>
 	</body>

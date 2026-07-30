@@ -11,7 +11,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: undefined,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -27,7 +27,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: undefined,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -43,7 +43,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '0',
 				reportingStatus: 'active',
@@ -61,7 +61,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'missing',
@@ -77,7 +77,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'not-started',
@@ -93,7 +93,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -111,7 +111,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -129,7 +129,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -147,7 +147,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 5n * 10n ** 18n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '5',
 				reportingStatus: 'active',
@@ -163,7 +163,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: undefined,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -179,7 +179,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -197,7 +197,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 5n * 10n ** 18n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: 2n * 10n ** 18n,
 				reportAmount: '5',
 				reportingStatus: 'active',
@@ -213,7 +213,7 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: 0n,
 				reportAmount: '1',
 				reportingStatus: 'active',
@@ -229,7 +229,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBe('Connect a wallet before settling escalation deposits.')
@@ -237,7 +237,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 				reportingStatus: 'active',
 			}),
 		).toBe('Switch to Ethereum mainnet.')
@@ -245,7 +245,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'missing',
 			}),
 		).toBe('Loading reporting details.')
@@ -255,7 +255,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()
@@ -263,7 +263,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()
@@ -271,7 +271,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()

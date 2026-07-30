@@ -204,7 +204,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 					encodeDeployData({
 						abi: Zoltar_Zoltar.abi,
 						bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-						args: [canonicalQuestionData, 20n, unsafeForkBurnDivisor],
+						args: [canonicalQuestionData, repTokenAddress, 20n, unsafeForkBurnDivisor],
 					}),
 				),
 				/Zoltar fork burn divisor must be at least five/,
@@ -216,7 +216,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: Zoltar_Zoltar.abi,
 				bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-				args: [canonicalQuestionData, 20n, forkBurnDivisor],
+				args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor],
 			}),
 		)
 		await mockWindow.addStateOverrides({

@@ -12,17 +12,18 @@ import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
 	childUniverses: ZoltarChildUniverseSummary[]
 	hasForked: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	questionDetails: MarketDetails | undefined
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 }
-export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
+export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isOnActiveAppChain, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
@@ -42,10 +43,10 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
-	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
+	const canDeployScalarChild = accountAddress !== undefined && isOnActiveAppChain && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
 		if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 		return (() => {
 			if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -72,7 +73,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				emptyMessage={marketCopy.deployedChildUniversesEmpty}
 				headerTitle={marketCopy.existingChildUniverses}
 				renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-				renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isMainnet} />}
+				renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isOnActiveAppChain} />}
 				surface='flat'
 			/>
 			<ScalarOutcomePicker
@@ -135,7 +136,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						emptyMessage={marketCopy.childUniverseSelectionEmpty}
 						headerTitle={marketCopy.selectedChildUniverse}
 						renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-						renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isMainnet} />}
+						renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isOnActiveAppChain} />}
 						surface='flat'
 					/>
 				)}

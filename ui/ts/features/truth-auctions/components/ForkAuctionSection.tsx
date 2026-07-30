@@ -40,7 +40,7 @@ import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementAc
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../../../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -425,7 +425,7 @@ export function ForkAuctionSection({
 	showSecurityPoolAddressInput = true,
 	truthAuctionReadClient,
 }: ForkAuctionSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
@@ -796,7 +796,7 @@ export function ForkAuctionSection({
 	}
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 		return undefined
 	})()
@@ -823,7 +823,7 @@ export function ForkAuctionSection({
 		return getTruthAuctionBidGuardMessage({
 			accountAddress: accountState.address,
 			currentTimestamp: effectiveCurrentTimestamp,
-			isMainnet,
+			isOnActiveAppChain,
 			submitBidAmountInput: forkAuctionForm.submitBidAmount,
 			truthAuction: truthAuctionStatus,
 			walletEthBalance: accountState.ethBalance,
@@ -1017,7 +1017,7 @@ export function ForkAuctionSection({
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		const disabledReason = !isMainnet ? commonCopy.mainnetRequiredReason : (interactionDisabledReason ?? resolvedAvailability.reason)
+		const disabledReason = !isOnActiveAppChain ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : (interactionDisabledReason ?? resolvedAvailability.reason)
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
@@ -1027,7 +1027,7 @@ export function ForkAuctionSection({
 				pending={isPending}
 				tone={tone}
 				availability={{
-					disabled: !isMainnet || !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
+					disabled: !isOnActiveAppChain || !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
 					reason: disabledReason,
 				}}
 			/>

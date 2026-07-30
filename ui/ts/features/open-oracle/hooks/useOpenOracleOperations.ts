@@ -775,7 +775,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					const walletEthBalance = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
 						ethValueInput: submittedOpenOracleCreateForm.ethValue,
-						isMainnet: true,
+						isOnActiveAppChain: true,
 						settlerRewardInput: submittedOpenOracleCreateForm.settlerReward,
 						walletConnected: true,
 						walletEthBalance,

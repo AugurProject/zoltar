@@ -18,10 +18,13 @@ import {
 	quoteEthForToken,
 	quoteExactInput,
 	quoteRepForEth,
+	quoteRepForUsdcV4WithSource,
 	quoteTokenForEth,
 } from '../../protocol/uniswapQuoter.js'
 import type { ReadClient } from '../../lib/clients.js'
-import { MAINNET_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { createFakeBackend } from '../testUtils/fakeBackend.js'
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {
 	poolKey: {
@@ -119,6 +122,19 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 	return client
 }
 void describe('quoteExactInput', () => {
+	void test('quotes Sepolia REP/ETH through the Sepolia V4 quoter', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const { client, captured } = createCapturingClient(5n)
+			await expect(quoteExactInput(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, ETH_ADDRESS, 1n)).resolves.toBe(5n)
+			expect(captured.address).toBe(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress)
+			expect(captured.currency0).toBe(ETH_ADDRESS)
+			expect(captured.currency1).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
 	void test('returns amountOut from the quoter result', async () => {
 		const { client } = createCapturingClient(500000000000000000n)
 		const result = await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)
@@ -243,6 +259,41 @@ void describe('quoteBestV3ExactInput', () => {
 		expect(captured.tokenIn).toBe(WETH_ADDRESS)
 		expect(captured.tokenOut).toBe(REP_ADDRESS)
 	})
+	void test('uses Sepolia REP, WETH, and V3 deployments for the Sepolia fallback', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const captured = {
+				factoryAddress: '',
+				quoterAddress: '',
+				tokenIn: '',
+				tokenOut: '',
+			}
+			const client = createStubReadClient()
+			client.simulateContract = async args => {
+				const typedArgs = args as SimulateArgs
+				const [param] = typedArgs.args as [RawV3SimulateParam]
+				captured.quoterAddress = typedArgs.address
+				captured.tokenIn = param.tokenIn
+				captured.tokenOut = param.tokenOut
+				return { result: [1n, 0n, 0, 0n], request: {} as never } as never
+			}
+			client.readContract = async args => {
+				captured.factoryAddress = args.address
+				return zeroAddress as never
+			}
+
+			await quoteBestV3ExactInputWithSource(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, ETH_ADDRESS, 1n, [3000])
+
+			expect(captured).toEqual({
+				factoryAddress: SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress,
+				quoterAddress: SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress,
+				tokenIn: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
+				tokenOut: SEPOLIA_NETWORK_PROFILE.wethAddress,
+			})
+		} finally {
+			resetEnvironment()
+		}
+	})
 	void test('throws when every tested V3 fee tier fails', async () => {
 		const client = createV3FeeAwareClient({})
 		await expect(quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no v3 pool for fee 10000')
@@ -341,6 +392,19 @@ void describe('quoteRepForEth', () => {
 		await quoteRepForEth(client, 1n)
 		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(false)
+	})
+})
+void describe('quoteRepForUsdcV4WithSource', () => {
+	void test('uses Sepolia REP and USDC for Sepolia quotes', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const { client, captured } = createCapturingClient(2n)
+			await expect(quoteRepForUsdcV4WithSource(client, 1n)).resolves.toMatchObject({ amountOut: 2n })
+			expect([captured.currency0, captured.currency1].sort()).toEqual([SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, SEPOLIA_NETWORK_PROFILE.usdcAddress].sort())
+			expect(captured.address).toBe(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress)
+		} finally {
+			resetEnvironment()
+		}
 	})
 })
 void describe('quoteEthForRep', () => {

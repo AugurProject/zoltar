@@ -18,7 +18,8 @@ import {
 import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
-import { getGenesisReputationTokenAddress } from './activeProtocolAddresses.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
+import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../lib/sepoliaDeploymentConfig.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -44,10 +45,11 @@ function markDeploymentTransactionPrepared(
 	})
 }
 
-function getDeploymentStatusOracleStepAddresses() {
-	const addresses = getInfraContractAddresses()
+function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
+	const addresses = getInfraContractAddresses(profile)
 	return [
 		PROXY_DEPLOYER_ADDRESS,
+		...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []),
 		addresses.multicall3,
 		addresses.uniformPriceDualCapBatchAuctionFactory,
 		addresses.scalarOutcomes,
@@ -63,11 +65,11 @@ function getDeploymentStatusOracleStepAddresses() {
 	] satisfies Address[]
 }
 
-function getDeploymentStatusOracleByteCode() {
+function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStatusOracleStepAddresses()],
+		args: [getDeploymentStatusOracleStepAddresses(profile)],
 	})
 }
 
@@ -94,11 +96,13 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-})
+function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) {
+	return createDeploymentStatusOracleAddressHelper({
+		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		zeroSalt: ZERO_SALT,
+	}).getDeploymentStatusOracleAddress()
+}
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	markDeploymentTransactionPrepared(client, {
@@ -163,8 +167,27 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 	)
 }
 
-export function getDeploymentSteps(): DeploymentStep[] {
-	const addresses = getInfraContractAddresses()
+export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()): DeploymentStep[] {
+	const addresses = getInfraContractAddresses(profile)
+	const testTokenSteps =
+		profile.id === 'sepolia'
+			? ([
+					{
+						id: 'weth',
+						label: 'Wrapped Ether',
+						address: profile.wethAddress,
+						dependencies: ['proxyDeployer'],
+						deploy: async client => await deployViaProxy(client, SEPOLIA_WETH_INIT_CODE),
+					},
+					{
+						id: 'reputationToken',
+						label: 'Genesis Reputation Token',
+						address: profile.genesisRepTokenAddress,
+						dependencies: ['proxyDeployer'],
+						deploy: async client => await deployViaProxy(client, SEPOLIA_GENESIS_REP_INIT_CODE),
+					},
+				] satisfies DeploymentStep[])
+			: []
 
 	return [
 		{
@@ -180,10 +203,11 @@ export function getDeploymentSteps(): DeploymentStep[] {
 		{
 			id: 'deploymentStatusOracle',
 			label: 'Deployment Status Oracle',
-			address: getDeploymentStatusOracleAddress(),
+			address: getDeploymentStatusOracleAddress(profile),
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
 		},
+		...testTokenSteps,
 		{
 			id: 'multicall3',
 			label: 'Multicall3',
@@ -230,11 +254,11 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'zoltar',
 			label: 'Zoltar',
 			address: addresses.zoltar,
-			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
+			dependencies: [...(profile.id === 'sepolia' ? (['reputationToken'] as const) : []), 'proxyDeployer', 'zoltarQuestionData'],
 			deploy: async client => {
-				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData))
+				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress))
 				await client.patchSimulationGenesisRepToken?.({
-					repAddress: getGenesisReputationTokenAddress(),
+					repAddress: profile.genesisRepTokenAddress,
 					zoltarAddress: addresses.zoltar,
 				})
 				return hash
@@ -251,8 +275,8 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'priceOracleManagerAndOperatorQueuerFactory',
 			label: 'OpenOracle Price Coordinator Factory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode()),
+			dependencies: [...(profile.id === 'sepolia' ? (['weth'] as const) : []), 'proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress)),
 		},
 		{
 			id: 'securityPoolForker',

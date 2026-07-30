@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { assertNever } from '../../../lib/assert.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
@@ -161,7 +161,7 @@ export function getTradingMintGuardMessage({
 	ethBalance,
 	feeEligibleSecurityBondAllowance,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
 	mintAmountInput,
 	shareTokenSupply,
 	totalRepDeposit,
@@ -171,13 +171,13 @@ export function getTradingMintGuardMessage({
 	ethBalance: bigint | undefined
 	feeEligibleSecurityBondAllowance: bigint | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	mintAmountInput: string
 	shareTokenSupply: bigint | undefined
 	totalRepDeposit: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before minting.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply)
@@ -208,7 +208,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress,
 	completeSetCollateralAmount,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
@@ -217,14 +217,14 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress: Address | undefined
 	completeSetCollateralAmount: bigint | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
 	shareTokenSupply: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
@@ -250,7 +250,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 export function getTradingMigrateSharesGuardMessage({
 	accountAddress,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	selectedShareOutcome,
@@ -260,7 +260,7 @@ export function getTradingMigrateSharesGuardMessage({
 }: {
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
 	selectedShareOutcome: ReportingOutcomeKey
@@ -269,7 +269,7 @@ export function getTradingMigrateSharesGuardMessage({
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before migrating shares.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before migrating shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
@@ -286,9 +286,9 @@ export function getTradingMigrateSharesGuardMessage({
 	return undefined
 }
 
-export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
+export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isOnActiveAppChain }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isOnActiveAppChain: boolean }) {
 	if (!hasSelectedPool) return 'Select a pool before redeeming shares.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	return undefined
 }

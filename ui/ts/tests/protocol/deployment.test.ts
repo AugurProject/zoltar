@@ -1,13 +1,17 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { type Address, type Hash, type TransactionReceipt, getAddress } from '@zoltar/shared/ethereum'
+import { type Address, type Hash, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../protocol/deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../../types/contracts.js'
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '../../lib/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib/sepoliaDeploymentConfig.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle } from '../../contractArtifact.js'
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
 type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
@@ -38,6 +42,107 @@ function createMockReadClient({ getCode, readContract }: { getCode: MockReadClie
 }
 
 describe('contract deployment internals', () => {
+	test('adds WETH and allocated genesis REP ahead of Sepolia protocol dependencies', () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const steps = createDeploymentSteps()
+			const wethStep = steps.find(step => step.id === 'weth')
+			const repStep = steps.find(step => step.id === 'reputationToken')
+			const zoltarStep = steps.find(step => step.id === 'zoltar')
+			const priceFactoryStep = steps.find(step => step.id === 'priceOracleManagerAndOperatorQueuerFactory')
+
+			expect(wethStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.wethAddress)
+			expect(repStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
+			expect(zoltarStep?.dependencies).toContain('reputationToken')
+			expect(priceFactoryStep?.dependencies).toContain('weth')
+			expect(SEPOLIA_WETH_INIT_CODE).toStartWith('0x')
+			expect(SEPOLIA_GENESIS_REP_INIT_CODE).toStartWith('0x')
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('status oracle constructor order matches the deployment-step order on every public network', () => {
+		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
+			const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile }))
+			try {
+				const steps = getDeploymentSteps()
+				const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+				if (oracleStep === undefined) throw new Error(`Expected ${profile.displayName} deploymentStatusOracle step`)
+				const trackedAddresses = steps.filter(step => step.id !== 'deploymentStatusOracle').map(step => step.address)
+				const expectedBytecode = encodeDeployData({
+					abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+					bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
+					args: [trackedAddresses],
+				})
+				const expectedAddress = getCreate2Address({
+					bytecode: expectedBytecode,
+					from: PROXY_DEPLOYER_ADDRESS,
+					salt: ZERO_SALT,
+				})
+
+				expect(oracleStep.address).toBe(expectedAddress)
+			} finally {
+				resetEnvironment()
+			}
+		}
+	})
+
+	test('explicit public profiles produce isolated addresses and init code when runtime uses the opposite network', async () => {
+		const captureDeployData = async (steps: ReturnType<typeof getDeploymentSteps>, stepId: 'priceOracleManagerAndOperatorQueuerFactory' | 'zoltar') => {
+			const step = steps.find(candidate => candidate.id === stepId)
+			if (step === undefined) throw new Error(`Expected ${stepId} deployment step`)
+			let deployData: `0x${string}` | undefined
+			const txHash = `0x${'9'.repeat(64)}` as Hash
+			const client = asWriteClient({
+				getCode: async () => '0x1234',
+				sendTransaction: async request => {
+					deployData = request.data
+					return txHash
+				},
+				waitForTransactionReceipt: async () => hashReceipt('success'),
+			})
+			await step.deploy(client)
+			if (deployData === undefined) throw new Error(`Expected ${stepId} deployment data`)
+			return deployData
+		}
+
+		for (const [requestedProfile, oppositeProfile] of [
+			[MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE],
+			[SEPOLIA_NETWORK_PROFILE, MAINNET_NETWORK_PROFILE],
+		] as const) {
+			const resetOppositeEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: oppositeProfile }))
+			const oppositeRuntimeSteps = getDeploymentSteps(requestedProfile)
+			resetOppositeEnvironment()
+
+			const resetAlignedEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: requestedProfile }))
+			const alignedRuntimeSteps = getDeploymentSteps(requestedProfile)
+			resetAlignedEnvironment()
+
+			expect(oppositeRuntimeSteps.map(step => [step.id, step.address])).toEqual(alignedRuntimeSteps.map(step => [step.id, step.address]))
+
+			const oracleStep = oppositeRuntimeSteps.find(step => step.id === 'deploymentStatusOracle')
+			if (oracleStep === undefined) throw new Error(`Expected ${requestedProfile.displayName} deploymentStatusOracle step`)
+			const trackedAddresses = oppositeRuntimeSteps.filter(step => step.id !== 'deploymentStatusOracle').map(step => step.address)
+			const expectedOracleBytecode = encodeDeployData({
+				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+				bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
+				args: [trackedAddresses],
+			})
+			expect(oracleStep.address).toBe(
+				getCreate2Address({
+					bytecode: expectedOracleBytecode,
+					from: PROXY_DEPLOYER_ADDRESS,
+					salt: ZERO_SALT,
+				}),
+			)
+
+			for (const stepId of ['zoltar', 'priceOracleManagerAndOperatorQueuerFactory'] as const) {
+				expect(await captureDeployData(oppositeRuntimeSteps, stepId)).toBe(await captureDeployData(alignedRuntimeSteps, stepId))
+			}
+		}
+	})
+
 	test('loadDeploymentStatusOracleSnapshot reads deployment mask when the status oracle is deployed', async () => {
 		const deploymentSteps = createDeploymentSteps()
 		const oracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')

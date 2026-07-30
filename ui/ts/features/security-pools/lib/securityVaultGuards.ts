@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
@@ -84,7 +84,7 @@ export function getVaultRequestPriceGuardMessage({
 	accountAddress,
 	hasLoadedSelectedPool,
 	bufferRequiredEthCost = true,
-	isMainnet,
+	isOnActiveAppChain,
 	isPriceValid,
 	pendingReportId,
 	requiredEthCost,
@@ -93,13 +93,13 @@ export function getVaultRequestPriceGuardMessage({
 	accountAddress: Address | undefined
 	hasLoadedSelectedPool: boolean
 	bufferRequiredEthCost?: boolean | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	isPriceValid: boolean | undefined
 	pendingReportId: bigint | undefined
 	requiredEthCost: bigint | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedSelectedPool) return 'Select a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
@@ -117,17 +117,17 @@ export function getVaultRequestPriceGuardMessage({
 export function getVaultExecutePendingOperationGuardMessage({
 	accountAddress,
 	hasLoadedOracleManager,
-	isMainnet,
+	isOnActiveAppChain,
 	isPriceValid,
 	resolvedPendingOperationId,
 }: {
 	accountAddress: Address | undefined
 	hasLoadedOracleManager: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	isPriceValid: boolean | undefined
 	resolvedPendingOperationId: bigint | undefined
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
 	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'

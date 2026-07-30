@@ -280,7 +280,7 @@ function createOpenOracleDisputeSubmission({
 
 function renderDisputeActionSection({
 	accountState = createAccountState(),
-	isMainnet = true,
+	isOnActiveAppChain = true,
 	openOracleForm = createOpenOracleForm(),
 	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
@@ -289,7 +289,7 @@ function renderDisputeActionSection({
 	}),
 }: {
 	accountState?: AccountState
-	isMainnet?: boolean
+	isOnActiveAppChain?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -304,7 +304,7 @@ function renderDisputeActionSection({
 		actionMode: 'dispute',
 		disputeSubmission,
 		isConnected: accountState.address !== undefined,
-		isMainnet,
+		isOnActiveAppChain,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
@@ -321,7 +321,7 @@ function renderDisputeActionSection({
 
 function renderSettleActionSection({
 	accountState = createAccountState(),
-	isMainnet = true,
+	isOnActiveAppChain = true,
 	openOracleForm = createOpenOracleForm(),
 	openOracleReportDetails = createOpenOracleReportDetails({
 		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
@@ -332,7 +332,7 @@ function renderSettleActionSection({
 	}),
 }: {
 	accountState?: AccountState
-	isMainnet?: boolean
+	isOnActiveAppChain?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
@@ -340,7 +340,7 @@ function renderSettleActionSection({
 		actionMode: 'settle',
 		disputeSubmission: undefined,
 		isConnected: accountState.address !== undefined,
-		isMainnet,
+		isOnActiveAppChain,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
@@ -671,13 +671,13 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('keeps create and selected-report actions disabled off mainnet with recovery guidance', () => {
-		const disputeSection = renderDisputeActionSection({ isMainnet: false })
+		const disputeSection = renderDisputeActionSection({ isOnActiveAppChain: false })
 		const disputeButton = findButton(disputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
 
-		const settleSection = renderSettleActionSection({ isMainnet: false })
+		const settleSection = renderSettleActionSection({ isOnActiveAppChain: false })
 		const settleButton = findButton(settleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
@@ -686,7 +686,7 @@ void describe('OpenOracleSection', () => {
 
 	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
 		const invalidDisputeSection = renderDisputeActionSection({
-			isMainnet: false,
+			isOnActiveAppChain: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
 		})
 		const disputeButton = findButton(invalidDisputeSection, 'Dispute & swap')
@@ -696,7 +696,7 @@ void describe('OpenOracleSection', () => {
 		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
 
 		const invalidSettleSection = renderSettleActionSection({
-			isMainnet: false,
+			isOnActiveAppChain: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
 			openOracleReportDetails: createOpenOracleReportDetails({
 				currentTime: 100n,

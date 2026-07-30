@@ -1,7 +1,7 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../../../types/contracts.js'
-import { getWalletConnectionMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletConnectionActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { sameAddress } from '../../../lib/address.js'
 import { assertNever } from '../../../lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
@@ -66,9 +66,9 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its atomic initial report is missing.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
-export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
-	const walletGuardState = getWalletConnectionMainnetGuardState({
-		isMainnet,
+export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppChain, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
+	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
+		isOnActiveAppChain,
 		walletConnected,
 		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle report.',
 	})

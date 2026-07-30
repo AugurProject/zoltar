@@ -57,7 +57,7 @@ pool, timestamp, numeraire, and decision horizon as the protected action.
 | A12 | Auction demand, indicative REP/ETH depth, expected discount, and bidder operating cost | Before and during every repair auction | Disclose likely under-repair and plan operation of the child at only migrated collateral plus accepted auction ETH |
 | A16, A26 | Inclusion delay, base fee, priority fee, reorg depth, block gas limit, and gas schedule against each immutable window and mandatory transition | Continuously while a deadline or mandatory transition is live | Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk |
 | A17, A18, A19 | Independent corrector availability, ownership and payoff independence, scenario-dependent WETH and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees/gas/impact, transaction budget, and settlement inclusion | Continuously while a report is pending or a cached price can authorize operations | Block or discourage new price-sensitive operations and disclose that an incorrect report may settle |
-| A21, A22 | Canonical external-token code and behavior; WETH redeemability; burn-sink status; recipient ETH/ERC-1155 compatibility | At deployment verification and before first use of a new recipient or integration | Reject the deployment or incompatible recipient; do not rely on redirected recovery |
+| A21, A22 | Mainnet external-token code and behavior; Sepolia reviewed Genesis REP/WETH runtime bytecode, constructor allocations, and wiring; WETH redeemability; burn-sink status; recipient ETH/ERC-1155 compatibility | At deployment verification and before first use of a new recipient or integration | Reject the deployment or incompatible recipient; do not rely on redirected recovery |
 | A20, A23, A24, A27, A28 | Pinned compiler and toolchain identity; reproducible-build output, reviewed bytecode hashes, release manifest, deployed runtime code and wiring; independent reorg-aware RPC/event replay; hash and CREATE2 verification; signer, typed-data domain, nonce, witness, session, and approval inventory | At release, on every environment or account change, and continuously for indexers | Stop signing or operating, reject an unverifiable deployment, revoke compromised authority where possible, and re-establish canonical state from independent sources |
 | A15 | Immutable question ID and metadata, evidence plan, and pool relevance | Before pool selection | Reject or warn on the selection; do not represent an admitted question as relevant or resolvable |
 | A25 | Deployed immutable values and every documented economic, timing, integer-width, and gas relationship | Before deployment and after any change in external gas or market conditions used by the model | Treat the immutable deployment as unsupported; there is no administrative parameter repair |
@@ -79,9 +79,12 @@ This is the protocol's
 
 Before tagging a launch release, run `bun run ui:build:prod` from a fresh
 dependency install and run `bun run check:mainnet-deployment`. This command
-warns instead of failing when the generated deployment manifest is stale.
-Treat any stale-manifest warning as a release blocker until the manifest is
-intentionally refreshed with `bun ./scripts/check-mainnet-deployment.mts --write`.
+fails when either generated deployment manifest is stale. Refresh and review
+both manifests with `bun ./scripts/check-mainnet-deployment.mts --write` before
+rerunning the check.
+That command writes and checks both
+[`mainnet-deployment-addresses.json`](./mainnet-deployment-addresses.json) and
+[`sepolia-deployment-addresses.json`](./sepolia-deployment-addresses.json).
 Use the pinned compiler configuration in
 [`solidity/ts/compile.ts`](../solidity/ts/compile.ts), the exact tool versions in
 [`solidity/package.json`](../solidity/package.json), and the imported OpenOracle
@@ -95,13 +98,41 @@ succeed for that tag, and the resulting GitHub release must record the IPFS hash
 emitted from the published artifact.
 
 Production UI release notes should state that `?simulate=1` is a browser-local
-sandbox and that quote-dependent actions depend on live RPC data plus available
-Uniswap liquidity. RPC and client integrity remain covered by
+sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus
+available network-local Uniswap liquidity, while simulation uses its configured
+mock where supported. The
+[OpenOracle integration guide](./open-oracle-integration.html#openoracle-role)
+owns the quote-source order and network-address details. RPC and client
+integrity remain covered by
 [A24](./security-model.html#assumption-a24), while quote availability and
 representativeness are official-client limitations rather than protocol
 security assumptions. Stale, unavailable, or unsupported quotes are production
 blockers for the affected client action, not inputs that should be replaced
 with simulation prices.
+
+## Genesis REP Deployment
+
+Sepolia genesis REP allocations are canonical source data in
+[`shared/ts/sepoliaRepAllocations.ts`](../shared/ts/sepoliaRepAllocations.ts).
+The listed holders and 10 million REP amount per holder are the intended
+starting allocations for this release. Each amount string is denominated in REP
+and `parseUnits(value, 18)` converts it once into atomic units. Review both the
+REP input values and the computed bigint total before deployment.
+The `GenesisReputationToken` constructor requires at least one allocation,
+matching holder and balance array lengths, unique nonzero holders, and nonzero
+balances. It emits the standard ERC-20 mint `Transfer` event once for each
+allocation.
+
+The sum of the constructor balances is immutable and is returned by
+`getTotalTheoreticalSupply()`. There is no administrator, post-deployment mint,
+allocation correction, or recovery entrypoint. An incorrect allocation must be
+fixed in the source list before deployment and the deterministic manifests must
+then be regenerated. Because constructor arguments are part of CREATE2 init
+code, any allocation change produces a new genesis REP address and new
+addresses for every deployment step whose constructor wiring depends on it.
+Never continue a deployment from a manifest generated for a different
+allocation list. A future release that intentionally changes starting holders
+must follow the same source review and full-manifest regeneration procedure.
 
 ## Security Pool Guardrails
 
@@ -196,7 +227,7 @@ Security assumptions:
 [A09 truthful-branch preference](./security-model.html#assumption-a09),
 [A11 practical migration](./security-model.html#assumption-a11),
 [A05 lineage access value](./security-model.html#assumption-a05),
-[A21 external token behavior](./security-model.html#assumption-a21),
+[A21 genesis REP and WETH behavior](./security-model.html#assumption-a21),
 [A06 lifecycle executors](./security-model.html#assumption-a06),
 [A20 chain-data availability](./security-model.html#assumption-a20).
 
@@ -307,7 +338,7 @@ Deployment helpers are not interchangeable with canonical protocol discovery. Se
 | Deployment tracking | [`DeploymentStatusOracle.sol`](../solidity/contracts/DeploymentStatusOracle.sol) | Reports one code-presence bit per configured deployment-step address. See [Deployment Status Oracle](./deployment-status.html). |
 | Carry proof hashing | [`MerkleMountainRange.sol`](../solidity/contracts/peripherals/MerkleMountainRange.sol), [`EscalationGameProofVerifier.sol`](../solidity/contracts/peripherals/EscalationGameProofVerifier.sol), [`EscalationGameTypes.sol`](../solidity/contracts/peripherals/EscalationGameTypes.sol) | Defines the carried-deposit leaf shape, the 64-peak limit, proof-length rules, and nullifier-root replay protection. See [Merkle Mountain Range carry proofs](./merkle-mountain-range.html). |
 | Escalation game composition | [`EscalationGame.sol`](../solidity/contracts/peripherals/EscalationGame.sol), [`EscalationGameCalculations.sol`](../solidity/contracts/peripherals/EscalationGameCalculations.sol), [`EscalationGameCarry.sol`](../solidity/contracts/peripherals/EscalationGameCarry.sol), [`EscalationGameDepositDelegate.sol`](../solidity/contracts/peripherals/EscalationGameDepositDelegate.sol), [`EscalationGameEscrow.sol`](../solidity/contracts/peripherals/EscalationGameEscrow.sol), [`EscalationGameSettlement.sol`](../solidity/contracts/peripherals/EscalationGameSettlement.sol), [`EscalationGameState.sol`](../solidity/contracts/peripherals/EscalationGameState.sol), [`EscalationGameStorage.sol`](../solidity/contracts/peripherals/EscalationGameStorage.sol) | Splits the game across immutable ownership and storage, deposit delegation, calculations, continuation proofs, escrow, and settlement without exposing those internal modules as separate canonical games. |
-| ERC-20 support | [`ERC20.sol`](../solidity/contracts/ERC20.sol), [`IERC20.sol`](../solidity/contracts/IERC20.sol), [`IERC20Metadata.sol`](../solidity/contracts/IERC20Metadata.sol), [`Context.sol`](../solidity/contracts/Context.sol), [`SafeERC20Ops.sol`](../solidity/contracts/SafeERC20Ops.sol), [`ReputationToken.sol`](../solidity/contracts/ReputationToken.sol) | Base REP token implementation, interfaces, metadata, execution context, safe transfer wrappers, and the inherited `transfer`, `approve`, and `transferFrom` entrypoints. |
+| ERC-20 support | [`ERC20.sol`](../solidity/contracts/ERC20.sol), [`IERC20.sol`](../solidity/contracts/IERC20.sol), [`IERC20Metadata.sol`](../solidity/contracts/IERC20Metadata.sol), [`Context.sol`](../solidity/contracts/Context.sol), [`SafeERC20Ops.sol`](../solidity/contracts/SafeERC20Ops.sol), [`GenesisReputationToken.sol`](../solidity/contracts/GenesisReputationToken.sol), [`ReputationToken.sol`](../solidity/contracts/ReputationToken.sol) | Base REP token implementation, interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited `transfer`, `approve`, and `transferFrom` entrypoints. |
 | ERC-1155 and token ids | [`ERC1155.sol`](../solidity/contracts/peripherals/tokens/ERC1155.sol), [`ShareToken.sol`](../solidity/contracts/peripherals/tokens/ShareToken.sol), [`TokenId.sol`](../solidity/contracts/peripherals/tokens/TokenId.sol), [`IERC1155.sol`](../solidity/contracts/peripherals/interfaces/IERC1155.sol), [`IERC1155Receiver.sol`](../solidity/contracts/peripherals/interfaces/IERC1155Receiver.sol), [`IERC165.sol`](../solidity/contracts/peripherals/interfaces/IERC165.sol), [`IShareToken.sol`](../solidity/contracts/peripherals/interfaces/IShareToken.sol) | Outcome-share token plumbing, interface support, token-id encoding, inherited `setApprovalForAll`, and both single and batch `safeTransferFrom` forms. |
 | Factories and deployers | [`EscalationGameFactory.sol`](../solidity/contracts/peripherals/factories/EscalationGameFactory.sol), [`SecurityPoolFactory.sol`](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol), [`SecurityPoolDeployer.sol`](../solidity/contracts/peripherals/factories/SecurityPoolDeployer.sol), [`ShareTokenFactory.sol`](../solidity/contracts/peripherals/factories/ShareTokenFactory.sol), [`UniformPriceDualCapBatchAuctionFactory.sol`](../solidity/contracts/peripherals/factories/UniformPriceDualCapBatchAuctionFactory.sol), [`PriceOracleManagerAndOperatorQueuerFactory.sol`](../solidity/contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol) | Deterministic deployment entrypoints for pool, share-token, oracle-coordinator, escalation-game, and auction instances. |
 | Migration delegates and storage modules | [`SecurityPoolMigrationProxy.sol`](../solidity/contracts/peripherals/SecurityPoolMigrationProxy.sol), [`SecurityPoolForker.sol`](../solidity/contracts/peripherals/SecurityPoolForker.sol), [`SecurityPoolForkerAuctionSettlementBase.sol`](../solidity/contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol), [`SecurityPoolForkerBase.sol`](../solidity/contracts/peripherals/SecurityPoolForkerBase.sol), [`SecurityPoolForkerStorage.sol`](../solidity/contracts/peripherals/SecurityPoolForkerStorage.sol), [`SecurityPoolForkerTypes.sol`](../solidity/contracts/peripherals/SecurityPoolForkerTypes.sol), [`SecurityPoolForkerVaultMigrationBase.sol`](../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol), [`SecurityPoolForkerVaultMigrationDelegate.sol`](../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol), [`EscalationGameForker.sol`](../solidity/contracts/peripherals/EscalationGameForker.sol), [`SecurityPoolEventEmitter.sol`](../solidity/contracts/peripherals/SecurityPoolEventEmitter.sol) | Split fork-time state, truth-auction settlement, vault and unresolved-escalation migration execution, event encoding, and stable proxy identity used while routing parent state into child pools. |

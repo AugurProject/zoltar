@@ -127,9 +127,9 @@ export function getUniversePresentation(state: LoadableValueState) {
 	}
 }
 
-export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWallet, isMainnet, isSupportedChain }: { accountAddress: Address | undefined; hasInjectedWallet?: boolean; hasWallet?: boolean; isMainnet?: boolean; isSupportedChain?: boolean }) {
+export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWallet, isOnActiveAppChain, isSupportedChain }: { accountAddress: Address | undefined; hasInjectedWallet?: boolean; hasWallet?: boolean; isOnActiveAppChain?: boolean; isSupportedChain?: boolean }) {
 	const walletAvailable = hasWallet ?? hasInjectedWallet ?? true
-	const supportedChain = isSupportedChain ?? isMainnet ?? true
+	const supportedChain = isSupportedChain ?? isOnActiveAppChain ?? true
 
 	if (!walletAvailable)
 		return createPresentation('wallet_disconnected', {
