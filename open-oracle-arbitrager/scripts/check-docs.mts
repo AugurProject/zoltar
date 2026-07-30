@@ -28,7 +28,7 @@ const assertLocalLinksResolve = async (documentPath: string, contents: string) =
 	for (const match of contents.matchAll(/href="([^"]+)"/g)) {
 		const href = match[1]
 		assert.ok(href !== undefined)
-		if (href === '/' || /^[a-z]+:/i.test(href)) continue
+		if (href.startsWith('/') || /^[a-z]+:/i.test(href)) continue
 
 		const [relativePath = '', fragment] = href.split('#', 2)
 		const targetPath = relativePath === '' ? documentPath : path.resolve(path.dirname(documentPath), relativePath)

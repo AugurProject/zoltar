@@ -34,6 +34,51 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
+function markdownHeadingId(value: string) {
+	return value
+		.trim()
+		.toLowerCase()
+		.replace(/[`']/g, '')
+		.replace(/[^a-z0-9 -]/g, '')
+		.replace(/\s+/g, '-')
+}
+
+function renderReadme(markdown: string) {
+	const headingIds = markdown
+		.split('\n')
+		.filter(line => /^#{1,6} /.test(line))
+		.map(line => markdownHeadingId(line.replace(/^#{1,6} /, '')))
+	let headingIndex = 0
+	const body = Bun.markdown
+		.html(markdown)
+		.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_match, ...captures) => {
+			const [level, contents] = captures
+			if (typeof level !== 'string' || typeof contents !== 'string') throw new Error('README heading render was malformed')
+			const id = headingIds[headingIndex]
+			if (id === undefined) throw new Error('README heading render count did not match its Markdown source')
+			headingIndex += 1
+			return `<h${level} id="${id}">${contents}</h${level}>`
+		})
+		.replaceAll('href="./docs/operator-guide.html', 'href="/documentation')
+		.replaceAll('href="./docs/market-fixture.html', 'href="/market-fixture.html')
+	if (headingIndex !== headingIds.length) throw new Error('README heading render count did not match its Markdown source')
+	return `<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>OpenOracle Arbitrager Reference</title>
+		<link rel="stylesheet" href="/shared.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header><h1>OpenOracle Arbitrager Reference</h1></header>
+			<section>${body}</section>
+		</main>
+	</body>
+</html>`
+}
+
 function sameOrigin(request: Request, authority: string) {
 	const origin = request.headers.get('origin')
 	return origin !== null && origin === `http://${authority}`
@@ -61,6 +106,20 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'GET' && url.pathname === '/') return new Response(Bun.file(join(directory, 'index.html')), { headers: securityHeaders('text/html; charset=utf-8') })
 			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
 				return new Response(Bun.file(join(documentationDirectory, 'operator-guide.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/documentation/reference') {
+				return new Response(renderReadme(await Bun.file(join(projectDirectory, 'README.md')).text()), {
+					headers: securityHeaders('text/html; charset=utf-8'),
+				})
+			}
+			if (request.method === 'GET' && url.pathname === '/market-fixture.html') {
+				return new Response(Bun.file(join(documentationDirectory, 'market-fixture.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/scripts/check-market-fixture.mts') {
+				return new Response(Bun.file(join(projectDirectory, 'scripts', 'check-market-fixture.mts')), { headers: securityHeaders('text/plain; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/src/core/strategy.ts') {
+				return new Response(Bun.file(join(projectDirectory, 'src', 'core', 'strategy.ts')), { headers: securityHeaders('text/plain; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
