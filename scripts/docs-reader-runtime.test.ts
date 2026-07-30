@@ -23,7 +23,7 @@ async function loadReader(narrow: boolean, fetchDocument: FetchDocument = async 
 		previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	}
 
-	const environment = installDomEnvironment('http://localhost/documentation.html')
+	const environment = installDomEnvironment('http://localhost/docs/documentation.html')
 	const windowValues = environment.window as unknown as Record<string, unknown>
 
 	for (const key of ['HTMLDetailsElement', 'HTMLAnchorElement', 'HTMLIFrameElement']) {
@@ -43,8 +43,10 @@ async function loadReader(narrow: boolean, fetchDocument: FetchDocument = async 
 	environment.window.HTMLElement.prototype.scrollIntoView = () => undefined
 
 	const shell = await Bun.file('docs/documentation.html').text()
+	const generatedMarkdown = await Bun.file('docs/assets/js/docsReaderMarkdown.js').text()
 	const runtime = await Bun.file('docs/assets/js/docsReader.js').text()
 	document.write(shell)
+	Function(generatedMarkdown)()
 	Function(runtime)()
 	await Bun.sleep(25)
 
@@ -182,6 +184,19 @@ test('links inside reader documents preserve grouped same-directory and cross-di
 		expect(visibleDocumentPaths()).toEqual(['protocol-design/liquidation.html'])
 		expect(location.hash).toBe('#doc-protocol-design-liquidation--model')
 		expect(document.querySelectorAll('.reader-document-frame[data-reader-source-ready="true"]')).toHaveLength(1)
+	} finally {
+		reader.cleanup()
+	}
+})
+
+test('Markdown reader documents load shared assets from the documentation root', async () => {
+	const reader = await loadReader(false)
+	try {
+		documentLink('safety-operations/operator-reference.md').click()
+		await waitForHistory()
+		const source = document.querySelector<HTMLIFrameElement>('.reader-chapter:not([hidden]) .reader-document-frame')?.getAttribute('srcdoc')
+		expect(source).toContain('href="http://localhost/docs/assets/css/shared-docs.css"')
+		expect(source).toContain('src="http://localhost/docs/assets/js/responsiveDocs.js"')
 	} finally {
 		reader.cleanup()
 	}

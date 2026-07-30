@@ -75,9 +75,9 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 
 function validateResponsiveRuntime(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	if (parsedDocument.relativePath === 'docs/documentation.html') return
-	const runtimeScripts = parsedDocument.document.querySelectorAll('script[src="../assets/js/responsiveDocs.js"]')
+	const runtimeScripts = elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/responsiveDocs.js')
 	if (runtimeScripts.length !== 1) {
-		addFailure(parsedDocument, 'must load ../assets/js/responsiveDocs.js exactly once for responsive equations and overflow cues', failures)
+		addFailure(parsedDocument, 'must load docs/assets/js/responsiveDocs.js exactly once for responsive equations and overflow cues', failures)
 	}
 }
 
@@ -171,7 +171,7 @@ function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failure
 			addFailure(parsedDocument, `${describeElement(details)} needs a stable id for direct links and shared scenarios`, failures)
 		}
 	}
-	if (interactiveDetails.length > 0 && parsedDocument.document.querySelector('script[src="../assets/js/interactiveTools.js"]') === null) {
+	if (interactiveDetails.length > 0 && elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/interactiveTools.js').length === 0) {
 		addFailure(parsedDocument, 'interactive calculators must load interactiveTools.js for presets, reset, sharing, and live results', failures)
 	}
 
@@ -184,7 +184,7 @@ function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failure
 		}
 	}
 	if (invariantEntries.length > 0) {
-		if (parsedDocument.document.querySelector('script[src="../assets/js/invariantExplorer.js"]') === null) {
+		if (elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/invariantExplorer.js').length === 0) {
 			addFailure(parsedDocument, 'invariant catalog must load invariantExplorer.js', failures)
 		}
 	}
@@ -241,9 +241,9 @@ function validatePlotMounts(parsedDocument: ParsedHtmlDocument, failures: Valida
 	if (chartMounts.length === 0) {
 		return
 	}
-	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="../assets/js/chartRuntime.js"]'))
+	const runtimeScripts = elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/chartRuntime.js')
 	if (runtimeScripts.length !== 1) {
-		addFailure(parsedDocument, `must load ../assets/js/chartRuntime.js exactly once when Plot mounts are present`, failures)
+		addFailure(parsedDocument, `must load docs/assets/js/chartRuntime.js exactly once when Plot mounts are present`, failures)
 	}
 
 	for (const chartMount of chartMounts) {
@@ -603,6 +603,18 @@ function formatUnknownError(error: unknown): string {
 		return error.message
 	}
 	return String(error)
+}
+
+export function resolveDocumentReference(filePath: string, reference: string): string {
+	return path.resolve(path.dirname(filePath), reference)
+}
+
+function elementsReferencingAsset(parsedDocument: ParsedHtmlDocument, selector: string, attribute: string, docsRelativeAssetPath: string): Element[] {
+	const expectedPath = path.join(docsDirectoryPath, docsRelativeAssetPath)
+	return Array.from(parsedDocument.document.querySelectorAll(selector)).filter(element => {
+		const reference = element.getAttribute(attribute)
+		return reference !== null && resolveDocumentReference(parsedDocument.filePath, reference) === expectedPath
+	})
 }
 
 function relativeToRepository(filePath: string): string {

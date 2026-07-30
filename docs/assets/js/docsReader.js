@@ -131,6 +131,10 @@ function sourceUrl(path) {
 	return new URL(path, window.location.href).href
 }
 
+function docsAssetUrl(path) {
+	return new URL(`assets/${path}`, window.location.href).href
+}
+
 function decodeFragment(fragment) {
 	try {
 		return decodeURIComponent(fragment)
@@ -239,8 +243,8 @@ function markdownFrameSource(path, title) {
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<base href="${sourceUrl(path)}">
 				<title>${title}</title>
-				<link rel="stylesheet" href="../assets/css/shared-docs.css">
-				<script src="../assets/js/responsiveDocs.js"></script>
+				<link rel="stylesheet" href="${docsAssetUrl('css/shared-docs.css')}">
+				<script src="${docsAssetUrl('js/responsiveDocs.js')}"></script>
 			</head>
 			<body class="doc-openoracle markdown-reference reader-embedded">
 				<main><article>${content}</article></main>
