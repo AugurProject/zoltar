@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="The complete Statoblast protocol documentation in one searchable, continuous reader."
+			content="Browse the complete Statoblast protocol documentation one document at a time."
 		/>
 		<title>Statoblast documentation</title>
 		<link rel="stylesheet" href="./docsReader.css" />
@@ -24,37 +24,30 @@
 		<div class="reader-shell">
 			<aside class="reader-sidebar" aria-label="Documentation navigation">
 				<div class="reader-sidebar-inner">
-					<label class="reader-search">
-						<span>Search documentation</span>
-						<input
-							type="search"
-							placeholder="Try “migration” or “oracle”"
-							autocomplete="off"
-							data-doc-search
-						/>
-						<kbd aria-hidden="true">/</kbd>
-					</label>
-					<p class="reader-search-status" aria-live="polite" data-search-status>
-						All 14 documents
-					</p>
+					<button
+						class="reader-sidebar-toggle"
+						type="button"
+						aria-label="Collapse menu"
+						aria-controls="reader-navigation-panel"
+						aria-expanded="true"
+						data-sidebar-toggle
+					>
+						<span class="reader-sidebar-toggle-icon" aria-hidden="true"></span>
+						<span data-sidebar-toggle-label>Collapse menu</span>
+					</button>
 
-					<nav data-reader-navigation></nav>
+					<div id="reader-navigation-panel" data-sidebar-panel>
+						<nav data-reader-navigation></nav>
+					</div>
 				</div>
 			</aside>
 
 			<main id="reader-content" class="reader-content" tabindex="-1">
-				<div class="reader-empty" hidden data-reader-empty>
-					<p class="reader-kicker">No matches</p>
-					<h2>Try a broader search.</h2>
-					<p>Search checks document titles, summaries, and the full rendered text.</p>
-					<button type="button" data-clear-search>Clear search</button>
-				</div>
-
 				<div data-reader-documents></div>
 
 				<noscript>
 					<section class="reader-noscript">
-						<h2>JavaScript is required for the continuous reader.</h2>
+						<h2>JavaScript is required for the documentation reader.</h2>
 						<p>You can still open every source document directly:</p>
 						<ul>
 							<li><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></li>

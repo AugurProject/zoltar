@@ -94,19 +94,18 @@ const documentGroups = [
 const documents = documentGroups.flatMap(group => group.documents)
 const documentsContainer = document.querySelector('[data-reader-documents]')
 const navigation = document.querySelector('[data-reader-navigation]')
-const searchInput = document.querySelector('[data-doc-search]')
-const searchStatus = document.querySelector('[data-search-status]')
-const emptyState = document.querySelector('[data-reader-empty]')
-const clearSearchButton = document.querySelector('[data-clear-search]')
 const progress = document.querySelector('[data-reading-progress]')
+const readerShell = document.querySelector('.reader-shell')
+const sidebarToggle = document.querySelector('[data-sidebar-toggle]')
+const sidebarToggleLabel = document.querySelector('[data-sidebar-toggle-label]')
 const chapterByPath = new Map()
 const frameByPath = new Map()
 const navigationDocumentByPath = new Map()
 const navigationSectionsByPath = new Map()
-const searchableTextByPath = new Map()
 const pendingFragmentByPath = new Map()
 const indexedPaths = new Set()
 const failedPaths = new Set()
+let activePath = documents[0]?.path
 
 window.history.scrollRestoration = 'manual'
 
@@ -265,14 +264,7 @@ function createChapter(documentEntry, index, groupLabel) {
 	description.textContent = documentEntry.description
 	heading.append(category, title, description)
 
-	const sourceLink = document.createElement('a')
-	sourceLink.className = 'reader-source-link'
-	sourceLink.href = `./${documentEntry.path}`
-	sourceLink.textContent = 'Open source ↗'
-	sourceLink.target = '_blank'
-	sourceLink.rel = 'noreferrer'
-
-	header.append(number, heading, sourceLink)
+	header.append(number, heading)
 
 	const frameWrap = document.createElement('div')
 	frameWrap.className = 'reader-frame-wrap'
@@ -291,7 +283,6 @@ function createChapter(documentEntry, index, groupLabel) {
 	chapter.append(header, frameWrap)
 	chapterByPath.set(documentEntry.path, chapter)
 	frameByPath.set(documentEntry.path, frame)
-	searchableTextByPath.set(documentEntry.path, `${documentEntry.title} ${documentEntry.description} ${groupLabel}`.toLowerCase())
 
 	frame.addEventListener('load', () => {
 		if (frame.dataset.readerSourceReady !== 'true') return
@@ -310,7 +301,7 @@ async function requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus
 	frame.hidden = false
 	frameWrap.querySelector('.reader-frame-error')?.remove()
 	failedPaths.delete(documentEntry.path)
-	applySearch()
+	updateReaderState()
 
 	if (documentEntry.path.endsWith('.md')) {
 		const source = markdownFrameSource(documentEntry.path, documentEntry.title)
@@ -347,7 +338,7 @@ function showFrameError(documentEntry, frame, frameWrap, frameStatus) {
 	const title = document.createElement('strong')
 	title.textContent = `${documentEntry.title} could not be loaded`
 	const guidance = document.createElement('p')
-	guidance.textContent = 'Check your connection and try this document again. The direct source link remains available above.'
+	guidance.textContent = 'Check your connection and try this document again.'
 	const retry = document.createElement('button')
 	retry.type = 'button'
 	retry.textContent = 'Retry document'
@@ -356,7 +347,7 @@ function showFrameError(documentEntry, frame, frameWrap, frameStatus) {
 	})
 	error.append(title, guidance, retry)
 	frameWrap.append(error)
-	applySearch()
+	updateReaderState()
 }
 
 function createChapters() {
@@ -447,16 +438,15 @@ function scrollToFrameFragment(path, fragment) {
 function navigateToDocument(path, fragment = '', updateHistory = true) {
 	const chapter = chapterByPath.get(path)
 	if (chapter === undefined) return
-	if (chapter.hidden) {
-		if (searchInput instanceof HTMLInputElement) searchInput.value = ''
-		applySearch()
-	}
+	const previousPath = activePath
+	activePath = path
+	updateReaderState()
 
 	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
 	if (updateHistory) {
 		const currentState = typeof window.history.state === 'object' && window.history.state !== null ? window.history.state : {}
-		window.history.replaceState({ ...currentState, readerScrollY: window.scrollY }, '', window.location.href)
-		window.history.pushState({}, '', `#${readerHash}`)
+		window.history.replaceState({ ...currentState, readerDocumentPath: previousPath, readerScrollY: window.scrollY }, '', window.location.href)
+		window.history.pushState({ readerDocumentPath: path }, '', `#${readerHash}`)
 	}
 	pendingFragmentByPath.clear()
 	if (!scrollToFrameFragment(path, fragment)) {
@@ -489,7 +479,6 @@ function initializeFrame(path, frame, frameWrap, frameStatus) {
 	frameStatus.hidden = true
 	failedPaths.delete(path)
 	indexedPaths.add(path)
-	searchableTextByPath.set(path, `${searchableTextByPath.get(path) ?? ''} ${frameDocument.body?.textContent ?? ''}`.toLowerCase())
 	populateNavigationSections(path, frameDocument)
 
 	frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
@@ -498,70 +487,28 @@ function initializeFrame(path, frame, frameWrap, frameStatus) {
 		observer.observe(frameDocument.body)
 	}
 
-	applySearch()
+	updateReaderState()
 }
 
-function applySearch() {
-	if (!(searchInput instanceof HTMLInputElement)) return
-	const query = searchInput.value.trim().toLowerCase()
-	let matches = 0
-	let readyMatches = 0
-	let unavailableMatches = 0
+function updateReaderState() {
 	const pendingCount = documents.length - indexedPaths.size - failedPaths.size
 
-	for (const documentEntry of documents) {
-		const chapter = chapterByPath.get(documentEntry.path)
-		const navigationDocument = navigationDocumentByPath.get(documentEntry.path)
-		if (chapter === undefined) continue
-		const matchesQuery = query.length === 0 || searchableTextByPath.get(documentEntry.path)?.includes(query)
-		chapter.hidden = !matchesQuery
-		if (navigationDocument !== undefined) navigationDocument.hidden = !matchesQuery
-		if (!matchesQuery) continue
-
-		matches += 1
-		if (indexedPaths.has(documentEntry.path)) {
-			readyMatches += 1
-		} else if (failedPaths.has(documentEntry.path)) {
-			unavailableMatches += 1
-		}
+	for (const [path, chapter] of chapterByPath) {
+		chapter.hidden = path !== activePath
 	}
-
-	if (searchStatus instanceof HTMLElement) {
-		let statusText = `All ${documents.length} documents`
-		if (query.length === 0) {
-			if (pendingCount > 0) {
-				statusText = `Indexing ${indexedPaths.size} of ${documents.length} documents…`
-			} else if (failedPaths.size > 0) {
-				statusText = `${indexedPaths.size} documents ready; ${failedPaths.size} unavailable`
-			}
-		} else if (pendingCount > 0) {
-			statusText = `${matches} ${matches === 1 ? 'match' : 'matches'} so far; indexing ${pendingCount} more`
-		} else if (failedPaths.size > 0) {
-			if (readyMatches > 0 && unavailableMatches > 0) {
-				statusText = `${readyMatches} ${readyMatches === 1 ? 'match' : 'matches'} in ready documents; ${unavailableMatches} in unavailable documents`
-			} else if (readyMatches > 0) {
-				statusText = `${readyMatches} ${readyMatches === 1 ? 'match' : 'matches'} in ${indexedPaths.size} ready documents; ${failedPaths.size} unavailable`
-			} else if (unavailableMatches > 0) {
-				statusText = `${unavailableMatches} metadata ${unavailableMatches === 1 ? 'match' : 'matches'} in unavailable documents; no ready-document matches`
-			} else {
-				statusText = `No matches in ${indexedPaths.size} ready documents; ${failedPaths.size} unavailable`
-			}
+	for (const [path, navigationDocument] of navigationDocumentByPath) {
+		const link = navigationDocument.querySelector('.reader-nav-document-link')
+		if (!(link instanceof HTMLAnchorElement)) continue
+		if (path === activePath) {
+			link.setAttribute('aria-current', 'page')
+			const group = link.closest('.reader-nav-group')
+			if (group instanceof HTMLDetailsElement) group.open = true
 		} else {
-			statusText = `${matches} ${matches === 1 ? 'document' : 'documents'} found`
+			link.removeAttribute('aria-current')
 		}
-		searchStatus.textContent = statusText
 	}
 	if (documentsContainer instanceof HTMLElement) {
 		documentsContainer.setAttribute('aria-busy', pendingCount > 0 ? 'true' : 'false')
-	}
-	if (emptyState instanceof HTMLElement) {
-		emptyState.hidden = matches !== 0 || pendingCount > 0 || failedPaths.size > 0
-	}
-	for (const group of navigation?.querySelectorAll('.reader-nav-group') ?? []) {
-		if (!(group instanceof HTMLDetailsElement)) continue
-		const hasVisibleDocument = Array.from(group.querySelectorAll('.reader-nav-document')).some(documentElement => !documentElement.hasAttribute('hidden'))
-		group.hidden = !hasVisibleDocument
-		if (query.length > 0 && hasVisibleDocument) group.open = true
 	}
 	if (pendingCount === 0) {
 		for (const [path, fragment] of pendingFragmentByPath) {
@@ -581,27 +528,15 @@ function updateProgress() {
 	progress.style.width = `${percentage}%`
 }
 
-function observeChapters() {
-	const links = Array.from(document.querySelectorAll('.reader-nav-document-link'))
-	const observer = new IntersectionObserver(
-		entries => {
-			const visibleEntry = entries.filter(entry => entry.isIntersecting).sort((left, right) => Math.abs(left.boundingClientRect.top) - Math.abs(right.boundingClientRect.top))[0]
-			if (visibleEntry === undefined) return
-			const path = visibleEntry.target.getAttribute('data-document-path')
-			for (const link of links) {
-				const isCurrent = link.getAttribute('data-document-path') === path ? 'location' : undefined
-				if (isCurrent === undefined) link.removeAttribute('aria-current')
-				else {
-					link.setAttribute('aria-current', isCurrent)
-					const group = link.closest('.reader-nav-group')
-					if (group instanceof HTMLDetailsElement) group.open = true
-				}
-			}
-		},
-		{ rootMargin: '-10% 0px -78% 0px' },
-	)
-
-	for (const chapter of chapterByPath.values()) observer.observe(chapter)
+function setSidebarCollapsed(collapsed) {
+	if (!(readerShell instanceof HTMLElement) || !(sidebarToggle instanceof HTMLButtonElement)) return
+	readerShell.dataset.sidebarCollapsed = String(collapsed)
+	sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+	sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand menu' : 'Collapse menu')
+	sidebarToggle.title = collapsed ? 'Expand menu' : ''
+	if (sidebarToggleLabel instanceof HTMLElement) {
+		sidebarToggleLabel.textContent = collapsed ? 'Expand menu' : 'Collapse menu'
+	}
 }
 
 function restoreHash() {
@@ -624,9 +559,11 @@ function restoreHash() {
 
 createNavigation()
 createChapters()
-observeChapters()
+window.requestAnimationFrame(() => {
+	setSidebarCollapsed(window.matchMedia('(max-width: 980px)').matches)
+})
 restoreHash()
-applySearch()
+updateReaderState()
 updateProgress()
 
 navigation?.addEventListener('click', event => {
@@ -639,23 +576,17 @@ navigation?.addEventListener('click', event => {
 	event.preventDefault()
 	navigateToDocument(path, link.dataset.documentFragment ?? '')
 })
-searchInput?.addEventListener('input', applySearch)
-clearSearchButton?.addEventListener('click', () => {
-	if (!(searchInput instanceof HTMLInputElement)) return
-	searchInput.value = ''
-	applySearch()
-	searchInput.focus()
-})
-document.addEventListener('keydown', event => {
-	if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
-	if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
-	event.preventDefault()
-	searchInput?.focus()
+sidebarToggle?.addEventListener('click', () => {
+	const collapsed = readerShell instanceof HTMLElement && readerShell.dataset.sidebarCollapsed === 'true'
+	setSidebarCollapsed(!collapsed)
 })
 window.addEventListener('scroll', updateProgress, { passive: true })
 window.addEventListener('popstate', event => {
 	if (restoreHash()) return
 	pendingFragmentByPath.clear()
+	const savedDocumentPath = event.state?.readerDocumentPath
+	const restoredPath = typeof savedDocumentPath === 'string' && chapterByPath.has(savedDocumentPath) ? savedDocumentPath : documents[0]?.path
+	if (restoredPath !== undefined) navigateToDocument(restoredPath, '', false)
 	const savedScrollY = event.state?.readerScrollY
 	window.scrollTo({ behavior: 'instant', top: typeof savedScrollY === 'number' ? savedScrollY : 0 })
 })

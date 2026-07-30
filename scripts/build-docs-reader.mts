@@ -27,7 +27,6 @@ async function collectReaderDocumentPaths(): Promise<string[]> {
 	assert.deepEqual(documentPaths.toSorted(), sourceDocumentPaths, 'docs/docsReader.js reader documents must exactly match the top-level documentation corpus')
 
 	const page = await readFile(path.join(repositoryRoot, 'docs/documentation.html'), 'utf8')
-	const initialStatusCount = Number(/All (\d+) documents/.exec(page)?.[1])
 	const pageWindow = new Window()
 	pageWindow.document.write(page)
 	pageWindow.document.close()
@@ -38,7 +37,6 @@ async function collectReaderDocumentPaths(): Promise<string[]> {
 	assert.deepEqual(pageTitles, ['Statoblast documentation'], 'documentation must have one exact Statoblast browser title')
 	assert.equal(browserTitle, 'Statoblast documentation', 'documentation browser title must render exactly as Statoblast documentation')
 	assert.deepEqual(pageHeadings, ['Statoblast documentation'], 'documentation must have one exact outer Statoblast heading')
-	assert.equal(initialStatusCount, documentPaths.length, 'documentation initial search status must match the reader corpus')
 
 	const noscript = /<noscript>([\s\S]+)<\/noscript>/.exec(page)?.[1]
 	assert(noscript !== undefined, 'docs/documentation.html must provide a no-JavaScript document list')
