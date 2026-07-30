@@ -47,43 +47,45 @@
 					<code data-fixture-field="gasCostWeth">0 WETH</code> so the result
 					isolates pre-gas market and fee economics.
 				</p>
-				<table id="open-oracle-market-fixture-inputs"
-					data-block-number="25600852"
-					data-base-fee-wei-per-gas="118491126"
-					data-minimum-weth-report="817262744792307693"
-					data-mid-report-rep="2121147070719536334508"
-					data-report-deviation-bps="500"
-					data-sell-report-rep="2227204424255513151233"
-					data-buy-report-rep="2015089717183559517782"
-					data-reporter-fee="10000"
-					data-protocol-fee="100000"
-					data-uniswap-pool-fee="10000"
-					data-gas-cost-weth="0"
-					data-sell-profit-weth="-255235735754674523"
-					data-buy-profit-weth="-626254311426940506">
-					<thead>
-						<tr>
-							<th>Scenario</th>
-							<th>Hypothetical report REP side</th>
-							<th>Deviation from midpoint</th>
-							<th>Execution assumption</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Sell REP</td>
-							<td data-fixture-field="sellReportRep">2,227.204424255513151233 REP</td>
-							<td data-fixture-field="sellDeviation">+5%</td>
-							<td data-fixture-field="sellExecution">Exact-input quote through the 1% REP/WETH pool</td>
-						</tr>
-						<tr>
-							<td>Buy REP</td>
-							<td data-fixture-field="buyReportRep">2,015.089717183559517782 REP</td>
-							<td data-fixture-field="buyDeviation">−5%</td>
-							<td data-fixture-field="buyExecution">Exact-output quote through the 1% REP/WETH pool</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-scroll" tabindex="0" aria-label="Scrollable pinned market fixture inputs">
+					<table id="open-oracle-market-fixture-inputs"
+						data-block-number="25600852"
+						data-base-fee-wei-per-gas="118491126"
+						data-minimum-weth-report="817262744792307693"
+						data-mid-report-rep="2121147070719536334508"
+						data-report-deviation-bps="500"
+						data-sell-report-rep="2227204424255513151233"
+						data-buy-report-rep="2015089717183559517782"
+						data-reporter-fee="10000"
+						data-protocol-fee="100000"
+						data-uniswap-pool-fee="10000"
+						data-gas-cost-weth="0"
+						data-sell-profit-weth="-255235735754674523"
+						data-buy-profit-weth="-626254311426940506">
+						<thead>
+							<tr>
+								<th>Scenario</th>
+								<th>Hypothetical report REP side</th>
+								<th>Deviation from midpoint</th>
+								<th>Execution assumption</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Sell REP</td>
+								<td data-fixture-field="sellReportRep">2,227.204424255513151233 REP</td>
+								<td data-fixture-field="sellDeviation">+5%</td>
+								<td data-fixture-field="sellExecution">Exact-input quote through the 1% REP/WETH pool</td>
+							</tr>
+							<tr>
+								<td>Buy REP</td>
+								<td data-fixture-field="buyReportRep">2,015.089717183559517782 REP</td>
+								<td data-fixture-field="buyDeviation">−5%</td>
+								<td data-fixture-field="buyExecution">Exact-output quote through the 1% REP/WETH pool</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 				<p>
 					Under only those two constructed report scenarios, the fixture produced
 					pre-gas results of

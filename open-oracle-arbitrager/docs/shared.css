@@ -107,6 +107,31 @@ body.doc-openoracle code {
 	overflow-wrap: anywhere;
 }
 
+body.doc-openoracle pre {
+	max-width: 100%;
+	margin: 0.85rem 0 1rem;
+	padding: 1rem;
+	overflow-x: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+	color: var(--ink);
+	font-family: var(--docs-font-mono);
+	font-size: 0.86rem;
+	line-height: 1.55;
+}
+
+body.doc-openoracle pre code {
+	padding: 0;
+	background: transparent;
+	font-size: inherit;
+}
+
+body.doc-openoracle pre:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
+
 body.doc-openoracle td > code:only-child {
 	white-space: nowrap;
 	overflow-wrap: normal;

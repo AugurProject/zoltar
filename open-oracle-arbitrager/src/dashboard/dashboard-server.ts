@@ -59,6 +59,7 @@ function renderReadme(markdown: string) {
 			headingIndex += 1
 			return `<h${level} id="${id}">${contents}</h${level}>`
 		})
+		.replaceAll('<pre>', '<pre tabindex="0" aria-label="Scrollable code or command example">')
 		.replaceAll('href="./docs/operator-guide.html', 'href="/documentation')
 		.replaceAll('href="./docs/market-fixture.html', 'href="/market-fixture.html')
 	if (headingIndex !== headingIds.length) throw new Error('README heading render count did not match its Markdown source')
@@ -72,7 +73,6 @@ function renderReadme(markdown: string) {
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header><h1>OpenOracle Arbitrager Reference</h1></header>
 			<section>${body}</section>
 		</main>
 	</body>
