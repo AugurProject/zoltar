@@ -7,48 +7,9 @@
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="paper-page paper-statoblast">
-		<a class="skip-link" href="#main-content">Skip to document</a>
-		<div class="site-shell">
-			<aside class="sidebar" aria-label="Table of contents">
-				<div class="sidebar-header">
-					<span class="sidebar-series">Augur / Zoltar</span>
-					<strong>Statoblast</strong>
-					<p>A prediction market built on Zoltar.</p>
-				</div>
-					<a class="sidebar-companion" href="./zoltar-whitepaper.html">
-						<span>Companion paper</span>
-						<b>Zoltar Oracle Layer</b>
-					</a>
-					<a class="sidebar-companion" href="./security-model.html">
-						<span>Security boundaries</span>
-						<b>Protocol Security Model</b>
-					</a>
-					<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#overview">System Overview</a>
-					<a href="#architecture">Architecture</a>
-					<a href="#roles">Economic Roles</a>
-					<a href="#pools">Security Pools</a>
-					<a href="#shares">Shares</a>
-					<a href="#escalation">Escalation</a>
-					<a href="#migration">Fork Migration</a>
-					<a href="#auction">Truth Auction</a>
-					<a href="#oracle">REP/ETH Oracle</a>
-					<a href="#security">Security Model</a>
-					<a href="#parameters">Parameter Sources</a>
-					<a href="#constraints">Constraints</a>
-					<a href="./operator-reference.md">Operator Reference</a>
-				</nav>
-			</aside>
 
 			<main id="main-content">
 				<header class="hero">
-					<div class="paper-brand">
-						<a class="companion-link" href="./zoltar-whitepaper.html">
-							<span>Companion paper</span>
-							<b>Zoltar - Branching Oracle Base Layer</b>
-						</a>
-					</div>
 					<div class="hero-label-row">
 						<p class="kicker">
 							<span class="layer-dot" aria-hidden="true"></span>Prediction
@@ -712,21 +673,31 @@
 							>#</a
 						>
 					</div>
-					<p class="lede">
-						Statoblast tries local resolution before forcing Zoltar to fork. An
-						<code>EscalationGame</code> escrows vault-backed REP behind
-						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. After
-						the deadline, a unique leading outcome can resolve locally. If at
-						least two outcomes reach the non-decision threshold, the pool can use
-						its escalation backing to initiate a Zoltar fork.
-					</p>
-						<p class="security-assumption-ref">
-							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
-							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
-							<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
+					<p class="lede"> When a market ends, Statoblast attempts to resolve the markets outcome by running an Escalation Game. In an Escalation Game, the game participants escrows vault backed REP behind the outcome they believe is the most truthfull outcome for the market. Statoblasts escalation game is based on
+						<a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md ">The Isonzo Front.md</a>
+						design.</p>
+					<p>
+					<p>Shortly:</p>
+					<ol>
+						<li>Someone posts a claim with an initial stake.</li>
+						<li>Anyone who disagrees can submit a different claim by locking a larger stake than the current leader.</li>
+						<li>The newest valid claim becomes the tentative winner, regardless of who submitted previous claims. There are no fixed sides—any participant may join at any time by outbidding the current claim.</li>
+						<li>After each successful challenge, the response timer becomes longer (typically growing exponentially), giving participants progressively more time to evaluate increasingly valuable disputes while still ensuring the game eventually reaches a conclusion.</li>
+						<li>If the timer expires without another larger challenge, the current claim becomes the final outcome.</li>
+						<li>If the required stake grows beyond a predefined threshold (non-decision threshold), the dispute is escalated to the protocol's ultimate resolution mechanism instead of continuing indefinitely.</li>
+					</ol>
+					<p>This emphasizes two important properties of the design:</p>
+					<ol>
+						<li><b>No permanent sides.</b> The game is simply a sequence of increasingly well-backed claims. Anyone can become the current leader by posting a larger stake.</li>
+						<li><b>Exponential time scaling.</b> As more value becomes locked in the game, participants are given increasingly more time to react, making it harder for an attacker to win by exploiting short response windows while still allowing small disputes to resolve quickly.</li>
+					</ol>
+					<p class="security-assumption-ref">
+						<strong>Security assumptions:</strong>
+						<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+						<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+						<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+						<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
+						<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
 						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
 						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
 						and
@@ -735,7 +706,7 @@
 
 					<div class="callout">
 						<strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded.
-						The Escalation Game system is an optimization, and in theory the system would work without it as well.
+						The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.
 					</div>
 					<p>
 						<code>SecurityPoolFactory</code> requires its configured
@@ -2674,7 +2645,7 @@
 						</thead>
 						<tbody>
 							<tr><td>Universe fork thresholds and haircuts</td><td><a href="./zoltar-whitepaper.html#economics">Zoltar fork economics</a></td></tr>
-							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Resolution</a></td></tr>
+							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Game</a></td></tr>
 							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="./truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
 							<tr><td>Liquidation constants and solvency limits</td><td><a href="./liquidation.html#punitive-liquidation">Liquidation penalty math</a></td></tr>
 							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="./open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
