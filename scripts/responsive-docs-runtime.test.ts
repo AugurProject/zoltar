@@ -36,6 +36,22 @@ test('responsive docs compact equations and label unavoidable equation and table
 			<div class="equation" data-matrix-equation style="padding: 8px">
 				<math><mtable><mtr><mtd><mi>a</mi></mtd><mtd><mi>b</mi></mtd></mtr></mtable></math>
 			</div>
+			<div class="equation" data-piecewise-equation style="padding: 8px">
+				<math>
+					<mtable>
+						<mtr>
+							<mtd><mi>result</mi></mtd>
+							<mtd><mo>=</mo></mtd>
+							<mtd>
+								<mtable>
+									<mtr><mtd><mn>1</mn></mtd><mtd><mtext>if accepted</mtext></mtd></mtr>
+									<mtr><mtd><mn>0</mn></mtd><mtd><mtext>otherwise</mtext></mtd></mtr>
+								</mtable>
+							</mtd>
+						</mtr>
+					</mtable>
+				</math>
+			</div>
 			<div class="table-wrap"><table><tr><td>Wide content</td></tr></table></div>
 			<table aria-label="Deployment mapping"><tr><td>Bare wide content</td></tr></table>
 		`)
@@ -45,8 +61,10 @@ test('responsive docs compact equations and label unavoidable equation and table
 		const regularMath = regularEquation?.querySelector('math') ?? null
 		const matrixEquation = document.querySelector('[data-matrix-equation]')
 		const matrixMath = matrixEquation?.querySelector('math') ?? null
+		const piecewiseEquation = document.querySelector('[data-piecewise-equation]')
+		const piecewiseMath = piecewiseEquation?.querySelector('math') ?? null
 		const tableWrap = document.querySelector('.table-wrap')
-		if (equation === null || math === null || regularEquation === null || regularMath === null || matrixEquation === null || matrixMath === null || tableWrap === null) {
+		if (equation === null || math === null || regularEquation === null || regularMath === null || matrixEquation === null || matrixMath === null || piecewiseEquation === null || piecewiseMath === null || tableWrap === null) {
 			throw new Error('Responsive documentation fixture is incomplete')
 		}
 
@@ -56,6 +74,8 @@ test('responsive docs compact equations and label unavoidable equation and table
 		setWidth(regularMath, 'scrollWidth', 600)
 		setWidth(matrixEquation, 'clientWidth', 320)
 		setWidth(matrixMath, 'scrollWidth', 600)
+		setWidth(piecewiseEquation, 'clientWidth', 320)
+		setWidth(piecewiseMath, 'scrollWidth', 600)
 		setWidth(tableWrap, 'clientWidth', 320)
 		setWidth(tableWrap, 'scrollWidth', 560)
 		Object.defineProperty(window, 'matchMedia', {
@@ -107,6 +127,11 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(matrixEquation.classList.contains('equation-compact-active')).toBeFalse()
 		expect(matrixMath.getAttribute('style')).toContain('font-size')
 		expect(matrixEquation.querySelector('.docs-overflow-cue')?.textContent).toContain('full equation')
+		expect(piecewiseEquation.classList.contains('equation-array')).toBeTrue()
+		expect(piecewiseEquation.classList.contains('equation-compact-active')).toBeFalse()
+		expect(piecewiseEquation.querySelector('.docs-equation-compact')).toBeNull()
+		expect(piecewiseMath.getAttribute('style')).toContain('font-size')
+		expect(piecewiseEquation.querySelector('.docs-overflow-cue')?.textContent).toContain('full equation')
 		expect(tableWrap.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
 		expect(bareTableContainer.getAttribute('role')).toBe('region')
 		expect(bareTableContainer.getAttribute('aria-label')).toBe('Deployment mapping')

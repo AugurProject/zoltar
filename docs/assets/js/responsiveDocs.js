@@ -53,7 +53,7 @@
 		const existing = equation.querySelector(':scope > .docs-equation-compact')
 		const rows = table === null ? [] : Array.from(table.querySelectorAll(':scope > mtr'))
 		const rowCells = rows.map(row => Array.from(row.children).filter(cell => cell.localName === 'mtd'))
-		const isDefinitionTable = rowCells.length > 0 && rowCells.every(cells => cells.length >= 3 && definitionRelations.has(mathText(cells[1]).trim()))
+		const isDefinitionTable = table?.querySelector('mtable') === null && rowCells.length > 0 && rowCells.every(cells => cells.length >= 3 && definitionRelations.has(mathText(cells[1]).trim()))
 		if (!isDefinitionTable) {
 			existing?.remove()
 			equation.classList.remove('equation-compact-active')
