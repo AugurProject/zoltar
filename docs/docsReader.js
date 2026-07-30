@@ -185,6 +185,9 @@ function createNavigation() {
 			documentElement.dataset.navigationDocumentPath = documentEntry.path
 
 			const documentSummary = document.createElement('summary')
+			const documentToggle = document.createElement('span')
+			documentToggle.className = 'reader-nav-document-toggle'
+			documentToggle.setAttribute('aria-hidden', 'true')
 			const link = document.createElement('a')
 			link.className = 'reader-nav-document-link'
 			link.href = `#${chapterId(documentEntry.path)}`
@@ -193,7 +196,7 @@ function createNavigation() {
 			const title = document.createElement('strong')
 			title.textContent = documentEntry.title
 			link.append(title)
-			documentSummary.append(link)
+			documentSummary.append(documentToggle, link)
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
