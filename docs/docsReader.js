@@ -92,6 +92,7 @@ const documentGroups = [
 ]
 
 const documents = documentGroups.flatMap(group => group.documents)
+const documentByPath = new Map(documents.map(documentEntry => [documentEntry.path, documentEntry]))
 const documentsContainer = document.querySelector('[data-reader-documents]')
 const navigation = document.querySelector('[data-reader-navigation]')
 const progress = document.querySelector('[data-reading-progress]')
@@ -99,13 +100,22 @@ const readerShell = document.querySelector('.reader-shell')
 const sidebarToggle = document.querySelector('[data-sidebar-toggle]')
 const sidebarToggleLabel = document.querySelector('[data-sidebar-toggle-label]')
 const chapterByPath = new Map()
-const frameByPath = new Map()
+const frameWrapByPath = new Map()
+const frameStatusByPath = new Map()
 const navigationDocumentByPath = new Map()
-const navigationSectionsByPath = new Map()
 const pendingFragmentByPath = new Map()
-const indexedPaths = new Set()
+const fragmentStabilizationTimeoutByPath = new Map()
+const resizeObserverByPath = new Map()
+const requestVersionByPath = new Map()
+const readerScrollByUrl = new Map()
+const loadedPaths = new Set()
+const loadingPaths = new Set()
 const failedPaths = new Set()
-let activePath = documents[0]?.path
+let activePath
+let navigationVersion = 0
+let pendingReaderScroll
+let readerScrollStabilizationTimeout
+const readerFrame = createDocumentFrame()
 
 window.history.scrollRestoration = 'manual'
 
@@ -128,6 +138,30 @@ function decodeFragment(fragment) {
 		if (error instanceof URIError) return undefined
 		throw error
 	}
+}
+
+function outlineSections(path) {
+	const outline = window.docsReaderOutline
+	if (typeof outline !== 'object' || outline === null || !Array.isArray(outline[path])) return []
+	return outline[path]
+}
+
+function sectionLink(path, section) {
+	const item = document.createElement('li')
+	const link = document.createElement('a')
+	link.href = `#${chapterId(path)}--${encodeURIComponent(section.id)}`
+	link.dataset.documentPath = path
+	link.dataset.documentFragment = section.id
+	if (section.kind === 'tool') {
+		link.className = 'reader-nav-tool-link'
+		const label = document.createElement('span')
+		label.textContent = 'Tool'
+		link.append(label, document.createTextNode(section.title))
+	} else {
+		link.textContent = section.title
+	}
+	item.append(link)
+	return item
 }
 
 function createNavigation() {
@@ -161,11 +195,13 @@ function createNavigation() {
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
-			sectionList.setAttribute('aria-label', `${documentEntry.title} sections`)
+			sectionList.setAttribute('aria-label', `${documentEntry.title} sections and tools`)
+			for (const section of outlineSections(documentEntry.path)) {
+				sectionList.append(sectionLink(documentEntry.path, section))
+			}
 			documentElement.append(link, sectionList)
 			groupDocuments.append(documentElement)
 			navigationDocumentByPath.set(documentEntry.path, documentElement)
-			navigationSectionsByPath.set(documentEntry.path, sectionList)
 		}
 
 		groupElement.append(groupDocuments)
@@ -173,55 +209,9 @@ function createNavigation() {
 	}
 }
 
-function headingSlug(text) {
-	return text
-		.toLowerCase()
-		.normalize('NFKD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-}
-
-function populateNavigationSections(path, frameDocument) {
-	const sectionList = navigationSectionsByPath.get(path)
-	const frameWindow = frameDocument.defaultView
-	if (sectionList === undefined || frameWindow === null) return
-
-	const headings = Array.from(frameDocument.querySelectorAll('main h2, article h2'))
-	const usedIds = new Set(Array.from(frameDocument.querySelectorAll('[id]'), element => element.id))
-	sectionList.replaceChildren()
-
-	for (const [index, heading] of headings.entries()) {
-		if (!(heading instanceof frameWindow.HTMLElement)) continue
-		let headingId = heading.id
-		if (headingId.length === 0) {
-			const baseId = headingSlug(heading.textContent ?? '') || `section-${index + 1}`
-			headingId = baseId
-			let suffix = 2
-			while (usedIds.has(headingId)) {
-				headingId = `${baseId}-${suffix}`
-				suffix += 1
-			}
-			heading.id = headingId
-			usedIds.add(headingId)
-		}
-
-		const item = document.createElement('li')
-		const link = document.createElement('a')
-		link.href = `#${chapterId(path)}--${encodeURIComponent(headingId)}`
-		link.dataset.documentPath = path
-		link.dataset.documentFragment = headingId
-		link.textContent = heading.textContent?.trim() || `Section ${index + 1}`
-		item.append(link)
-		sectionList.append(item)
-	}
-}
-
 function markdownFrameSource(path, title) {
 	const markdownDocuments = window.docsReaderMarkdown
-	if (typeof markdownDocuments !== 'object' || markdownDocuments === null) {
-		return ''
-	}
+	if (typeof markdownDocuments !== 'object' || markdownDocuments === null) return ''
 	const content = markdownDocuments[path]
 	if (typeof content !== 'string') return ''
 
@@ -234,10 +224,66 @@ function markdownFrameSource(path, title) {
 				<title>${title}</title>
 				<link rel="stylesheet" href="./shared-docs.css">
 			</head>
-			<body class="doc-openoracle markdown-reference">
+			<body class="doc-openoracle markdown-reference reader-embedded">
 				<main><article>${content}</article></main>
 			</body>
-		</html>`
+	</html>`
+}
+
+function htmlFrameSource(path, source) {
+	const base = `<base href="${sourceUrl(path)}">`
+	const head = /<head(?:\s[^>]*)?>/i.exec(source)
+	if (head === null || head.index === undefined) {
+		return `${base}${source}`
+	}
+	const insertionIndex = head.index + head[0].length
+	return `${source.slice(0, insertionIndex)}${base}${source.slice(insertionIndex)}`
+}
+
+function writeFrameSource(path, frame, source) {
+	const frameDocument = frame.contentDocument
+	if (frameDocument === null) return false
+	frame.dataset.readerSourceReady = 'true'
+	frame.dataset.readerSourceUrl = path
+	frameDocument.open()
+	frameDocument.write(source)
+	frameDocument.close()
+	initializeFrame(path)
+	return true
+}
+
+function createDocumentFrame() {
+	const frame = document.createElement('iframe')
+	frame.className = 'reader-document-frame'
+	frame.title = 'Documentation chapter'
+	frame.loading = 'lazy'
+	frame.addEventListener('load', () => {
+		const path = frame.dataset.documentFrame
+		if (path === undefined || frame.dataset.readerSourceReady !== 'true') return
+		initializeFrame(path)
+	})
+	frame.addEventListener('error', () => {
+		const path = frame.dataset.documentFrame
+		const documentEntry = path === undefined ? undefined : documentByPath.get(path)
+		if (documentEntry !== undefined && activePath === path && frame.dataset.readerSourceReady === 'true') {
+			showFrameError(documentEntry)
+		}
+	})
+	return frame
+}
+
+function frameForPath(path) {
+	return readerFrame.dataset.documentFrame === path ? readerFrame : undefined
+}
+
+function attachReaderFrame(path) {
+	const documentEntry = documentByPath.get(path)
+	const frameWrap = frameWrapByPath.get(path)
+	if (documentEntry === undefined || frameWrap === undefined) return false
+	readerFrame.dataset.documentFrame = path
+	readerFrame.title = `${documentEntry.title} document`
+	frameWrap.append(readerFrame)
+	return true
 }
 
 function createChapter(documentEntry, index, groupLabel) {
@@ -245,6 +291,7 @@ function createChapter(documentEntry, index, groupLabel) {
 	chapter.className = 'reader-chapter'
 	chapter.id = chapterId(documentEntry.path)
 	chapter.dataset.documentPath = documentEntry.path
+	chapter.hidden = true
 
 	const header = document.createElement('header')
 	header.className = 'reader-chapter-header'
@@ -268,86 +315,17 @@ function createChapter(documentEntry, index, groupLabel) {
 
 	const frameWrap = document.createElement('div')
 	frameWrap.className = 'reader-frame-wrap'
-	frameWrap.setAttribute('aria-busy', 'true')
 	const frameStatus = document.createElement('span')
 	frameStatus.className = 'reader-frame-status'
 	frameStatus.setAttribute('role', 'status')
 	frameStatus.textContent = 'Loading document…'
-	const frame = document.createElement('iframe')
-	frame.className = 'reader-document-frame'
-	frame.title = `${documentEntry.title} document`
-	frame.dataset.documentFrame = documentEntry.path
-	frame.loading = 'eager'
 
-	frameWrap.append(frameStatus, frame)
+	frameWrap.append(frameStatus)
 	chapter.append(header, frameWrap)
 	chapterByPath.set(documentEntry.path, chapter)
-	frameByPath.set(documentEntry.path, frame)
-
-	frame.addEventListener('load', () => {
-		if (frame.dataset.readerSourceReady !== 'true') return
-		initializeFrame(documentEntry.path, frame, frameWrap, frameStatus)
-	})
-	frame.addEventListener('error', () => showFrameError(documentEntry, frame, frameWrap, frameStatus))
-	requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus).catch(error => handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus))
+	frameWrapByPath.set(documentEntry.path, frameWrap)
+	frameStatusByPath.set(documentEntry.path, frameStatus)
 	return chapter
-}
-
-async function requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus) {
-	delete frameWrap.dataset.loaded
-	frameWrap.setAttribute('aria-busy', 'true')
-	frameStatus.hidden = false
-	frameStatus.textContent = 'Loading document…'
-	frame.hidden = false
-	frameWrap.querySelector('.reader-frame-error')?.remove()
-	failedPaths.delete(documentEntry.path)
-	updateReaderState()
-
-	if (documentEntry.path.endsWith('.md')) {
-		const source = markdownFrameSource(documentEntry.path, documentEntry.title)
-		if (source.length === 0) throw new Error('Generated Markdown content is unavailable')
-		frame.dataset.readerSourceReady = 'true'
-		frame.srcdoc = source
-		return
-	}
-
-	const response = await fetch(`./${documentEntry.path}`, { method: 'HEAD' })
-	if (!response.ok) throw new Error(`Document request returned ${response.status}`)
-	frame.dataset.readerSourceReady = 'true'
-	frame.src = `./${documentEntry.path}`
-}
-
-function handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus) {
-	if (!(error instanceof Error)) throw error
-	showFrameError(documentEntry, frame, frameWrap, frameStatus)
-}
-
-function showFrameError(documentEntry, frame, frameWrap, frameStatus) {
-	delete frame.dataset.readerSourceReady
-	frameWrap.dataset.loaded = 'true'
-	frameWrap.setAttribute('aria-busy', 'false')
-	frameStatus.hidden = true
-	frame.hidden = true
-	indexedPaths.delete(documentEntry.path)
-	failedPaths.add(documentEntry.path)
-	frameWrap.querySelector('.reader-frame-error')?.remove()
-
-	const error = document.createElement('div')
-	error.className = 'reader-frame-error'
-	error.setAttribute('role', 'alert')
-	const title = document.createElement('strong')
-	title.textContent = `${documentEntry.title} could not be loaded`
-	const guidance = document.createElement('p')
-	guidance.textContent = 'Check your connection and try this document again.'
-	const retry = document.createElement('button')
-	retry.type = 'button'
-	retry.textContent = 'Retry document'
-	retry.addEventListener('click', () => {
-		requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus).catch(error => handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus))
-	})
-	error.append(title, guidance, retry)
-	frameWrap.append(error)
-	updateReaderState()
 }
 
 function createChapters() {
@@ -362,12 +340,136 @@ function createChapters() {
 	}
 }
 
+function unloadDocumentFrame(path) {
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	requestVersionByPath.set(path, (requestVersionByPath.get(path) ?? 0) + 1)
+	resizeObserverByPath.get(path)?.disconnect()
+	resizeObserverByPath.delete(path)
+	loadingPaths.delete(path)
+	loadedPaths.delete(path)
+	failedPaths.delete(path)
+	delete frame.dataset.readerSourceReady
+	delete frame.dataset.readerSourceUrl
+	delete frame.dataset.readerInitialized
+	frame.style.removeProperty('height')
+	const frameDocument = frame.contentDocument
+	if (frameDocument !== null) {
+		frameDocument.open()
+		frameDocument.write('<!doctype html><title></title>')
+		frameDocument.close()
+	}
+	frame.removeAttribute('src')
+	frame.removeAttribute('srcdoc')
+	delete frameWrap.dataset.loaded
+	frameWrap.setAttribute('aria-busy', 'false')
+	frameStatus.hidden = true
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+}
+
+async function requestDocumentFrame(path) {
+	if (path !== activePath || loadedPaths.has(path) || loadingPaths.has(path)) return
+	const documentEntry = documentByPath.get(path)
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (documentEntry === undefined || frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	const requestVersion = (requestVersionByPath.get(path) ?? 0) + 1
+	requestVersionByPath.set(path, requestVersion)
+	const requestIsCurrent = () => activePath === path && requestVersionByPath.get(path) === requestVersion
+	loadingPaths.add(path)
+	delete frameWrap.dataset.loaded
+	frameWrap.setAttribute('aria-busy', 'true')
+	frameStatus.hidden = false
+	frameStatus.textContent = 'Loading document…'
+	frame.hidden = false
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+	failedPaths.delete(path)
+	updateReaderBusyState()
+
+	if (path.endsWith('.md')) {
+		const source = markdownFrameSource(path, documentEntry.title)
+		if (source.length === 0) {
+			showFrameError(documentEntry)
+			return
+		}
+		if (!writeFrameSource(path, frame, source)) {
+			showFrameError(documentEntry)
+		}
+		return
+	}
+
+	let response
+	try {
+		response = await fetch(`./${path}`)
+	} catch (error) {
+		if (!requestIsCurrent()) return
+		if (!(error instanceof TypeError)) throw error
+		showFrameError(documentEntry)
+		return
+	}
+	if (!requestIsCurrent()) return
+	if (!response.ok) {
+		showFrameError(documentEntry)
+		return
+	}
+	let source
+	try {
+		source = await response.text()
+	} catch (error) {
+		if (!requestIsCurrent()) return
+		if (!(error instanceof TypeError)) throw error
+		showFrameError(documentEntry)
+		return
+	}
+	if (!requestIsCurrent()) return
+	if (!writeFrameSource(path, frame, htmlFrameSource(path, source))) {
+		showFrameError(documentEntry)
+	}
+}
+
+function showFrameError(documentEntry) {
+	if (activePath !== documentEntry.path) return
+	const frame = frameForPath(documentEntry.path)
+	const frameWrap = frameWrapByPath.get(documentEntry.path)
+	const frameStatus = frameStatusByPath.get(documentEntry.path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	delete frame.dataset.readerSourceReady
+	delete frame.dataset.readerSourceUrl
+	loadingPaths.delete(documentEntry.path)
+	loadedPaths.delete(documentEntry.path)
+	failedPaths.add(documentEntry.path)
+	frameWrap.dataset.loaded = 'true'
+	frameWrap.setAttribute('aria-busy', 'false')
+	frameStatus.hidden = true
+	frame.hidden = true
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+
+	const error = document.createElement('div')
+	error.className = 'reader-frame-error'
+	error.setAttribute('role', 'alert')
+	const title = document.createElement('strong')
+	title.textContent = `${documentEntry.title} could not be loaded`
+	const guidance = document.createElement('p')
+	guidance.textContent = 'Check your connection and try this document again.'
+	const retry = document.createElement('button')
+	retry.type = 'button'
+	retry.textContent = 'Retry document'
+	retry.addEventListener('click', () => requestDocumentFrame(documentEntry.path))
+	error.append(title, guidance, retry)
+	frameWrap.append(error)
+	updateReaderBusyState()
+}
+
 function frameHeight(frame) {
 	const documentElement = frame.contentDocument?.documentElement
 	const body = frame.contentDocument?.body
-	if (documentElement === undefined || documentElement === null || body === undefined || body === null) {
-		return 0
-	}
+	if (documentElement === undefined || documentElement === null || body === undefined || body === null) return 0
 	return Math.max(documentElement.scrollHeight, documentElement.offsetHeight, body.scrollHeight, body.offsetHeight)
 }
 
@@ -380,7 +482,7 @@ function sourcePathFromHref(href, baseUrl) {
 	const target = new URL(href, baseUrl)
 	if (target.origin !== window.location.origin) return undefined
 	const fileName = target.pathname.split('/').pop()
-	if (fileName === undefined || !documents.some(entry => entry.path === fileName)) return undefined
+	if (fileName === undefined || !documentByPath.has(fileName)) return undefined
 	const fragment = decodeFragment(target.hash.slice(1))
 	if (fragment === undefined) return undefined
 	return { fragment, path: fileName }
@@ -399,7 +501,7 @@ function frameLinkClick(path, frame, event) {
 		const fragment = decodeFragment(href.slice(1))
 		if (fragment === undefined) return
 		event.preventDefault()
-		navigateToDocument(path, fragment)
+		void navigateToDocument(path, fragment)
 		return
 	}
 
@@ -412,113 +514,217 @@ function frameLinkClick(path, frame, event) {
 	}
 	if (requestsSeparateContext) return
 	event.preventDefault()
-	navigateToDocument(target.path, target.fragment)
+	void navigateToDocument(target.path, target.fragment)
+}
+
+function openFragmentDetails(target, frameWindow) {
+	if (target instanceof frameWindow.HTMLDetailsElement) target.open = true
+	const containingDetails = target.closest('details')
+	if (containingDetails instanceof frameWindow.HTMLDetailsElement) containingDetails.open = true
+}
+
+function positionFrameFragment(path, fragment, behavior = 'instant') {
+	const frame = frameForPath(path)
+	if (frame === undefined) return
+	if (fragment.length === 0) {
+		chapterByPath.get(path)?.scrollIntoView({ behavior, block: 'start' })
+		return
+	}
+	const target = frame.contentDocument?.getElementById(fragment)
+	const frameWindow = frame.contentWindow
+	if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return
+	openFragmentDetails(target, frameWindow)
+	resizeFrame(frame)
+	const outerTop = frame.getBoundingClientRect().top + window.scrollY
+	const innerTop = target.getBoundingClientRect().top + frameWindow.scrollY
+	const navigationOffset = window.innerWidth <= 980 ? 72 : 24
+	window.scrollTo({ behavior, top: outerTop + innerTop - navigationOffset })
 }
 
 function scrollToFrameFragment(path, fragment) {
-	const frame = frameByPath.get(path)
-	const chapter = chapterByPath.get(path)
-	if (frame === undefined || chapter === undefined) return false
-	if (failedPaths.has(path)) return false
-	if (fragment.length === 0) {
-		chapter.scrollIntoView({ block: 'start' })
-		return true
+	const frame = frameForPath(path)
+	if (frame === undefined || failedPaths.has(path) || !loadedPaths.has(path)) return false
+	if (fragment.length > 0) {
+		const target = frame.contentDocument?.getElementById(fragment)
+		const frameWindow = frame.contentWindow
+		if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return false
+		openFragmentDetails(target, frameWindow)
 	}
 
-	const target = frame.contentDocument?.getElementById(fragment)
-	const frameWindow = frame.contentWindow
-	if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return false
-	const outerTop = frame.getBoundingClientRect().top + window.scrollY
-	const innerTop = target.getBoundingClientRect().top + (frame.contentWindow?.scrollY ?? 0)
-	const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
-	window.scrollTo({ behavior, top: outerTop + innerTop - 24 })
+	const preferredBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+	positionFrameFragment(path, fragment, preferredBehavior)
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => positionFrameFragment(path, fragment))
+	})
+	window.setTimeout(() => positionFrameFragment(path, fragment), 180)
 	return true
 }
 
-function navigateToDocument(path, fragment = '', updateHistory = true) {
-	const chapter = chapterByPath.get(path)
-	if (chapter === undefined) return
-	const previousPath = activePath
-	activePath = path
-	updateReaderState()
+function stabilizeFrameFragment(path) {
+	const fragment = pendingFragmentByPath.get(path)
+	if (fragment === undefined || !scrollToFrameFragment(path, fragment)) return
+	const existingTimeout = fragmentStabilizationTimeoutByPath.get(path)
+	if (existingTimeout !== undefined) window.clearTimeout(existingTimeout)
+	const timeout = window.setTimeout(() => {
+		positionFrameFragment(path, fragment)
+		pendingFragmentByPath.delete(path)
+		fragmentStabilizationTimeoutByPath.delete(path)
+	}, 650)
+	fragmentStabilizationTimeoutByPath.set(path, timeout)
+}
 
-	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
-	if (updateHistory) {
-		const currentState = typeof window.history.state === 'object' && window.history.state !== null ? window.history.state : {}
-		window.history.replaceState({ ...currentState, readerDocumentPath: previousPath, readerScrollY: window.scrollY }, '', window.location.href)
-		window.history.pushState({ readerDocumentPath: path }, '', `#${readerHash}`)
-	}
-	pendingFragmentByPath.clear()
-	if (!scrollToFrameFragment(path, fragment)) {
-		const allDocumentsSettled = indexedPaths.size + failedPaths.size === documents.length
-		if (failedPaths.has(path)) {
-			if (fragment.length > 0) pendingFragmentByPath.set(path, fragment)
-			chapter.scrollIntoView({ block: 'start' })
-			return
-		}
-		if (allDocumentsSettled) {
-			chapter.scrollIntoView({ block: 'start' })
-			return
-		}
-		pendingFragmentByPath.set(path, fragment)
-		chapter.scrollIntoView({ block: 'start' })
+function clearPendingReaderScroll() {
+	pendingReaderScroll = undefined
+	if (readerScrollStabilizationTimeout !== undefined) {
+		window.clearTimeout(readerScrollStabilizationTimeout)
+		readerScrollStabilizationTimeout = undefined
 	}
 }
 
-function initializeFrame(path, frame, frameWrap, frameStatus) {
-	const frameDocument = frame.contentDocument
-	if (frameDocument === null) {
-		const documentEntry = documents.find(entry => entry.path === path)
-		if (documentEntry !== undefined) showFrameError(documentEntry, frame, frameWrap, frameStatus)
-		return
+function positionPendingReaderScroll(path) {
+	const restoration = pendingReaderScroll
+	if (restoration === undefined || restoration.path !== path || restoration.navigationVersion !== navigationVersion || restoration.url !== window.location.href || activePath !== path) {
+		return false
 	}
-
-	resizeFrame(frame)
-	frameWrap.dataset.loaded = 'true'
-	frameWrap.setAttribute('aria-busy', 'false')
-	frameStatus.hidden = true
-	failedPaths.delete(path)
-	indexedPaths.add(path)
-	populateNavigationSections(path, frameDocument)
-
-	frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
-	if (typeof ResizeObserver !== 'undefined' && frameDocument.body !== null) {
-		const observer = new ResizeObserver(() => resizeFrame(frame))
-		observer.observe(frameDocument.body)
-	}
-
-	updateReaderState()
+	window.scrollTo({ behavior: 'instant', top: restoration.scrollY })
+	return true
 }
 
-function updateReaderState() {
-	const pendingCount = documents.length - indexedPaths.size - failedPaths.size
-
-	for (const [path, chapter] of chapterByPath) {
-		chapter.hidden = path !== activePath
+function stabilizePendingReaderScroll(path) {
+	const restoration = pendingReaderScroll
+	if (restoration === undefined || !positionPendingReaderScroll(path)) return
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => positionPendingReaderScroll(path))
+	})
+	if (readerScrollStabilizationTimeout !== undefined) {
+		window.clearTimeout(readerScrollStabilizationTimeout)
 	}
-	for (const [path, navigationDocument] of navigationDocumentByPath) {
-		const link = navigationDocument.querySelector('.reader-nav-document-link')
+	readerScrollStabilizationTimeout = window.setTimeout(() => {
+		if (pendingReaderScroll !== restoration) return
+		positionPendingReaderScroll(path)
+		pendingReaderScroll = undefined
+		readerScrollStabilizationTimeout = undefined
+	}, 650)
+}
+
+function stabilizeReaderPosition(path) {
+	stabilizeFrameFragment(path)
+	stabilizePendingReaderScroll(path)
+}
+
+function setCurrentNavigation(path) {
+	for (const link of document.querySelectorAll('.reader-nav-document-link')) {
 		if (!(link instanceof HTMLAnchorElement)) continue
-		if (path === activePath) {
-			link.setAttribute('aria-current', 'page')
+		if (link.dataset.documentPath === path) {
+			link.setAttribute('aria-current', 'location')
 			const group = link.closest('.reader-nav-group')
 			if (group instanceof HTMLDetailsElement) group.open = true
 		} else {
 			link.removeAttribute('aria-current')
 		}
 	}
-	if (documentsContainer instanceof HTMLElement) {
-		documentsContainer.setAttribute('aria-busy', pendingCount > 0 ? 'true' : 'false')
+}
+
+async function selectDocument(path, fragment = '', positionFragment = true) {
+	if (!documentByPath.has(path)) return
+	if (positionFragment) clearPendingReaderScroll()
+	const previousPath = activePath
+	if (previousPath !== undefined && previousPath !== path) {
+		unloadDocumentFrame(previousPath)
 	}
-	if (pendingCount === 0) {
-		for (const [path, fragment] of pendingFragmentByPath) {
-			if (failedPaths.has(path)) continue
-			if (!scrollToFrameFragment(path, fragment)) {
-				chapterByPath.get(path)?.scrollIntoView({ block: 'start' })
-			}
-			pendingFragmentByPath.delete(path)
+	activePath = path
+	if (!attachReaderFrame(path)) return
+	for (const [chapterPath, chapter] of chapterByPath) {
+		chapter.hidden = chapterPath !== path
+	}
+	setCurrentNavigation(path)
+	pendingFragmentByPath.clear()
+	for (const timeout of fragmentStabilizationTimeoutByPath.values()) window.clearTimeout(timeout)
+	fragmentStabilizationTimeoutByPath.clear()
+	if (positionFragment && !scrollToFrameFragment(path, fragment)) {
+		pendingFragmentByPath.set(path, fragment)
+		chapterByPath.get(path)?.scrollIntoView({ block: 'start' })
+	}
+	await requestDocumentFrame(path)
+	updateReaderBusyState()
+}
+
+async function navigateToDocument(path, fragment = '', updateHistory = true) {
+	const chapter = chapterByPath.get(path)
+	if (chapter === undefined) return
+	const currentUrl = window.location.href
+	const currentScrollY = window.scrollY
+	const currentNavigationVersion = navigationVersion + 1
+	navigationVersion = currentNavigationVersion
+	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
+	await selectDocument(path, fragment)
+	if (updateHistory && navigationVersion === currentNavigationVersion && activePath === path) {
+		readerScrollByUrl.set(currentUrl, currentScrollY)
+		window.history.pushState({}, '', `#${readerHash}`)
+	}
+	if (window.matchMedia('(max-width: 980px)').matches) setSidebarCollapsed(true)
+}
+
+function initializeFrame(path) {
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+	const frameDocument = frame.contentDocument
+	const frameWindow = frame.contentWindow
+	if (frameDocument === null || frameWindow === null) {
+		const documentEntry = documentByPath.get(path)
+		if (documentEntry !== undefined) showFrameError(documentEntry)
+		return
+	}
+
+	loadingPaths.delete(path)
+	loadedPaths.add(path)
+	failedPaths.delete(path)
+	frameDocument.body?.classList.add('reader-embedded')
+	frameWrap.dataset.loaded = 'true'
+	frameWrap.setAttribute('aria-busy', 'false')
+	frameStatus.hidden = true
+	resizeFrame(frame)
+
+	if (frame.dataset.readerInitialized !== 'true') {
+		frame.dataset.readerInitialized = 'true'
+		frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
+		frameDocument.addEventListener(
+			'toggle',
+			() => {
+				resizeFrame(frame)
+				stabilizeReaderPosition(path)
+			},
+			true,
+		)
+		frameWindow.addEventListener('docs:charts-rendered', () => {
+			resizeFrame(frame)
+			stabilizeReaderPosition(path)
+		})
+		frameWindow.addEventListener('docs:tools-ready', () => {
+			resizeFrame(frame)
+			stabilizeReaderPosition(path)
+		})
+		if (typeof ResizeObserver !== 'undefined' && frameDocument.body !== null) {
+			const observer = new ResizeObserver(() => {
+				resizeFrame(frame)
+				stabilizeReaderPosition(path)
+			})
+			observer.observe(frameDocument.body)
+			resizeObserverByPath.set(path, observer)
 		}
 	}
+
+	requestAnimationFrame(() => resizeFrame(frame))
+	window.setTimeout(() => resizeFrame(frame), 180)
+	stabilizeReaderPosition(path)
+	updateReaderBusyState()
+}
+
+function updateReaderBusyState() {
+	if (!(documentsContainer instanceof HTMLElement)) return
+	documentsContainer.setAttribute('aria-busy', activePath !== undefined && loadingPaths.has(activePath) ? 'true' : 'false')
 }
 
 function updateProgress() {
@@ -526,6 +732,24 @@ function updateProgress() {
 	const scrollable = document.documentElement.scrollHeight - window.innerHeight
 	const percentage = scrollable <= 0 ? 0 : Math.min(100, (window.scrollY / scrollable) * 100)
 	progress.style.width = `${percentage}%`
+}
+
+function restoreHash(positionFragment = true) {
+	const hash = decodeFragment(window.location.hash.slice(1))
+	if (hash === undefined || hash.length === 0) return undefined
+
+	for (const documentEntry of documents) {
+		const prefix = chapterId(documentEntry.path)
+		if (hash === prefix) {
+			void selectDocument(documentEntry.path, '', positionFragment)
+			return documentEntry.path
+		}
+		if (hash.startsWith(`${prefix}--`)) {
+			void selectDocument(documentEntry.path, hash.slice(prefix.length + 2), positionFragment)
+			return documentEntry.path
+		}
+	}
+	return undefined
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -539,34 +763,7 @@ function setSidebarCollapsed(collapsed) {
 	}
 }
 
-function restoreHash() {
-	const hash = decodeFragment(window.location.hash.slice(1))
-	if (hash === undefined || hash.length === 0) return false
-
-	for (const documentEntry of documents) {
-		const prefix = chapterId(documentEntry.path)
-		if (hash === prefix) {
-			navigateToDocument(documentEntry.path, '', false)
-			return true
-		}
-		if (hash.startsWith(`${prefix}--`)) {
-			navigateToDocument(documentEntry.path, hash.slice(prefix.length + 2), false)
-			return true
-		}
-	}
-	return false
-}
-
-createNavigation()
-createChapters()
-window.requestAnimationFrame(() => {
-	setSidebarCollapsed(window.matchMedia('(max-width: 980px)').matches)
-})
-restoreHash()
-updateReaderState()
-updateProgress()
-
-navigation?.addEventListener('click', event => {
+function handleReaderNavigationClick(event) {
 	if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 	if (!(event.target instanceof Element)) return
 	const link = event.target.closest('a[data-document-path]')
@@ -574,23 +771,50 @@ navigation?.addEventListener('click', event => {
 	const path = link.dataset.documentPath
 	if (path === undefined) return
 	event.preventDefault()
-	navigateToDocument(path, link.dataset.documentFragment ?? '')
-})
+	void navigateToDocument(path, link.dataset.documentFragment ?? '')
+}
+
+createNavigation()
+createChapters()
+setSidebarCollapsed(window.matchMedia('(max-width: 980px)').matches)
+if (restoreHash() === undefined) void selectDocument(documents[0].path, '', false)
+updateProgress()
+
+navigation?.addEventListener('click', handleReaderNavigationClick)
 sidebarToggle?.addEventListener('click', () => {
 	const collapsed = readerShell instanceof HTMLElement && readerShell.dataset.sidebarCollapsed === 'true'
 	setSidebarCollapsed(!collapsed)
 })
 window.addEventListener('scroll', updateProgress, { passive: true })
 window.addEventListener('popstate', event => {
-	if (restoreHash()) return
-	pendingFragmentByPath.clear()
-	const savedDocumentPath = event.state?.readerDocumentPath
-	const restoredPath = typeof savedDocumentPath === 'string' && chapterByPath.has(savedDocumentPath) ? savedDocumentPath : documents[0]?.path
-	if (restoredPath !== undefined) navigateToDocument(restoredPath, '', false)
-	const savedScrollY = event.state?.readerScrollY
-	window.scrollTo({ behavior: 'instant', top: typeof savedScrollY === 'number' ? savedScrollY : 0 })
+	navigationVersion += 1
+	clearPendingReaderScroll()
+	const savedScrollY = readerScrollByUrl.get(window.location.href) ?? event.state?.readerScrollY
+	const hasSavedScroll = typeof savedScrollY === 'number'
+	let restoredPath = restoreHash(!hasSavedScroll)
+	if (restoredPath === undefined) {
+		pendingFragmentByPath.clear()
+		if (window.location.hash.length === 0) {
+			restoredPath = documents[0].path
+			void selectDocument(restoredPath, '', false)
+		}
+	}
+	if (hasSavedScroll && restoredPath !== undefined) {
+		pendingReaderScroll = {
+			navigationVersion,
+			path: restoredPath,
+			scrollY: savedScrollY,
+			url: window.location.href,
+		}
+		stabilizePendingReaderScroll(restoredPath)
+	} else if (restoredPath === undefined) {
+		window.scrollTo({ behavior: 'instant', top: 0 })
+	}
 })
 window.addEventListener('resize', () => {
-	for (const frame of frameByPath.values()) resizeFrame(frame)
+	if (activePath !== undefined) {
+		const frame = frameForPath(activePath)
+		if (frame !== undefined) resizeFrame(frame)
+	}
 	updateProgress()
 })

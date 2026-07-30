@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
-const extraGlobalKeys = ['HTMLDetailsElement', 'HTMLAnchorElement', 'HTMLIFrameElement', 'matchMedia'] as const
+const extraGlobalKeys = ['HTMLDetailsElement', 'HTMLAnchorElement', 'HTMLIFrameElement', 'fetch', 'matchMedia'] as const
 
 function mediaQueryList(query: string, narrow: boolean): MediaQueryList {
 	return {
@@ -34,6 +34,9 @@ async function loadReader(narrow: boolean) {
 	}
 
 	const matchMedia = (query: string) => mediaQueryList(query, narrow)
+	const fetchDocument = async () => new Response('<!doctype html><html><body><main><h1>Document</h1><h2 id="abstract">Abstract</h2></main></body></html>')
+	Object.defineProperty(globalThis, 'fetch', { configurable: true, value: fetchDocument, writable: true })
+	Reflect.set(environment.window, 'fetch', fetchDocument)
 	Object.defineProperty(globalThis, 'matchMedia', { configurable: true, value: matchMedia, writable: true })
 	Reflect.set(environment.window, 'matchMedia', matchMedia)
 	Reflect.set(environment.window, 'scrollTo', () => undefined)
@@ -81,9 +84,12 @@ test('documentation reader shows and navigates one document at a time', async ()
 	const reader = await loadReader(false)
 	try {
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(document.querySelector('[aria-current="page"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[data-doc-search]')).toBeNull()
+		expect(document.querySelectorAll('.reader-source-link')).toHaveLength(0)
 
 		documentLink('zoltar-whitepaper.html').click()
+		await waitForHistory()
 		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
 		expect(location.hash).toBe('#doc-zoltar-whitepaper')
 
@@ -91,7 +97,7 @@ test('documentation reader shows and navigates one document at a time', async ()
 		await waitForHistory()
 		expect(location.hash).toBe('')
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(document.querySelector('[aria-current="page"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
 
 		history.forward()
 		await waitForHistory()
@@ -102,7 +108,7 @@ test('documentation reader shows and navigates one document at a time', async ()
 		await waitForHistory()
 		expect(location.hash).toBe('')
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(document.querySelector('[aria-current="page"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
 
 		history.forward()
 		await waitForHistory()
@@ -115,6 +121,7 @@ test('documentation reader shows and navigates one document at a time', async ()
 		sectionLink.dataset['documentFragment'] = 'abstract'
 		document.querySelector('[data-reader-navigation]')?.append(sectionLink)
 		sectionLink.click()
+		await waitForHistory()
 		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
 		expect(location.hash).toBe('#doc-zoltar-whitepaper--abstract')
 	} finally {

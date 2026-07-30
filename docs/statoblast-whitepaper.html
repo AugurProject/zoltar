@@ -1745,21 +1745,22 @@
 						.
 					</p>
 					<figure class="diagram" id="fig-statoblast-proportional-migration">
-						<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent pool ownership determines migrated REP, and migrated REP
-								determines the child collateral transferred from the parent
-								collateral baseline.</span></div>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent pool ownership normally determines a floored migrated REP
+								delta. The migration that completes a child's ownership receives
+								the remaining REP; cumulative routed REP determines child
+								collateral.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Proportional Migration</span>Vault
-							migration first converts parent pool ownership into migrated REP,
-							then transfers parent collateral in the same REP-at-fork
-							proportion.
+							migration normally floors each ownership-based REP delta. The migration
+							that completes a child's ownership reconciles every remaining REP unit,
+							and cumulative routed REP sets the collateral target.
 						</p>
 					</figure>
 					<div class="equation" id="eq-statoblast-fork-migration-proportion">
 						<math
 							display="block"
-							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; migrated REP equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator"
-							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator)"
+							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; the provisional migrated REP delta equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator; the migration that completes the ownership denominator instead receives all REP remaining in the fork bucket"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator); migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator ? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"
 						>
 							<mtable columnalign="right center left" rowspacing="0.8em">
 							<mtr>
@@ -1797,7 +1798,7 @@
 
 							<mtr>
 								<mtd>
-									<mi>migratedRep</mi>
+									<mi>provisionalMigratedRepDelta</mi>
 								</mtd>
 								<mtd>
 									<mo>=</mo>
@@ -1817,20 +1818,64 @@
 									</mrow>
 								</mtd>
 							</mtr>
+							<mtr>
+								<mtd>
+									<mi>migratedRepDelta</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mrow>
+										<mo>{</mo>
+										<mtable columnalign="left left" rowspacing="0.35em">
+											<mtr>
+												<mtd>
+													<mrow>
+														<mi>migrationRepDenominatorAtFork</mi>
+														<mo>&#x2212;</mo>
+														<mi>priorMigratedRep</mi>
+													</mrow>
+												</mtd>
+												<mtd>
+													<mtext>if </mtext>
+													<mi>resultingMigratedPoolOwnership</mi>
+													<mo>=</mo>
+													<mi>parentPoolOwnershipDenominator</mi>
+												</mtd>
+											</mtr>
+											<mtr>
+												<mtd>
+													<mi>provisionalMigratedRepDelta</mi>
+												</mtd>
+												<mtd>
+													<mtext>otherwise</mtext>
+												</mtd>
+											</mtr>
+										</mtable>
+									</mrow>
+								</mtd>
+							</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Fork Migration Proportion</span
-							>Unlocked vault migration floors the parent ownership share against
-							the REP bucket that backs collateral for that fork type.
+							>Unlocked vault migration normally floors the parent ownership share
+							against the REP bucket that backs collateral for that fork type. The
+							migration that completes the parent ownership denominator receives the
+							exact remaining REP delta.
 						</p>
 					</div>
 					<p>
-						The equation above gives the ownership proportion. Both external and
-						own-fork collateral transfers use one fixed, fee-exclusive fork
-						snapshot plus cumulative ceiling accounting, so repeated vault
-						migrations neither geometrically shrink later transfers nor strand
-						collateral through individual rounding. An external fork is already
+						The equation above gives the provisional ownership proportion. The
+						forker also tracks cumulative migrated parent ownership independently
+						for every child. When that cumulative value reaches the complete parent
+						denominator, the final migration receives every REP unit left in the
+						fork bucket. Both external and own-fork transfers use one fixed, fee-exclusive fork
+						snapshot plus cumulative ceiling accounting, so
+						complete ownership migration transfers the complete REP and collateral
+						snapshots without manufacturing an auction shortfall from individual
+						REP rounding. An external fork is already
 						known when <code>activateForkMode</code> checkpoints and records that
 						snapshot. The own-fork snapshot
 						uses this order: <code>activateForkMode</code> changes the pool state
@@ -3114,5 +3159,6 @@
 		</script>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
+		<script type="module" src="./interactiveTools.js"></script>
 	</body>
 </html>

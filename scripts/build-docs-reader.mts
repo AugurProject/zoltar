@@ -2,19 +2,136 @@ import assert from 'node:assert/strict'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Window } from 'happy-dom'
+import { Element, Node, Window } from 'happy-dom'
 import { markdownHeadingIds } from './docs-markdown-anchors.mts'
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
-const outputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
+const markdownOutputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
+const searchIndexOutputPath = path.join(repositoryRoot, 'docs/docsReaderSearchIndex.json')
 const readerShellPaths = new Set(['documentation.html'])
+const maximumEagerReaderBytes = 250_000
+const maximumSearchIndexBytes = 500_000
+
+type ReaderSearchSection = {
+	id: string
+	kind: 'section' | 'tool'
+	text: string
+	title: string
+}
+
+type ReaderSearchEntry = {
+	intro: string
+	sections: ReaderSearchSection[]
+}
 
 function normalizedElementText(content: string): string {
 	return content.replace(/\s+/g, ' ').trim()
 }
 
+function isElementNode(node: Node): node is Element {
+	return node.nodeType === 1
+}
+
+function searchText(element: Element, excludeInteractiveTools = false): string {
+	const clone = element.cloneNode(true)
+	if (!isElementNode(clone)) return ''
+	const excludedSelectors = ['script', 'style', 'nav', '.sidebar', '.skip-link']
+	if (excludeInteractiveTools) excludedSelectors.push('.interactive-example[id]')
+	for (const excluded of Array.from(clone.querySelectorAll(excludedSelectors.join(', ')))) {
+		excluded.remove()
+	}
+	return normalizedElementText(clone.textContent ?? '')
+}
+
+function headingSectionText(heading: Element): string {
+	const fragments: string[] = []
+	let current: Element | null = heading
+	while (current !== null) {
+		if (current !== heading && current.tagName.toLowerCase() === 'h2') break
+		fragments.push(searchText(current, true))
+		current = current.nextElementSibling
+	}
+	return normalizedElementText(fragments.join(' '))
+}
+
+function leadingDocumentText(searchRoot: Element): string {
+	const fragments: string[] = []
+	let reachedFirstSection = false
+	const visit = (node: Node) => {
+		if (reachedFirstSection) return
+		if (isElementNode(node)) {
+			if (node.tagName.toLowerCase() === 'h2') {
+				reachedFirstSection = true
+				return
+			}
+			if (node.matches('script, style, nav, .sidebar, .skip-link')) return
+		}
+		if (node.nodeType === 3) {
+			fragments.push(node.textContent ?? '')
+			return
+		}
+		for (const child of Array.from(node.childNodes)) visit(child)
+	}
+	visit(searchRoot)
+	return normalizedElementText(fragments.join(' '))
+}
+
+function buildSearchEntry(relativePath: string, html: string): ReaderSearchEntry {
+	const pageWindow = new Window()
+	pageWindow.document.write(html)
+	pageWindow.document.close()
+	const searchRoot = pageWindow.document.querySelector('main, article') ?? pageWindow.document.body
+	const sections: ReaderSearchSection[] = []
+	const sectionIds = new Set<string>()
+	const indexedToolIds = new Set<string>()
+	let headingIndex = 0
+	let toolIndex = 0
+
+	for (const candidate of Array.from(searchRoot.querySelectorAll('h2, .interactive-example[id]'))) {
+		if (candidate.matches('h2')) {
+			headingIndex += 1
+			const title = normalizedElementText(candidate.textContent ?? '') || `Section ${headingIndex}`
+			const containingSection = candidate.closest('section[id], article[id]')
+			const id = candidate.id || containingSection?.id
+			assert(id !== undefined && id.length > 0, `${relativePath} h2 "${title}" needs a stable source fragment id`)
+			assert(!sectionIds.has(id), `${relativePath} h2 "${title}" reuses indexed fragment #${id}`)
+			const target = pageWindow.document.getElementById(id)
+			assert(target !== null, `${relativePath} h2 "${title}" indexes missing source fragment #${id}`)
+			sectionIds.add(id)
+			const kind = target.matches('.interactive-example[id]') ? 'tool' : 'section'
+			let text: string
+			if (kind === 'tool') {
+				text = searchText(target)
+			} else if (containingSection === null) {
+				text = headingSectionText(candidate)
+			} else {
+				text = searchText(containingSection, true)
+			}
+			if (kind === 'tool') indexedToolIds.add(id)
+			sections.push({ id, kind, text, title })
+			continue
+		}
+
+		if (candidate.querySelector('h2') !== null) continue
+		toolIndex += 1
+		const id = candidate.id
+		if (id.length === 0 || indexedToolIds.has(id)) continue
+		const title = normalizedElementText(candidate.querySelector('summary')?.textContent ?? candidate.getAttribute('aria-label') ?? '') || `Interactive tool ${toolIndex}`
+		assert(pageWindow.document.getElementById(id) === candidate, `${relativePath} tool "${title}" indexes missing source fragment #${id}`)
+		sections.push({ id, kind: 'tool', text: searchText(candidate), title })
+	}
+
+	const intro = leadingDocumentText(searchRoot)
+	pageWindow.close()
+	assert(intro.length > 0 || sections.length > 0, `${relativePath} must provide searchable reader text`)
+	return { intro, sections }
+}
+
 async function collectReaderDocumentPaths(): Promise<string[]> {
 	const runtime = await readFile(path.join(repositoryRoot, 'docs/docsReader.js'), 'utf8')
+	assert(runtime.includes("frame.loading = 'lazy'"), 'docs reader frames must load on demand')
+	assert(!runtime.includes("frame.loading = 'eager'"), 'docs reader must not eagerly load the full corpus')
+	assert(runtime.includes('window.docsReaderOutline'), 'docs reader must use the eager compact document outline')
 	const documentPaths = Array.from(runtime.matchAll(/\n\s+path: '([^']+\.(?:html|md))',/g), match => match[1]).filter(path => path !== undefined)
 	assert(documentPaths.length > 0, 'docs/docsReader.js must declare at least one reader document')
 	assert.equal(new Set(documentPaths).size, documentPaths.length, 'docs/docsReader.js reader document paths must be unique')
@@ -83,15 +200,27 @@ async function renderMarkdownDocument(relativePath: string): Promise<readonly [s
 const documentPaths = await collectReaderDocumentPaths()
 const markdownPaths = documentPaths.filter(documentPath => documentPath.endsWith('.md')).map(documentPath => `docs/${documentPath}`)
 const renderedDocuments = Object.fromEntries(await Promise.all(markdownPaths.map(renderMarkdownDocument)))
+const searchEntries = Object.fromEntries(
+	await Promise.all(
+		documentPaths.map(async documentPath => {
+			const relativePath = `docs/${documentPath}`
+			const html = documentPath.endsWith('.md') ? renderedDocuments[documentPath] : await readFile(path.join(repositoryRoot, relativePath), 'utf8')
+			assert(html !== undefined, `${relativePath} must have rendered reader content`)
+			return [documentPath, buildSearchEntry(relativePath, html)] as const
+		}),
+	),
+)
 
-const output = `// Generated by scripts/build-docs-reader.mts. Do not edit directly.\nwindow.docsReaderMarkdown = ${JSON.stringify(renderedDocuments)}\n`
+const outlines = Object.fromEntries(Object.entries(searchEntries).map(([documentPath, entry]) => [documentPath, entry.sections.map(({ id, kind, title }) => ({ id, kind, title }))]))
+const markdownOutput = `// Generated by scripts/build-docs-reader.mts. Do not edit directly.\nwindow.docsReaderMarkdown = ${JSON.stringify(renderedDocuments)}\nwindow.docsReaderOutline = ${JSON.stringify(outlines)}\n`
+const searchIndexOutput = `${JSON.stringify(searchEntries)}\n`
+assert(Buffer.byteLength(markdownOutput) <= maximumEagerReaderBytes, `docs/docsReaderMarkdown.js exceeds its ${maximumEagerReaderBytes.toLocaleString()} byte eager-load budget`)
+assert(Buffer.byteLength(searchIndexOutput) <= maximumSearchIndexBytes, `docs/docsReaderSearchIndex.json exceeds its ${maximumSearchIndexBytes.toLocaleString()} byte lazy-load budget`)
 const checkOnly = process.argv.includes('--check')
 
 if (checkOnly) {
-	const current = await readFile(outputPath, 'utf8').catch(() => '')
-	if (current !== output) {
-		throw new Error('docs/docsReaderMarkdown.js is stale; run bun run docs:build-reader')
-	}
+	const [currentMarkdown, currentSearchIndex] = await Promise.all([readFile(markdownOutputPath, 'utf8').catch(() => ''), readFile(searchIndexOutputPath, 'utf8').catch(() => '')])
+	if (currentMarkdown !== markdownOutput || currentSearchIndex !== searchIndexOutput) throw new Error('Documentation reader bundles are stale; run bun run docs:build-reader')
 } else {
-	await writeFile(outputPath, output)
+	await Promise.all([writeFile(markdownOutputPath, markdownOutput), writeFile(searchIndexOutputPath, searchIndexOutput)])
 }

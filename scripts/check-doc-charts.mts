@@ -5,10 +5,12 @@ import { Window } from 'happy-dom'
 import ts from 'typescript'
 
 import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
+import { hasDiagramOverflow, resolveChartEnvelopeWidth } from '../docs/charts/diagramControl'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
+const diagramControlPath = path.join(repositoryRoot, 'docs/charts/diagramControl.ts')
 const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 40
@@ -16,6 +18,16 @@ const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path'
 const axisFreeNativeChartIds = new Set(['fig-contract-interaction-map'])
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 const chartAxes: ('x' | 'y')[] = ['x', 'y']
+
+if (resolveChartEnvelopeWidth(612, 780, 1024) !== 612) {
+	throw new Error('Documentation chart layout must prefer a positive measured envelope over wider parent and viewport fallbacks')
+}
+if (resolveChartEnvelopeWidth(0, 780, 1024) !== 780 || resolveChartEnvelopeWidth(0, 0, 1024) !== 992) {
+	throw new Error('Documentation chart layout must use parent and viewport widths only when the envelope has no measurable width')
+}
+if (!hasDiagramOverflow(934, 976) || !hasDiagramOverflow(957, 976) || hasDiagramOverflow(976, 976)) {
+	throw new Error('Documentation diagram controls must follow measured CSS-driven overflow at standalone breakpoint widths')
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -188,7 +200,7 @@ function assertChartNode(value: unknown, chartId: string): void {
 	}
 }
 
-const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
+const [diagramControlSource, htmlEntries, specsSource, runtimeSource] = await Promise.all([readFile(diagramControlPath, 'utf8'), readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
 if (nativeDispatchResult.issue !== undefined) {
@@ -304,6 +316,19 @@ if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createEle
 }
 if (!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Scrollable figure: ${spec.ariaLabel}')) {
 	throw new Error('Documentation figure overflow wrappers must be keyboard-focusable and accessibly named')
+}
+if (
+	!runtimeSource.includes('responsiveChartSpec(spec, overflowEnvelope)') ||
+	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)") ||
+	!runtimeSource.includes('fullSizeDiagramOverflows(overflowEnvelope)') ||
+	!runtimeSource.includes('updateDiagramControl(button, cue, isFit)') ||
+	!diagramControlSource.includes("'View full size'") ||
+	!diagramControlSource.includes("'Fit to width'") ||
+	!diagramControlSource.includes("button.removeAttribute('aria-pressed')") ||
+	!runtimeSource.includes("new CustomEvent('docs:charts-rendered')") ||
+	!runtimeSource.includes('restoreDocumentFragment')
+) {
+	throw new Error('Documentation charts must reflow quantitative plots, expose fit/full-size diagram controls, and restore fragment targets after layout')
 }
 if (
 	!/new Set\(contractInteractionEdges\.map/.test(runtimeSource) ||

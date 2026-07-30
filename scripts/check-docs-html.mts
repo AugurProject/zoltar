@@ -45,6 +45,7 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	for (const parsedDocument of parsedDocuments) {
 		validateTextEnvelope(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
+		validateInteractiveCatalogs(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
 		validatePlotMounts(parsedDocument, failures)
 		if (isLegacyRedirectDocument(parsedDocument)) {
@@ -149,6 +150,36 @@ function validateIds(parsedDocument: ParsedHtmlDocument, failures: ValidationFai
 			continue
 		}
 		seen.add(id)
+	}
+}
+
+function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const interactiveDetails = Array.from(parsedDocument.document.querySelectorAll('details.interactive-example'))
+	for (const details of interactiveDetails) {
+		const id = details.getAttribute('id')?.trim() ?? ''
+		if (id.length === 0) {
+			addFailure(parsedDocument, `${describeElement(details)} needs a stable id for direct links and shared scenarios`, failures)
+		}
+	}
+	if (interactiveDetails.length > 0 && parsedDocument.document.querySelector('script[src="./interactiveTools.js"]') === null) {
+		addFailure(parsedDocument, 'interactive calculators must load interactiveTools.js for presets, reset, sharing, and live results', failures)
+	}
+
+	const invariantEntries = Array.from(parsedDocument.document.querySelectorAll('details.invariant-entry'))
+	for (const entry of invariantEntries) {
+		const identifier = entry.querySelector('summary code')?.textContent?.trim().toLowerCase() ?? ''
+		const id = entry.getAttribute('id')?.trim() ?? ''
+		if (identifier.length === 0 || id !== identifier) {
+			addFailure(parsedDocument, `${describeElement(entry)} id must match its invariant identifier "${identifier || 'missing'}"`, failures)
+		}
+	}
+	if (invariantEntries.length > 0) {
+		if (parsedDocument.document.querySelector('#invariant-explorer') === null) {
+			addFailure(parsedDocument, 'invariant catalog must provide #invariant-explorer facets', failures)
+		}
+		if (parsedDocument.document.querySelector('script[src="./invariantExplorer.js"]') === null) {
+			addFailure(parsedDocument, 'invariant catalog must load invariantExplorer.js', failures)
+		}
 	}
 }
 
