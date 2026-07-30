@@ -2,7 +2,7 @@
 <!-- Validated production Solidity source fingerprint: ed39fb6eecfbeb5a2c682b38715a115af9692f915a91f4e3ee534898577300b7 -->
 # Contract Interaction Reference
 
-The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](./documentation.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
+The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](../documentation.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
 
 The tables focus on transaction entrypoints in the ten primary state-changing contracts that users and protocol components interact with directly. Each read surface names every read-only function and public storage getter in the deployed contract ABI; its hidden fingerprint pins the exact source declarations, including parameters, returns, visibility, and mutability. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator. Stateless helpers, deployment workers, factories used only for component construction, migration proxies, and event emitters are inventoried with their caller boundaries in the Operator Reference.
 
@@ -12,7 +12,7 @@ Failure behavior follows Solidity transaction semantics: an uncaught revert roll
 
 ## ZoltarQuestionData
 
-Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata. [Source](../solidity/contracts/ZoltarQuestionData.sol)
+Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata. [Source](../../solidity/contracts/ZoltarQuestionData.sol)
 
 Read surface: Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers.
 
@@ -25,7 +25,7 @@ Read surface: Use `getQuestionId` before submission; `questionCreatedTimestamp`,
 
 ## Zoltar
 
-Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. [Source](../solidity/contracts/Zoltar.sol)
+Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. [Source](../../solidity/contracts/Zoltar.sol)
 
 Read surface: Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.
 
@@ -44,7 +44,7 @@ Security boundaries for these calls are [A15 intended question selection](./secu
 
 ## ReputationToken
 
-Implements universe-specific ERC-20 REP and enforces the supply ceiling maintained by Zoltar. [Source](../solidity/contracts/ReputationToken.sol)
+Implements universe-specific ERC-20 REP and enforces the supply ceiling maintained by Zoltar. [Source](../../solidity/contracts/ReputationToken.sol)
 
 Read surface: Use `getTotalTheoreticalSupply`, `zoltar`, and the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads.
 
@@ -62,7 +62,7 @@ Read surface: Use `getTotalTheoreticalSupply`, `zoltar`, and the standard ERC-20
 
 ## SecurityPoolFactory
 
-Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction. [Source](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol)
+Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction. [Source](../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol)
 
 Read surface: Use `initialEscalationGameDeposit` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.
 
@@ -76,7 +76,7 @@ Read surface: Use `initialEscalationGameDeposit` for the immutable deployment pa
 
 ## SecurityPool
 
-Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation. [Source](../solidity/contracts/peripherals/SecurityPool.sol)
+Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation. [Source](../../solidity/contracts/peripherals/SecurityPool.sol)
 
 Read surface: Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.
 
@@ -121,7 +121,7 @@ Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 time
 
 ## SecurityPoolForker
 
-Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions. [Source](../solidity/contracts/peripherals/SecurityPoolForker.sol)
+Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions. [Source](../../solidity/contracts/peripherals/SecurityPoolForker.sol)
 
 Read surface: Use `zoltar`, `forkData`, `getMigratedRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `repToPoolOwnership`, and `poolOwnershipToRep` to reconstruct fork progress and preview migration conversions.
 
@@ -150,7 +150,7 @@ Fork entrypoints and child setup may receive contracts through unauthenticated p
 
 ## EscalationGame
 
-Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits. [Source](../solidity/contracts/peripherals/EscalationGame.sol)
+Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits. [Source](../../solidity/contracts/peripherals/EscalationGame.sol)
 
 Read surface: Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, and `totalEscrowedRep`. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.
 
@@ -179,7 +179,7 @@ Read surface: Base getters are `securityPool`, `repToken`, `activationTime`, `no
 
 ## OpenOraclePriceCoordinator
 
-Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it. [Source](../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol)
+Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it. [Source](../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol)
 
 Read surface: Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeWeiPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.
 
@@ -200,7 +200,7 @@ Report and staged-operation liveness depends on [A16 timely inclusion](./securit
 
 ## ShareToken
 
-Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches. [Source](../solidity/contracts/peripherals/tokens/ShareToken.sol)
+Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches. [Source](../../solidity/contracts/peripherals/tokens/ShareToken.sol)
 
 Read surface: Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmount`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.
 
@@ -220,7 +220,7 @@ Read surface: Base and relationship getters are `name`, `symbol`, `zoltar`, `can
 
 ## UniformPriceDualCapBatchAuction
 
-Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. [Source](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol)
+Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. [Source](../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol)
 
 Read surface: Auction summary getters are `maxRepBeingSold`, `ethRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearing`, `ethRaised`, `totalRepPurchased`, `auctionStarted`, `minBidSize`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningEth`, and `activeTickCount`. `pendingEthRefunds` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.
 

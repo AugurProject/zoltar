@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>EscalationGame Architecture</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -142,18 +142,18 @@
 				<h2>Accounting Invariants</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-					<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
-					<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
-					<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
-					<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a21"
+					<a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+					<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+					<a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>,
+					<a href="../safety-operations/security-model.html#assumption-a04">A04 early alarm capital</a>,
+					<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+					<a href="../safety-operations/security-model.html#assumption-a21"
 						>A21 genesis REP behavior</a
 					>,
-					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
-					<a href="./security-model.html#assumption-a20">A20 proof-data availability</a>,
+					<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
+					<a href="../safety-operations/security-model.html#assumption-a20">A20 proof-data availability</a>,
 					and
-					<a href="./security-model.html#assumption-a27">A27 cryptographic security</a>.
+					<a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.
 				</p>
 				<p>
 					Safe refactors keep the local REP and unresolved-deposit counters in
@@ -228,7 +228,7 @@
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
-							<td>An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="../safety-operations/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.</td>
 						</tr>
 						<tr>
 							<td>Inherited losing outcome</td>
@@ -236,7 +236,7 @@
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="statoblast-whitepaper.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
+							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -293,9 +293,9 @@
 				<h2>Deployment and Bytecode</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-					<a href="./security-model.html#assumption-a23">A23 verified deployment</a>, and
-					<a href="./security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
+					<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+					<a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, and
+					<a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
 				</p>
 				<p>
 					The proof verifier and deposit delegate splits also exist because
@@ -338,7 +338,7 @@
 					because address derivation uses init code. After contract changes,
 					regenerate and review every network deployment manifest with the normal
 					artifact workflow. Follow the
-					<a href="./operator-reference.md#launch-release-checklist"
+					<a href="../safety-operations/operator-reference.md#launch-release-checklist"
 						>Operator Reference launch release checklist</a
 					>
 					when those addresses intentionally change.
@@ -386,9 +386,10 @@
 				</table>
 			</section>
 		</main>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

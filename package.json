@@ -98,7 +98,7 @@
 		"coverage:full": "bun run coverage:typescript && bun run coverage:contracts:bytecode && bun run coverage:check",
 		"coverage": "bun run coverage:fast",
 		"docs:check-html": "bun ./scripts/check-docs-html.mts",
-		"docs:build-charts": "bun build ./docs/charts/chartRuntime.ts --outfile ./docs/chartRuntime.js --target browser --minify",
+		"docs:build-charts": "bun build ./docs/charts/chartRuntime.ts --outfile ./docs/assets/js/chartRuntime.js --target browser --minify",
 		"docs:build-reader": "bun ./scripts/build-docs-reader.mts",
 		"docs:check-charts": "bun ./scripts/check-doc-charts.mts",
 		"docs:check-reader": "bun ./scripts/build-docs-reader.mts --check",

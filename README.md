@@ -17,18 +17,18 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 
 Protocol documentation lives in `docs/`:
 
-- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, account-authority, and cryptographic assumptions A01–A28
-- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
-- [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing) — funded and underfunded clearing mechanics
+- [Security model](https://augurproject.github.io/zoltar/docs/safety-operations/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, account-authority, and cryptographic assumptions A01–A28
+- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
+- [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/protocol-design/truth-auction.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 For oracle audit classification, use the
-[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs)
-and [attack model](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#attack-model).
+[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs)
+and [attack model](https://augurproject.github.io/zoltar/docs/protocol-design/open-oracle-integration.html#attack-model).
 For weak-demand auction behavior, use
-[Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing).
+[Truth-auction clearing](https://augurproject.github.io/zoltar/docs/protocol-design/truth-auction.html#clearing).
 The invariant catalog owns the current requirement, status, and evidence for
-[`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/invariants.html#ext-05).
+[`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/safety-operations/invariants.html#ext-05).
 
 Deterministic deployment outputs live in the generated
 [`mainnet`](./docs/mainnet-deployment-addresses.json) and
@@ -105,11 +105,11 @@ are defined in
 [`shared/ts/sepoliaRepAllocations.ts`](./shared/ts/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address. See the
-[Genesis REP deployment procedure](./docs/operator-reference.md#genesis-rep-deployment)
+[Genesis REP deployment procedure](./docs/safety-operations/operator-reference.md#genesis-rep-deployment)
 for constructor guards and recovery steps.
 
 Sepolia quote-dependent actions query live, network-local Uniswap liquidity.
-The [OpenOracle integration guide](./docs/open-oracle-integration.html#openoracle-role)
+The [OpenOracle integration guide](./docs/protocol-design/open-oracle-integration.html#openoracle-role)
 owns the quote-source order and address-selection details.
 
 ## Browser Simulation
@@ -132,7 +132,7 @@ Simulation mode details:
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Its **Mint 1 million REP** control credits only the selected QA account inside the tab-local simulation. It raises the simulated REP theoretical supply and, when Zoltar is deployed, synchronizes the genesis universe supply and fork threshold. It does not request a wallet transaction or mint on mainnet or Sepolia. Resetting the simulation or closing the tab discards unsaved credited REP; an explicitly saved or exported simulation snapshot can restore it only inside another browser-local simulation. On public Sepolia, Genesis REP remains limited to the constructor-fixed [allocation list](#sepolia); mainnet REP is unaffected.
 - Simulation does not call Uniswap. Supported REP/ETH, REP/WETH, and REP/USDC quote paths use the configured browser-local mock; unsupported pairs degrade. Simulation prices are not evidence of mainnet liquidity.
-- Mainnet and Sepolia quote-dependent flows rely on live RPC data and available network-local Uniswap liquidity under [A24 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a24). Available and representative liquidity is an official-client limitation, not a protocol security assumption. If a quote is stale, unavailable, or unsupported, affected client actions should remain blocked or degraded rather than falling back to simulated prices.
+- Mainnet and Sepolia quote-dependent flows rely on live RPC data and available network-local Uniswap liquidity under [A24 client and RPC integrity](https://augurproject.github.io/zoltar/docs/safety-operations/security-model.html#assumption-a24). Available and representative liquidity is an official-client limitation, not a protocol security assumption. If a quote is stale, unavailable, or unsupported, affected client actions should remain blocked or degraded rather than falling back to simulated prices.
 - The live simulation chain is ephemeral and exists only in the current browser tab session; explicitly saved or exported snapshots can recreate its state in a later browser-local session
 
 ## Common Commands

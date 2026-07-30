@@ -4,51 +4,11 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Augur Statoblast White Paper</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="paper-page paper-statoblast">
-		<a class="skip-link" href="#main-content">Skip to document</a>
-		<div class="site-shell">
-			<aside class="sidebar" aria-label="Table of contents">
-				<div class="sidebar-header">
-					<span class="sidebar-series">Augur / Zoltar</span>
-					<strong>Statoblast</strong>
-					<p>A prediction market built on Zoltar.</p>
-				</div>
-					<a class="sidebar-companion" href="./zoltar-whitepaper.html">
-						<span>Companion paper</span>
-						<b>Zoltar Oracle Layer</b>
-					</a>
-					<a class="sidebar-companion" href="./security-model.html">
-						<span>Security boundaries</span>
-						<b>Protocol Security Model</b>
-					</a>
-					<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#overview">System Overview</a>
-					<a href="#architecture">Architecture</a>
-					<a href="#roles">Economic Roles</a>
-					<a href="#pools">Security Pools</a>
-					<a href="#shares">Shares</a>
-					<a href="#escalation">Escalation</a>
-					<a href="#migration">Fork Migration</a>
-					<a href="#auction">Truth Auction</a>
-					<a href="#oracle">REP/ETH Oracle</a>
-					<a href="#security">Security Model</a>
-					<a href="#parameters">Parameter Sources</a>
-					<a href="#constraints">Constraints</a>
-					<a href="./operator-reference.md">Operator Reference</a>
-				</nav>
-			</aside>
-
-			<main id="main-content">
+		<main id="main-content">
 				<header class="hero">
-					<div class="paper-brand">
-						<a class="companion-link" href="./zoltar-whitepaper.html">
-							<span>Companion paper</span>
-							<b>Zoltar - Branching Oracle Base Layer</b>
-						</a>
-					</div>
 					<div class="hero-label-row">
 						<p class="kicker">
 							<span class="layer-dot" aria-hidden="true"></span>Prediction
@@ -59,28 +19,13 @@
 						</p>
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
-					<p class="subtitle">
-						A permissionless oracle and prediction-market protocol built on
-						Ethereum and Zoltar, subject to the assumptions in the
-						<a href="./security-model.html">Protocol Security Model</a>.
-					</p>
 				</header>
 
 				<section class="paper-section" id="abstract">
-					<div class="section-heading">
-						<h2>Abstract</h2>
-						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
-					</div>
-					<p class="lede">
-						Augur Statoblast is a binary prediction market built on top of Zoltar. It
-						creates security pools scoped to individual questions, lets traders
-						mint and redeem ETH-backed shares, lets REP vaults provide
-						underwriting, and tries to settle disputes locally before forcing
-						Zoltar to fork.
-					</p>
+					<p> Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../safety-operations/security-model.html">Protocol Security Model</a>. </p>
 					<p> The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault holders choose a child by migrating their vault positions, and the forker materializes the corresponding child REP. </p>
 					<p> Proportional open-interest collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
-					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="./truth-auction.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
+					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="../protocol-design/truth-auction.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
 				</section>
 
 				<section class="paper-section" id="overview">
@@ -207,10 +152,10 @@
 						</div>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
-							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, and
-							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
+							<a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+							<a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>,
+							<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>, and
+							<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>.
 						</p>
 						<ul>
 						<li> Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built. </li>
@@ -231,18 +176,18 @@
 						</div>
 							<p class="security-assumption-ref">
 								<strong>Security assumptions:</strong>
-								<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
-								<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
-								<a href="./security-model.html#assumption-a21"
+								<a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>,
+								<a href="../safety-operations/security-model.html#assumption-a14">A14 REP economic backing</a>,
+								<a href="../safety-operations/security-model.html#assumption-a21"
 									>A21 genesis REP and WETH behavior</a
 								>,
-								<a href="./security-model.html#assumption-a23">A23 canonical deployment</a>,
-								<a href="./security-model.html#assumption-a15">A15 intended question selection</a>,
-								<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
-								<a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>,
-								<a href="./security-model.html#assumption-a24">A24 client and wallet integrity</a>,
+								<a href="../safety-operations/security-model.html#assumption-a23">A23 canonical deployment</a>,
+								<a href="../safety-operations/security-model.html#assumption-a15">A15 intended question selection</a>,
+								<a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>,
+								<a href="../safety-operations/security-model.html#assumption-a22">A22 asset-recipient compatibility</a>,
+								<a href="../safety-operations/security-model.html#assumption-a24">A24 client and wallet integrity</a>,
 								and
-								<a href="./security-model.html#assumption-a28">A28 account authority</a>.
+								<a href="../safety-operations/security-model.html#assumption-a28">A28 account authority</a>.
 						</p>
 						<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -262,7 +207,7 @@
 						with different priority fees therefore cannot share a pool or
 						share-token namespace, while children inherit their origin's
 						configuration. The
-						<a href="./operator-reference.md#security-pool-guardrails">Operator Reference</a>
+						<a href="../safety-operations/operator-reference.md#security-pool-guardrails">Operator Reference</a>
 						owns the exact address and registry-key derivations.
 					</p>
 					<p>
@@ -611,7 +556,7 @@
 					<h3>Solvency Operations and Liquidation</h3>
 					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation transfers unsafe allowance to a non-liquidatable caller vault and seizes unlocked target REP, so it redistributes backing rather than creating it.</p>
 
-					<p>Read how the liquidation works from <a href="./liquidation.html">Liquidation Design</a>.</p>
+					<p>Read how the liquidation works from <a href="../protocol-design/liquidation.html">Liquidation Design</a>.</p>
 				</section>
 
 				<section class="paper-section" id="shares">
@@ -657,9 +602,9 @@
 						<code>current source balance - amount already materialized</code>. If
 						every selected delta is zero, the call reverts.
 						The canonical guarantees are
-						<a href="./invariants.html#fork-10"><code>FORK-10</code></a>,
-						<a href="./invariants.html#share-04"><code>SHARE-04</code></a>, and
-						<a href="./invariants.html#fork-11"><code>FORK-11</code></a>.
+						<a href="../safety-operations/invariants.html#fork-10"><code>FORK-10</code></a>,
+						<a href="../safety-operations/invariants.html#share-04"><code>SHARE-04</code></a>, and
+						<a href="../safety-operations/invariants.html#fork-11"><code>FORK-11</code></a>.
 					</p>
 					<p>
 						At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That
@@ -713,29 +658,42 @@
 						>
 					</div>
 					<p class="lede">
-						Statoblast tries local resolution before forcing Zoltar to fork. An
-						<code>EscalationGame</code> escrows vault-backed REP behind
-						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. After
-						the deadline, a unique leading outcome can resolve locally. If at
-						least two outcomes reach the non-decision threshold, the pool can use
-						its escalation backing to initiate a Zoltar fork.
+						When a market ends, Statoblast attempts to resolve its outcome by
+						running an Escalation Game based on
+						<a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md"
+							>The Isonzo Front</a
+						>. Participants escrow vault-backed REP behind
+						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>.
+						Each deposit adds to that outcome's cumulative balance; it does not
+						have to outbid the previous deposit or the current leader. The
+						accepted deposit must normally meet the game's starting bond, unless
+						it fills the selected outcome to the non-decision threshold.
 					</p>
-						<p class="security-assumption-ref">
-							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
-							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
-							<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
-						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+					<p>
+						The running escalation cost increases with elapsed time, and the
+						median outcome balance determines the scheduled end. After that
+						deadline, a strict balance leader resolves the question. If two
+						outcomes instead reach the non-decision threshold, the game enters
+						local non-decision and Statoblast proceeds to its fork-resolution
+						path. The sections below derive those rules and their economic
+						consequences.
+					</p>
+					<p class="security-assumption-ref">
+						<strong>Security assumptions:</strong>
+						<a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+						<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+						<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+						<a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>,
+						<a href="../safety-operations/security-model.html#assumption-a04">A04 early alarm capital</a>,
+						<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>,
+						<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
 						and
-						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
+						<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>.
 					</p>
 
 					<div class="callout">
 						<strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded.
-						The Escalation Game system is an optimization, and in theory the system would work without it as well.
+						The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.
 					</div>
 					<p>
 						<code>SecurityPoolFactory</code> requires its configured
@@ -1191,7 +1149,7 @@
 					<p>
 						For the exact resolution ordering, empty-game fallback, deposit
 						clipping, carry batching, and residual sweep rules, see
-						<a href="./operator-reference.md#escalation-resolution-and-deposits"
+						<a href="../safety-operations/operator-reference.md#escalation-resolution-and-deposits"
 							>Escalation Resolution and Deposits</a
 						>.
 					</p>
@@ -1338,6 +1296,7 @@
 											</mfrac>
 											<mo>)</mo>
 										</mrow>
+										<mspace linebreak="newline" />
 										<mtext>
 											if forkTime &lt;= escalationGameEndDate and
 											actualForkThreshold &lt; nonDecisionThreshold</mtext
@@ -1447,7 +1406,7 @@
 									<td>
 										The affected vault invokes the wrapper for its own parent lock totals.
 										See the
-										<a href="./operator-reference.md#escalation-resolution-and-deposits">operator cleanup reference</a>
+										<a href="../safety-operations/operator-reference.md#escalation-resolution-and-deposits">operator cleanup reference</a>
 										for ordering, scope, and proof independence.
 									</td>
 								</tr>
@@ -1491,7 +1450,7 @@
 						<a href="#migration">Forks and Migration</a>. This section only distinguishes
 						the settlement entry points and their caller permissions.
 					</p>
-					<p> Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>. </p>
+					<p> Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="../architecture-deployment/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>. </p>
 				</section>
 
 					<section class="paper-section" id="migration">
@@ -1516,15 +1475,15 @@
 					</p>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-						<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
-						<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
-						<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
-						<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
-						<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
-						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
+						<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>,
+						<a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+						<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+						<a href="../safety-operations/security-model.html#assumption-a11">A11 practical migration</a>,
+						<a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>,
+						<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+						<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
 						and
-						<a href="./security-model.html#assumption-a20">A20 chain-data availability</a>.
+						<a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data availability</a>.
 					</p>
 
 					<table>
@@ -1604,7 +1563,7 @@
 						</li>
 						<li>
 							Parent-lock cleanup is optional and vault-scoped; the
-							<a href="./operator-reference.md#escalation-resolution-and-deposits">operator cleanup reference</a>
+							<a href="../safety-operations/operator-reference.md#escalation-resolution-and-deposits">operator cleanup reference</a>
 							owns wrapper ordering and constant-size export details.
 						</li>
 						<li>
@@ -1741,7 +1700,7 @@
 						split for each parent-pool/outcome pair and only splits the
 						shortfall before sweeping child REP into the child pool. The
 						migration-proxy and child-backing guardrails are collected in
-						<a href="./operator-reference.md#fork-migration">Fork Migration</a>
+						<a href="../safety-operations/operator-reference.md#fork-migration">Fork Migration</a>
 						.
 					</p>
 					<figure class="diagram" id="fig-statoblast-proportional-migration">
@@ -2117,7 +2076,7 @@
 						Recursive continuation adds another descendant branch to the migration
 						lifecycle described here. The normative recursive-fork gas-bound
 						requirement, current enforcement status, and evidence are maintained in
-						<a href="invariants.html#ext-05">EXT-05</a>. Total historical data and
+						<a href="../safety-operations/invariants.html#ext-05">EXT-05</a>. Total historical data and
 						offchain proof coordination can still grow as more forks occur.
 					</p>
 					<p>
@@ -2428,17 +2387,17 @@
 						</div>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
-							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a03">A03 independent demand</a>,
-							<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
-							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
-							<a href="./security-model.html#assumption-a20">A20 bid-data availability</a>,
-							<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
+							<a href="../safety-operations/security-model.html#assumption-a01">A01 bidder incentives</a>,
+							<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+							<a href="../safety-operations/security-model.html#assumption-a03">A03 independent demand</a>,
+							<a href="../safety-operations/security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+							<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>,
+							<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+							<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
+							<a href="../safety-operations/security-model.html#assumption-a20">A20 bid-data availability</a>,
+							<a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>,
 							and
-							<a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
+							<a href="../safety-operations/security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
 						</p>
 					<p class="lede"> After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap. </p>
 
@@ -2553,7 +2512,7 @@
 						Auction winners become the responsible child-pool owners only when
 						their claims attach ownership and allowance to bidder vaults. Recipient
 						behavior cannot roll back that accounting transition. The
-						<a href="./truth-auction.html#zero-migration-full-cap-ownership"
+						<a href="../protocol-design/truth-auction.html#zero-migration-full-cap-ownership"
 							>Truth Auction settlement specification</a
 						>
 						owns the exact zero-migration ownership conversion, allowance
@@ -2561,12 +2520,12 @@
 					</p>
 					<h3>Clearing and Settlement</h3>
 					<p>
-						The <a href="./truth-auction.html#clearing">Truth Auction design</a>
+						The <a href="../protocol-design/truth-auction.html#clearing">Truth Auction design</a>
 						owns tick pricing, cap selection, underfunded qualification, and the
 						interactive examples; its
-						<a href="./truth-auction.html#settlement">settlement section</a> owns
+						<a href="../protocol-design/truth-auction.html#settlement">settlement section</a> owns
 						allocation rounding and recovery behavior.
-						The <a href="./security-model.html#assumption-a12">security model</a>
+						The <a href="../safety-operations/security-model.html#assumption-a12">security model</a>
 						separately states efficient REP-to-ETH auction conversion as an
 						explicit assumption.
 					</p>
@@ -2579,19 +2538,19 @@
 						</div>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>,
-							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a17">A17 corrector capability</a>,
-							<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>,
-							<a href="./security-model.html#assumption-a19">A19 observable correctable price</a>,
-							<a href="./security-model.html#assumption-a06">A06 settlement executors</a>,
+							<a href="../safety-operations/security-model.html#assumption-a01">A01 arbitrage incentives</a>,
+							<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+							<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>,
+							<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+							<a href="../safety-operations/security-model.html#assumption-a17">A17 corrector capability</a>,
+							<a href="../safety-operations/security-model.html#assumption-a18">A18 independent correction incentive</a>,
+							<a href="../safety-operations/security-model.html#assumption-a19">A19 observable correctable price</a>,
+							<a href="../safety-operations/security-model.html#assumption-a06">A06 settlement executors</a>,
 							and
-							<a href="./security-model.html#assumption-a20">A20 report-state availability</a>.
+							<a href="../safety-operations/security-model.html#assumption-a20">A20 report-state availability</a>.
 						</p>
 					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path. </p>
-					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
+					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="../protocol-design/open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
 					<p>
 						If the last price is stale, solvency-sensitive operations can be
 						queued until a valid report is settled. The coordinator then replays
@@ -2627,19 +2586,19 @@
 						>
 					</div>
 						<p>
-							The <a href="./security-model.html">Protocol Security Model</a>
+							The <a href="../safety-operations/security-model.html">Protocol Security Model</a>
 					defines assumptions A01–A28 and the guarantees deliberately excluded
 							from the protocol model.
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Primary economic assumptions:</strong>
-							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
-							<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
-							<a href="./security-model.html#assumption-a12">A12 truth-auction demand</a>,
-							<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
+							<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>,
+							<a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+							<a href="../safety-operations/security-model.html#assumption-a12">A12 truth-auction demand</a>,
+							<a href="../safety-operations/security-model.html#assumption-a14">A14 REP economic backing</a>,
 							and
-							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>.
+							<a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>.
 						</p>
 					<ul>
 						<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
@@ -2664,7 +2623,7 @@
 					</div>
 					<p class="security-assumption-ref">
 						<strong>Security assumption:</strong>
-						<a href="./security-model.html#assumption-a25"
+						<a href="../safety-operations/security-model.html#assumption-a25"
 							>A25 safe immutable parameters</a
 						>.
 					</p>
@@ -2674,11 +2633,11 @@
 						</thead>
 						<tbody>
 							<tr><td>Universe fork thresholds and haircuts</td><td><a href="./zoltar-whitepaper.html#economics">Zoltar fork economics</a></td></tr>
-							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Resolution</a></td></tr>
-							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="./truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
-							<tr><td>Liquidation constants and solvency limits</td><td><a href="./liquidation.html#punitive-liquidation">Liquidation penalty math</a></td></tr>
-							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="./open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
-							<tr><td>Carry-proof peak and nullifier bounds</td><td><a href="./merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td></tr>
+							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Game</a></td></tr>
+							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="../protocol-design/truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
+							<tr><td>Liquidation constants and solvency limits</td><td><a href="../protocol-design/liquidation.html#punitive-liquidation">Liquidation penalty math</a></td></tr>
+							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="../protocol-design/open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
+							<tr><td>Carry-proof peak and nullifier bounds</td><td><a href="../architecture-deployment/merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td></tr>
 						</tbody>
 					</table>
 				</section>
@@ -2717,10 +2676,9 @@
 						</li>
 					</ul>
 				</section>
-			</main>
-		</div>
+		</main>
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script>
 			const formatFixed = (value, digits = 2) => {
 				if (Number.isInteger(value)) {
@@ -3157,8 +3115,9 @@
 			}
 
 		</script>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>
