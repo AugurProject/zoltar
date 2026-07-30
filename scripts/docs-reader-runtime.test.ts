@@ -70,6 +70,10 @@ function visibleDocumentPaths() {
 		.map(chapter => chapter.dataset['documentPath'])
 }
 
+function expandedNavigationDocumentPaths() {
+	return Array.from(document.querySelectorAll<HTMLDetailsElement>('.reader-nav-document[open]')).map(documentEntry => documentEntry.dataset['navigationDocumentPath'])
+}
+
 function documentLink(path: string) {
 	const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('.reader-nav-document-link')).find(candidate => candidate.dataset['documentPath'] === path)
 	if (link === undefined) throw new Error(`Reader navigation link is missing for ${path}`)
@@ -84,7 +88,9 @@ test('documentation reader shows and navigates one document at a time', async ()
 	const reader = await loadReader(false)
 	try {
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
 		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector<HTMLIFrameElement>('.reader-document-frame')?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
 		for (const selector of ['[data-doc-search]', '[data-search-status]', '[data-search-results]', '[data-retry-search]', '[data-reader-empty]']) {
 			expect(document.querySelector(selector)).toBeNull()
 		}
@@ -96,12 +102,14 @@ test('documentation reader shows and navigates one document at a time', async ()
 		documentLink('zoltar-whitepaper.html').click()
 		await waitForHistory()
 		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
 		expect(location.hash).toBe('#doc-zoltar-whitepaper')
 
 		history.back()
 		await waitForHistory()
 		expect(location.hash).toBe('')
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(document.querySelector<HTMLIFrameElement>('.reader-document-frame')?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
 		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
 
 		history.forward()

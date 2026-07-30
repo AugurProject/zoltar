@@ -180,10 +180,11 @@ function createNavigation() {
 		groupDocuments.className = 'reader-nav-documents'
 
 		for (const documentEntry of group.documents) {
-			const documentElement = document.createElement('section')
+			const documentElement = document.createElement('details')
 			documentElement.className = 'reader-nav-document'
 			documentElement.dataset.navigationDocumentPath = documentEntry.path
 
+			const documentSummary = document.createElement('summary')
 			const link = document.createElement('a')
 			link.className = 'reader-nav-document-link'
 			link.href = `#${chapterId(documentEntry.path)}`
@@ -192,6 +193,7 @@ function createNavigation() {
 			const title = document.createElement('strong')
 			title.textContent = documentEntry.title
 			link.append(title)
+			documentSummary.append(link)
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
@@ -199,7 +201,13 @@ function createNavigation() {
 			for (const section of outlineSections(documentEntry.path)) {
 				sectionList.append(sectionLink(documentEntry.path, section))
 			}
-			documentElement.append(link, sectionList)
+			documentElement.append(documentSummary, sectionList)
+			documentElement.addEventListener('toggle', () => {
+				if (!documentElement.open) return
+				for (const [path, candidate] of navigationDocumentByPath) {
+					if (path !== documentEntry.path && candidate instanceof HTMLDetailsElement) candidate.open = false
+				}
+			})
 			groupDocuments.append(documentElement)
 			navigationDocumentByPath.set(documentEntry.path, documentElement)
 		}
@@ -241,13 +249,11 @@ function htmlFrameSource(path, source) {
 }
 
 function writeFrameSource(path, frame, source) {
-	const frameDocument = frame.contentDocument
-	if (frameDocument === null) return false
+	if (!frame.isConnected) return false
 	frame.dataset.readerSourceReady = 'true'
 	frame.dataset.readerSourceUrl = path
-	frameDocument.open()
-	frameDocument.write(source)
-	frameDocument.close()
+	frame.hidden = false
+	frame.srcdoc = source
 	initializeFrame(path)
 	return true
 }
@@ -356,14 +362,7 @@ function unloadDocumentFrame(path) {
 	delete frame.dataset.readerSourceUrl
 	delete frame.dataset.readerInitialized
 	frame.style.removeProperty('height')
-	const frameDocument = frame.contentDocument
-	if (frameDocument !== null) {
-		frameDocument.open()
-		frameDocument.write('<!doctype html><title></title>')
-		frameDocument.close()
-	}
-	frame.removeAttribute('src')
-	frame.removeAttribute('srcdoc')
+	frame.hidden = true
 	delete frameWrap.dataset.loaded
 	frameWrap.setAttribute('aria-busy', 'false')
 	frameStatus.hidden = true
@@ -386,7 +385,7 @@ async function requestDocumentFrame(path) {
 	frameWrap.setAttribute('aria-busy', 'true')
 	frameStatus.hidden = false
 	frameStatus.textContent = 'Loading document…'
-	frame.hidden = false
+	frame.hidden = true
 	frameWrap.querySelector('.reader-frame-error')?.remove()
 	failedPaths.delete(path)
 	updateReaderBusyState()
@@ -613,6 +612,9 @@ function stabilizeReaderPosition(path) {
 }
 
 function setCurrentNavigation(path) {
+	for (const [documentPath, documentElement] of navigationDocumentByPath) {
+		if (documentElement instanceof HTMLDetailsElement) documentElement.open = documentPath === path
+	}
 	for (const link of document.querySelectorAll('.reader-nav-document-link')) {
 		if (!(link instanceof HTMLAnchorElement)) continue
 		if (link.dataset.documentPath === path) {
@@ -682,6 +684,7 @@ function initializeFrame(path) {
 		if (documentEntry !== undefined) showFrameError(documentEntry)
 		return
 	}
+	if (frame.dataset.readerSourceReady !== 'true' || frame.dataset.readerSourceUrl !== path || frameDocument.baseURI !== sourceUrl(path)) return
 
 	loadingPaths.delete(path)
 	loadedPaths.add(path)
@@ -762,7 +765,7 @@ function setSidebarCollapsed(collapsed) {
 	readerShell.dataset.sidebarCollapsed = String(collapsed)
 	sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
 	sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand menu' : 'Collapse menu')
-	sidebarToggle.title = collapsed ? 'Expand menu' : ''
+	sidebarToggle.title = collapsed ? 'Expand menu' : 'Collapse menu'
 	if (sidebarToggleLabel instanceof HTMLElement) {
 		sidebarToggleLabel.textContent = collapsed ? 'Expand menu' : 'Collapse menu'
 	}
