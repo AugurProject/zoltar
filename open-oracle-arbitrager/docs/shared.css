@@ -344,4 +344,9 @@ body.doc-openoracle td math {
 		overflow-x: auto;
 		white-space: nowrap;
 	}
+
+	body.doc-openoracle .table-scroll table {
+		display: table;
+		overflow-x: visible;
+	}
 }
