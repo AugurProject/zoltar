@@ -294,11 +294,17 @@ The bot calls only the parent-bound entrypoints in the first four rows below.
 parent-block guard and emits no durable bot-accounting event, so the arbitrager
 runtime does not use it.
 
+The runtime—not the executor—authenticates which report and amounts belong to a
+durable position. It derives those values from quorum-confirmed state and the
+position journal, then matches the resulting event during receipt recovery. The
+executor enforces the parent binding and exact caller-requested transfers, but its
+event alone is not self-authenticating position-attribution evidence.
+
 | Function | Intended caller and behavior | Success evidence and constraints |
 | --- | --- | --- |
 | `hedgeAndDispute` | Arbitrager wallet; executes the selected authenticated V2, V3, or hookless V4 hedge and replacement report atomically. | Requires the signed canonical parent and emits `HedgeAndDisputeExecuted`. |
-| `settleAndWithdraw` | Arbitrager wallet; optionally settles, then withdraws one position's exact two-token proceeds and settler reward. | Requires the signed canonical parent and emits `LifecycleExecuted`. |
-| `withdrawReplacementCredit` | Arbitrager wallet; withdraws only the exact credit from the immediate replacement report. | Requires the signed canonical parent and emits `ReplacementCreditWithdrawn`. |
+| `settleAndWithdraw` | Arbitrager wallet; executes the runtime's requested two-token withdrawal and optionally settles the supplied report. | Requires the signed canonical parent, transfers the exact caller-supplied amounts, and emits `LifecycleExecuted`. The runtime authenticates report and position attribution. |
+| `withdrawReplacementCredit` | Arbitrager wallet; executes the runtime's requested one-token credit withdrawal. | Requires the signed canonical parent, transfers the exact caller-supplied amount, and emits `ReplacementCreditWithdrawn` with the caller-supplied report ID. The runtime derives and authenticates the immediate-replacement credit. |
 | `assertParentBlock` | Bot transaction preflight or atomic bundle; checks the next-block parent binding without changing state. | Reverts unless the supplied parent is the current block's canonical parent. |
 | `dispute` | Low-level integrator; funds an OpenOracle dispute without a Uniswap hedge. | No parent binding and no executor evidence event. The caller must provide both exact contributions and must not use this path for durable bot accounting. |
 | `contributions` | Read-only integrator; reproduces the executor's exact contribution calculation. | Pure helper; returns token1 and token2 contribution amounts. |
