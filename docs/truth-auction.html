@@ -328,17 +328,6 @@
 							differencing cumulative floor allocations at fixed bid positions.
 						</p>
 				</div>
-				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
-					<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
-					<p class="diagram-caption">
-						<span class="figure-label">Interactive Demand Curve</span>The stepped
-						curve accumulates bids from the highest limit price to the lowest. The
-						vertical rule is available REP, the horizontal rule is the current
-						clearing or qualification price, and colored bid points distinguish
-						accepted demand from demand below the boundary. The chart follows the
-						auction controls below.
-					</p>
-				</figure>
 				<p>
 					The interactive example below is where those branches become
 					concrete. The <code>Binding condition</code> output reports one of four
@@ -730,6 +719,17 @@
 							>
 						</label>
 					</div>
+					<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
+						<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
+						<p class="diagram-caption">
+							<span class="figure-label">Interactive Demand Curve</span>The stepped
+							curve accumulates bids from the highest limit price to the lowest. The
+							vertical rule is available REP, the horizontal rule is the current
+							clearing or qualification price, and colored bid points distinguish
+							accepted demand from demand below the boundary. The chart updates from
+							the auction controls directly above it.
+						</p>
+					</figure>
 					<div class="example-output-grid">
 						<div>
 							<span>Mode</span
@@ -968,5 +968,6 @@
 				update();
 			}
 		</script>
+		<script type="module" src="./interactiveTools.js"></script>
 	</body>
 </html>

@@ -13,7 +13,9 @@ import {
 	normalizedEscalationCost,
 	parseLiquidationMultiplierBps,
 	quantitativeChartAxisLabels,
+	quantitativeChartIds,
 } from './chartModels'
+import { hasDiagramOverflow, resolveChartEnvelopeWidth, updateDiagramControl } from './diagramControl'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -99,6 +101,7 @@ if (!isRecord(diagramSpecsSource)) {
 	throw new Error('Plot diagram specifications must be an object')
 }
 const specs = Object.fromEntries(Object.entries(diagramSpecsSource).map(([chartId, value]) => [chartId, parseChartSpec(value, chartId)]))
+const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 
 type DiagramRect = {
 	attributes: Record<string, string>
@@ -1350,6 +1353,95 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	return markDrivenDiagramChart(spec)
 }
 
+function chartEnvelopeWidth(overflowEnvelope: HTMLElement): number {
+	const envelopeWidth = overflowEnvelope.getBoundingClientRect().width
+	const parentWidth = overflowEnvelope.parentElement?.getBoundingClientRect().width ?? 0
+	return resolveChartEnvelopeWidth(envelopeWidth, parentWidth, document.documentElement.clientWidth)
+}
+
+function responsiveChartSpec(spec: ChartSpec, overflowEnvelope: HTMLElement): ChartSpec {
+	const availableWidth = Math.max(280, Math.floor(chartEnvelopeWidth(overflowEnvelope) - 16))
+	return { ...spec, width: Math.min(spec.width, availableWidth) }
+}
+
+function dispatchChartLayout(): void {
+	window.dispatchEvent(new CustomEvent('docs:charts-rendered'))
+}
+
+function fullSizeDiagramOverflows(overflowEnvelope: HTMLElement): boolean {
+	const wasFit = overflowEnvelope.classList.contains('plot-figure-fit')
+	if (wasFit) overflowEnvelope.classList.remove('plot-figure-fit')
+	const overflows = hasDiagramOverflow(overflowEnvelope.clientWidth, overflowEnvelope.scrollWidth)
+	if (wasFit) overflowEnvelope.classList.add('plot-figure-fit')
+	return overflows
+}
+
+function updateDiagramToolbar(overflowEnvelope: HTMLElement): void {
+	const toolbar = overflowEnvelope.querySelector<HTMLElement>(':scope > .plot-chart-toolbar')
+	const button = toolbar?.querySelector<HTMLButtonElement>('button')
+	const cue = toolbar?.querySelector<HTMLElement>('.plot-chart-pan-cue')
+	if (toolbar === null || toolbar === undefined || button === null || button === undefined || cue === null || cue === undefined) return
+	const needsControl = fullSizeDiagramOverflows(overflowEnvelope)
+	toolbar.hidden = !needsControl
+	if (!needsControl) {
+		overflowEnvelope.classList.remove('plot-figure-fit')
+		return
+	}
+	const isFit = overflowEnvelope.classList.contains('plot-figure-fit')
+	updateDiagramControl(button, cue, isFit)
+}
+
+function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
+	let toolbar = overflowEnvelope.querySelector<HTMLElement>(':scope > .plot-chart-toolbar')
+	if (toolbar === null) {
+		toolbar = document.createElement('div')
+		toolbar.className = 'plot-chart-toolbar'
+		toolbar.setAttribute('role', 'group')
+		toolbar.setAttribute('aria-label', 'Diagram display')
+		const button = document.createElement('button')
+		button.type = 'button'
+		const cue = document.createElement('span')
+		cue.className = 'plot-chart-pan-cue'
+		toolbar.append(button, cue)
+		overflowEnvelope.prepend(toolbar)
+		if (window.matchMedia('(max-width: 640px)').matches) {
+			overflowEnvelope.classList.add('plot-figure-fit')
+		}
+		button.addEventListener('click', () => {
+			overflowEnvelope.classList.toggle('plot-figure-fit')
+			updateDiagramToolbar(overflowEnvelope)
+			dispatchChartLayout()
+		})
+	}
+	updateDiagramToolbar(overflowEnvelope)
+}
+
+const observedEnvelopes = new WeakSet<HTMLElement>()
+
+function observeChartEnvelope(mount: HTMLElement, overflowEnvelope: HTMLElement, chartId: string, spec: ChartSpec): void {
+	if (observedEnvelopes.has(overflowEnvelope) || typeof ResizeObserver === 'undefined') return
+	observedEnvelopes.add(overflowEnvelope)
+	let scheduled = false
+	const observer = new ResizeObserver(() => {
+		if (scheduled) return
+		scheduled = true
+		requestAnimationFrame(() => {
+			scheduled = false
+			if (quantitativeChartIdSet.has(chartId)) {
+				const expectedWidth = responsiveChartSpec(spec, overflowEnvelope).width
+				const currentWidth = Number(mount.dataset['renderedChartWidth'])
+				if (!Number.isFinite(currentWidth) || Math.abs(expectedWidth - currentWidth) > 1) {
+					renderMount(mount)
+					dispatchChartLayout()
+				}
+			} else {
+				updateDiagramToolbar(overflowEnvelope)
+			}
+		})
+	})
+	observer.observe(overflowEnvelope)
+}
+
 function renderMount(mount: HTMLElement): void {
 	const chartId = mount.dataset['plotChart']
 	if (chartId === undefined) {
@@ -1359,31 +1451,70 @@ function renderMount(mount: HTMLElement): void {
 	if (spec === undefined) {
 		throw new Error(`Plot chart specification is missing for ${chartId}`)
 	}
-	const chart = createChart(chartId, spec, mount)
+	const overflowEnvelope = mount.closest<HTMLElement>('figure.diagram, .example-visual')
+	if (overflowEnvelope === null) {
+		throw new Error(`Plot chart ${chartId} is missing a scrollable figure or example envelope`)
+	}
+	const isQuantitative = quantitativeChartIdSet.has(chartId)
+	const renderSpec = isQuantitative ? responsiveChartSpec(spec, overflowEnvelope) : spec
+	const chart = createChart(chartId, renderSpec, mount)
 	if (!(chart instanceof SVGSVGElement)) {
 		throw new Error(`Plot chart ${chartId} did not produce an SVG root`)
 	}
 	chart.dataset['plotGenerated'] = 'true'
 	chart.setAttribute('role', 'img')
 	if (!chart.hasAttribute('viewBox')) {
-		chart.setAttribute('viewBox', `0 0 ${spec.width} ${spec.height}`)
-	}
-	const overflowEnvelope = mount.closest<HTMLElement>('figure.diagram, .example-visual')
-	if (overflowEnvelope === null) {
-		throw new Error(`Plot chart ${chartId} is missing a scrollable figure or example envelope`)
+		chart.setAttribute('viewBox', `0 0 ${renderSpec.width} ${renderSpec.height}`)
 	}
 	overflowEnvelope.tabIndex = 0
-	overflowEnvelope.setAttribute('aria-label', `Scrollable figure: ${spec.ariaLabel}`)
+	overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)
+	overflowEnvelope.classList.toggle('plot-figure-diagram', !isQuantitative)
+	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Scrollable figure: ${spec.ariaLabel}`)
+	if (isQuantitative) {
+		overflowEnvelope.classList.remove('plot-figure-fit')
+	}
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)
 	mount.classList.add('plot-chart-ready')
+	mount.dataset['renderedChartWidth'] = String(renderSpec.width)
+	if (!isQuantitative) {
+		ensureDiagramToolbar(overflowEnvelope)
+	}
+	observeChartEnvelope(mount, overflowEnvelope, chartId, spec)
 }
 
 const mounts = Array.from(document.querySelectorAll<HTMLElement>('[data-plot-chart]'))
 for (const mount of mounts) {
 	renderMount(mount)
 }
+dispatchChartLayout()
+
+function restoreDocumentFragment(): void {
+	const rawFragment = window.location.hash.slice(1)
+	if (rawFragment.length === 0) return
+	let fragment = rawFragment
+	try {
+		fragment = decodeURIComponent(rawFragment)
+	} catch (error) {
+		if (!(error instanceof URIError)) throw error
+	}
+	const target = document.getElementById(fragment)
+	if (!(target instanceof HTMLElement)) return
+	if (target instanceof HTMLDetailsElement) target.open = true
+	const containingDetails = target.closest('details')
+	if (containingDetails instanceof HTMLDetailsElement) containingDetails.open = true
+	const targetTop = target.getBoundingClientRect().top + window.scrollY
+	window.scrollTo({ behavior: 'instant', top: Math.max(0, targetTop - 16) })
+}
+
+requestAnimationFrame(() => {
+	requestAnimationFrame(restoreDocumentFragment)
+})
+window.setTimeout(restoreDocumentFragment, 180)
+window.setTimeout(restoreDocumentFragment, 600)
+window.addEventListener('load', restoreDocumentFragment)
+window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
 for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-curve', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
@@ -1393,6 +1524,7 @@ for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-cu
 		input.addEventListener('input', () => {
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)
+				dispatchChartLayout()
 			}
 		})
 	}
