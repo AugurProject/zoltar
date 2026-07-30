@@ -1450,6 +1450,114 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('preserves validated read readiness while a wallet-only refresh is pending', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a9')
+		const pendingAccounts = createDeferred<readonly Address[]>()
+		const walletRefreshStarted = createDeferred<void>()
+		let getAccountsCalls = 0
+		const { backend } = createBackend({
+			getAccounts: async () => {
+				getAccountsCalls += 1
+				if (getAccountsCalls === 1) return [account]
+				walletRefreshStarted.resolve()
+				return await pendingAccounts.promise
+			},
+		})
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: true,
+				deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+			})),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(requireHookState(hookState).readBackendValidated).toBe(true)
+
+		let walletRefresh: Promise<void> | undefined
+		await act(async () => {
+			walletRefresh = requireHookState(hookState).refreshState({
+				loadChainClock: false,
+				loadDeploymentState: false,
+			})
+			await walletRefreshStarted.promise
+		})
+
+		expect(requireHookState(hookState).readBackendValidated).toBe(true)
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+
+		pendingAccounts.resolve([account])
+		if (walletRefresh === undefined) throw new Error('Wallet refresh did not start')
+		await act(async () => {
+			await walletRefresh
+		})
+		expect(requireHookState(hookState).readBackendValidated).toBe(true)
+		resetEnvironment()
+	})
+
+	test('closes read readiness while a full refresh discovers a failing read backend', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000aa')
+		const pendingAccounts = createDeferred<readonly Address[]>()
+		const fullRefreshStarted = createDeferred<void>()
+		let getAccountsCalls = 0
+		let getChainIdCalls = 0
+		const { backend } = createBackend({
+			getAccounts: async () => {
+				getAccountsCalls += 1
+				if (getAccountsCalls === 1) return [account]
+				fullRefreshStarted.resolve()
+				return await pendingAccounts.promise
+			},
+			getChainId: async () => {
+				getChainIdCalls += 1
+				return getChainIdCalls === 1 ? MAINNET_NETWORK_PROFILE.chainIdHex : '0x2'
+			},
+			readClient: {
+				...createReadClient(),
+				getChainId: async () => {
+					throw new Error('read RPC unavailable')
+				},
+			} as ReadClient,
+		})
+		const dependencies = createOnchainStateDependencies({
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: true,
+				deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })),
+			})),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		expect(requireHookState(hookState).readBackendValidated).toBe(true)
+
+		let fullRefresh: Promise<void> | undefined
+		await act(async () => {
+			fullRefresh = requireHookState(hookState).refreshState()
+			await fullRefreshStarted.promise
+		})
+		expect(requireHookState(hookState).readBackendValidated).toBe(false)
+
+		pendingAccounts.resolve([account])
+		if (fullRefresh === undefined) throw new Error('Full refresh did not start')
+		await act(async () => {
+			await fullRefresh
+		})
+		expect(requireHookState(hookState).readBackendValidated).toBe(false)
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
+		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because read RPC validation failed.')
+		resetEnvironment()
+	})
+
 	test('executes backend subscriptions and unsubscribes on cleanup', async () => {
 		const { backend, subscriptionState } = createBackend({
 			readClient: createReadClient({ ethBalance: 3n }),

@@ -311,6 +311,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		const shouldLoadChainClock = enableChainClock && (options.loadChainClock ?? true)
 		const shouldLoadDeploymentState = options.loadDeploymentState ?? true
 		const shouldLoadWalletState = options.loadWalletState ?? true
+		const preserveValidatedReadiness = shouldLoadWalletState && options.loadChainClock === false && options.loadDeploymentState === false
 		const backend = getActiveBackend()
 		updateReadBackendStatus(backend)
 		const isCurrent = nextRefresh()
@@ -328,8 +329,10 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			wethBalanceError.value = undefined
 		}
 		if (shouldLoadChainClock) chainClockError.value = undefined
-		readBackendMessage.value = undefined
-		readBackendValidated.value = false
+		if (!preserveValidatedReadiness) {
+			readBackendMessage.value = undefined
+			readBackendValidated.value = false
+		}
 		const invalidateWalletDiscoveryState = () => {
 			accountState.value = {
 				address: undefined,
@@ -387,9 +390,11 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				if (!isCurrent()) return
 				invalidateDeploymentState()
 				deploymentStatusError.value = 'Deployment status could not be refreshed because read RPC validation failed.'
+				readBackendValidated.value = false
 				errorMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
 			}
 		} else {
+			readBackendMessage.value = undefined
 			readBackendValidated.value = true
 			updateReadBackendStatus(backend)
 		}
