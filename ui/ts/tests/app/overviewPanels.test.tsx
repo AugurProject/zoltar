@@ -159,6 +159,8 @@ describe('OverviewPanels', () => {
 
 			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
 			expect(documentQueries.getByText('Read-only')).not.toBeNull()
+			expect(documentQueries.getAllByText('Not configured on Sepolia')).toHaveLength(2)
+			expect(documentQueries.queryByRole('button', { name: 'Refresh REP prices' })).toBeNull()
 		} finally {
 			resetEnvironment()
 		}

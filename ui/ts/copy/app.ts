@@ -13,6 +13,7 @@ export const sepoliaNetwork = 'Sepolia (11155111)'
 export const formatNetworkWithChainId = (networkLabel: string, chainId: string) => `${networkLabel} (${chainId})`
 export const oracleReports = 'Open Oracle'
 export const refreshRepPrices = 'Refresh REP prices'
+export const formatRepPricingUnavailable = (networkName: string) => `Not configured on ${networkName}`
 export const repPerEthCompact = 'REP/ETH'
 export const skipToMainContent = 'Skip to main content'
 export const createOracleReport = 'Create Open Oracle Report'

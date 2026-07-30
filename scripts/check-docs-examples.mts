@@ -994,7 +994,7 @@ async function checkReaderRuntimeStates(): Promise<void> {
 		if (!(firstResult instanceof window.HTMLAnchorElement)) throw new Error('Reader search did not render a result')
 		assert.equal(firstResult.dataset['documentPath'], 'deployment-status.html', 'reader search must rank the deployment document first for deployment mask')
 		assert.equal(firstResult.dataset['documentFragment'], 'deployment-mask-decoder', 'reader search must route directly to the deployment decoder')
-		assert.match(firstResult.textContent, /Decode a deployment mask/, 'reader search must label the matching interactive tool')
+		assert.match(firstResult.textContent, /Decode a mainnet deployment mask/, 'reader search must identify the decoder as mainnet-specific')
 		assert.deepEqual(
 			fetchRequests.map(request => request.input),
 			['./truth-auction.html'],

@@ -26,8 +26,9 @@
 					configured deployment-step addresses currently contain runtime bytecode.
 				</p>
 				<p>
-					The mainnet manifest lists this contract directly, so operators and frontends need a
-					precise explanation of the returned bitmask and the built-in 256-step ceiling.
+				The canonical mainnet and Sepolia manifests list this contract directly, so operators
+				and frontends need a precise explanation of the returned bitmask and the built-in
+				256-step ceiling.
 				</p>
 			</header>
 
@@ -134,11 +135,12 @@
 					data-tool-unavailable="true"
 					open
 				>
-					<summary>Decode a deployment mask</summary>
+					<summary>Decode a mainnet deployment mask</summary>
 					<p>
-						Paste the decimal or hexadecimal <code>uint256</code> returned by
+						Paste the decimal or hexadecimal <code>uint256</code> returned by the mainnet
 						<code>getDeploymentMask()</code>. The status column above updates against the
-						canonical constructor order.
+						mainnet constructor order. Sepolia has a different order; use the Sepolia table
+						below instead of this decoder when interpreting its mask.
 					</p>
 					<div class="example-grid">
 						<label>

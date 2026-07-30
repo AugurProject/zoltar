@@ -71,6 +71,8 @@ export function OverviewPanels({
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
 	const activeNetworkProfile = getActiveNetworkProfile()
+	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
+	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
 	const walletOnActiveNetwork = isMainnetChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
@@ -190,13 +192,15 @@ export function OverviewPanels({
 								<span>
 									{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 								</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-									↻
-								</button>
+								{isRepPricingUnavailable ? undefined : (
+									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+										↻
+									</button>
+								)}
 							</span>
 						}
 					>
-						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />}
 					</MetricField>
 					<MetricField
 						className='overview-metric-secondary'
@@ -206,7 +210,7 @@ export function OverviewPanels({
 							</>
 						}
 					>
-						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />}
 					</MetricField>
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}
