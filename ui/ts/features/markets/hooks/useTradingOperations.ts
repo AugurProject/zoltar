@@ -194,7 +194,7 @@ export function useTradingOperations(
 				},
 				async (walletAddress, activeWallet) => {
 					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')
-					const isMainnet = isActiveAppChain(activeWallet.chainId)
+					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
 					const latestTradingDetails = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
 					const latestForkUniverse = await dependencies.loadZoltarUniverseSummary(latestTradingDetails.universeId)
 					if (isActionSelectionCurrent()) {
@@ -210,7 +210,7 @@ export function useTradingOperations(
 							ethBalance: walletEthBalance,
 							feeEligibleSecurityBondAllowance: latestMintCapacity.feeEligibleSecurityBondAllowance,
 							hasSelectedPool: true,
-							isMainnet,
+							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,
 							shareTokenSupply: latestMintCapacity.shareTokenSupply,
 							totalRepDeposit: latestMintCapacity.totalRepDeposit,
@@ -223,7 +223,7 @@ export function useTradingOperations(
 							accountAddress: walletAddress,
 							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
 							hasSelectedPool: true,
-							isMainnet,
+							isOnActiveAppChain,
 							loadingTradingDetails: false,
 							redeemAmountInput: currentForm.redeemAmount,
 							shareBalances: latestTradingDetails.shareBalances,
@@ -235,7 +235,7 @@ export function useTradingOperations(
 						const guardMessage = getTradingMigrateSharesGuardMessage({
 							accountAddress: walletAddress,
 							hasSelectedPool: true,
-							isMainnet,
+							isOnActiveAppChain,
 							loadingTradingDetails: false,
 							loadingTradingForkUniverse: false,
 							selectedShareOutcome: currentForm.selectedShareOutcome,
@@ -246,7 +246,7 @@ export function useTradingOperations(
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemShares') {
-						const guardMessage = getTradingRedeemSharesGuardMessage({ accountAddress: walletAddress, hasSelectedPool: true, isMainnet })
+						const guardMessage = getTradingRedeemSharesGuardMessage({ accountAddress: walletAddress, hasSelectedPool: true, isOnActiveAppChain })
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (!isActionSelectionCurrent()) return undefined

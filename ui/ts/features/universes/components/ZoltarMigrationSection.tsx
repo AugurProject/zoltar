@@ -36,7 +36,7 @@ import { getWrongNetworkMessage } from '../../../lib/network.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarUniverse: boolean
 	onMigrateInternalRep: () => void
@@ -75,7 +75,7 @@ function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: b
 
 export function ZoltarMigrationSection({
 	accountAddress,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingZoltarForkAccess,
 	loadingZoltarUniverse,
 	onMigrateInternalRep,
@@ -115,8 +115,8 @@ export function ZoltarMigrationSection({
 	const needsAdditionalPreparation = missingPreparationAmount > 0n
 	const splitLimit = useMemo(() => getMigrationOutcomeSplitLimit(rootUniverse?.childUniverses ?? [], zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance, selectedOutcomeIndexSet), [rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance])
 	const hasSufficientSplitLimit = migrationAmount !== undefined && splitLimit !== undefined && migrationAmount <= splitLimit
-	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
-	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
+	const canPrepare = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
+	const canSplit = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
 	const walletRepAfterPrepare = zoltarForkRepBalance === undefined || missingPreparationAmount > zoltarForkRepBalance ? undefined : zoltarForkRepBalance - missingPreparationAmount
 	const custodyRepAfterPrepare = (zoltarMigrationPreparedRepBalance ?? 0n) + missingPreparationAmount
@@ -141,7 +141,7 @@ export function ZoltarMigrationSection({
 					</span>
 				))
 	const approvalGuardMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		return undefined
@@ -151,7 +151,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.migrationBalanceReadyDetail
 	}
 	const prepareHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
@@ -160,7 +160,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()
 	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (!hasPreparedBalance) return zoltarCopy.formatMigrationPreparationRequired(formatCurrencyBalance(missingPreparationAmount ?? 0n))
@@ -171,7 +171,7 @@ export function ZoltarMigrationSection({
 		return undefined
 	})()
 	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalRepAvailable), formatCurrencyBalance(zoltarMigrationPreparedRepBalance ?? 0n), formatCurrencyBalance(zoltarForkRepBalance ?? 0n))
@@ -263,7 +263,7 @@ export function ZoltarMigrationSection({
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
-						disabled={!isMainnet}
+						disabled={!isOnActiveAppChain}
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
@@ -292,7 +292,7 @@ export function ZoltarMigrationSection({
 							<DataGrid dense>
 								{heldChildUniverses.map(child => (
 									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
 									</MetricField>
 								))}
 							</DataGrid>
@@ -343,14 +343,14 @@ export function ZoltarMigrationSection({
 							onClick={onPrepareRepForMigration}
 							pending={zoltarMigrationActiveAction === 'prepare'}
 							tone='secondary'
-							availability={{ disabled: !canPrepare, reason: isMainnet ? prepareHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
+							availability={{ disabled: !canPrepare, reason: isOnActiveAppChain ? prepareHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
 						/>
 						<TransactionActionButton
 							idleLabel={zoltarCopy.splitRep}
 							pendingLabel={zoltarCopy.splittingRepPending}
 							onClick={onMigrateInternalRep}
 							pending={zoltarMigrationActiveAction === 'split'}
-							availability={{ disabled: !canSplit, reason: isMainnet ? splitHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
+							availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
 						/>
 					</div>
 				</div>

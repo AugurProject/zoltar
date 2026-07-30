@@ -260,7 +260,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: undefined,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '1',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
@@ -271,7 +271,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 				submitBidAmountInput: '1',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
@@ -282,7 +282,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '1',
 				truthAuction: undefined,
 				walletEthBalance: 100n,
@@ -293,7 +293,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 1_000n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '1',
 				truthAuction: createTruthAuction({ timeRemaining: 0n }),
 				walletEthBalance: 100n,
@@ -304,7 +304,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
@@ -315,7 +315,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: 'abc',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
@@ -328,7 +328,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '0.5',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 10n * 10n ** 18n,
@@ -339,7 +339,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '2',
 				truthAuction: createTruthAuction({ minBidSize: 2n * 10n ** 18n }),
 				walletEthBalance: 1n * 10n ** 18n,
@@ -349,7 +349,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '2',
 				truthAuction: createTruthAuction({ minBidSize: 2n * 10n ** 18n }),
 				walletEthBalance: 2n * 10n ** 18n,
@@ -362,7 +362,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '2',
 				truthAuction: createTruthAuction({ minBidSize: 2n * 10n ** 18n }),
 				walletEthBalance: 10n * 10n ** 18n,
@@ -375,7 +375,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '2000000000000000000',
 				truthAuction: createTruthAuction({ finalized: true }),
 				walletEthBalance: 10n * 10n ** 18n,
@@ -386,7 +386,7 @@ void describe('fork auction helpers', () => {
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				submitBidAmountInput: '2000000000000000000',
 				truthAuction: createTruthAuction(),
 				walletEthBalance: undefined,

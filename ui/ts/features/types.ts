@@ -117,7 +117,7 @@ export type DeploymentSectionProps = {
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	busyStepId: DeploymentStepId | undefined
 	deploymentStateReady: boolean
 	deploymentStatusReasonElementId?: string | undefined
@@ -164,7 +164,7 @@ export type DeploymentRouteContentProps = {
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
 	isLoadingDeploymentStatuses: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	deployNextMissingPending: boolean
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void

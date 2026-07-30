@@ -74,7 +74,7 @@ export function MarketSection({
 	securityPoolsLoadError,
 }: MarketSectionProps) {
 	const hasForked = zoltarUniverse?.hasForked === true
-	const isMainnet = isActiveAppChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
@@ -110,7 +110,7 @@ export function MarketSection({
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 						zoltarChildUniverseError={zoltarChildUniverseError}
@@ -174,7 +174,7 @@ export function MarketSection({
 					<MarketCreateQuestionSection
 						accountAddress={accountState.address}
 						hasForked={hasForked}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						marketCreating={marketCreating}
 						marketError={marketError}
@@ -258,7 +258,7 @@ export function MarketSection({
 							<ForkZoltarSection
 								accountAddress={accountState.address}
 								hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
-								isMainnet={isMainnet}
+								isOnActiveAppChain={isOnActiveAppChain}
 								loadingZoltarForkAccess={loadingZoltarForkAccess}
 								loadingZoltarQuestions={loadingZoltarQuestions || loadingZoltarQuestionCount}
 								onApproveZoltarForkRep={onApproveZoltarForkRep}
@@ -281,7 +281,7 @@ export function MarketSection({
 				{view === 'migrate' ? (
 					<ZoltarMigrationSection
 						accountAddress={accountState.address}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onMigrateInternalRep={onMigrateInternalRep}

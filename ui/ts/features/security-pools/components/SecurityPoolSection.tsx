@@ -45,7 +45,7 @@ export function SecurityPoolSection({
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
-	const isMainnet = isActiveAppChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
 	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
 	const requestedAvailableQuestionsContextRef = useRef<string | undefined>(undefined)
@@ -82,14 +82,14 @@ export function SecurityPoolSection({
 		checkingDuplicateOriginPool,
 		duplicateOriginPoolExists,
 		initialReportPriorityFeeGwei: securityPoolForm.initialReportPriorityFeeGwei,
-		isMainnet,
+		isOnActiveAppChain,
 		marketDetails,
 		securityPoolCreating,
 		statoblastSecurityMultiplier: securityPoolForm.statoblastSecurityMultiplierBps,
 		zoltarUniverseHasForked,
 	})
 	const createDisabledReason = loadingAvailableQuestions && securityPoolForm.marketId.trim() === '' ? securityPoolCopy.loadingAvailableQuestionsReason : guardedCreateDisabledReason
-	const isCreateDisabled = !isMainnet || createDisabledReason !== undefined
+	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
 	let visibleFieldErrorId: string | undefined = undefined
 	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
 		visibleFieldErrorId = 'security-pool-security-multiplier-error'

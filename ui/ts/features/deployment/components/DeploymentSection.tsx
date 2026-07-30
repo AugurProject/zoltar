@@ -13,7 +13,7 @@ type StepStatus = {
 	buttonLabel: string
 }
 
-function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isMainnet: boolean): StepStatus {
+function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isOnActiveAppChain: boolean): StepStatus {
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
@@ -37,7 +37,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 				label: deploymentCopy.notDeployedBadgeLabel,
 				buttonLabel: commonCopy.deploy,
 			}
-		if (!isMainnet)
+		if (!isOnActiveAppChain)
 			return {
 				badgeTone: 'pending',
 				label: deploymentCopy.notDeployedBadgeLabel,
@@ -59,7 +59,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 }
 
-export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isMainnet, onDeploy }: DeploymentSectionProps) {
+export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isOnActiveAppChain, onDeploy }: DeploymentSectionProps) {
 	return (
 		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
 			<div className='contract-list'>
@@ -68,7 +68,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
 					const stepStatus = deploymentStateReady
-						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
+						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isOnActiveAppChain)
 						: {
 								badgeTone: 'muted' as const,
 								buttonLabel: commonCopy.deploy,
@@ -78,7 +78,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 						? getDeploymentStepAvailability({
 								accountAddress,
 								busyStepId,
-								isMainnet,
+								isOnActiveAppChain,
 								prerequisiteLabel,
 								step,
 							})

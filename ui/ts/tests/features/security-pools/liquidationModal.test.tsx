@@ -138,7 +138,7 @@ describe('LiquidationModal', () => {
 			accountAddress: defaultCallerVaultAddress,
 			closeLiquidationModal: () => undefined,
 			currentPoolOracleManagerDetails: undefined,
-			isMainnet: true,
+			isOnActiveAppChain: true,
 			liquidationAmount: '1',
 			liquidationMaxAmount: 5n * 10n ** 18n,
 			liquidationManagerAddress: zeroAddress,
@@ -279,7 +279,7 @@ describe('LiquidationModal', () => {
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 			}),
-			isMainnet: false,
+			isOnActiveAppChain: false,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -498,7 +498,7 @@ describe('LiquidationModal', () => {
 					accountAddress={zeroAddress}
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={undefined}
-					isMainnet
+					isOnActiveAppChain
 					liquidationAmount={liquidationAmount}
 					liquidationMaxAmount={5n}
 					liquidationManagerAddress={zeroAddress}
@@ -874,7 +874,7 @@ describe('LiquidationModal', () => {
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 					})}
-					isMainnet
+					isOnActiveAppChain
 					liquidationAmount='1'
 					liquidationMaxAmount={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
@@ -968,7 +968,7 @@ describe('LiquidationModal', () => {
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 					})}
-					isMainnet
+					isOnActiveAppChain
 					liquidationAmount='1'
 					liquidationMaxAmount={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
@@ -1270,7 +1270,7 @@ describe('LiquidationModal', () => {
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={undefined}
-					isMainnet
+					isOnActiveAppChain
 					liquidationAmount='1'
 					liquidationMaxAmount={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
@@ -1579,7 +1579,7 @@ describe('LiquidationModal', () => {
 						isPriceValid: true,
 						lastPrice: 3n * 10n ** 18n,
 					})}
-					isMainnet
+					isOnActiveAppChain
 					liquidationAmount={liquidationAmount}
 					liquidationMaxAmount={2_500n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}

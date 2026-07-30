@@ -425,7 +425,7 @@ export function ForkAuctionSection({
 	showSecurityPoolAddressInput = true,
 	truthAuctionReadClient,
 }: ForkAuctionSectionProps) {
-	const isMainnet = isActiveAppChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
@@ -796,7 +796,7 @@ export function ForkAuctionSection({
 	}
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
-		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 		return undefined
 	})()
@@ -823,7 +823,7 @@ export function ForkAuctionSection({
 		return getTruthAuctionBidGuardMessage({
 			accountAddress: accountState.address,
 			currentTimestamp: effectiveCurrentTimestamp,
-			isMainnet,
+			isOnActiveAppChain,
 			submitBidAmountInput: forkAuctionForm.submitBidAmount,
 			truthAuction: truthAuctionStatus,
 			walletEthBalance: accountState.ethBalance,
@@ -1017,7 +1017,7 @@ export function ForkAuctionSection({
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		const disabledReason = !isMainnet ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : (interactionDisabledReason ?? resolvedAvailability.reason)
+		const disabledReason = !isOnActiveAppChain ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : (interactionDisabledReason ?? resolvedAvailability.reason)
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
@@ -1027,7 +1027,7 @@ export function ForkAuctionSection({
 				pending={isPending}
 				tone={tone}
 				availability={{
-					disabled: !isMainnet || !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
+					disabled: !isOnActiveAppChain || !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
 					reason: disabledReason,
 				}}
 			/>

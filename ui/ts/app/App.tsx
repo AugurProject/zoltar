@@ -124,7 +124,7 @@ export function App() {
 	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
 	const readBackendReady = readBackendValidated && readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
-	const isMainnet = isSupportedAppChain(accountState.chainId)
+	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
 	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
 	const baseHookConfig = {
 		accountAddress: accountState.address,
@@ -479,7 +479,7 @@ export function App() {
 		deploymentSections,
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
-		isMainnet,
+		isOnActiveAppChain,
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),

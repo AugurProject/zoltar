@@ -67,7 +67,7 @@ export function TradingSection({
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
 	const [activeModal, setActiveModal] = useState<TradingActionModal>(undefined)
-	const isMainnet = isActiveAppChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const resolvedPoolState =
@@ -100,7 +100,7 @@ export function TradingSection({
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
-	const walletOnWrongNetwork = accountState.address !== undefined && !isMainnet
+	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
 	const mintedShareAmount = mintAmount === undefined ? undefined : convertCollateralAmountToShareAmount(mintAmount, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const resultingEthBalance = mintAmount === undefined || accountState.ethBalance === undefined || mintAmount > accountState.ethBalance ? undefined : accountState.ethBalance - mintAmount
@@ -115,7 +115,7 @@ export function TradingSection({
 		ethBalance: accountState.ethBalance,
 		feeEligibleSecurityBondAllowance: selectedPool?.feeEligibleSecurityBondAllowance,
 		hasSelectedPool,
-		isMainnet,
+		isOnActiveAppChain,
 		mintAmountInput: tradingForm.completeSetAmount,
 		shareTokenSupply: selectedPool?.shareTokenSupply,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
@@ -124,7 +124,7 @@ export function TradingSection({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
 		hasSelectedPool,
-		isMainnet,
+		isOnActiveAppChain,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
@@ -133,7 +133,7 @@ export function TradingSection({
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,
 		hasSelectedPool,
-		isMainnet,
+		isOnActiveAppChain,
 		loadingTradingForkUniverse,
 		loadingTradingDetails,
 		selectedShareOutcome: tradingForm.selectedShareOutcome,
@@ -144,7 +144,7 @@ export function TradingSection({
 	const redeemSharesGuardMessage = getTradingRedeemSharesGuardMessage({
 		accountAddress: accountState.address,
 		hasSelectedPool,
-		isMainnet,
+		isOnActiveAppChain,
 	})
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.feeEligibleSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
@@ -153,7 +153,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -174,7 +174,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetBurnWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
@@ -190,7 +190,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.shareMigrationWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
 
 			return (() => {
@@ -210,7 +210,7 @@ export function TradingSection({
 		? tradingCopy.shareRedemptionPoolRequiredReason
 		: (() => {
 				if (accountState.address === undefined) return tradingCopy.shareRedemptionWalletRequiredReason
-				if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				if (selectedPool?.questionOutcome === 'none') return tradingCopy.poolResolutionRequired
 
 				return undefined
@@ -220,7 +220,7 @@ export function TradingSection({
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.migrateForkedShares))
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
 	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
-		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 		if (!actionEnabled) return undefined
 		return guardMessage
 	}
@@ -421,7 +421,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={{ disabled: !isMainnet || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled, mintGuardMessage) }}
+						availability={{ disabled: !isOnActiveAppChain || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled, mintGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
@@ -474,7 +474,7 @@ export function TradingSection({
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: getModalActionReason(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage) }}
+						availability={{ disabled: !isOnActiveAppChain || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: getModalActionReason(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
@@ -529,7 +529,7 @@ export function TradingSection({
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: getModalActionReason(migrateSharesEnabled, migrateSharesGuardMessage) }}
+						availability={{ disabled: !isOnActiveAppChain || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: getModalActionReason(migrateSharesEnabled, migrateSharesGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
@@ -561,7 +561,7 @@ export function TradingSection({
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: getModalActionReason(redeemSharesEnabled, redeemSharesGuardMessage) }}
+						availability={{ disabled: !isOnActiveAppChain || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: getModalActionReason(redeemSharesEnabled, redeemSharesGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>

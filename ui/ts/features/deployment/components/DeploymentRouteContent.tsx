@@ -14,7 +14,7 @@ import { writeZoltarViewQueryParam } from '../../../lib/urlParams.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
+export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
 	const deploymentStatusReasonId = useId()
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
@@ -26,7 +26,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentS
 				accountAddress,
 				busyStepId,
 				deployNextMissingPending,
-				isMainnet,
+				isOnActiveAppChain,
 				nextMissingStep,
 			})
 		: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
@@ -117,7 +117,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentS
 								steps={section.steps}
 								allSteps={deploymentStatuses}
 								accountAddress={accountAddress}
-								isMainnet={isMainnet}
+								isOnActiveAppChain={isOnActiveAppChain}
 								busyStepId={busyStepId}
 								deploymentStateReady={deploymentStateReady}
 								deploymentStatusReasonElementId={deploymentStateReady ? undefined : deploymentStatusReasonId}

@@ -1,5 +1,5 @@
 import * as deploymentCopy from '../../../copy/deployment.js'
-import { getWalletMainnetActionAvailability } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainActionAvailability } from '../../../lib/actionGuards.js'
 import type { ActionAvailability } from '../../types.js'
 import type { DeploymentStatus } from '../../../types/contracts.js'
 
@@ -45,19 +45,19 @@ export function findNextDeployableStep(steps: DeploymentStatus[]) {
 export function getDeploymentStepAvailability({
 	accountAddress,
 	busyStepId,
-	isMainnet,
+	isOnActiveAppChain,
 	prerequisiteLabel,
 	step,
 }: {
 	accountAddress: string | undefined
 	busyStepId: DeploymentStatus['id'] | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	prerequisiteLabel: string | undefined
 	step: DeploymentStepAvailabilityState
 }): ActionAvailability {
 	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
-	const walletAvailability = getWalletMainnetActionAvailability({ accountAddress, isMainnet, walletRequiredReason: 'Connect wallet to deploy this contract.' })
+	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect wallet to deploy this contract.' })
 	if (walletAvailability !== undefined) return walletAvailability
 	if (prerequisiteLabel !== undefined) return { disabled: true, reason: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel) }
 	return { disabled: false, reason: undefined }
@@ -67,18 +67,18 @@ export function getDeployNextMissingAvailability({
 	accountAddress,
 	busyStepId,
 	deployNextMissingPending,
-	isMainnet,
+	isOnActiveAppChain,
 	nextMissingStep,
 }: {
 	accountAddress: string | undefined
 	busyStepId: DeploymentStatus['id'] | undefined
 	deployNextMissingPending: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	nextMissingStep: Pick<DeploymentStatus, 'id' | 'label'> | undefined
 }): ActionAvailability {
 	if (deployNextMissingPending) return { disabled: true, reason: 'Deployment in progress.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: 'Another deployment is already in progress.' }
-	const walletAvailability = getWalletMainnetActionAvailability({ accountAddress, isMainnet })
+	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain })
 	if (walletAvailability !== undefined) return walletAvailability
 	if (nextMissingStep === undefined) return { disabled: true, reason: 'All deterministic contracts are already deployed.' }
 	return { disabled: false, reason: undefined }

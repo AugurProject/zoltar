@@ -82,7 +82,7 @@ void describe('deployment helpers', () => {
 				accountAddress: undefined,
 				busyStepId: undefined,
 				deployNextMissingPending: false,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				nextMissingStep,
 			}),
 		).toEqual({ disabled: true, reason: 'Connect wallet to continue.' })
@@ -92,7 +92,7 @@ void describe('deployment helpers', () => {
 				accountAddress: zeroAddress,
 				busyStepId: undefined,
 				deployNextMissingPending: false,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 				nextMissingStep,
 			}),
 		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
@@ -104,7 +104,7 @@ void describe('deployment helpers', () => {
 			getDeploymentStepAvailability({
 				accountAddress: zeroAddress,
 				busyStepId: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				prerequisiteLabel: 'Scalar Outcomes',
 				step: blockedStep,
 			}),
@@ -115,7 +115,7 @@ void describe('deployment helpers', () => {
 			getDeploymentStepAvailability({
 				accountAddress: zeroAddress,
 				busyStepId: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				prerequisiteLabel: undefined,
 				step: readyStep,
 			}),

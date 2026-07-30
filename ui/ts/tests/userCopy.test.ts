@@ -36,14 +36,14 @@ void describe('user copy helpers', () => {
 	})
 
 	void test('maps wallet and placeholder states semantically', () => {
-		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isMainnet: true })?.key).toBe('wallet_disconnected')
-		expect(getWalletPresentation({ accountAddress: '0x0000000000000000000000000000000000000001', hasInjectedWallet: true, isMainnet: false })?.key).toBe('wrong_network')
+		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.key).toBe('wallet_disconnected')
+		expect(getWalletPresentation({ accountAddress: '0x0000000000000000000000000000000000000001', hasInjectedWallet: true, isOnActiveAppChain: false })?.key).toBe('wrong_network')
 		expect(getMetricPlaceholderPresentation(undefined)?.placeholder).toBe('—')
 	})
 
 	void test('keeps disconnected wallet guidance concise', () => {
-		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isMainnet: true })?.detail).toBe('Install or enable a wallet to continue.')
-		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isMainnet: true })?.detail).toBe('Connect wallet to continue.')
+		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.detail).toBe('Install or enable a wallet to continue.')
+		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.detail).toBe('Connect wallet to continue.')
 	})
 
 	void test('covers metric placeholders and loading copy paths', () => {
@@ -74,6 +74,6 @@ void describe('user copy helpers', () => {
 	void test('maps wallet branch states with non-increasing permission checks', () => {
 		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false })?.key).toBe('wallet_disconnected')
 		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false })?.key).toBe('wrong_network')
-		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false, isMainnet: true })?.detail).toBe('Switch to Ethereum mainnet.')
+		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false, isOnActiveAppChain: true })?.detail).toBe('Switch to Ethereum mainnet.')
 	})
 })

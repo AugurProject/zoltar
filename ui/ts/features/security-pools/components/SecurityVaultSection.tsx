@@ -32,7 +32,7 @@ import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationP
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/marketForm.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
 import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -303,7 +303,7 @@ export function SecurityVaultSection({
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
-	const isMainnet = isActiveAppChain(accountState?.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '0',
 		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',
@@ -424,7 +424,7 @@ export function SecurityVaultSection({
 	const hasConnectedWallet = accountState.address !== undefined
 	const canUseOwnedVaultActions = selectedVaultIsOwnedByAccount && hasConnectedWallet
 	const hasLoadedSelectedVaultDetails = currentSelectedVaultDetails !== undefined
-	const canUseLoadedVaultActions = canUseOwnedVaultActions && hasLoadedSelectedVaultDetails && isMainnet
+	const canUseLoadedVaultActions = canUseOwnedVaultActions && hasLoadedSelectedVaultDetails && isOnActiveAppChain
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
@@ -476,9 +476,9 @@ export function SecurityVaultSection({
 	})()
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? securityPoolCopy.missingVaultDetail : undefined
 	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance') => {
-		const walletGuardState = getWalletMainnetGuardState({
+		const walletGuardState = getWalletActiveAppChainGuardState({
 			accountAddress: accountState.address,
-			isMainnet,
+			isOnActiveAppChain,
 			walletRequiredReason: getVaultLauncherWalletReason(action, effectiveRepExitMode),
 		})
 		if (walletGuardState.blocked) return walletGuardState.reason
@@ -494,7 +494,7 @@ export function SecurityVaultSection({
 	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit')
 	const bondAllowanceLauncherBlocker = getVaultLauncherBlocker('set-bond-allowance')
 	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees')
-	const showSharedRefreshVaultBlocker = vaultLifecycleBlocker === undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && !hasLoadedSelectedVaultDetails && isMainnet
+	const showSharedRefreshVaultBlocker = vaultLifecycleBlocker === undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && !hasLoadedSelectedVaultDetails && isOnActiveAppChain
 	const getVaultActionDisabledReasonId = (lifecycleActionEnabled: boolean) => {
 		if (vaultLifecycleBlocker !== undefined && !lifecycleActionEnabled) return vaultLifecycleBlockerId
 		if (showSharedRefreshVaultBlocker) return refreshVaultActionsDescriptionId

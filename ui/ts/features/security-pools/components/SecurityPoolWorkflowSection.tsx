@@ -199,7 +199,7 @@ export function SecurityPoolWorkflowSection({
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastForkAuctionAutoLoadKey = useRef<string | undefined>(undefined)
-	const isMainnet = isActiveAppChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 	const normalizedReportingFormPoolAddress = normalizeAddress(reporting.reportingForm.securityPoolAddress)
@@ -399,7 +399,7 @@ export function SecurityPoolWorkflowSection({
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
-		isMainnet,
+		isOnActiveAppChain,
 		isPriceValid: currentPoolOraclePriceUsable,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
@@ -410,7 +410,7 @@ export function SecurityPoolWorkflowSection({
 		accountAddress: accountState.address,
 		bufferRequiredEthCost: false,
 		hasLoadedSelectedPool: requestPriceReview !== undefined,
-		isMainnet,
+		isOnActiveAppChain,
 		isPriceValid: currentPoolOraclePriceUsable,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: requestPriceReview?.ethValue,
@@ -435,12 +435,12 @@ export function SecurityPoolWorkflowSection({
 	const executePendingOperationGuardMessage = getVaultExecutePendingOperationGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,
-		isMainnet,
+		isOnActiveAppChain,
 		isPriceValid: currentPoolOraclePriceUsable,
 		resolvedPendingOperationId,
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
-	const canUseOracleActions = accountState.address !== undefined && isMainnet
+	const canUseOracleActions = accountState.address !== undefined && isOnActiveAppChain
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
@@ -906,8 +906,8 @@ export function SecurityPoolWorkflowSection({
 																<button
 																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-																	disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																	title={!isMainnet && accountState.address !== undefined ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : securityPoolCopy.reviewLiquidation}
+																	disabled={accountState.address === undefined || !isOnActiveAppChain || !liquidationEnabled}
+																	title={!isOnActiveAppChain && accountState.address !== undefined ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : securityPoolCopy.reviewLiquidation}
 																>
 																	{securityPoolCopy.reviewLiquidation}
 																</button>
@@ -926,7 +926,7 @@ export function SecurityPoolWorkflowSection({
 												compactLayout
 												extraReadinessActions={[
 													(() => {
-														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isMainnet
+														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isOnActiveAppChain
 														const loadedVaultMissing = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain
 														const liquidationBlocker = (() => {
 															if (loadedVaultMissing) return securityPoolCopy.missingVaultDetail
@@ -1186,7 +1186,7 @@ export function SecurityPoolWorkflowSection({
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
 				currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
-				isMainnet={isMainnet}
+				isOnActiveAppChain={isOnActiveAppChain}
 				liquidationAmount={liquidationAmount}
 				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}

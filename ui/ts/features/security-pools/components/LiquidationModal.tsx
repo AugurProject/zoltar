@@ -39,7 +39,7 @@ type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	liquidationAmount: string
 	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
@@ -162,7 +162,7 @@ export function LiquidationModal({
 	accountAddress,
 	closeLiquidationModal,
 	currentPoolOracleManagerDetails,
-	isMainnet,
+	isOnActiveAppChain,
 	liquidationAmount,
 	liquidationMaxAmount,
 	liquidationManagerAddress,
@@ -278,7 +278,7 @@ export function LiquidationModal({
 					})
 				})()
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
-	const canUseLiquidationAction = accountAddress !== undefined && isMainnet
+	const canUseLiquidationAction = accountAddress !== undefined && isOnActiveAppChain
 	const liquidationActionReason = pickFirstReason(
 		liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined,
 		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined,
@@ -294,7 +294,7 @@ export function LiquidationModal({
 		queueLiquidationEthGuardMessage,
 	)
 	const liquidationButtonDisabledReason = (() => {
-		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 		if (accountAddress === undefined) return commonCopy.walletConnectionRequired
 		if (!liquidationEnabled) return undefined
 		return liquidationActionReason

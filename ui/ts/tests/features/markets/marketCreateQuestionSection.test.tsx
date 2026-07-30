@@ -72,7 +72,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={undefined}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -126,7 +126,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ description: '', title: '' })}
@@ -182,7 +182,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ title: '', startTime: '2000', endTime: '1000' })}
@@ -222,7 +222,7 @@ describe('MarketCreateQuestionSection', () => {
 				<MarketCreateQuestionSection
 					accountAddress={zeroAddress}
 					hasForked={false}
-					isMainnet={true}
+					isOnActiveAppChain={true}
 					marketCreating={false}
 					marketError={undefined}
 					marketForm={createMarketForm({ startTime: '', endTime: '2000' })}
@@ -258,7 +258,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ marketType: 'categorical' })}
@@ -298,7 +298,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -345,7 +345,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -387,7 +387,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ categoricalOutcomes: ['', 'Yes', 'No'], marketType: 'categorical' })}
@@ -435,7 +435,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -469,7 +469,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -503,7 +503,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -536,7 +536,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -568,7 +568,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -602,7 +602,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ marketType: 'scalar', scalarIncrement: '', scalarMax: '', scalarMin: '' })}
@@ -649,7 +649,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm()}
@@ -682,7 +682,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -730,7 +730,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -775,7 +775,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
@@ -800,7 +800,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError='Unable to load details'
 				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
