@@ -84,9 +84,9 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   `--coordinator-address` flags or the comma-separated
   `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable for every coordinator
   whose games this wallet may dispute; execution is fail-closed without either.
-- A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor once per
-  network with `./bin/deploy-executor`, then pass the printed
-  address through `--executor-address` whenever execution mode is enabled.
+- A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
+  predictable CREATE2 address from the dashboard or with `./bin/deploy-executor`,
+  then authenticate that address in the execution manifest.
 - The exact Uniswap V3 SwapRouter address supplied with `--uniswap-router`.
 - Optionally, the exact Uniswap V2 Router02 supplied with
   `--uniswap-v2-router`. When configured and authenticated, mainnet execution
@@ -268,12 +268,14 @@ combine rows and profit totals.
 
 ## Execute disputes
 
-Deploy the stateless executor from the same selected network:
+Deploy the stateless executor from the same selected network. The default zero salt
+is deterministic; use the same 32-byte `--salt` to obtain the same address on every
+chain where the canonical CREATE2 proxy and executor init code are identical:
 
 ```bash
 PRIVATE_KEY=0xYourDeploymentPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./bin/deploy-executor --network=mainnet
+  ./bin/deploy-executor --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 ### Executor ABI source
@@ -663,7 +665,7 @@ security.
 
 ## Persistent operator settings
 
-Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs and
+Dashboard changes to deployment identities, independent quorum RPCs, strategy, read/public RPCs, delivery mode, relay URLs and
 relay-success threshold, the
 token list, and the pause state are atomically saved after validation and restored on restart. Mainnet
 and Sepolia use separate files by default:
@@ -689,6 +691,7 @@ Startup resolves values in this order:
 | Strategy value | Its explicit strategy flag; saved value; built-in default |
 | Read RPC | `--rpc-url`; `ETH_RPC_URL`; saved read RPC; network default |
 | Public submission RPCs | Repeated `--public-rpc-url`; saved list; selected read RPC |
+| Deployment identities and quorum RPCs | Explicit flags or environment values; saved deployment configuration; network defaults where available |
 | Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
 | Submission mode | `--submission-mode`; saved mode; `private` |
 | Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
@@ -700,16 +703,17 @@ An environment `PRIVATE_KEY` is never automatically remembered and does not repl
 an existing saved restart signer. The dashboard shows active, queued, and restart
 addresses independently, and **Forget saved key** removes the disk credential
 without changing the environment-backed in-memory signer. Every successful
-dashboard mutation writes one complete snapshot of the effective strategy,
-connectivity, submission, pause, and persisted-signer settings. This means a CLI or
+dashboard mutation writes one complete snapshot of the effective deployment,
+strategy, connectivity, submission, pause, and persisted-signer settings. This means a CLI or
 environment override for a non-secret setting becomes the saved restart value after
 any dashboard save. `PRIVATE_KEY` is the exception: it is saved only through the
 explicit plaintext opt-in.
 
-Approved coordinator addresses are deliberately restart-time trust roots. They are
-not mutable through the dashboard and are not copied into the dashboard settings
-file; pass the same reviewed `--coordinator-address` values on every restart or use
-`OPEN_ORACLE_COORDINATOR_ADDRESSES`.
+Deployment identities remain restart-time trust roots, but the dashboard can validate
+and save REP, WETH, OpenOracle, coordinator, executor, manifest, quorum-RPC, and
+Uniswap V2/V3/V4 values for the next restart. The dashboard can also deploy and
+runtime-code-verify the executor through the canonical CREATE2 proxy; update the
+authenticated execution manifest after deployment.
 
 Pause blocks new position entry. It deliberately does not block settlement,
 replacement recovery, or withdrawal for a position that already has capital at

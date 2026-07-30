@@ -46,8 +46,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
+	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
 	const server = startDashboardServer(0, {
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
 		setPaused: paused => {
 			state.paused = paused
 		},
@@ -56,6 +57,16 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			connectivity = { publicRpcUrls: value.publicRpcUrls.map(String), readRpcUrl: value.readRpcUrl }
 			return connectivity
 		},
+		updateDeployment: value => {
+			if (typeof value !== 'object' || value === null || !('executor' in value)) throw new Error('Invalid test deployment')
+			deployment = { ...deployment, executor: value.executor === null ? undefined : address }
+			return deployment
+		},
+		deployExecutor: value => {
+			if (typeof value !== 'object' || value === null || !('salt' in value)) throw new Error('Invalid test salt')
+			return { address, alreadyDeployed: false, transactionHash: `0x${'11'.repeat(32)}` }
+		},
+		predictExecutor: () => ({ address, salt: `0x${'00'.repeat(32)}` }),
 		updateSigner: value => {
 			if (typeof value === 'object' && value !== null && 'forgetSavedSigner' in value) {
 				savedWallet = undefined
@@ -100,6 +111,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('Strategy use')
 	expect(pageSource).toContain('id="connectivity-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-fieldset" disabled')
+	expect(pageSource).toContain('id="deployment-fieldset" disabled')
+	expect(pageSource).toContain('id="create2-fieldset" disabled')
+	expect(pageSource).toContain('Deploy predictable executor')
 	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')
 	expect(pageSource).toContain('aria-describedby="signer-status"')
 	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
@@ -221,6 +235,26 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	expect(tokenUpdate.status).toBe(200)
 	expect(await tokenUpdate.json()).toEqual({ tokenAddresses: [address] })
+	const deploymentUpdate = await fetch(`${origin}/api/deployment`, {
+		body: JSON.stringify({ executor: address }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(deploymentUpdate.status).toBe(200)
+	const executorDeployment = await fetch(`${origin}/api/executor-deployment`, {
+		body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'POST',
+	})
+	expect(executorDeployment.status).toBe(200)
+	expect(await executorDeployment.json()).toMatchObject({ address, alreadyDeployed: false })
+	const executorPrediction = await fetch(`${origin}/api/executor-prediction`, {
+		body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'POST',
+	})
+	expect(executorPrediction.status).toBe(200)
+	expect(await executorPrediction.json()).toMatchObject({ address })
 	const signerUpdate = await fetch(`${origin}/api/signer`, {
 		body: JSON.stringify({ privateKey: 'not returned by test controller', rememberSigner: true }),
 		headers: { 'content-type': 'application/json', origin },

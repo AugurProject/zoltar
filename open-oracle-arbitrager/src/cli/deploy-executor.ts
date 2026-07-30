@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, encodeDeployData, getAddress, http, privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
-import { executorArtifact } from '#contracts/artifacts.generated'
+import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
+import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
 
 function option(name: string) {
 	const prefix = `--${name}=`
@@ -16,9 +16,10 @@ PRIVATE_KEY=0x... ./bin/deploy-executor [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...
+  --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
-The command verifies the selected chain, deploys the stateless executor, waits for
-confirmation, and prints the address to pass as --executor-address.`)
+The command predicts and deploys the stateless executor through the canonical
+CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
 	process.exit(0)
 }
 
@@ -28,20 +29,8 @@ const networkName = parseNetworkName(option('network'))
 const network = networkConfiguration(networkName, { rep: networkName === 'sepolia' ? zeroAddress : undefined })
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const account = privateKeyToAccount(privateKeyValue as Hex)
-const publicClient = createPublicClient({ chain: network.chain, transport: http(rpcUrl) })
-const observedChainId = await publicClient.getChainId()
-if (observedChainId !== network.chain.id) throw new Error(`RPC chain mismatch: expected ${network.chain.id.toString()}, received ${observedChainId.toString()}`)
-const wallet = createWalletClient({ account, chain: network.chain, transport: http(rpcUrl) })
-const hash = await wallet.sendTransaction({
-	data: encodeDeployData({
-		abi: executorArtifact.abi,
-		bytecode: `0x${executorArtifact.evm.bytecode.object}`,
-	}),
-})
-console.log(`deployment=${hash} network=${networkName} deployer=${account.address}`)
-const receipt = await publicClient.waitForTransactionReceipt({ hash })
-if (receipt.status !== 'success') throw new Error(`Executor deployment reverted: ${receipt.transactionHash}`)
-if (receipt.contractAddress === null || receipt.contractAddress === undefined) throw new Error('Executor deployment receipt did not contain a contract address')
-const code = await publicClient.getCode({ address: receipt.contractAddress })
-if (code === undefined || code === '0x') throw new Error('Executor deployment address has no contract code')
-console.log(`executor=${getAddress(receipt.contractAddress)} block=${receipt.blockNumber.toString()}`)
+const salt = option('salt') ?? `0x${'00'.repeat(32)}`
+const plan = executorDeploymentPlan(salt)
+console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
+const deployment = await deployExecutorCreate2({ chain: network.chain, privateKey: privateKeyValue as Hex, rpcUrl, salt })
+console.log(`executor=${deployment.address} transaction=${deployment.transactionHash ?? 'already-deployed'}`)

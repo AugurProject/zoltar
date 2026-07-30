@@ -290,6 +290,11 @@
 								<td>Every new endpoint is checked before it is applied. Display labels redact path and query credentials.</td>
 							</tr>
 							<tr>
+								<td>Deployment configuration</td>
+								<td>REP, WETH, OpenOracle, approved coordinators, executor, authenticated manifest, quorum RPCs, and Uniswap V2/V3/V4 contracts.</td>
+								<td>Validate and save reviewed values for restart. The executor deploy action uses the active signer, a bytes32 salt, and the canonical CREATE2 proxy, then verifies runtime bytecode before saving the predicted address.</td>
+							</tr>
+							<tr>
 								<td>Transactions and operations</td>
 								<td>Submission targets, hashes, replacements, gas, status, decisions, and reasons.</td>
 								<td>Use the reason column to distinguish an unprofitable quote from a safety or infrastructure rejection.</td>

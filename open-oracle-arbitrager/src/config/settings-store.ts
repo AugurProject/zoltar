@@ -6,9 +6,11 @@ import { validateConnectivitySettings, type ConnectivitySettings, type NetworkNa
 import { decimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
 import { signerCandidate } from '#config/signer'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 
 export type PersistedOperatorSettings = {
 	connectivity: ConnectivitySettings
+	deployment?: DeploymentSettings | undefined
 	paused: boolean
 	privateKey: Hex | undefined
 	strategy: MutableStrategy
@@ -41,13 +43,14 @@ const operatorSettingsFilesystem: OperatorSettingsFilesystem = {
 
 type StoredOperatorSettings = {
 	connectivity: ConnectivitySettings
+	deployment?: DeploymentSettings | undefined
 	network: NetworkName
 	paused: boolean
 	privateKey?: Hex | undefined
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
-	version: 2
+	version: 3
 }
 
 function requiredRecord(value: unknown) {
@@ -56,7 +59,7 @@ function requiredRecord(value: unknown) {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['connectivity', 'network', 'paused', 'privateKey', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['connectivity', 'deployment', 'network', 'paused', 'privateKey', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown saved operator setting: ${key}`)
 	}
@@ -82,7 +85,7 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 	}
 	const record = requiredRecord(value)
 	validatedKeys(record)
-	if (record['version'] !== 1 && record['version'] !== 2) throw new Error('Saved operator settings use an unsupported version')
+	if (record['version'] !== 1 && record['version'] !== 2 && record['version'] !== 3) throw new Error('Saved operator settings use an unsupported version')
 	if (record['network'] !== expectedNetwork) throw new Error(`Saved operator settings are for ${String(record['network'])}, not ${expectedNetwork}`)
 	if (typeof record['paused'] !== 'boolean') throw new Error('Saved pause setting must be a boolean')
 	const strategy: MutableStrategy = {
@@ -98,6 +101,7 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 	const candidate = signerCandidate(record['privateKey'] ?? null)
 	return {
 		connectivity: validateConnectivitySettings(record['connectivity']),
+		deployment: record['deployment'] === undefined ? undefined : validateDeploymentSettings(record['deployment']),
 		paused: record['paused'],
 		privateKey: candidate.privateKey,
 		strategy,
@@ -115,6 +119,7 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 export async function saveOperatorSettings(path: string, network: NetworkName, settings: PersistedOperatorSettings, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem) {
 	const stored: StoredOperatorSettings = {
 		connectivity: settings.connectivity,
+		deployment: settings.deployment,
 		network,
 		paused: settings.paused,
 		privateKey: settings.privateKey,
@@ -129,7 +134,7 @@ export async function saveOperatorSettings(path: string, network: NetworkName, s
 		},
 		submission: settings.submission,
 		tokenAddresses: settings.tokenAddresses ?? [],
-		version: 2,
+		version: 3,
 	}
 	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`

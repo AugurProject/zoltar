@@ -2,6 +2,7 @@ import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '#ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { Venue } from '#core/venue-strategy'
@@ -190,6 +191,7 @@ export type OperatorSnapshot = {
 		}
 	}
 	connectivity: ConnectivitySettings
+	deployment: DeploymentSettings
 	totalActualGasCostEth: string
 	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
@@ -508,7 +510,7 @@ export function operatorSnapshot(
 	strategy: MutableStrategy,
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
-	fixed: { execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
+	fixed: { deployment?: DeploymentSettings | undefined; execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
 	riskLimits: RiskLimits = {
 		lifecycleGasReserveWeth: 10n ** 16n,
 		maxConcurrentPositions: 1,
@@ -571,6 +573,23 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
+		deployment:
+			fixed.deployment ??
+			({
+				coordinatorAddresses: [],
+				deploymentManifest: undefined,
+				executor: fixed.executor,
+				openOracle: fixed.openOracle,
+				quorumRpcUrls: [],
+				rep: fixed.openOracle,
+				uniswapFactory: fixed.openOracle,
+				uniswapQuoter: fixed.openOracle,
+				uniswapRouter: undefined,
+				uniswapV2Router: undefined,
+				uniswapV4PoolManager: undefined,
+				uniswapV4Quoter: undefined,
+				weth: fixed.openOracle,
+			} satisfies DeploymentSettings),
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

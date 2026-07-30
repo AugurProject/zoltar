@@ -51,8 +51,8 @@ function options(name: string) {
 	return process.argv.filter(argument => argument.startsWith(prefix)).map(argument => argument.slice(prefix.length))
 }
 
-function requiredAddress(name: string) {
-	const value = option(name) ?? process.env['OPEN_ORACLE_ADDRESS']
+function requiredAddress(name: string, saved: string | undefined) {
+	const value = option(name) ?? process.env['OPEN_ORACLE_ADDRESS'] ?? saved
 	if (value === undefined) throw new Error(`Missing --${name}=0x... (or OPEN_ORACLE_ADDRESS)`)
 	return getAddress(value)
 }
@@ -139,10 +139,10 @@ export async function loadConfiguration(): Promise<Configuration> {
 		twapSeconds: Number(option('twap-seconds') ?? strategy.twapSeconds),
 	})
 	const network = networkConfiguration(networkName, {
-		factory: option('uniswap-factory') ?? process.env['UNISWAP_FACTORY_ADDRESS'],
-		quoter: option('uniswap-quoter') ?? process.env['UNISWAP_QUOTER_ADDRESS'],
-		rep: option('rep-address') ?? process.env['REP_ADDRESS'],
-		weth: option('weth-address') ?? process.env['WETH_ADDRESS'],
+		factory: option('uniswap-factory') ?? process.env['UNISWAP_FACTORY_ADDRESS'] ?? saved?.deployment?.uniswapFactory,
+		quoter: option('uniswap-quoter') ?? process.env['UNISWAP_QUOTER_ADDRESS'] ?? saved?.deployment?.uniswapQuoter,
+		rep: option('rep-address') ?? process.env['REP_ADDRESS'] ?? saved?.deployment?.rep,
+		weth: option('weth-address') ?? process.env['WETH_ADDRESS'] ?? saved?.deployment?.weth,
 	})
 	const readRpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? saved?.connectivity.readRpcUrl ?? defaultRpcUrl(networkName)
 	const quorumEnvironment =
@@ -150,17 +150,18 @@ export async function loadConfiguration(): Promise<Configuration> {
 			?.split(',')
 			.map(value => value.trim())
 			.filter(Boolean) ?? []
-	const quorumRpcUrls = validateIndependentReadRpcUrls(readRpcUrl, [...quorumEnvironment, ...options('quorum-rpc-url')])
+	const configuredQuorumRpcUrls = [...quorumEnvironment, ...options('quorum-rpc-url')]
+	const quorumRpcUrls = validateIndependentReadRpcUrls(readRpcUrl, configuredQuorumRpcUrls.length === 0 ? (saved?.deployment?.quorumRpcUrls ?? []) : configuredQuorumRpcUrls)
 	const publicRpcUrls = options('public-rpc-url')
 	const relayUrls = options('relay-url')
 	const privateKey = (privateKeyValue as Hex | undefined) ?? saved?.privateKey
 	const execute = process.argv.includes('--execute')
-	const executorValue = option('executor-address') ?? process.env['OPEN_ORACLE_EXECUTOR_ADDRESS']
+	const executorValue = option('executor-address') ?? process.env['OPEN_ORACLE_EXECUTOR_ADDRESS'] ?? saved?.deployment?.executor
 	if (execute && executorValue === undefined) throw new Error('--execute requires --executor-address=0x... (or OPEN_ORACLE_EXECUTOR_ADDRESS)')
-	const routerValue = option('uniswap-router') ?? process.env['UNISWAP_ROUTER_ADDRESS']
-	const v2RouterValue = option('uniswap-v2-router') ?? process.env['UNISWAP_V2_ROUTER_ADDRESS']
-	const v4PoolManagerValue = option('uniswap-v4-pool-manager') ?? process.env['UNISWAP_V4_POOL_MANAGER_ADDRESS']
-	const v4QuoterValue = option('uniswap-v4-quoter') ?? process.env['UNISWAP_V4_QUOTER_ADDRESS']
+	const routerValue = option('uniswap-router') ?? process.env['UNISWAP_ROUTER_ADDRESS'] ?? saved?.deployment?.uniswapRouter
+	const v2RouterValue = option('uniswap-v2-router') ?? process.env['UNISWAP_V2_ROUTER_ADDRESS'] ?? saved?.deployment?.uniswapV2Router
+	const v4PoolManagerValue = option('uniswap-v4-pool-manager') ?? process.env['UNISWAP_V4_POOL_MANAGER_ADDRESS'] ?? saved?.deployment?.uniswapV4PoolManager
+	const v4QuoterValue = option('uniswap-v4-quoter') ?? process.env['UNISWAP_V4_QUOTER_ADDRESS'] ?? saved?.deployment?.uniswapV4Quoter
 	if ((v4PoolManagerValue === undefined) !== (v4QuoterValue === undefined)) throw new Error('Uniswap V4 execution requires both --uniswap-v4-pool-manager and --uniswap-v4-quoter')
 	if (execute && routerValue === undefined) throw new Error('--execute requires --uniswap-router=0x... (or UNISWAP_ROUTER_ADDRESS)')
 	if (execute && quorumRpcUrls.length === 0) throw new Error('--execute requires at least one independent --quorum-rpc-url=https://... (or OPEN_ORACLE_QUORUM_RPC_URLS)')
@@ -169,11 +170,12 @@ export async function loadConfiguration(): Promise<Configuration> {
 			?.split(',')
 			.map(value => value.trim())
 			.filter(Boolean) ?? []
-	const coordinatorAddresses = [...new Map([...coordinatorEnvironment, ...options('coordinator-address')].map(value => getAddress(value)).map(address => [address.toLowerCase(), address])).values()]
+	const configuredCoordinatorAddresses = [...coordinatorEnvironment, ...options('coordinator-address')]
+	const coordinatorAddresses = [...new Map((configuredCoordinatorAddresses.length === 0 ? (saved?.deployment?.coordinatorAddresses ?? []) : configuredCoordinatorAddresses).map(value => getAddress(value)).map(address => [address.toLowerCase(), address])).values()]
 	if (execute && coordinatorAddresses.length === 0) throw new Error('--execute requires at least one --coordinator-address=0x... (or OPEN_ORACLE_COORDINATOR_ADDRESSES)')
 	const deploymentManifestPath = option('deployment-manifest') ?? process.env['OPEN_ORACLE_DEPLOYMENT_MANIFEST']
 	if (execute && deploymentManifestPath === undefined) throw new Error('--execute requires --deployment-manifest=PATH (or OPEN_ORACLE_DEPLOYMENT_MANIFEST)')
-	let deploymentManifest: DeploymentManifest | undefined
+	let deploymentManifest: DeploymentManifest | undefined = saved?.deployment?.deploymentManifest
 	if (deploymentManifestPath !== undefined) {
 		let value: unknown
 		try {
@@ -214,7 +216,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		maxHedgeSlippageBps,
 		network,
 		once: process.argv.includes('--once'),
-		openOracle: requiredAddress('open-oracle'),
+		openOracle: requiredAddress('open-oracle', saved?.deployment?.openOracle),
 		paused: saved?.paused ?? false,
 		persistedPrivateKey: saved?.privateKey,
 		priceHistoryFile: resolve(option('price-history-file') ?? resolve(defaultStateDirectory, `prices-${networkName}.jsonl`)),

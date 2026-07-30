@@ -42,6 +42,8 @@ import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConne
 import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from '#config/configuration'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
@@ -2178,6 +2180,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		transactionActivity: [],
 	}
 	const fixedState: {
+		deployment: DeploymentSettings
 		execute: boolean
 		executor: Address | undefined
 		expectedChainId: number
@@ -2188,6 +2191,21 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		savedWallet: Address | undefined
 		wallet: Address | undefined
 	} = {
+		deployment: {
+			coordinatorAddresses: config.coordinatorAddresses,
+			deploymentManifest: config.deploymentManifest,
+			executor: config.executor,
+			openOracle: config.openOracle,
+			quorumRpcUrls: config.quorumRpcUrls,
+			rep: config.network.rep,
+			uniswapFactory: config.network.factory,
+			uniswapQuoter: config.network.quoter,
+			uniswapRouter: config.router,
+			uniswapV2Router: config.v2Router,
+			uniswapV4PoolManager: config.v4PoolManager,
+			uniswapV4Quoter: config.v4Quoter,
+			weth: config.network.weth,
+		},
 		execute: config.execute,
 		executor: config.executor,
 		expectedChainId: config.network.chain.id,
@@ -2201,6 +2219,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	let pendingStrategy: MutableStrategy | undefined
 	let pendingSubmission: SubmissionSettings | undefined
 	let pendingConnectivity: ConnectivitySettings | undefined
+	let pendingDeployment: DeploymentSettings | undefined
 	let pendingPrivateKey: Hex | undefined
 	let activeSignerLock = initialSignerLock
 	let pendingSignerLock: ExclusiveProcessLock | undefined
@@ -2209,6 +2228,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	let cursor: SyncCursor | undefined
 	const currentPersistedSettings = (): PersistedOperatorSettings => ({
 		connectivity: pendingConnectivity ?? config.connectivity,
+		deployment: pendingDeployment ?? fixedState.deployment,
 		paused: state.paused,
 		privateKey: config.persistedPrivateKey,
 		strategy: pendingStrategy ?? config,
@@ -2255,6 +2275,59 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
 						return next
 					})
+				},
+				updateDeployment: value => {
+					const next = validateDeploymentSettings(value)
+					return queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), deployment: next })
+						pendingDeployment = next
+						fixedState.deployment = next
+						recordOperation(state, {
+							category: 'configuration',
+							details: `OpenOracle ${next.openOracle}; executor ${next.executor ?? 'not configured'}`,
+							level: 'info',
+							message: 'Deployment configuration saved',
+							reason: 'Protocol identities and independent RPCs apply after restart',
+							reportId: undefined,
+						})
+						return next
+					})
+				},
+				predictExecutor: value => {
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor prediction requires only a CREATE2 salt')
+					const plan = executorDeploymentPlan(value['salt'])
+					return { address: plan.address, salt: plan.salt }
+				},
+				deployExecutor: async value => {
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
+					if (config.execute && !state.paused) throw new Error('Pause execution before deploying with the active signer')
+					const privateKey = pendingPrivateKey ?? config.privateKey
+					if (privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
+					const connectivity = pendingConnectivity ?? config.connectivity
+					const deploymentRpcUrl = connectivity.publicRpcUrls[0]
+					if (deploymentRpcUrl === undefined) throw new Error('Configure a public submission RPC before deploying the executor')
+					const plan = executorDeploymentPlan(value['salt'])
+					const deployed = await deployExecutorCreate2({
+						chain: config.network.chain,
+						privateKey,
+						rpcUrl: deploymentRpcUrl,
+						salt: plan.salt,
+					})
+					const next = { ...(pendingDeployment ?? fixedState.deployment), deploymentManifest: undefined, executor: deployed.address }
+					await queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), deployment: next })
+						pendingDeployment = next
+						fixedState.deployment = next
+						recordOperation(state, {
+							category: 'transaction',
+							details: deployed.transactionHash,
+							level: 'info',
+							message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
+							reason: `Saved predictable executor ${deployed.address} for restart`,
+							reportId: undefined,
+						})
+					})
+					return deployed
 				},
 				updateSigner: async value => {
 					const signerRecord = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined

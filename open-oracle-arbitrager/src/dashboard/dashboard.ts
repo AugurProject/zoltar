@@ -19,12 +19,14 @@ import {
 	venueLabel,
 } from './dashboard-format.js'
 import type { SubmissionSettings } from '#execution/transaction-submission'
+import type { DeploymentSettings } from '#config/deployment-settings'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: OperatorSnapshot | undefined
 let settingsLoaded = false
 let submissionLoaded = false
 let connectivityLoaded = false
+let deploymentLoaded = false
 let tokensLoaded = false
 let initialFragmentApplied = false
 let connected = false
@@ -50,7 +52,7 @@ function setControlsEnabled(enabled: boolean) {
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
 	submissionFieldset.disabled = !enabled
-	for (const id of ['connectivity-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
+	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		fieldset.disabled = !enabled
@@ -59,6 +61,34 @@ function setControlsEnabled(enabled: boolean) {
 
 function shorten(value: string, leading = 8, trailing = 6) {
 	return value.length <= leading + trailing + 1 ? value : `${value.slice(0, leading)}…${value.slice(-trailing)}`
+}
+
+function optionalInput(id: string) {
+	const value = element<HTMLInputElement>(id).value.trim()
+	return value === '' ? undefined : value
+}
+
+function lines(id: string) {
+	return element<HTMLTextAreaElement>(id)
+		.value.split('\n')
+		.map(value => value.trim())
+		.filter(Boolean)
+}
+
+function loadDeployment(deployment: DeploymentSettings) {
+	element<HTMLInputElement>('deployment-rep').value = deployment.rep
+	element<HTMLInputElement>('deployment-weth').value = deployment.weth
+	element<HTMLInputElement>('deployment-open-oracle').value = deployment.openOracle
+	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
+	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
+	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
+	element<HTMLInputElement>('deployment-v3-router').value = deployment.uniswapRouter ?? ''
+	element<HTMLInputElement>('deployment-v2-router').value = deployment.uniswapV2Router ?? ''
+	element<HTMLInputElement>('deployment-v4-pool-manager').value = deployment.uniswapV4PoolManager ?? ''
+	element<HTMLInputElement>('deployment-v4-quoter').value = deployment.uniswapV4Quoter ?? ''
+	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
+	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
+	element<HTMLTextAreaElement>('deployment-manifest').value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
 
 function amount(value: string | undefined, symbol: string) {
@@ -632,6 +662,10 @@ function render(snapshot: OperatorSnapshot) {
 		loadConnectivity(snapshot.connectivity)
 		connectivityLoaded = true
 	}
+	if (!deploymentLoaded) {
+		loadDeployment(snapshot.deployment)
+		deploymentLoaded = true
+	}
 	if (!tokensLoaded) {
 		element<HTMLTextAreaElement>('token-addresses').value = snapshot.tokenAddresses.join('\n')
 		tokensLoaded = true
@@ -862,6 +896,73 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		await refresh()
+	} finally {
+		button.disabled = !connected
+	}
+})
+
+element<HTMLFormElement>('deployment-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const button = element<HTMLFormElement>('deployment-form').querySelector('button[type="submit"]')
+	if (!(button instanceof HTMLButtonElement)) return
+	button.disabled = true
+	setText('deployment-status', 'Validating deployment configuration…')
+	try {
+		const manifestText = element<HTMLTextAreaElement>('deployment-manifest').value.trim()
+		const deployment = {
+			coordinatorAddresses: lines('deployment-coordinators'),
+			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
+			executor: optionalInput('deployment-executor'),
+			openOracle: element<HTMLInputElement>('deployment-open-oracle').value.trim(),
+			quorumRpcUrls: lines('deployment-quorum-rpcs'),
+			rep: element<HTMLInputElement>('deployment-rep').value.trim(),
+			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
+			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
+			uniswapRouter: optionalInput('deployment-v3-router'),
+			uniswapV2Router: optionalInput('deployment-v2-router'),
+			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
+			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
+			weth: element<HTMLInputElement>('deployment-weth').value.trim(),
+		}
+		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
+			body: JSON.stringify(deployment),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		loadDeployment(response.deployment)
+		setText('deployment-status', 'Deployment configuration saved. Restart the bot to apply protocol identities and quorum RPCs.')
+	} catch (error) {
+		setText('deployment-status', error instanceof Error ? error.message : String(error))
+	} finally {
+		button.disabled = !connected
+	}
+})
+
+element<HTMLFormElement>('create2-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const button = element<HTMLButtonElement>('deploy-executor-button')
+	const salt = element<HTMLInputElement>('create2-salt').value.trim()
+	button.disabled = true
+	setText('create2-status', 'Calculating the CREATE2 address…')
+	try {
+		const prediction = await api<{ address: string }>('/api/executor-prediction', {
+			body: JSON.stringify({ salt }),
+			headers: { 'content-type': 'application/json' },
+			method: 'POST',
+		})
+		if (!window.confirm(`Deploy the executor at predictable address ${prediction.address} with the active local signer?`)) return
+		setText('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
+		const result = await api<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>('/api/executor-deployment', {
+			body: JSON.stringify({ salt }),
+			headers: { 'content-type': 'application/json' },
+			method: 'POST',
+		})
+		element<HTMLInputElement>('deployment-executor').value = result.address
+		element<HTMLTextAreaElement>('deployment-manifest').value = ''
+		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}. Saved for restart; replace the cleared execution manifest.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}. Saved for restart; replace the cleared execution manifest.`)
+		await refresh()
+	} catch (error) {
+		setText('create2-status', error instanceof Error ? error.message : String(error))
 	} finally {
 		button.disabled = !connected
 	}

@@ -2,11 +2,15 @@ import { join } from 'node:path'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
+import type { DeploymentSettings } from '#config/deployment-settings'
 
 type DashboardController = {
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
+	updateDeployment?: (value: unknown) => DeploymentSettings | Promise<DeploymentSettings>
+	deployExecutor?: (value: unknown) => { address: string; alreadyDeployed: boolean; transactionHash: string | undefined } | Promise<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>
+	predictExecutor?: (value: unknown) => { address: string; salt: string } | Promise<{ address: string; salt: string }>
 	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
@@ -176,6 +180,33 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					return json({ connectivity: await controller.updateConnectivity(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/deployment') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.updateDeployment === undefined) throw new Error('Deployment configuration is unavailable')
+					return json({ deployment: await controller.updateDeployment(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'POST' && url.pathname === '/api/executor-deployment') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
+					return json(await controller.deployExecutor(await requireJson(request)))
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'POST' && url.pathname === '/api/executor-prediction') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.predictExecutor === undefined) throw new Error('Executor prediction is unavailable')
+					return json(await controller.predictExecutor(await requireJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

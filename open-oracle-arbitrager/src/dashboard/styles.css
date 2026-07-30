@@ -333,6 +333,22 @@ main {
 	gap: 18px;
 }
 
+.deployment-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.deployment-manifest-field {
+	grid-column: 1 / -1;
+}
+
+.create2-form {
+	margin-top: 1.5rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border);
+}
+
 .panel {
 	overflow: hidden;
 	padding: 22px;
@@ -659,6 +675,14 @@ footer .mono {
 }
 
 @media (max-width: 680px) {
+	.deployment-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.deployment-manifest-field {
+		grid-column: auto;
+	}
+
 	.app-header,
 	main,
 	footer {

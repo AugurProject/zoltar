@@ -70,7 +70,16 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
 			['dashboard-markets.png', 'markets'],
+			...(process.env['OPEN_ORACLE_CAPTURE_DEPLOYMENT'] === '1'
+				? ([
+						['deployment-desktop.png', 'deployment-configuration'],
+						['deployment-mobile.png', 'deployment-configuration'],
+						['deployment-create2.png', 'create2-form'],
+					] as const)
+				: []),
 		] as const) {
+			const mobile = name === 'deployment-mobile.png'
+			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
 			if (section !== undefined) {
@@ -306,6 +315,7 @@ const snapshot = {
 	blockNumber: '23842152',
 	blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
 	connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
+	deployment: positionDerivedSnapshot.deployment,
 	endpointChecks: [
 		{ chainId: 1, checkedAt, error: undefined, kind: 'read-rpc' as const, status: 'healthy' as const, target: 'https://read.example' },
 		{ chainId: 1, checkedAt, error: undefined, kind: 'public-rpc' as const, status: 'healthy' as const, target: 'https://rpc.example' },
@@ -442,7 +452,7 @@ try {
 	if (process.argv.includes('--serve')) {
 		await new Promise(() => {})
 	}
-	const outputDirectory = join(import.meta.dir, '..', 'docs', 'assets')
+	const outputDirectory = process.env['OPEN_ORACLE_SCREENSHOT_OUTPUT_DIR'] ?? join(import.meta.dir, '..', 'docs', 'assets')
 	await mkdir(outputDirectory, { recursive: true })
 	const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 	const port = server.port
