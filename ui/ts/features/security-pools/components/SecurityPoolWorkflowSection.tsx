@@ -68,7 +68,7 @@ import {
 import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../../../lib/loadState.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { isActiveAppChain } from '../../../lib/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
@@ -199,7 +199,7 @@ export function SecurityPoolWorkflowSection({
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastForkAuctionAutoLoadKey = useRef<string | undefined>(undefined)
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 	const normalizedReportingFormPoolAddress = normalizeAddress(reporting.reportingForm.securityPoolAddress)

@@ -40,7 +40,7 @@ import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementAc
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../../../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '../../markets/lib/marketForm.js'
-import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -425,7 +425,7 @@ export function ForkAuctionSection({
 	showSecurityPoolAddressInput = true,
 	truthAuctionReadClient,
 }: ForkAuctionSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId

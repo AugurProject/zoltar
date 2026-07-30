@@ -15,7 +15,7 @@ import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { isActiveAppChain } from '../../../lib/network.js'
 import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketSectionProps } from '../../types.js'
 
@@ -74,7 +74,7 @@ export function MarketSection({
 	securityPoolsLoadError,
 }: MarketSectionProps) {
 	const hasForked = zoltarUniverse?.hasForked === true
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)

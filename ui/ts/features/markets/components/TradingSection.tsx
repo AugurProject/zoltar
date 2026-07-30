@@ -22,7 +22,7 @@ import { TransactionNetworkValue } from '../../../components/TransactionNetworkV
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
-import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
@@ -67,7 +67,7 @@ export function TradingSection({
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
 	const [activeModal, setActiveModal] = useState<TradingActionModal>(undefined)
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const resolvedPoolState =

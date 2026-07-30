@@ -11,7 +11,7 @@ import { LoadingText } from '../../components/LoadingText.js'
 import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
@@ -73,7 +73,7 @@ export function OverviewPanels({
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
 	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
-	const walletOnActiveNetwork = isMainnetChain(accountState.chainId)
+	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {

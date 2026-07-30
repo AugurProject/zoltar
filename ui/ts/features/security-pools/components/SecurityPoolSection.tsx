@@ -14,7 +14,7 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { isActiveAppChain } from '../../../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
@@ -45,7 +45,7 @@ export function SecurityPoolSection({
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
 	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
 	const requestedAvailableQuestionsContextRef = useRef<string | undefined>(undefined)

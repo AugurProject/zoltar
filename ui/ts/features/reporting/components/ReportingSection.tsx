@@ -24,7 +24,7 @@ import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../../markets/lib/marketForm.js'
-import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
@@ -228,7 +228,7 @@ export function ReportingSection({
 	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined

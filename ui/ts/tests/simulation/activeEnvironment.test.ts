@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isActiveAppChain, isSupportedAppChain } from '../../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../../simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
@@ -41,6 +41,8 @@ void describe('active environment', () => {
 		const routeBackend = await initializeActiveEnvironment({ hash: '#/deploy?network=sepolia', hostname: 'localhost', search: '' })
 		expect(routeBackend.profile.id).toBe('sepolia')
 		expect(isSupportedAppChain('0xaa36a7')).toBe(true)
+		expect(isActiveAppChain('0xaa36a7')).toBe(true)
+		expect(isActiveAppChain('0x1')).toBe(false)
 		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
 	})
 

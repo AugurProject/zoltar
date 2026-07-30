@@ -30,7 +30,7 @@ import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } fro
 import { balanceShortage } from '../../../lib/inputs.js'
 import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { isActiveAppChain } from '../../../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
@@ -303,7 +303,7 @@ export function SecurityVaultSection({
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
-	const isMainnet = isMainnetChain(accountState?.chainId)
+	const isMainnet = isActiveAppChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '0',
 		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',

@@ -52,7 +52,7 @@ import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount } from '../../../lib/pagination.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
-import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
@@ -923,7 +923,7 @@ export function OpenOracleSection({
 	}
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isActiveAppChain(accountState.chainId)
 	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })
 	const hasCreateContractFieldErrors = openOracleCreateFieldErrors.token1Address !== undefined || openOracleCreateFieldErrors.token2Address !== undefined
 	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({

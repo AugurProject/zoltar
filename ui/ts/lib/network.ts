@@ -59,7 +59,7 @@ export function isSupportedAppChain(chainId: string | undefined) {
 	return profile.isSupportedAppChain && chainId === profile.chainIdHex
 }
 
-export function isMainnetChain(chainId: string | undefined) {
+export function isActiveAppChain(chainId: string | undefined) {
 	return isSupportedAppChain(chainId)
 }
 
