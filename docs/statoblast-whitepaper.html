@@ -20,24 +20,10 @@
 						</p>
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
-					<p class="subtitle">
-						A permissionless oracle and prediction-market protocol built on
-						Ethereum and Zoltar, subject to the assumptions in the
-						<a href="./security-model.html">Protocol Security Model</a>.
-					</p>
 				</header>
 
 				<section class="paper-section" id="abstract">
-					<div class="section-heading">
-						<h2>Abstract</h2>
-						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
-					</div>
-					<p class="lede">
-						Augur Statoblast is a binary prediction market built on top of Zoltar. It
-						creates security pools scoped to individual questions, lets traders
-						mint and redeem ETH-backed shares, lets REP vaults provide
-						underwriting, and tries to settle disputes locally before forcing
-						Zoltar to fork.
+					<p> Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="./security-model.html">Protocol Security Model</a>.
 					</p>
 					<p> The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault holders choose a child by migrating their vault positions, and the forker materializes the corresponding child REP. </p>
 					<p> Proportional open-interest collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
