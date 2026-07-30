@@ -14,6 +14,7 @@ type RunLoadOptions<TResult> = {
 export type LoadController = {
 	phase: Signal<LoadPhase>
 	isLoading: Signal<boolean>
+	invalidate(): void
 	run<TResult>(options: RunLoadOptions<TResult>): Promise<TResult | undefined>
 	track<TResult>(work: () => Promise<TResult>): Promise<TResult>
 }
@@ -48,6 +49,7 @@ export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, i
 export function createLoadController(): LoadController {
 	const phase = signal<LoadPhase>('idle')
 	const isLoading = signal(false)
+	let generation = 0
 	let pendingCount = 0
 
 	const syncPhase = () => {
@@ -57,14 +59,23 @@ export function createLoadController(): LoadController {
 	}
 
 	const track = async <TResult>(work: () => Promise<TResult>) => {
+		const workGeneration = generation
 		pendingCount += 1
 		syncPhase()
 		try {
 			return await work()
 		} finally {
-			pendingCount = Math.max(0, pendingCount - 1)
-			syncPhase()
+			if (workGeneration === generation) {
+				pendingCount = Math.max(0, pendingCount - 1)
+				syncPhase()
+			}
 		}
+	}
+
+	const invalidate = () => {
+		generation += 1
+		pendingCount = 0
+		syncPhase()
 	}
 
 	const run = async <TResult>({ isCurrent, load, onStart, onSuccess, onError }: RunLoadOptions<TResult>) => {
@@ -85,6 +96,7 @@ export function createLoadController(): LoadController {
 	}
 
 	return {
+		invalidate,
 		isLoading,
 		phase,
 		run,

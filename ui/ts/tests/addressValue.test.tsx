@@ -93,4 +93,28 @@ describe('AddressValue', () => {
 		})
 		expect(copyButton.getAttribute('title')).toBe(address)
 	})
+
+	test('keeps the address visible and associates an announced clipboard error', async () => {
+		const address = '0x1234567890abcdef1234567890abcdef12345678'
+		const clipboard = {
+			writeText: async () => {
+				throw new DOMException('clipboard unavailable', 'NotAllowedError')
+			},
+		}
+		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+		Reflect.defineProperty(window.navigator, 'clipboard', { configurable: true, value: clipboard })
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
+
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
+		const error = await waitFor(() => documentQueries.getByRole('alert'))
+		expect(copyButton.textContent).toBe(address)
+		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
+		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
+		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe(address)
+	})
 })

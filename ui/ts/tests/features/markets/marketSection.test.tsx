@@ -156,6 +156,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarQuestionCount: 0n,
 		zoltarQuestionPage: undefined,
 		zoltarQuestions: [],
+		zoltarQuestionsError: undefined,
 		zoltarUniverse: createZoltarUniverse(),
 		zoltarUniverseState: 'ready',
 		securityPoolsLoadError: undefined,
@@ -191,6 +192,54 @@ describe('MarketSection', () => {
 		const sectionHeader = questionsTitle.closest('.section-block-header')
 		if (sectionHeader === null) throw new Error('Expected Zoltar title to render inside a section header')
 		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Zoltar views"]')).toBeNull()
+	})
+
+	test('shows question load failures in the questions section with a retry', async () => {
+		let retryCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onLoadZoltarQuestions: async () => {
+						retryCalls += 1
+					},
+					zoltarQuestionCount: undefined,
+					zoltarQuestionsError: 'Question service unavailable',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert').textContent).toContain('Question service unavailable')
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
+		await waitFor(() => expect(retryCalls).toBe(1))
+	})
+
+	test('retries a failed question page only once', async () => {
+		let pageLoadCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onLoadZoltarQuestionPage: async () => {
+						pageLoadCalls += 1
+						throw new Error('Question page unavailable')
+					},
+					zoltarQuestionCount: 1n,
+					zoltarQuestionsError: 'Question page unavailable',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => expect(pageLoadCalls).toBe(1))
+		expect(documentQueries.queryByText('Question page unavailable.')).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
+		await waitFor(() => expect(pageLoadCalls).toBe(2))
+		await new Promise(resolve => setTimeout(resolve, 50))
+		expect(pageLoadCalls).toBe(2)
 	})
 
 	test('renders the active universe as a deterministic hex identifier outside the questions view', async () => {

@@ -62,4 +62,14 @@ describe('TimestampValue', () => {
 		expect(loadingStatus?.textContent).toContain('Loading…')
 		expect(loadingStatus?.querySelector('.spinner')).not.toBeNull()
 	})
+
+	test('renders an invalid timestamp without crashing', async () => {
+		const invalidTimestamp = 10n ** 30n
+		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={invalidTimestamp} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const invalidValue = document.body.querySelector('.timestamp-value.error')
+		expect(invalidValue?.textContent).toContain(`Invalid timestamp (${invalidTimestamp.toString()})`)
+		expect(document.body.querySelector('time')).toBeNull()
+	})
 })

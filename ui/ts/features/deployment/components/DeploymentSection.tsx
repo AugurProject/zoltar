@@ -59,7 +59,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 }
 
-export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
+export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isMainnet, onDeploy }: DeploymentSectionProps) {
 	return (
 		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
 			<div className='contract-list'>
@@ -67,14 +67,22 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
-					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
-					const availability = getDeploymentStepAvailability({
-						accountAddress,
-						busyStepId,
-						isMainnet,
-						prerequisiteLabel,
-						step,
-					})
+					const stepStatus = deploymentStateReady
+						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
+						: {
+								badgeTone: 'muted' as const,
+								buttonLabel: commonCopy.deploy,
+								label: commonCopy.unavailable,
+							}
+					const availability = deploymentStateReady
+						? getDeploymentStepAvailability({
+								accountAddress,
+								busyStepId,
+								isMainnet,
+								prerequisiteLabel,
+								step,
+							})
+						: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
 
 					return (
 						<div className='contract-row' key={step.id}>
@@ -94,7 +102,8 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 									onClick={() => void onDeploy(step.id)}
 									pending={isBusy}
 									availability={availability}
-									showDisabledReason={prerequisiteLabel === undefined}
+									disabledReasonElementId={deploymentStateReady ? undefined : deploymentStatusReasonElementId}
+									showDisabledReason={deploymentStateReady && prerequisiteLabel === undefined}
 								/>
 							)}
 						</div>

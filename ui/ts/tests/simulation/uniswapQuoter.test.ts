@@ -79,13 +79,13 @@ describe('simulation Uniswap quotes', () => {
 			selectAccount: async () => undefined,
 			selectedAccount: getAddress('0x00000000000000000000000000000000000000a1'),
 			simulationSource: { kind: 'scenario', scenario: 'baseline' },
-			setRepPerEthPrice: () => undefined,
-			setRepPerUsdcPrice: () => undefined,
-			setQueryDelayMilliseconds: () => undefined,
+			setRepPerEthPrice: async () => undefined,
+			setRepPerUsdcPrice: async () => undefined,
+			setQueryDelayMilliseconds: async () => undefined,
 			subscribe: () => () => undefined,
 			transactionCountSinceReset: 0n,
 			transactionDelayMilliseconds: 0,
-			setTransactionDelayMilliseconds: () => undefined,
+			setTransactionDelayMilliseconds: async () => undefined,
 			waitUntilReady: async () => undefined,
 		})
 		const client = createStubReadClient()
