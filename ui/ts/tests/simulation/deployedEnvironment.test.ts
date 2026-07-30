@@ -12,7 +12,7 @@ void describe('deployed simulation backend', () => {
 
 	beforeAll(async () => {
 		deployedBackend = await createBootstrappedSimulationBackendWithRetry('deployed')
-		deployedBackend.setTransactionDelayMilliseconds(0)
+		await deployedBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	beforeEach(async () => {

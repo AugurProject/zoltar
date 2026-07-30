@@ -14,6 +14,15 @@ import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTr
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
+}
+
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
@@ -121,6 +130,131 @@ void describe('active environment', () => {
 		resetEnvironment()
 	})
 
+	void test('keeps the current simulation usable when replacement construction fails', async () => {
+		let disposeCalls = 0
+		const currentBackend = createFakeBackend({
+			profile: createFakeSimulationProfile(),
+		})
+		const currentController = {
+			dispose: async () => {
+				disposeCalls += 1
+			},
+		} as Awaited<ReturnType<typeof createSimulationBackend>>
+		const resetEnvironment = installActiveEnvironmentForTesting(currentBackend, currentController)
+
+		await expect(
+			initializeActiveEnvironment(
+				{ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' },
+				{
+					createSimulationBackend: async () => {
+						throw new Error('replacement construction failed')
+					},
+				},
+			),
+		).rejects.toThrow('replacement construction failed')
+
+		expect(getActiveBackend()).toBe(currentBackend)
+		expect(disposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('keeps the newest environment when overlapping replacements resolve out of order', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const firstReplacement = createDeferred<SimulationBackend>()
+		const secondReplacement = createDeferred<SimulationBackend>()
+		let replacementRequestCount = 0
+		let initialDisposeCalls = 0
+		let firstDisposeCalls = 0
+		let secondDisposeCalls = 0
+		const createReplacement = (dispose: () => void) =>
+			Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+				bootstrap: async () => undefined,
+				dispose: async () => dispose(),
+			}) as SimulationBackend
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => {
+					initialDisposeCalls += 1
+				},
+			}) as SimulationBackend,
+		)
+		const dependencies = {
+			createSimulationBackend: async () => {
+				replacementRequestCount += 1
+				return await (replacementRequestCount === 1 ? firstReplacement.promise : secondReplacement.promise)
+			},
+		}
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, dependencies)
+		const secondInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, dependencies)
+		const newestBackend = createReplacement(() => {
+			secondDisposeCalls += 1
+		})
+		secondReplacement.resolve(newestBackend)
+		await secondInitialization
+		expect(getActiveBackend()).toBe(newestBackend)
+
+		const staleBackend = createReplacement(() => {
+			firstDisposeCalls += 1
+		})
+		firstReplacement.resolve(staleBackend)
+		await firstInitialization
+
+		expect(getActiveBackend()).toBe(newestBackend)
+		expect(initialDisposeCalls).toBe(1)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondDisposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('does not bootstrap a replacement superseded while disposing the previous environment', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const initialDispose = createDeferred<void>()
+		let firstBootstrapCalls = 0
+		let firstDisposeCalls = 0
+		let secondBootstrapCalls = 0
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => await initialDispose.promise,
+			}) as SimulationBackend,
+		)
+		const firstBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				firstBootstrapCalls += 1
+			},
+			dispose: async () => {
+				firstDisposeCalls += 1
+			},
+		}) as SimulationBackend
+		const secondBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				secondBootstrapCalls += 1
+			},
+			dispose: async () => undefined,
+		}) as SimulationBackend
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, { createSimulationBackend: async () => firstBackend })
+		await Promise.resolve()
+		expect(getActiveBackend()).toBe(firstBackend)
+
+		const secondResult = await initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, { createSimulationBackend: async () => secondBackend })
+		expect(secondResult).toBe(secondBackend)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondBootstrapCalls).toBe(1)
+
+		initialDispose.resolve()
+		const firstResult = await firstInitialization
+
+		expect(firstResult).toBe(secondBackend)
+		expect(getActiveBackend()).toBe(secondBackend)
+		expect(firstBootstrapCalls).toBe(0)
+		resetEnvironment()
+	})
+
 	void test('initializes a saved simulation state from simState query params', async () => {
 		const domEnvironment = installDomEnvironment()
 		const record = persistSavedSimulationState(
@@ -214,7 +348,7 @@ void describe('simulation backend', () => {
 	beforeAll(async () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
 		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
-		warmBaselineBackend.setTransactionDelayMilliseconds(0)
+		await warmBaselineBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	beforeEach(async () => {
@@ -362,7 +496,7 @@ void describe('simulation backend', () => {
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -386,7 +520,7 @@ void describe('simulation backend', () => {
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -431,7 +565,7 @@ void describe('simulation backend', () => {
 			const toAccount = backend.accounts[1]
 			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
-			backend.setTransactionDelayMilliseconds(250)
+			await backend.setTransactionDelayMilliseconds(250)
 			expect(backend.transactionDelayMilliseconds).toBe(250)
 
 			const writeClient = backend.createWriteClient(fromAccount)
@@ -453,9 +587,9 @@ void describe('simulation backend', () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		await backend.setRepPerEthPrice(2n * 10n ** 18n)
 		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
-		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
+		await backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
@@ -471,9 +605,9 @@ void describe('simulation backend', () => {
 			const secondaryAccount = sourceBackend.accounts[1]
 			if (secondaryAccount === undefined) throw new Error('Expected a secondary simulation QA account')
 
-			sourceBackend.setQueryDelayMilliseconds(250)
-			sourceBackend.setTransactionDelayMilliseconds(0)
-			sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
+			await sourceBackend.setQueryDelayMilliseconds(250)
+			await sourceBackend.setTransactionDelayMilliseconds(0)
+			await sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
 			await sourceBackend.selectAccount(secondaryAccount)
 			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 

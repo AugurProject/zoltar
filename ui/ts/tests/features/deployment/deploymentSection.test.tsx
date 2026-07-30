@@ -48,6 +48,7 @@ describe('DeploymentSection', () => {
 				allSteps={[deploymentStep]}
 				accountAddress={zeroAddress}
 				busyStepId={undefined}
+				deploymentStateReady={true}
 				isMainnet={true}
 				onDeploy={async () => {
 					onDeployCalls += 1
@@ -64,7 +65,7 @@ describe('DeploymentSection', () => {
 
 	test('shows deployment progress for busy steps', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId='multicall3' isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId='multicall3' deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
@@ -73,7 +74,7 @@ describe('DeploymentSection', () => {
 
 	test('shows the connect-wallet branch when account is missing', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={undefined} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={undefined} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
@@ -87,7 +88,7 @@ describe('DeploymentSection', () => {
 
 	test('shows the network-guard branch when account is present but not on mainnet', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={false} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={false} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
@@ -97,7 +98,7 @@ describe('DeploymentSection', () => {
 	test('shows waiting state while prerequisite step is missing', async () => {
 		const prerequisite = createDeploymentStep({ id: 'proxyDeployer', deployed: false, label: 'Proxy Deployer' })
 		const dependent = createDeploymentStep({ id: 'deploymentStatusOracle', deployed: false, dependencies: ['proxyDeployer'], label: 'Deployment Status Oracle' })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
@@ -114,7 +115,7 @@ describe('DeploymentSection', () => {
 
 	test('enables deploy when wallet and chain are ready and prerequisites are satisfied', async () => {
 		const step = createDeploymentStep({ id: 'multicall3', deployed: false })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Deploy multicall3')

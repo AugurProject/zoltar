@@ -23,6 +23,19 @@ type PendingRequest = {
 
 type WorkerRequestMessage = Omit<SimulationWorkerCallMessage, 'id'> | Omit<SimulationWorkerRpcMessage, 'id'>
 
+type SimulationWorkerConnection = {
+	clearHandlers: () => void
+	postMessage: (message: SimulationWorkerMessage) => void
+	setErrorHandler: (handler: (event: ErrorEvent) => void) => void
+	setMessageErrorHandler: (handler: () => void) => void
+	setMessageHandler: (handler: (event: MessageEvent<SimulationWorkerEvent>) => void) => void
+	terminate: () => void
+}
+
+type CreateSimulationBackendDependencies = {
+	createWorkerConnection?: (workerPath: URL) => SimulationWorkerConnection
+}
+
 type SimulationBackend = ChainBackend &
 	SimulationController & {
 		bootstrap(): Promise<void>
@@ -48,6 +61,28 @@ function resolveWorkerPath() {
 	return new URL('./tevmWorker.worker.js', import.meta.url)
 }
 
+function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
+	const worker = new Worker(workerPath, { type: 'module' })
+	return {
+		clearHandlers: () => {
+			worker.onmessage = null
+			worker.onerror = null
+			worker.onmessageerror = null
+		},
+		postMessage: message => worker.postMessage(message),
+		setErrorHandler: handler => {
+			worker.onerror = handler
+		},
+		setMessageErrorHandler: handler => {
+			worker.onmessageerror = handler
+		},
+		setMessageHandler: handler => {
+			worker.onmessage = handler
+		},
+		terminate: () => worker.terminate(),
+	}
+}
+
 function createSimulationProvider(requestRpc: (parameters: RequestArguments) => Promise<unknown>): InjectedEthereum {
 	const request = (async parameters => await requestRpc(parameters as RequestArguments)) as InjectedEthereum['request']
 	return {
@@ -57,7 +92,10 @@ function createSimulationProvider(requestRpc: (parameters: RequestArguments) => 
 	}
 }
 
-export async function createSimulationBackend({ initialBootstrapError, savedState, savedStateId, scenario }: { initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario }): Promise<SimulationBackend> {
+export async function createSimulationBackend(
+	{ initialBootstrapError, savedState, savedStateId, scenario }: { initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
+	dependencies: CreateSimulationBackendDependencies = {},
+): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
@@ -74,12 +112,14 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 				}
 	const listeners = createListenerMap()
 	const workerPath = resolveWorkerPath()
-	const worker = new Worker(workerPath, { type: 'module' })
+	const worker = (dependencies.createWorkerConnection ?? createWorkerConnection)(workerPath)
 	const pendingRequests = new Map<number, PendingRequest>()
 	let nextRequestId = 1
 	let currentState: SimulationWorkerState | undefined = undefined
 	let bootstrapPromise: Promise<void> | undefined = undefined
 	let disposed = false
+	let terminalError: Error | undefined = undefined
+	let rejectReady: ((error: Error) => void) | undefined = undefined
 
 	const rejectPendingRequests = (error: Error) => {
 		for (const pendingRequest of pendingRequests.values()) {
@@ -88,8 +128,23 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 		pendingRequests.clear()
 	}
 
+	const failWorker = (error: Error) => {
+		if (disposed) return
+		terminalError = error
+		disposed = true
+		worker.clearHandlers()
+		rejectPendingRequests(error)
+		rejectReady?.(error)
+		rejectReady = undefined
+		worker.terminate()
+	}
+
 	const requestFromWorker = <TResult>(message: WorkerRequestMessage): Promise<TResult> =>
 		new Promise((resolve, reject) => {
+			if (terminalError !== undefined) {
+				reject(terminalError)
+				return
+			}
 			if (disposed) {
 				reject(new Error('Simulation backend has been disposed'))
 				return
@@ -102,10 +157,15 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 					resolve(value as TResult)
 				},
 			})
-			worker.postMessage({
-				...message,
-				id: requestId,
-			} as SimulationWorkerMessage)
+			try {
+				worker.postMessage({
+					...message,
+					id: requestId,
+				} as SimulationWorkerMessage)
+			} catch (error) {
+				pendingRequests.delete(requestId)
+				reject(error instanceof Error ? error : new Error('Simulation worker request failed'))
+			}
 		})
 
 	const callWorker = async <TMethod extends SimulationWorkerCallMethod>(method: TMethod, params: SimulationWorkerCallMap[TMethod]['params']): Promise<SimulationWorkerCallMap[TMethod]['result']> =>
@@ -139,10 +199,12 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 	}
 
 	const waitForReady = new Promise<SimulationWorkerState>((resolve, reject) => {
-		worker.onmessage = event => {
-			const message = event.data as SimulationWorkerEvent
+		rejectReady = reject
+		worker.setMessageHandler(event => {
+			const message = event.data
 			if (message.type === 'ready') {
 				applyState(message.state)
+				rejectReady = undefined
 				resolve(message.state)
 				return
 			}
@@ -151,7 +213,7 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 				return
 			}
 			if (message.type === 'error' && message.id === undefined) {
-				reject(new Error(message.message))
+				failWorker(new Error(message.message))
 				return
 			}
 			if (message.type === 'result') {
@@ -169,18 +231,22 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 				pendingRequests.delete(requestId)
 				pendingRequest.reject(new Error(message.message))
 			}
-		}
-		worker.onerror = event => {
+		})
+		worker.setErrorHandler(event => {
 			const locationSuffix = event.filename === undefined || event.filename === '' ? '' : ` at ${event.filename}${event.lineno === 0 ? '' : `:${event.lineno}${event.colno === 0 ? '' : `:${event.colno}`}`}`
-			reject(new Error(`${event.message || 'Simulation worker failed'}${locationSuffix} (worker: ${workerPath.toString()})`))
+			failWorker(new Error(`${event.message || 'Simulation worker failed'}${locationSuffix} (worker: ${workerPath.toString()})`))
+		})
+		worker.setMessageErrorHandler(() => {
+			failWorker(new Error(`Simulation worker message deserialization failed (worker: ${workerPath.toString()})`))
+		})
+		try {
+			worker.postMessage({
+				initialization,
+				type: 'init',
+			} satisfies SimulationWorkerMessage)
+		} catch (error) {
+			failWorker(error instanceof Error ? error : new Error('Simulation worker initialization failed'))
 		}
-		worker.onmessageerror = () => {
-			reject(new Error(`Simulation worker message deserialization failed (worker: ${workerPath.toString()})`))
-		}
-		worker.postMessage({
-			initialization,
-			type: 'init',
-		} satisfies SimulationWorkerMessage)
 	})
 
 	await waitForReady
@@ -286,8 +352,7 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 		dispose: async () => {
 			if (disposed) return
 			disposed = true
-			worker.onmessage = null
-			worker.onerror = null
+			worker.clearHandlers()
 			rejectPendingRequests(new Error('Simulation backend has been disposed'))
 			worker.terminate()
 		},
@@ -340,30 +405,10 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 		get simulationSource() {
 			return requireState().currentSource
 		},
-		setRepPerEthPrice: value => {
-			patchState({
-				repPerEthPrice: value,
-			})
-			void callWorker('setRepPerEthPrice', { value })
-		},
-		setRepPerUsdcPrice: value => {
-			patchState({
-				repPerUsdcPrice: value,
-			})
-			void callWorker('setRepPerUsdcPrice', { value })
-		},
-		setQueryDelayMilliseconds: value => {
-			patchState({
-				queryDelayMilliseconds: value,
-			})
-			void callWorker('setQueryDelayMilliseconds', { value })
-		},
-		setTransactionDelayMilliseconds: value => {
-			patchState({
-				transactionDelayMilliseconds: value,
-			})
-			void callWorker('setTransactionDelayMilliseconds', { value })
-		},
+		setRepPerEthPrice: async value => await callWorker('setRepPerEthPrice', { value }),
+		setRepPerUsdcPrice: async value => await callWorker('setRepPerUsdcPrice', { value }),
+		setQueryDelayMilliseconds: async value => await callWorker('setQueryDelayMilliseconds', { value }),
+		setTransactionDelayMilliseconds: async value => await callWorker('setTransactionDelayMilliseconds', { value }),
 		subscribe: handler => {
 			listeners.state.add(handler)
 			return () => {

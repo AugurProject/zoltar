@@ -773,6 +773,45 @@ button .loading-value {
 	vertical-align: bottom;
 }
 
+.copy-value-wrap {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	max-width: 100%;
+	min-width: 0;
+	vertical-align: bottom;
+}
+
+.copy-error-message {
+	display: block;
+	max-width: min(24rem, 100%);
+	margin-top: var(--space-1);
+	color: var(--danger);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.copy-error-recovery {
+	display: grid;
+	gap: var(--space-1);
+	width: min(24rem, 100%);
+	margin-top: var(--space-1);
+}
+
+.copy-error-recovery .copy-error-message {
+	margin-top: 0;
+}
+
+.copy-manual-value {
+	width: 100%;
+	min-height: var(--touch-target-min);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+}
+
 .currency-value {
 	display: inline-block;
 	max-width: 100%;
@@ -896,7 +935,8 @@ button.currency-value.copyable:hover:not(:disabled) {
 	min-width: 0;
 }
 
-.wallet-asset-control > .address-value {
+.wallet-asset-control > .address-value,
+.wallet-asset-control > .copy-value-wrap {
 	flex: 1 1 18rem;
 }
 

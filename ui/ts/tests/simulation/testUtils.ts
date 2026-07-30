@@ -28,5 +28,5 @@ export async function resetSelectedAccountAndTransactionDelay(backend: Simulatio
 	activateSimulationBackendProfile(backend)
 	const primaryAccount = backend.accounts[0]
 	if (primaryAccount !== undefined && backend.selectedAccount !== primaryAccount) await backend.selectAccount(primaryAccount)
-	backend.setTransactionDelayMilliseconds(0)
+	await backend.setTransactionDelayMilliseconds(0)
 }

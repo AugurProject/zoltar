@@ -215,6 +215,7 @@ export type TransactionActionButtonProps = {
 
 export type OperationModalProps = {
 	children: ComponentChildren
+	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
 	context?: TransactionContextItem[]
 	description?: ComponentChildren
