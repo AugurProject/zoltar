@@ -128,6 +128,7 @@ export const notDeployed = 'Not deployed'
 export const working = 'Working…'
 export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'
+export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
 export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
 export const walletAssetRequestAccepted = 'Request accepted'
 export const walletAssetRequestFailed = 'Unable to send the token request to your wallet. Try again.'

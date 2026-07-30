@@ -22,6 +22,7 @@ import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../../../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -32,7 +33,7 @@ type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErr
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
 	hasForked: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -126,7 +127,7 @@ function getDraftOutcomeLabels(marketForm: MarketFormState, categoricalOutcomesE
 export function MarketCreateQuestionSection({
 	accountAddress,
 	hasForked,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingZoltarQuestions,
 	marketCreating,
 	marketError,
@@ -164,7 +165,7 @@ export function MarketCreateQuestionSection({
 	const endTimeError = timingRelationshipError ?? getVisibleFieldError('endTime')
 	const timingRelationshipErrorId = 'market-create-timing-error'
 	const hasVisibleValidationError = timingRelationshipError !== undefined || Array.from(touchedFields).some(field => marketFormValidation.fieldErrors[field] !== undefined)
-	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
+	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !marketCreating && marketFormValidation.isValid
 	const showEndedQuestionWarning = marketFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(marketForm, currentTimestamp)
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
@@ -466,7 +467,7 @@ export function MarketCreateQuestionSection({
 									disabled: !canCreateQuestion,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-										if (!isMainnet) return commonCopy.mainnetRequiredReason
+										if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 										if (marketFormValidation.isValid) return undefined
 										if (timingRelationshipError !== undefined) return marketCopy.formatInvalidQuestionFieldsReason(timingRelationshipError)

@@ -37,7 +37,7 @@ function createProps(): DeploymentRouteContentProps {
 		],
 		deploymentStatuses,
 		isLoadingDeploymentStatuses: false,
-		isMainnet: true,
+		isOnActiveAppChain: true,
 		onDeploy: async () => undefined,
 		onDeployNextMissing: () => undefined,
 		onRetryDeploymentStatus: () => undefined,

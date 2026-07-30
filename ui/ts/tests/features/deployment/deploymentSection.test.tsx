@@ -49,7 +49,7 @@ describe('DeploymentSection', () => {
 				accountAddress={zeroAddress}
 				busyStepId={undefined}
 				deploymentStateReady={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onDeploy={async () => {
 					onDeployCalls += 1
 				}}
@@ -65,7 +65,7 @@ describe('DeploymentSection', () => {
 
 	test('shows deployment progress for busy steps', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId='multicall3' deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId='multicall3' deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
@@ -74,16 +74,21 @@ describe('DeploymentSection', () => {
 
 	test('shows the connect-wallet branch when account is missing', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={undefined} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={undefined} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
-		expectTransactionButtonDisabled(document.body, 'Deploy multicall3', 'Connect wallet to deploy this contract.')
+		expect(rendered.container.textContent?.match(/Connect wallet/g) ?? []).toHaveLength(1)
+		expectTransactionButtonDisabled(document.body, 'Deploy multicall3')
+		const button = rendered.container.querySelector('button')
+		const detailId = button?.getAttribute('aria-describedby')
+		expect(detailId).toBe('deployment-multicall3-status-detail')
+		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Connect wallet to continue.')
 	})
 
 	test('shows the network-guard branch when account is present but not on mainnet', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={false} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={false} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
@@ -93,12 +98,16 @@ describe('DeploymentSection', () => {
 	test('shows waiting state while prerequisite step is missing', async () => {
 		const prerequisite = createDeploymentStep({ id: 'proxyDeployer', deployed: false, label: 'Proxy Deployer' })
 		const dependent = createDeploymentStep({ id: 'deploymentStatusOracle', deployed: false, dependencies: ['proxyDeployer'], label: 'Deployment Status Oracle' })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
 		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
 		expectTransactionButtonDisabled(document.body, 'Deploy Deployment Status Oracle', 'Requires Proxy Deployer')
+		const button = rendered.container.querySelector('button')
+		const detailId = button?.getAttribute('aria-describedby')
+		expect(detailId).toBe('deployment-deploymentStatusOracle-status-detail')
+		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('Deployment Status Oracle')
@@ -106,7 +115,7 @@ describe('DeploymentSection', () => {
 
 	test('enables deploy when wallet and chain are ready and prerequisites are satisfied', async () => {
 		const step = createDeploymentStep({ id: 'multicall3', deployed: false })
-		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isMainnet={true} onDeploy={async () => undefined} />)
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Deploy multicall3')

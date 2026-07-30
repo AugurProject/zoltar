@@ -23,7 +23,7 @@ function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+		args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
 	})
 }
 

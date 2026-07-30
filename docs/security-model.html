@@ -641,18 +641,28 @@
 				</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a21" value="21" data-assumption="A21">
-						<h3>Genesis REP and configured WETH obey the external accounting model</h3>
+						<h3>Genesis REP and configured WETH obey the required accounting model</h3>
 						<p>
 							Genesis REP and configured WETH move exactly the requested base units,
 							use 18 decimals, return supported ERC-20 values, and do not rebase,
 							charge transfer fees, invoke unexpected callbacks, blacklist protocol
 							contracts, pause required transfers, or permit unauthorized minting.
 							WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is
-							accurate, and the configured genesis REP burn sink remains
-							inaccessible. Canonical child REP is implemented by the reviewed
-							<code>ReputationToken</code> contract and is a protocol-enforced
-							property under A23 and A26, not an additional external-token
-							assumption.
+							accurate, and the configured genesis REP burn sink remains inaccessible.
+							On mainnet these token behaviors are external assumptions. On Sepolia,
+							the reviewed <a href="../solidity/contracts/GenesisReputationToken.sol"
+								><code>GenesisReputationToken</code></a
+							>
+							and <a href="../solidity/contracts/peripherals/WETH9.sol"
+								><code>WETH9</code></a
+							>
+							enforce issuance and transfer behavior, provided A23 verifies their
+							deployed bytecode and wiring and A26 preserves Ethereum execution.
+							The configured burn sink's inaccessibility remains an external
+							assumption on Sepolia as well as mainnet.
+							Canonical child REP is likewise implemented by the reviewed
+							<code>ReputationToken</code> contract rather than being an additional
+							external-token assumption.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> Origin-pool, genesis-fork, or

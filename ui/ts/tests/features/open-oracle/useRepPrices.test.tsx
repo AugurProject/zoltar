@@ -9,6 +9,7 @@ import { resetRepPriceCacheForTesting, useRepPrices } from '../../../features/op
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import type { ChainBackend, ReadClient } from '../../../lib/chainBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '../../testUtils/fakeBackend.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../../lib/networkProfile.js'
 import { serializeSavedSimulationStateEnvelope } from '../../../simulation/savedStates.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
@@ -71,12 +72,14 @@ function createSimulationController(): SimulationController {
 }
 
 function PriceProbe({ enabled = true }: { enabled?: boolean }) {
-	const { isLoadingRepPrices, isRefreshingRepPrices, repPerEthPrice, refreshRepPrices, repUsdcPrice } = useRepPrices({ enabled })
+	const { isLoadingRepPrices, isRefreshingRepPrices, repPerEthFailure, repPerEthPrice, refreshRepPrices, repUsdcFailure, repUsdcPrice } = useRepPrices({ enabled })
 
 	return (
 		<div>
 			<span data-testid='rep-per-eth'>{repPerEthPrice?.toString() ?? '-'}</span>
+			<span data-testid='rep-per-eth-failure'>{repPerEthFailure ?? '-'}</span>
 			<span data-testid='rep-per-usdc'>{repUsdcPrice?.toString() ?? '-'}</span>
+			<span data-testid='rep-per-usdc-failure'>{repUsdcFailure ?? '-'}</span>
 			<span data-testid='rep-loading'>{isLoadingRepPrices ? 'loading' : 'ready'}</span>
 			<span data-testid='rep-refreshing'>{isRefreshingRepPrices ? 'refreshing' : 'idle'}</span>
 			<button type='button' onClick={refreshRepPrices}>
@@ -132,6 +135,64 @@ describe('useRepPrices', () => {
 			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
 			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
 			expect(documentQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+		})
+		resetEnvironment()
+	})
+
+	test('reports missing Sepolia liquidity after the automatic quote attempt', async () => {
+		const readClient: ReadClient = {
+			...createPublicClient({
+				chain: SEPOLIA_NETWORK_PROFILE.chain,
+				transport: http('http://127.0.0.1:8545'),
+			}),
+		}
+		readClient.simulateContract = async () => {
+			throw new Error('No Uniswap pool is available')
+		}
+		const backend: ChainBackend = {
+			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
+			createReadClient: () => readClient,
+		}
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+
+		const renderedComponent = await renderIntoDocument(<PriceProbe />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		await waitFor(() => {
+			expect(documentQueries.getByTestId('rep-per-eth-failure').textContent).toBe('no-liquidity')
+			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).toBe('no-liquidity')
+			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
+		})
+		resetEnvironment()
+	})
+
+	test('reports Sepolia RPC failures separately from missing liquidity', async () => {
+		const rpcError = new Error('RPC request failed')
+		rpcError.name = 'RpcRequestError'
+		const readClient: ReadClient = {
+			...createPublicClient({
+				chain: SEPOLIA_NETWORK_PROFILE.chain,
+				transport: http('http://127.0.0.1:8545'),
+			}),
+		}
+		readClient.simulateContract = async () => {
+			throw rpcError
+		}
+		const backend: ChainBackend = {
+			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
+			createReadClient: () => readClient,
+		}
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+
+		const renderedComponent = await renderIntoDocument(<PriceProbe />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		await waitFor(() => {
+			expect(documentQueries.getByTestId('rep-per-eth-failure').textContent).toBe('rpc-error')
+			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).toBe('rpc-error')
+			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
 		})
 		resetEnvironment()
 	})

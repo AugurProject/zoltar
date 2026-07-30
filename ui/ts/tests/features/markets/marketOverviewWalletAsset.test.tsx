@@ -49,7 +49,7 @@ describe('MarketOverviewSection wallet asset control', () => {
 			universeId: 0n,
 		} satisfies ZoltarUniverseSummary
 		const renderedComponent = await renderIntoDocument(
-			<MarketOverviewSection accountAddress={zeroAddress} isMainnet loadingZoltarUniverse={false} onCreateChildUniverseForOutcomeIndex={() => undefined} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} zoltarUniverse={universe} zoltarUniverseState='ready' />,
+			<MarketOverviewSection accountAddress={zeroAddress} isOnActiveAppChain loadingZoltarUniverse={false} onCreateChildUniverseForOutcomeIndex={() => undefined} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} zoltarUniverse={universe} zoltarUniverseState='ready' />,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
