@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from './testUtils/queries'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { CurrencyValue } from '../components/CurrencyValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -145,6 +146,25 @@ describe('CurrencyValue', () => {
 		expect(copyButton.textContent).toBe('Copied')
 	})
 
+	test('clears copied feedback when the exact value changes', async () => {
+		const renderedComponent = await renderIntoDocument(<CurrencyValue value={1n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 1' })
+
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
+		await waitFor(() => {
+			expect(copyButton.textContent).toBe('Copied')
+		})
+
+		await act(() => {
+			render(<CurrencyValue value={2n * 10n ** 18n} />, renderedComponent.container)
+		})
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 2' }).textContent).toBe('≈ 2.00')
+	})
+
 	test('keeps an exact-precision value fully visible without an approximation marker', async () => {
 		const documentQueries = await renderCurrencyValue({
 			precision: 'exact',
@@ -154,5 +174,26 @@ describe('CurrencyValue', () => {
 
 		expect(copyButton.textContent).toBe('0.000000000137760122 ETH')
 		expect(copyButton.textContent).not.toContain('≈')
+	})
+
+	test('keeps the value visible and associates an announced clipboard error', async () => {
+		const clipboard = {
+			writeText: async () => {
+				throw new DOMException('clipboard unavailable', 'NotAllowedError')
+			},
+		}
+		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+		Reflect.defineProperty(window.navigator, 'clipboard', { configurable: true, value: clipboard })
+		const documentQueries = await renderCurrencyValue()
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
+
+		await act(() => {
+			fireEvent.click(copyButton)
+		})
+		const error = await waitFor(() => documentQueries.getByRole('alert'))
+		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
+		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
+		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
+		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe('999 999 990 000')
 	})
 })

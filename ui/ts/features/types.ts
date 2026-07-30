@@ -119,6 +119,8 @@ export type DeploymentSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
 	busyStepId: DeploymentStepId | undefined
+	deploymentStateReady: boolean
+	deploymentStatusReasonElementId?: string | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
@@ -157,6 +159,8 @@ export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
+	deploymentStateReady: boolean
+	deploymentStatusError: string | undefined
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
 	isLoadingDeploymentStatuses: boolean
@@ -164,6 +168,7 @@ export type DeploymentRouteContentProps = {
 	deployNextMissingPending: boolean
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
+	onRetryDeploymentStatus: () => void
 }
 
 export type MarketRouteContentProps = {
@@ -216,6 +221,7 @@ export type MarketRouteContentProps = {
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
 	zoltarQuestions: MarketDetails[]
+	zoltarQuestionsError: string | undefined
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void

@@ -67,7 +67,13 @@ function formatTimestampPart(value: number) {
 
 function formatUtcTimestamp(timestamp: bigint) {
 	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	if (Number.isNaN(date.getTime())) return undefined
 	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
+}
+
+export function formatTimestampDateTime(timestamp: bigint) {
+	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
 function getEffectiveRoundedDecimals(absoluteValue: bigint, units: number, decimals: number) {
@@ -142,7 +148,7 @@ export function formatCompactCurrencyBalance(value: bigint | undefined, units: n
 
 export function formatTimestamp(timestamp: bigint) {
 	if (timestamp === 0n) return 'Immediate'
-	return formatUtcTimestamp(timestamp)
+	return formatUtcTimestamp(timestamp) ?? `Invalid timestamp (${timestamp.toString()})`
 }
 
 function formatRelativeDuration(seconds: bigint) {

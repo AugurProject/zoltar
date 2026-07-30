@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
@@ -14,6 +14,8 @@ import { OperationModal } from './OperationModal.js'
 import { AddressValue } from './AddressValue.js'
 import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
+import { ErrorNotice } from './ErrorNotice.js'
+import { CopyErrorMessage } from './CopyErrorMessage.js'
 import type { BadgeTone } from '../types/components.js'
 
 const SIMULATION_TIME_PRESETS = [
@@ -31,6 +33,7 @@ type SimulationBannerProps = {
 }
 
 type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
+type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'save'
 
 function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(getRouteHashSearch())
@@ -40,25 +43,39 @@ function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
-function navigateToSimulationSearch(nextSearch: string) {
-	window.history.pushState({}, '', buildRouteHref(getCurrentRouteHash(), nextSearch))
+function getSimulationLocation(nextSearch: string) {
+	return new URL(buildRouteHref(getCurrentRouteHash(), nextSearch), window.location.href).toString()
+}
+
+function stageSimulationLocation(nextUrl: string) {
+	window.history.replaceState({}, '', nextUrl)
 	window.dispatchEvent(new window.PopStateEvent('popstate'))
 }
 
-function navigateToBuiltInScenario(scenario: string) {
+function restoreSimulationLocation(previousUrl: string) {
+	window.history.replaceState({}, '', previousUrl)
+	window.dispatchEvent(new window.PopStateEvent('popstate'))
+}
+
+function commitSimulationLocation(previousUrl: string, nextUrl: string) {
+	window.history.replaceState({}, '', previousUrl)
+	window.history.pushState({}, '', nextUrl)
+}
+
+function getBuiltInScenarioLocation(scenario: string) {
 	const nextSearch = buildSimulationSearch(params => {
 		params.set('simScenario', scenario)
 		params.delete('simState')
 	})
-	navigateToSimulationSearch(nextSearch)
+	return getSimulationLocation(nextSearch)
 }
 
-function navigateToSavedSimulationState(stateId: string) {
+function getSavedSimulationStateLocation(stateId: string) {
 	const nextSearch = buildSimulationSearch(params => {
 		params.delete('simScenario')
 		params.set('simState', stateId)
 	})
-	navigateToSimulationSearch(nextSearch)
+	return getSimulationLocation(nextSearch)
 }
 
 function hasSavedSimulationStateRoute() {
@@ -91,8 +108,8 @@ function getScenarioStatus(parameters: { bootstrapError: string | undefined; isB
 }
 
 export function SimulationBanner({ controller, onEnvironmentChanged = async () => undefined, onRefresh }: SimulationBannerProps) {
-	const { copied, copyText } = useCopyToClipboard()
 	const busy = useSignal(false)
+	const controlError = useSignal<string | undefined>(undefined)
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
 	const currentTimestamp = useSignal(controller.currentTimestamp)
 	const currentScenario = useSignal(controller.currentScenario)
@@ -111,6 +128,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const saveName = useSignal('')
 	const exportName = useSignal('')
 	const exportStateText = useSignal('')
+	const exportInProgress = useSignal(false)
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exportStateText.value)
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const simulationDetailsOpen = useSignal(!controller.isBootstrapped)
@@ -120,6 +139,25 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 	const previousController = useRef(controller)
+	const currentController = useRef(controller)
+	const operationRequestGeneration = useRef(0)
+	const navigationRequestGeneration = useRef(0)
+	const navigationInProgress = useRef(false)
+	const navigationOperation = useSignal<NavigationOperation | undefined>(undefined)
+	if (currentController.current !== controller) {
+		currentController.current = controller
+		operationRequestGeneration.current += 1
+	}
+
+	useLayoutEffect(() => {
+		if (!navigationInProgress.current) busy.value = false
+		controlError.value = undefined
+		modal.value = undefined
+		savedStateError.value = undefined
+		exportStateText.value = ''
+		exportInProgress.value = false
+		if (!navigationInProgress.current) navigationOperation.value = undefined
+	}, [controller])
 
 	const reloadSavedStateRecords = () => {
 		const summary = getSavedSimulationStateStorageSummary(savedStateStorage)
@@ -146,80 +184,150 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const resetRepPerUsdcPriceInput = () => {
 		repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
 	}
+	const syncControllerState = () => {
+		blockCountSinceReset.value = controller.blockCountSinceReset
+		bootstrapError.value = controller.bootstrapError
+		bootstrapLabel.value = controller.bootstrapLabel
+		bootstrapProgress.value = controller.bootstrapProgress
+		currentTimestamp.value = controller.currentTimestamp
+		currentScenario.value = controller.currentScenario
+		currentSource.value = controller.simulationSource
+		isBootstrapped.value = controller.isBootstrapped
+		isBootstrapping.value = controller.isBootstrapping
+		queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
+		repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+		repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+		selectedAccount.value = controller.selectedAccount
+		transactionCountSinceReset.value = controller.transactionCountSinceReset
+		transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
+	}
+	const startOperation = () => {
+		operationRequestGeneration.current += 1
+		const requestGeneration = operationRequestGeneration.current
+		const requestController = controller
+		return () => requestGeneration === operationRequestGeneration.current && requestController === currentController.current
+	}
+	const startNavigationOperation = () => {
+		navigationRequestGeneration.current += 1
+		const requestGeneration = navigationRequestGeneration.current
+		const requestController = controller
+		return {
+			isCurrentRequest: () => requestGeneration === navigationRequestGeneration.current,
+			isOriginControllerCurrent: () => requestController === currentController.current,
+		}
+	}
 	useEffect(() => {
 		let controllerChanged = previousController.current !== controller
 		previousController.current = controller
-		const syncControllerState = () => {
+		if (controllerChanged) controlError.value = undefined
+		const handleControllerState = () => {
 			const wasBootstrapped = isBootstrapped.value
-			blockCountSinceReset.value = controller.blockCountSinceReset
-			bootstrapError.value = controller.bootstrapError
-			bootstrapLabel.value = controller.bootstrapLabel
-			bootstrapProgress.value = controller.bootstrapProgress
-			currentTimestamp.value = controller.currentTimestamp
-			currentScenario.value = controller.currentScenario
-			currentSource.value = controller.simulationSource
-			isBootstrapped.value = controller.isBootstrapped
-			isBootstrapping.value = controller.isBootstrapping
+			syncControllerState()
 			if (!controller.isBootstrapped || controller.isBootstrapping) simulationDetailsOpen.value = true
 			else if (controllerChanged || !wasBootstrapped) simulationDetailsOpen.value = false
 			controllerChanged = false
-			queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
-			repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
-			repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
-			selectedAccount.value = controller.selectedAccount
-			transactionCountSinceReset.value = controller.transactionCountSinceReset
-			transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
 		}
-		syncControllerState()
-		return controller.subscribe(syncControllerState)
+		handleControllerState()
+		return controller.subscribe(handleControllerState)
 	}, [controller])
 	const runControl = async (work: () => Promise<void>) => {
 		if (busy.value) return
+		const isCurrentRequest = startOperation()
 		busy.value = true
+		controlError.value = undefined
 		try {
 			await work()
+			if (!isCurrentRequest()) return
 			await onRefresh()
+		} catch (error) {
+			if (!isCurrentRequest()) return
+			syncControllerState()
+			controlError.value = getErrorMessage(error, simulationCopy.simulationControlError)
 		} finally {
-			busy.value = false
+			if (isCurrentRequest()) busy.value = false
 		}
 	}
-	const runNavigationControl = async (work: () => Promise<void>) => {
+	const runNavigationControl = async (operation: NavigationOperation, work: (ownership: ReturnType<typeof startNavigationOperation>) => Promise<void>) => {
 		if (busy.value) return
+		const ownership = startNavigationOperation()
+		navigationInProgress.current = true
+		navigationOperation.value = operation
 		busy.value = true
 		savedStateError.value = undefined
 		try {
-			await work()
+			await work(ownership)
 		} catch (error) {
+			if (!ownership.isCurrentRequest()) return
 			savedStateError.value = getErrorMessage(error, simulationCopy.savedStateUpdateError)
+			simulationDetailsOpen.value = true
 		} finally {
-			busy.value = false
+			if (ownership.isCurrentRequest()) {
+				navigationInProgress.current = false
+				navigationOperation.value = undefined
+				busy.value = false
+			}
 		}
 	}
 
-	const navigateAndRefreshEnvironment = async (navigate: () => void) => {
-		await runNavigationControl(async () => {
-			navigate()
+	const refreshEnvironmentAtLocation = async (nextUrl: string) => {
+		const previousUrl = window.location.href
+		stageSimulationLocation(nextUrl)
+		try {
 			await onEnvironmentChanged()
+		} catch (error) {
+			restoreSimulationLocation(previousUrl)
+			throw error
+		}
+		commitSimulationLocation(previousUrl, nextUrl)
+	}
+
+	const navigateAndRefreshEnvironment = async (getNextLocation: () => string) => {
+		await runNavigationControl('navigation', async () => {
+			await refreshEnvironmentAtLocation(getNextLocation())
 		})
 	}
 
 	const persistAndNavigateToSavedState = async (serialized: string) => {
 		const record = persistSavedSimulationState(serialized, savedStateStorage)
 		reloadSavedStateRecords()
-		navigateToSavedSimulationState(record.id)
-		await onEnvironmentChanged()
+		await refreshEnvironmentAtLocation(getSavedSimulationStateLocation(record.id))
 	}
 
 	const showExportModal = async () => {
+		if (exportInProgress.value) return
+		const isCurrentRequest = startOperation()
 		const nextName = getDefaultSavedStateName()
 		exportName.value = nextName
 		exportStateText.value = ''
 		savedStateError.value = undefined
 		modal.value = 'export'
+		exportInProgress.value = true
 		try {
-			exportStateText.value = await controller.exportState(nextName)
+			const serialized = await controller.exportState(nextName)
+			if (!isCurrentRequest()) return
+			exportStateText.value = serialized
 		} catch (error) {
+			if (!isCurrentRequest()) return
 			savedStateError.value = getErrorMessage(error, simulationCopy.stateExportError)
+		} finally {
+			if (isCurrentRequest()) exportInProgress.value = false
+		}
+	}
+
+	const refreshExport = async () => {
+		if (exportInProgress.value) return
+		const isCurrentRequest = startOperation()
+		savedStateError.value = undefined
+		exportInProgress.value = true
+		try {
+			const serialized = await controller.exportState(exportName.value)
+			if (!isCurrentRequest()) return
+			exportStateText.value = serialized
+		} catch (error) {
+			if (!isCurrentRequest()) return
+			savedStateError.value = getErrorMessage(error, simulationCopy.stateExportError)
+		} finally {
+			if (isCurrentRequest()) exportInProgress.value = false
 		}
 	}
 
@@ -265,6 +373,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							</div>
 							<p className='detail'>{scenarioDetail}</p>
 							{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
+							{modal.value === undefined ? <ErrorNotice message={savedStateError.value} /> : undefined}
 							{bootstrapError.value === undefined && isBootstrapping.value ? (
 								<p className='detail'>
 									<span className='spinner' aria-hidden='true' />
@@ -285,14 +394,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							onChange={event => {
 								const nextSelection = event.currentTarget.value
 								if (nextSelection.startsWith('saved:')) {
-									void navigateAndRefreshEnvironment(() => {
-										navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
-									})
+									void navigateAndRefreshEnvironment(() => getSavedSimulationStateLocation(nextSelection.slice('saved:'.length)))
 									return
 								}
-								void navigateAndRefreshEnvironment(() => {
-									navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
-								})
+								void navigateAndRefreshEnvironment(() => getBuiltInScenarioLocation(nextSelection.slice('scenario:'.length)))
 							}}
 						>
 							<optgroup label={simulationCopy.builtInScenarios}>
@@ -376,7 +481,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 												queryDelayMilliseconds.value = event.currentTarget.value
 											}}
 											onChange={event => {
-												controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
+												void runControl(async () => await controller.setQueryDelayMilliseconds(Number(event.currentTarget.value)))
 											}}
 										/>
 									</label>
@@ -398,7 +503,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 													return
 												}
 												void runControl(async () => {
-													controller.setRepPerEthPrice(parsedPrice)
+													await controller.setRepPerEthPrice(parsedPrice)
 												})
 											}}
 										/>
@@ -421,7 +526,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 													return
 												}
 												void runControl(async () => {
-													controller.setRepPerUsdcPrice(parsedPrice)
+													await controller.setRepPerUsdcPrice(parsedPrice)
 												})
 											}}
 										/>
@@ -440,12 +545,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 												transactionDelayMilliseconds.value = event.currentTarget.value
 											}}
 											onChange={event => {
-												controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
+												void runControl(async () => await controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value)))
 											}}
 										/>
 									</label>
 								</div>
 								<p className='detail'>{simulationCopy.simulationControlHelpText}</p>
+								<ErrorNotice message={controlError.value} />
 							</div>
 							<div className='simulation-control-groups'>
 								<div className='simulation-control-group'>
@@ -471,7 +577,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										>
 											{simulationCopy.saveState}
 										</button>
-										<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
+										<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || exportInProgress.value || !isBootstrapped.value}>
 											{simulationCopy.exportState}
 										</button>
 										<button
@@ -526,98 +632,96 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</details>
 				</div>
 			</details>
-			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-save-name'>{simulationCopy.stateName}</label>
-					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} onInput={event => (saveName.value = event.currentTarget.value)} />
+					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} disabled={busy.value} onInput={event => (saveName.value = event.currentTarget.value)} />
 				</div>
-				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
+						disabled={busy.value}
 						onClick={() =>
-							void runNavigationControl(async () => {
-								await persistAndNavigateToSavedState(await controller.exportState(saveName.value))
+							void runNavigationControl('save', async ownership => {
+								const serialized = await controller.exportState(saveName.value)
+								if (!ownership.isCurrentRequest() || !ownership.isOriginControllerCurrent()) return
+								await persistAndNavigateToSavedState(serialized)
 							})
 						}
 					>
-						{simulationCopy.save}
+						{navigationOperation.value === 'save' ? simulationCopy.savingState : simulationCopy.save}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
+			<OperationModal closeDisabled={exportInProgress.value} isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-export-name'>{simulationCopy.exportName}</label>
-					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} onInput={event => (exportName.value = event.currentTarget.value)} />
+					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} disabled={exportInProgress.value} onInput={event => (exportName.value = event.currentTarget.value)} />
 				</div>
 				<div className='field'>
 					<label htmlFor='simulation-export-json'>{simulationCopy.jsonState}</label>
-					<textarea id='simulation-export-json' rows={14} value={exportStateText.value} readOnly />
+					<textarea id='simulation-export-json' aria-busy={exportInProgress.value || undefined} rows={14} value={exportStateText.value} readOnly />
 				</div>
-				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
-					<button
-						type='button'
-						className='secondary'
-						onClick={() =>
-							void runNavigationControl(async () => {
-								exportStateText.value = await controller.exportState(exportName.value)
-							})
-						}
-					>
-						{simulationCopy.refreshExport}
+					<button type='button' className='secondary' disabled={exportInProgress.value} onClick={() => void refreshExport()}>
+						{exportInProgress.value ? simulationCopy.exportingState : simulationCopy.refreshExport}
 					</button>
-					<button type='button' className='secondary' disabled={exportStateText.value.trim() === ''} onClick={() => void copyText(exportStateText.value)}>
+					<button type='button' className='secondary' disabled={exportInProgress.value || exportStateText.value.trim() === ''} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => void copyText(exportStateText.value)}>
 						{copied.value ? commonCopy.copied : simulationCopy.copyJson}
 					</button>
 				</div>
+				<CopyErrorMessage id={copyErrorId} message={copyError.value} />
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title={simulationCopy.importSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'import'} onClose={closeModal} title={simulationCopy.importSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-import-json'>{simulationCopy.jsonState}</label>
-					<textarea id='simulation-import-json' rows={14} value={importStateText.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
+					<textarea id='simulation-import-json' rows={14} value={importStateText.value} disabled={busy.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
 				</div>
-				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
+						disabled={busy.value}
 						onClick={() =>
-							void runNavigationControl(async () => {
+							void runNavigationControl('import', async () => {
 								await persistAndNavigateToSavedState(importStateText.value)
 							})
 						}
 					>
-						{simulationCopy.importAndLoad}
+						{navigationOperation.value === 'import' ? simulationCopy.importingState : simulationCopy.importAndLoad}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title={simulationCopy.deleteSavedSimulationState}>
+			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'delete'} onClose={closeModal} title={simulationCopy.deleteSavedSimulationState}>
 				<p className='detail'>{currentSource.value.kind === 'saved-state' ? simulationCopy.formatDeleteSavedSimulationStateDetail(currentSource.value.name) : simulationCopy.builtInScenarioDeletionReason}</p>
-				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
 						className='destructive'
-						disabled={currentSource.value.kind !== 'saved-state'}
+						disabled={busy.value || currentSource.value.kind !== 'saved-state'}
 						onClick={() =>
-							void runNavigationControl(async () => {
+							void runNavigationControl('delete', async () => {
 								if (currentSource.value.kind !== 'saved-state') return
-								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(simulationCopy.formatMissingSavedStateError(currentSource.value.name))
+								const stateId = currentSource.value.stateId
+								const stateName = currentSource.value.name
 								const baseScenario = currentSource.value.baseScenario
+								await refreshEnvironmentAtLocation(getBuiltInScenarioLocation(baseScenario))
+								if (!deleteSavedSimulationState(stateId, savedStateStorage)) throw new Error(simulationCopy.formatMissingSavedStateError(stateName))
 								reloadSavedStateRecords()
-								navigateToBuiltInScenario(baseScenario)
-								await onEnvironmentChanged()
 							})
 						}
 					>
-						{simulationCopy.deleteSave}
+						{busy.value ? simulationCopy.deletingSave : simulationCopy.deleteSave}
 					</button>
 				</div>
 			</OperationModal>
 			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={simulationCopy.removeCorruptedSavedStatesTitle}>
 				<p className='detail'>{simulationCopy.invalidSavedStateCleanupHint}</p>
 				{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
-				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
 						type='button'
@@ -625,13 +729,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						onClick={() => {
 							closeModal()
 							savedStateStorageWarning.value = undefined
-							void runNavigationControl(async () => {
+							void runNavigationControl('cleanup', async () => {
 								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
 								if (removedCount === 0) throw new Error(simulationCopy.corruptedSavesEmptyError)
 								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
-									navigateToBuiltInScenario(currentScenario.value)
-									await onEnvironmentChanged()
+									await refreshEnvironmentAtLocation(getBuiltInScenarioLocation(currentScenario.value))
 									return
 								}
 							})
