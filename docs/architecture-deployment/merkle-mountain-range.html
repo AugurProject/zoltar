@@ -4,14 +4,14 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Merkle Mountain Range Carry Proofs</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
 				<h1>Merkle Mountain Range Carry Proofs</h1>
 				<p>
-					Statoblast uses a Merkle Mountain Range only for inherited escalation carry.
+					Statoblast uses a <a href='https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/'>Merkle Mountain Range</a> only for inherited escalation carry.
 					Parent escalation games export unresolved deposits into compact snapshots, and child
 					continuations later verify withdrawals against those snapshots without replaying the
 					full parent history onchain.
@@ -126,9 +126,9 @@
 				<h2>Proof Structure</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a20">A20 chain-data and proof availability</a>
+					<a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data and proof availability</a>
 					and
-					<a href="./security-model.html#assumption-a27">A27 cryptographic security</a>.
+					<a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.
 				</p>
 				<p>
 					A carried-deposit proof has two parts. First it proves membership in the inherited
@@ -303,16 +303,17 @@
 			<section id="sources">
 				<h2>Sources</h2>
 				<ul>
-					<li><a href="../solidity/contracts/peripherals/MerkleMountainRange.sol"><code>MerkleMountainRange.sol</code></a></li>
-					<li><a href="../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"><code>EscalationGameProofVerifier.sol</code></a></li>
-					<li><a href="../solidity/contracts/peripherals/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a></li>
-					<li><a href="../solidity/contracts/peripherals/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/MerkleMountainRange.sol"><code>MerkleMountainRange.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"><code>EscalationGameProofVerifier.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a></li>
 				</ul>
 			</section>
 		</main>
 
-		<script src="./chartRuntime.js"></script>
-		<script type="module" src="./mmrProofPlanner.js"></script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
+		<script type="module" src="../assets/js/mmrProofPlanner.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

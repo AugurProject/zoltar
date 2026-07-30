@@ -1404,9 +1404,7 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 		cue.className = 'plot-chart-pan-cue'
 		toolbar.append(button, cue)
 		overflowEnvelope.prepend(toolbar)
-		if (window.matchMedia('(max-width: 640px)').matches) {
-			overflowEnvelope.classList.add('plot-figure-fit')
-		}
+		overflowEnvelope.classList.add('plot-figure-fit')
 		button.addEventListener('click', () => {
 			overflowEnvelope.classList.toggle('plot-figure-fit')
 			updateDiagramToolbar(overflowEnvelope)

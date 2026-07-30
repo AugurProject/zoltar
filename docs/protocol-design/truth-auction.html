@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Truth Auction</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -37,16 +37,16 @@
 			<h2>Operational Lifecycle</h2>
 			<p class="security-assumption-ref">
 				<strong>Security assumptions:</strong>
-				<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-				<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
-				<a href="./security-model.html#assumption-a03">A03 independent bidders</a>,
-				<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
-				<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-				<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
-				<a href="./security-model.html#assumption-a20">A20 bid-data availability</a>,
-				<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
+				<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+				<a href="../safety-operations/security-model.html#assumption-a11">A11 practical migration</a>,
+				<a href="../safety-operations/security-model.html#assumption-a03">A03 independent bidders</a>,
+				<a href="../safety-operations/security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+				<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+				<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
+				<a href="../safety-operations/security-model.html#assumption-a20">A20 bid-data availability</a>,
+				<a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>,
 				and
-				<a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
+				<a href="../safety-operations/security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
 			</p>
 
 			<p>
@@ -57,7 +57,7 @@
 				inclusive. <code>forkActivationTime</code> is recorded when this parent
 				pool enters <code>PoolForked</code>; it is pool-local and can be later
 				than Zoltar's universe <code>forkTime</code>. See
-				<a href="./invariants.html#fork-05"><code>FORK-05</code></a> for the
+				<a href="../safety-operations/invariants.html#fork-05"><code>FORK-05</code></a> for the
 				canonical timing invariant. Until that window ends,
 				vault holders can still choose which child universe to support, so the
 				protocol cannot know the final collateral shortfall.
@@ -78,7 +78,7 @@
 				ETH, even when that total is below the original fork snapshot. Full repair
 				is not guaranteed, and the remaining impairment is borne by the affected
 				child's open-interest holders. This is the security model's
-				<a href="./security-model.html#excluded-guarantee-eg02"
+				<a href="../safety-operations/security-model.html#excluded-guarantee-eg02"
 					>EG02 full-repair exclusion</a
 				>. Finalization rejects caller contribution ETH,
 				and forced ETH remains unaccounted surplus. On the underfunded path,
@@ -230,10 +230,10 @@
 				<h2>How Clearing Works</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
-					<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+					<a href="../safety-operations/security-model.html#assumption-a01">A01 bidder incentives</a>,
+					<a href="../safety-operations/security-model.html#assumption-a12">A12 efficient REP conversion</a>,
 					and
-					<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>.
+					<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>.
 				</p>
 				<p>
 					Bidders submit ETH at discrete price ticks, where each tick encodes an
@@ -479,7 +479,7 @@
 				<h2>Gas and Spam Bounds</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumption:</strong>
-					<a href="./security-model.html#assumption-a02"
+					<a href="../safety-operations/security-model.html#assumption-a02"
 						>A02 viable operating costs</a
 					>.
 				</p>
@@ -521,7 +521,7 @@
 				<h2>Settlement Modes</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumption:</strong>
-					<a href="./security-model.html#assumption-a22"
+					<a href="../safety-operations/security-model.html#assumption-a22"
 						>A22 native-ETH recipient compatibility</a
 					>.
 				</p>
@@ -781,10 +781,10 @@
 				</details>
 			</section>
 		</main>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script>
 			const formatFixed = (value, digits = 2) => {
 				if (!Number.isFinite(value)) {
@@ -968,6 +968,7 @@
 				update();
 			}
 		</script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

@@ -3304,4 +3304,112 @@ body.paper-zoltar .footer-note {
 	body.paper-zoltar.reader-embedded .paper-section {
 		padding: 0.85rem;
 	}
+
+	.equation {
+		max-width: 100%;
+	}
+
+	.equation math {
+		max-width: none;
+	}
+
+	.equation-array math {
+		font-size: min(0.9rem, 4vw);
+	}
+
+	.equation-array mtd {
+		padding-inline: 0.15em;
+	}
+
+	:is(.table-wrap, .table-scroll) :is(th, td) {
+		overflow-wrap: anywhere;
+	}
+
+	:is(.table-wrap, .table-scroll) table {
+		font-size: clamp(0.78rem, 3.4vw, 0.92rem);
+	}
+}
+
+.docs-overflow-cue {
+	position: sticky;
+	left: 0.5rem;
+	display: block;
+	width: fit-content;
+	margin: 0.45rem 0 0;
+	padding: 0.25rem 0.45rem;
+	border-radius: 0.35rem;
+	background: color-mix(in srgb, var(--paper, #fff) 94%, transparent);
+	color: var(--muted, #52606d);
+	font-size: 0.76rem;
+	font-weight: 700;
+}
+
+.docs-content-overflows {
+	scrollbar-gutter: stable;
+}
+
+.docs-content-overflows:focus-visible {
+	outline: 2px solid var(--accent, var(--blue, #176653));
+	outline-offset: 0.2rem;
+}
+
+.docs-equation-compact {
+	display: none;
+}
+
+.equation-compact-active {
+	overflow-x: hidden !important;
+}
+
+.equation-compact-active > math {
+	position: absolute;
+	width: 1px !important;
+	height: 1px;
+	margin: -1px !important;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.equation-compact-active > .docs-equation-compact {
+	display: grid;
+	gap: 0.7rem;
+	font-family: var(--mono);
+	font-size: clamp(0.78rem, 3.3vw, 0.9rem);
+	line-height: 1.45;
+}
+
+.docs-equation-compact-row {
+	display: grid;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.docs-equation-compact-label {
+	color: var(--ink);
+	font-weight: 750;
+}
+
+.docs-equation-compact-expression {
+	min-width: 0;
+	padding-inline-start: 0.65rem;
+	color: var(--ink);
+	white-space: normal;
+}
+
+.docs-auto-table-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+
+.docs-auto-table-scroll > table {
+	display: table;
+	width: max-content;
+	min-width: 100%;
+	overflow: visible;
+	white-space: normal;
 }
