@@ -43,7 +43,7 @@ async function loadReader(narrow: boolean, fetchDocument: FetchDocument = async 
 	environment.window.HTMLElement.prototype.scrollIntoView = () => undefined
 
 	const shell = await Bun.file('docs/documentation.html').text()
-	const runtime = await Bun.file('docs/docsReader.js').text()
+	const runtime = await Bun.file('docs/assets/js/docsReader.js').text()
 	document.write(shell)
 	Function(runtime)()
 	await Bun.sleep(25)
@@ -87,9 +87,9 @@ async function waitForHistory() {
 test('documentation reader shows and navigates one document at a time', async () => {
 	const reader = await loadReader(false)
 	try {
-		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(expandedNavigationDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('whitepapers/statoblast-whitepaper.html')
 		expect(document.querySelector<HTMLIFrameElement>('.reader-document-frame')?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
 		for (const selector of ['[data-doc-search]', '[data-search-status]', '[data-search-results]', '[data-retry-search]', '[data-reader-empty]']) {
 			expect(document.querySelector(selector)).toBeNull()
@@ -99,44 +99,44 @@ test('documentation reader shows and navigates one document at a time', async ()
 		const chapterActions = Array.from(document.querySelectorAll('.reader-chapter-header a, .reader-chapter-header button'))
 		expect(chapterActions.some(action => /open source/i.test(action.textContent ?? '') || /open source/i.test(action.getAttribute('aria-label') ?? ''))).toBeFalse()
 
-		documentLink('zoltar-whitepaper.html').click()
+		documentLink('whitepapers/zoltar-whitepaper.html').click()
 		await waitForHistory()
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
-		expect(expandedNavigationDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
-		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper')
 
 		history.back()
 		await waitForHistory()
 		expect(location.hash).toBe('')
-		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
 		expect(document.querySelector<HTMLIFrameElement>('.reader-document-frame')?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
-		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('whitepapers/statoblast-whitepaper.html')
 
 		history.forward()
 		await waitForHistory()
-		expect(location.hash).toBe('#doc-zoltar-whitepaper')
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
 
 		history.back()
 		await waitForHistory()
 		expect(location.hash).toBe('')
-		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
-		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('whitepapers/statoblast-whitepaper.html')
 
 		history.forward()
 		await waitForHistory()
-		expect(location.hash).toBe('#doc-zoltar-whitepaper')
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
 
 		const sectionLink = document.createElement('a')
-		sectionLink.href = '#doc-zoltar-whitepaper--abstract'
-		sectionLink.dataset['documentPath'] = 'zoltar-whitepaper.html'
+		sectionLink.href = '#doc-whitepapers-zoltar-whitepaper--abstract'
+		sectionLink.dataset['documentPath'] = 'whitepapers/zoltar-whitepaper.html'
 		sectionLink.dataset['documentFragment'] = 'abstract'
 		document.querySelector('[data-reader-navigation]')?.append(sectionLink)
 		sectionLink.click()
 		await waitForHistory()
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
-		expect(location.hash).toBe('#doc-zoltar-whitepaper--abstract')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper--abstract')
 	} finally {
 		reader.cleanup()
 	}
@@ -145,15 +145,15 @@ test('documentation reader shows and navigates one document at a time', async ()
 test('opening an inactive document disclosure selects that document', async () => {
 	const reader = await loadReader(false)
 	try {
-		const zoltarDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="zoltar-whitepaper.html"]')
+		const zoltarDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="whitepapers/zoltar-whitepaper.html"]')
 		if (zoltarDisclosure === null) throw new Error('Zoltar disclosure is missing')
 		zoltarDisclosure.querySelector('summary')?.click()
 		await waitForHistory()
 
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
-		expect(expandedNavigationDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
-		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('zoltar-whitepaper.html')
-		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('whitepapers/zoltar-whitepaper.html')
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper')
 	} finally {
 		reader.cleanup()
 	}
@@ -162,13 +162,13 @@ test('opening an inactive document disclosure selects that document', async () =
 test('the active document outline can collapse without unloading its document', async () => {
 	const reader = await loadReader(false)
 	try {
-		const statoblastDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="statoblast-whitepaper.html"]')
+		const statoblastDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="whitepapers/statoblast-whitepaper.html"]')
 		if (statoblastDisclosure === null) throw new Error('Statoblast disclosure is missing')
 		statoblastDisclosure.querySelector('summary')?.click()
 
-		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
 		expect(expandedNavigationDocumentPaths()).toEqual([])
-		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('whitepapers/statoblast-whitepaper.html')
 	} finally {
 		reader.cleanup()
 	}
@@ -193,16 +193,16 @@ test('documentation reader collapse state remains accessible on desktop and narr
 	try {
 		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
 		expect(document.querySelector('[data-sidebar-toggle]')?.getAttribute('aria-expanded')).toBe('false')
-		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/statoblast-whitepaper.html'])
 
 		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
-		const link = documentLink('zoltar-whitepaper.html')
+		const link = documentLink('whitepapers/zoltar-whitepaper.html')
 		link.focus()
 		link.click()
 		await waitForHistory()
 		expect(document.activeElement?.id).toBe('reader-content')
 		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
 	} finally {
 		narrowReader.cleanup()
 	}
@@ -211,7 +211,7 @@ test('documentation reader collapse state remains accessible on desktop and narr
 test('narrow navigation collapses and transfers focus before loading settles', async () => {
 	let resolveDocument: ((response: Response) => void) | undefined
 	const pendingFetch: FetchDocument = async input => {
-		if (!String(input).includes('zoltar-whitepaper.html')) {
+		if (!String(input).includes('whitepapers/zoltar-whitepaper.html')) {
 			return new Response('<!doctype html><html><body><main><h1>Document</h1></main></body></html>')
 		}
 		return await new Promise<Response>(resolve => {
@@ -221,13 +221,13 @@ test('narrow navigation collapses and transfers focus before loading settles', a
 	const pendingReader = await loadReader(true, pendingFetch)
 	try {
 		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
-		const link = documentLink('zoltar-whitepaper.html')
+		const link = documentLink('whitepapers/zoltar-whitepaper.html')
 		link.focus()
 		link.click()
 
 		expect(document.activeElement?.id).toBe('reader-content')
 		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
-		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
 		const pendingFrame = document.querySelector<HTMLIFrameElement>('.reader-document-frame')
 		expect(pendingFrame?.hidden).toBeTrue()
 		expect(pendingFrame?.getAttribute('srcdoc')).toContain('<h1>Document</h1>')
@@ -235,7 +235,7 @@ test('narrow navigation collapses and transfers focus before loading settles', a
 		if (resolveDocument === undefined) throw new Error('Pending document request did not start')
 		resolveDocument(new Response('<!doctype html><html><body><main><h1>Zoltar</h1></main></body></html>'))
 		await waitForHistory()
-		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper')
 		expect(pendingFrame?.hidden).toBeFalse()
 		expect(pendingFrame?.getAttribute('srcdoc')).toContain('<h1>Zoltar</h1>')
 	} finally {
@@ -243,13 +243,13 @@ test('narrow navigation collapses and transfers focus before loading settles', a
 	}
 
 	const rejectedFetch: FetchDocument = async input => {
-		if (String(input).includes('zoltar-whitepaper.html')) throw new TypeError('Document request failed')
+		if (String(input).includes('whitepapers/zoltar-whitepaper.html')) throw new TypeError('Document request failed')
 		return new Response('<!doctype html><html><body><main><h1>Document</h1></main></body></html>')
 	}
 	const rejectedReader = await loadReader(true, rejectedFetch)
 	try {
 		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
-		const link = documentLink('zoltar-whitepaper.html')
+		const link = documentLink('whitepapers/zoltar-whitepaper.html')
 		link.focus()
 		link.click()
 

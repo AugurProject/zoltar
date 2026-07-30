@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Statoblast And Zoltar Invariants</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle invariants-catalog">
 		<main>
@@ -26,9 +26,9 @@
 				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
 					is normative for assumptions A01–A28. The
-					<a href="./truth-auction.html#clearing">Truth Auction clearing guide</a>
+					<a href="../protocol-design/truth-auction.html#clearing">Truth Auction clearing guide</a>
 					owns funded and underfunded clearing mechanics, while
-					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
+					<a href="../protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs"
 						>OpenOracle Integration</a
 					>
 					owns the oracle notional and residual-loss analysis.
@@ -210,7 +210,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>Zoltar.forkUniverse</code></a
 										>
 								</dd></div>
@@ -234,10 +234,10 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 									<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>forkUniverse</code></a
 										>,
-									<a href="./zoltar-whitepaper.html#global-question-scope"
+									<a href="../whitepapers/zoltar-whitepaper.html#global-question-scope"
 										>question model</a
 										>
 									</dd></div>
@@ -268,7 +268,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>getForkThreshold</code> and
 										<code>forkUniverse</code></a
 										>
@@ -290,7 +290,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>getChildUniverseId</code></a
 										>
 								</dd></div>
@@ -310,7 +310,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>deployChild</code> and
 										<code>splitRepInternal</code></a
 										>
@@ -331,7 +331,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>childMigrationRepAmounts</code></a
 										>
 								</dd></div>
@@ -353,10 +353,10 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>splitRepInternal</code></a
 										>,
-										<a href="../solidity/contracts/ReputationToken.sol"
+										<a href="../../solidity/contracts/ReputationToken.sol"
 										><code>ReputationToken</code></a
 										>
 								</dd></div>
@@ -378,7 +378,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>childUniverseTheoreticalSupplySnapshots</code></a
 										>
 								</dd></div>
@@ -400,14 +400,14 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>splitMigrationRep</code> and child universe
 										accounting</a
 										>,
-										<a href="../solidity/contracts/ReputationToken.sol"
+										<a href="../../solidity/contracts/ReputationToken.sol"
 										><code>ReputationToken</code> supply</a
 										>,
-										<a href="../solidity/ts/tests/zoltar.test.ts"
+										<a href="../../solidity/ts/tests/zoltar.test.ts"
 										>aggregate child-supply invariant test</a
 										>
 								</dd></div>
@@ -436,11 +436,11 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/ZoltarQuestionData.sol"
+										<a href="../../solidity/contracts/ZoltarQuestionData.sol"
 										><code>createQuestion</code>, <code>getQuestions</code>,
 										and answer classification</a
 										>,
-										<a href="../solidity/ts/tests/questionData.test.ts"
+										<a href="../../solidity/ts/tests/questionData.test.ts"
 										>registry and classifier invariant test</a
 										>
 								</dd></div>
@@ -482,7 +482,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>SecurityPool.onlyValidOracle</code> and
 										<code>onlyForker</code></a
 										>
@@ -505,11 +505,11 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
 										><code>SecurityPoolFactory</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>setSecurityPool</code></a
 										>
 								</dd></div>
@@ -553,10 +553,10 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
 										><code>SecurityPoolFactory</code></a
 										>,
-										<a href="../shared/ts/addressDerivation.ts"
+										<a href="../../shared/ts/addressDerivation.ts"
 										><code>addressDerivation.ts</code></a
 										>
 								</dd></div>
@@ -578,7 +578,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>SecurityPoolForker</code></a
 										>, interface and storage-layout regression tests
 								</dd></div>
@@ -621,10 +621,10 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Proposed guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./deployment-status.html"
+										<a href="../architecture-deployment/deployment-status.html"
 										>Deployment Status Oracle limits</a
 										>,
-										<a href="./mainnet-deployment-addresses.json"
+										<a href="../mainnet-deployment-addresses.json"
 										>mainnet manifest</a
 										>
 								</dd></div>
@@ -642,19 +642,19 @@
 								forward lookup are mutual inverses, and its recorded share token
 								authorizes that pool.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an <a href="./statoblast-whitepaper.html#pools">independent origin lineage</a> in that universe.</p>
+							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an <a href="../whitepapers/statoblast-whitepaper.html#pools">independent origin lineage</a> in that universe.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
 										>factory registry and canonical lookups</a
 										>,
-										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										>share-token authorization</a
 										>,
 										<a
-										href="../solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts"
+										href="../../solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts"
 										>stateful registry-bijection test</a
 										>
 								</dd></div>
@@ -718,10 +718,10 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										>Pool ETH accounting</a
 										>,
-										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts"
 										>stateful exact-accounting invariant tests</a
 										>
 								</dd></div>
@@ -742,12 +742,12 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>receive</code>, tracked collateral, and fee
 										redemption</a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>auction finalization</a
 										>
 								</dd></div>
@@ -771,12 +771,12 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>_requireCapacityNotExceeded</code>,
 										<code>setPoolFinancials</code>, and fee redemption</a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>fork finalization</a
 										>
 								</dd></div>
@@ -802,7 +802,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										>Allowance and withdrawal checks</a
 										>
 								</dd></div>
@@ -824,7 +824,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>repToPoolOwnership</code> and
 										<code>poolOwnershipToRep</code></a
 										>
@@ -846,7 +846,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										>Fee accumulator and <code>redeemFees</code></a
 										>
 								</dd></div>
@@ -866,7 +866,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>transferEth</code></a
 										>
 								</dd></div>
@@ -891,7 +891,7 @@
 								zero REP, no auction allowance exists: the child still records the
 								parent's fork-time total, while the unmigrated remainder stays
 								outside fee eligibility. The
-								<a href="./truth-auction.html#settlement"
+								<a href="../protocol-design/truth-auction.html#settlement"
 									>auction settlement specification</a
 								>
 								owns that zero-purchase allocation rule.
@@ -901,14 +901,14 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>getPoolAccountingSnapshot</code> and vault
 										checkpointing</a
 										>,
-										<a href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>truth-auction claim accounting</a
 										>,
-										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts"
 										>stateful ledger and claim-order invariant tests</a
 										>
 								</dd></div>
@@ -929,7 +929,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>mintCompleteSets</code> and
 										<code>burnCompleteSets</code></a
 										>
@@ -952,7 +952,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>redeemCompleteSet</code></a
 										>
 								</dd></div>
@@ -972,7 +972,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>cashToShares</code> and
 										<code>createCompleteSet</code></a
 										>
@@ -996,11 +996,11 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>cashToShares</code> and <code>redeemShares</code></a
 										>
 										and
-										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>ShareToken.migrate</code></a
 										>
 								</dd></div>
@@ -1021,7 +1021,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>redeemShares</code></a
 										>
 								</dd></div>
@@ -1043,10 +1043,10 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										>ERC-1155 supply accounting</a
 										>,
-										<a href="../solidity/ts/tests/erc1155.test.ts"
+										<a href="../../solidity/ts/tests/erc1155.test.ts"
 										>modeled holder-supply invariant test</a
 										>
 								</dd></div>
@@ -1067,10 +1067,10 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										>Escrow checks</a
 										>,
-										<a href="../solidity/contracts/peripherals/EscalationGame.sol"
+										<a href="../../solidity/contracts/peripherals/EscalationGame.sol"
 										><code>EscalationGame</code></a
 										>
 								</dd></div>
@@ -1092,8 +1092,8 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./liquidation.html">Liquidation design</a>,
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../protocol-design/liquidation.html">Liquidation design</a>,
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>performLiquidation</code></a
 										>
 								</dd></div>
@@ -1119,11 +1119,11 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>_trackVault</code> and
 										<code>_syncActiveVault</code></a
 										>,
-										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts"
 										>active/history and direct-claim boundary tests</a
 										>
 								</dd></div>
@@ -1150,7 +1150,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>isOperational</code></a
 										>
 								</dd></div>
@@ -1173,7 +1173,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>Fork snapshot preparation</a
 										>
 								</dd></div>
@@ -1195,7 +1195,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>getMigrationProxyAddress</code></a
 										>
 								</dd></div>
@@ -1217,7 +1217,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>initiateSecurityPoolFork</code></a
 										>
 								</dd></div>
@@ -1244,11 +1244,11 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>forkActivationTime</code> recording and child guards</a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolUtils.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol"
 										><code>MIGRATION_TIME</code></a
 										>, migration deadline tests
 								</dd></div>
@@ -1276,16 +1276,16 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>_prepareForkState</code> external-fork authorization guard</a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										><code>_validateChildPoolDeployment</code></a
 										>
 										and
 										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
 										><code>deployChildSecurityPool</code></a
 										>
 								</dd></div>
@@ -1307,7 +1307,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										><code>_migrateVaultUnlockedState</code></a
 										>
 								</dd></div>
@@ -1330,7 +1330,7 @@
 									floor(sourcePrincipalAtFork / 5)</code
 								>, the rounded-up 80% minimum, and the live balance must cover the
 								unexported remainder after valid direct pre-resume claims.
-								<a href="statoblast-whitepaper.html#source-principal-at-fork"
+								<a href="../whitepapers/statoblast-whitepaper.html#source-principal-at-fork"
 									><code>sourcePrincipalAtFork</code></a
 								>
 								is the raw aggregate stored by the fork snapshot before effective
@@ -1342,24 +1342,24 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										><code>_ensureChildEscalationBacking</code></a
 										>
 										,
 										<a
-										href="../solidity/contracts/peripherals/EscalationGame.sol"
+										href="../../solidity/contracts/peripherals/EscalationGame.sol"
 										><code>resumeFromFork</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"
 										><code>isForkCarryFundingComplete</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameEscrow.sol"
 										><code>_exportForkedEscrowByOutcome</code></a
 										>, and
 										<a
-										href="../solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts"
+										href="../../solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts"
 										>fork-backing regression tests</a
 										>
 								</dd></div>
@@ -1381,7 +1381,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										><code>_transferForkMigratedCollateralToChild</code></a
 										>
 								</dd></div>
@@ -1404,7 +1404,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>ShareToken.migrate</code></a
 										>
 								</dd></div>
@@ -1429,15 +1429,15 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 									<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>setTotalShares</code> during auction preparation</a
 									>,
-									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+									<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>sharesToCash</code>, <code>redeemCompleteSet</code>,
 										and <code>redeemShares</code></a
 									>,
 									<a
-										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>mintCompleteSets</code> and persistent migration
 										accounting</a
 										>
@@ -1462,7 +1462,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>Truth-auction start and finalization</a
 										>
 								</dd></div>
@@ -1490,7 +1490,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameState.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameState.sol"
 										>Escalation state</a
 										>
 								</dd></div>
@@ -1512,7 +1512,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameState.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameState.sol"
 										>Unresolved counters</a
 										>
 								</dd></div>
@@ -1536,7 +1536,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="./escalation-game-architecture.html#accounting-invariants"
+										href="../architecture-deployment/escalation-game-architecture.html#accounting-invariants"
 										>Escalation accounting invariants</a
 										>
 								</dd></div>
@@ -1560,7 +1560,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="./escalation-game-architecture.html#accounting-invariants"
+										href="../architecture-deployment/escalation-game-architecture.html#accounting-invariants"
 										>Stable deposit identity</a
 										>
 								</dd></div>
@@ -1585,9 +1585,9 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"
 										>Carry nullifiers</a
-										>, <a href="./merkle-mountain-range.html">MMR proofs</a>
+										>, <a href="../architecture-deployment/merkle-mountain-range.html">MMR proofs</a>
 								</dd></div>
 							</dl>
 						</div>
@@ -1608,7 +1608,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameEscrow.sol"
 										><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a
 										>
 								</dd></div>
@@ -1631,7 +1631,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"
 										><code>withdrawDeposit</code></a
 										>
 								</dd></div>
@@ -1654,7 +1654,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"
 										>Settlement</a
 										>
 								</dd></div>
@@ -1674,7 +1674,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/EscalationGame.sol"
+										<a href="../../solidity/contracts/peripherals/EscalationGame.sol"
 										><code>EscalationGame</code></a
 										>
 								</dd></div>
@@ -1697,7 +1697,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameForker.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameForker.sol"
 										>Forked claims</a
 										>
 								</dd></div>
@@ -1721,7 +1721,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"
 										><code>sweepResidualRepToSecurityPool</code></a
 										>
 								</dd></div>
@@ -1747,19 +1747,19 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPool.sol"
+										href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>activateForkMode</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameCalculations.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameCalculations.sol"
 										><code>getQuestionResolution</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										>fixed-outcome propagation</a
 										>, and
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"
 										>pool/game payout check</a
 										>
 								</dd></div>
@@ -1786,20 +1786,20 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/Zoltar.sol"
+										<a href="../../solidity/contracts/Zoltar.sol"
 										><code>getNonDecisionThreshold</code></a
 										>
 										,
 										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
 										>origin threshold admission</a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/factories/EscalationGameFactory.sol"
+										href="../../solidity/contracts/peripherals/factories/EscalationGameFactory.sol"
 										><code>deployEscalationGame</code></a
 										>, and
 										<a
-										href="../solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts"
+										href="../../solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts"
 										>start-liveness regression tests</a
 										>
 								</dd></div>
@@ -1823,14 +1823,14 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										<a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"
 										><code>getForkCarrySnapshot</code> and
 										<code>getForkCarryRoots</code></a
 										>,
-										<a href="../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"
+										<a href="../../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"
 										><code>bagCarryPeaks</code></a
 										>,
-										<a href="../solidity/ts/tests/escalationGame.test.ts"
+										<a href="../../solidity/ts/tests/escalationGame.test.ts"
 										>independent carry-structure invariant tests</a
 										>
 								</dd></div>
@@ -1897,7 +1897,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>openOracleCallback</code></a
 										>
 								</dd></div>
@@ -1919,10 +1919,10 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>openOracleCallback</code></a
 										>,
-										<a href="./open-oracle-integration.html">ratio direction</a>
+										<a href="../protocol-design/open-oracle-integration.html">ratio direction</a>
 								</dd></div>
 							</dl>
 						</div>
@@ -1941,7 +1941,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>isPriceValid</code></a
 										>
 								</dd></div>
@@ -1964,7 +1964,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>executeStagedOperation</code></a
 										>
 								</dd></div>
@@ -1986,7 +1986,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										>Staging and snapshot checks</a
 										>
 								</dd></div>
@@ -2009,7 +2009,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>executeStagedOperation</code></a
 										>
 								</dd></div>
@@ -2033,10 +2033,10 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										>active and pending staged-operation indexes</a
 										>,
-										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts"
 										>queue/index invariant test</a
 										>
 								</dd></div>
@@ -2058,7 +2058,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+										href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
 										><code>settle</code> and dispute validation</a
 										>
 								</dd></div>
@@ -2083,14 +2083,14 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 										><code>pendingReportSponsor</code> and
 										<code>_withdrawOpenOracleReporterBalances</code></a
 										>,
-										<a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+										<a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
 										><code>deposit</code> and <code>withdrawTo</code></a
 										>,
-										<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
+										<a href="../../solidity/ts/tests/priceOracleSecurity.test.ts"
 										>coordinator/OpenOracle balance-domain test</a
 										>
 								</dd></div>
@@ -2118,7 +2118,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>submitBid</code></a
 										>
 								</dd></div>
@@ -2139,7 +2139,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>computeClearing</code> and <code>finalize</code></a
 										>
 								</dd></div>
@@ -2163,7 +2163,7 @@
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>withdrawBids</code> and refund functions</a
 										>
 								</dd></div>
@@ -2184,7 +2184,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>_allocateFromCumulativePosition</code></a
 										>
 								</dd></div>
@@ -2205,7 +2205,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./truth-auction.html#settlement"
+										<a href="../protocol-design/truth-auction.html#settlement"
 										>Auction settlement</a
 										>
 								</dd></div>
@@ -2230,7 +2230,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>Auction-claim settlement</a
 										>
 								</dd></div>
@@ -2256,7 +2256,7 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-									<a href="./truth-auction.html#clearing"
+									<a href="../protocol-design/truth-auction.html#clearing"
 										>Truth Auction clearing design</a
 									>
 								</dd></div>
@@ -2277,7 +2277,7 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
 										><code>finalizeTruthAuctionRepair</code></a
 										>
 								</dd></div>
@@ -2298,9 +2298,9 @@
 								<div><dt>Type</dt><dd>Liveness</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./truth-auction.html">Weak-demand behavior</a>,
+										<a href="../protocol-design/truth-auction.html">Weak-demand behavior</a>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
 										><code>finalizeTruthAuctionRepair</code></a
 										>
 								</dd></div>
@@ -2323,11 +2323,11 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>_appendBid</code> and refund-prefix accounting</a
 										>
 										and
-										<a href="../solidity/ts/tests/auction.test.ts"
+										<a href="../../solidity/ts/tests/auction.test.ts"
 										>repeated tick deletion/recreation tests</a
 										>
 								</dd></div>
@@ -2355,10 +2355,10 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										>AVL tree, enumeration, and clearing</a
 										>,
-										<a href="../solidity/ts/tests/auction.test.ts"
+										<a href="../../solidity/ts/tests/auction.test.ts"
 										>seeded independent-model and frozen-snapshot tests</a
 										>
 								</dd></div>
@@ -2384,11 +2384,11 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
 										><code>finalize</code>, <code>withdrawBids</code>, and
 										deferred refunds</a
 										>,
-										<a href="../solidity/ts/tests/auction.test.ts"
+										<a href="../../solidity/ts/tests/auction.test.ts"
 										>seeded and deferred-refund ETH-liability tests</a
 										>
 								</dd></div>
@@ -2425,11 +2425,11 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/interfaces/ISecurityPool.sol"
+										href="../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol"
 										><code>SystemState</code></a
 										>,
 										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										>fork transitions</a
 										>; see <code>FORK-12</code> for child accounting consistency.
 								</dd></div>
@@ -2537,10 +2537,10 @@
 										<a href="./event-stream.md"
 										>Canonical event-stream specification</a
 										>,
-										<a href="../solidity/ts/tests/eventReplay/eventReplayModel.ts"
+										<a href="../../solidity/ts/tests/eventReplay/eventReplayModel.ts"
 										>event replay model</a
 										>,
-										<a href="../solidity/ts/tests/eventReplay/eventReplay.test.ts"
+										<a href="../../solidity/ts/tests/eventReplay/eventReplay.test.ts"
 										>actual-log storage-equivalence tests</a
 										>
 								</dd></div>
@@ -2561,7 +2561,7 @@
 								<div><dt>Type</dt><dd>External assumption</dd></div>
 								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/SafeERC20Ops.sol"
+										<a href="../../solidity/contracts/SafeERC20Ops.sol"
 										><code>SafeERC20Ops</code></a
 										>,
 										fixed external token addresses, and security assumption
@@ -2569,7 +2569,7 @@
 								</dd></div>
 								<div><dt>Related enforced property</dt><dd>
 										Canonical child REP behavior is enforced by
-										<a href="../solidity/contracts/ReputationToken.sol"
+										<a href="../../solidity/contracts/ReputationToken.sol"
 											><code>ReputationToken</code></a
 										>
 										and its Zoltar-only mint and burn authority.
@@ -2619,7 +2619,7 @@
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>createCompleteSet</code></a
 										>, ERC-1155 receiver checks, and receiver callback tests
 								</dd></div>
@@ -2677,10 +2677,11 @@
 			</section>
 
 		</main>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
 
-		<script src="./chartRuntime.js"></script>
-		<script type="module" src="./invariantExplorer.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
+		<script type="module" src="../assets/js/invariantExplorer.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

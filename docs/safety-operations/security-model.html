@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Statoblast Protocol Security Model</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle security-model">
 		<main>
@@ -53,10 +53,10 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
-							<a href="./liquidation.html#incentives">liquidation incentives</a>,
-							<a href="./truth-auction.html#clearing">auction clearing</a>, and
-							<a href="./open-oracle-integration.html#security-guarantee"
+							<a href="../whitepapers/statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="../protocol-design/liquidation.html#incentives">liquidation incentives</a>,
+							<a href="../protocol-design/truth-auction.html#clearing">auction clearing</a>, and
+							<a href="../protocol-design/open-oracle-integration.html#security-guarantee"
 								>oracle incentives</a
 							>.
 						</p>
@@ -74,8 +74,8 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./truth-auction.html#gas-and-spam">auction gas bounds</a>,
-							<a href="./open-oracle-integration.html#parameters"
+							<a href="../protocol-design/truth-auction.html#gas-and-spam">auction gas bounds</a>,
+							<a href="../protocol-design/open-oracle-integration.html#parameters"
 								>oracle gas parameters</a
 							>.
 						</p>
@@ -95,9 +95,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
-							<a href="./zoltar-whitepaper.html#security">fork coordination</a>, and
-							<a href="./truth-auction.html#lifecycle">auction participation</a>.
+							<a href="../whitepapers/statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#security">fork coordination</a>, and
+							<a href="../protocol-design/truth-auction.html#lifecycle">auction participation</a>.
 						</p>
 					</li>
 					<li id="assumption-a04" value="4" data-assumption="A04">
@@ -114,10 +114,10 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#escalation"
+							<a href="../whitepapers/statoblast-whitepaper.html#escalation"
 								>escalation resolution</a
 							>,
-							<a href="./escalation-game-architecture.html#accounting-invariants"
+							<a href="../architecture-deployment/escalation-game-architecture.html#accounting-invariants"
 								>escalation accounting</a
 							>, and
 							<a href="./operator-reference.md#escalation-resolution-and-deposits"
@@ -131,7 +131,7 @@
 							The participants whose coordination determines durable use value
 							continued access to the supported Statoblast lineage at least as
 							highly as its configured
-							<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+							<a href="../../solidity/contracts/peripherals/SecurityPool.sol"
 								><code>statoblastSecurityMultiplierBps</code></a
 							>
 							basis points of the value secured by that lineage.
@@ -173,10 +173,10 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#security">fork security</a>,
-							<a href="./statoblast-whitepaper.html#migration">fork migration</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#security">fork security</a>,
+							<a href="../whitepapers/statoblast-whitepaper.html#migration">fork migration</a>,
 							and
-							<a href="./statoblast-whitepaper.html#security"
+							<a href="../whitepapers/statoblast-whitepaper.html#security"
 								>Statoblast security boundary</a
 							>.
 						</p>
@@ -272,9 +272,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#economics">fork economics</a>,
-							<a href="./zoltar-whitepaper.html#security">fork coordination</a>, and
-							<a href="./statoblast-whitepaper.html#migration">pool migration</a>.
+							<a href="../whitepapers/zoltar-whitepaper.html#economics">fork economics</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#security">fork coordination</a>, and
+							<a href="../whitepapers/statoblast-whitepaper.html#migration">pool migration</a>.
 						</p>
 					</li>
 					<li id="assumption-a08" value="8" data-assumption="A08">
@@ -290,8 +290,8 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#economics">REP economics</a> and
-							<a href="./statoblast-whitepaper.html#security"
+							<a href="../whitepapers/zoltar-whitepaper.html#economics">REP economics</a> and
+							<a href="../whitepapers/statoblast-whitepaper.html#security"
 								>economic backing claims</a
 							>.
 						</p>
@@ -335,8 +335,8 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#security">Zoltar security</a> and
-							<a href="./statoblast-whitepaper.html#child-outcome-resolution"
+							<a href="../whitepapers/zoltar-whitepaper.html#security">Zoltar security</a> and
+							<a href="../whitepapers/statoblast-whitepaper.html#child-outcome-resolution"
 								>child outcome resolution</a
 							>.
 						</p>
@@ -354,9 +354,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#questions">question encoding</a>,
-							<a href="./zoltar-whitepaper.html#invalid">invalid outcomes</a>, and
-							<a href="./statoblast-whitepaper.html#child-outcome-resolution"
+							<a href="../whitepapers/zoltar-whitepaper.html#questions">question encoding</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#invalid">invalid outcomes</a>, and
+							<a href="../whitepapers/statoblast-whitepaper.html#child-outcome-resolution"
 								>child resolution</a
 							>.
 						</p>
@@ -375,8 +375,8 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#splitting">REP splitting</a>,
-							<a href="./statoblast-whitepaper.html#migration">pool migration</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#splitting">REP splitting</a>,
+							<a href="../whitepapers/statoblast-whitepaper.html#migration">pool migration</a>,
 							and
 							<a href="./operator-reference.md#share-migration"
 								>operator migration guidance</a
@@ -396,9 +396,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./truth-auction.html#lifecycle">auction lifecycle</a>,
-							<a href="./truth-auction.html#clearing">clearing</a>, and
-							<a href="./statoblast-whitepaper.html#auction">repair accounting</a>.
+							<a href="../protocol-design/truth-auction.html#lifecycle">auction lifecycle</a>,
+							<a href="../protocol-design/truth-auction.html#clearing">clearing</a>, and
+							<a href="../whitepapers/statoblast-whitepaper.html#auction">repair accounting</a>.
 						</p>
 					</li>
 					<li id="assumption-a13" value="13" data-assumption="A13">
@@ -414,9 +414,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
-							<a href="./statoblast-whitepaper.html#escalation">escalation</a>, and
-							<a href="./open-oracle-integration.html#security-guarantee"
+							<a href="../whitepapers/statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="../whitepapers/statoblast-whitepaper.html#escalation">escalation</a>, and
+							<a href="../protocol-design/open-oracle-integration.html#security-guarantee"
 								>oracle positions</a
 							>.
 						</p>
@@ -466,9 +466,9 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#pools">security pools</a>,
-							<a href="./liquidation.html#rule">liquidation backing</a>, and
-							<a href="./open-oracle-integration.html#attack-model"
+							<a href="../whitepapers/statoblast-whitepaper.html#pools">security pools</a>,
+							<a href="../protocol-design/liquidation.html#rule">liquidation backing</a>, and
+							<a href="../protocol-design/open-oracle-integration.html#attack-model"
 								>oracle exposure analysis</a
 							>.
 						</p>
@@ -489,8 +489,8 @@
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./invariants.html#uni-02"><code>UNI-02</code></a>,
-							<a href="./zoltar-whitepaper.html#questions">question identity</a>, and
-							<a href="./statoblast-whitepaper.html#pools">pool selection</a>.
+							<a href="../whitepapers/zoltar-whitepaper.html#questions">question identity</a>, and
+							<a href="../whitepapers/statoblast-whitepaper.html#pools">pool selection</a>.
 						</p>
 					</li>
 				</ol>
@@ -519,8 +519,8 @@
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./invariants.html#lifecycle">deadline invariants</a>,
-							<a href="./truth-auction.html#lifecycle">auction windows</a>, and
-							<a href="./open-oracle-integration.html#attack-model"
+							<a href="../protocol-design/truth-auction.html#lifecycle">auction windows</a>, and
+							<a href="../protocol-design/open-oracle-integration.html#attack-model"
 								>oracle censorship model</a
 							>.
 						</p>
@@ -543,11 +543,11 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#oracle">REP/ETH oracle</a>,
-							<a href="./open-oracle-integration.html#security-guarantee"
+							<a href="../whitepapers/statoblast-whitepaper.html#oracle">REP/ETH oracle</a>,
+							<a href="../protocol-design/open-oracle-integration.html#security-guarantee"
 								>correction incentives</a
 							>, and
-							<a href="./open-oracle-integration.html#attack-model">attack model</a>.
+							<a href="../protocol-design/open-oracle-integration.html#attack-model">attack model</a>.
 						</p>
 					</li>
 					<li id="assumption-a18" value="18" data-assumption="A18">
@@ -569,10 +569,10 @@
 						<p class="assumption-links">
 							Mechanics:
 							<a
-								href="./open-oracle-integration.html#settlement-validation-scope"
+								href="../protocol-design/open-oracle-integration.html#settlement-validation-scope"
 								>settlement validation scope</a
 							>,
-							<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
+							<a href="../protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs"
 								>economic tradeoffs</a
 							>, and
 							<a href="./invariants.html#oracle">oracle invariants</a>.
@@ -594,14 +594,14 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./open-oracle-integration.html#security-guarantee"
+							<a href="../protocol-design/open-oracle-integration.html#security-guarantee"
 								>report sizing</a
 							>,
-							<a href="./open-oracle-integration.html#attack-model"
+							<a href="../protocol-design/open-oracle-integration.html#attack-model"
 								>external-payoff model</a
 							>, and
 							<a
-								href="./open-oracle-integration.html#settlement-validation-scope"
+								href="../protocol-design/open-oracle-integration.html#settlement-validation-scope"
 								>settlement limits</a
 							>.
 						</p>
@@ -621,7 +621,7 @@
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./event-stream.md">event replay</a>,
-							<a href="./merkle-mountain-range.html#proofs">carry proofs</a>, and
+							<a href="../architecture-deployment/merkle-mountain-range.html#proofs">carry proofs</a>, and
 							<a href="./operator-reference.md#security-review-orientation"
 								>operator orientation</a
 							>.
@@ -659,9 +659,9 @@
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./invariants.html#ext-01"><code>EXT-01</code></a>,
-							<a href="./zoltar-whitepaper.html#economics">genesis REP handling</a>,
+							<a href="../whitepapers/zoltar-whitepaper.html#economics">genesis REP handling</a>,
 							and
-							<a href="./open-oracle-integration.html#openoracle-role"
+							<a href="../protocol-design/open-oracle-integration.html#openoracle-role"
 								>oracle token pair</a
 							>.
 						</p>
@@ -693,8 +693,8 @@
 							<a href="./contract-interaction-reference.md#sharetoken"
 								>share-token receipt</a
 							>,
-							<a href="./truth-auction.html#settlement">auction refunds</a>,
-							<a href="./open-oracle-integration.html#refund-callback"
+							<a href="../protocol-design/truth-auction.html#settlement">auction refunds</a>,
+							<a href="../protocol-design/open-oracle-integration.html#refund-callback"
 								>oracle request refunds</a
 							>, and
 							<a href="./operator-reference.md#security-pool-guardrails"
@@ -725,9 +725,9 @@
 							<a href="./operator-reference.md#immutable-protocol-release-posture"
 								>release posture</a
 							>,
-							<a href="./deployment-status.html">deployment status</a>,
-							<a href="../solidity/ts/compile.ts">compiler configuration</a>,
-							<a href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md"
+							<a href="../architecture-deployment/deployment-status.html">deployment status</a>,
+							<a href="../../solidity/ts/compile.ts">compiler configuration</a>,
+							<a href="../../solidity/contracts/peripherals/openOracle/UPSTREAM.md"
 								>OpenOracle build provenance</a
 							>,
 							and
@@ -751,7 +751,7 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./deployment-status.html">deployment discovery</a>,
+							<a href="../architecture-deployment/deployment-status.html">deployment discovery</a>,
 							<a href="./event-stream.md#canonical-reducers">canonical replay</a>,
 							and
 							<a href="./operator-reference.md#security-review-orientation"
@@ -777,15 +777,15 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./statoblast-whitepaper.html#parameters"
+							<a href="../whitepapers/statoblast-whitepaper.html#parameters"
 								>Statoblast parameters</a
 							>,
-							<a href="./zoltar-whitepaper.html#economics">fork economics</a>,
-							<a href="./liquidation.html#incentives">liquidation economics</a>,
-							<a href="./open-oracle-integration.html#parameters"
+							<a href="../whitepapers/zoltar-whitepaper.html#economics">fork economics</a>,
+							<a href="../protocol-design/liquidation.html#incentives">liquidation economics</a>,
+							<a href="../protocol-design/open-oracle-integration.html#parameters"
 								>oracle parameters</a
 							>, and
-							<a href="./open-oracle-integration.html#attack-model"
+							<a href="../protocol-design/open-oracle-integration.html#attack-model"
 								>oracle attack model</a
 							>.
 						</p>
@@ -841,20 +841,20 @@
 						</p>
 						<p class="assumption-links">
 							Mechanics:
-							<a href="./zoltar-whitepaper.html#universe-model"
+							<a href="../whitepapers/zoltar-whitepaper.html#universe-model"
 								>universe identity</a
 							>,
-							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>,
+							<a href="../architecture-deployment/merkle-mountain-range.html#leaf-shape">proof hashing</a>,
 							<a
-								href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+								href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
 								>Permit2 deposit authorization</a
 							>,
 							<a
-								href="../solidity/contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol"
+								href="../../solidity/contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol"
 								>Permit2 signature interface</a
 							>,
 							<a
-								href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md#permit2-dependency"
+								href="../../solidity/contracts/peripherals/openOracle/UPSTREAM.md#permit2-dependency"
 								>pinned Permit2 implementation provenance</a
 							>,
 							and
@@ -930,5 +930,6 @@
 				</ul>
 			</section>
 		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

@@ -15,11 +15,11 @@ Open Oracle logging remains outside this Zoltar event-stream contract. The vendo
 
 ### OpenOracle packed-state reconstruction
 
-An OpenOracle indexer must filter logs by the configured OpenOracle emitter and the `ReportSubmitted(uint256,bytes)`, `ReportDisputed(uint256,bytes)`, and `ReportSettled(uint256)` signature topics. Submitted and disputed logs are emitted with raw `log2`: topic 1 is the indexed 32-byte report ID, and `data` is exactly 235 raw packed bytes rather than ABI encoding for a dynamic `bytes` value. [`shared/ts/openOracle.ts`](../shared/ts/openOracle.ts) is the canonical field-offset decoder and state-hash helper.
+An OpenOracle indexer must filter logs by the configured OpenOracle emitter and the `ReportSubmitted(uint256,bytes)`, `ReportDisputed(uint256,bytes)`, and `ReportSettled(uint256)` signature topics. Submitted and disputed logs are emitted with raw `log2`: topic 1 is the indexed 32-byte report ID, and `data` is exactly 235 raw packed bytes rather than ABI encoding for a dynamic `bytes` value. [`shared/ts/openOracle.ts`](../../shared/ts/openOracle.ts) is the canonical field-offset decoder and state-hash helper.
 
 Reduce those logs in canonical block, transaction, and log-index order. A submitted log creates the report preimage; every later disputed log for the same report ID replaces it. Decode the data, restore the topic-1 report ID in `PreimageHelper`, and verify the ABI preimage hash against `oracleGame[reportId]` before sending a dispute or settlement transaction.
 
-`ReportSettled` contains only the report ID and no replacement preimage. Mark the latest reconstructed state as settled and set `settlementTimestamp` from the settlement block: use the block timestamp when the report's `TIME_TYPE` flag is set and the block number otherwise. Hashing that completed preimage reproduces the final stored state. [`ui/ts/protocol/openOracleState.ts`](../ui/ts/protocol/openOracleState.ts) implements this chronological reduction and settlement-block lookup.
+`ReportSettled` contains only the report ID and no replacement preimage. Mark the latest reconstructed state as settled and set `settlementTimestamp` from the settlement block: use the block timestamp when the report's `TIME_TYPE` flag is set and the block number otherwise. Hashing that completed preimage reproduces the final stored state. [`ui/ts/protocol/openOracleState.ts`](../../ui/ts/protocol/openOracleState.ts) implements this chronological reduction and settlement-block lookup.
 
 ## Deployment anchor and schema version
 
@@ -119,7 +119,7 @@ Escalation escrow bookkeeping uses `VaultEscrowUpdated(vault indexed, escrowedRe
 
 Standard ERC-20 `Transfer` and `Approval`, plus ERC-1155 `TransferSingle`, `TransferBatch`, and `ApprovalForAll`, may be indexed for wallet balances and authorization, but they do not replace a Zoltar lifecycle or accounting field. The ERC-1155 ABI declares `URI`, but the current implementation never emits it; indexers must not wait for or synthesize that event. ERC-20 `Approval` is not an authoritative allowance reducer: a finite `transferFrom` spend decreases allowance without emitting `Approval`, while infinite allowance is neither decreased nor re-emitted. OpenOracle's `InternalApproval` likewise tracks only its separate internal-balance allowance and is not part of the packed report-state reducer. The imported `IAugur` event declarations are compatibility types; Zoltar contracts do not emit an Augur event stream.
 
-`DeploymentStatusOracle.DeploymentAddressesSet(address[])` is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by `getDeploymentMask()`; see [Deployment Status Oracle](./deployment-status.html).
+`DeploymentStatusOracle.DeploymentAddressesSet(address[])` is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by `getDeploymentMask()`; see [Deployment Status Oracle](../architecture-deployment/deployment-status.html).
 
 ## Canonical reducers
 

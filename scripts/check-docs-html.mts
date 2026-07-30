@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
@@ -21,7 +21,7 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
-const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/security-model.html'])
+const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/safety-operations/security-model.html'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
@@ -44,6 +44,7 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 
 	for (const parsedDocument of parsedDocuments) {
 		validateTextEnvelope(parsedDocument, failures)
+		validateResponsiveRuntime(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
 		validateInteractiveCatalogs(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
@@ -72,6 +73,14 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	return failures
 }
 
+function validateResponsiveRuntime(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	if (parsedDocument.relativePath === 'docs/documentation.html') return
+	const runtimeScripts = parsedDocument.document.querySelectorAll('script[src="../assets/js/responsiveDocs.js"]')
+	if (runtimeScripts.length !== 1) {
+		addFailure(parsedDocument, 'must load ../assets/js/responsiveDocs.js exactly once for responsive equations and overflow cues', failures)
+	}
+}
+
 function isLegacyRedirectDocument(parsedDocument: ParsedHtmlDocument): boolean {
 	return parsedDocument.relativePath === 'docs/start-here.html'
 }
@@ -96,11 +105,12 @@ function validateLegacyRedirect(parsedDocument: ParsedHtmlDocument, failures: Va
 }
 
 async function findDocsFiles(extension: string): Promise<string[]> {
-	const entries = await readdir(docsDirectoryPath)
-	return entries
-		.filter(entry => entry.endsWith(extension))
-		.map(entry => path.join(docsDirectoryPath, entry))
-		.sort()
+	const paths: string[] = []
+	const glob = new Bun.Glob(`**/*${extension}`)
+	for await (const relativePath of glob.scan({ cwd: docsDirectoryPath, onlyFiles: true })) {
+		paths.push(path.join(docsDirectoryPath, relativePath))
+	}
+	return paths.sort()
 }
 
 async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> {
@@ -161,7 +171,7 @@ function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failure
 			addFailure(parsedDocument, `${describeElement(details)} needs a stable id for direct links and shared scenarios`, failures)
 		}
 	}
-	if (interactiveDetails.length > 0 && parsedDocument.document.querySelector('script[src="./interactiveTools.js"]') === null) {
+	if (interactiveDetails.length > 0 && parsedDocument.document.querySelector('script[src="../assets/js/interactiveTools.js"]') === null) {
 		addFailure(parsedDocument, 'interactive calculators must load interactiveTools.js for presets, reset, sharing, and live results', failures)
 	}
 
@@ -174,7 +184,7 @@ function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failure
 		}
 	}
 	if (invariantEntries.length > 0) {
-		if (parsedDocument.document.querySelector('script[src="./invariantExplorer.js"]') === null) {
+		if (parsedDocument.document.querySelector('script[src="../assets/js/invariantExplorer.js"]') === null) {
 			addFailure(parsedDocument, 'invariant catalog must load invariantExplorer.js', failures)
 		}
 	}
@@ -231,9 +241,9 @@ function validatePlotMounts(parsedDocument: ParsedHtmlDocument, failures: Valida
 	if (chartMounts.length === 0) {
 		return
 	}
-	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="./chartRuntime.js"]'))
+	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="../assets/js/chartRuntime.js"]'))
 	if (runtimeScripts.length !== 1) {
-		addFailure(parsedDocument, `must load ./chartRuntime.js exactly once when Plot mounts are present`, failures)
+		addFailure(parsedDocument, `must load ../assets/js/chartRuntime.js exactly once when Plot mounts are present`, failures)
 	}
 
 	for (const chartMount of chartMounts) {

@@ -3,12 +3,12 @@ const documentGroups = [
 		label: 'Whitepapers',
 		documents: [
 			{
-				path: 'statoblast-whitepaper.html',
+				path: 'whitepapers/statoblast-whitepaper.html',
 				title: 'Statoblast whitepaper',
 				description: 'The application layer, from markets and pools through resolution and migration.',
 			},
 			{
-				path: 'zoltar-whitepaper.html',
+				path: 'whitepapers/zoltar-whitepaper.html',
 				title: 'Zoltar whitepaper',
 				description: 'Universes, question encoding, global forks, and REP splitting.',
 			},
@@ -18,17 +18,17 @@ const documentGroups = [
 		label: 'Protocol design',
 		documents: [
 			{
-				path: 'truth-auction.html',
+				path: 'protocol-design/truth-auction.html',
 				title: 'Truth auction',
 				description: 'Auction clearing, settlement, and weak-demand loss allocation.',
 			},
 			{
-				path: 'open-oracle-integration.html',
+				path: 'protocol-design/open-oracle-integration.html',
 				title: 'OpenOracle integration',
 				description: 'REP/ETH price requests, corrections, settlement, and residual risk.',
 			},
 			{
-				path: 'liquidation.html',
+				path: 'protocol-design/liquidation.html',
 				title: 'Liquidation design',
 				description: 'Punitive REP seizure, chunking limits, health calculations, and incentives.',
 			},
@@ -38,27 +38,27 @@ const documentGroups = [
 		label: 'Safety and operations',
 		documents: [
 			{
-				path: 'security-model.html',
+				path: 'safety-operations/security-model.html',
 				title: 'Protocol security model',
 				description: 'Normative participant, market, deployment, client, and cryptographic assumptions.',
 			},
 			{
-				path: 'invariants.html',
+				path: 'safety-operations/invariants.html',
 				title: 'Protocol invariants',
 				description: 'Contract, lifecycle, cross-contract, liveness, and economic properties.',
 			},
 			{
-				path: 'operator-reference.md',
+				path: 'safety-operations/operator-reference.md',
 				title: 'Operator reference',
 				description: 'Launch guardrails, subsystem edge cases, and operational recovery paths.',
 			},
 			{
-				path: 'contract-interaction-reference.md',
+				path: 'safety-operations/contract-interaction-reference.md',
 				title: 'Contract interaction reference',
 				description: 'Transaction callers, prerequisites, effects, and emitted events.',
 			},
 			{
-				path: 'event-stream.md',
+				path: 'safety-operations/event-stream.md',
 				title: 'Event stream contract',
 				description: 'Deterministic event-only indexing, replay, and reorg rollback.',
 			},
@@ -68,22 +68,22 @@ const documentGroups = [
 		label: 'Architecture and deployment',
 		documents: [
 			{
-				path: 'contract-interactions.html',
+				path: 'architecture-deployment/contract-interactions.html',
 				title: 'Contract interaction map',
 				description: 'How deployed contracts call, deploy, and move assets between one another.',
 			},
 			{
-				path: 'escalation-game-architecture.html',
+				path: 'architecture-deployment/escalation-game-architecture.html',
 				title: 'EscalationGame architecture',
 				description: 'The Solidity module split, authority boundaries, and accounting responsibilities.',
 			},
 			{
-				path: 'deployment-status.html',
+				path: 'architecture-deployment/deployment-status.html',
 				title: 'Deployment status oracle',
 				description: 'Deployment progress bitmask semantics and the 256-step limit.',
 			},
 			{
-				path: 'merkle-mountain-range.html',
+				path: 'architecture-deployment/merkle-mountain-range.html',
 				title: 'Merkle Mountain Range proofs',
 				description: 'Carry-proof hashing, snapshot peaks, and nullifier replay protection.',
 			},
@@ -239,7 +239,8 @@ function markdownFrameSource(path, title) {
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<base href="${sourceUrl(path)}">
 				<title>${title}</title>
-				<link rel="stylesheet" href="./shared-docs.css">
+				<link rel="stylesheet" href="../assets/css/shared-docs.css">
+				<script src="../assets/js/responsiveDocs.js"></script>
 			</head>
 			<body class="doc-openoracle markdown-reference reader-embedded">
 				<main><article>${content}</article></main>

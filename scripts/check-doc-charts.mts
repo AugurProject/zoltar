@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { Window } from 'happy-dom'
@@ -11,7 +11,7 @@ const repositoryRoot = path.resolve(import.meta.dir, '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const diagramControlPath = path.join(repositoryRoot, 'docs/charts/diagramControl.ts')
-const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
+const generatedPath = path.join(repositoryRoot, 'docs/assets/js/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 40
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
@@ -200,7 +200,11 @@ function assertChartNode(value: unknown, chartId: string): void {
 	}
 }
 
-const [diagramControlSource, htmlEntries, specsSource, runtimeSource] = await Promise.all([readFile(diagramControlPath, 'utf8'), readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
+const htmlEntries: string[] = []
+for await (const relativePath of new Bun.Glob('**/*.html').scan({ cwd: docsDirectory, onlyFiles: true })) {
+	htmlEntries.push(relativePath)
+}
+const [diagramControlSource, specsSource, runtimeSource] = await Promise.all([readFile(diagramControlPath, 'utf8'), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
 if (nativeDispatchResult.issue !== undefined) {
@@ -210,7 +214,7 @@ const nativeDispatches = nativeDispatchResult.dispatches
 const nativeChartIds = new Set(nativeDispatches.keys())
 const mountIds: string[] = []
 const mergedDescriptionBoundaryPattern = /(?:FlowThe|treeA|SplitThe|ReproductionSelecting|AnswerA)/
-for (const entry of htmlEntries.filter(item => item.endsWith('.html'))) {
+for (const entry of htmlEntries) {
 	const html = await readFile(path.join(docsDirectory, entry), 'utf8')
 	if (/<svg\b/.test(html)) {
 		throw new Error(`Documentation HTML docs/${entry} contains a literal SVG instead of a Plot mount`)
@@ -322,6 +326,8 @@ if (
 	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)") ||
 	!runtimeSource.includes('fullSizeDiagramOverflows(overflowEnvelope)') ||
 	!runtimeSource.includes('updateDiagramControl(button, cue, isFit)') ||
+	!runtimeSource.includes("overflowEnvelope.classList.add('plot-figure-fit')") ||
+	runtimeSource.includes("matchMedia('(max-width: 640px)')") ||
 	!diagramControlSource.includes("'View full size'") ||
 	!diagramControlSource.includes("'Fit to width'") ||
 	!diagramControlSource.includes("button.removeAttribute('aria-pressed')") ||
@@ -458,7 +464,7 @@ for (let firstRouteIndex = 0; firstRouteIndex < layoutRoutes.length; firstRouteI
 		}
 	}
 }
-const contractInteractionHtml = await readFile(path.join(docsDirectory, 'contract-interactions.html'), 'utf8')
+const contractInteractionHtml = await readFile(path.join(docsDirectory, 'architecture-deployment/contract-interactions.html'), 'utf8')
 const documentedEdges = [...contractInteractionHtml.matchAll(/<tr data-edge-id="([^"]+)" data-source="([^"]+)" data-receiver="([^"]+)" data-phase="([^"]+)">/g)].map(match => ({
 	id: match[1],
 	phase: match[4],
@@ -492,6 +498,6 @@ if (output === undefined) {
 }
 const [expected, generated] = await Promise.all([output.text(), readFile(generatedPath, 'utf8')])
 if (expected !== generated) {
-	throw new Error('docs/chartRuntime.js is stale; run bun run docs:build-charts')
+	throw new Error('docs/assets/js/chartRuntime.js is stale; run bun run docs:build-charts')
 }
 console.log(`Documentation chart bundle is current; validated ${expectedChartCount} mount/spec pairs, ${nativeChartIds.size} specialized native charts, and ${markDrivenFlowchartIds.length} mark-driven flowcharts.`)

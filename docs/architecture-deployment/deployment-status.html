@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Deployment Status Oracle</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -12,11 +12,11 @@
 				<h1>Deployment Status Oracle</h1>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a23"
+					<a href="../safety-operations/security-model.html#assumption-a23"
 						>A23 verified canonical deployments</a
 					>
 					and
-					<a href="./security-model.html#assumption-a24"
+					<a href="../safety-operations/security-model.html#assumption-a24"
 						>A24 client and RPC integrity</a
 					>.
 				</p>
@@ -108,7 +108,7 @@
 				</p>
 				<p>
 					The table below renders the complete bit mapping directly from the canonical
-					<a href="./mainnet-deployment-addresses.json">mainnet deployment manifest</a>,
+					<a href="../mainnet-deployment-addresses.json">mainnet deployment manifest</a>,
 					excluding <code>deploymentStatusOracle</code>.
 				</p>
 				<table aria-label="Current mainnet deployment-status bit mapping">
@@ -199,14 +199,14 @@
 			<section id="sources">
 				<h2>Sources</h2>
 				<ul>
-					<li><a href="../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
-					<li><a href="../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
-					<li><a href="./mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
+					<li><a href="../../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
+					<li><a href="../../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
+					<li><a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
 				</ul>
 			</section>
 		</main>
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script type="module">
 			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
 			if (!(mappingBody instanceof HTMLTableSectionElement)) {
@@ -374,6 +374,7 @@
 			retryButton.addEventListener('click', () => void loadMapping())
 			await loadMapping()
 		</script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

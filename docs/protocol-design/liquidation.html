@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Liquidation Design</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -54,16 +54,16 @@
 				<h2>Liquidatable Condition</h2>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-						<a href="./security-model.html#assumption-a21"
+						<a href="../safety-operations/security-model.html#assumption-a21"
 							>A21 external token behavior</a
 						>,
-						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-					<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
-					<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a17">A17 corrector capability</a>,
-						<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>,
+						<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>,
+					<a href="../safety-operations/security-model.html#assumption-a14">A14 REP economic backing</a>,
+					<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+					<a href="../safety-operations/security-model.html#assumption-a17">A17 corrector capability</a>,
+						<a href="../safety-operations/security-model.html#assumption-a18">A18 independent correction incentive</a>,
 						and
-						<a href="./security-model.html#assumption-a19">A19 observable correctable price</a>.
+						<a href="../safety-operations/security-model.html#assumption-a19">A19 observable correctable price</a>.
 				</p>
 				<p id="client-liquidation-preview">
 					The official client may separately show a Uniswap-derived market
@@ -206,31 +206,31 @@
 							<td><code>BPS_DENOMINATOR</code></td>
 							<td><code>10000</code></td>
 							<td>basis points</td>
-							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+							<td><a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 						</tr>
 						<tr>
 							<td><code>LIQUIDATION_REP_BONUS_BPS</code></td>
 							<td><code>500</code></td>
 							<td>basis points</td>
-							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+							<td><a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 						</tr>
 						<tr>
 							<td><code>MIN_REP_DEPOSIT</code></td>
 							<td><code>10e18</code></td>
 							<td>REP wei</td>
-							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+							<td><a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 						</tr>
 						<tr>
 							<td><code>MIN_SECURITY_BOND_DEBT</code></td>
 							<td><code>1e18</code></td>
 							<td>ETH wei</td>
-							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+							<td><a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 						</tr>
 						<tr>
 							<td><code>PRICE_PRECISION</code></td>
 							<td><code>1e18</code></td>
 							<td>fixed-point scale</td>
-							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+							<td><a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 						</tr>
 					</tbody>
 				</table>
@@ -604,12 +604,12 @@
 				<h2>Incentive Implications</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
-						<a href="./security-model.html#assumption-a03">A03 independent liquidators</a>,
-						<a href="./security-model.html#assumption-a06">A06 liquidation executors</a>,
+					<a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+					<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+						<a href="../safety-operations/security-model.html#assumption-a03">A03 independent liquidators</a>,
+						<a href="../safety-operations/security-model.html#assumption-a06">A06 liquidation executors</a>,
 						and
-					<a href="./security-model.html#assumption-a25">A25 safe parameter relationships</a>.
+					<a href="../safety-operations/security-model.html#assumption-a25">A25 safe parameter relationships</a>.
 				</p>
 				<p>
 					The protocol uses a target-funded REP penalty. That means the liquidator
@@ -643,7 +643,7 @@
 		</main>
 
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script>
 			const BPS_DENOMINATOR = 10_000n
 			const DISPLAY_UNIT_SCALE = 100n
@@ -773,6 +773,7 @@
 			updateLiquidationExample()
 			updatePathExample()
 		</script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>
