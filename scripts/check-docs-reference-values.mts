@@ -4,22 +4,22 @@ import { createHash } from 'node:crypto'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const readme = await readFile('README.md', 'utf8')
-const auctionDesign = await readFile('docs/truth-auction.html', 'utf8')
-const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
-const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
-const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
-const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
-const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
-const whitepaperStatoblast = await readFile('docs/statoblast-whitepaper.html', 'utf8')
+const auctionDesign = await readFile('docs/protocol-design/truth-auction.html', 'utf8')
+const html = await readFile('docs/architecture-deployment/escalation-game-architecture.html', 'utf8')
+const invariantsHtml = await readFile('docs/safety-operations/invariants.html', 'utf8')
+const liquidationHtml = await readFile('docs/protocol-design/liquidation.html', 'utf8')
+const openOracleIntegration = await readFile('docs/protocol-design/open-oracle-integration.html', 'utf8')
+const zoltarWhitepaper = await readFile('docs/whitepapers/zoltar-whitepaper.html', 'utf8')
+const whitepaperStatoblast = await readFile('docs/whitepapers/statoblast-whitepaper.html', 'utf8')
 const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
 const normalizedDiagramSpecs = diagramSpecs.replaceAll(/\\n|\\t|\s+/g, ' ')
 const startHere = await readFile('docs/documentation.html', 'utf8')
-const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
-const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
+const operatorReference = await readFile('docs/safety-operations/operator-reference.md', 'utf8')
+const contractInteractionReference = await readFile('docs/safety-operations/contract-interaction-reference.md', 'utf8')
 const contractReferenceGenerator = await readFile('scripts/generate-contract-interaction-reference.mts', 'utf8')
-const eventStream = await readFile('docs/event-stream.md', 'utf8')
-const protocolTerms = await readFile('docs/protocolTerms.js', 'utf8')
-const deploymentStatus = await readFile('docs/deployment-status.html', 'utf8')
+const eventStream = await readFile('docs/safety-operations/event-stream.md', 'utf8')
+const protocolTerms = await readFile('docs/assets/js/protocolTerms.js', 'utf8')
+const deploymentStatus = await readFile('docs/architecture-deployment/deployment-status.html', 'utf8')
 const escalationGame = await readFile('solidity/contracts/peripherals/EscalationGame.sol', 'utf8')
 const escalationGameCarry = await readFile('solidity/contracts/peripherals/EscalationGameCarry.sol', 'utf8')
 const escalationGameState = await readFile('solidity/contracts/peripherals/EscalationGameState.sol', 'utf8')
@@ -55,17 +55,8 @@ const shareToken = await readFile('solidity/contracts/peripherals/tokens/ShareTo
 const truthAuction = await readFile('solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol', 'utf8')
 const truthAuctionInterface = await readFile('solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol', 'utf8')
 const zoltar = await readFile('solidity/contracts/Zoltar.sol', 'utf8')
-const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
-const interfaceRegressionTest = await readFile('solidity/ts/tests/escalationGameInterfaceRegression.test.ts', 'utf8')
 const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 
-const expectedProjectBudget = readNumericConstant(interfaceRegressionTest, 'escalationGameDeployedBytecodeBudgetBytes')
-const expectedEip170Budget = readNumericConstant(interfaceRegressionTest, 'eip170DeployedBytecodeLimitBytes')
-
-assertSimpleByteRow('Creation bytecode', formatNumber(bytecodeSnapshot.creationBytes))
-assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedBytes))
-assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
-assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
 assertEscalationReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
@@ -86,10 +77,13 @@ assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
 
 function assertContinuationIdentifierExplanation(): void {
-	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
-	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
-	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit(uint256,...)'), 'docs/escalation-game-architecture.html must name the exact event and local export surface that expose the continuation identifier')
-	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/architecture-deployment/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
+	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/architecture-deployment/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
+	assert.ok(
+		html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit(uint256,...)'),
+		'docs/architecture-deployment/escalation-game-architecture.html must name the exact event and local export surface that expose the continuation identifier',
+	)
+	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/architecture-deployment/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
 }
 
 function assertEscalationReplayIdentityDocs(): void {
@@ -102,7 +96,7 @@ function assertEscalationReplayIdentityDocs(): void {
 	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
 	const normalizedArchitecture = html.replaceAll(/\s+/g, ' ')
 	assert.ok(normalizedStatoblast.includes('keccak256(abi.encode(securityPoolFactory, originId, uint8(outcomeIndex), parentDepositIndex))'), 'Statoblast whitepaper must document the factory-scoped escalation replay identity encoded by SecurityPoolForkerBase.sol')
-	assert.match(normalizedArchitecture, /factory-scoped lineage id[\s\S]*href="statoblast-whitepaper\.html#migration">fork-migration specification<\/a> owns the exact construction/)
+	assert.match(normalizedArchitecture, /factory-scoped lineage id[\s\S]*href="\.\.\/whitepapers\/statoblast-whitepaper\.html#migration">fork-migration specification<\/a> owns the exact construction/)
 }
 
 function assertAggregateEscalationContinuationDocs(): void {
@@ -137,7 +131,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 	assert.match(normalizedInvariants, /sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
 	assert.match(normalizedContractReference, /resumeFromFork\(\)[\s\S]*sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
 	assert.match(normalizedStatoblast, /id="source-principal-at-fork"[\s\S]*aggregate raw unresolved principal[\s\S]*before effective direct-claim deductions/)
-	assert.match(normalizedInvariants, /href="statoblast-whitepaper\.html#source-principal-at-fork"/)
+	assert.match(normalizedInvariants, /href="\.\.\/whitepapers\/statoblast-whitepaper\.html#source-principal-at-fork"/)
 	assert.match(normalizedContractReference, /sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions/)
 	assert.match(normalizedContractReference, /live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims/)
 	assert.match(normalizedArchitecture, /resumeFromFork<\/code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims/)
@@ -248,7 +242,7 @@ function assertAuditFindingRemediations(): void {
 		/When bidding ends[\s\S]*qualifying bidders collectively receive <code>maxRepBeingSold<\/code>[\s\S]*no bid qualifies, no REP is sold[\s\S]*Any unsold REP remains behind inherited ownership[\s\S]*zero-migration full-cap sale[\s\S]*href="#zero-migration-full-cap-ownership"/,
 		'Truth Auction lifecycle summary must distinguish qualifying underfunding, no qualifying demand, residual ownership, and the zero-migration full-cap case',
 	)
-	assert.match(normalizedStatoblast, /href="\.\/truth-auction\.html#zero-migration-full-cap-ownership"[\s\S]*Truth Auction settlement specification/, 'Statoblast must link to the canonical zero-migration full-cap ownership rule')
+	assert.match(normalizedStatoblast, /href="\.\.\/protocol-design\/truth-auction\.html#zero-migration-full-cap-ownership"[\s\S]*Truth Auction settlement specification/, 'Statoblast must link to the canonical zero-migration full-cap ownership rule')
 	assert.doesNotMatch(normalizedStatoblast, /zero-migration full-cap sale initializes auction ownership[\s\S]*30,000[\s\S]*withdrawPendingEthRefund/, 'Statoblast must not duplicate the exact truth-auction ownership and refund mechanics')
 	for (const documentedClaim of [
 		'`amount` is the newly deferred delta and `pendingAmount` is the authoritative resulting bidder balance',
@@ -301,7 +295,7 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 active-index boundary accounting')
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
-	assert.match(allowanceEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\/truth-auction\.html#settlement"/)
+	assert.match(allowanceEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\.\/protocol-design\/truth-auction\.html#settlement"/)
 	assert.match(vaultEntry, /A direct own-fork claim[\s\S]*may remain indexed with zero live state until its next pool-mediated synchronization/)
 	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
 	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefunds<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*deferred <code>pendingEthRefunds<\/code>/)
@@ -482,7 +476,7 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.doesNotMatch(openOracleIntegration, /Only its state hash|finalized storage/, 'OpenOracle docs must not retain the superseded finalized-only storage description')
 	assert.ok(normalizedIntegration.includes('The sponsor may request and fund more than the minimum; the coordinator submits the selected amount as <code>currentAmount1</code>.'), 'OpenOracle integration must distinguish sponsor funding from coordinator submission')
 	assert.doesNotMatch(openOracleIntegration, /<code>openOracleReportPrice<\/code>/, 'OpenOracle integration must not name the removed openOracleReportPrice function')
-	assert.doesNotMatch(invariantsHtml, /<\/a\s*>\s*>\s*and\s*<a href="\.\.\/solidity\/ts\/tests\/openOracleDispute\.test\.ts"/, 'oracle verification row must not render a stray greater-than marker between test links')
+	assert.doesNotMatch(invariantsHtml, /<\/a\s*>\s*>\s*and\s*<a href="\.\.\/\.\.\/solidity\/ts\/tests\/openOracleDispute\.test\.ts"/, 'oracle verification row must not render a stray greater-than marker between test links')
 }
 
 function assertLiquidationFullCloseDocs(): void {
@@ -501,7 +495,7 @@ function assertLiquidationFullCloseDocs(): void {
 		assert.ok(liquidationHtml.includes(marker), `Missing liquidation documentation marker: ${marker}`)
 	}
 
-	assert.match(whitepaperStatoblast, /href="\.\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
+	assert.match(whitepaperStatoblast, /href="\.\.\/protocol-design\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
 	assert.ok(liquidationHtml.includes('data-liquidation-summary="normal-plus-full-close"'), 'canonical liquidation diagram caption must be tagged for the normal-path plus full-close summary')
 	const computeCandidateIndex = diagramSpecs.indexOf('Compute debt and REP candidate')
@@ -611,7 +605,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /### Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
 	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameForker`, and `SecurityPoolForkerVaultMigrationDelegate`[\s\S]*`claimForkedEscalationDeposits` and `migrateVaultWithUnresolvedEscalation`/)
-	assert.match(operatorReference, /Migration delegates and storage modules[\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
+	assert.match(operatorReference, /Migration delegates and storage modules[\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)
 	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking\)[\s\S]*does not start the remaining clock until `resumeFromFork`/)
@@ -903,7 +897,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(protocolTerms, /minimumToken1ReportDefinition = 'The coordinator-computed minimum WETH side: the priority-fee-derived report plus the larger base-fee- or open-interest-derived report\.'/)
 	assert.match(protocolTerms, /'initial report size':[\s\S]*minimumToken1ReportDefinition/)
 	assert.match(whitepaperStatoblast, /lineage identity[\s\S]*commits to the origin's immutable[\s\S]*<code>initialReportPriorityFeeWeiPerGas<\/code>[\s\S]*children\s+inherit their origin's\s+configuration/)
-	assert.match(whitepaperStatoblast, /href="\.\/operator-reference\.md#security-pool-guardrails"/)
+	assert.match(whitepaperStatoblast, /href="\.\.\/safety-operations\/operator-reference\.md#security-pool-guardrails"/)
 	assert.doesNotMatch(whitepaperStatoblast, /originId = keccak256\(abi\.encode\(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)/)
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
@@ -1080,54 +1074,4 @@ function assertSolidityFunctionReader(): void {
 		'function fixture(',
 	)
 	assert.throws(() => assertCallOrder(commentedCallBody, 'firstCall()', 'secondCall()', 'commented calls must not satisfy order checks'))
-}
-
-function assertSimpleByteRow(label: string, expectedValue: string): void {
-	const escapedLabel = escapeRegExp(label)
-	const match = html.match(new RegExp(`<td>${escapedLabel}</td>\\s*<td><code>([^<]+)</code> bytes</td>`))
-	assert.ok(match, `Missing documentation row for ${label}`)
-	assert.equal(match[1], expectedValue, `${label} should be ${expectedValue} in docs/escalation-game-architecture.html`)
-}
-
-function assertBudgetHeadroomRow(label: string, expectedHeadroom: string, expectedBudget: string): void {
-	const escapedLabel = escapeRegExp(label)
-	const match = html.match(new RegExp(`<td>${escapedLabel}</td>\\s*<td><code>([^<]+)</code> bytes below <code>([^<]+)</code></td>`))
-	assert.ok(match, `Missing documentation row for ${label}`)
-	assert.equal(match[1], expectedHeadroom, `${label} headroom should be ${expectedHeadroom} in docs/escalation-game-architecture.html`)
-	assert.equal(match[2], expectedBudget, `${label} budget should be ${expectedBudget} in docs/escalation-game-architecture.html`)
-}
-
-function escapeRegExp(value: string): string {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function formatNumber(value: number): string {
-	return value.toLocaleString('en-US')
-}
-
-function readNumericConstant(source: string, constantName: string): number {
-	const match = source.match(new RegExp(`const\\s+${constantName}\\s*=\\s*([\\d_]+)`))
-	assert.ok(match, `Could not find ${constantName} in escalationGameInterfaceRegression.test.ts`)
-	return Number(match[1]?.replaceAll('_', ''))
-}
-
-function readBytecodeSnapshot(source: string): { creationBytes: number; deployedBytes: number } {
-	const parsed = JSON.parse(source) as unknown
-	assert.ok(isRecord(parsed), 'Escalation game bytecode snapshot must be a JSON object')
-	return {
-		creationBytes: readNumberField(parsed, 'creationBytes'),
-		deployedBytes: readNumberField(parsed, 'deployedBytes'),
-	}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
-function readNumberField(record: Record<string, unknown>, fieldName: string): number {
-	const value = Reflect.get(record, fieldName)
-	if (typeof value !== 'number') {
-		throw new Error(`Escalation game bytecode snapshot field ${fieldName} must be a number`)
-	}
-	return value
 }

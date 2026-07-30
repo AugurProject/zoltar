@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 	targetSourcePath: string
 }
 
-const outputPath = 'docs/contract-interaction-reference.md'
+const outputPath = 'docs/safety-operations/contract-interaction-reference.md'
 const expectedProductionSoliditySourceFingerprint = 'ed39fb6eecfbeb5a2c682b38715a115af9692f915a91f4e3ee534898577300b7'
 
 const eventSourceByName: Record<string, string> = {
@@ -1776,7 +1776,7 @@ async function generateMarkdown(): Promise<string> {
 	assert.equal(actualEventAbiFingerprint, referencedEventAbiFingerprint, 'A referenced event ABI changed; review event semantics and update the pinned fingerprint')
 
 	const sections = contractReferences.map(contractReference => {
-		const sourceLink = `../${contractReference.sourcePath}`
+		const sourceLink = `../../${contractReference.sourcePath}`
 		const rows = contractReference.interactions.map(interaction => `| ${interaction.call} | ${interaction.caller} | ${interaction.preconditions} | ${interaction.effect} | ${interaction.signals} |`).join('\n')
 		const readAbiFingerprint = readAbiFingerprintByContract.get(contractReference.name)
 		assert.ok(readAbiFingerprint, `Missing read ABI fingerprint for ${contractReference.name}`)
@@ -1790,7 +1790,7 @@ async function generateMarkdown(): Promise<string> {
 <!-- Validated production Solidity source fingerprint: ${productionSoliditySourceFingerprint} -->
 # Contract Interaction Reference
 
-The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](./documentation.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
+The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](../documentation.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
 
 The tables focus on transaction entrypoints in the ten primary state-changing contracts that users and protocol components interact with directly. Each read surface names every read-only function and public storage getter in the deployed contract ABI; its hidden fingerprint pins the exact source declarations, including parameters, returns, visibility, and mutability. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator. Stateless helpers, deployment workers, factories used only for component construction, migration proxies, and event emitters are inventoried with their caller boundaries in the Operator Reference.
 

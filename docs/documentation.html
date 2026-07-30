@@ -5,26 +5,16 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="The complete Statoblast protocol documentation in a searchable, on-demand reader."
+			content="Browse the complete Statoblast protocol documentation one document at a time."
 		/>
 		<title>Statoblast documentation</title>
-		<link rel="stylesheet" href="./docsReader.css" />
+		<link rel="stylesheet" href="./assets/css/docsReader.css" />
 	</head>
 	<body class="doc-reader">
 		<a class="skip-link" href="#reader-content">Skip to documentation</a>
 
 		<header class="reader-header">
 			<h1>Statoblast documentation</h1>
-			<p>Search documents, sections, and tools.</p>
-			<button
-				class="reader-nav-toggle"
-				type="button"
-				aria-controls="reader-sidebar"
-				aria-expanded="false"
-				data-reader-nav-toggle
-			>
-				Browse contents
-			</button>
 		</header>
 
 		<div class="reader-progress" aria-hidden="true">
@@ -38,73 +28,56 @@
 				aria-label="Documentation navigation"
 			>
 				<div class="reader-sidebar-inner">
-					<label class="reader-search">
-						<span>Search documentation</span>
-						<input
-							type="search"
-							placeholder="Try “migration” or “oracle”"
-							autocomplete="off"
-							data-doc-search
-						/>
-						<kbd aria-hidden="true">/</kbd>
-					</label>
-						<p class="reader-search-status" aria-live="polite" data-search-status>
-							14 documents
-						</p>
-						<button
-							class="reader-search-retry"
-							type="button"
-							hidden
-							data-retry-search
-						>
-							Retry full-text search
-						</button>
-						<div class="reader-search-results" hidden data-search-results></div>
+					<button
+						class="reader-sidebar-toggle"
+						type="button"
+						aria-label="Collapse menu"
+						aria-controls="reader-navigation-panel"
+						aria-expanded="true"
+						title="Collapse menu"
+						data-sidebar-toggle
+					>
+						<span class="reader-sidebar-toggle-icon" aria-hidden="true"></span>
+						<span data-sidebar-toggle-label>Collapse menu</span>
+					</button>
 
-					<nav data-reader-navigation></nav>
+					<div id="reader-navigation-panel" data-sidebar-panel>
+						<nav data-reader-navigation></nav>
+					</div>
 				</div>
 			</aside>
 
 			<main id="reader-content" class="reader-content" tabindex="-1">
-				<div class="reader-empty" hidden data-reader-empty>
-						<p class="reader-kicker">No matches</p>
-						<h2>Try a broader search.</h2>
-						<p data-reader-empty-guidance>
-							Search checks document titles, summaries, and the full rendered text.
-						</p>
-					<button type="button" data-clear-search>Clear search</button>
-				</div>
-
 				<div data-reader-documents></div>
 
 				<noscript>
 					<section class="reader-noscript">
-						<h2>JavaScript is required for the searchable reader.</h2>
+						<h2>JavaScript is required for the documentation reader.</h2>
 						<p>You can still open every source document directly:</p>
 						<ul>
-							<li><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></li>
-							<li><a href="./zoltar-whitepaper.html">Zoltar whitepaper</a></li>
-							<li><a href="./truth-auction.html">Truth auction</a></li>
-							<li><a href="./open-oracle-integration.html">OpenOracle integration</a></li>
-							<li><a href="./liquidation.html">Liquidation design</a></li>
-							<li><a href="./security-model.html">Protocol security model</a></li>
-							<li><a href="./invariants.html">Protocol invariants</a></li>
-							<li><a href="./operator-reference.md">Operator reference</a></li>
+							<li><a href="./whitepapers/statoblast-whitepaper.html">Statoblast whitepaper</a></li>
+							<li><a href="./whitepapers/zoltar-whitepaper.html">Zoltar whitepaper</a></li>
+							<li><a href="./protocol-design/truth-auction.html">Truth auction</a></li>
+							<li><a href="./protocol-design/open-oracle-integration.html">OpenOracle integration</a></li>
+							<li><a href="./protocol-design/liquidation.html">Liquidation design</a></li>
+							<li><a href="./safety-operations/security-model.html">Protocol security model</a></li>
+							<li><a href="./safety-operations/invariants.html">Protocol invariants</a></li>
+							<li><a href="./safety-operations/operator-reference.md">Operator reference</a></li>
 							<li>
-								<a href="./contract-interaction-reference.md">
+								<a href="./safety-operations/contract-interaction-reference.md">
 									Contract interaction reference
 								</a>
 							</li>
-							<li><a href="./event-stream.md">Event stream contract</a></li>
-							<li><a href="./contract-interactions.html">Contract interaction map</a></li>
+							<li><a href="./safety-operations/event-stream.md">Event stream contract</a></li>
+							<li><a href="./architecture-deployment/contract-interactions.html">Contract interaction map</a></li>
 							<li>
-								<a href="./escalation-game-architecture.html">
+								<a href="./architecture-deployment/escalation-game-architecture.html">
 									EscalationGame architecture
 								</a>
 							</li>
-							<li><a href="./deployment-status.html">Deployment status oracle</a></li>
+							<li><a href="./architecture-deployment/deployment-status.html">Deployment status oracle</a></li>
 							<li>
-								<a href="./merkle-mountain-range.html">Merkle Mountain Range proofs</a>
+								<a href="./architecture-deployment/merkle-mountain-range.html">Merkle Mountain Range proofs</a>
 							</li>
 						</ul>
 					</section>
@@ -112,7 +85,7 @@
 			</main>
 		</div>
 
-		<script src="./docsReaderMarkdown.js"></script>
-		<script src="./docsReader.js"></script>
+		<script src="./assets/js/docsReaderMarkdown.js"></script>
+		<script src="./assets/js/docsReader.js"></script>
 	</body>
 </html>

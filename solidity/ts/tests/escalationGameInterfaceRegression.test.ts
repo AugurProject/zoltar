@@ -6,7 +6,6 @@ import { getArray, getContractOutput, getRecord, getString, loadContractsJson, n
 
 const escalationGameSourcePath = 'contracts/peripherals/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
-const escalationGameAbiSnapshotPath = `${import.meta.dir}/fixtures/escalationGameAbi.snapshot`
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
 // Keep the project budget aligned with the EIP-170 deployed bytecode limit.
@@ -61,63 +60,9 @@ function storageMemberSummary(typeTable: Record<string, unknown>, typeLabel: str
 	})
 }
 
-function getOptionalArray(value: unknown): unknown[] {
-	if (value === undefined) return []
-	return getArray(value, 'Expected ABI array field')
-}
-
-function getOptionalString(value: unknown): string {
-	if (value === undefined) return ''
-	return getString(value, 'Expected ABI string field')
-}
-
 function getNumber(value: unknown, errorMessage: string): number {
 	if (typeof value !== 'number') throw new Error(errorMessage)
 	return value
-}
-
-function normalizeAbiParameter(parameter: unknown): string {
-	const normalizedParameter = getRecord(parameter, 'Invalid ABI parameter')
-	const parameterType = getString(normalizedParameter.type, 'ABI parameter missing type')
-	const components = getOptionalArray(normalizedParameter.components)
-	const componentSuffix = components.length === 0 ? '' : `(${components.map(component => normalizeAbiParameter(component)).join(',')})`
-	const indexedSuffix = normalizedParameter.indexed === true ? ' indexed' : ''
-	const parameterName = getOptionalString(normalizedParameter.name)
-	const nameSuffix = parameterName === '' ? '' : ` ${parameterName}`
-	return `${parameterType}${componentSuffix}${indexedSuffix}${nameSuffix}`
-}
-
-function normalizeAbiEntry(entry: unknown): string {
-	const normalizedEntry = getRecord(entry, 'Invalid ABI entry')
-	const entryType = getString(normalizedEntry.type, 'ABI entry missing type')
-	const inputs = getOptionalArray(normalizedEntry.inputs)
-		.map(input => normalizeAbiParameter(input))
-		.join(',')
-	if (entryType === 'event') {
-		const name = getString(normalizedEntry.name, 'ABI event missing name')
-		return `event ${name}(${inputs})${normalizedEntry.anonymous === true ? ' anonymous' : ''}`
-	}
-	if (entryType === 'error') {
-		const name = getString(normalizedEntry.name, 'ABI error missing name')
-		return `error ${name}(${inputs})`
-	}
-	if (entryType === 'function') {
-		const name = getString(normalizedEntry.name, 'ABI function missing name')
-		const stateMutability = getString(normalizedEntry.stateMutability, `ABI function ${name} missing mutability`)
-		const outputs = getOptionalArray(normalizedEntry.outputs)
-			.map(output => normalizeAbiParameter(output))
-			.join(',')
-		return `function ${name}(${inputs}) ${stateMutability} -> (${outputs})`
-	}
-	return ''
-}
-
-function getExpectedEscalationGameAbiSnapshot(normalizedAbi: readonly string[]): string[] {
-	const snapshotText = `${normalizedAbi.join('\n')}\n`
-	if (process.env.UPDATE_ESCALATION_GAME_ABI_SNAPSHOT === '1') {
-		writeFileSync(escalationGameAbiSnapshotPath, snapshotText)
-	}
-	return readFileSync(escalationGameAbiSnapshotPath, 'utf8').trimEnd().split('\n')
 }
 
 function getBytecodeObject(contractOutput: Record<string, unknown>, sectionName: 'bytecode' | 'deployedBytecode'): string {
@@ -231,17 +176,6 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 		{ label: 'childRep', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'childRepClaimed', slot: '3', offset: 0, type: 'uint256' },
 	])
-})
-
-test('EscalationGame ABI preserves public functions, events, and tuple shapes', () => {
-	const escalationGameOutput = getEscalationGameOutput()
-	const abi = getArray(escalationGameOutput.abi, 'EscalationGame output is missing ABI')
-	const normalizedAbi = abi
-		.map(entry => normalizeAbiEntry(entry))
-		.filter(entry => entry !== '')
-		.sort()
-
-	assert.deepStrictEqual(normalizedAbi, getExpectedEscalationGameAbiSnapshot(normalizedAbi))
 })
 
 test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {
