@@ -287,6 +287,24 @@ verify freshness with `bun run check:generated`. The remaining minimal ABIs in
 `src/contracts/abi.ts` are maintained separately and checked against compiled
 artifacts by `tests/contracts/abi.test.ts`.
 
+### Executor public surface
+
+The bot calls only the parent-bound entrypoints in the first four rows below.
+`dispute` is a lower-level, unhedged funding helper: it intentionally has no
+parent-block guard and emits no durable bot-accounting event, so the arbitrager
+runtime does not use it.
+
+| Function | Intended caller and behavior | Success evidence and constraints |
+| --- | --- | --- |
+| `hedgeAndDispute` | Arbitrager wallet; executes the selected authenticated V2, V3, or hookless V4 hedge and replacement report atomically. | Requires the signed canonical parent and emits `HedgeAndDisputeExecuted`. |
+| `settleAndWithdraw` | Arbitrager wallet; optionally settles, then withdraws one position's exact two-token proceeds and settler reward. | Requires the signed canonical parent and emits `LifecycleExecuted`. |
+| `withdrawReplacementCredit` | Arbitrager wallet; withdraws only the exact credit from the immediate replacement report. | Requires the signed canonical parent and emits `ReplacementCreditWithdrawn`. |
+| `assertParentBlock` | Bot transaction preflight or atomic bundle; checks the next-block parent binding without changing state. | Reverts unless the supplied parent is the current block's canonical parent. |
+| `dispute` | Low-level integrator; funds an OpenOracle dispute without a Uniswap hedge. | No parent binding and no executor evidence event. The caller must provide both exact contributions and must not use this path for durable bot accounting. |
+| `contributions` | Read-only integrator; reproduces the executor's exact contribution calculation. | Pure helper; returns token1 and token2 contribution amounts. |
+| `unlockCallback` | Authenticated V4 PoolManager only, during an active `hedgeAndDispute` call. | Rejects every other caller or payload; settles one exact hookless pool swap. |
+| `receive` | Internal WETH/V4 conversion only while execution is active. | Rejects unsolicited ETH. |
+
 Verify the deployment address independently, then start an inventory-funded
 execution process:
 
@@ -332,7 +350,7 @@ Include every address in use. Do not construct this trust root from the same RPC
 that the bot will authenticate; independently review the deployment, compiler
 settings, and runtime code.
 
-The schema is `execution-manifest.schema.json`. Generate hashes from one endpoint
+The schema is `config/execution-manifest.schema.json`. Generate hashes from one endpoint
 and verify the resulting file through a separately operated endpoint:
 
 The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
@@ -352,7 +370,7 @@ can verify the file.
   --manifest=/secure/operator/sepolia-deployments.json
 ```
 
-`execution-manifest.example.json` is deliberately placeholder-only and must never
+`config/execution-manifest.example.json` is deliberately placeholder-only and must never
 be used as an execution trust root.
 
 Execution remains fixed for the lifetime of the process. It cannot be enabled from
