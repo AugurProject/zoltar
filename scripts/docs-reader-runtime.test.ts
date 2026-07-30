@@ -159,6 +159,21 @@ test('opening an inactive document disclosure selects that document', async () =
 	}
 })
 
+test('the active document outline can collapse without unloading its document', async () => {
+	const reader = await loadReader(false)
+	try {
+		const statoblastDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="statoblast-whitepaper.html"]')
+		if (statoblastDisclosure === null) throw new Error('Statoblast disclosure is missing')
+		statoblastDisclosure.querySelector('summary')?.click()
+
+		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual([])
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
+	} finally {
+		reader.cleanup()
+	}
+})
+
 test('documentation reader collapse state remains accessible on desktop and narrow layouts', async () => {
 	const desktopReader = await loadReader(false)
 	try {
