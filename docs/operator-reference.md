@@ -79,9 +79,9 @@ This is the protocol's
 
 Before tagging a launch release, run `bun run ui:build:prod` from a fresh
 dependency install and run `bun run check:mainnet-deployment`. This command
-warns instead of failing when the generated deployment manifest is stale.
-Treat any stale-manifest warning as a release blocker until the manifest is
-intentionally refreshed with `bun ./scripts/check-mainnet-deployment.mts --write`.
+fails when either generated deployment manifest is stale. Refresh and review
+both manifests with `bun ./scripts/check-mainnet-deployment.mts --write` before
+rerunning the check.
 That command writes and checks both
 [`mainnet-deployment-addresses.json`](./mainnet-deployment-addresses.json) and
 [`sepolia-deployment-addresses.json`](./sepolia-deployment-addresses.json).

@@ -187,15 +187,19 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 	}
 }
 
-export async function warnIfMainnetDeploymentManifestStale(): Promise<void> {
+export function assertDeploymentManifestCurrent(manifestId: ManifestId, expected: string, computed: string): void {
+	if (expected === computed) return
+	const displayName = manifestId === 'mainnet' ? 'Mainnet' : 'Sepolia'
+	throw new Error(`${displayName} deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new values.`)
+}
+
+export async function assertDeploymentManifestsCurrent(): Promise<void> {
 	for (const manifestId of manifestIds) {
 		const expectedManifest = await readManifest(manifestId)
 		const computedManifest = await loadComputedManifest(manifestId)
 		const expected = normalizeManifest(expectedManifest)
 		const computed = normalizeManifest(computedManifest)
-		if (expected !== computed) {
-			console.warn(`Warning: ${manifestId} deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new values.`)
-		}
+		assertDeploymentManifestCurrent(manifestId, expected, computed)
 	}
 }
 
@@ -206,7 +210,7 @@ async function main() {
 		return
 	}
 
-	await warnIfMainnetDeploymentManifestStale()
+	await assertDeploymentManifestsCurrent()
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)
