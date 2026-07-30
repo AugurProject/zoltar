@@ -142,6 +142,23 @@ test('documentation reader shows and navigates one document at a time', async ()
 	}
 })
 
+test('opening an inactive document disclosure selects that document', async () => {
+	const reader = await loadReader(false)
+	try {
+		const zoltarDisclosure = document.querySelector<HTMLDetailsElement>('[data-navigation-document-path="zoltar-whitepaper.html"]')
+		if (zoltarDisclosure === null) throw new Error('Zoltar disclosure is missing')
+		zoltarDisclosure.querySelector('summary')?.click()
+		await waitForHistory()
+
+		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(expandedNavigationDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('zoltar-whitepaper.html')
+		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+	} finally {
+		reader.cleanup()
+	}
+})
+
 test('documentation reader collapse state remains accessible on desktop and narrow layouts', async () => {
 	const desktopReader = await loadReader(false)
 	try {

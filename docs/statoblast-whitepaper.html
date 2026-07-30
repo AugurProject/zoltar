@@ -659,23 +659,27 @@
 							>#</a
 						>
 					</div>
-					<p class="lede"> When a market ends, Statoblast attempts to resolve the markets outcome by running an Escalation Game. In an Escalation Game, the game participants escrows vault backed REP behind the outcome they believe is the most truthfull outcome for the market. Statoblasts escalation game is based on
-						<a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md ">The Isonzo Front.md</a>
-						design.</p>
-					<p>Shortly:</p>
-					<ol>
-						<li>Someone posts a claim with an initial stake.</li>
-						<li>Anyone who disagrees can submit a different claim by locking a larger stake than the current leader.</li>
-						<li>The newest valid claim becomes the tentative winner, regardless of who submitted previous claims. There are no fixed sides—any participant may join at any time by outbidding the current claim.</li>
-						<li>After each successful challenge, the response timer becomes longer (typically growing exponentially), giving participants progressively more time to evaluate increasingly valuable disputes while still ensuring the game eventually reaches a conclusion.</li>
-						<li>If the timer expires without another larger challenge, the current claim becomes the final outcome.</li>
-						<li>If the required stake grows beyond a predefined threshold (non-decision threshold), the dispute is escalated to the protocol's ultimate resolution mechanism instead of continuing indefinitely.</li>
-					</ol>
-					<p>This emphasizes two important properties of the design:</p>
-					<ol>
-						<li><b>No permanent sides.</b> The game is simply a sequence of increasingly well-backed claims. Anyone can become the current leader by posting a larger stake.</li>
-						<li><b>Exponential time scaling.</b> As more value becomes locked in the game, participants are given increasingly more time to react, making it harder for an attacker to win by exploiting short response windows while still allowing small disputes to resolve quickly.</li>
-					</ol>
+					<p class="lede">
+						When a market ends, Statoblast attempts to resolve its outcome by
+						running an Escalation Game based on
+						<a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md"
+							>The Isonzo Front</a
+						>. Participants escrow vault-backed REP behind
+						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>.
+						Each deposit adds to that outcome's cumulative balance; it does not
+						have to outbid the previous deposit or the current leader. The
+						accepted deposit must normally meet the game's starting bond, unless
+						it fills the selected outcome to the non-decision threshold.
+					</p>
+					<p>
+						The running escalation cost increases with elapsed time, and the
+						median outcome balance determines the scheduled end. After that
+						deadline, a strict balance leader resolves the question. If two
+						outcomes instead reach the non-decision threshold, the game enters
+						local non-decision and Statoblast proceeds to its fork-resolution
+						path. The sections below derive those rules and their economic
+						consequences.
+					</p>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
 						<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,

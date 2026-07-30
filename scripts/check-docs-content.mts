@@ -358,6 +358,10 @@ for await (const path of uiCopyModuleGlob.scan('.')) {
 }
 assert.match(whitepaper, /After the migration window ends, each undercollateralized child pool may run its own <a href="\.\/truth-auction\.html#lifecycle">truth auction<\/a>[\s\S]{0,160}as much repair ETH as demand supports/)
 assert.doesNotMatch(whitepaper, /class="subtitle"[\s\S]{0,180}\bcensorship-resistant\b/)
+assert.match(whitepaper, /Each deposit adds to that outcome's cumulative balance[\s\S]{0,200}does not[\s\S]{0,80}outbid/)
+assert.match(whitepaper, /median outcome balance determines the scheduled end[\s\S]{0,140}strict balance leader resolves the question/)
+assert.match(whitepaper, /two\s+outcomes[\s\S]{0,80}reach the non-decision threshold[\s\S]{0,120}local non-decision/)
+assert.doesNotMatch(whitepaper, /newest valid claim becomes the tentative winner|response timer becomes longer/)
 assert.match(zoltarWhitepaper, /anyone able to commit the required REP threshold[\s\S]{0,120}an eligible ended global question/)
 assert.match(zoltarWhitepaper, /applications may choose to continue/)
 assert.match(zoltarWhitepaper, /data-rounding="integer-flooring"/)

@@ -323,51 +323,6 @@ body.doc-openoracle .invariant-metadata {
 	margin: 0.85rem 0 0;
 }
 
-body.doc-openoracle .invariant-explorer {
-	position: sticky;
-	z-index: 5;
-	top: 0.5rem;
-	box-shadow: 0 0.8rem 2rem rgba(15, 23, 31, 0.1);
-}
-
-body.doc-openoracle .invariant-explorer-controls {
-	display: grid;
-	grid-template-columns: minmax(13rem, 1.5fr) repeat(3, minmax(10rem, 1fr));
-	gap: 0.65rem;
-}
-
-body.doc-openoracle .invariant-explorer-controls label {
-	display: grid;
-	gap: 0.25rem;
-	color: var(--muted);
-	font-size: 0.75rem;
-	font-weight: 800;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-}
-
-body.doc-openoracle .invariant-explorer-controls input,
-body.doc-openoracle .invariant-explorer-controls select {
-	width: 100%;
-	min-height: 2.6rem;
-	padding: 0.5rem 0.6rem;
-	border: 1px solid var(--line);
-	border-radius: 0.4rem;
-	background: var(--paper);
-	color: var(--ink);
-	font: inherit;
-	font-size: 0.85rem;
-	letter-spacing: 0;
-	text-transform: none;
-}
-
-body.doc-openoracle .invariant-explorer-controls input:focus-visible,
-body.doc-openoracle .invariant-explorer-controls select:focus-visible {
-	outline: 2px solid var(--blue);
-	outline-offset: 2px;
-}
-
-body.doc-openoracle .invariant-explorer-actions,
 body.doc-openoracle .invariant-entry-actions {
 	display: flex;
 	flex-wrap: wrap;
@@ -375,11 +330,6 @@ body.doc-openoracle .invariant-entry-actions {
 	align-items: center;
 }
 
-body.doc-openoracle .invariant-explorer-actions {
-	margin-top: 0.75rem;
-}
-
-body.doc-openoracle .invariant-explorer-actions button,
 body.doc-openoracle .invariant-entry-actions button,
 body.doc-openoracle .invariant-entry-actions a {
 	min-height: 2.2rem;
@@ -396,23 +346,10 @@ body.doc-openoracle .invariant-entry-actions a {
 	cursor: pointer;
 }
 
-body.doc-openoracle .invariant-explorer-actions button:hover,
 body.doc-openoracle .invariant-entry-actions button:hover,
 body.doc-openoracle .invariant-entry-actions a:hover {
 	border-color: var(--blue);
 	background: var(--blue-soft);
-}
-
-body.doc-openoracle .invariant-result-count {
-	margin: 0.7rem 0 0;
-	color: var(--blue);
-	font-size: 0.85rem;
-	font-weight: 800;
-}
-
-body.doc-openoracle .invariant-no-results {
-	margin: 0.55rem 0 0;
-	color: var(--red);
 }
 
 body.doc-openoracle .invariant-entry-actions {
@@ -1004,12 +941,6 @@ body.doc-openoracle td math {
 		padding: 0.8rem;
 	}
 	body.doc-openoracle .invariant-metadata {
-		grid-template-columns: 1fr;
-	}
-	body.doc-openoracle .invariant-explorer {
-		position: static;
-	}
-	body.doc-openoracle .invariant-explorer-controls {
 		grid-template-columns: 1fr;
 	}
 	body.security-model .assumption-nav {

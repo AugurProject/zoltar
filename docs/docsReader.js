@@ -197,6 +197,12 @@ function createNavigation() {
 			title.textContent = documentEntry.title
 			link.append(title)
 			documentSummary.append(documentToggle, link)
+			documentSummary.addEventListener('click', event => {
+				if (event.target instanceof Element && event.target.closest('a') !== null) return
+				if (activePath === documentEntry.path) return
+				event.preventDefault()
+				void navigateToDocument(documentEntry.path, '')
+			})
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'

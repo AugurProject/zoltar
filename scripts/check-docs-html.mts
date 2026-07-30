@@ -424,10 +424,14 @@ function validateTables(parsedDocument: ParsedHtmlDocument, failures: Validation
 
 async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, failures: ValidationFailure[]): Promise<void> {
 	for (const link of Array.from(parsedDocument.document.querySelectorAll('a[href]'))) {
-		const href = link.getAttribute('href')?.trim()
+		const rawHref = link.getAttribute('href')
+		const href = rawHref?.trim()
 		if (href === undefined || href.length === 0) {
 			addFailure(parsedDocument, `${describeElement(link)} has an empty href`, failures)
 			continue
+		}
+		if (rawHref !== href) {
+			addFailure(parsedDocument, `${describeElement(link)} href has leading or trailing whitespace`, failures)
 		}
 		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, markdownAnchorsByPath, parsedDocument.relativePath, failures)
 	}
