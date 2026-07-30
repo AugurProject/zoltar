@@ -7,26 +7,7 @@
 		<link rel="stylesheet" href="./shared-docs.css">
 	</head>
 	<body class="paper-page paper-zoltar">
-		<a class="skip-link" href="#main-content">Skip to document</a>
 		<div class="site-shell">
-			<aside class="sidebar" aria-label="Document navigation">
-				<div class="sidebar-header">
-					<span class="sidebar-series">Augur / Zoltar</span>
-				</div>
-					<nav aria-label="Document sections">
-						<a href="#abstract" aria-current="location">Abstract</a>
-						<a href="#timeline">Lifecycle Timeline</a>
-						<a href="#overview">System Overview</a>
-					<a href="#universe-model">Universe Model</a>
-					<a href="#economics">Fork Economics</a>
-					<a href="#splitting">REP Splitting</a>
-					<a href="#security">Security Model</a>
-					<a href="#questions">Question Encoding</a>
-					<a href="#question-types">Question Types</a>
-					<a href="#invalid">Invalid vs Malformed</a>
-					<a href="#thesis">Design Thesis</a>
-				</nav>
-			</aside>
 
 			<main id="main-content">
 				<header class="hero">
@@ -38,14 +19,11 @@
 				</header>
 
 				<section class="paper-section" id="abstract">
-					<div class="section-heading">
-						<h2>Abstract</h2>
-						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
-					</div>
-					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and universe forks. A higher-level application may use a paid fork after local non-decision, but Zoltar itself permits any address able to commit the threshold REP to fork an unforked universe using any eligible ended global question. The fork changes the universe used by applications that choose to continue from that forked universe. </p>
-					<p> Once a fork is initiated, Zoltar creates child branches for the question's valid answers rather than forcing a single onchain answer. The protocol does not decide which branch is economically dominant or truthful; applications and their users make that coordination choice. </p>
+					<p> Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders may migrate or split their claims across one or more selected branches. </p>
 
-					<p> Zoltar supports binary, categorical and scalar questions. </p>
+					<p> The design closely follows the <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a> model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value. </p>
+
+					<p> Zoltar is not itself a prediction market or an outcome-reporting oracle. Instead, it provides the shared infrastructure for questions, REP tokens, and universe forks. Any application can build on top of it and define its own local dispute process. If disagreement cannot be resolved locally, anyone able to commit the required REP threshold may fork an unforked universe using an eligible ended global question. The resulting child universes become the new foundations from which applications may choose to continue. </p>
 				</section>
 
 					<section class="paper-section" id="timeline">
@@ -686,23 +664,6 @@
 					</p>
 				</section>
 
-
-				<section class="paper-section" id="thesis">
-					<div class="section-heading">
-						<h2>9. Design Thesis</h2>
-						<a class="anchor-link" href="#thesis" aria-label="Link to Design Thesis">#</a>
-					</div>
-					<p class="lede">
-						Zoltar provides a generalized branching oracle layer for categorical and scalar
-						questions. Rather than forcing a single answer when disagreement persists, it
-						turns unresolved decisions into explicit child universes and lets REP holders
-						split post-fork claims across one or more selected branches.
-					</p>
-					<p>
-						In that sense it closely follows the Colored Coins model: the protocol branches
-						state first, and later coordination determines which branch carries durable value.
-					</p>
-				</section>
 			</main>
 		</div>
 
