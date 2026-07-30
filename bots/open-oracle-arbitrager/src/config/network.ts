@@ -55,7 +55,7 @@ export function networkConfiguration(
 ): NetworkConfiguration {
 	const defaults = NETWORK_DEFAULTS[name]
 	const rep = overrides.rep ?? defaults.rep
-	if (rep === undefined) throw new Error('Sepolia requires --rep-address=0x... (or REP_ADDRESS)')
+	if (rep === undefined) throw new Error('Sepolia requires deployment.rep in the operator configuration')
 	const chain = defineChain({
 		id: defaults.chainId,
 		name: defaults.chainName,

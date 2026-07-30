@@ -144,6 +144,13 @@ fieldset {
 	border: 0;
 }
 
+.configuration-json.mono {
+	min-height: 32rem;
+	overflow: auto;
+	resize: vertical;
+	white-space: pre;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

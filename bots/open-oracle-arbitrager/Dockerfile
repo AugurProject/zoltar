@@ -29,8 +29,7 @@ COPY bots/open-oracle-arbitrager/config/ ./bots/open-oracle-arbitrager/config/
 COPY bots/open-oracle-arbitrager/docs/ ./bots/open-oracle-arbitrager/docs/
 COPY bots/open-oracle-arbitrager/scripts/check-market-fixture.mts ./bots/open-oracle-arbitrager/scripts/check-market-fixture.mts
 COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/
-RUN mkdir -p bots/open-oracle-arbitrager/.state \
-	&& chown -R bun:bun bots/open-oracle-arbitrager/.state
+RUN install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state
 
 USER bun
 WORKDIR /app/bots/open-oracle-arbitrager
@@ -38,5 +37,4 @@ WORKDIR /app/bots/open-oracle-arbitrager
 EXPOSE 4173
 VOLUME ["/app/bots/open-oracle-arbitrager/.state"]
 
-ENTRYPOINT ["bun", "run", "run", "--"]
-CMD ["--help"]
+ENTRYPOINT ["bun", "run", "run"]

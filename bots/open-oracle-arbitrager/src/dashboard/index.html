@@ -299,7 +299,30 @@
 					<div class="metric"><span>Per-position limit</span><strong id="risk-position-limit">—</strong></div>
 					<div class="metric"><span>Lifecycle reserve floor</span><strong id="risk-lifecycle-reserve">—</strong></div>
 				</div>
-				<p class="section-note">Risk limits are intentionally command-line controls. Restart with the documented <span class="mono">--max-*-weth</span> flags to change them.</p>
+				<p class="section-note">Risk limits are stored in the complete configuration below and apply after restart.</p>
+			</section>
+
+			<section id="complete-configuration" class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Single source of truth</p>
+						<h2>Complete bot configuration</h2>
+					</div>
+					<button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button>
+				</div>
+				<form id="configuration-form">
+					<fieldset id="configuration-fieldset" disabled>
+						<label>
+							<span>Operator configuration JSON</span>
+							<textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" required></textarea>
+						</label>
+						<p class="section-note">Every bot setting is represented here. A saved private key is shown as a preserve marker and is never sent to the browser. Replace the marker with a new key only when intentionally rotating it.</p>
+						<div class="form-actions">
+							<span id="configuration-status" class="muted" aria-live="polite">Changes are schema-validated before the owner-only configuration file is replaced.</span>
+							<button class="button" type="submit">Validate &amp; save</button>
+						</div>
+					</fieldset>
+				</form>
 			</section>
 
 			<section id="markets" class="panel">

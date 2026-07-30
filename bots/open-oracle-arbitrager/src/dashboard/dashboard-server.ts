@@ -3,12 +3,15 @@ import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
+import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
 
 type DashboardController = {
+	getConfiguration?: () => unknown | Promise<unknown>
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	hostname?: '0.0.0.0' | '127.0.0.1'
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
+	updateConfiguration?: (value: unknown) => unknown | Promise<unknown>
 	updateDeployment?: (value: unknown) => DeploymentSettings | Promise<DeploymentSettings>
 	deployExecutor?: (value: unknown) => { address: string; alreadyDeployed: boolean; transactionHash: string | undefined } | Promise<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>
 	predictExecutor?: (value: unknown) => { address: string; salt: string } | Promise<{ address: string; salt: string }>
@@ -159,6 +162,23 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.getSnapshot())
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 503)
+				}
+			}
+			if (request.method === 'GET' && url.pathname === '/api/configuration') {
+				try {
+					if (controller.getConfiguration === undefined) throw new Error('Complete configuration is unavailable')
+					return json(await controller.getConfiguration())
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 503)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/configuration') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.updateConfiguration === undefined) throw new Error('Complete configuration is unavailable')
+					return json(await controller.updateConfiguration(await requireJson(request)))
+				} catch (error) {
+					return json({ error: errorMessage(error) }, error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT ? 409 : 400)
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {

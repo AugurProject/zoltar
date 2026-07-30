@@ -1,0 +1,54 @@
+{
+	"connectivity": {
+		"publicRpcUrls": ["https://ethereum-rpc.publicnode.com"],
+		"readRpcUrl": "https://ethereum-rpc.publicnode.com"
+	},
+	"deployment": {
+		"coordinatorAddresses": [],
+		"openOracle": "0x0000000000000000000000000000000000000000",
+		"quorumRpcUrls": [],
+		"rep": "0x221657776846890989a759BA2973e427DfF5C9bB",
+		"uniswapFactory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+		"uniswapQuoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+		"uniswapRouter": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+		"uniswapV2Router": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+		"weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+	},
+	"network": "mainnet",
+	"paused": true,
+	"runtime": {
+		"execute": false,
+		"historyFile": ".state/history-mainnet.jsonl",
+		"lookbackBlocks": "50000",
+		"maxHedgeSlippageBps": "50",
+		"once": false,
+		"positionFile": ".state/positions-mainnet.json",
+		"priceHistoryFile": ".state/prices-mainnet.jsonl",
+		"riskLimits": {
+			"lifecycleGasReserveWeth": "0.01",
+			"maxConcurrentPositions": 1,
+			"maxDailyGasSpendWeth": "0.05",
+			"maxPositionNotionalWeth": "5",
+			"maxTotalLockedWeth": "10"
+		},
+		"ui": true,
+		"uiHost": "127.0.0.1",
+		"uiPort": 4173
+	},
+	"strategy": {
+		"maxSpotTwapTicks": "100",
+		"minimumProfitBps": "100",
+		"minimumProfitWeth": "0.01",
+		"minimumRemainingBlocks": "3",
+		"minimumRemainingSeconds": "36",
+		"pollMilliseconds": 1000,
+		"twapSeconds": 1800
+	},
+	"submission": {
+		"minimumRelaySuccesses": 1,
+		"mode": "private",
+		"relayUrls": ["https://relay.flashbots.net"]
+	},
+	"tokenAddresses": [],
+	"version": 4
+}

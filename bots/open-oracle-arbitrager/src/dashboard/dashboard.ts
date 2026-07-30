@@ -28,6 +28,10 @@ let submissionLoaded = false
 let connectivityLoaded = false
 let deploymentLoaded = false
 let tokensLoaded = false
+let configurationLoaded = false
+let configurationLoading = false
+let configurationAttempted = false
+let configurationRevision: string | undefined
 let initialFragmentApplied = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
@@ -41,6 +45,12 @@ function element<T extends HTMLElement>(id: string) {
 
 function setText(id: string, value: string) {
 	element(id).textContent = value
+}
+
+function prettyJson(value: unknown) {
+	const serialized = JSON.stringify(value, undefined, 2)
+	if (serialized === undefined) throw new Error('Configuration cannot be represented as JSON')
+	return serialized
 }
 
 function setControlsEnabled(enabled: boolean) {
@@ -57,6 +67,14 @@ function setControlsEnabled(enabled: boolean) {
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		fieldset.disabled = !enabled
 	}
+	updateConfigurationControls()
+}
+
+function updateConfigurationControls() {
+	const fieldset = element('configuration-fieldset')
+	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
+	fieldset.disabled = !connected || !configurationLoaded || configurationLoading
+	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || configurationLoading
 }
 
 function shorten(value: string, leading = 8, trailing = 6) {
@@ -100,6 +118,33 @@ function amount(value: string | undefined, symbol: string) {
 
 function isSnapshot(value: unknown): value is OperatorSnapshot {
 	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'positions' in value && 'transactionActivity' in value
+}
+
+function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
+	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string'
+}
+
+async function loadCompleteConfiguration() {
+	if (configurationLoading) return
+	configurationAttempted = true
+	configurationLoading = true
+	updateConfigurationControls()
+	setText('configuration-status', 'Loading complete configuration…')
+	try {
+		const envelope = await api<unknown>('/api/configuration')
+		if (!isConfigurationEnvelope(envelope)) throw new Error('Bot returned an invalid configuration document')
+		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(envelope.configuration)
+		configurationRevision = envelope.revision
+		configurationLoaded = true
+		setText('configuration-status', 'Changes are schema-validated before the owner-only configuration file is replaced.')
+	} catch (error) {
+		configurationLoaded = false
+		configurationRevision = undefined
+		setText('configuration-status', `${error instanceof Error ? error.message : String(error)} Use Reload configuration to retry.`)
+	} finally {
+		configurationLoading = false
+		updateConfigurationControls()
+	}
 }
 
 async function api<T>(path: string, init?: RequestInit) {
@@ -670,6 +715,7 @@ function render(snapshot: OperatorSnapshot) {
 		element<HTMLTextAreaElement>('token-addresses').value = snapshot.tokenAddresses.join('\n')
 		tokensLoaded = true
 	}
+	if (!configurationAttempted) void loadCompleteConfiguration()
 	const modeBadge = element('mode-badge')
 	const statusLabels = botStatusLabels(snapshot)
 	modeBadge.dataset['mode'] = snapshot.mode
@@ -708,7 +754,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 	const notice = element('notice')
 	let noticeTitle = 'Dry-run mode'
-	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Restart with --execute to change modes.'
+	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration and restart to change modes.'
 	let noticeTone = 'info'
 	if (snapshot.execute) {
 		noticeTitle = 'Execution mode is locally armed'
@@ -769,6 +815,31 @@ async function refresh() {
 }
 
 element('refresh-button').addEventListener('click', () => void refresh())
+element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
+element<HTMLFormElement>('configuration-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const button = element<HTMLFormElement>('configuration-form').querySelector('button[type="submit"]')
+	if (!(button instanceof HTMLButtonElement)) return
+	button.disabled = true
+	setText('configuration-status', 'Validating complete configuration…')
+	try {
+		const value: unknown = JSON.parse(element<HTMLTextAreaElement>('configuration-json').value)
+		if (configurationRevision === undefined) throw new Error('Reload the configuration before saving')
+		const response = await api<unknown>('/api/configuration', {
+			body: prettyJson({ configuration: value, revision: configurationRevision }),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		if (!isConfigurationEnvelope(response)) throw new Error('Bot returned an invalid configuration document')
+		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(response.configuration)
+		configurationRevision = response.revision
+		setText('configuration-status', 'Complete configuration saved. Restart the bot to apply every field.')
+	} catch (error) {
+		setText('configuration-status', error instanceof Error ? error.message : String(error))
+	} finally {
+		button.disabled = !connected
+	}
+})
 element<HTMLSelectElement>('price-token').addEventListener('change', () => {
 	if (latestSnapshot !== undefined) renderMarketPriceChart(latestSnapshot)
 })

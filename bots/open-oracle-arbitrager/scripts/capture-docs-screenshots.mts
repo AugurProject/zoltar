@@ -77,8 +77,14 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						['deployment-create2.png', 'create2-form'],
 					] as const)
 				: []),
+			...(process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION'] === '1'
+				? ([
+						['configuration-desktop.png', 'complete-configuration'],
+						['configuration-mobile.png', 'complete-configuration'],
+					] as const)
+				: []),
 		] as const) {
-			const mobile = name === 'deployment-mobile.png'
+			const mobile = name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
@@ -439,9 +445,14 @@ if (
 }
 
 const server = startDashboardServer(0, {
+	getConfiguration: async () => ({
+		configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
+		revision: 'fixture-revision',
+	}),
 	getSnapshot: () => snapshot,
 	setPaused: () => undefined,
 	updateConnectivity: () => snapshot.connectivity,
+	updateConfiguration: value => value,
 	updateSigner: () => ({ wallet }),
 	updateStrategy: () => snapshot.settings,
 	updateSubmission: () => snapshot.submission,

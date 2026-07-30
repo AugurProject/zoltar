@@ -39,7 +39,7 @@ import {
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from '#monitoring/connectivity'
-import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from '#config/configuration'
+import { applyStrategy, loadConfiguration, mutableStrategy, type Configuration } from '#config/configuration'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
 import { prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
@@ -106,7 +106,7 @@ import { quorumValue } from '#monitoring/read-quorum'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from '#monitoring/resilience'
 import { adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
-import { saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import {
 	calculateFee,
@@ -2118,8 +2118,8 @@ type ExecutionLockManager = {
 async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined) {
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
-	if (config.ui && config.once) throw new Error('--ui cannot be combined with --once')
-	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('--execute requires PRIVATE_KEY unless --ui is used to unlock the signer')
+	if (config.ui && config.once) throw new Error('runtime.ui cannot be combined with runtime.once')
+	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
 	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
 	let positions = await loadPositionJournal(config.positionFile)
@@ -2229,16 +2229,14 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	let signerUpdatePending = false
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
-	const currentPersistedSettings = (): PersistedOperatorSettings => ({
-		connectivity: pendingConnectivity ?? config.connectivity,
-		deployment: pendingDeployment ?? fixedState.deployment,
-		paused: state.paused,
-		privateKey: config.persistedPrivateKey,
-		strategy: pendingStrategy ?? config,
-		submission: pendingSubmission ?? config.submission,
-		tokenAddresses: restartTokenAddresses ?? pendingTokenAddresses ?? config.tokenAddresses,
-	})
-	const persistSettings = (settings: PersistedOperatorSettings) => saveOperatorSettings(config.settingsFile, config.network.name, settings)
+	const persistSettings = (settings: PersistedOperatorSettings, expectedRevision?: string) => saveOperatorSettings(config.settingsFile, settings, undefined, expectedRevision)
+	const persistFocusedSettings = async (update: (settings: PersistedOperatorSettings) => PersistedOperatorSettings) => {
+		const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+		if (latest === undefined) throw configurationRevisionConflict()
+		const next = update(latest.settings)
+		await persistSettings(next, latest.revision)
+		return next
+	}
 	let settingsUpdateQueue = Promise.resolve()
 	const queueSettingsUpdate = <T>(update: () => Promise<T>) => {
 		const result = settingsUpdateQueue.then(update)
@@ -2261,11 +2259,50 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	}
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
+				getConfiguration: async () => {
+					const loaded = await loadOperatorSettingsWithRevision(config.settingsFile)
+					if (loaded === undefined) throw new Error('Operator configuration file is missing')
+					return {
+						configuration: serializeOperatorSettings(loaded.settings, true),
+						revision: loaded.revision,
+					}
+				},
 				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState, config.riskLimits),
 				hostname: config.uiHost,
+				updateConfiguration: value =>
+					queueSettingsUpdate(async () => {
+						if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') {
+							throw new Error('Complete configuration updates require configuration and revision')
+						}
+						const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+						if (latest === undefined) throw configurationRevisionConflict()
+						if (latest.revision !== value.revision) throw configurationRevisionConflict()
+						const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
+						const savedRevision = await persistSettings(next, value.revision)
+						pendingConnectivity = undefined
+						pendingDeployment = undefined
+						pendingStrategy = undefined
+						pendingSubmission = undefined
+						pendingTokenAddresses = undefined
+						restartTokenAddresses = undefined
+						config.persistedPrivateKey = next.privateKey
+						fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
+						recordOperation(state, {
+							category: 'configuration',
+							details: config.settingsFile,
+							level: 'info',
+							message: 'Complete operator configuration saved',
+							reason: 'All fields apply after restart',
+							reportId: undefined,
+						})
+						return {
+							configuration: serializeOperatorSettings(next, true),
+							revision: savedRevision,
+						}
+					}),
 				setPaused: paused =>
 					queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), paused })
+						await persistFocusedSettings(settings => ({ ...settings, paused }))
 						state.paused = paused
 						state.status = operatorStatusAfterPause(paused, cursor?.initial === false, state.lastError !== undefined)
 						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
@@ -2274,7 +2311,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					const next = validateConnectivitySettings(value)
 					await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
 					return queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), connectivity: next })
+						await persistFocusedSettings(settings => ({ ...settings, connectivity: next }))
 						pendingConnectivity = next
 						recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
 						return next
@@ -2285,7 +2322,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					return queueSettingsUpdate(async () => {
 						const previous = pendingDeployment ?? fixedState.deployment
 						const tokens = prepareDeploymentTokenTransition(pendingTokenAddresses ?? config.tokenAddresses, restartTokenAddresses, previous.rep, next.rep)
-						await persistSettings({ ...currentPersistedSettings(), deployment: next, tokenAddresses: tokens.restart })
+						await persistFocusedSettings(settings => ({ ...settings, deployment: next, tokenAddresses: tokens.restart }))
 						pendingDeployment = next
 						pendingTokenAddresses = tokens.active
 						restartTokenAddresses = tokens.restart
@@ -2329,7 +2366,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					}
 					const next = { ...(pendingDeployment ?? fixedState.deployment), deploymentManifest: undefined, executor: deployed.address }
 					await queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), deployment: next })
+						await persistFocusedSettings(settings => ({ ...settings, deployment: next }))
 						pendingDeployment = next
 						fixedState.deployment = next
 						recordOperation(state, {
@@ -2347,7 +2384,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					const signerRecord = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 					if (signerRecord !== undefined && Object.keys(signerRecord).length === 1 && signerRecord['forgetSavedSigner'] === true) {
 						return queueSettingsUpdate(async () => {
-							await persistSettings({ ...currentPersistedSettings(), privateKey: undefined })
+							await persistFocusedSettings(settings => ({ ...settings, privateKey: undefined }))
 							config.persistedPrivateKey = undefined
 							fixedState.savedWallet = undefined
 							recordOperation(state, {
@@ -2378,7 +2415,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						if (candidate.privateKey === undefined) persistedPrivateKey = undefined
 						else if (rememberSigner) persistedPrivateKey = candidate.privateKey
 						try {
-							await persistSettings({ ...currentPersistedSettings(), privateKey: persistedPrivateKey })
+							await persistFocusedSettings(settings => ({ ...settings, privateKey: persistedPrivateKey }))
 						} catch (error) {
 							if (acquiredSignerLock !== undefined && lockManager !== undefined) await lockManager.release(acquiredSignerLock)
 							throw error
@@ -2409,7 +2446,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					const next = validateSubmissionSettings(value)
 					await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
 					return queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), submission: next })
+						await persistFocusedSettings(settings => ({ ...settings, submission: next }))
 						pendingSubmission = next
 						recordOperation(state, { category: 'configuration', details: next.relayUrls.map(endpointLabel).join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
 						return pendingSubmission
@@ -2427,7 +2464,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					const next = [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 					return queueSettingsUpdate(async () => {
 						const restartTokens = pendingDeployment === undefined ? next : replacePrimaryRepToken(next, config.network.rep, pendingDeployment.rep)
-						await persistSettings({ ...currentPersistedSettings(), tokenAddresses: restartTokens })
+						await persistFocusedSettings(settings => ({ ...settings, tokenAddresses: restartTokens }))
 						pendingTokenAddresses = next
 						restartTokenAddresses = restartTokens
 						recordOperation(state, {
@@ -2445,7 +2482,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					const next = mutableStrategy(pendingStrategy ?? config)
 					updateStrategyFromRequest(next, value)
 					return queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), strategy: next })
+						await persistFocusedSettings(settings => ({ ...settings, strategy: next }))
 						pendingStrategy = next
 						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Strategy update saved and queued', reason: 'Applied at the next scan boundary', reportId: undefined })
 						return strategySettings(next)
@@ -2778,10 +2815,6 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 }
 
 async function main() {
-	if (process.argv.includes('--help') || process.argv.includes('-h')) {
-		printHelp()
-		return
-	}
 	const config = await loadConfiguration()
 	if (!config.execute) {
 		await runOperator(config, undefined, undefined)

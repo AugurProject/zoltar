@@ -14,7 +14,7 @@
 					This operator guide explains how the bot discovers OpenOracle games,
 					compares their exchange rate with onchain liquidity, submits an atomic
 					hedge and dispute, and accounts for the final withdrawal. It covers the
-					command line, local dashboard, strategy math, supported exchanges, durable
+					operator configuration, local dashboard, strategy math, supported exchanges, durable
 					recovery, and the balances an execution wallet needs.
 				</p>
 				<div class="callout">
@@ -101,25 +101,21 @@
 			</section>
 
 			<section id="quick-start">
-				<h2>Command-line quick start</h2>
+				<h2>Configuration-file quick start</h2>
 				<p>
-					Run commands from the arbitrager project root. The default is monitoring-only:
-					without <code>--execute</code>, no transaction can be signed or sent.
-					Use <code>bun run run -- --help</code> for every option.
+					The bot accepts no command-line arguments. Copy the complete versioned
+					configuration, edit every deployment and endpoint for the selected chain,
+					then run the zero-argument command.
 				</p>
-				<p><strong>One mainnet dry-run scan</strong></p>
-				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
-bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xReviewedCoordinator \
-  --lookback-blocks=50000 \
-  --once</code></pre>
-				<p><strong>Continuous monitoring with the local UI</strong></p>
-				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
-bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xReviewedCoordinator \
-  --ui</code></pre>
+				<pre><code>install -d -m 700 .state
+install -m 600 config/operator.example.json .state/operator.json
+# Edit .state/operator.json
+bun run run</code></pre>
+				<p>
+					Direct file editing is an offline workflow: stop the bot, edit the
+					configuration, and restart it. While the bot is running, use the
+					dashboard only; do not edit the file concurrently with a dashboard save.
+				</p>
 				<p>
 					Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is
 					<strong>Syncing</strong>; after the bounded historical scan reaches the
@@ -127,22 +123,12 @@ bun run run -- \
 					every newly observed block and evaluates opportunities at the newest
 					canonical head.
 				</p>
-				<p><strong>Sepolia rehearsal with execution armed</strong></p>
-				<pre><code>PRIVATE_KEY=0xDedicatedTestKey \
-bun run run -- \
-  --network=sepolia \
-  --execute \
-  --ui \
-  --rpc-url=https://your-sepolia-read-rpc.example \
-  --quorum-rpc-url=https://independent-sepolia-rpc.example \
-  --public-rpc-url=https://your-sepolia-submit-rpc.example \
-  --submission-mode=public \
-  --open-oracle=0xReviewedSepoliaOpenOracle \
-  --coordinator-address=0xReviewedSepoliaCoordinator \
-  --executor-address=0xVerifiedSepoliaExecutor \
-  --deployment-manifest=/secure/sepolia-execution-manifest.json \
-  --rep-address=0xSepoliaReportToken \
-  --uniswap-router=0xSepoliaSwapRouter</code></pre>
+				<p>
+					For Sepolia, set <code>network</code> to <code>sepolia</code>, replace
+					the deployment addresses and RPC URLs, keep <code>runtime.execute</code>
+					off for the first rehearsal, and save the complete JSON in the UI when
+					you need to change a startup-only field.
+				</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
 					Execution also requires an authenticated manifest, at least two
@@ -151,7 +137,7 @@ bun run run -- \
 					and WETH, and all entry and lifecycle allowances before an opportunity is
 					selected.
 				</div>
-				<div class="table-scroll" tabindex="0" aria-label="Important command-line controls">
+				<div class="table-scroll" tabindex="0" aria-label="Important configuration groups">
 					<table>
 						<thead>
 							<tr>
@@ -162,37 +148,37 @@ bun run run -- \
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>--network</code></td>
+								<td><code>network</code></td>
 								<td>Selects <code>mainnet</code> or <code>sepolia</code>.</td>
 								<td>Fixes the expected chain ID and network defaults.</td>
 							</tr>
 							<tr>
-								<td><code>--rpc-url</code> and <code>--quorum-rpc-url</code></td>
+								<td><code>connectivity</code> and <code>deployment.quorumRpcUrls</code></td>
 								<td>Primary and independent execution-state reads.</td>
 								<td>Live execution requires exact quorum agreement.</td>
 							</tr>
 							<tr>
-								<td><code>--submission-mode</code></td>
+								<td><code>submission</code></td>
 								<td>Chooses private relay or public mempool delivery.</td>
 								<td>Both modes send one atomic parent-bound call.</td>
 							</tr>
 							<tr>
-								<td><code>--relay-url</code></td>
+								<td><code>submission.relayUrls</code></td>
 								<td>Adds a Flashbots-compatible private bundle relay.</td>
 								<td>Repeat for up to eight; capability and chain checks run first.</td>
 							</tr>
 							<tr>
-								<td><code>--public-rpc-url</code></td>
+								<td><code>connectivity.publicRpcUrls</code></td>
 								<td>Adds a direct raw-transaction destination.</td>
 								<td>Every configured endpoint receives the identical signed payload.</td>
 							</tr>
 							<tr>
-								<td><code>--token-address</code></td>
+								<td><code>tokenAddresses</code></td>
 								<td>Adds an explicitly reviewed executable token.</td>
 								<td>Observed but unapproved game tokens remain monitoring-only.</td>
 							</tr>
 							<tr>
-								<td><code>--once</code></td>
+								<td><code>runtime.once</code></td>
 								<td>Runs one bounded scan and exits.</td>
 								<td>Useful for monitoring and scheduled diagnostics; incompatible with the UI.</td>
 							</tr>
@@ -246,7 +232,7 @@ bun run run -- \
 			<section id="dashboard">
 				<h2>Using the dashboard</h2>
 				<p>
-					Start with <code>--ui</code>. The header shows whether execution is armed
+					Set <code>runtime.ui</code> to <code>true</code> in the operator configuration and start the bot. The header shows whether execution is armed
 					and whether the scanner is syncing, running, paused, stopped, or in
 					error. Pausing prevents new entries but deliberately continues recovery,
 					settlement, and withdrawal for capital already at risk.
@@ -284,7 +270,7 @@ bun run run -- \
 							<tr>
 								<td>Strategy</td>
 								<td>Profit floors, TWAP distance/window, timing buffers, and polling interval.</td>
-								<td>Save changes for the next scan and future restarts. Risk-limit flags remain restart-time controls.</td>
+								<td>Save changes for the next scan and future restarts. Risk limits are editable in the complete configuration and apply after restart.</td>
 							</tr>
 							<tr>
 								<td>RPC and delivery</td>
@@ -506,7 +492,7 @@ bun run run -- \
 								<td>Uniswap V2</td>
 								<td>Mainnet</td>
 								<td>Yes</td>
-								<td>Optional, through an authenticated Router02 when <code>--uniswap-v2-router</code> is configured</td>
+								<td>Optional, through an authenticated Router02 when <code>deployment.uniswapV2Router</code> is configured</td>
 								<td>Spot WETH/token comes from normalized reserves; both reserves are shown. Execution uses the exact direct-pair 0.30% constant-product quote at the quorum block.</td>
 							</tr>
 							<tr>
@@ -519,7 +505,7 @@ bun run run -- \
 							<tr>
 								<td>Uniswap V4</td>
 								<td>Mainnet and Sepolia</td>
-								<td>Exact size-aware quotes when both V4 flags are configured</td>
+								<td>Exact size-aware quotes when <code>deployment.uniswapV4PoolManager</code> and <code>deployment.uniswapV4Quoter</code> are configured</td>
 								<td>Optional, through an authenticated PoolManager and Quoter for direct hookless native-ETH/token pools</td>
 								<td>Execution uses exact-input or exact-output V4 Quoter evidence at the quorum block, validates signed PoolManager deltas, and converts native ETH and WETH atomically. Hooked pools are excluded. See <a href="/documentation/reference#uniswap-venue-execution">V4 pool eligibility in the operator README</a> for the exact pool keys, signs, and amount bound.</td>
 							</tr>
@@ -614,23 +600,23 @@ bun run run -- \
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>settings-NETWORK.json</code></td>
-								<td>Deployment identities, quorum RPCs, manifest, strategy, endpoints, submission mode, pause state, token list, and optional saved signer. <a href="/documentation/reference#persistent-operator-settings">Precedence and deployment procedure</a>.</td>
+								<td><code>.state/operator.json</code></td>
+								<td>Complete versioned bot configuration, including deployment identities, quorum RPCs, strategy, runtime, risk, endpoints, submission, pause, tokens, and an optional saved signer. <a href="/documentation/reference#persistent-operator-settings">Configuration and deployment procedure</a>.</td>
 								<td>Owner-only; protect integrity as execution policy, and treat as a wallet secret when signer persistence is enabled.</td>
 							</tr>
 							<tr>
-								<td><code>positions-NETWORK.json</code></td>
-								<td>Crash-critical hashes, intents, accounting, finality evidence, and manual reconciliation.</td>
+								<td><code>runtime.positionFile</code></td>
+								<td>Crash-critical hashes, intents, accounting, finality evidence, and manual reconciliation. The example value is <code>.state/positions-mainnet.json</code>.</td>
 								<td>Owner-only, synchronized atomic replacement, single-process lock.</td>
 							</tr>
 							<tr>
-								<td><code>history-NETWORK.jsonl</code></td>
-								<td>Confirmed entry history and quote-time tracking.</td>
+								<td><code>runtime.historyFile</code></td>
+								<td>Confirmed entry history and quote-time tracking. The example value is <code>.state/history-mainnet.jsonl</code>.</td>
 								<td>Owner-only append with file and directory synchronization.</td>
 							</tr>
 							<tr>
-								<td><code>prices-NETWORK.jsonl</code></td>
-								<td>Per-block, per-pool spot history shown by the chart.</td>
+								<td><code>runtime.priceHistoryFile</code></td>
+								<td>Per-block, per-pool spot history shown by the chart. The example value is <code>.state/prices-mainnet.jsonl</code>.</td>
 								<td>Keep network-specific; malformed records are skipped with diagnostics.</td>
 							</tr>
 						</tbody>

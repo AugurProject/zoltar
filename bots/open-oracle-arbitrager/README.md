@@ -6,14 +6,14 @@ modeled hedge remains profitable after OpenOracle fees and gas. It includes a lo
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
 
-The rendered [operator guide](./docs/operator-guide.html) explains the UI and CLI,
+The rendered [operator guide](./docs/operator-guide.html) explains the UI and configuration,
 execution math, exchange support, recovery states, and includes populated dashboard
 screenshots. When the dashboard is running, select **Operator guide** or open
 `http://127.0.0.1:4173/documentation` (using the configured UI port).
 
-Dry-run is the default. The bot cannot submit a transaction unless it is explicitly
-started with `--execute` and has a signer supplied through `PRIVATE_KEY`, saved
-restart settings, or the local dashboard when `--ui` is enabled.
+Dry-run is the example default. The bot cannot submit a transaction unless
+`runtime.execute` is enabled in its configuration and a signer is saved in that
+configuration or supplied through the local dashboard.
 
 > **Live execution is experimental.** Mainnet commands below are operator
 > references, not production approval. Rehearse on Sepolia with a dedicated
@@ -79,7 +79,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 
 - Bun and this project's frozen dependencies.
 - An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
-  `--lookback-blocks` reaches beyond the provider's retained log history.
+  `runtime.lookbackBlocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
   coordinator whose games this wallet may dispute.
@@ -87,11 +87,11 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
   then authenticate that address in the execution manifest.
 - The exact Uniswap V3 SwapRouter address.
-- Optionally, the exact Uniswap V2 Router02 supplied with
-  `--uniswap-v2-router`. When configured and authenticated, mainnet execution
+- Optionally, the exact Uniswap V2 Router02 in
+  `deployment.uniswapV2Router`. When configured and authenticated, mainnet execution
   adds direct WETH/token V2 hedges to the configured venue comparison.
-- Optionally, an exact Uniswap V4 PoolManager and V4 Quoter supplied together with
-  `--uniswap-v4-pool-manager` and `--uniswap-v4-quoter`. V4 execution is limited to
+- Optionally, an exact Uniswap V4 PoolManager and V4 Quoter supplied together in
+  `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter`. V4 execution is limited to
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
@@ -102,9 +102,9 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   quote-block agreement on OpenOracle state, pool state, quotes, confirmed nonce,
   and balances, plus exact agreement on the pending nonce actually signed. A
   legitimate pending transaction visible to only one provider blocks signing until
-  the providers converge or the operator resolves it. A flag, environment variable, or the
-  [persistent operator settings](#persistent-operator-settings) can supply
-  restart-time deployment values.
+  the providers converge or the operator resolves it. The
+  [operator configuration](#persistent-operator-settings) supplies every
+  restart-time value.
 - For execution, a dedicated key on the selected network with:
   - ETH for the atomic dispute transaction.
   - WETH for the total executor funding shown in the dashboard.
@@ -174,17 +174,20 @@ cd bots/open-oracle-arbitrager
 bun install --frozen-lockfile
 ```
 
-Run the executable from the arbitrager project:
+Create the single operator configuration, edit its deployment and endpoint values,
+then run the executable with no arguments:
 
 ```bash
-bun run run -- --help
+install -d -m 700 .state
+install -m 600 config/operator.example.json .state/operator.json
+bun run run
 ```
 
 The package scripts call the TypeScript entrypoints directly through Bun. No Bash
 wrapper scripts are required:
 
 ```bash
-bun run run -- [operator options]
+bun run run
 bun run deploy-executor -- [deployment options]
 bun run manifest -- generate [manifest options]
 bun run reconcile -- [reconciliation options]
@@ -201,36 +204,35 @@ docker build \
   .
 ```
 
-Run one dry scan and persist operator state in a named volume:
+From the monorepo root, create the mounted state directory and configuration:
 
 ```bash
-docker run --rm \
-  --env ETH_RPC_URL=https://your-mainnet-rpc.example \
-  --mount type=volume,source=zoltar-arbitrager-state,target=/app/bots/open-oracle-arbitrager/.state \
-  zoltar-open-oracle-arbitrager \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --lookback-blocks=50000 \
-  --once
+install -d -m 700 bots/open-oracle-arbitrager/.state
+install -m 600 bots/open-oracle-arbitrager/config/operator.example.json \
+  bots/open-oracle-arbitrager/.state/operator.json
 ```
 
-For the dashboard, bind the published host port to loopback and let the process
-listen on the container interface:
+For a one-shot scan, edit the file so `runtime.once` is `true` and `runtime.ui`
+is `false`, then run:
 
 ```bash
 docker run --rm \
-  --env ETH_RPC_URL=https://your-mainnet-rpc.example \
-  --mount type=volume,source=zoltar-arbitrager-state,target=/app/bots/open-oracle-arbitrager/.state \
+  --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state \
+  zoltar-open-oracle-arbitrager
+```
+
+For the dashboard, set `runtime.once` to `false`, `runtime.ui` to `true`, and
+`runtime.uiHost` to `0.0.0.0`. Bind the published host port to loopback:
+
+```bash
+docker run --rm \
+  --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state \
   --publish 127.0.0.1:4173:4173 \
-  zoltar-open-oracle-arbitrager \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --ui \
-  --ui-host=0.0.0.0
+  zoltar-open-oracle-arbitrager
 ```
 
 Open `http://127.0.0.1:4173`. Do not publish the dashboard on a public interface:
-it controls signer and execution settings. Do not bake `PRIVATE_KEY`, RPC
+it controls signer and execution settings. Do not bake private keys, RPC
 credentials, or manifests containing private infrastructure into the image.
 Do not attach the bot to a Docker network shared with untrusted containers. Loopback
 RPC URLs refer to the container itself, so use a container-reachable RPC address
@@ -238,25 +240,11 @@ when the node runs elsewhere.
 
 ## Monitor without trading
 
-Run one scan:
+Set `runtime.execute` to `false`. Set `runtime.once` to `true` for one scan, or
+set `runtime.ui` to `true` for continuous monitoring with the local dashboard:
 
 ```bash
-ETH_RPC_URL=https://your-mainnet-rpc.example \
-  bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --lookback-blocks=50000 \
-  --once
-```
-
-Run continuously with the local dashboard:
-
-```bash
-ETH_RPC_URL=https://your-mainnet-rpc.example \
-  bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --ui
+bun run run
 ```
 
 Then open `http://127.0.0.1:4173`. Dry-run opportunities are evaluated exactly like
@@ -295,32 +283,21 @@ reorg window and are then removed from the live scanner; confirmed transaction
 history remains in the execution history file. Unapproved reports are not retained
 in the execution cache. In diagnostic mode without configured coordinators, at most
 256 reports and 64 permissionlessly observed tokens are retained so event spam
-cannot create ever-growing per-block work. Increase `--lookback-blocks` when
+cannot create ever-growing per-block work. Increase `runtime.lookbackBlocks` when
 complete active-game context is operationally important.
 
 ## Run on Sepolia
 
-Sepolia uses the canonical Sepolia WETH9, Uniswap V3 factory, and QuoterV2 defaults.
-There is no canonical REP deployment, so the REP and OpenOracle addresses must be
-supplied explicitly:
+For Sepolia, set `network` to `sepolia` and replace every deployment address and
+RPC URL with values from the same reviewed test environment:
 
 ```bash
-bun run run -- \
-  --network=sepolia \
-  --rpc-url=https://your-sepolia-rpc.example \
-  --public-rpc-url=https://your-sepolia-rpc.example \
-  --rep-address=0xYourSepoliaRep \
-  --open-oracle=0xYourSepoliaOpenOracle \
-  --coordinator-address=0xYourSepoliaPriceCoordinator \
-  --ui
+bun run run
 ```
 
-Only use addresses deployed for the same Sepolia test environment. Override
-`--weth-address`, `--uniswap-factory`, or `--uniswap-quoter` when the test deployment
-uses noncanonical contracts. The selected network cannot be changed in the
-dashboard; restart with a different `--network` so cached reports, transaction
-and contract identities cannot cross networks. The network-specific default history
-paths also isolate records; when overriding `--history-file`, use a different file
+The selected network and every address can be changed in the complete JSON editor,
+but they apply only after restart so cached reports, transaction and contract
+identities cannot cross networks. Use different history, price, and position paths
 for every network because records do not contain a chain ID and a shared file would
 combine rows and profit totals.
 
@@ -371,22 +348,11 @@ event alone is not self-authenticating position-attribution evidence.
 | `unlockCallback` | Authenticated V4 PoolManager only, during an active `hedgeAndDispute` call. | Rejects every other caller or payload; settles one exact hookless pool swap. |
 | `receive` | Internal WETH/V4 conversion only while execution is active. | Rejects unsolicited ETH. |
 
-Verify the deployment address independently, then start an inventory-funded
-execution process:
+Verify the deployment address independently, set `runtime.execute` to `true`, save
+the signer through the local dashboard (or the owner-only JSON file), and start:
 
 ```bash
-PRIVATE_KEY=0xYourDedicatedPrivateKey \
-ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --executor-address=0xYourExecutor \
-  --uniswap-router=0xYourUniswapV3SwapRouter \
-  --deployment-manifest=/secure/operator/mainnet-deployments.json \
-  --quorum-rpc-url=https://your-independent-mainnet-rpc.example \
-  --relay-url=https://relay.flashbots.net \
-  --execute \
-  --ui
+bun run run
 ```
 
 The manifest is JSON with this shape. Replace every placeholder with reviewed
@@ -439,33 +405,17 @@ bun run manifest -- verify \
 `config/execution-manifest.example.json` is deliberately placeholder-only and must never
 be used as an execution trust root.
 
-Execution remains fixed for the lifetime of the process. It cannot be enabled from
-the dashboard. When `--execute --ui` starts without `PRIVATE_KEY` or a remembered
-signer, it remains locked until a key is set in the local dashboard. Signer set/clear
+Execution remains fixed for the lifetime of the process. It can be configured in
+the complete JSON editor but requires a restart. When execution starts without a
+remembered signer, it remains locked until a key is set in the local dashboard. Signer set/clear
 changes apply at the next unpaused scan boundary; they do not interrupt the current
 scan or confirmation wait, and clearing a signer cannot cancel a transaction already
 broadcast. Restarting the command is required to change between dry-run and
 execution.
 
-Private bundle delivery is the default. To simulate and send the single guarded
-dispute transaction to multiple bundle relays:
-
-```bash
-PRIVATE_KEY=0xYourDedicatedPrivateKey \
-ETH_RPC_URL=https://your-mainnet-rpc.example \
-  bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --coordinator-address=0xYourPriceCoordinator \
-  --executor-address=0xYourExecutor \
-  --uniswap-router=0xYourUniswapV3SwapRouter \
-  --deployment-manifest=/secure/operator/mainnet-deployments.json \
-  --quorum-rpc-url=https://your-independent-mainnet-rpc.example \
-  --execute \
-  --submission-mode=private \
-  --relay-url=https://relay.flashbots.net \
-  --relay-url=https://your-second-relay.example \
-  --ui
-```
+Private bundle delivery is the example default. Configure relay URLs and the
+successful simulation threshold under `submission`, either in the focused dashboard
+form or the complete JSON editor.
 
 Execution supports **Private relays** and **Public mempool** delivery. Private mode
 requires at least one relay and supports up to eight. The configurable successful
@@ -480,9 +430,8 @@ as a failed relay. Ambiguous, successful, or malformed probe responses are rejec
 too. Non-successful HTTP responses are rejected regardless of their body.
 No transaction is signed or submitted by this capability check. The configuration
 is also rejected when a relay is unreachable or reports the wrong selected network.
-Relay URLs changed in the dashboard are saved in the network-specific operator
-settings file. Startup `--relay-url` values remain process overrides until a
-dashboard save. Relay URLs are never written to the transaction-history file. URLs
+Relay URLs changed in the dashboard are saved in `submission.relayUrls` in the
+operator configuration. Relay URLs are never written to the transaction-history file. URLs
 may use HTTPS, or loopback HTTP for a locally operated relay; embedded URL
 credentials, query parameters, fragments, and redirects are rejected.
 
@@ -627,8 +576,8 @@ locked through later dispute rounds.
   largest gas usage returned by the successful relay simulations at the same gas
   price.
 - The full adverse movement permitted by the signed hedge limit
-  (`--max-hedge-slippage-bps`).
-- The larger of `--lifecycle-gas-reserve-weth` and
+  (`runtime.maxHedgeSlippageBps`).
+- The larger of `runtime.riskLimits.lifecycleGasReserveWeth` and
   `(callbackGasLimit + 900,000) × gas price`. Public and private delivery use the
   same single atomic lifecycle call.
 
@@ -652,13 +601,10 @@ can move sharply when REP/WETH liquidity is shallow.
 
 ## Dashboard
 
-Start with `--ui` and optionally choose another local port:
+Set `runtime.ui` to `true`, choose `runtime.uiPort`, and run:
 
 ```bash
-bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --ui \
-  --ui-port=4180
+bun run run
 ```
 
 The dashboard shows:
@@ -725,49 +671,36 @@ security.
 
 ## Persistent operator settings
 
-Dashboard changes to deployment identities, independent quorum RPCs, strategy, read/public RPCs, delivery mode, relay URLs and
-relay-success threshold, the
-token list, and the pause state are atomically saved after validation and restored on restart. Mainnet
-and Sepolia use separate files by default:
+`.state/operator.json` is the only source of bot settings. The bot accepts no
+command-line arguments and does not read operational settings from environment
+variables. Copy the example before first startup:
 
-```text
-.state/settings-mainnet.json
-.state/settings-sepolia.json
+```bash
+install -d -m 700 .state
+install -m 600 config/operator.example.json .state/operator.json
 ```
 
-Override the destination with `--settings-file=/secure/operator/settings.json`.
+`OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
+any value inside the document. This locator is useful for service managers and
+tests.
+
+Direct file editing is an offline workflow: stop the bot, edit the configuration,
+and restart it. While the bot is running, use the dashboard only; do not edit the
+file concurrently with a dashboard save.
+
+The dashboard's focused forms and **Complete bot configuration** JSON editor write
+the same versioned file. The complete editor exposes network, runtime, paths, risk,
+strategy, connectivity, submission, tokens, and deployment fields. A saved private
+key is returned as `__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material; leaving
+that marker unchanged preserves the credential.
+
 The containing directory is created with owner-only permissions when possible, and
-every replacement settings file is mode `0600`. File contents and the containing
+every replacement configuration file is mode `0600`. File contents and the containing
 directory are synced before a successful save is reported. The default directory is ignored by
-Git. A malformed, unsupported, or wrong-network file stops startup instead of
-silently reverting to defaults. A runtime write failure rejects the dashboard
+Git. A malformed or unsupported file stops startup instead of silently reverting
+to defaults. A runtime write failure rejects the dashboard
 mutation and keeps the prior runtime settings active; fix the settings path or
 permissions and retry.
-
-Startup resolves values in this order:
-
-| Field | Highest-to-lowest precedence |
-| --- | --- |
-| Strategy value | Its explicit strategy flag; saved value; built-in default |
-| Read RPC | `--rpc-url`; `ETH_RPC_URL`; saved read RPC; network default |
-| Public submission RPCs | Repeated `--public-rpc-url`; saved list; selected read RPC |
-| Deployment identities and quorum RPCs | Explicit flags or environment values; saved deployment configuration; network defaults where available |
-| Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
-| Submission mode | `--submission-mode`; saved mode; `private` |
-| Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
-| Relay simulation threshold | `--minimum-relay-successes`; saved dashboard value; `1` |
-| Token list | Repeated `--token-address`; saved list; canonical network REP |
-| Pause state | Saved value; `false` |
-
-An environment `PRIVATE_KEY` is never automatically remembered and does not replace
-an existing saved restart signer. The dashboard shows active, queued, and restart
-addresses independently, and **Forget saved key** removes the disk credential
-without changing the environment-backed in-memory signer. Every successful
-dashboard mutation writes one complete snapshot of the effective deployment,
-strategy, connectivity, submission, pause, and persisted-signer settings. This means a CLI or
-environment override for a non-secret setting becomes the saved restart value after
-any dashboard save. `PRIVATE_KEY` is the exception: it is saved only through the
-explicit plaintext opt-in.
 
 Deployment identities remain restart-time trust roots, but the dashboard can validate
 the syntax and shape of REP, WETH, OpenOracle, coordinator, executor, manifest,
@@ -794,16 +727,8 @@ bundle or transaction.
 
 ## Profit and history semantics
 
-Successful dispute submissions are appended to
-`.state/history-mainnet.jsonl` or
-`.state/history-sepolia.jsonl` by default. Override the location with:
-
-```bash
-bun run run -- \
-  --open-oracle=0xYourOpenOracle \
-  --ui \
-  --history-file=/secure/operator/open-oracle-history.jsonl
-```
+Successful dispute submissions are appended to `runtime.historyFile`. The example
+uses `.state/history-mainnet.jsonl`; use separate paths for each network.
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
@@ -878,10 +803,10 @@ list. Tokens present only in retained approved-coordinator games are monitored a
 shown with their pools, but cannot trigger execution. A coordinator-free diagnostic
 run additionally samples at most 64 permissionlessly observed tokens.
 Augur-discovered REP tokens and addresses explicitly entered in the dashboard or
-repeated with `--token-address=0x...` form the execution allowlist. Explicitly adding
+listed in `tokenAddresses` form the execution allowlist. Explicitly adding
 a token is a security decision: the atomic executor still enforces exact transfers,
 but it cannot establish the token's issuer, economic value, or pool legitimacy. The
-primary `--rep-address` remains the token used in the top-level REP portfolio
+primary `deployment.rep` remains the token used in the top-level REP portfolio
 summary.
 
 ### Uniswap venue execution
@@ -893,7 +818,7 @@ shows both token reserves. Neither is a token-denominated TVL or a promise that 
 full game size can execute without price impact. “Price” is the decimal-normalized
 WETH-per-token spot price derived from V3 `sqrtPriceX96` or V2 reserves; it is not
 an executable size-aware quote. V3 execution uses QuoterV2 and the configured
-spot/TWAP guard. When `--uniswap-v2-router` is supplied, mainnet execution also
+spot/TWAP guard. When `deployment.uniswapV2Router` is configured, mainnet execution also
 reads the canonical Uniswap V2 pair reserves at the exact quorum quote block and
 evaluates the direct WETH/token route with the standard 0.30% fee:
 
@@ -905,7 +830,8 @@ amount in  = floor(reserve in × amount out × 1000
              ÷ ((reserve out − amount out) × 997)) + 1
 ```
 
-When both V4 flags are supplied, the bot also asks the authenticated V4 Quoter for
+When `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter` are both
+configured, the bot also asks the authenticated V4 Quoter for
 exact-input and exact-output quotes against these exact pool keys:
 
 | Fee units | Tick spacing |
@@ -938,11 +864,8 @@ maximum input. SushiSwap V2 remains monitoring-only because it has no authentica
 execution router in this release. The bot will not silently fall back to an
 unsupported venue.
 
-Price samples are stored in
-`.state/prices-mainnet.jsonl` or
-`.state/prices-sepolia.jsonl`. Use
-`--price-history-file=/secure/operator/open-oracle-prices.jsonl` to override the
-path. Keep files network-specific.
+Price samples are stored at `runtime.priceHistoryFile`. The example uses
+`.state/prices-mainnet.jsonl`; keep files network-specific.
 
 ## Transaction delivery and tracking
 
@@ -1007,18 +930,17 @@ ETH profit totals are persisted in the configured history file.
 ## Adjust the strategy
 
 Every setting below can be changed in the dashboard and takes effect on the next
-scan. The equivalent startup flags are shown below. Defaults apply when neither a
-saved value nor a higher-precedence override exists:
+scan. The same values live under `strategy` in the complete configuration:
 
-| Setting | Default | Flag | Effect |
+| Setting | Example | JSON field | Effect |
 | --- | ---: | --- | --- |
-| Minimum profit | `0.01 WETH` | `--minimum-profit-weth` | Rejects opportunities below an absolute modeled net profit. |
-| Minimum return | `100 bps` | `--minimum-profit-bps` | Requires modeled net profit relative to the direction-specific return basis: report WETH plus fees when selling token 2, or exact-output quoted WETH input when buying token 2. |
-| Spot/TWAP distance | `100 ticks` | `--max-spot-twap-ticks` | Rejects pools whose current tick is too far from the TWAP. |
-| TWAP window | `1800 seconds` | `--twap-seconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
-| Remaining time | `36 seconds` | `--minimum-remaining-seconds` | Inclusion buffer for timestamp-based games. |
-| Remaining blocks | `3 blocks` | `--minimum-remaining-blocks` | Inclusion buffer for block-based games. |
-| Head poll interval | `1000 ms` | `--poll-ms` | Delay between latest-head checks. Every unseen event-log height is queried; evaluation and pool sampling run once at the newest head. Minimum: 1000 ms. |
+| Minimum profit | `0.01 WETH` | `minimumProfitWeth` | Rejects opportunities below an absolute modeled net profit. |
+| Minimum return | `100 bps` | `minimumProfitBps` | Requires modeled net profit relative to the direction-specific return basis. |
+| Spot/TWAP distance | `100 ticks` | `maxSpotTwapTicks` | Rejects pools whose current tick is too far from the TWAP. |
+| TWAP window | `1800 seconds` | `twapSeconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
+| Remaining time | `36 seconds` | `minimumRemainingSeconds` | Inclusion buffer for timestamp-based games. |
+| Remaining blocks | `3 blocks` | `minimumRemainingBlocks` | Inclusion buffer for block-based games. |
+| Head poll interval | `1000 ms` | `pollMilliseconds` | Delay between latest-head checks. Every unseen event-log height is queried. |
 
 Increasing profit thresholds reduces execution frequency. Increasing the TWAP
 window or remaining-time buffers is generally more conservative, while decreasing
@@ -1027,42 +949,10 @@ conservative. Increasing that maximum permits larger Spot/TWAP deviations.
 Parameter changes do not disable contract-side deadline, ratio, state-hash,
 quote-refresh, simulation, or inventory guards.
 
-Other startup-only options:
-
-| Flag | Default | Purpose |
-| --- | ---: | --- |
-| `--network` | `mainnet` | Select `mainnet` or `sepolia`; fixes the expected chain ID and address defaults. |
-| `--rpc-url` | Network public endpoint | Read RPC. Adjustable in the dashboard only after its chain check passes. |
-| `--public-rpc-url` | Read RPC | Public transaction endpoint. Repeat for up to eight; all receive the identical payload. |
-| `--open-oracle` | required | OpenOracle trust root; the flag overrides `OPEN_ORACLE_ADDRESS`, which overrides the saved value. Manifest-authenticated in execution mode. |
-| `--rep-address` | Mainnet REP / required on Sepolia | Primary REP token for the portfolio summary and default monitored-token catalog; explicit flag/environment values override the saved dashboard deployment value. |
-| `--weth-address` | Network WETH | Override WETH for a custom test deployment; explicit flag/environment values override the saved value. |
-| `--uniswap-factory` | Network Uniswap V3 factory | Override the factory; explicit flag/environment values override the saved value. |
-| `--uniswap-quoter` | Network QuoterV2 | Override the quoter; explicit flag/environment values override the saved value. |
-| `--executor-address` | none | Deployed atomic executor; explicit flag/environment values override the saved value. Required and manifest-authenticated in execution mode. |
-| `--uniswap-router` | none | V3 SwapRouter; explicit flag/environment values override the saved value. Required and manifest-authenticated in execution mode. |
-| `--uniswap-v2-router` | none | Optional V2 Router02; explicit flag/environment values override the saved value. When set, it is manifest-authenticated and joins best-route selection. |
-| `--uniswap-v4-pool-manager` | none | Optional V4 PoolManager; explicit flag/environment values override the saved value. Requires the V4 Quoter and matching manifest role. |
-| `--uniswap-v4-quoter` | none | Optional V4 Quoter; explicit flag/environment values override the saved value. Requires the V4 PoolManager and matching manifest role. |
-| `--deployment-manifest` | none | Reviewed trust root; an explicit path/environment value overrides the saved manifest. Required in execution mode. |
-| `--quorum-rpc-url` | none | Independent read RPC; explicit flag/environment lists override the saved list. At least one secondary is required in execution mode. |
-| `--coordinator-address` | none | Approved coordinator; explicit flag/environment lists override the saved list. Execution requires one and verifies its immutable template. |
-| `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
-| `--ui-host` | `127.0.0.1` | Dashboard bind address. `0.0.0.0` is allowed only for a protected container published exclusively on host loopback as documented under [Docker](#docker). |
-| `--ui-port` | `4173` | Local dashboard port. |
-| `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
-| `--position-file` | Network-specific JSON | Recovery-critical durable positions, entry/lifecycle transaction hashes, and lifecycle intent. Keep overrides separate by chain and signer. |
-| `--settings-file` | Network-specific JSON | Persistent deployment identities, quorum RPCs, manifest, strategy, endpoint, delivery, pause, and opt-in signer settings. Protect its integrity even without a saved signer. |
-| `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
-| `--execute` | off | Enable guarded bundle/executor submission. Requires an executor address, at least one approved coordinator, and `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
-| `--submission-mode` | `private` | `private` simulates/fans out atomic bundles; `public` submits one atomic entry transaction and requires pre-existing allowances. |
-| `--relay-url` | `https://relay.flashbots.net` | Flashbots-compatible bundle relay. Repeat the flag for up to eight relays; adjustable in the dashboard. |
-| `--minimum-relay-successes` | `1` | Number of configured private relays that must successfully simulate the exact bundle before submission; adjustable in the dashboard. |
-| `--max-hedge-slippage-bps` | `50` | Maximum atomic Uniswap hedge slippage, capped at 1,000 bps. |
-| `--lifecycle-gas-reserve-weth` | `0.01` | Minimum modeled reserve for settlement and withdrawal gas. |
-| `--max-daily-gas-weth` | `0.05` | Maximum UTC-day recorded gas plus the candidate's mode-specific entry reserve and lifecycle reserve. |
-| `--max-position-weth` | `5` | Maximum conservative WETH-equivalent funded notional for one position. |
-| `--max-total-locked-weth` | `10` | Maximum stored funded notional across non-closed positions plus the candidate. |
+All other startup values are in `network`, `connectivity`, `deployment`,
+`submission`, `tokenAddresses`, and `runtime`. The example file documents their
+shape. The UI's complete JSON editor can change every field; network, deployment,
+path, execution-mode, UI-bind, and risk changes take effect after restart.
 
 The position notional uses the refreshed required WETH plus required token funding
 valued at the higher of the executable hedge quote and signed hedge limit.
@@ -1079,12 +969,12 @@ receipt, and both the execution limit and dashboard use that same ledger.
 
 ### Durable position journal
 
-The default journal is `.state/positions-mainnet.json` or
-`.state/positions-sepolia.json`. Before relay delivery, writes use
+The configured `runtime.positionFile` is the durable journal; the example uses
+`.state/positions-mainnet.json`. Before relay delivery, writes use
 an owner-only temporary file, sync its complete contents, atomically rename it, and
 sync the parent directory. A malformed journal stops startup rather than discarding
-recovery state. Back it up with the settings and history files, never share one
-override across networks or execution signers, and preserve it until every position
+recovery state. Back it up with the configuration and history files, never share one
+path across networks or execution signers, and preserve it until every position
 is closed and reconciled.
 
 Execute mode holds `<position-file>.lock` for the process lifetime to prevent
@@ -1239,9 +1129,10 @@ entry from depending on wallet inventory already committed to recovery.
 
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
   and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
-  authenticated Uniswap V2 Router02 when `--uniswap-v2-router` is configured.
-  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
-  contracts when both V4 flags are configured, but only against standard-fee,
+	  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Router` is configured.
+	  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
+	  contracts when `deployment.uniswapV4PoolManager` and
+	  `deployment.uniswapV4Quoter` are configured, but only against standard-fee,
   hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
   Identities remain operator-supplied, but
   live mode authenticates every address and runtime bytecode hash against the

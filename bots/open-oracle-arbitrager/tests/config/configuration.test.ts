@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { privateKeyToAccount, type Hex } from '#ethereum'
-import { loadOperatorSettings, saveOperatorSettings } from '#config/settings-store'
+import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
-const oracle = '--open-oracle=0x0000000000000000000000000000000000000000'
 const temporaryDirectories: string[] = []
 const children: Bun.Subprocess[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -27,12 +26,64 @@ async function temporaryDirectory() {
 	return directory
 }
 
-async function invalidStartup(argument: string | readonly string[]) {
-	const directory = await temporaryDirectory()
-	const environment = { ...process.env }
-	delete environment['PRIVATE_KEY']
-	const child = Bun.spawn([executable, runSource, oracle, '--once', `--settings-file=${join(directory, 'settings.json')}`, ...(typeof argument === 'string' ? [argument] : argument)], {
-		env: environment,
+function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOperatorSettings {
+	const address = '0x0000000000000000000000000000000000000001'
+	return {
+		connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl },
+		deployment: {
+			coordinatorAddresses: [],
+			deploymentManifest: undefined,
+			executor: undefined,
+			openOracle: '0x0000000000000000000000000000000000000000',
+			quorumRpcUrls: [],
+			rep: address,
+			uniswapFactory: address,
+			uniswapQuoter: address,
+			uniswapRouter: undefined,
+			uniswapV2Router: undefined,
+			uniswapV4PoolManager: undefined,
+			uniswapV4Quoter: undefined,
+			weth: address,
+		},
+		network: 'mainnet',
+		paused: false,
+		privateKey,
+		runtime: {
+			execute: false,
+			historyFile: '.state/history.jsonl',
+			lookbackBlocks: 0n,
+			maxHedgeSlippageBps: 50n,
+			once: false,
+			positionFile: '.state/positions.json',
+			priceHistoryFile: '.state/prices.jsonl',
+			riskLimits: {
+				lifecycleGasReserveWeth: 10n ** 16n,
+				maxConcurrentPositions: 1,
+				maxDailyGasSpendWeth: 5n * 10n ** 16n,
+				maxPositionNotionalWeth: 5n * 10n ** 18n,
+				maxTotalLockedWeth: 10n * 10n ** 18n,
+			},
+			ui: true,
+			uiHost: '127.0.0.1',
+			uiPort,
+		},
+		strategy: {
+			maxSpotTwapTicks: 100n,
+			minimumProfitBps: 100n,
+			minimumProfitWeth: 10n ** 16n,
+			minimumRemainingBlocks: 3n,
+			minimumRemainingSeconds: 36n,
+			pollMilliseconds: 1_000,
+			twapSeconds: 1_800,
+		},
+		submission: { minimumRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
+		tokenAddresses: [],
+	}
+}
+
+async function runToExit(configurationPath: string, arguments_: readonly string[] = [], extraEnvironment: Record<string, string> = {}) {
+	const child = Bun.spawn([executable, runSource, ...arguments_], {
+		env: { ...process.env, ...extraEnvironment, OPEN_ORACLE_ARBITRAGER_CONFIG: configurationPath },
 		stderr: 'pipe',
 		stdout: 'pipe',
 	})
@@ -48,12 +99,13 @@ function unusedPort() {
 	return port
 }
 
-async function waitForSnapshot(origin: string) {
+async function waitForJson(origin: string, path: string) {
 	for (let attempt = 0; attempt < 100; attempt++) {
 		try {
-			const response = await fetch(`${origin}/api/state`)
+			const response = await fetch(`${origin}${path}`)
 			if (response.ok) return (await response.json()) as Record<string, unknown>
 		} catch (error) {
+			// The server may still be starting.
 			void error
 		}
 		await Bun.sleep(20)
@@ -61,259 +113,140 @@ async function waitForSnapshot(origin: string) {
 	throw new Error('Dashboard did not become ready')
 }
 
-function dashboardPut(origin: string, path: string, value: unknown) {
-	const body = JSON.stringify(value)
-	if (body === undefined) throw new Error('Dashboard test request must be JSON serializable')
-	return fetch(`${origin}${path}`, {
-		body,
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
-}
-
-describe('startup configuration', () => {
-	test('describes the UTC-day gas cap without claiming projected reserves are losses', async () => {
-		const child = Bun.spawn([executable, runSource, '--help'], { stderr: 'pipe', stdout: 'pipe' })
-		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
-		expect(exitCode).toBe(0)
-		expect(`${stdout}${stderr}`).toContain('UTC-day recorded gas + projected entry/lifecycle reserve cap')
-	})
-
-	test.each([
-		['--minimum-remaining-blocks=0', 'Minimum remaining blocks must be from 1 to 1000'],
-		['--minimum-remaining-seconds=86401', 'Minimum remaining seconds must be from 1 to 86400'],
-		['--minimum-profit-bps=100001', 'Minimum return must be from 0 to 100000'],
-		['--max-spot-twap-ticks=-1', 'Maximum spot/TWAP ticks must be a non-negative integer'],
-		['--poll-ms=999', 'Poll interval must be an integer from 1000 to 3600000'],
-		['--lookback-blocks=-1', 'lookback-blocks must be a non-negative integer'],
-		['--submission-mode=unknown', 'Submission mode must be public or private'],
-		['--minimum-relay-successes=2', 'Minimum successful relays'],
-		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
-		['--ui-host=localhost', 'ui-host must be 127.0.0.1 or 0.0.0.0'],
-		['--uniswap-v4-pool-manager=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
-		['--uniswap-v4-quoter=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
-		['--execute', '--execute requires --executor-address'],
-	])('rejects %s before starting RPC activity', async (argument, message) => {
-		const result = await invalidStartup(argument)
-		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain(message)
-		expect(result.output).not.toContain('mode=')
-	})
-
-	test('requires an approved coordinator before execution can start', async () => {
-		const result = await invalidStartup(['--execute', '--executor-address=0x0000000000000000000000000000000000000001', '--uniswap-router=0x0000000000000000000000000000000000000002', '--quorum-rpc-url=https://quorum.example'])
-		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain('--execute requires at least one --coordinator-address')
-		expect(result.output).not.toContain('mode=')
-	})
-
-	test('allows public mempool execution to proceed to deployment and RPC checks', async () => {
+describe('file-only startup configuration', () => {
+	test('rejects every command-line argument', async () => {
 		const directory = await temporaryDirectory()
-		const manifestPath = join(directory, 'manifest.json')
-		await writeFile(
-			manifestPath,
-			JSON.stringify({
-				chainId: 1,
-				contracts: [{ address: '0x0000000000000000000000000000000000000001', role: 'executor', runtimeCodeHash: `0x${'11'.repeat(32)}` }],
-				network: 'mainnet',
-				version: 1,
-			}),
-		)
-		const result = await invalidStartup([
-			'--execute',
-			'--executor-address=0x0000000000000000000000000000000000000001',
-			'--uniswap-router=0x0000000000000000000000000000000000000002',
-			'--rpc-url=http://127.0.0.1:1',
-			'--quorum-rpc-url=http://127.0.0.1:2',
-			'--coordinator-address=0x0000000000000000000000000000000000000003',
-			`--deployment-manifest=${manifestPath}`,
-			'--submission-mode=public',
-		])
+		const result = await runToExit(join(directory, 'missing.json'), ['--help'])
 		expect(result.exitCode).toBe(1)
-		expect(result.output).not.toContain('public mempool execution is disabled')
-		expect(result.output).not.toContain('--execute requires private bundle submission')
+		expect(result.output).toContain('accepts no command-line arguments')
 	})
 
-	test('loads an authenticated execution manifest from dashboard settings without requiring a manifest path', async () => {
+	test('explains how to create the required configuration file', async () => {
 		const directory = await temporaryDirectory()
-		const settingsPath = join(directory, 'settings.json')
-		const address = '0x0000000000000000000000000000000000000001' as const
-		await saveOperatorSettings(settingsPath, 'mainnet', {
-			connectivity: { publicRpcUrls: ['http://127.0.0.1:1/'], readRpcUrl: 'http://127.0.0.1:1/' },
-			deployment: {
-				coordinatorAddresses: [address],
-				deploymentManifest: { chainId: 1, contracts: [{ address, role: 'executor', runtimeCodeHash: `0x${'11'.repeat(32)}` }], network: 'mainnet', version: 1 },
-				executor: address,
-				openOracle: oracle.slice('--open-oracle='.length) as `0x${string}`,
-				quorumRpcUrls: ['http://127.0.0.1:2/'],
-				rep: address,
-				uniswapFactory: address,
-				uniswapQuoter: address,
-				uniswapRouter: address,
-				uniswapV2Router: undefined,
-				uniswapV4PoolManager: undefined,
-				uniswapV4Quoter: undefined,
-				weth: address,
-			},
-			paused: true,
-			privateKey: undefined,
-			strategy: { maxSpotTwapTicks: 100n, minimumProfitBps: 100n, minimumProfitWeth: 10n ** 16n, minimumRemainingBlocks: 3n, minimumRemainingSeconds: 36n, pollMilliseconds: 1_000, twapSeconds: 1_800 },
-			submission: { minimumRelaySuccesses: 1, mode: 'public', relayUrls: [] },
-		})
-		const environment = { ...process.env }
-		delete environment['PRIVATE_KEY']
-		const child = Bun.spawn([executable, runSource, '--execute', '--once', '--submission-mode=public', `--settings-file=${settingsPath}`], { env: environment, stderr: 'pipe', stdout: 'pipe' })
-		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
-		expect(exitCode).toBe(1)
-		expect(`${stdout}${stderr}`).not.toContain('requires an authenticated deployment manifest')
-		expect(`${stdout}${stderr}`).toContain('--execute requires PRIVATE_KEY')
-	})
-
-	test('rejects a per-position limit larger than the total lock limit', async () => {
-		const result = await invalidStartup(['--max-position-weth=2', '--max-total-locked-weth=1'])
+		const result = await runToExit(join(directory, 'missing.json'))
 		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain('max-position-weth cannot exceed max-total-locked-weth')
+		expect(result.output).toContain('Missing operator configuration')
+		expect(result.output).toContain('config/operator.example.json')
 	})
 
-	test('defaults to private bundle submission', async () => {
+	test('rejects invalid file settings before RPC activity', async () => {
+		const directory = await temporaryDirectory()
+		const path = join(directory, 'operator.json')
+		const value = settings('http://127.0.0.1:1/', 4173)
+		await saveOperatorSettings(path, value)
+		const document = JSON.parse(await Bun.file(path).text()) as { runtime: { maxHedgeSlippageBps: string } }
+		document.runtime.maxHedgeSlippageBps = '1001'
+		await writeFile(path, JSON.stringify(document), 'utf8')
+		const result = await runToExit(path)
+		expect(result.exitCode).toBe(1)
+		expect(result.output).toContain('maxHedgeSlippageBps must be from 0 to 1000')
+	})
+
+	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {
 		const directory = await temporaryDirectory()
 		const dashboardPort = unusedPort()
 		const rpc = Bun.serve({
 			hostname: '127.0.0.1',
 			port: 0,
 			async fetch(request) {
-				const value = (await request.json()) as { id: unknown; method: string }
-				const result = value.method === 'eth_chainId' || value.method === 'eth_blockNumber' ? '0x1' : '0x'
-				return Response.json({ id: value.id, jsonrpc: '2.0', result })
+				const requestValue = (await request.json()) as { id: unknown; method: string }
+				const result = requestValue.method === 'eth_chainId' || requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
 			},
 		})
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
-		const environment = { ...process.env }
-		delete environment['PRIVATE_KEY']
-		const child = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', `--rpc-url=http://127.0.0.1:${rpc.port.toString()}`, `--settings-file=${join(directory, 'settings.json')}`], {
-			env: environment,
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		children.push(child)
-		const snapshot = await waitForSnapshot(`http://127.0.0.1:${dashboardPort.toString()}`)
-		expect(snapshot).toMatchObject({ submission: { mode: 'private', relayUrls: ['https://relay.flashbots.net/'] } })
-	})
-
-	test('restores saved settings, preserves an overridden restart key, serializes mutations, and rejects failed writes', async () => {
-		const directory = await temporaryDirectory()
-		const settingsPath = join(directory, 'settings.json')
 		const savedPrivateKey = `0x${'11'.repeat(32)}` as Hex
-		const environmentPrivateKey = `0x${'22'.repeat(32)}` as Hex
-		const rpc = Bun.serve({
-			hostname: '127.0.0.1',
-			port: 0,
-			async fetch(request) {
-				const value = (await request.json()) as { id: unknown }
-				return Response.json({ id: value.id, jsonrpc: '2.0', result: '0x1' })
-			},
-		})
-		servers.push(rpc)
-		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
-		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}`
-		await saveOperatorSettings(settingsPath, 'mainnet', {
-			connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl },
-			paused: true,
-			privateKey: savedPrivateKey,
-			strategy: {
-				maxSpotTwapTicks: 77n,
-				minimumProfitBps: 222n,
-				minimumProfitWeth: 25n * 10n ** 15n,
-				minimumRemainingBlocks: 4n,
-				minimumRemainingSeconds: 48n,
-				pollMilliseconds: 15_000,
-				twapSeconds: 2_400,
-			},
-			submission: { minimumRelaySuccesses: 2, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] },
-		})
-		const dashboardPort = unusedPort()
-		const environment = { ...process.env, PRIVATE_KEY: environmentPrivateKey }
-		const child = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', '--minimum-relay-successes=1', `--settings-file=${settingsPath}`], {
-			env: environment,
+		const ignoredEnvironmentKey = `0x${'22'.repeat(32)}` as Hex
+		const path = join(directory, 'operator.json')
+		await saveOperatorSettings(path, settings(`http://127.0.0.1:${rpc.port.toString()}/`, dashboardPort, savedPrivateKey))
+		const child = Bun.spawn([executable, runSource], {
+			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, PRIVATE_KEY: ignoredEnvironmentKey },
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
 		children.push(child)
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
-		const initial = await waitForSnapshot(origin)
-		expect(initial).toMatchObject({
-			paused: true,
-			savedWallet: privateKeyToAccount(savedPrivateKey).address,
-			settings: { maxSpotTwapTicks: '77', minimumProfitBps: '222', pollMilliseconds: 15_000 },
-			submission: { minimumRelaySuccesses: 1 },
-			wallet: privateKeyToAccount(environmentPrivateKey).address,
+		const snapshot = await waitForJson(origin, '/api/state')
+		expect(snapshot['wallet']).toBe(privateKeyToAccount(savedPrivateKey).address)
+		const staleEnvelope = await waitForJson(origin, '/api/configuration')
+		const configuration = staleEnvelope['configuration']
+		if (typeof configuration !== 'object' || configuration === null || Array.isArray(configuration)) throw new Error('Configuration document is missing')
+		expect(Reflect.get(configuration, 'privateKey')).toBe('__PRESERVE_SAVED_PRIVATE_KEY__')
+		expect(JSON.stringify(staleEnvelope)).not.toContain(savedPrivateKey)
+		const runtime = Reflect.get(configuration, 'runtime')
+		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Configuration runtime is missing')
+		expect(Reflect.get(runtime, 'historyFile')).toBe('.state/history.jsonl')
+		Reflect.set(runtime, 'lookbackBlocks', '123')
+		const pauseResponse = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: true }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
 		})
-		const [strategyResponse, submissionResponse] = await Promise.all([
-			dashboardPut(origin, '/api/settings', {
-				maxSpotTwapTicks: '88',
-				minimumProfitBps: '333',
-				minimumProfitWeth: '0.03',
-				minimumRemainingBlocks: '5',
-				minimumRemainingSeconds: '60',
-				pollMilliseconds: 20_000,
-				twapSeconds: 3_000,
-			}),
-			dashboardPut(origin, '/api/submission', { mode: 'public', relayUrls: ['https://relay.example'] }),
-		])
+		expect(pauseResponse.status).toBe(200)
+		const staleBody = JSON.stringify(staleEnvelope)
+		if (staleBody === undefined) throw new Error('Configuration must serialize')
+		const staleResponse = await fetch(`${origin}/api/configuration`, {
+			body: staleBody,
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(staleResponse.status, await staleResponse.clone().text()).toBe(409)
+		expect((await loadOperatorSettings(path))?.paused).toBe(true)
+
+		const currentEnvelope = await waitForJson(origin, '/api/configuration')
+		const currentConfiguration = currentEnvelope['configuration']
+		if (typeof currentConfiguration !== 'object' || currentConfiguration === null || Array.isArray(currentConfiguration)) throw new Error('Current configuration document is missing')
+		const currentRuntime = Reflect.get(currentConfiguration, 'runtime')
+		if (typeof currentRuntime !== 'object' || currentRuntime === null || Array.isArray(currentRuntime)) throw new Error('Current runtime configuration is missing')
+		Reflect.set(currentRuntime, 'lookbackBlocks', '123')
+		const replacementPrivateKey = `0x${'33'.repeat(32)}` as Hex
+		Reflect.set(currentConfiguration, 'privateKey', replacementPrivateKey)
+		Reflect.set(currentConfiguration, 'paused', false)
+		const currentBody = JSON.stringify(currentEnvelope)
+		if (currentBody === undefined) throw new Error('Current configuration must serialize')
+		const response = await fetch(`${origin}/api/configuration`, {
+			body: currentBody,
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(response.status, await response.clone().text()).toBe(200)
+		const replacementEnvelope = (await response.json()) as Record<string, unknown>
+		const replacementConfiguration = replacementEnvelope['configuration']
+		if (typeof replacementConfiguration !== 'object' || replacementConfiguration === null || Array.isArray(replacementConfiguration)) throw new Error('Replacement configuration document is missing')
+		const replacementStrategy = Reflect.get(replacementConfiguration, 'strategy')
+		if (typeof replacementStrategy !== 'object' || replacementStrategy === null || Array.isArray(replacementStrategy)) throw new Error('Replacement strategy is missing')
+		Reflect.set(replacementStrategy, 'minimumProfitBps', '101')
+		const replacementStrategyBody = JSON.stringify(replacementStrategy)
+		if (replacementStrategyBody === undefined) throw new Error('Replacement strategy must serialize')
+		const strategyResponse = await fetch(`${origin}/api/settings`, {
+			body: replacementStrategyBody,
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
 		expect(strategyResponse.status, await strategyResponse.clone().text()).toBe(200)
-		expect(submissionResponse.status, await submissionResponse.clone().text()).toBe(200)
-		const concurrentSave = await loadOperatorSettings(settingsPath, 'mainnet')
-		expect(concurrentSave?.strategy.minimumProfitBps).toBe(333n)
-		expect(concurrentSave?.submission.relayUrls).toEqual(['https://relay.example/'])
-		expect(concurrentSave?.privateKey).toBe(savedPrivateKey)
-		const memoryOnlyPrivateKey = `0x${'33'.repeat(32)}` as Hex
-		const memoryOnlyResponse = await dashboardPut(origin, '/api/signer', { privateKey: memoryOnlyPrivateKey, rememberSigner: false })
-		expect(memoryOnlyResponse.status).toBe(200)
-		const queued = await waitForSnapshot(origin)
-		expect(queued).toMatchObject({
-			queuedWallet: privateKeyToAccount(memoryOnlyPrivateKey).address,
-			savedWallet: privateKeyToAccount(savedPrivateKey).address,
-			wallet: privateKeyToAccount(environmentPrivateKey).address,
+		const saved = await loadOperatorSettings(path)
+		expect(saved?.runtime.lookbackBlocks).toBe(123n)
+		expect(saved?.runtime.historyFile).toBe('.state/history.jsonl')
+		expect(saved?.privateKey).toBe(replacementPrivateKey)
+		expect(saved?.paused).toBe(false)
+		expect(saved?.strategy.minimumProfitBps).toBe(101n)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(true)
+		expect((await waitForJson(origin, '/api/state'))['savedWallet']).toBe(privateKeyToAccount(replacementPrivateKey).address)
+
+		const removalEnvelope = await waitForJson(origin, '/api/configuration')
+		const removalConfiguration = removalEnvelope['configuration']
+		if (typeof removalConfiguration !== 'object' || removalConfiguration === null || Array.isArray(removalConfiguration)) throw new Error('Removal configuration document is missing')
+		Reflect.deleteProperty(removalConfiguration, 'privateKey')
+		const removalBody = JSON.stringify(removalEnvelope)
+		if (removalBody === undefined) throw new Error('Removal configuration must serialize')
+		const removalResponse = await fetch(`${origin}/api/configuration`, {
+			body: removalBody,
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
 		})
-		expect((await loadOperatorSettings(settingsPath, 'mainnet'))?.privateKey).toBe(savedPrivateKey)
-		child.kill()
-		await child.exited
-		children.splice(children.indexOf(child), 1)
-		const restartDashboardPort = unusedPort()
-		const restartEnvironment = { ...process.env }
-		delete restartEnvironment['PRIVATE_KEY']
-		const restart = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${restartDashboardPort.toString()}`, '--lookback-blocks=0', `--settings-file=${settingsPath}`], {
-			env: restartEnvironment,
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		children.push(restart)
-		const restartOrigin = `http://127.0.0.1:${restartDashboardPort.toString()}`
-		const restarted = await waitForSnapshot(restartOrigin)
-		expect(restarted).toMatchObject({
-			savedWallet: privateKeyToAccount(savedPrivateKey).address,
-			wallet: privateKeyToAccount(savedPrivateKey).address,
-		})
-		const forgetResponse = await dashboardPut(restartOrigin, '/api/signer', { forgetSavedSigner: true })
-		expect(forgetResponse.status).toBe(200)
-		const forgotten = await waitForSnapshot(restartOrigin)
-		expect(forgotten['wallet']).toBe(privateKeyToAccount(savedPrivateKey).address)
-		expect(forgotten['savedWallet']).toBeUndefined()
-		expect((await loadOperatorSettings(settingsPath, 'mainnet'))?.privateKey).toBeUndefined()
-		await rm(settingsPath)
-		await mkdir(settingsPath)
-		const failedUpdate = await dashboardPut(restartOrigin, '/api/settings', {
-			maxSpotTwapTicks: '99',
-			minimumProfitBps: '444',
-			minimumProfitWeth: '0.04',
-			minimumRemainingBlocks: '6',
-			minimumRemainingSeconds: '72',
-			pollMilliseconds: 25_000,
-			twapSeconds: 3_600,
-		})
-		expect(failedUpdate.status).toBe(400)
-		const afterFailure = await waitForSnapshot(restartOrigin)
-		expect(afterFailure['settings']).toMatchObject({ maxSpotTwapTicks: '88', minimumProfitBps: '333' })
+		expect(removalResponse.status, await removalResponse.clone().text()).toBe(200)
+		expect((await loadOperatorSettings(path))?.privateKey).toBeUndefined()
+		expect((await waitForJson(origin, '/api/state'))['savedWallet']).toBeUndefined()
 	})
 })
