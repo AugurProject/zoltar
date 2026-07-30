@@ -842,13 +842,16 @@ async function checkInvariantCatalogStates(): Promise<void> {
 		window.document.write(html)
 		window.document.close()
 		window.HTMLElement.prototype.scrollIntoView = () => undefined
-		const runScript = new Function('window', 'document', 'DOMException', 'HTMLDetailsElement', 'HTMLElement', 'navigator', 'requestAnimationFrame', 'URIError', 'URL', source)
+		const runScript = new Function('window', 'document', 'DOMException', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'requestAnimationFrame', 'URIError', 'URL', source)
 		runScript(
 			window,
 			window.document,
 			window.DOMException,
+			window.HTMLButtonElement,
 			window.HTMLDetailsElement,
 			window.HTMLElement,
+			window.HTMLInputElement,
+			window.HTMLSelectElement,
 			window.navigator,
 			(callback: FrameRequestCallback) => {
 				callback(0)
@@ -858,12 +861,56 @@ async function checkInvariantCatalogStates(): Promise<void> {
 			window.URL,
 		)
 
-		const entries = Array.from(window.document.querySelectorAll('details.invariant-entry')).flatMap(entry => (entry instanceof window.HTMLDetailsElement ? [entry] : []))
+		const explorer = window.document.querySelector('#invariant-explorer')
+		const search = explorer?.querySelector('[data-invariant-search]')
+		const type = explorer?.querySelector('[data-invariant-type]')
+		const status = explorer?.querySelector('[data-invariant-status]')
+		const subsystem = explorer?.querySelector('[data-invariant-subsystem]')
+		const count = explorer?.querySelector('[data-invariant-count]')
+		const reset = explorer?.querySelector('[data-invariant-reset]')
+		const expand = explorer?.querySelector('[data-invariant-expand]')
+		const collapse = explorer?.querySelector('[data-invariant-collapse]')
+		if (
+			!(search instanceof window.HTMLInputElement) ||
+			!(type instanceof window.HTMLSelectElement) ||
+			!(status instanceof window.HTMLSelectElement) ||
+			!(subsystem instanceof window.HTMLSelectElement) ||
+			!(count instanceof window.HTMLElement) ||
+			!(reset instanceof window.HTMLButtonElement) ||
+			!(expand instanceof window.HTMLButtonElement) ||
+			!(collapse instanceof window.HTMLButtonElement)
+		) {
+			throw new Error('Invariant explorer test controls are incomplete')
+		}
 
+		const entries = Array.from(window.document.querySelectorAll('details.invariant-entry')).flatMap(entry => (entry instanceof window.HTMLDetailsElement ? [entry] : []))
+		const visibleIds = () => entries.filter(entry => !entry.hidden).map(entry => entry.id)
 		assert.equal(entries.length, 93, 'the invariant catalog must include every documented property')
 		assert.equal(new Set(entries.map(entry => entry.id)).size, 93, 'every invariant catalog entry must have a unique stable id')
+		assert.equal(count.textContent, '93 of 93 invariants', 'the invariant explorer must report the complete default catalog')
 		assert.equal(window.document.querySelector('#esc-10')?.hasAttribute('open'), true, 'an invariant fragment must open its matching entry')
+		assert.deepEqual({ status: status.options.length, subsystem: subsystem.options.length, type: type.options.length }, { status: 5, subsystem: 10, type: 5 }, 'invariant facets must be derived from all catalog metadata values plus their All options')
 		assert.equal(window.document.querySelectorAll('.invariant-entry-actions').length, 93, 'every invariant must receive permalink actions')
+
+		search.value = 'replay'
+		search.dispatchEvent(new window.Event('input', { bubbles: true }))
+		assert.deepEqual(visibleIds(), ['esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
+		assert.equal(count.textContent, '4 of 93 invariants', 'filtered invariant count must remain explicit')
+		expand.click()
+		assert(
+			entries.filter(entry => !entry.hidden).every(entry => entry.open),
+			'Expand visible must open only the filtered results',
+		)
+		collapse.click()
+		assert(
+			entries.every(entry => !entry.open),
+			'Collapse all must close the complete catalog',
+		)
+
+		reset.click()
+		assert.equal(search.value, '', 'Reset filters must clear the search query')
+		assert.equal(count.textContent, '93 of 93 invariants', 'Reset filters must restore the complete result count')
+		assert.equal(visibleIds().length, 93, 'Reset filters must restore every catalog entry')
 	} finally {
 		window.close()
 	}

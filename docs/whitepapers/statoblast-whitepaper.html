@@ -7,9 +7,47 @@
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="paper-page paper-statoblast">
-
+		<a class="skip-link" href="#main-content">Skip to document</a>
+		<div class="site-shell">
+			<aside class="sidebar" aria-label="Table of contents">
+				<div class="sidebar-header">
+					<span class="sidebar-series">Augur / Zoltar</span>
+					<strong>Statoblast</strong>
+					<p>A prediction market built on Zoltar.</p>
+				</div>
+				<a class="sidebar-companion" href="./zoltar-whitepaper.html">
+					<span>Companion paper</span>
+					<b>Zoltar Oracle Layer</b>
+				</a>
+				<a class="sidebar-companion" href="../safety-operations/security-model.html">
+					<span>Security boundaries</span>
+					<b>Protocol Security Model</b>
+				</a>
+				<nav aria-label="Document sections">
+					<a href="#abstract" aria-current="location">Abstract</a>
+					<a href="#overview">System Overview</a>
+					<a href="#architecture">Architecture</a>
+					<a href="#roles">Economic Roles</a>
+					<a href="#pools">Security Pools</a>
+					<a href="#shares">Shares</a>
+					<a href="#escalation">Escalation</a>
+					<a href="#migration">Fork Migration</a>
+					<a href="#auction">Truth Auction</a>
+					<a href="#oracle">REP/ETH Oracle</a>
+					<a href="#security">Security Model</a>
+					<a href="#parameters">Parameter Sources</a>
+					<a href="#constraints">Constraints</a>
+					<a href="../safety-operations/operator-reference.md">Operator Reference</a>
+				</nav>
+			</aside>
 			<main id="main-content">
 				<header class="hero">
+					<div class="paper-brand">
+						<a class="companion-link" href="./zoltar-whitepaper.html">
+							<span>Companion paper</span>
+							<b>Zoltar - Branching Oracle Base Layer</b>
+						</a>
+					</div>
 					<div class="hero-label-row">
 						<p class="kicker">
 							<span class="layer-dot" aria-hidden="true"></span>Prediction
@@ -20,11 +58,19 @@
 						</p>
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
+					<p class="subtitle">
+						A permissionless oracle and prediction-market protocol built on
+						Ethereum and Zoltar, subject to the assumptions in the
+						<a href="../safety-operations/security-model.html">Protocol Security Model</a>.
+					</p>
 				</header>
 
 				<section class="paper-section" id="abstract">
-					<p> Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../safety-operations/security-model.html">Protocol Security Model</a>.
-					</p>
+					<div class="section-heading">
+						<h2>Abstract</h2>
+						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
+					</div>
+					<p class="lede"> Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. </p>
 					<p> The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault holders choose a child by migrating their vault positions, and the forker materializes the corresponding child REP. </p>
 					<p> Proportional open-interest collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
 					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="../protocol-design/truth-auction.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
@@ -2678,6 +2724,7 @@
 					</ul>
 				</section>
 			</main>
+		</div>
 
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script>

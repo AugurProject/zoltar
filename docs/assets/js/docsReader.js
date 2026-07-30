@@ -489,11 +489,13 @@ function resizeFrame(frame) {
 function sourcePathFromHref(href, baseUrl) {
 	const target = new URL(href, baseUrl)
 	if (target.origin !== window.location.origin) return undefined
-	const fileName = target.pathname.split('/').pop()
-	if (fileName === undefined || !documentByPath.has(fileName)) return undefined
+	const docsDirectory = new URL('./', document.baseURI).pathname
+	if (!target.pathname.startsWith(docsDirectory)) return undefined
+	const documentPath = decodeURIComponent(target.pathname.slice(docsDirectory.length))
+	if (!documentByPath.has(documentPath)) return undefined
 	const fragment = decodeFragment(target.hash.slice(1))
 	if (fragment === undefined) return undefined
-	return { fragment, path: fileName }
+	return { fragment, path: documentPath }
 }
 
 function frameLinkClick(path, frame, event) {

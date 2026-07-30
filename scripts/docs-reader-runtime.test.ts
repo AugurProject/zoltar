@@ -159,6 +159,34 @@ test('opening an inactive document disclosure selects that document', async () =
 	}
 })
 
+test('links inside reader documents preserve grouped same-directory and cross-directory navigation', async () => {
+	const reader = await loadReader(false, async input => {
+		const url = String(input)
+		if (url.includes('whitepapers/statoblast-whitepaper.html')) {
+			return new Response('<!doctype html><html><body><main><h1>Statoblast</h1><a href="./zoltar-whitepaper.html#abstract">Zoltar</a></main></body></html>')
+		}
+		if (url.includes('whitepapers/zoltar-whitepaper.html')) {
+			return new Response('<!doctype html><html><body><main><h1>Zoltar</h1><h2 id="abstract">Abstract</h2><a href="../protocol-design/liquidation.html#model">Liquidation</a></main></body></html>')
+		}
+		return new Response('<!doctype html><html><body><main><h1>Liquidation</h1><h2 id="model">Model</h2></main></body></html>')
+	})
+	try {
+		const activeFrame = () => document.querySelector<HTMLIFrameElement>('.reader-chapter:not([hidden]) .reader-document-frame')
+		activeFrame()?.contentDocument?.querySelector<HTMLAnchorElement>('a')?.click()
+		await waitForHistory()
+		expect(visibleDocumentPaths()).toEqual(['whitepapers/zoltar-whitepaper.html'])
+		expect(location.hash).toBe('#doc-whitepapers-zoltar-whitepaper--abstract')
+
+		activeFrame()?.contentDocument?.querySelector<HTMLAnchorElement>('a')?.click()
+		await waitForHistory()
+		expect(visibleDocumentPaths()).toEqual(['protocol-design/liquidation.html'])
+		expect(location.hash).toBe('#doc-protocol-design-liquidation--model')
+		expect(document.querySelectorAll('.reader-document-frame[data-reader-source-ready="true"]')).toHaveLength(1)
+	} finally {
+		reader.cleanup()
+	}
+})
+
 test('the active document outline can collapse without unloading its document', async () => {
 	const reader = await loadReader(false)
 	try {

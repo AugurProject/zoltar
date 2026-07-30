@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Window } from 'happy-dom'
 import { markdownHeadingIds } from './docs-markdown-anchors.mts'
+import { collectGroupedDocumentPaths } from './docs-reader-source-paths.ts'
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const markdownOutputPath = path.join(repositoryRoot, 'docs/assets/js/docsReaderMarkdown.js')
@@ -70,16 +71,7 @@ async function collectReaderDocumentPaths(): Promise<string[]> {
 	assert(documentPaths.length > 0, 'docs/assets/js/docsReader.js must declare at least one reader document')
 	assert.equal(new Set(documentPaths).size, documentPaths.length, 'docs/assets/js/docsReader.js reader document paths must be unique')
 
-	const sourceDocumentPaths = (
-		await Promise.all(
-			documentDirectoryNames.map(async directoryName => {
-				const entries = await readdir(path.join(repositoryRoot, 'docs', directoryName), { withFileTypes: true })
-				return entries.filter(entry => entry.isFile() && /\.(?:html|md)$/.test(entry.name)).map(entry => `${directoryName}/${entry.name}`)
-			}),
-		)
-	)
-		.flat()
-		.toSorted()
+	const sourceDocumentPaths = await collectGroupedDocumentPaths(path.join(repositoryRoot, 'docs'), documentDirectoryNames)
 	assert.deepEqual(documentPaths.toSorted(), sourceDocumentPaths, 'docs/assets/js/docsReader.js reader documents must exactly match the grouped documentation corpus')
 
 	const page = await readFile(path.join(repositoryRoot, 'docs/documentation.html'), 'utf8')

@@ -49,13 +49,29 @@
 	}
 
 	function markScrollableContent(container) {
-		const label = container.matches('.table-wrap, .table-scroll') ? 'Horizontal scrolling reveals the full table.' : 'Horizontal scrolling reveals the full content.'
+		const label = container.matches('.table-wrap, .table-scroll, .docs-auto-table-scroll') ? 'Horizontal scrolling reveals the full table.' : 'Horizontal scrolling reveals the full content.'
 		overflowCue(container, container.scrollWidth > container.clientWidth + overflowThreshold, label)
 	}
 
+	function prepareTableContainers() {
+		for (const table of document.querySelectorAll('table')) {
+			if (table.closest('.table-wrap, .table-scroll, .docs-auto-table-scroll') !== null) continue
+			const container = document.createElement('div')
+			container.className = 'docs-auto-table-scroll'
+			container.setAttribute('role', 'region')
+			const caption = table.querySelector('caption')?.textContent?.replace(/\s+/g, ' ').trim()
+			container.setAttribute('aria-label', table.getAttribute('aria-label') ?? caption ?? 'Scrollable table')
+			table.before(container)
+			container.append(table)
+		}
+	}
+
 	function refresh() {
+		prepareTableContainers()
 		for (const equation of document.querySelectorAll('.equation')) fitEquation(equation)
-		for (const container of document.querySelectorAll('.table-wrap, .table-scroll')) markScrollableContent(container)
+		for (const container of document.querySelectorAll('.table-wrap, .table-scroll, .docs-auto-table-scroll')) {
+			markScrollableContent(container)
+		}
 	}
 
 	let scheduled = false

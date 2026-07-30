@@ -53,6 +53,58 @@
 				</figure>
 			</header>
 
+			<section
+				class="interactive-example invariant-explorer"
+				id="invariant-explorer"
+				aria-label="Invariant explorer"
+			>
+				<h2>Find an Invariant</h2>
+				<p>
+					Search the full property, example, status, and evidence text, or narrow the
+					catalog by property type, enforcement status, and subsystem.
+				</p>
+				<div class="invariant-explorer-controls">
+					<label>
+						<span>Search</span>
+						<input
+							type="search"
+							placeholder="Try “replay” or “auction allowance”"
+							autocomplete="off"
+							data-invariant-search
+						/>
+					</label>
+					<label>
+						<span>Property type</span>
+						<select data-invariant-type>
+							<option value="">All property types</option>
+						</select>
+					</label>
+					<label>
+						<span>Enforcement status</span>
+						<select data-invariant-status>
+							<option value="">All enforcement statuses</option>
+						</select>
+					</label>
+					<label>
+						<span>Subsystem</span>
+						<select data-invariant-subsystem>
+							<option value="">All subsystems</option>
+						</select>
+					</label>
+				</div>
+				<div class="invariant-explorer-actions">
+					<button type="button" data-invariant-expand>Expand visible</button>
+					<button type="button" data-invariant-collapse>Collapse all</button>
+					<button type="button" data-invariant-reset>Reset filters</button>
+				</div>
+				<p class="invariant-result-count" role="status" aria-live="polite" data-invariant-count>
+					93 of 93 invariants
+				</p>
+				<p class="invariant-no-results" hidden data-invariant-empty>
+					No invariants match every active filter.
+				</p>
+			</section>
+
 			<section id="standing">
 				<h2>Classification and Scope</h2>
 				<p>
