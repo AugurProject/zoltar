@@ -14,6 +14,8 @@ import { UniverseLink } from '../../features/universes/components/UniverseLink.j
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
+import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
+import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
 
 function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainId === undefined) return appCopy.unknownNetwork
@@ -68,8 +70,9 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
-	const walletOnMainnet = isMainnetChain(accountState.chainId)
-	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
+	const activeNetworkProfile = getActiveNetworkProfile()
+	const walletOnActiveNetwork = isMainnetChain(accountState.chainId)
+	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
@@ -81,7 +84,12 @@ export function OverviewPanels({
 		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
-	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : getWalletNetworkLabel(accountState.chainId)
+	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
+	const walletNetworkLabel = (() => {
+		if (!walletOnActiveNetwork) return getWalletNetworkLabel(accountState.chainId)
+		if (activeNetworkProfile.id === 'sepolia') return appCopy.sepoliaNetwork
+		return appCopy.ethereumMainnet
+	})()
 	const accountActions = (() => {
 		if (accountState.address === undefined)
 			return (
@@ -103,7 +111,7 @@ export function OverviewPanels({
 					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{appCopy.switchToEthereumMainnet}
+							{appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(getActiveNetworkProfile()))}
 						</button>
 					) : undefined}
 					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
@@ -138,6 +146,7 @@ export function OverviewPanels({
 					actions={accountActions}
 					badge={
 						<span className='environment-badge-row'>
+							{activeNetworkBadge}
 							{environmentBadge}
 							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>

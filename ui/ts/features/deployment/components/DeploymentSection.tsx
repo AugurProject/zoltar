@@ -75,6 +75,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 						prerequisiteLabel,
 						step,
 					})
+					const statusDetailId = stepStatus.detail === undefined ? undefined : `deployment-${step.id}-status-detail`
 
 					return (
 						<div className='contract-row' key={step.id}>
@@ -84,7 +85,11 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>
-								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
+								{stepStatus.detail === undefined ? undefined : (
+									<p className='detail' id={statusDetailId}>
+										{stepStatus.detail}
+									</p>
+								)}
 							</div>
 							{step.deployed ? undefined : (
 								<TransactionActionButton
@@ -94,7 +99,8 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 									onClick={() => void onDeploy(step.id)}
 									pending={isBusy}
 									availability={availability}
-									showDisabledReason={prerequisiteLabel === undefined}
+									disabledReasonElementId={statusDetailId}
+									showDisabledReason={accountAddress !== undefined && prerequisiteLabel === undefined}
 								/>
 							)}
 						</div>

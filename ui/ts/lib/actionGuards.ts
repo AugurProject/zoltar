@@ -1,6 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ActionAvailability } from '../types/components.js'
+import { getWrongNetworkMessage } from './network.js'
 
 type WalletMainnetGuardParameters = {
 	accountAddress: Address | string | undefined
@@ -25,7 +26,7 @@ function getWalletRequiredReason(walletRequiredReason: string | undefined) {
 
 export function getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason }: WalletMainnetGuardParameters): WalletMainnetGuardState {
 	if (accountAddress === undefined) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isMainnet) return { blocked: true, reason: commonCopy.mainnetRequiredReason }
+	if (!isMainnet) return { blocked: true, reason: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason }
 	return { blocked: false, reason: undefined }
 }
 
@@ -36,7 +37,7 @@ export function getWalletMainnetGuardMessage(parameters: WalletMainnetGuardParam
 
 export function getWalletConnectionMainnetGuardState({ isMainnet, walletConnected, walletRequiredReason }: WalletConnectionMainnetGuardParameters): WalletMainnetGuardState {
 	if (!walletConnected) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isMainnet) return { blocked: true, reason: commonCopy.mainnetRequiredReason }
+	if (!isMainnet) return { blocked: true, reason: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason }
 	return { blocked: false, reason: undefined }
 }
 

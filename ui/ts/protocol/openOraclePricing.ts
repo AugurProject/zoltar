@@ -1,4 +1,5 @@
 import { getErrorDetail } from '../lib/errors.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
@@ -38,13 +39,15 @@ function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
-	if (!isRepPricingEnabled())
+	if (!isRepPricingEnabled()) {
+		const profile = getActiveNetworkProfile()
 		return {
 			attemptedSources: [],
 			failureKind: 'unsupported-pair',
-			reason: 'Automatic pricing is unavailable for this pair in simulation mode. The simulation mock only supports REP / ETH and REP / WETH pairs.',
+			reason: `Automatic pricing is unavailable on ${profile.displayName} because no REP pricing source is configured for this network.`,
 			status: 'failure',
 		}
+	}
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
 	try {
 		const { amountOut: token2Amount, source } = await quoteBestExactInputWithSource(client, token1, token2, token1Amount)

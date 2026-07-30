@@ -141,7 +141,8 @@ function isMockRepPricingEnabled() {
 
 function assertRepPricingEnabled() {
 	if (isRepPricingEnabled()) return
-	throw new Error('Uniswap pricing is unavailable in simulation mode.')
+	const profile = getActiveNetworkProfile()
+	throw new Error(`Uniswap pricing is unavailable on ${profile.displayName} because this network has no configured REP pricing source.`)
 }
 
 async function isRepToken(client: ReadClient, token: Address) {

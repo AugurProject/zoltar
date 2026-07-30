@@ -77,7 +77,12 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
-		expectTransactionButtonDisabled(document.body, 'Deploy multicall3', 'Connect wallet to deploy this contract.')
+		expect(rendered.container.textContent?.match(/Connect wallet/g) ?? []).toHaveLength(1)
+		expectTransactionButtonDisabled(document.body, 'Deploy multicall3')
+		const button = rendered.container.querySelector('button')
+		const detailId = button?.getAttribute('aria-describedby')
+		expect(detailId).toBe('deployment-multicall3-status-detail')
+		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Connect wallet to continue.')
 	})
 
 	test('shows the network-guard branch when account is present but not on mainnet', async () => {
@@ -98,6 +103,10 @@ describe('DeploymentSection', () => {
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
 		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
 		expectTransactionButtonDisabled(document.body, 'Deploy Deployment Status Oracle', 'Requires Proxy Deployer')
+		const button = rendered.container.querySelector('button')
+		const detailId = button?.getAttribute('aria-describedby')
+		expect(detailId).toBe('deployment-deploymentStatusOracle-status-detail')
+		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('Deployment Status Oracle')

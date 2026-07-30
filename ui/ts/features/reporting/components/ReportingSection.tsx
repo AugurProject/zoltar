@@ -24,7 +24,7 @@ import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
@@ -378,7 +378,7 @@ export function ReportingSection({
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
-	const reportActionDisabledReason = !isMainnet ? commonCopy.mainnetRequiredReason : reportButtonGuardMessage
+	const reportActionDisabledReason = !isMainnet ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : reportButtonGuardMessage
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({

@@ -22,7 +22,7 @@ import { TransactionNetworkValue } from '../../../components/TransactionNetworkV
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
@@ -153,7 +153,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return commonCopy.mainnetRequiredReason
+			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -174,7 +174,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetBurnWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return commonCopy.mainnetRequiredReason
+			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
@@ -190,7 +190,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.shareMigrationWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return commonCopy.mainnetRequiredReason
+			if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
 
 			return (() => {
@@ -210,7 +210,7 @@ export function TradingSection({
 		? tradingCopy.shareRedemptionPoolRequiredReason
 		: (() => {
 				if (accountState.address === undefined) return tradingCopy.shareRedemptionWalletRequiredReason
-				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 				if (selectedPool?.questionOutcome === 'none') return tradingCopy.poolResolutionRequired
 
 				return undefined
@@ -220,7 +220,7 @@ export function TradingSection({
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.migrateForkedShares))
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
 	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 		if (!actionEnabled) return undefined
 		return guardMessage
 	}

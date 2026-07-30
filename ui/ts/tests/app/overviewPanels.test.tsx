@@ -6,6 +6,9 @@ import { OverviewPanels } from '../../app/components/OverviewPanels.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { createFakeBackend } from '../testUtils/fakeBackend.js'
 
 describe('OverviewPanels', () => {
 	type MetricElement = {
@@ -140,6 +143,25 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(false)
+	})
+
+	test('keeps the active Sepolia deployment target visible while disconnected', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const documentQueries = await renderOverviewPanels({
+				accountState: {
+					address: undefined,
+					chainId: SEPOLIA_NETWORK_PROFILE.chainIdHex,
+					ethBalance: undefined,
+					wethBalance: undefined,
+				},
+			})
+
+			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
+			expect(documentQueries.getByText('Read-only')).not.toBeNull()
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	test('shows a disabled spinner button while a wallet connection request is pending', async () => {

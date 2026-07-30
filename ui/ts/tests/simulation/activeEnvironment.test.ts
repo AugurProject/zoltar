@@ -24,6 +24,17 @@ void describe('active environment', () => {
 		expect(getActiveBackend().profile.id).toBe('mainnet')
 	})
 
+	void test('selects Sepolia from either page or route query parameters', async () => {
+		const pageBackend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia' })
+		expect(pageBackend.profile.id).toBe('sepolia')
+		expect(pageBackend.profile.chainIdHex).toBe('0xaa36a7')
+
+		const routeBackend = await initializeActiveEnvironment({ hash: '#/deploy?network=sepolia', hostname: 'localhost', search: '' })
+		expect(routeBackend.profile.id).toBe('sepolia')
+		expect(isSupportedAppChain('0xaa36a7')).toBe(true)
+		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
+	})
+
 	void test('enables simulation mode when the explicit URL flag is present', () => {
 		expect(shouldUseSimulationLocation({ hostname: 'localhost', search: '?simulate=1' })).toBe(true)
 		expect(shouldUseSimulationLocation({ hostname: '127.0.0.1', search: '?foo=bar&simulate=1' })).toBe(true)
@@ -50,7 +61,7 @@ void describe('active environment', () => {
 		resetEnvironment()
 	})
 
-	void test('labels 20 common EVM chains and falls back to a decimal chain ID', () => {
+	void test('labels common EVM chains and falls back to a decimal chain ID', () => {
 		const commonChains = [
 			['0x1', 'Ethereum'],
 			['0xa', 'Optimism'],
@@ -72,6 +83,7 @@ void describe('active environment', () => {
 			['0xe708', 'Linea'],
 			['0x13e31', 'Blast'],
 			['0x82750', 'Scroll'],
+			['0xaa36a7', 'Sepolia'],
 		] as const
 
 		expect(commonChains.map(([chainId, _name]) => getChainDisplayLabel(chainId))).toEqual(commonChains.map(([_chainId, name]) => name))

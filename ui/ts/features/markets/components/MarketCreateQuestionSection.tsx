@@ -22,6 +22,7 @@ import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../../../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -466,7 +467,7 @@ export function MarketCreateQuestionSection({
 									disabled: !canCreateQuestion,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-										if (!isMainnet) return commonCopy.mainnetRequiredReason
+										if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 										if (marketFormValidation.isValid) return undefined
 										if (timingRelationshipError !== undefined) return marketCopy.formatInvalidQuestionFieldsReason(timingRelationshipError)

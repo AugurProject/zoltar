@@ -38,6 +38,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { assertNever } from '../../../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 import { getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
@@ -906,7 +907,7 @@ export function SecurityPoolWorkflowSection({
 																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																	disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																	title={!isMainnet && accountState.address !== undefined ? commonCopy.mainnetRequiredReason : securityPoolCopy.reviewLiquidation}
+																	title={!isMainnet && accountState.address !== undefined ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : securityPoolCopy.reviewLiquidation}
 																>
 																	{securityPoolCopy.reviewLiquidation}
 																</button>

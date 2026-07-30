@@ -32,6 +32,7 @@ import { formatUniverseLabel } from '../lib/universe.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined
@@ -342,9 +343,15 @@ export function ZoltarMigrationSection({
 							onClick={onPrepareRepForMigration}
 							pending={zoltarMigrationActiveAction === 'prepare'}
 							tone='secondary'
-							availability={{ disabled: !canPrepare, reason: isMainnet ? prepareHintMessage : commonCopy.mainnetRequiredReason }}
+							availability={{ disabled: !canPrepare, reason: isMainnet ? prepareHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
 						/>
-						<TransactionActionButton idleLabel={zoltarCopy.splitRep} pendingLabel={zoltarCopy.splittingRepPending} onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: isMainnet ? splitHintMessage : commonCopy.mainnetRequiredReason }} />
+						<TransactionActionButton
+							idleLabel={zoltarCopy.splitRep}
+							pendingLabel={zoltarCopy.splittingRepPending}
+							onClick={onMigrateInternalRep}
+							pending={zoltarMigrationActiveAction === 'split'}
+							availability={{ disabled: !canSplit, reason: isMainnet ? splitHintMessage : (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) }}
+						/>
 					</div>
 				</div>
 			</SectionBlock>

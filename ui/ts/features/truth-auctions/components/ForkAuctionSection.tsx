@@ -40,7 +40,7 @@ import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementAc
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../../../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isMainnetChain } from '../../../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -796,7 +796,7 @@ export function ForkAuctionSection({
 	}
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 		return undefined
 	})()
@@ -1017,7 +1017,7 @@ export function ForkAuctionSection({
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		const disabledReason = !isMainnet ? commonCopy.mainnetRequiredReason : (interactionDisabledReason ?? resolvedAvailability.reason)
+		const disabledReason = !isMainnet ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : (interactionDisabledReason ?? resolvedAvailability.reason)
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton

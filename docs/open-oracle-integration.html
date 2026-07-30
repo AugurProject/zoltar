@@ -388,8 +388,10 @@
 				<p>
 					The application proposes a REP/ETH price from the coordinator's
 					cached <code>lastPrice</code> whenever it is non-zero, even after that
-					price becomes stale. If no cached price exists, it requests a live
-					WETH-to-REP Uniswap quote and does not substitute a fixed fallback.
+					price becomes stale. If no cached price exists, mainnet requests a live
+					WETH-to-REP Uniswap quote, simulation uses its configured mock for
+					supported pairs, and Sepolia does not attempt REP pricing until a source
+					is configured. No profile substitutes a fixed fallback.
 					The coordinator enforces a non-zero proposed price, computes the
 					request block's minimum WETH amount, selects the greater of that minimum
 					and <code>requestedInitialWeth</code>, and derives REP

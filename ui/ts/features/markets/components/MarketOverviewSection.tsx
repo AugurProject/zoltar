@@ -19,6 +19,7 @@ import type { LoadableValueState } from '../../../lib/loadState.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
@@ -101,7 +102,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-										if (!isMainnet) return commonCopy.mainnetRequiredReason
+										if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 										return (() => {
 											if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -129,7 +130,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									? marketCopy.childDeploymentSelectionRequired
 									: (() => {
 											if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-											if (!isMainnet) return commonCopy.mainnetRequiredReason
+											if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 											return (() => {
 												if (!hasForked) return marketCopy.childUniversesNotForkedReason

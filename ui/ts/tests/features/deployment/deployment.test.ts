@@ -18,6 +18,12 @@ import {
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE as SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../../lib/networkProfile.js'
+import { createFakeBackend } from '../../testUtils/fakeBackend.js'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/sepoliaRepAllocations'
+import type { WriteClient as UiWriteClient } from '../../../types/contracts.js'
+import { GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar } from '../../../contractArtifact.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -149,6 +155,53 @@ void describe('deployment helpers', () => {
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
 		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
+	})
+
+	void test('deploys Sepolia WETH and allocated REP before wiring REP into Zoltar', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const deploymentSteps = getDeploymentSteps()
+			const deployableIds = ['weth', 'reputationToken', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'] as const
+			for (const stepId of deployableIds) {
+				const step = deploymentSteps.find(candidate => candidate.id === stepId)
+				if (step === undefined) throw new Error(`Expected ${stepId} Sepolia deployment step`)
+				await step.deploy(writeClient as unknown as UiWriteClient)
+			}
+
+			expect(await readClient.getCode({ address: SEPOLIA_NETWORK_PROFILE.wethAddress })).not.toBeUndefined()
+			expect(await readClient.getCode({ address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress })).not.toBeUndefined()
+			expect(
+				await readClient.readContract({
+					abi: GenesisReputationToken_GenesisReputationToken.abi,
+					address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
+					functionName: 'getTotalTheoreticalSupply',
+					args: [],
+				}),
+			).toBe(SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)
+			for (const allocation of SEPOLIA_REP_ALLOCATIONS) {
+				expect(
+					await readClient.readContract({
+						abi: GenesisReputationToken_GenesisReputationToken.abi,
+						address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
+						functionName: 'balanceOf',
+						args: [allocation.address],
+					}),
+				).toBe(allocation.amount)
+			}
+
+			const zoltarStep = deploymentSteps.find(step => step.id === 'zoltar')
+			if (zoltarStep === undefined) throw new Error('Expected Sepolia Zoltar deployment step')
+			expect(
+				await readClient.readContract({
+					abi: Zoltar_Zoltar.abi,
+					address: zoltarStep.address,
+					functionName: 'getRepToken',
+					args: [0n],
+				}),
+			).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	void test('getOpenOracleAddress matches the deterministic OpenOracle deployment step', () => {

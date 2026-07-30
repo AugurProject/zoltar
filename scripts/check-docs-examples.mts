@@ -147,7 +147,18 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 	}
 }
 
-async function renderDeploymentMapping(response: DeploymentManifestResponse): Promise<{ busy: string | null; link: string | null; rowCount: number; text: string }> {
+type DeploymentMappingResult = {
+	busy: string | null
+	link: string | null
+	rowCount: number
+	text: string
+}
+
+async function renderDeploymentMappings(response: DeploymentManifestResponse): Promise<{
+	mainnet: DeploymentMappingResult
+	requestedUrls: string[]
+	sepolia: DeploymentMappingResult
+}> {
 	const filePath = 'docs/deployment-status.html'
 	const html = await readFile(filePath, 'utf8')
 	const window = new Window({
@@ -164,17 +175,33 @@ async function renderDeploymentMapping(response: DeploymentManifestResponse): Pr
 		}
 
 		const runScript = new Function('document', 'fetch', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
-		await runScript(window.document, async () => response, window.HTMLTableSectionElement)
+		const requestedUrls: string[] = []
+		await runScript(
+			window.document,
+			async (requestedUrl: string) => {
+				requestedUrls.push(requestedUrl)
+				return response
+			},
+			window.HTMLTableSectionElement,
+		)
 
-		const mappingBody = window.document.querySelector('#deployment-status-bit-mapping')
-		if (!(mappingBody instanceof window.HTMLTableSectionElement)) {
-			throw new Error(`${filePath} is missing its mapping tbody`)
+		const readMapping = (selector: string): DeploymentMappingResult => {
+			const mappingBody = window.document.querySelector(selector)
+			if (!(mappingBody instanceof window.HTMLTableSectionElement)) {
+				throw new Error(`${filePath} is missing its ${selector} mapping tbody`)
+			}
+			return {
+				busy: mappingBody.getAttribute('aria-busy'),
+				link: mappingBody.querySelector('a')?.getAttribute('href') ?? null,
+				rowCount: mappingBody.querySelectorAll(':scope > tr').length,
+				text: mappingBody.textContent.replaceAll(/\s+/g, ' ').trim(),
+			}
 		}
+
 		return {
-			busy: mappingBody.getAttribute('aria-busy'),
-			link: mappingBody.querySelector('a')?.getAttribute('href') ?? null,
-			rowCount: mappingBody.querySelectorAll(':scope > tr').length,
-			text: mappingBody.textContent.replaceAll(/\s+/g, ' ').trim(),
+			mainnet: readMapping('#deployment-status-bit-mapping'),
+			requestedUrls,
+			sepolia: readMapping('#sepolia-deployment-status-bit-mapping'),
 		}
 	} finally {
 		window.close()
@@ -182,7 +209,7 @@ async function renderDeploymentMapping(response: DeploymentManifestResponse): Pr
 }
 
 async function checkDeploymentMappingStates(): Promise<void> {
-	const success = await renderDeploymentMapping({
+	const success = await renderDeploymentMappings({
 		json: async () => ({
 			deploymentSteps: [
 				{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
@@ -192,12 +219,15 @@ async function checkDeploymentMappingStates(): Promise<void> {
 		ok: true,
 		status: 200,
 	})
-	assert.deepEqual(success, {
+	const expectedSuccess = {
 		busy: 'false',
 		link: null,
 		rowCount: 1,
 		text: '0proxyDeployerProxy Deployer',
-	})
+	}
+	assert.deepEqual(success.mainnet, expectedSuccess)
+	assert.deepEqual(success.sepolia, expectedSuccess)
+	assert.deepEqual(success.requestedUrls, ['./mainnet-deployment-addresses.json', './sepolia-deployment-addresses.json'])
 
 	for (const [scenario, response] of [
 		['HTTP failure', { json: async () => ({}), ok: false, status: 503 }],
@@ -231,11 +261,17 @@ async function checkDeploymentMappingStates(): Promise<void> {
 			},
 		],
 	] as const) {
-		const failure = await renderDeploymentMapping(response)
-		assert.equal(failure.busy, 'false', `${scenario} must clear the busy state`)
-		assert.equal(failure.rowCount, 1, `${scenario} must replace loading with one failure row`)
-		assert.equal(failure.text, 'Unable to load the deployment mapping. Open the canonical manifest.', `${scenario} must show a visible recovery message`)
-		assert.equal(failure.link, './mainnet-deployment-addresses.json', `${scenario} must link to the canonical manifest`)
+		const failure = await renderDeploymentMappings(response)
+		for (const [network, mapping, expectedUrl] of [
+			['mainnet', failure.mainnet, './mainnet-deployment-addresses.json'],
+			['Sepolia', failure.sepolia, './sepolia-deployment-addresses.json'],
+		] as const) {
+			assert.equal(mapping.busy, 'false', `${scenario} must clear the ${network} busy state`)
+			assert.equal(mapping.rowCount, 1, `${scenario} must replace ${network} loading with one failure row`)
+			assert.equal(mapping.text, 'Unable to load the deployment mapping. Open the canonical manifest.', `${scenario} must show a visible ${network} recovery message`)
+			assert.equal(mapping.link, expectedUrl, `${scenario} must link to the canonical ${network} manifest`)
+		}
+		assert.deepEqual(failure.requestedUrls, ['./mainnet-deployment-addresses.json', './sepolia-deployment-addresses.json'])
 	}
 }
 

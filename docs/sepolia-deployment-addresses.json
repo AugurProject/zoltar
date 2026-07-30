@@ -1,11 +1,11 @@
 {
 	"network": {
-		"chainId": 1,
-		"chainIdHex": "0x1",
-		"genesisRepTokenAddress": "0x221657776846890989a759ba2973e427dff5c9bb",
-		"id": "mainnet",
-		"name": "Ethereum Mainnet",
-		"wethAddress": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+		"chainId": 11155111,
+		"chainIdHex": "0xaa36a7",
+		"genesisRepTokenAddress": "0xc5FE385324E4C5D7894d79cbb558CDBF254081c1",
+		"id": "sepolia",
+		"name": "Sepolia",
+		"wethAddress": "0xCF83fB771E5FF502A16f7b5db3acD1e1dC67aE82"
 	},
 	"protocolConfig": {
 		"forkBurnDivisor": "5",
@@ -21,7 +21,17 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x991e673CdA3583d9f1AA8eFb8aD9488De45526A0"
+			"address": "0xdf61F6bC09bDF08E55D0cff4BF8D4808CF53E79f"
+		},
+		{
+			"id": "weth",
+			"label": "Wrapped Ether",
+			"address": "0xCF83fB771E5FF502A16f7b5db3acD1e1dC67aE82"
+		},
+		{
+			"id": "reputationToken",
+			"label": "Genesis Reputation Token",
+			"address": "0xc5FE385324E4C5D7894d79cbb558CDBF254081c1"
 		},
 		{
 			"id": "multicall3",
@@ -56,22 +66,22 @@
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x637BCbcdc8Bb9F476Fe17241C37da31e2B9a1b75"
+			"address": "0xB1948095c044BADd0c990d28B1F65C8d1c91552D"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x14c0f7f81c2D0b9Ac1cCA3fdA11D38Ea4E86a711"
+			"address": "0x0aD86A188DbE58DFEc154c116C93DcaDD853638A"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x4EE0bCbf68807BA58c5baa7a2B63504648ccc7B3"
+			"address": "0xF7FC25204F6905d6ABf8A498560E857615952148"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x7e86D8a40481aAC46cBeC1126aB57aE1F769903b"
+			"address": "0x5F3Bd3f661a06E57978F7d801d73E8F4d04843FD"
 		},
 		{
 			"id": "escalationGameFactory",
@@ -81,7 +91,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xa25C8172EaB05F89bA91960597574af0cA070E2a"
+			"address": "0xBfF2f474C9c5a883E721256cEe511A6eDFe9705D"
 		}
 	],
 	"derivedContracts": [

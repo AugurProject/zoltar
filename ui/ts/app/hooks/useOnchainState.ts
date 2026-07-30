@@ -6,6 +6,7 @@ import { createConnectedReadClient, normalizeAccount } from '../../lib/clients.j
 import type { ChainBackend, ReadBackendStatus } from '../../lib/chainBackend.js'
 import { getErrorMessage, hasErrorCode, hasErrorMessage, isRecoverableContractReadError } from '../../lib/errors.js'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
+import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
 import { getWethAddress } from '../../protocol/uniswapQuoter.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
@@ -399,7 +400,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		}, 'Wallet disconnect failed')
 	const switchNetwork = async () =>
 		await runWalletManagementAction(async backend => {
-			if (backend.switchNetwork === undefined) throw new Error('This wallet does not support switching networks from the application. Switch to Ethereum mainnet in the wallet.')
+			if (backend.switchNetwork === undefined) throw new Error(`This wallet does not support switching networks from the application. Switch to ${getNetworkSwitchTarget(backend.profile)} in the wallet.`)
 			await backend.switchNetwork()
 		}, 'Network switch failed')
 

@@ -12,6 +12,7 @@ import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -45,7 +46,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
 		if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 		return (() => {
 			if (!hasForked) return marketCopy.childUniversesNotForkedReason

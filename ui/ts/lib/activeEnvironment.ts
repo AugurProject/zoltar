@@ -1,7 +1,7 @@
 import type { ChainBackend } from './chainBackend.js'
 import { createInjectedBackend } from './chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import type { NetworkProfile } from './networkProfile.js'
+import { getPublicNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -13,13 +13,14 @@ type LocationLike = {
 	search: string
 }
 
-const injectedBackend = createInjectedBackend()
+const defaultInjectedBackend = createInjectedBackend()
 
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
 
 const SIMULATION_QUERY_PARAM = 'simulate'
 const SIMULATION_QUERY_VALUE = '1'
+const NETWORK_QUERY_PARAM = 'network'
 
 function readLocationParams(location: LocationLike) {
 	const params = new URLSearchParams(location.search)
@@ -60,7 +61,11 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 
 	if (!shouldUseSimulationLocation(location)) {
+		const injectedBackend = createInjectedBackend({
+			profile: getPublicNetworkProfile(readLocationParams(location).get(NETWORK_QUERY_PARAM) ?? undefined),
+		})
 		activeBackend = injectedBackend
+		setRuntimeNetworkProfile(injectedBackend.profile)
 		return injectedBackend
 	}
 
@@ -88,6 +93,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 				})
 	activeBackend = simulationBackend
+	setRuntimeNetworkProfile(simulationBackend.profile)
 	activeSimulationController = simulationBackend
 	void simulationBackend.bootstrap().catch(error => {
 		console.error('[simulation] bootstrap failed', error)
@@ -96,7 +102,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 }
 
 export function getActiveBackend() {
-	return activeBackend ?? injectedBackend
+	return activeBackend ?? defaultInjectedBackend
 }
 
 export function getActiveNetworkProfile(): NetworkProfile {
@@ -110,6 +116,7 @@ export function getActiveSimulationController() {
 function setActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	activeBackend = backend
 	activeSimulationController = simulationController
+	setRuntimeNetworkProfile(backend.profile)
 }
 
 export function installActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
@@ -122,4 +129,5 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 export function resetActiveEnvironmentForTesting() {
 	activeBackend = undefined
 	activeSimulationController = undefined
+	resetRuntimeNetworkProfile()
 }

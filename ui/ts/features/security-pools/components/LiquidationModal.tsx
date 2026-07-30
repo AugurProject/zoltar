@@ -34,6 +34,7 @@ import { formatStatoblastSecurityMultiplier, getVaultCollateralizationPercent } 
 import { useModalFocusIsolation } from '../../../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -293,7 +294,7 @@ export function LiquidationModal({
 		queueLiquidationEthGuardMessage,
 	)
 	const liquidationButtonDisabledReason = (() => {
-		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!isMainnet) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 		if (accountAddress === undefined) return commonCopy.walletConnectionRequired
 		if (!liquidationEnabled) return undefined
 		return liquidationActionReason

@@ -20,8 +20,11 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../../protocol/uniswapQuoter.js'
+import { loadOpenOracleInitialReportPriceResult } from '../../protocol/openOraclePricing.js'
 import type { ReadClient } from '../../lib/clients.js'
-import { MAINNET_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { createFakeBackend } from '../testUtils/fakeBackend.js'
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {
 	poolKey: {
@@ -119,6 +122,31 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 	return client
 }
 void describe('quoteExactInput', () => {
+	void test('does not attempt quote RPC calls when Sepolia REP pricing is unsupported', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			let simulateCalls = 0
+			const client = createStubReadClient()
+			client.simulateContract = async () => {
+				simulateCalls += 1
+				throw new Error('Sepolia must not attempt a quote')
+			}
+
+			const result = await loadOpenOracleInitialReportPriceResult(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, SEPOLIA_NETWORK_PROFILE.wethAddress, 1n)
+
+			expect(result).toEqual({
+				attemptedSources: [],
+				failureKind: 'unsupported-pair',
+				reason: 'Automatic pricing is unavailable on Sepolia because no REP pricing source is configured for this network.',
+				status: 'failure',
+			})
+			await expect(quoteExactInput(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, SEPOLIA_NETWORK_PROFILE.wethAddress, 1n)).rejects.toThrow('Uniswap pricing is unavailable on Sepolia because this network has no configured REP pricing source.')
+			expect(simulateCalls).toBe(0)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
 	void test('returns amountOut from the quoter result', async () => {
 		const { client } = createCapturingClient(500000000000000000n)
 		const result = await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)

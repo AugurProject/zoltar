@@ -26,8 +26,9 @@
 					configured deployment-step addresses currently contain runtime bytecode.
 				</p>
 				<p>
-					The mainnet manifest lists this contract directly, so operators and frontends need a
-					precise explanation of the returned bitmask and the built-in 256-step ceiling.
+					The network deployment manifests list this contract directly, so operators and
+					frontends need a precise explanation of the returned bitmask and the built-in
+					256-step ceiling.
 				</p>
 			</header>
 
@@ -107,9 +108,11 @@
 					out-of-band and starts consuming mask bits from the remaining addresses.
 				</p>
 				<p>
-					The table below renders the complete bit mapping directly from the canonical
-					<a href="./mainnet-deployment-addresses.json">mainnet deployment manifest</a>,
-					excluding <code>deploymentStatusOracle</code>.
+					The tables below render the complete bit mappings directly from the canonical
+					<a href="./mainnet-deployment-addresses.json">mainnet</a> and
+					<a href="./sepolia-deployment-addresses.json">Sepolia</a> deployment manifests,
+					excluding <code>deploymentStatusOracle</code>. Each manifest's ordered
+					<code>deploymentSteps</code> array is the canonical mapping for that network.
 				</p>
 				<table aria-label="Current mainnet deployment-status bit mapping">
 					<thead>
@@ -120,6 +123,20 @@
 						</tr>
 					</thead>
 					<tbody id="deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
+						<tr>
+							<td colspan="3">Loading the canonical manifest…</td>
+						</tr>
+					</tbody>
+				</table>
+				<table aria-label="Current Sepolia deployment-status bit mapping">
+					<thead>
+						<tr>
+							<th>Bit</th>
+							<th>Sepolia step id</th>
+							<th>Label</th>
+						</tr>
+					</thead>
+					<tbody id="sepolia-deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
 						<tr>
 							<td colspan="3">Loading the canonical manifest…</td>
 						</tr>
@@ -157,73 +174,86 @@
 					<li><a href="../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
 					<li><a href="../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
 					<li><a href="./mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
+					<li><a href="./sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a></li>
 				</ul>
 			</section>
 		</main>
 
 		<script src="./chartRuntime.js"></script>
 		<script type="module">
-			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
-			if (!(mappingBody instanceof HTMLTableSectionElement)) {
-				throw new Error('Missing deployment-status mapping tbody')
-			}
+			const mappings = [
+				{
+					bodySelector: '#deployment-status-bit-mapping',
+					manifestUrl: './mainnet-deployment-addresses.json',
+				},
+				{
+					bodySelector: '#sepolia-deployment-status-bit-mapping',
+					manifestUrl: './sepolia-deployment-addresses.json',
+				},
+			]
 
-			const manifestUrl = './mainnet-deployment-addresses.json'
-			try {
-				const response = await fetch(manifestUrl)
-				if (!response.ok) {
-					throw new Error(`Could not load deployment manifest: ${response.status}`)
+			for (const mapping of mappings) {
+				const mappingBody = document.querySelector(mapping.bodySelector)
+				if (!(mappingBody instanceof HTMLTableSectionElement)) {
+					throw new Error('Missing deployment-status mapping tbody')
 				}
-				const manifest = await response.json()
-				if (!manifest || !Array.isArray(manifest.deploymentSteps)) {
-					throw new Error('Deployment manifest has no deploymentSteps array')
-				}
-				for (const step of manifest.deploymentSteps) {
-					if (!step || typeof step.id !== 'string' || step.id.length === 0 || typeof step.label !== 'string' || step.label.length === 0) {
-						throw new Error('Deployment manifest step has an invalid id or label')
+
+				try {
+					const response = await fetch(mapping.manifestUrl)
+					if (!response.ok) {
+						throw new Error(`Could not load deployment manifest: ${response.status}`)
 					}
-				}
-				const stepIds = manifest.deploymentSteps.map((step) => step.id)
-				if (new Set(stepIds).size !== stepIds.length) {
-					throw new Error('Deployment manifest has duplicate step ids')
-				}
-				if (stepIds.filter((id) => id === 'deploymentStatusOracle').length !== 1) {
-					throw new Error('Deployment manifest must contain exactly one deploymentStatusOracle step')
-				}
-				const trackedSteps = manifest.deploymentSteps.filter((step) => step.id !== 'deploymentStatusOracle')
-				if (trackedSteps.length === 0 || trackedSteps.length > 256) {
-					throw new Error('Deployment manifest must contain between 1 and 256 tracked steps')
-				}
-				const rows = trackedSteps.map((step, bit) => {
-					const row = document.createElement('tr')
-					for (const value of [String(bit), step.id, step.label]) {
-						const cell = document.createElement('td')
-						if (value === step.label) {
-							cell.textContent = value
-						} else {
-							const code = document.createElement('code')
-							code.textContent = value
-							cell.append(code)
+					const manifest = await response.json()
+					if (!manifest || !Array.isArray(manifest.deploymentSteps)) {
+						throw new Error('Deployment manifest has no deploymentSteps array')
+					}
+					for (const step of manifest.deploymentSteps) {
+						if (!step || typeof step.id !== 'string' || step.id.length === 0 || typeof step.label !== 'string' || step.label.length === 0) {
+							throw new Error('Deployment manifest step has an invalid id or label')
 						}
-						row.append(cell)
 					}
-					return row
-				})
-				mappingBody.replaceChildren(...rows)
-			} catch {
-				const row = document.createElement('tr')
-				const cell = document.createElement('td')
-				cell.colSpan = 3
-				cell.append('Unable to load the deployment mapping. ')
-				cell.append(document.createElement('br'))
-				const link = document.createElement('a')
-				link.href = manifestUrl
-				link.textContent = 'Open the canonical manifest.'
-				cell.append(link)
-				row.append(cell)
-				mappingBody.replaceChildren(row)
-			} finally {
-				mappingBody.setAttribute('aria-busy', 'false')
+					const stepIds = manifest.deploymentSteps.map((step) => step.id)
+					if (new Set(stepIds).size !== stepIds.length) {
+						throw new Error('Deployment manifest has duplicate step ids')
+					}
+					if (stepIds.filter((id) => id === 'deploymentStatusOracle').length !== 1) {
+						throw new Error('Deployment manifest must contain exactly one deploymentStatusOracle step')
+					}
+					const trackedSteps = manifest.deploymentSteps.filter((step) => step.id !== 'deploymentStatusOracle')
+					if (trackedSteps.length === 0 || trackedSteps.length > 256) {
+						throw new Error('Deployment manifest must contain between 1 and 256 tracked steps')
+					}
+					const rows = trackedSteps.map((step, bit) => {
+						const row = document.createElement('tr')
+						for (const value of [String(bit), step.id, step.label]) {
+							const cell = document.createElement('td')
+							if (value === step.label) {
+								cell.textContent = value
+							} else {
+								const code = document.createElement('code')
+								code.textContent = value
+								cell.append(code)
+							}
+							row.append(cell)
+						}
+						return row
+					})
+					mappingBody.replaceChildren(...rows)
+				} catch {
+					const row = document.createElement('tr')
+					const cell = document.createElement('td')
+					cell.colSpan = 3
+					cell.append('Unable to load the deployment mapping. ')
+					cell.append(document.createElement('br'))
+					const link = document.createElement('a')
+					link.href = mapping.manifestUrl
+					link.textContent = 'Open the canonical manifest.'
+					cell.append(link)
+					row.append(cell)
+					mappingBody.replaceChildren(row)
+				} finally {
+					mappingBody.setAttribute('aria-busy', 'false')
+				}
 			}
 		</script>
 	</body>

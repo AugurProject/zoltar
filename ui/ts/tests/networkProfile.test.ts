@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getPublicNetworkProfile } from '../lib/networkProfile.js'
+import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 
 describe('network profile helpers', () => {
 	test('exports expected defaults for Ethereum mainnet', () => {
@@ -22,6 +23,18 @@ describe('network profile helpers', () => {
 		})
 
 		expect(buildTransactionExplorerUrl(profile, '0xabc')).toBeUndefined()
+	})
+
+	test('defines Sepolia with deterministically deployable WETH and genesis REP', () => {
+		expect(SEPOLIA_NETWORK_PROFILE.id).toBe('sepolia')
+		expect(SEPOLIA_NETWORK_PROFILE.chainIdHex).toBe('0xaa36a7')
+		expect(SEPOLIA_NETWORK_PROFILE.chain.id).toBe(11155111)
+		expect(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress).toBe(SEPOLIA_GENESIS_REP_ADDRESS)
+		expect(SEPOLIA_NETWORK_PROFILE.wethAddress).toBe(SEPOLIA_WETH_ADDRESS)
+		expect(SEPOLIA_NETWORK_PROFILE.repPricingMode).toBe('unavailable')
+		expect(buildTransactionExplorerUrl(SEPOLIA_NETWORK_PROFILE, '0xabc')).toBe('https://sepolia.etherscan.io/tx/0xabc')
+		expect(getPublicNetworkProfile('sepolia')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile(undefined)).toBe(MAINNET_NETWORK_PROFILE)
 	})
 
 	test('creates a deterministic simulation profile from constructor inputs', () => {
