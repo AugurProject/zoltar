@@ -318,7 +318,7 @@ export function App() {
 		startTruthAuction,
 		submitBid,
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices({ enabled: route !== 'deploy' })
+	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
@@ -362,9 +362,11 @@ export function App() {
 		onRefreshRepPrices: refreshRepPrices,
 		onSwitchNetwork: () => void switchNetwork(),
 		parentUniverseId: zoltarUniverse?.parentUniverseId,
+		repPerEthFailure,
 		repPerEthPrice,
 		repPerEthSource,
 		repPerEthSourceUrl,
+		repUsdcFailure,
 		repUsdcPrice,
 		repUsdcSource,
 		repUsdcSourceUrl,

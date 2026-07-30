@@ -2612,12 +2612,14 @@
 								return-value, decimal, and callback behavior assumed by pool and
 								oracle accounting. Mainnet relies on external token behavior;
 								Sepolia relies on verified deployments of the reviewed
-								<code>GenesisReputationToken</code> and <code>WETH9</code> contracts.
+								<code>GenesisReputationToken</code> and <code>WETH9</code> contracts
+								for issuance and transfer mechanics. Burn-sink inaccessibility
+								remains an external assumption on both networks.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Genesis REP transfer returns and moves exactly the requested atomic units rather than charging a fee that leaves pool accounting overstated; child REP supply remains bounded by its contract-enforced theoretical ceiling.</p>
 							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>External assumption (mainnet); safety (Sepolia)</dd></div>
-								<div><dt>Enforcement status</dt><dd>External on mainnet; reviewed contract guards under A23 and A26 on Sepolia</dd></div>
+								<div><dt>Type</dt><dd>External assumption (mainnet); mixed safety and external assumption (Sepolia)</dd></div>
+								<div><dt>Enforcement status</dt><dd>External on mainnet; reviewed issuance and transfer guards under A23 and A26 on Sepolia, with burn-sink inaccessibility still assumed</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/SafeERC20Ops.sol"
 										><code>SafeERC20Ops</code></a

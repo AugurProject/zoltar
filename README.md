@@ -103,14 +103,14 @@ The Sepolia deployment flow includes WETH and genesis REP before the contracts
 that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
 are defined in
 [`shared/ts/sepoliaRepAllocations.ts`](./shared/ts/sepoliaRepAllocations.ts).
-Update that single list before the public testnet deployment; changing it also
-changes the deterministic genesis REP address and every dependent deployment
-address. See the
+Changing that list also changes the deterministic genesis REP address and every
+dependent deployment address. See the
 [Genesis REP deployment procedure](./docs/operator-reference.md#genesis-rep-deployment)
 for constructor guards and recovery steps.
 
-Sepolia does not assume mainnet Uniswap REP liquidity. Quote-dependent actions
-remain unavailable until a supported Sepolia pricing source is configured.
+Sepolia quote-dependent actions query live, network-local Uniswap liquidity.
+The [OpenOracle integration guide](./docs/open-oracle-integration.html#openoracle-role)
+owns the quote-source order and address-selection details.
 
 ## Browser Simulation
 
@@ -132,7 +132,7 @@ Simulation mode details:
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Its **Mint 1 million REP** control credits only the selected QA account inside the tab-local simulation. It raises the simulated REP theoretical supply and, when Zoltar is deployed, synchronizes the genesis universe supply and fork threshold. It does not request a wallet transaction or mint on mainnet or Sepolia. Resetting the simulation or closing the tab discards unsaved credited REP; an explicitly saved or exported simulation snapshot can restore it only inside another browser-local simulation. On public Sepolia, Genesis REP remains limited to the constructor-fixed [allocation list](#sepolia); mainnet REP is unaffected.
 - Simulation does not call Uniswap. Supported REP/ETH, REP/WETH, and REP/USDC quote paths use the configured browser-local mock; unsupported pairs degrade. Simulation prices are not evidence of mainnet liquidity.
-- Mainnet quote-dependent flows rely on live RPC data and available Uniswap liquidity under [A24 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a24). Sepolia does not attempt REP pricing until a source is configured. Available and representative liquidity is an official-client limitation, not a protocol security assumption. If a quote is stale, unavailable, or unsupported, affected client actions should remain blocked or degraded rather than falling back to simulated prices.
+- Mainnet and Sepolia quote-dependent flows rely on live RPC data and available network-local Uniswap liquidity under [A24 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a24). Available and representative liquidity is an official-client limitation, not a protocol security assumption. If a quote is stale, unavailable, or unsupported, affected client actions should remain blocked or degraded rather than falling back to simulated prices.
 - The live simulation chain is ephemeral and exists only in the current browser tab session; explicitly saved or exported snapshots can recreate its state in a later browser-local session
 
 ## Common Commands

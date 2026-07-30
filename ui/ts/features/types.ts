@@ -49,6 +49,8 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
+export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
+
 export type OutcomeChipRowProps = {
 	className?: string
 	items: Array<{
@@ -139,6 +141,7 @@ export type OverviewPanelsProps = {
 	universeLabel: string
 	isRefreshing: boolean
 	repUsdcPrice: bigint | undefined
+	repUsdcFailure: RepPriceFailure | undefined
 	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
@@ -150,6 +153,7 @@ export type OverviewPanelsProps = {
 	onRefreshRepPrices: () => void
 	onSwitchNetwork: () => void
 	readBackendStatus?: ReadBackendStatus
+	repPerEthFailure: RepPriceFailure | undefined
 } & RepPerEthPriceProps
 
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'

@@ -98,10 +98,12 @@ succeed for that tag, and the resulting GitHub release must record the IPFS hash
 emitted from the published artifact.
 
 Production UI release notes should state that `?simulate=1` is a browser-local
-sandbox. Mainnet quote-dependent actions use live RPC data plus available
-Uniswap liquidity, simulation uses its configured mock where supported, and
-Sepolia does not attempt REP pricing until a source is configured. RPC and
-client integrity remain covered by
+sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus
+available network-local Uniswap liquidity, while simulation uses its configured
+mock where supported. The
+[OpenOracle integration guide](./open-oracle-integration.html#openoracle-role)
+owns the quote-source order and network-address details. RPC and client
+integrity remain covered by
 [A24](./security-model.html#assumption-a24), while quote availability and
 representativeness are official-client limitations rather than protocol
 security assumptions. Stale, unavailable, or unsupported quotes are production
@@ -112,10 +114,10 @@ with simulation prices.
 
 Sepolia genesis REP allocations are canonical source data in
 [`shared/ts/sepoliaRepAllocations.ts`](../shared/ts/sepoliaRepAllocations.ts).
-Before a public deployment, replace the documented QA addresses with the
-intended starting holders. Each amount string is denominated in REP and
-`parseUnits(value, 18)` converts it once into atomic units. Review both the REP
-input values and the computed bigint total before deployment.
+The listed holders and 10 million REP amount per holder are the intended
+starting allocations for this release. Each amount string is denominated in REP
+and `parseUnits(value, 18)` converts it once into atomic units. Review both the
+REP input values and the computed bigint total before deployment.
 The `GenesisReputationToken` constructor requires at least one allocation,
 matching holder and balance array lengths, unique nonzero holders, and nonzero
 balances. It emits the standard ERC-20 mint `Transfer` event once for each
@@ -129,7 +131,8 @@ then be regenerated. Because constructor arguments are part of CREATE2 init
 code, any allocation change produces a new genesis REP address and new
 addresses for every deployment step whose constructor wiring depends on it.
 Never continue a deployment from a manifest generated for a different
-allocation list.
+allocation list. A future release that intentionally changes starting holders
+must follow the same source review and full-manifest regeneration procedure.
 
 ## Security Pool Guardrails
 

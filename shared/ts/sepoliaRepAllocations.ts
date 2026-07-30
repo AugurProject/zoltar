@@ -5,20 +5,22 @@ export type SepoliaRepAllocation = {
 	amount: bigint
 }
 
-// Replace or extend this list before the public Sepolia deployment. These
-// deterministic QA addresses are intentionally isolated here so the complete
-// genesis holder set and every minted amount remain auditable in one file.
+// This list is intentionally isolated so the complete Sepolia genesis holder
+// set and every minted amount remain auditable in one file.
 export const SEPOLIA_REP_ALLOCATIONS = [
 	{
-		address: getAddress('0x00000000000000000000000000000000000000a1'),
+		// vitalik.eth
+		address: getAddress('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'),
 		amount: parseUnits('10000000', 18),
 	},
 	{
-		address: getAddress('0x00000000000000000000000000000000000000b2'),
+		// private key 0x1
+		address: getAddress('0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'),
 		amount: parseUnits('10000000', 18),
 	},
 	{
-		address: getAddress('0x00000000000000000000000000000000000000c3'),
+		// dev
+		address: getAddress('0xC6cCd3c2d63bc8De8fcF43EdE80D135666b7aceE'),
 		amount: parseUnits('10000000', 18),
 	},
 ] as const satisfies readonly SepoliaRepAllocation[]

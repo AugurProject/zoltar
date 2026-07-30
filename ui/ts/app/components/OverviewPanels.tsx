@@ -13,7 +13,7 @@ import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
-import type { OverviewPanelsProps } from '../../features/types.js'
+import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
 
@@ -26,6 +26,15 @@ function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainName === undefined) return chainLabel
 	const decimalChainId = getChainIdDecimalLabel(chainId)
 	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
+}
+
+function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
+	if (failure === undefined) return undefined
+	return (
+		<span className='currency-value unavailable' role='status'>
+			{failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity}
+		</span>
+	)
 }
 
 export function OverviewPanels({
@@ -44,9 +53,11 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	parentUniverseId,
 	readBackendStatus,
+	repPerEthFailure,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	repUsdcFailure,
 	repUsdcPrice,
 	repUsdcSource,
 	repUsdcSourceUrl,
@@ -200,7 +211,7 @@ export function OverviewPanels({
 							</span>
 						}
 					>
-						{isRepPricingUnavailable ? repPricingUnavailableLabel : <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />}
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
 					</MetricField>
 					<MetricField
 						className='overview-metric-secondary'
@@ -210,7 +221,7 @@ export function OverviewPanels({
 							</>
 						}
 					>
-						{isRepPricingUnavailable ? repPricingUnavailableLabel : <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />}
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
 					</MetricField>
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}

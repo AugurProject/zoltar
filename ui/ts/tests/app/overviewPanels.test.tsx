@@ -48,9 +48,11 @@ describe('OverviewPanels', () => {
 			onRefreshRepPrices: () => undefined,
 			onSwitchNetwork: () => undefined,
 			parentUniverseId: undefined,
+			repPerEthFailure: undefined,
 			repPerEthPrice: undefined,
 			repPerEthSource: undefined,
 			repPerEthSourceUrl: undefined,
+			repUsdcFailure: undefined,
 			repUsdcPrice: undefined,
 			repUsdcSource: undefined,
 			repUsdcSourceUrl: undefined,
@@ -159,11 +161,22 @@ describe('OverviewPanels', () => {
 
 			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
 			expect(documentQueries.getByText('Read-only')).not.toBeNull()
-			expect(documentQueries.getAllByText('Not configured on Sepolia')).toHaveLength(2)
-			expect(documentQueries.queryByRole('button', { name: 'Refresh REP prices' })).toBeNull()
+			expect(documentQueries.queryByText('Not configured on Sepolia')).toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 		} finally {
 			resetEnvironment()
 		}
+	})
+
+	test('distinguishes missing liquidity from a failed REP price request', async () => {
+		const documentQueries = await renderOverviewPanels({
+			repPerEthFailure: 'no-liquidity',
+			repUsdcFailure: 'rpc-error',
+		})
+
+		expect(documentQueries.getByText('No pool quote')).not.toBeNull()
+		expect(documentQueries.getByText('Quote failed')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
 
 	test('shows a disabled spinner button while a wallet connection request is pending', async () => {
