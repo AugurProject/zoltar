@@ -85,4 +85,15 @@ describe('UniverseLink', () => {
 		const link = documentQueries.getByRole('link', { name: '0xf' }) as HTMLAnchorElement
 		expect(link.getAttribute('href')).toBe(getUniverseLinkHref(15n))
 	})
+
+	test('abbreviates a long universe id visually while preserving its complete accessible name', async () => {
+		const universeId = BigInt('0x1234567890abcdef1234567890abcdef1234567890abcdef')
+		const renderedComponent = await renderIntoDocument(<UniverseLink universeId={universeId} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const fullLabel = `Universe 0x${universeId.toString(16)}`
+		const link = within(document.body).getByRole('link', { name: fullLabel }) as HTMLAnchorElement
+		expect(link.textContent).toBe('Universe 0x12345678…abcdef')
+		expect(link.title).toBe(fullLabel)
+	})
 })

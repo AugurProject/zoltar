@@ -7,8 +7,8 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ActionLauncherCard } from '../../../components/ActionLauncherCard.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { Badge } from '../../../components/Badge.js'
+import { ComparisonRecord } from '../../../components/ComparisonRecord.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { EntityCard } from '../../../components/EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from '../../../components/EnumDropdown.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -26,6 +26,7 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionObjectContext } from '../../../components/TransactionObjectContext.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
@@ -191,26 +192,23 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 	const statusTone = getOpenOracleReportStatusTone(status)
 	const reportTitle = openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())
 	return (
-		<EntityCard
+		<ComparisonRecord
 			key={report.reportId.toString()}
-			className='compact'
 			title={reportTitle}
 			badge={<Badge tone={statusTone}>{status}</Badge>}
-			actions={
-				<div className='actions'>
-					<button aria-label={openOracleCopy.formatOpenReportLabel(reportTitle)} className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
-						{openOracleCopy.openReport}
-					</button>
-				</div>
+			action={
+				<button aria-label={openOracleCopy.formatOpenReportLabel(reportTitle)} className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
+					{openOracleCopy.openReport}
+				</button>
 			}
+			metrics={[
+				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} /> },
+				{ label: openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), value: <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} /> },
+				{ label: openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), value: <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} /> },
+				{ label: openOracleCopy.reportTimestamp, value: <TimestampValue timestamp={report.reportTimestamp} /> },
+				{ label: openOracleCopy.settlementTimestamp, value: <TimestampValue timestamp={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
+			]}
 		>
-			<MetricGrid variant='question'>
-				{renderReportField(openOracleCopy.currentPrice, <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
-				{renderReportField(openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} />)}
-				{renderReportField(openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
-				{renderReportField(openOracleCopy.reportTimestamp, <TimestampValue timestamp={report.reportTimestamp} />)}
-				{renderReportField(openOracleCopy.settlementTimestamp, <TimestampValue timestamp={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} />)}
-			</MetricGrid>
 			<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
 				{renderReportFields([
 					{
@@ -227,7 +225,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 					},
 				])}
 			</ReadOnlyDetailAccordion>
-		</EntityCard>
+		</ComparisonRecord>
 	)
 }
 export function renderSelectedReportActionSection({
@@ -917,6 +915,7 @@ export function OpenOracleSection({
 	const [browseStatusFilter, setBrowseStatusFilter] = useState<BrowseStatusFilter>('all')
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
 	const [touchedCreateFields, setTouchedCreateFields] = useState<ReadonlySet<OpenOracleCreateField>>(new Set())
+	const [dismissedCreateSuccessKey, setDismissedCreateSuccessKey] = useState<string | undefined>(undefined)
 	const changeSelectedReportModal = (modal: SelectedReportModal) => {
 		if (getSelectedWithdrawalBalance(selectedReportModal) !== undefined && modal !== selectedReportModal) onCancelOpenOracleWithdrawalBalanceCheck()
 		setSelectedReportModal(modal)
@@ -959,6 +958,7 @@ export function OpenOracleSection({
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const browseRequestKey = `${environmentRefreshKey}:${browsePageIndex}:${browseReloadKey}:${openOracleResult?.action ?? ''}:${openOracleResult?.hash ?? ''}`
 	const successfulCreateKey = openOracleResult?.action === 'createReportInstance' ? openOracleResult.hash : undefined
+	const showCreateSuccess = successfulCreateKey !== undefined && successfulCreateKey !== dismissedCreateSuccessKey
 	useEffect(() => {
 		if (successfulCreateKey === undefined) return
 		setTouchedCreateFields(new Set())
@@ -1091,7 +1091,7 @@ export function OpenOracleSection({
 							if (currentBrowsePage.reports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
 							if (filteredBrowseReports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
 
-							return <div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+							return <div className='comparison-record-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
 						})()}
 					</SectionBlock>
 				</div>
@@ -1099,267 +1099,285 @@ export function OpenOracleSection({
 
 			{view === 'create' ? (
 				<div className='workflow-stack route-workflow-stack'>
-					{openOracleResult?.action !== 'createReportInstance' ? undefined : (
-						<SectionBlock title={openOracleCopy.createSuccess}>
+					{!showCreateSuccess ? undefined : (
+						<SectionBlock title={openOracleCopy.nextStep}>
 							<div className='actions'>
-								<button className='primary' type='button' onClick={() => onActiveViewChange('browse')}>
+								<button
+									className='primary'
+									type='button'
+									onClick={() => {
+										setDismissedCreateSuccessKey(successfulCreateKey)
+										onActiveViewChange('browse')
+									}}
+								>
 									{commonCopy.returnToBrowse}
 								</button>
-								<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
+								<button className='secondary' type='button' onClick={() => setDismissedCreateSuccessKey(successfulCreateKey)}>
 									{openOracleCopy.createAnother}
 								</button>
 							</div>
 						</SectionBlock>
 					)}
-					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
-						<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
-						<p className='detail'>{openOracleCopy.standaloneOracleIntroduction}</p>
-						<div className='form-grid'>
-							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
-								<div className='field-row'>
-									<div className='field'>
-										<label>
-											<span>{openOracleCopy.token1Address}</span>
-											<FormInput
-												aria-describedby={token1AddressError === undefined ? undefined : 'open-oracle-token1-address-error'}
-												aria-label={openOracleCopy.token1Address}
-												invalid={token1AddressError !== undefined}
-												onBlur={() => markCreateFieldTouched('token1Address')}
-												onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })}
-												placeholder={commonCopy.hexValuePlaceholder}
-												value={openOracleCreateForm.token1Address}
-											/>
-										</label>
-										{token1AddressError === undefined ? undefined : (
-											<p className='field-error' id='open-oracle-token1-address-error' role='alert'>
-												{token1AddressError}
-											</p>
-										)}
-									</div>
-									<div className='field'>
-										<label>
-											<span>{openOracleCopy.token2Address}</span>
-											<FormInput
-												aria-describedby={token2AddressError === undefined ? undefined : 'open-oracle-token2-address-error'}
-												aria-label={openOracleCopy.token2Address}
-												invalid={token2AddressError !== undefined}
-												onBlur={() => markCreateFieldTouched('token2Address')}
-												onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })}
-												placeholder={commonCopy.hexValuePlaceholder}
-												value={openOracleCreateForm.token2Address}
-											/>
-										</label>
-										{token2AddressError === undefined ? undefined : (
-											<p className='field-error' id='open-oracle-token2-address-error' role='alert'>
-												{token2AddressError}
-											</p>
-										)}
-									</div>
-								</div>
-							</SectionBlock>
-
-							<SectionBlock headingLevel={4} title={openOracleCopy.initialEconomics} variant='embedded'>
-								<div className='field-row'>
-									<label className='field'>
-										<span>{openOracleCopy.exactToken1Report}</span>
-										<FormInput
-											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError, 'open-oracle-exact-token1-report-help')}
-											aria-label={openOracleCopy.exactToken1Report}
-											inputMode='decimal'
-											invalid={exactToken1ReportError !== undefined}
-											onBlur={() => markCreateFieldTouched('exactToken1Report')}
-											onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })}
-											value={openOracleCreateForm.exactToken1Report}
-										/>
-										<p id='open-oracle-exact-token1-report-help' className='field-help'>
-											{openOracleCopy.initialToken1AmountHelpText}
-										</p>
-										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError)}
-									</label>
-									<label className='field'>
-										<span>{openOracleCopy.initialToken2Amount}</span>
-										<FormInput
-											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError, 'open-oracle-initial-token2-amount-help')}
-											aria-label={openOracleCopy.initialToken2Amount}
-											inputMode='decimal'
-											invalid={initialToken2AmountError !== undefined}
-											onBlur={() => markCreateFieldTouched('initialToken2Amount')}
-											onInput={event => onOpenOracleCreateFormChange({ initialToken2Amount: event.currentTarget.value })}
-											value={openOracleCreateForm.initialToken2Amount}
-										/>
-										<p id='open-oracle-initial-token2-amount-help' className='field-help'>
-											{openOracleCopy.initialToken2AmountHelpText}
-										</p>
-										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError)}
-									</label>
-								</div>
-								<label className='field'>
-									<span>{openOracleCopy.settlerReward}</span>
-									<FormInput
-										aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError, 'open-oracle-settler-reward-help')}
-										aria-label={openOracleCopy.settlerReward}
-										inputMode='decimal'
-										invalid={settlerRewardError !== undefined}
-										onBlur={() => markCreateFieldTouched('settlerReward')}
-										onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })}
-										value={openOracleCreateForm.settlerReward}
-									/>
-									<p id='open-oracle-settler-reward-help' className='field-help'>
-										{openOracleCopy.settlerRewardHelpText}
-									</p>
-									{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError)}
-								</label>
-								<label className='field'>
-									<span>{openOracleCopy.ethValueToSend}</span>
-									<FormInput
-										aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError, 'open-oracle-eth-value-help')}
-										aria-label={openOracleCopy.ethValueToSend}
-										inputMode='decimal'
-										invalid={ethValueError !== undefined}
-										onBlur={() => markCreateFieldTouched('ethValue')}
-										onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })}
-										value={openOracleCreateForm.ethValue}
-									/>
-									<p id='open-oracle-eth-value-help' className='field-help'>
-										{openOracleCopy.creationFundingRequirementHelpText}
-									</p>
-									{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError)}
-								</label>
-							</SectionBlock>
-
-							<ReadOnlyDetailAccordion title={openOracleCopy.advancedDisputeAndTimingSettings}>
-								<p className='detail'>{openOracleCopy.advancedDisputeAndTimingSettingsDetail}</p>
-								<div className='field-row'>
-									<label className='field'>
-										<span>{openOracleCopy.disputeFeePercentage}</span>
-										<FormInput
-											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
-											aria-label={openOracleCopy.disputeFeePercentage}
-											inputMode='decimal'
-											invalid={feePercentageError !== undefined}
-											onBlur={() => markCreateFieldTouched('feePercentage')}
-											onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })}
-											value={openOracleCreateForm.feePercentage}
-										/>
-										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
-									</label>
-									<label className='field'>
-										<span>{commonCopy.multiplier}</span>
-										<FormInput
-											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError, 'open-oracle-multiplier-help')}
-											aria-label={commonCopy.multiplier}
-											inputMode='numeric'
-											invalid={multiplierError !== undefined}
-											onBlur={() => markCreateFieldTouched('multiplier')}
-											onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })}
-											value={openOracleCreateForm.multiplier}
-										/>
-										<p id='open-oracle-multiplier-help' className='field-help'>
-											{openOracleCopy.escalationMultiplierHelpText}
-										</p>
-										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError)}
-									</label>
-								</div>
-								<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
+					{showCreateSuccess ? undefined : (
+						<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
+							<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
+							<p className='detail'>{openOracleCopy.standaloneOracleIntroduction}</p>
+							<TransactionObjectContext
+								className='mobile-workflow-context'
+								title={openOracleCopy.reportAtAGlance}
+								items={[
+									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} copyable={false} responsiveAbbreviation /> },
+									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} copyable={false} responsiveAbbreviation /> },
+									{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+								]}
+							/>
+							<div className='form-grid'>
+								<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
 									<div className='field-row'>
-										<label className='field'>
-											<span>{openOracleCopy.settlementDelaySeconds}</span>
-											<FormInput
-												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
-												aria-label={openOracleCopy.settlementDelaySeconds}
-												inputMode='numeric'
-												invalid={settlementTimeError !== undefined}
-												onBlur={() => markCreateFieldTouched('settlementTime')}
-												onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })}
-												value={openOracleCreateForm.settlementTime}
-											/>
-											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
-										</label>
-										<label className='field'>
-											<span>{openOracleCopy.escalationHalt}</span>
-											<FormInput
-												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError, 'open-oracle-escalation-halt-help')}
-												aria-label={openOracleCopy.escalationHalt}
-												inputMode='decimal'
-												invalid={escalationHaltError !== undefined}
-												onBlur={() => markCreateFieldTouched('escalationHalt')}
-												onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })}
-												value={openOracleCreateForm.escalationHalt}
-											/>
-											<p id='open-oracle-escalation-halt-help' className='field-help'>
-												{openOracleCopy.disputeEscalationStopAmountHelpText}
-											</p>
-											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError)}
-										</label>
-									</div>
-									<div className='field-row'>
-										<label className='field'>
-											<span>{openOracleCopy.disputeDelaySeconds}</span>
-											<FormInput
-												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
-												aria-label={openOracleCopy.disputeDelaySeconds}
-												inputMode='numeric'
-												invalid={disputeDelayError !== undefined}
-												onBlur={() => markCreateFieldTouched('disputeDelay')}
-												onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })}
-												value={openOracleCreateForm.disputeDelay}
-											/>
-											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
-										</label>
-										<label className='field'>
-											<span>{openOracleCopy.protocolFeePercentage}</span>
-											<FormInput
-												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
-												aria-label={openOracleCopy.protocolFeePercentage}
-												inputMode='decimal'
-												invalid={protocolFeeError !== undefined}
-												onBlur={() => markCreateFieldTouched('protocolFee')}
-												onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })}
-												value={openOracleCreateForm.protocolFee}
-											/>
-											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
-										</label>
+										<div className='field'>
+											<label>
+												<span>{openOracleCopy.token1Address}</span>
+												<FormInput
+													aria-describedby={token1AddressError === undefined ? undefined : 'open-oracle-token1-address-error'}
+													aria-label={openOracleCopy.token1Address}
+													invalid={token1AddressError !== undefined}
+													onBlur={() => markCreateFieldTouched('token1Address')}
+													onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })}
+													placeholder={commonCopy.hexValuePlaceholder}
+													value={openOracleCreateForm.token1Address}
+												/>
+											</label>
+											{token1AddressError === undefined ? undefined : (
+												<p className='field-error' id='open-oracle-token1-address-error' role='alert'>
+													{token1AddressError}
+												</p>
+											)}
+										</div>
+										<div className='field'>
+											<label>
+												<span>{openOracleCopy.token2Address}</span>
+												<FormInput
+													aria-describedby={token2AddressError === undefined ? undefined : 'open-oracle-token2-address-error'}
+													aria-label={openOracleCopy.token2Address}
+													invalid={token2AddressError !== undefined}
+													onBlur={() => markCreateFieldTouched('token2Address')}
+													onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })}
+													placeholder={commonCopy.hexValuePlaceholder}
+													value={openOracleCreateForm.token2Address}
+												/>
+											</label>
+											{token2AddressError === undefined ? undefined : (
+												<p className='field-error' id='open-oracle-token2-address-error' role='alert'>
+													{token2AddressError}
+												</p>
+											)}
+										</div>
 									</div>
 								</SectionBlock>
-								<h4>{openOracleCopy.parameterDetails}</h4>
-								<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
-							</ReadOnlyDetailAccordion>
 
-							<TransactionReview
-								context={[
-									{ label: openOracleCopy.token1Address, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} /> },
-									{ label: openOracleCopy.token2Address, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} /> },
-									{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-								]}
-								primary={[
-									{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
-									{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
-								]}
-								details={[
-									{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
-									{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
-									{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
-									{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
-									{ label: commonCopy.multiplier, value: formatOpenOracleMultiplier(tryParseBigIntInput(openOracleCreateForm.multiplier)) },
-									{ label: openOracleCopy.escalationHalt, value: openOracleCreateForm.escalationHalt || commonCopy.metricUnavailablePlaceholder },
-									{ label: openOracleCopy.protocolFeePercentage, value: `${openOracleCreateForm.protocolFee || commonCopy.metricUnavailablePlaceholder}%` },
-								]}
-								risks={[openOracleCopy.standaloneFundingRisk, openOracleCopy.standaloneDisputeSettingsRisk]}
-							/>
+								<SectionBlock headingLevel={4} title={openOracleCopy.initialEconomics} variant='embedded'>
+									<div className='field-row'>
+										<label className='field'>
+											<span>{openOracleCopy.exactToken1Report}</span>
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError, 'open-oracle-exact-token1-report-help')}
+												aria-label={openOracleCopy.exactToken1Report}
+												inputMode='decimal'
+												invalid={exactToken1ReportError !== undefined}
+												onBlur={() => markCreateFieldTouched('exactToken1Report')}
+												onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })}
+												value={openOracleCreateForm.exactToken1Report}
+											/>
+											<p id='open-oracle-exact-token1-report-help' className='field-help'>
+												{openOracleCopy.initialToken1AmountHelpText}
+											</p>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError)}
+										</label>
+										<label className='field'>
+											<span>{openOracleCopy.initialToken2Amount}</span>
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError, 'open-oracle-initial-token2-amount-help')}
+												aria-label={openOracleCopy.initialToken2Amount}
+												inputMode='decimal'
+												invalid={initialToken2AmountError !== undefined}
+												onBlur={() => markCreateFieldTouched('initialToken2Amount')}
+												onInput={event => onOpenOracleCreateFormChange({ initialToken2Amount: event.currentTarget.value })}
+												value={openOracleCreateForm.initialToken2Amount}
+											/>
+											<p id='open-oracle-initial-token2-amount-help' className='field-help'>
+												{openOracleCopy.initialToken2AmountHelpText}
+											</p>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError)}
+										</label>
+									</div>
+									<label className='field'>
+										<span>{openOracleCopy.settlerReward}</span>
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError, 'open-oracle-settler-reward-help')}
+											aria-label={openOracleCopy.settlerReward}
+											inputMode='decimal'
+											invalid={settlerRewardError !== undefined}
+											onBlur={() => markCreateFieldTouched('settlerReward')}
+											onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })}
+											value={openOracleCreateForm.settlerReward}
+										/>
+										<p id='open-oracle-settler-reward-help' className='field-help'>
+											{openOracleCopy.settlerRewardHelpText}
+										</p>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError)}
+									</label>
+									<label className='field'>
+										<span>{openOracleCopy.ethValueToSend}</span>
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError, 'open-oracle-eth-value-help')}
+											aria-label={openOracleCopy.ethValueToSend}
+											inputMode='decimal'
+											invalid={ethValueError !== undefined}
+											onBlur={() => markCreateFieldTouched('ethValue')}
+											onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })}
+											value={openOracleCreateForm.ethValue}
+										/>
+										<p id='open-oracle-eth-value-help' className='field-help'>
+											{openOracleCopy.creationFundingRequirementHelpText}
+										</p>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError)}
+									</label>
+								</SectionBlock>
 
-							<div className='actions'>
-								<TransactionActionButton
-									idleLabel={openOracleCopy.createStandaloneOracleGame}
-									pendingLabel={openOracleCopy.creating}
-									onClick={onCreateOpenOracleGame}
-									pending={loadingOpenOracleCreate}
-									availability={{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
-									disabledReasonElementId={createDisabledReasonElementId}
-									showDisabledReason={createDisabledReasonElementId === undefined}
+								<ReadOnlyDetailAccordion title={openOracleCopy.advancedDisputeAndTimingSettings}>
+									<p className='detail'>{openOracleCopy.advancedDisputeAndTimingSettingsDetail}</p>
+									<div className='field-row'>
+										<label className='field'>
+											<span>{openOracleCopy.disputeFeePercentage}</span>
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
+												aria-label={openOracleCopy.disputeFeePercentage}
+												inputMode='decimal'
+												invalid={feePercentageError !== undefined}
+												onBlur={() => markCreateFieldTouched('feePercentage')}
+												onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })}
+												value={openOracleCreateForm.feePercentage}
+											/>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
+										</label>
+										<label className='field'>
+											<span>{commonCopy.multiplier}</span>
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError, 'open-oracle-multiplier-help')}
+												aria-label={commonCopy.multiplier}
+												inputMode='numeric'
+												invalid={multiplierError !== undefined}
+												onBlur={() => markCreateFieldTouched('multiplier')}
+												onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })}
+												value={openOracleCreateForm.multiplier}
+											/>
+											<p id='open-oracle-multiplier-help' className='field-help'>
+												{openOracleCopy.escalationMultiplierHelpText}
+											</p>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError)}
+										</label>
+									</div>
+									<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
+										<div className='field-row'>
+											<label className='field'>
+												<span>{openOracleCopy.settlementDelaySeconds}</span>
+												<FormInput
+													aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
+													aria-label={openOracleCopy.settlementDelaySeconds}
+													inputMode='numeric'
+													invalid={settlementTimeError !== undefined}
+													onBlur={() => markCreateFieldTouched('settlementTime')}
+													onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })}
+													value={openOracleCreateForm.settlementTime}
+												/>
+												{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
+											</label>
+											<label className='field'>
+												<span>{openOracleCopy.escalationHalt}</span>
+												<FormInput
+													aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError, 'open-oracle-escalation-halt-help')}
+													aria-label={openOracleCopy.escalationHalt}
+													inputMode='decimal'
+													invalid={escalationHaltError !== undefined}
+													onBlur={() => markCreateFieldTouched('escalationHalt')}
+													onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })}
+													value={openOracleCreateForm.escalationHalt}
+												/>
+												<p id='open-oracle-escalation-halt-help' className='field-help'>
+													{openOracleCopy.disputeEscalationStopAmountHelpText}
+												</p>
+												{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError)}
+											</label>
+										</div>
+										<div className='field-row'>
+											<label className='field'>
+												<span>{openOracleCopy.disputeDelaySeconds}</span>
+												<FormInput
+													aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
+													aria-label={openOracleCopy.disputeDelaySeconds}
+													inputMode='numeric'
+													invalid={disputeDelayError !== undefined}
+													onBlur={() => markCreateFieldTouched('disputeDelay')}
+													onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })}
+													value={openOracleCreateForm.disputeDelay}
+												/>
+												{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
+											</label>
+											<label className='field'>
+												<span>{openOracleCopy.protocolFeePercentage}</span>
+												<FormInput
+													aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
+													aria-label={openOracleCopy.protocolFeePercentage}
+													inputMode='decimal'
+													invalid={protocolFeeError !== undefined}
+													onBlur={() => markCreateFieldTouched('protocolFee')}
+													onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })}
+													value={openOracleCreateForm.protocolFee}
+												/>
+												{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
+											</label>
+										</div>
+									</SectionBlock>
+									<h4>{openOracleCopy.parameterDetails}</h4>
+									<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
+								</ReadOnlyDetailAccordion>
+
+								<TransactionReview
+									context={[
+										{ label: openOracleCopy.token1Address, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} /> },
+										{ label: openOracleCopy.token2Address, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} /> },
+										{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+									]}
+									primary={[
+										{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+										{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
+									]}
+									details={[
+										{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+										{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
+										{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
+										{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
+										{ label: commonCopy.multiplier, value: formatOpenOracleMultiplier(tryParseBigIntInput(openOracleCreateForm.multiplier)) },
+										{ label: openOracleCopy.escalationHalt, value: openOracleCreateForm.escalationHalt || commonCopy.metricUnavailablePlaceholder },
+										{ label: openOracleCopy.protocolFeePercentage, value: `${openOracleCreateForm.protocolFee || commonCopy.metricUnavailablePlaceholder}%` },
+									]}
+									risks={[openOracleCopy.standaloneFundingRisk, openOracleCopy.standaloneDisputeSettingsRisk]}
 								/>
+
+								<div className='actions'>
+									<TransactionActionButton
+										idleLabel={openOracleCopy.createStandaloneOracleGame}
+										pendingLabel={openOracleCopy.creating}
+										onClick={onCreateOpenOracleGame}
+										pending={loadingOpenOracleCreate}
+										availability={{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
+										disabledReasonElementId={createDisabledReasonElementId}
+										showDisabledReason={createDisabledReasonElementId === undefined}
+									/>
+								</div>
 							</div>
-						</div>
-					</SectionBlock>
+						</SectionBlock>
+					)}
 					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}

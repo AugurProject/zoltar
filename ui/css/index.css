@@ -774,6 +774,7 @@ button .loading-value {
 }
 
 .copy-value-wrap {
+	position: relative;
 	display: inline-flex;
 	flex-direction: column;
 	align-items: flex-start;
@@ -782,27 +783,72 @@ button .loading-value {
 	vertical-align: bottom;
 }
 
+.copy-error-recovery-wrap {
+	display: block;
+	max-width: 100%;
+}
+
+.copy-error-recovery {
+	position: relative;
+	width: fit-content;
+	max-width: 100%;
+	margin-top: var(--space-1);
+}
+
+.copy-error-recovery > summary {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	width: fit-content;
+	min-height: var(--touch-target-min);
+	color: var(--danger);
+	cursor: pointer;
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 700;
+	line-height: 1.35;
+	list-style: none;
+}
+
+.copy-error-recovery > summary::before {
+	content: "▸";
+}
+
+.copy-error-recovery[open] > summary::before {
+	content: "▾";
+}
+
+.copy-error-recovery > summary::-webkit-details-marker {
+	display: none;
+}
+
+.copy-error-recovery > summary:focus-visible {
+	border-radius: var(--radius-control);
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.copy-error-recovery-panel {
+	display: grid;
+	gap: var(--space-2);
+	width: min(24rem, 100%);
+	box-sizing: border-box;
+	margin-top: var(--space-1);
+	padding: var(--space-3);
+	border: 1px solid var(--danger-border);
+	border-radius: var(--radius-control);
+	background: var(--surface-section-opaque);
+	box-shadow: none;
+}
+
 .copy-error-message {
 	display: block;
-	max-width: min(24rem, 100%);
-	margin-top: var(--space-1);
 	color: var(--danger);
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 600;
 	line-height: 1.35;
 	overflow-wrap: anywhere;
-}
-
-.copy-error-recovery {
-	display: grid;
-	gap: var(--space-1);
-	width: min(24rem, 100%);
-	margin-top: var(--space-1);
-}
-
-.copy-error-recovery .copy-error-message {
-	margin-top: 0;
 }
 
 .copy-manual-value {
@@ -2059,6 +2105,132 @@ button.wallet-asset-action-pending:disabled {
 .entity-card-list {
 	display: grid;
 	gap: 1.15rem;
+}
+
+.comparison-record-list {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.comparison-record {
+	display: grid;
+	grid-template-columns: minmax(15rem, 1.35fr) minmax(0, 3fr);
+	gap: var(--space-3) var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-section);
+	background: var(--surface-record);
+	box-shadow: var(--glow-inset-subtle);
+}
+
+.comparison-record-header {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.comparison-record-identity {
+	display: grid;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.comparison-record-identity h3 {
+	margin: 0;
+	font-size: var(--font-h3-section);
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.comparison-record-badge {
+	display: flex;
+}
+
+.comparison-record-action {
+	flex: 0 0 auto;
+}
+
+.comparison-record-metrics {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin: 0;
+}
+
+.comparison-record-metrics > div {
+	display: grid;
+	align-content: start;
+	gap: var(--space-1);
+	min-width: 0;
+	padding-left: var(--space-3);
+	border-left: 1px solid var(--divider-subtle);
+}
+
+.comparison-record-metrics dt {
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.comparison-record-metrics dd {
+	min-width: 0;
+	margin: 0;
+	color: var(--value);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-body);
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+.comparison-record-metrics .currency-value {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
+}
+
+.comparison-record-metrics .timestamp-value {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.comparison-record-metrics .timestamp-value-relative {
+	white-space: normal;
+}
+
+.comparison-record-value-stack {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.comparison-record-value-stack .detail {
+	font-family: var(--font-family-sans);
+	font-size: var(--font-label);
+	font-weight: 500;
+}
+
+.comparison-record-collateralization {
+	--collateralization-size: 4.2rem;
+}
+
+.comparison-record-collateralization .collateralization-gauge-label {
+	display: none;
+}
+
+.comparison-record-details {
+	grid-column: 1 / -1;
+	padding-top: var(--space-1);
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.comparison-record-expanded {
+	display: grid;
+	gap: var(--space-3);
 }
 
 .entity-card-subsection {
@@ -3601,6 +3773,14 @@ strong.metric-value-danger {
 	gap: 1.1rem;
 }
 
+.question-create-editor {
+	display: contents;
+}
+
+.question-create-editor[hidden] {
+	display: none;
+}
+
 .field-row {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4417,6 +4597,24 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 @media (max-width: 800px) {
+	.comparison-record {
+		grid-template-columns: 1fr;
+	}
+
+	.comparison-record-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.comparison-record-metrics > div {
+		padding: var(--space-2) 0 0;
+		border-top: 1px solid var(--divider-subtle);
+		border-left: 0;
+	}
+
+	.comparison-record-details {
+		grid-column: auto;
+	}
+
 	.sticky-object-context {
 		top: 0;
 	}
@@ -7265,6 +7463,39 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.85rem;
 }
 
+.selected-pool-change-control {
+	width: fit-content;
+	max-width: 100%;
+}
+
+.selected-pool-change-control > summary {
+	display: flex;
+	align-items: center;
+	min-height: var(--touch-target-min);
+	width: fit-content;
+	color: var(--accent);
+	cursor: pointer;
+	font-size: var(--font-detail);
+	font-weight: 700;
+}
+
+.selected-pool-change-control > summary:hover,
+.selected-pool-change-control > summary:focus-visible {
+	color: var(--text);
+}
+
+.selected-pool-change-control[open] {
+	width: 100%;
+}
+
+.selected-pool-change-control[open] > summary {
+	margin-bottom: var(--space-2);
+}
+
+.mobile-workflow-context {
+	display: none;
+}
+
 .selected-pool-context-nonsticky {
 	display: grid;
 	gap: 0.85rem;
@@ -7847,6 +8078,50 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 @media (max-width: 640px) {
 	main {
 		padding: 0.75rem 0.65rem 2.5rem;
+	}
+
+	.mobile-workflow-context {
+		position: sticky;
+		top: var(--space-2);
+		z-index: 4;
+		display: grid;
+		padding: var(--space-2) var(--space-3);
+		border-color: var(--interactive-border);
+		background: var(--surface-section-opaque);
+		box-shadow: 0 14px 30px var(--shadow-color-soft);
+	}
+
+	.mobile-workflow-context > strong {
+		font-size: var(--font-label);
+	}
+
+	.mobile-workflow-context dl {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.mobile-workflow-context dl > div {
+		padding-top: var(--space-1);
+		border-top: 0;
+	}
+
+	.mobile-workflow-context dd {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.comparison-record {
+		padding: var(--space-3);
+	}
+
+	.comparison-record-header {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.comparison-record-action .primary,
+	.comparison-record-action .secondary {
+		width: 100%;
 	}
 
 	.app-nav-stack {

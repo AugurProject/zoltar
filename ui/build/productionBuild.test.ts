@@ -771,7 +771,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 year')
 			const reportingPoolOpened = await driver.evaluate(
-				`(() => { const card = [...document.querySelectorAll('article.security-pool-card')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(card?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault…')
@@ -879,7 +879,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(
-				`(() => { const card = [...document.querySelectorAll('article.security-pool-card')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(card?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
 			const auctionPoolBody = await driver.waitForBodyText('Fork & Migration')
