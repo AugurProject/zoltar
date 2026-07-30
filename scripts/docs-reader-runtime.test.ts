@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
 const extraGlobalKeys = ['HTMLDetailsElement', 'HTMLAnchorElement', 'HTMLIFrameElement', 'fetch', 'matchMedia'] as const
+type FetchDocument = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 function mediaQueryList(query: string, narrow: boolean): MediaQueryList {
 	return {
@@ -16,7 +17,7 @@ function mediaQueryList(query: string, narrow: boolean): MediaQueryList {
 	}
 }
 
-async function loadReader(narrow: boolean) {
+async function loadReader(narrow: boolean, fetchDocument: FetchDocument = async () => new Response('<!doctype html><html><body><main><h1>Document</h1><h2 id="abstract">Abstract</h2></main></body></html>')) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of extraGlobalKeys) {
 		previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
@@ -34,7 +35,6 @@ async function loadReader(narrow: boolean) {
 	}
 
 	const matchMedia = (query: string) => mediaQueryList(query, narrow)
-	const fetchDocument = async () => new Response('<!doctype html><html><body><main><h1>Document</h1><h2 id="abstract">Abstract</h2></main></body></html>')
 	Object.defineProperty(globalThis, 'fetch', { configurable: true, value: fetchDocument, writable: true })
 	Reflect.set(environment.window, 'fetch', fetchDocument)
 	Object.defineProperty(globalThis, 'matchMedia', { configurable: true, value: matchMedia, writable: true })
@@ -165,5 +165,54 @@ test('documentation reader collapse state remains accessible on desktop and narr
 		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
 	} finally {
 		narrowReader.cleanup()
+	}
+})
+
+test('narrow navigation collapses and transfers focus before loading settles', async () => {
+	let resolveDocument: ((response: Response) => void) | undefined
+	const pendingFetch: FetchDocument = async input => {
+		if (!String(input).includes('zoltar-whitepaper.html')) {
+			return new Response('<!doctype html><html><body><main><h1>Document</h1></main></body></html>')
+		}
+		return await new Promise<Response>(resolve => {
+			resolveDocument = resolve
+		})
+	}
+	const pendingReader = await loadReader(true, pendingFetch)
+	try {
+		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
+		const link = documentLink('zoltar-whitepaper.html')
+		link.focus()
+		link.click()
+
+		expect(document.activeElement?.id).toBe('reader-content')
+		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
+		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
+
+		if (resolveDocument === undefined) throw new Error('Pending document request did not start')
+		resolveDocument(new Response('<!doctype html><html><body><main><h1>Zoltar</h1></main></body></html>'))
+		await waitForHistory()
+		expect(location.hash).toBe('#doc-zoltar-whitepaper')
+	} finally {
+		pendingReader.cleanup()
+	}
+
+	const rejectedFetch: FetchDocument = async input => {
+		if (String(input).includes('zoltar-whitepaper.html')) throw new TypeError('Document request failed')
+		return new Response('<!doctype html><html><body><main><h1>Document</h1></main></body></html>')
+	}
+	const rejectedReader = await loadReader(true, rejectedFetch)
+	try {
+		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
+		const link = documentLink('zoltar-whitepaper.html')
+		link.focus()
+		link.click()
+
+		expect(document.activeElement?.id).toBe('reader-content')
+		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
+		await waitForHistory()
+		expect(document.querySelector('.reader-frame-error')).not.toBeNull()
+	} finally {
+		rejectedReader.cleanup()
 	}
 })

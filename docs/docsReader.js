@@ -657,16 +657,16 @@ async function navigateToDocument(path, fragment = '', updateHistory = true) {
 	const currentNavigationVersion = navigationVersion + 1
 	navigationVersion = currentNavigationVersion
 	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
-	await selectDocument(path, fragment)
-	if (updateHistory && navigationVersion === currentNavigationVersion && activePath === path) {
-		readerScrollByUrl.set(currentUrl, currentScrollY)
-		window.history.pushState({}, '', `#${readerHash}`)
-	}
 	if (window.matchMedia('(max-width: 980px)').matches) {
 		const sidebarPanel = document.querySelector('[data-sidebar-panel]')
 		const shouldMoveFocus = sidebarPanel instanceof HTMLElement && sidebarPanel.contains(document.activeElement)
 		setSidebarCollapsed(true)
 		if (shouldMoveFocus) document.querySelector('#reader-content')?.focus()
+	}
+	await selectDocument(path, fragment)
+	if (updateHistory && navigationVersion === currentNavigationVersion && activePath === path) {
+		readerScrollByUrl.set(currentUrl, currentScrollY)
+		window.history.pushState({}, '', `#${readerHash}`)
 	}
 }
 
