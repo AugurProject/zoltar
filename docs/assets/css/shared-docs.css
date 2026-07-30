@@ -3353,6 +3353,52 @@ body.paper-zoltar .footer-note {
 	outline-offset: 0.2rem;
 }
 
+.docs-equation-compact {
+	display: none;
+}
+
+.equation-compact-active {
+	overflow-x: hidden !important;
+}
+
+.equation-compact-active > math {
+	position: absolute;
+	width: 1px !important;
+	height: 1px;
+	margin: -1px !important;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.equation-compact-active > .docs-equation-compact {
+	display: grid;
+	gap: 0.7rem;
+	font-family: var(--mono);
+	font-size: clamp(0.78rem, 3.3vw, 0.9rem);
+	line-height: 1.45;
+}
+
+.docs-equation-compact-row {
+	display: grid;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.docs-equation-compact-label {
+	color: var(--ink);
+	font-weight: 750;
+}
+
+.docs-equation-compact-expression {
+	min-width: 0;
+	padding-inline-start: 0.65rem;
+	color: var(--ink);
+	white-space: normal;
+}
+
 .docs-auto-table-scroll {
 	max-width: 100%;
 	overflow-x: auto;

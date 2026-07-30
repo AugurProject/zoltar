@@ -1,6 +1,91 @@
 ;(() => {
 	const overflowThreshold = 1
 	const minimumEquationFontSize = 13
+	const compactEquationQuery = '(max-width: 640px)'
+	const suggestedBreakOperators = new Set(['=', '+', '-', '−', '·', '×', '/', '<', '>', '≤', '≥'])
+	const definitionRelations = new Set(['=', '<', '>', '≤', '≥', '≈', '≠', ':='])
+
+	function prepareMathBreakHints(math) {
+		for (const operator of math.querySelectorAll('mo')) {
+			if (!suggestedBreakOperators.has((operator.textContent ?? '').trim())) continue
+			if (!operator.hasAttribute('linebreak')) operator.setAttribute('linebreak', 'goodbreak')
+			if (!operator.hasAttribute('linebreakstyle')) operator.setAttribute('linebreakstyle', 'after')
+		}
+	}
+
+	function mathText(node) {
+		if (node.nodeType === 3) return node.textContent ?? ''
+		if (!(node instanceof Element)) return ''
+
+		const childText = () => Array.from(node.childNodes).map(mathText).join('')
+		const children = Array.from(node.children)
+		const name = node.localName
+		if (name === 'mfrac' && children.length >= 2) {
+			return `(${mathText(children[0])}) / (${mathText(children[1])})`
+		}
+		if (name === 'msup' && children.length >= 2) return `${mathText(children[0])}^(${mathText(children[1])})`
+		if (name === 'msub' && children.length >= 2) return `${mathText(children[0])}_(${mathText(children[1])})`
+		if (name === 'msubsup' && children.length >= 3) {
+			return `${mathText(children[0])}_(${mathText(children[1])})^(${mathText(children[2])})`
+		}
+		if (name === 'msqrt') return `sqrt(${childText()})`
+		if (name === 'mroot' && children.length >= 2) return `root(${mathText(children[0])}, ${mathText(children[1])})`
+		if (name === 'mtext') return ` ${node.textContent ?? ''} `
+		if (name === 'mo') {
+			const operator = (node.textContent ?? '').trim()
+			return ['(', ')', '[', ']', '{', '}'].includes(operator) ? operator : ` ${operator} `
+		}
+		return childText()
+	}
+
+	function breakableEquationText(value) {
+		return value
+			.replace(/\s+/g, ' ')
+			.trim()
+			.replace(/\(\s+/g, '(')
+			.replace(/\s+\)/g, ')')
+			.replace(/([a-z0-9])([A-Z])/g, '$1\u200b$2')
+			.replace(/([=+×·/<>≤≥,])/g, '$1\u200b')
+	}
+
+	function prepareCompactEquation(equation, math) {
+		const table = math.querySelector('mtable')
+		const existing = equation.querySelector(':scope > .docs-equation-compact')
+		const rows = table === null ? [] : Array.from(table.querySelectorAll(':scope > mtr'))
+		const rowCells = rows.map(row => Array.from(row.children).filter(cell => cell.localName === 'mtd'))
+		const isDefinitionTable = rowCells.length > 0 && rowCells.every(cells => cells.length >= 3 && definitionRelations.has(mathText(cells[1]).trim()))
+		if (!isDefinitionTable) {
+			existing?.remove()
+			equation.classList.remove('equation-compact-active')
+			return false
+		}
+
+		if (existing === null) {
+			const compact = document.createElement('div')
+			compact.className = 'docs-equation-compact'
+			compact.setAttribute('aria-hidden', 'true')
+			for (const cells of rowCells) {
+				const label = cells[0] === undefined ? '' : mathText(cells[0])
+				const relation = cells[1] === undefined ? '' : mathText(cells[1])
+				const expression = cells.slice(2).map(mathText).join(' ')
+				const compactRow = document.createElement('div')
+				compactRow.className = 'docs-equation-compact-row'
+				const compactLabel = document.createElement('span')
+				compactLabel.className = 'docs-equation-compact-label'
+				compactLabel.textContent = breakableEquationText(label)
+				const compactExpression = document.createElement('span')
+				compactExpression.className = 'docs-equation-compact-expression'
+				compactExpression.textContent = breakableEquationText(`${relation} ${expression}`)
+				compactRow.append(compactLabel, compactExpression)
+				compact.append(compactRow)
+			}
+			math.after(compact)
+		}
+
+		const compactActive = window.matchMedia(compactEquationQuery).matches
+		equation.classList.toggle('equation-compact-active', compactActive)
+		return compactActive
+	}
 
 	function overflowCue(element, isOverflowing, label) {
 		let cue = element.querySelector(':scope > .docs-overflow-cue')
@@ -31,7 +116,12 @@
 		const math = equation.querySelector('math')
 		if (math === null) return
 		equation.classList.toggle('equation-array', math.querySelector('mtable') !== null)
+		prepareMathBreakHints(math)
 		math.style.removeProperty('font-size')
+		if (prepareCompactEquation(equation, math)) {
+			overflowCue(equation, false, '')
+			return
+		}
 
 		const computedStyle = getComputedStyle(equation)
 		const availableWidth = equation.clientWidth - Number.parseFloat(computedStyle.paddingLeft) - Number.parseFloat(computedStyle.paddingRight)
