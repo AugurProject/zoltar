@@ -20,6 +20,67 @@
 	height: auto;
 }
 
+.plot-figure-quantitative > .plot-chart,
+.plot-figure-quantitative > .plot-chart > svg,
+.plot-figure-fit > .plot-chart,
+.plot-figure-fit > .plot-chart > svg {
+	width: 100% !important;
+	min-width: 0 !important;
+	max-width: 100% !important;
+}
+
+.plot-chart-toolbar {
+	position: sticky;
+	z-index: 2;
+	left: 0.5rem;
+	display: flex;
+	width: fit-content;
+	max-width: calc(100% - 1rem);
+	gap: 0.55rem;
+	align-items: center;
+	margin: 0 0 0.55rem;
+	padding: 0.35rem;
+	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+	border-radius: 0.5rem;
+	background: color-mix(in srgb, var(--paper, #fff) 94%, transparent);
+	box-shadow: 0 0.35rem 1rem rgba(15, 23, 31, 0.08);
+	backdrop-filter: blur(10px);
+}
+
+.plot-chart-toolbar[hidden] {
+	display: none;
+}
+
+.plot-chart-toolbar button {
+	flex: 0 0 auto;
+	padding: 0.42rem 0.62rem;
+	border: 1px solid var(--blue, var(--accent, #176653));
+	border-radius: 0.38rem;
+	background: var(--paper, #fff);
+	color: var(--blue, var(--accent, #176653));
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.plot-chart-toolbar button:hover {
+	background: var(--blue-soft, var(--accent-soft, #dcece5));
+}
+
+.plot-chart-toolbar button:focus-visible {
+	outline: 2px solid var(--blue, var(--accent, #176653));
+	outline-offset: 2px;
+}
+
+.plot-chart-pan-cue {
+	min-width: 0;
+	color: var(--muted, #5f6d75);
+	font-size: 0.73rem;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
 .plot-chart-fallback {
 	display: block;
 	padding: 1rem;
@@ -65,6 +126,29 @@
 .term-tooltip[data-visible="true"] {
 	opacity: 1;
 	transform: translateY(0);
+}
+
+/* Documents embedded by documentation.html use the outer reader navigation. */
+body.reader-embedded > .skip-link,
+body.paper-statoblast.reader-embedded .sidebar,
+body.paper-zoltar.reader-embedded .sidebar {
+	display: none;
+}
+
+body.paper-statoblast.reader-embedded .site-shell,
+body.paper-zoltar.reader-embedded .site-shell {
+	display: block;
+	width: min(var(--docs-page-width), calc(100% - var(--docs-page-inline-gutter-mobile)));
+	padding: 0.5rem 0 2rem;
+}
+
+body.paper-statoblast.reader-embedded .paper-content,
+body.paper-zoltar.reader-embedded .paper-content {
+	min-width: 0;
+}
+
+body.doc-openoracle.reader-embedded main {
+	padding-top: 0.5rem;
 }
 
 /* OpenOracle integration document */
@@ -238,6 +322,121 @@ body.doc-openoracle .invariant-metadata {
 	gap: 0.65rem;
 	margin: 0.85rem 0 0;
 }
+
+body.doc-openoracle .invariant-explorer {
+	position: sticky;
+	z-index: 5;
+	top: 0.5rem;
+	box-shadow: 0 0.8rem 2rem rgba(15, 23, 31, 0.1);
+}
+
+body.doc-openoracle .invariant-explorer-controls {
+	display: grid;
+	grid-template-columns: minmax(13rem, 1.5fr) repeat(3, minmax(10rem, 1fr));
+	gap: 0.65rem;
+}
+
+body.doc-openoracle .invariant-explorer-controls label {
+	display: grid;
+	gap: 0.25rem;
+	color: var(--muted);
+	font-size: 0.75rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+body.doc-openoracle .invariant-explorer-controls input,
+body.doc-openoracle .invariant-explorer-controls select {
+	width: 100%;
+	min-height: 2.6rem;
+	padding: 0.5rem 0.6rem;
+	border: 1px solid var(--line);
+	border-radius: 0.4rem;
+	background: var(--paper);
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.85rem;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+body.doc-openoracle .invariant-explorer-controls input:focus-visible,
+body.doc-openoracle .invariant-explorer-controls select:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+
+body.doc-openoracle .invariant-explorer-actions,
+body.doc-openoracle .invariant-entry-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+body.doc-openoracle .invariant-explorer-actions {
+	margin-top: 0.75rem;
+}
+
+body.doc-openoracle .invariant-explorer-actions button,
+body.doc-openoracle .invariant-entry-actions button,
+body.doc-openoracle .invariant-entry-actions a {
+	min-height: 2.2rem;
+	padding: 0.4rem 0.65rem;
+	border: 1px solid var(--line);
+	border-radius: 0.4rem;
+	background: var(--paper);
+	color: var(--blue);
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 800;
+	line-height: 1.3;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+body.doc-openoracle .invariant-explorer-actions button:hover,
+body.doc-openoracle .invariant-entry-actions button:hover,
+body.doc-openoracle .invariant-entry-actions a:hover {
+	border-color: var(--blue);
+	background: var(--blue-soft);
+}
+
+body.doc-openoracle .invariant-result-count {
+	margin: 0.7rem 0 0;
+	color: var(--blue);
+	font-size: 0.85rem;
+	font-weight: 800;
+}
+
+body.doc-openoracle .invariant-no-results {
+	margin: 0.55rem 0 0;
+	color: var(--red);
+}
+
+body.doc-openoracle .invariant-entry-actions {
+	margin: 0 0 0.8rem;
+	padding-bottom: 0.65rem;
+	border-bottom: 1px solid var(--line);
+}
+
+body.doc-openoracle .invariant-copy-status {
+	min-width: 5rem;
+	color: var(--muted);
+	font-size: 0.75rem;
+}
+
+body.doc-openoracle [data-deployment-bit-status][data-mask-state="set"] {
+	background: var(--green-soft);
+	color: var(--green);
+	font-weight: 800;
+}
+
+body.doc-openoracle [data-deployment-bit-status][data-mask-state="clear"] {
+	color: var(--muted);
+}
+
 body.doc-openoracle .invariant-metadata > div {
 	padding: 0.65rem 0.7rem;
 	border: 1px solid var(--line);
@@ -529,6 +728,106 @@ body.paper-statoblast .interactive-example summary {
 	cursor: pointer;
 	font-weight: 700;
 }
+
+.interactive-tool-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.55rem;
+	align-items: end;
+	margin: 0.8rem 0;
+	padding: 0.65rem;
+	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+	border-radius: var(--radius, 0.5rem);
+	background: var(--soft, var(--section-bg, rgba(0, 0, 0, 0.035)));
+}
+
+.interactive-tool-toolbar label {
+	display: grid;
+	flex: 1 1 11rem;
+	gap: 0.2rem;
+	color: var(--muted, #5f6d75);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.interactive-tool-toolbar select,
+.interactive-tool-toolbar button {
+	min-height: 2.4rem;
+	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+	border-radius: 0.4rem;
+	background: var(--paper, #fff);
+	color: var(--ink, #1f2529);
+	font: inherit;
+	font-size: 0.82rem;
+}
+
+.interactive-tool-toolbar select {
+	width: 100%;
+	padding: 0.45rem 1.8rem 0.45rem 0.55rem;
+}
+
+.interactive-tool-toolbar button {
+	flex: 0 0 auto;
+	padding: 0.45rem 0.7rem;
+	color: var(--blue, var(--accent, #176653));
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.interactive-tool-toolbar button:hover {
+	border-color: var(--blue, var(--accent, #176653));
+	background: var(--blue-soft, var(--accent-soft, #dcece5));
+}
+
+.interactive-tool-toolbar select:disabled,
+.interactive-tool-toolbar button:disabled {
+	opacity: 0.52;
+	cursor: not-allowed;
+}
+
+.interactive-tool-toolbar button:disabled:hover {
+	border-color: var(--line, rgba(0, 0, 0, 0.15));
+	background: var(--paper, #fff);
+}
+
+.interactive-tool-toolbar select:focus-visible,
+.interactive-tool-toolbar button:focus-visible {
+	outline: 2px solid var(--blue, var(--accent, #176653));
+	outline-offset: 2px;
+}
+
+.interactive-tool-status {
+	flex: 1 0 100%;
+	min-height: 1.1rem;
+	color: var(--muted, #5f6d75);
+	font-size: 0.76rem;
+	line-height: 1.4;
+}
+
+.interactive-tool-retry {
+	min-height: 2.4rem;
+	padding: 0.45rem 0.75rem;
+	border: 1px solid var(--blue, var(--accent, #176653));
+	border-radius: 0.4rem;
+	background: var(--paper, #fff);
+	color: var(--blue, var(--accent, #176653));
+	font: inherit;
+	font-size: 0.82rem;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.interactive-tool-retry:hover {
+	background: var(--blue-soft, var(--accent-soft, #dcece5));
+}
+
+.interactive-tool-retry:focus-visible {
+	outline: 2px solid var(--blue, var(--accent, #176653));
+	outline-offset: 2px;
+}
+
 body.doc-openoracle .example-grid,
 body.paper-statoblast .example-grid {
 	display: grid;
@@ -545,7 +844,9 @@ body.paper-statoblast .example-grid label {
 	font-weight: 650;
 }
 body.doc-openoracle .example-grid input,
-body.paper-statoblast .example-grid input {
+body.doc-openoracle .example-grid select,
+body.paper-statoblast .example-grid input,
+body.paper-statoblast .example-grid select {
 	width: 100%;
 	padding: 0.45rem 0.5rem;
 	border: 1px solid var(--line);
@@ -566,8 +867,14 @@ body.doc-openoracle .example-value {
 }
 body.doc-openoracle .example-output,
 body.paper-statoblast .example-output {
+	min-width: 0;
 	margin: 0;
 	padding-left: 1.1rem;
+	overflow-wrap: anywhere;
+}
+body.doc-openoracle .example-output > *,
+body.paper-statoblast .example-output > * {
+	min-width: 0;
 }
 body.doc-openoracle .example-output-grid {
 	display: grid;
@@ -576,6 +883,7 @@ body.doc-openoracle .example-output-grid {
 	margin-top: 1rem;
 }
 body.doc-openoracle .example-output-grid div {
+	min-width: 0;
 	padding: 0.75rem;
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
@@ -592,6 +900,7 @@ body.doc-openoracle .example-output-grid output {
 	margin-top: 0.25rem;
 	color: var(--ink);
 	font-weight: 800;
+	overflow-wrap: anywhere;
 }
 body.doc-openoracle .example-visual {
 	margin: 1rem 0;
@@ -695,6 +1004,12 @@ body.doc-openoracle td math {
 		padding: 0.8rem;
 	}
 	body.doc-openoracle .invariant-metadata {
+		grid-template-columns: 1fr;
+	}
+	body.doc-openoracle .invariant-explorer {
+		position: static;
+	}
+	body.doc-openoracle .invariant-explorer-controls {
 		grid-template-columns: 1fr;
 	}
 	body.security-model .assumption-nav {
@@ -2812,5 +3127,181 @@ body.paper-zoltar .footer-note {
 	body.paper-zoltar a {
 		color: #111;
 		text-decoration: none;
+	}
+}
+
+/*
+	Inside the searchable reader, every source document adopts the reader's visual
+	vocabulary. Standalone pages retain their own theme and print treatment.
+*/
+@media screen {
+	body.reader-embedded {
+		color-scheme: light;
+		--bg: #fffdf8;
+		--paper: #fffdf8;
+		--ink: #17201d;
+		--muted: #65706b;
+		--line: #d8d4ca;
+		--soft: #f3f0e9;
+		--soft-line: #e7e2d8;
+		--card-bg: #fbf9f4;
+		--section-bg: #f7f4ed;
+		--code-bg: #f4ede2;
+		--table-head: #eeeae1;
+		--green: #176653;
+		--green-soft: #dcece5;
+		--blue: #176653;
+		--blue-soft: #dcece5;
+		--gold: #9b4f2d;
+		--gold-soft: #f2dfd4;
+		--teal: #176653;
+		--teal-soft: #dcece5;
+		--red: #98483b;
+		--red-soft: #f2d9d3;
+		--accent: #176653;
+		--accent-soft: #dcece5;
+		--accent-2: #9b4f2d;
+		--accent-2-soft: #f2dfd4;
+		--accent-rgb: 23 102 83;
+		--accent-2-rgb: 155 79 45;
+		--diagram-line: #65706b;
+		--focus: #176653;
+		--radius: 0.75rem;
+		--radius-sm: 0.45rem;
+		--shadow: none;
+		--section-shadow: none;
+		margin: 0;
+		background: var(--paper);
+		color: var(--ink);
+		font-family: var(--docs-font-sans);
+		font-size: 1rem;
+		line-height: 1.62;
+	}
+
+	body.reader-embedded::before {
+		display: none;
+	}
+
+	body.doc-openoracle.reader-embedded main,
+	body.paper-statoblast.reader-embedded .site-shell,
+	body.paper-zoltar.reader-embedded .site-shell {
+		display: block;
+		width: 100%;
+		max-width: none;
+		margin: 0;
+		padding: clamp(0.55rem, 1.8vw, 1rem);
+	}
+
+	body.paper-statoblast.reader-embedded .paper-content,
+	body.paper-zoltar.reader-embedded .paper-content {
+		width: 100%;
+		min-width: 0;
+	}
+
+	body.reader-embedded :is(h1, h2) {
+		font-family: Georgia, "Times New Roman", serif;
+		font-weight: 500;
+		letter-spacing: -0.025em;
+	}
+
+	body.doc-openoracle.reader-embedded h1,
+	body.paper-statoblast.reader-embedded h1,
+	body.paper-zoltar.reader-embedded h1 {
+		max-width: 19ch;
+		font-size: clamp(2.25rem, 5.5vw, 3.7rem);
+		line-height: 1.03;
+	}
+
+	body.doc-openoracle.reader-embedded h2,
+	body.paper-statoblast.reader-embedded .paper-section h2,
+	body.paper-zoltar.reader-embedded .paper-section h2 {
+		font-size: clamp(1.55rem, 3.5vw, 2.3rem);
+		line-height: 1.12;
+	}
+
+	body.reader-embedded a {
+		color: var(--accent);
+		text-decoration-thickness: 0.08em;
+		text-underline-offset: 0.18em;
+	}
+
+	body.reader-embedded a:hover {
+		color: var(--ink);
+	}
+
+	body.reader-embedded :is(a, button, input, select, [tabindex]):focus-visible {
+		outline: 3px solid var(--accent-soft);
+		outline-offset: 2px;
+	}
+
+	body.doc-openoracle.reader-embedded header,
+	body.paper-statoblast.reader-embedded .hero,
+	body.paper-zoltar.reader-embedded .hero {
+		margin: 0 0 0.9rem;
+		padding: clamp(1.25rem, 4vw, 2.5rem);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		background: radial-gradient(circle at 92% 4%, rgb(var(--accent-2-rgb) / 11%), transparent 20rem), linear-gradient(145deg, var(--paper), var(--section-bg));
+		box-shadow: none;
+	}
+
+	body.doc-openoracle.reader-embedded section,
+	body.paper-statoblast.reader-embedded .paper-section,
+	body.paper-zoltar.reader-embedded .paper-section {
+		margin: 0.9rem 0 0;
+		padding: clamp(1rem, 3vw, 1.75rem);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		background: var(--paper);
+		box-shadow: none;
+	}
+
+	body.reader-embedded :is(.meta-card, .summary-card) {
+		border-top-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+	}
+
+	body.reader-embedded :is(.diagram, .equation, .example-visual, .interactive-example, .table-wrap) {
+		border-color: var(--line);
+		border-radius: 0.65rem;
+		box-shadow: none;
+	}
+
+	body.reader-embedded .interactive-tool-toolbar {
+		border-color: var(--line);
+		border-radius: 0.65rem;
+		background: var(--soft);
+	}
+
+	body.reader-embedded :is(.interactive-tool-toolbar select, .interactive-tool-toolbar button, .interactive-tool-retry) {
+		border-radius: 0.5rem;
+		background: var(--paper);
+	}
+
+	body.reader-embedded :is(table, th, td) {
+		border-color: var(--line);
+	}
+
+	body.reader-embedded th {
+		background: var(--table-head);
+	}
+}
+
+@media screen and (max-width: 640px) {
+	body.doc-openoracle.reader-embedded main,
+	body.paper-statoblast.reader-embedded .site-shell,
+	body.paper-zoltar.reader-embedded .site-shell {
+		padding: 0.4rem;
+	}
+
+	body.doc-openoracle.reader-embedded header,
+	body.paper-statoblast.reader-embedded .hero,
+	body.paper-zoltar.reader-embedded .hero {
+		padding: 1.05rem;
+	}
+
+	body.doc-openoracle.reader-embedded section,
+	body.paper-statoblast.reader-embedded .paper-section,
+	body.paper-zoltar.reader-embedded .paper-section {
+		padding: 0.85rem;
 	}
 }

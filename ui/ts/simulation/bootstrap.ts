@@ -354,8 +354,8 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 	}
 }
 
-async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
-	const steps = getDeploymentSteps()
+async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
+	const steps = getDeploymentSteps(profile)
 	for (const [index, step] of steps.entries()) {
 		const code = await memoryClient.getCode({ address: step.address })
 		if (code !== undefined && code !== '0x') {
@@ -1133,10 +1133,10 @@ async function applyScenario({
 			await reportBootstrapProgress(onProgress, 'Using baseline simulation scenario', 0.84)
 			return
 		case 'deployed':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.92 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.92 })
 			return
 		case 'security-pool':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.78 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 })
 			await seedSecurityPoolScenario({
 				accounts,
 				createReadClient,
@@ -1147,7 +1147,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2Scenario({
 				accounts,
 				createReadClient,
@@ -1158,7 +1158,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2-auction':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2AuctionScenario({
 				accounts,
 				createReadClient,
@@ -1198,7 +1198,7 @@ export async function bootstrapSimulationChain({
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
-	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
+	const zoltarStep = getDeploymentSteps(profile).find(step => step.id === 'zoltar')
 	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step for simulation bootstrap')
 
 	await deploySimulationTokens({

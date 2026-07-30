@@ -255,9 +255,14 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		uint256 vaultPoolOwnership = childCurrentPoolOwnership + parentPoolOwnership;
 		uint256 vaultFeeIndex = childCurrentSecurityBondAllowance > 0 ? childCurrentFeeIndex : 0;
 		if (parentSecurityBondAllowance > 0) vaultFeeIndex = child.feeIndex();
-		if (parent.poolOwnershipDenominator() > 0 && parentRepAtFork > 0 && parentPoolOwnership > 0) {
-			migratedRep = (parentPoolOwnership * parentRepAtFork) / parent.poolOwnershipDenominator();
+		uint256 parentOwnershipDenominator = parent.poolOwnershipDenominator();
+		if (parentOwnershipDenominator > 0 && parentRepAtFork > 0 && parentPoolOwnership > 0) {
 			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
+			childForkData.migratedPoolOwnership += parentPoolOwnership;
+			migratedRep =
+				childForkData.migratedPoolOwnership == parentOwnershipDenominator
+					? parentRepAtFork - childForkData.migratedRep
+					: (parentPoolOwnership * parentRepAtFork) / parentOwnershipDenominator;
 			uint256 nextMigratedRep = childForkData.migratedRep + migratedRep;
 			_ensureMigratedVaultRepBacked(parent, child, nextMigratedRep);
 			childForkData.migratedRep = nextMigratedRep;

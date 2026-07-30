@@ -26,9 +26,8 @@
 					configured deployment-step addresses currently contain runtime bytecode.
 				</p>
 				<p>
-					The network deployment manifests list this contract directly, so operators and
-					frontends need a precise explanation of the returned bitmask and the built-in
-					256-step ceiling.
+					The mainnet manifest lists this contract directly, so operators and frontends need a
+					precise explanation of the returned bitmask and the built-in 256-step ceiling.
 				</p>
 			</header>
 
@@ -120,14 +119,59 @@
 							<th>Bit</th>
 							<th>Mainnet step id</th>
 							<th>Label</th>
+							<th>Status in entered mask</th>
 						</tr>
 					</thead>
 					<tbody id="deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
 						<tr>
-							<td colspan="3">Loading the canonical manifest…</td>
+							<td colspan="4">Loading the canonical manifest…</td>
 						</tr>
 					</tbody>
 				</table>
+				<details
+					class="interactive-example"
+					id="deployment-mask-decoder"
+					data-tool-unavailable="true"
+					open
+				>
+					<summary>Decode a deployment mask</summary>
+					<p>
+						Paste the decimal or hexadecimal <code>uint256</code> returned by
+						<code>getDeploymentMask()</code>. The status column above updates against the
+						canonical constructor order.
+					</p>
+					<div class="example-grid">
+						<label>
+							Deployment mask
+							<input
+								type="text"
+								inputmode="text"
+								value="0x0"
+								placeholder="0x0 or 0"
+								spellcheck="false"
+								data-tool-input="deploymentMask"
+								disabled
+							/>
+						</label>
+					</div>
+					<div class="example-output" data-tool-output-region>
+						<p>
+							<strong>Decoded status:</strong>
+							<output data-deployment-mask-summary>Waiting for the deployment mapping…</output>
+						</p>
+						<p class="detail" data-deployment-mask-guidance>
+							Bits above the tracked manifest range are reported separately.
+						</p>
+						<button
+							type="button"
+							class="interactive-tool-retry"
+							data-deployment-mask-retry
+							hidden
+						>
+							Retry mapping
+						</button>
+					</div>
+				</details>
 				<table aria-label="Current Sepolia deployment-status bit mapping">
 					<thead>
 						<tr>
@@ -181,49 +225,121 @@
 
 		<script src="./chartRuntime.js"></script>
 		<script type="module">
-			const mappings = [
-				{
-					bodySelector: '#deployment-status-bit-mapping',
-					manifestUrl: './mainnet-deployment-addresses.json',
-				},
-				{
-					bodySelector: '#sepolia-deployment-status-bit-mapping',
-					manifestUrl: './sepolia-deployment-addresses.json',
-				},
-			]
+			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
+			if (!(mappingBody instanceof HTMLTableSectionElement)) {
+				throw new Error('Missing deployment-status mapping tbody')
+			}
+			const decoder = document.querySelector('#deployment-mask-decoder')
+			const maskInput = decoder?.querySelector('[data-tool-input="deploymentMask"]')
+			const maskSummary = decoder?.querySelector('[data-deployment-mask-summary]')
+			const maskGuidance = decoder?.querySelector('[data-deployment-mask-guidance]')
+			const retryButton = decoder?.querySelector('[data-deployment-mask-retry]')
+			if (!(decoder instanceof HTMLDetailsElement) || !(maskInput instanceof HTMLInputElement) || !(maskSummary instanceof HTMLOutputElement) || !(maskGuidance instanceof HTMLElement) || !(retryButton instanceof HTMLButtonElement)) {
+				throw new Error('Missing deployment-mask decoder controls')
+			}
 
-			for (const mapping of mappings) {
-				const mappingBody = document.querySelector(mapping.bodySelector)
-				if (!(mappingBody instanceof HTMLTableSectionElement)) {
-					throw new Error('Missing deployment-status mapping tbody')
+			const manifestUrl = './mainnet-deployment-addresses.json'
+			const sepoliaManifestUrl = './sepolia-deployment-addresses.json'
+			const sepoliaMappingBody = document.querySelector('#sepolia-deployment-status-bit-mapping')
+			if (!(sepoliaMappingBody instanceof HTMLTableSectionElement)) {
+				throw new Error('Missing Sepolia deployment-status mapping tbody')
+			}
+			let trackedSteps = []
+
+			const setToolUnavailable = (unavailable) => {
+				if (unavailable) {
+					decoder.dataset.toolUnavailable = 'true'
+				} else {
+					delete decoder.dataset.toolUnavailable
 				}
-
+				maskInput.disabled = unavailable
+				decoder.dispatchEvent(new CustomEvent('docs:tool-availability'))
+			}
+			const renderMessageRow = (message, includeManifestLink = false) => {
+				const row = document.createElement('tr')
+				const cell = document.createElement('td')
+				cell.colSpan = 4
+				cell.append(message)
+				if (includeManifestLink) {
+					cell.append(document.createElement('br'))
+					const link = document.createElement('a')
+					link.href = manifestUrl
+					link.textContent = 'Open the canonical manifest.'
+					cell.append(link)
+				}
+				row.append(cell)
+				mappingBody.replaceChildren(row)
+			}
+			const validateManifest = (manifest) => {
+				if (!manifest || !Array.isArray(manifest.deploymentSteps)) {
+					throw new Error('Deployment manifest has no deploymentSteps array')
+				}
+				for (const step of manifest.deploymentSteps) {
+					if (!step || typeof step.id !== 'string' || step.id.length === 0 || typeof step.label !== 'string' || step.label.length === 0) {
+						throw new Error('Deployment manifest step has an invalid id or label')
+					}
+				}
+				const stepIds = manifest.deploymentSteps.map((step) => step.id)
+				if (new Set(stepIds).size !== stepIds.length) {
+					throw new Error('Deployment manifest has duplicate step ids')
+				}
+				if (stepIds.filter((id) => id === 'deploymentStatusOracle').length !== 1) {
+					throw new Error('Deployment manifest must contain exactly one deploymentStatusOracle step')
+				}
+				const nextTrackedSteps = manifest.deploymentSteps.filter((step) => step.id !== 'deploymentStatusOracle')
+				if (nextTrackedSteps.length === 0 || nextTrackedSteps.length > 256) {
+					throw new Error('Deployment manifest must contain between 1 and 256 tracked steps')
+				}
+				return nextTrackedSteps
+			}
+			const renderMappingRows = () => {
+				const rows = trackedSteps.map((step, bit) => {
+					const row = document.createElement('tr')
+					row.dataset.deploymentBit = String(bit)
+					for (const value of [String(bit), step.id, step.label]) {
+						const cell = document.createElement('td')
+						if (value === step.label) {
+							cell.textContent = value
+						} else {
+							const code = document.createElement('code')
+							code.textContent = value
+							cell.append(code)
+						}
+						row.append(cell)
+					}
+					const statusCell = document.createElement('td')
+					statusCell.dataset.deploymentBitStatus = String(bit)
+					statusCell.textContent = 'Clear'
+					row.append(statusCell)
+					return row
+				})
+				mappingBody.replaceChildren(...rows)
+			}
+			const renderSepoliaMessageRow = (message, includeManifestLink = false) => {
+				const row = document.createElement('tr')
+				const cell = document.createElement('td')
+				cell.colSpan = 3
+				cell.append(message)
+				if (includeManifestLink) {
+					cell.append(document.createElement('br'))
+					const link = document.createElement('a')
+					link.href = sepoliaManifestUrl
+					link.textContent = 'Open the canonical manifest.'
+					cell.append(link)
+				}
+				row.append(cell)
+				sepoliaMappingBody.replaceChildren(row)
+			}
+			const loadSepoliaMapping = async () => {
+				sepoliaMappingBody.setAttribute('aria-busy', 'true')
+				renderSepoliaMessageRow('Loading the canonical manifest…')
 				try {
-					const response = await fetch(mapping.manifestUrl)
+					const response = await fetch(sepoliaManifestUrl)
 					if (!response.ok) {
 						throw new Error(`Could not load deployment manifest: ${response.status}`)
 					}
-					const manifest = await response.json()
-					if (!manifest || !Array.isArray(manifest.deploymentSteps)) {
-						throw new Error('Deployment manifest has no deploymentSteps array')
-					}
-					for (const step of manifest.deploymentSteps) {
-						if (!step || typeof step.id !== 'string' || step.id.length === 0 || typeof step.label !== 'string' || step.label.length === 0) {
-							throw new Error('Deployment manifest step has an invalid id or label')
-						}
-					}
-					const stepIds = manifest.deploymentSteps.map((step) => step.id)
-					if (new Set(stepIds).size !== stepIds.length) {
-						throw new Error('Deployment manifest has duplicate step ids')
-					}
-					if (stepIds.filter((id) => id === 'deploymentStatusOracle').length !== 1) {
-						throw new Error('Deployment manifest must contain exactly one deploymentStatusOracle step')
-					}
-					const trackedSteps = manifest.deploymentSteps.filter((step) => step.id !== 'deploymentStatusOracle')
-					if (trackedSteps.length === 0 || trackedSteps.length > 256) {
-						throw new Error('Deployment manifest must contain between 1 and 256 tracked steps')
-					}
-					const rows = trackedSteps.map((step, bit) => {
+					const steps = validateManifest(await response.json())
+					const rows = steps.map((step, bit) => {
 						const row = document.createElement('tr')
 						for (const value of [String(bit), step.id, step.label]) {
 							const cell = document.createElement('td')
@@ -238,23 +354,94 @@
 						}
 						return row
 					})
-					mappingBody.replaceChildren(...rows)
+					sepoliaMappingBody.replaceChildren(...rows)
 				} catch {
-					const row = document.createElement('tr')
-					const cell = document.createElement('td')
-					cell.colSpan = 3
-					cell.append('Unable to load the deployment mapping. ')
-					cell.append(document.createElement('br'))
-					const link = document.createElement('a')
-					link.href = mapping.manifestUrl
-					link.textContent = 'Open the canonical manifest.'
-					cell.append(link)
-					row.append(cell)
-					mappingBody.replaceChildren(row)
+					renderSepoliaMessageRow('Unable to load the deployment mapping. ', true)
+				} finally {
+					sepoliaMappingBody.setAttribute('aria-busy', 'false')
+				}
+			}
+			const markStatusesUnavailable = () => {
+				for (const statusCell of mappingBody.querySelectorAll('[data-deployment-bit-status]')) {
+					if (!(statusCell instanceof HTMLTableCellElement)) continue
+					statusCell.textContent = 'Unavailable · invalid mask'
+					delete statusCell.dataset.maskState
+				}
+			}
+			const updateDecoder = () => {
+				if (trackedSteps.length === 0 || maskInput.disabled) return
+				const source = maskInput.value.trim()
+				if (!/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(source)) {
+					maskInput.setAttribute('aria-invalid', 'true')
+					markStatusesUnavailable()
+					maskSummary.value = 'Enter a non-negative decimal or hexadecimal integer.'
+					maskGuidance.textContent = 'Examples: 5, 0x5, or 0xff.'
+					return
+				}
+				const mask = BigInt(source)
+				if (mask >= 1n << 256n) {
+					maskInput.setAttribute('aria-invalid', 'true')
+					markStatusesUnavailable()
+					maskSummary.value = 'The value is larger than a uint256.'
+					maskGuidance.textContent = 'Use a value between 0 and 2²⁵⁶ − 1.'
+					return
+				}
+				maskInput.removeAttribute('aria-invalid')
+				const deployedSteps = []
+				for (const [bit, step] of trackedSteps.entries()) {
+					const isSet = (mask & (1n << BigInt(bit))) !== 0n
+					const statusCell = mappingBody.querySelector(`[data-deployment-bit-status="${bit}"]`)
+					if (statusCell instanceof HTMLTableCellElement) {
+						statusCell.textContent = isSet ? 'Set · code present' : 'Clear · no code'
+						statusCell.dataset.maskState = isSet ? 'set' : 'clear'
+					}
+					if (isSet) deployedSteps.push(step.label)
+				}
+				const unknownBits = mask >> BigInt(trackedSteps.length)
+				maskSummary.value =
+					deployedSteps.length === 0
+						? `0 of ${trackedSteps.length} tracked steps have set bits.`
+						: `${deployedSteps.length} of ${trackedSteps.length} tracked steps have set bits: ${deployedSteps.join(', ')}.`
+				maskGuidance.textContent =
+					unknownBits === 0n
+						? 'No bits are set above the tracked manifest range.'
+						: `Additional untracked high bits are set (shifted value ${unknownBits.toString(16).toUpperCase()} hex). Verify the constructor event before interpreting them.`
+			}
+			const loadMapping = async () => {
+				mappingBody.setAttribute('aria-busy', 'true')
+				renderMessageRow('Loading the canonical manifest…')
+				setToolUnavailable(true)
+				retryButton.hidden = true
+				retryButton.disabled = true
+				maskInput.removeAttribute('aria-invalid')
+				maskSummary.value = 'Loading the canonical mapping…'
+				maskGuidance.textContent = 'Decoder controls will be available when the mapping loads.'
+				try {
+					const response = await fetch(manifestUrl)
+					if (!response.ok) {
+						throw new Error(`Could not load deployment manifest: ${response.status}`)
+					}
+					trackedSteps = validateManifest(await response.json())
+					renderMappingRows()
+					setToolUnavailable(false)
+					retryButton.disabled = false
+					updateDecoder()
+				} catch {
+					trackedSteps = []
+					renderMessageRow('Unable to load the deployment mapping. ', true)
+					setToolUnavailable(true)
+					retryButton.hidden = false
+					retryButton.disabled = false
+					maskSummary.value = 'The canonical mapping is unavailable, so this mask cannot be decoded safely.'
+					maskGuidance.textContent = 'Retry to restore bit decoding and high-bit reporting.'
 				} finally {
 					mappingBody.setAttribute('aria-busy', 'false')
 				}
 			}
+			maskInput.addEventListener('input', updateDecoder)
+			retryButton.addEventListener('click', () => void loadMapping())
+			await Promise.all([loadMapping(), loadSepoliaMapping()])
 		</script>
+		<script type="module" src="./interactiveTools.js"></script>
 	</body>
 </html>

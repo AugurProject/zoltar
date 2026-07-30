@@ -272,6 +272,7 @@ assert.deepEqual(
 )
 
 const duplicateBlocks: DuplicateBlockMap = new Map()
+const generatedDocumentationBundles = new Set(['docs/chartRuntime.js', 'docs/docsReaderMarkdown.js'])
 
 const docsGlob = new Bun.Glob('docs/**/*.{html,js,md}')
 const paths = ['README.md']
@@ -281,6 +282,9 @@ for await (const path of docsGlob.scan('.')) {
 
 const wordingViolations: string[] = []
 for (const path of paths.sort()) {
+	if (generatedDocumentationBundles.has(path)) {
+		continue
+	}
 	const text = await Bun.file(path).text()
 	wordingViolations.push(...findDiscouragedDocsWording(path, text))
 	wordingViolations.push(...(await findDefinitionPileups(path, text)))

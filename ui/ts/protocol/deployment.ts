@@ -18,8 +18,7 @@ import {
 import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
-import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import type { NetworkProfile } from '../lib/networkProfile.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../lib/sepoliaDeploymentConfig.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
@@ -46,7 +45,7 @@ function markDeploymentTransactionPrepared(
 	})
 }
 
-function getDeploymentStatusOracleStepAddresses(profile = getActiveNetworkProfile()) {
+function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getInfraContractAddresses(profile)
 	return [
 		PROXY_DEPLOYER_ADDRESS,
@@ -66,7 +65,7 @@ function getDeploymentStatusOracleStepAddresses(profile = getActiveNetworkProfil
 	] satisfies Address[]
 }
 
-function getDeploymentStatusOracleByteCode(profile = getActiveNetworkProfile()) {
+function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
@@ -97,7 +96,7 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-function getDeploymentStatusOracleAddress(profile = getActiveNetworkProfile()) {
+function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) {
 	return createDeploymentStatusOracleAddressHelper({
 		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
 		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
@@ -168,7 +167,7 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 	)
 }
 
-export function getDeploymentSteps(profile: NetworkProfile = getActiveNetworkProfile()): DeploymentStep[] {
+export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
 	const testTokenSteps =
 		profile.id === 'sepolia'

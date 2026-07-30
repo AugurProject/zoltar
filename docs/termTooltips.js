@@ -241,4 +241,29 @@ function applyTermTooltips() {
 	})
 }
 
+function restoreTooltipDocumentFragment() {
+	const rawFragment = window.location.hash.slice(1)
+	if (rawFragment.length === 0) return
+	let fragment = rawFragment
+	try {
+		fragment = decodeURIComponent(rawFragment)
+	} catch (error) {
+		if (!(error instanceof URIError)) throw error
+	}
+	const target = document.getElementById(fragment)
+	if (!(target instanceof HTMLElement)) return
+	if (target instanceof HTMLDetailsElement) target.open = true
+	let containingDetails = target.closest('details')
+	while (containingDetails instanceof HTMLDetailsElement) {
+		containingDetails.open = true
+		containingDetails = containingDetails.parentElement?.closest('details') ?? null
+	}
+	const targetTop = target.getBoundingClientRect().top + window.scrollY
+	window.scrollTo({ behavior: 'instant', top: Math.max(0, targetTop - 16) })
+}
+
 applyTermTooltips()
+requestAnimationFrame(() => requestAnimationFrame(restoreTooltipDocumentFragment))
+window.setTimeout(restoreTooltipDocumentFragment, 600)
+window.addEventListener('load', restoreTooltipDocumentFragment)
+window.addEventListener('docs:tools-ready', restoreTooltipDocumentFragment)
