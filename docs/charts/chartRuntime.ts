@@ -1383,10 +1383,7 @@ function updateDiagramToolbar(overflowEnvelope: HTMLElement): void {
 	if (toolbar === null || toolbar === undefined || button === null || button === undefined || cue === null || cue === undefined) return
 	const needsControl = fullSizeDiagramOverflows(overflowEnvelope)
 	toolbar.hidden = !needsControl
-	if (!needsControl) {
-		overflowEnvelope.classList.remove('plot-figure-fit')
-		return
-	}
+	if (!needsControl) return
 	const isFit = overflowEnvelope.classList.contains('plot-figure-fit')
 	updateDiagramControl(button, cue, isFit)
 }
@@ -1467,10 +1464,8 @@ function renderMount(mount: HTMLElement): void {
 	overflowEnvelope.tabIndex = 0
 	overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-diagram', !isQuantitative)
+	overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)
 	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Scrollable figure: ${spec.ariaLabel}`)
-	if (isQuantitative) {
-		overflowEnvelope.classList.remove('plot-figure-fit')
-	}
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)

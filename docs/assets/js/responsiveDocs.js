@@ -140,7 +140,8 @@
 
 	function markScrollableContent(container) {
 		const label = container.matches('.table-wrap, .table-scroll, .docs-auto-table-scroll') ? 'Horizontal scrolling reveals the full table.' : 'Horizontal scrolling reveals the full content.'
-		overflowCue(container, container.scrollWidth > container.clientWidth + overflowThreshold, label)
+		const responsiveTableReflows = window.matchMedia(compactEquationQuery).matches && container.querySelector(':scope > .docs-responsive-table') !== null
+		overflowCue(container, !responsiveTableReflows && container.scrollWidth > container.clientWidth + overflowThreshold, label)
 	}
 
 	function prepareTableContainers() {
@@ -156,8 +157,30 @@
 		}
 	}
 
+	function prepareResponsiveTables() {
+		for (const table of document.querySelectorAll('table')) {
+			const headerRows = Array.from(table.querySelectorAll(':scope > thead > tr'))
+			const headers = headerRows.length === 1 ? Array.from(headerRows[0].children) : []
+			const bodyRows = Array.from(table.querySelectorAll(':scope > tbody > tr'))
+			const hasSpanningCells = table.querySelector('[colspan], [rowspan]') !== null
+			const hasRegularRows = headers.length > 0 && bodyRows.length > 0 && bodyRows.every(row => row.children.length === headers.length)
+			const canReflow = !hasSpanningCells && hasRegularRows
+			table.classList.toggle('docs-responsive-table', canReflow)
+			table.classList.toggle('docs-table-scroll-only', !canReflow)
+			if (!canReflow) continue
+
+			const labels = headers.map(header => (header.textContent ?? '').replace(/\s+/g, ' ').trim())
+			for (const row of bodyRows) {
+				for (const [index, cell] of Array.from(row.children).entries()) {
+					cell.setAttribute('data-docs-label', labels[index] ?? '')
+				}
+			}
+		}
+	}
+
 	function refresh() {
 		prepareTableContainers()
+		prepareResponsiveTables()
 		for (const equation of document.querySelectorAll('.equation')) fitEquation(equation)
 		for (const container of document.querySelectorAll('.table-wrap, .table-scroll, .docs-auto-table-scroll')) {
 			markScrollableContent(container)

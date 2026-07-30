@@ -105,38 +105,136 @@
 				<section class="paper-section" id="architecture">
 					<div class="section-heading">
 						<h2>2. Architecture</h2>
-						<a
-							class="anchor-link"
-							href="#architecture"
-							aria-label="Link to Architecture"
-							>#</a
-						>
+						<a class="anchor-link" href="#architecture" aria-label="Link to Architecture">#</a>
 					</div>
-					<div class="role-grid">
-						<div class="role-card">
-							<span>SecurityPool</span>
-							<b>Question-specific underwriting and ETH collateral engine.</b>
+					<p class="lede">
+						A Statoblast lineage begins with one origin
+						<code>SecurityPool</code> and includes the descendant child pools created
+						after forks. It sits between two independent oracle boundaries: Zoltar
+						supplies question and universe identity, while OpenOracle supplies
+						contestable REP/ETH prices through a pool-specific coordinator. Each
+						contract owns only its part of the lineage's state.
+					</p>
+					<div class="architecture-map" aria-label="Statoblast architecture layers">
+						<div class="architecture-map-heading">
+							<div>
+								<span class="architecture-eyebrow">Authority map</span>
+								<h3>One lineage, three architectural layers</h3>
+							</div>
+							<p>
+								Follow the map from durable identity, through the market ledger,
+								to services that decide, price, migrate, and repair it. Every
+								contract box is a separate storage and authority boundary.
+							</p>
 						</div>
-						<div class="role-card">
-							<span>EscalationGame</span>
-							<b>Local dispute game for Invalid, Yes, and No.</b>
-						</div>
-						<div class="role-card">
-							<span>SecurityPoolForker</span>
-							<b>Fork migration and child-pool activation coordinator.</b>
-						</div>
-						<div class="role-card">
-							<span>Truth Auction</span>
-							<b>Batch auction that sells child-universe REP for ETH repair.</b>
-						</div>
-						<div class="role-card">
-							<span>Oracle Coordinator</span>
-							<b>REP/ETH price flow for solvency-sensitive operations.</b>
-						</div>
-						<div class="role-card">
-							<span>ShareToken</span>
-							<b>ERC-1155 positions with universe-aware token ids.</b>
-						</div>
+						<ol class="architecture-layers">
+							<li class="architecture-layer architecture-layer-foundation">
+								<div class="architecture-layer-label">
+									<span>01</span>
+									<div>
+										<b>Truth and identity</b>
+										<small>Arrows show direct call direction</small>
+									</div>
+								</div>
+								<div class="architecture-components">
+									<div class="architecture-component">
+										<code>ZoltarQuestionData</code>
+										<p>Registers the question and its valid answer encoding.</p>
+									</div>
+									<div class="architecture-arrow" aria-hidden="true">←</div>
+									<div class="architecture-component">
+										<code>Zoltar</code>
+										<p>Owns universe identity, branch creation, and the migration ledger.</p>
+									</div>
+									<div class="architecture-arrow" aria-hidden="true">→</div>
+									<div class="architecture-component">
+										<code>ReputationToken</code>
+										<p>Owns REP balances and theoretical supply within one universe.</p>
+									</div>
+								</div>
+							</li>
+							<li class="architecture-layer architecture-layer-ledger">
+								<div class="architecture-layer-label">
+									<span>02</span>
+									<div>
+										<b>Market lineage ledger</b>
+										<small>Held across one origin pool and its descendants</small>
+									</div>
+								</div>
+								<div class="architecture-components">
+									<div class="architecture-component">
+										<code>SecurityPoolFactory</code>
+										<p>Binds an eligible binary question to a universe and deploys an origin pool.</p>
+									</div>
+									<div class="architecture-arrow" aria-hidden="true">→</div>
+									<div class="architecture-component architecture-component-primary">
+										<code>SecurityPool</code>
+										<p>Owns its ETH collateral, REP vault accounting, allowances, fees, lifecycle status, and the pointer to its escalation game.</p>
+									</div>
+									<div class="architecture-arrow" aria-hidden="true">↔</div>
+									<div class="architecture-component">
+										<code>ShareToken</code>
+										<p>Tracks universe-aware Invalid, Yes, and No claims, and materializes unminted child claims during migration.</p>
+									</div>
+								</div>
+							</li>
+							<li class="architecture-layer architecture-layer-services">
+								<div class="architecture-layer-label">
+									<span>03</span>
+									<div>
+										<b>Bounded services</b>
+										<small>Invoked for one specialized transition</small>
+									</div>
+								</div>
+								<div class="architecture-service-grid">
+									<div class="architecture-component">
+										<strong>Decide locally</strong>
+										<a href="../architecture-deployment/escalation-game-architecture.html"><code>EscalationGame</code></a>
+										<p>Owns outcome deposits, balances, carry commitments, replay state, and resolution state; it verifies caller-supplied carry proofs and resolves locally unless contention reaches a non-decision.</p>
+									</div>
+									<div class="architecture-component">
+										<strong>Stage guarded operations</strong>
+										<code>OpenOraclePriceCoordinator</code>
+										<p>Owns cached price and staged-operation state. A vault or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
+									</div>
+									<div class="architecture-component">
+										<strong>Report REP/ETH price</strong>
+										<code>OpenOracle</code>
+										<p>Owns report games and reporter balances; the coordinator requests and accepts its contestable REP/ETH reports.</p>
+									</div>
+									<div class="architecture-component">
+										<strong>Create child pools</strong>
+										<code>SecurityPoolForker</code>
+										<p>Snapshots the parent pool, deploys selected child pools, routes vault accounting and collateral, and installs continuation backing.</p>
+									</div>
+									<div class="architecture-component">
+										<strong>Route branch REP</strong>
+										<a href="../safety-operations/operator-reference.md#fork-migration"><code>SecurityPoolMigrationProxy</code></a>
+										<p>Provides one stable caller identity, calls Zoltar to lock, fork, and split REP, then transfers materialized child REP directly to its receiver.</p>
+									</div>
+									<div class="architecture-component">
+										<strong>Attempt collateral repair</strong>
+										<a href="../protocol-design/truth-auction.html"><code>UniformPriceDualCapBatchAuction</code></a>
+										<p>When a shortfall remains, sells auctionable child REP for as much ETH as demand supplies; activation counts only actual accepted ETH.</p>
+									</div>
+								</div>
+							</li>
+						</ol>
+					</div>
+					<div class="architecture-path" aria-label="Statoblast lifecycle control path">
+						<p class="architecture-path-title">Control path</p>
+						<ol>
+							<li><span>Deploy</span><b>Factory binds question + universe</b></li>
+							<li><span>Operate</span><b>Pool accounts for collateral, REP, and shares</b></li>
+							<li><span>Resolve</span><b>Escalation settles locally or exposes non-decision</b></li>
+							<li><span>Continue</span><b>Forker creates selected children; the auction may attempt remaining shortfall repair</b></li>
+						</ol>
+					</div>
+					<div class="callout architecture-boundary-note">
+						<strong>Keep the oracle roles separate.</strong>
+						Zoltar answers “which truth branch is this?” OpenOracle answers “what is
+						REP worth in ETH for this guarded operation?” Neither oracle owns the
+						pool's collateral ledger, and the truth auction answers neither question.
 					</div>
 				</section>
 
@@ -619,13 +717,12 @@
 						<math
 							display="block"
 							aria-label="cash payout equals floor of burned winning shares times complete set collateral amount divided by remaining economic claim supply before the burn"
-							data-source="cashPayout = floor(burnedWinningShares \cdot completeSetCollateralAmount / economicClaimSupplyBeforeBurn)"
+							data-source="cashPayout = ⌊burnedWinningShares \cdot completeSetCollateralAmount / economicClaimSupplyBeforeBurn⌋"
 						>
 							<mrow>
 								<mi>cashPayout</mi>
 								<mo>=</mo>
-								<mi>floor</mi>
-								<mo>(</mo>
+								<mo form="prefix" stretchy="true">⌊</mo>
 								<mfrac>
 									<mrow>
 										<mi>burnedWinningShares</mi>
@@ -634,7 +731,7 @@
 									</mrow>
 									<mi>economicClaimSupplyBeforeBurn</mi>
 								</mfrac>
-								<mo>)</mo>
+								<mo form="postfix" stretchy="true">⌋</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
@@ -1174,7 +1271,7 @@
 						<math
 							display="block"
 								aria-label="reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when fork time is at or before the scheduled escalation game end date and the actual fork threshold is lower"
-							data-source="rewardEligibleCap = bindingCapital + floor(bindingCapital / excessRewardWindowDivisor); rewardBonusPool = floor(bindingCapital \cdot 3 / 5); burnAmount = floor(rewardEligibleDeposit \cdot floor(bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal); amountToWithdraw = depositAmount + floor(rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal); scaledWithdrawal = floor(amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold) when forkTime &lt;= escalationGameEndDate and actualForkThreshold &lt; nonDecisionThreshold"
+							data-source="rewardEligibleCap = bindingCapital + ⌊bindingCapital / excessRewardWindowDivisor⌋; rewardBonusPool = ⌊bindingCapital \cdot 3 / 5⌋; burnAmount = ⌊rewardEligibleDeposit \cdot ⌊bindingCapital \cdot 2 / 5⌋ / rewardEligiblePrincipal⌋; amountToWithdraw = depositAmount + ⌊rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal⌋; scaledWithdrawal = ⌊amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold⌋ when forkTime &lt;= escalationGameEndDate and actualForkThreshold &lt; nonDecisionThreshold"
 						>
 							<mtable>
 								<mtr>
@@ -1188,12 +1285,12 @@
 										<mi>bindingCapital</mi>
 										<mo>+</mo>
 										<mrow>
-											<mo>floor(</mo>
+											<mo form="prefix" stretchy="true">⌊</mo>
 											<mfrac>
 												<mi>bindingCapital</mi>
 												<mi>excessRewardWindowDivisor</mi>
 											</mfrac>
-											<mo>)</mo>
+											<mo form="postfix" stretchy="true">⌋</mo>
 										</mrow>
 									</mtd>
 								</mtr>
@@ -1206,7 +1303,7 @@
 									</mtd>
 									<mtd>
 										<mrow>
-											<mo>floor(</mo>
+											<mo form="prefix" stretchy="true">⌊</mo>
 											<mfrac>
 												<mrow>
 													<mi>bindingCapital</mi>
@@ -1215,7 +1312,7 @@
 												</mrow>
 												<mn>5</mn>
 											</mfrac>
-											<mo>)</mo>
+											<mo form="postfix" stretchy="true">⌋</mo>
 										</mrow>
 									</mtd>
 								</mtr>
@@ -1228,13 +1325,13 @@
 									</mtd>
 									<mtd>
 										<mrow>
-											<mo>floor(</mo>
+											<mo form="prefix" stretchy="true">⌊</mo>
 											<mfrac>
 												<mrow>
 													<mi>rewardEligibleDeposit</mi>
 													<mo>&#x22C5;</mo>
 													<mrow>
-														<mo>floor(</mo>
+														<mo form="prefix" stretchy="true">⌊</mo>
 												<mfrac>
 															<mrow>
 																<mi>bindingCapital</mi>
@@ -1243,12 +1340,12 @@
 															</mrow>
 													<mn>5</mn>
 												</mfrac>
-														<mo>)</mo>
+														<mo form="postfix" stretchy="true">⌋</mo>
 													</mrow>
 												</mrow>
 												<mi>rewardEligiblePrincipal</mi>
 											</mfrac>
-											<mo>)</mo>
+											<mo form="postfix" stretchy="true">⌋</mo>
 										</mrow>
 									</mtd>
 								</mtr>
@@ -1263,7 +1360,7 @@
 										<mi>depositAmount</mi>
 										<mo>+</mo>
 										<mrow>
-											<mo>floor(</mo>
+											<mo form="prefix" stretchy="true">⌊</mo>
 											<mfrac>
 												<mrow>
 													<mi>rewardEligibleDeposit</mi>
@@ -1272,7 +1369,7 @@
 												</mrow>
 												<mi>rewardEligiblePrincipal</mi>
 											</mfrac>
-											<mo>)</mo>
+											<mo form="postfix" stretchy="true">⌋</mo>
 										</mrow>
 									</mtd>
 								</mtr>
@@ -1285,7 +1382,7 @@
 									</mtd>
 									<mtd>
 										<mrow>
-											<mo>floor(</mo>
+											<mo form="prefix" stretchy="true">⌊</mo>
 											<mfrac>
 												<mrow>
 													<mi>amountToWithdraw</mi>
@@ -1294,7 +1391,7 @@
 												</mrow>
 												<mi>nonDecisionThreshold</mi>
 											</mfrac>
-											<mo>)</mo>
+											<mo form="postfix" stretchy="true">⌋</mo>
 										</mrow>
 										<mspace linebreak="newline" />
 										<mtext>
@@ -1332,8 +1429,8 @@
 						<li>
 							The reward-eligible cap is
 							<code
-								>bindingCapitalAmount + floor(bindingCapitalAmount /
-								EXCESS_REWARD_WINDOW_DIVISOR)</code
+								>bindingCapitalAmount + ⌊bindingCapitalAmount /
+								EXCESS_REWARD_WINDOW_DIVISOR⌋</code
 							>.
 						</li>
 						<li>
@@ -1719,7 +1816,7 @@
 						<math
 							display="block"
 							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; the provisional migrated REP delta equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator; the migration that completes the ownership denominator instead receives all REP remaining in the fork bucket"
-							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator); migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator ? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = ⌊parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator⌋; migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator ? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"
 						>
 							<mtable columnalign="right center left" rowspacing="0.8em">
 							<mtr>
@@ -1858,7 +1955,7 @@
 						<math
 							display="block"
 							aria-label="cumulative collateral target after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by the migration REP denominator at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; requested collateral delta equals the cumulative target minus cumulative collateral already transferred; actual collateral delta is the minimum of requested delta and current parent complete-set collateral"
-							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / migrationRepDenominatorAtFork); requestedCollateralDelta = cumulativeCollateralTargetAfterMigration - cumulativeCollateralAlreadyTransferred; actualCollateralDelta = min(requestedCollateralDelta, parentCompleteSetCollateral)"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ⌈parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / migrationRepDenominatorAtFork⌉; requestedCollateralDelta = cumulativeCollateralTargetAfterMigration - cumulativeCollateralAlreadyTransferred; actualCollateralDelta = min(requestedCollateralDelta, parentCompleteSetCollateral)"
 						>
 							<mtable>
 								<mtr>
@@ -1867,8 +1964,7 @@
 									</mtd>
 									<mtd>
 										<mo>=</mo>
-										<mi>ceil</mi>
-										<mo>(</mo>
+										<mo form="prefix" stretchy="true">⌈</mo>
 										<mfrac>
 											<mrow>
 												<mi>parentCollateralAtFork</mi>
@@ -1877,7 +1973,7 @@
 											</mrow>
 											<mi>migrationRepDenominatorAtFork</mi>
 										</mfrac>
-										<mo>)</mo>
+										<mo form="postfix" stretchy="true">⌉</mo>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -1928,13 +2024,13 @@
 						<math
 							display="block"
 							aria-label="fork haircut equals fork threshold divided by fork burn divisor, escalation child REP equals escalation REP minus the haircut, vault REP equals auctionable REP minus escalation child REP, and selected child backing equals escalation child REP"
-							data-source="forkHaircut = floor(forkThreshold / forkBurnDivisor); escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork"
+							data-source="forkHaircut = ⌊forkThreshold / forkBurnDivisor⌋; escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork"
 						>
 							<mtable>
 								<mtr>
 									<mtd><mi>forkHaircut</mi></mtd>
 									<mtd><mo>=</mo></mtd>
-									<mtd><mi>floor</mi><mo>(</mo><mfrac><mi>forkThreshold</mi><mi>forkBurnDivisor</mi></mfrac><mo>)</mo></mtd>
+									<mtd><mo form="prefix" stretchy="true">⌊</mo><mfrac><mi>forkThreshold</mi><mi>forkBurnDivisor</mi></mfrac><mo form="postfix" stretchy="true">⌋</mo></mtd>
 								</mtr>
 								<mtr>
 									<mtd>
@@ -2013,7 +2109,7 @@
 						fork must cover effective unresolved principal one-to-one. When the
 						escalation's own fork already paid the winner haircut through Zoltar, its
 						recorded initial backing must cover at least
-						<code>sourcePrincipalAtFork - floor(sourcePrincipalAtFork / 5)</code>.
+						<code>sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋</code>.
 						The game's live balance must cover that initial backing minus child REP
 						already exported by valid direct claims before resume. An underfunded child
 						therefore remains paused instead of reaching a resolution it cannot pay.

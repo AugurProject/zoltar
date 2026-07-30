@@ -235,19 +235,18 @@
 					</tbody>
 				</table>
 				<div class="equation" id="eq-liquidation-rep-penalty">
-					<math display="block" aria-label="liquidation first computes the fixed-bonus REP seizure and its ownership conversion, then applies an explicit full-close branch that sweeps all current unlocked target REP when the computed ownership move would consume all current ownership or leave less than the minimum REP deposit" data-source="computedRepToMove = ceil(debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR)); computedOwnershipToMove = repToPoolOwnership(computedRepToMove); repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove">
+					<math display="block" aria-label="liquidation first computes the fixed-bonus REP seizure and its ownership conversion, then applies an explicit full-close branch that sweeps all current unlocked target REP when the computed ownership move would consume all current ownership or leave less than the minimum REP deposit" data-source="computedRepToMove = ⌈debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉; computedOwnershipToMove = repToPoolOwnership(computedRepToMove); repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove">
 						<mtable>
 							<mtr>
 								<mtd><mi>computedRepToMove</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>ceil</mi>
-									<mo>(</mo>
+									<mo form="prefix" stretchy="true">⌈</mo>
 									<mfrac>
 										<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
 										<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 									</mfrac>
-									<mo>)</mo>
+									<mo form="postfix" stretchy="true">⌉</mo>
 								</mtd>
 							</mtr>
 							<mtr>
@@ -305,7 +304,7 @@
 					the final ownership sweep.
 				</p>
 				<div class="equation" id="eq-liquidation-dust-rounding">
-					<math display="block" aria-label="rep-bounded debt cap equals floor of snapshot target unlocked REP minus minimum REP deposit times price precision times basis-point denominator divided by current REP per ETH price times basis-point denominator plus liquidation bonus when the snapshot REP is above the minimum and zero otherwise; target cap before debt floor equals the smaller of the queued snapshot allowance and that REP bound; when the capped remainder is nonzero and at or below the debt floor, leave exactly the minimum debt floor if the queued snapshot allowance is above it, otherwise execute the whole minimum-sized allowance; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? floor((snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0; targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
+					<math display="block" aria-label="rep-bounded debt cap equals the rounded-down ratio of snapshot target unlocked REP minus minimum REP deposit times price precision times basis-point denominator to current REP per ETH price times basis-point denominator plus liquidation bonus when the snapshot REP is above the minimum and zero otherwise; target cap before debt floor equals the smaller of the queued snapshot allowance and that REP bound; when the capped remainder is nonzero and at or below the debt floor, leave exactly the minimum debt floor if the queued snapshot allowance is above it, otherwise execute the whole minimum-sized allowance; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? ⌊(snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))⌋ : 0; targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
 						<mtable>
 							<mtr>
 								<mtd><mi>repBoundDebt</mi></mtd>
@@ -314,13 +313,12 @@
 									<mi>if</mi><mo>&#xA0;</mo><mi>snapshotTargetUnlockedRep</mi><mo>&gt;</mo><mi>MIN_REP_DEPOSIT</mi>
 									<mo>,</mo>
 									<mo>&#xA0;</mo>
-									<mi>floor</mi>
-									<mo>(</mo>
+									<mo form="prefix" stretchy="true">⌊</mo>
 									<mfrac>
 										<mrow><mo>(</mo><mi>snapshotTargetUnlockedRep</mi><mo>-</mo><mi>MIN_REP_DEPOSIT</mi><mo>)</mo><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 										<mrow><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
 									</mfrac>
-									<mo>)</mo>
+									<mo form="postfix" stretchy="true">⌋</mo>
 									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mn>0</mn>
 								</mtd>
 							</mtr>
