@@ -80,14 +80,12 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 - An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
   `--lookback-blocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
-- At least one reviewed Zoltar `OpenOraclePriceCoordinator` address. Supply repeated
-  `--coordinator-address` flags or the comma-separated
-  `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable for every coordinator
-  whose games this wallet may dispute; execution is fail-closed without either.
+- At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
+  coordinator whose games this wallet may dispute.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
   predictable CREATE2 address from the dashboard or with `./bin/deploy-executor`,
   then authenticate that address in the execution manifest.
-- The exact Uniswap V3 SwapRouter address supplied with `--uniswap-router`.
+- The exact Uniswap V3 SwapRouter address.
 - Optionally, the exact Uniswap V2 Router02 supplied with
   `--uniswap-v2-router`. When configured and authenticated, mainnet execution
   adds direct WETH/token V2 hedges to the configured venue comparison.
@@ -95,15 +93,17 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   `--uniswap-v4-pool-manager` and `--uniswap-v4-quoter`. V4 execution is limited to
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
-- A reviewed `--deployment-manifest` that pins chain, role, address, and runtime
+- A reviewed deployment manifest that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. Every read RPC authenticates
   every manifest entry before the bot can sign.
-- At least two independently operated read RPCs: the primary `--rpc-url` plus one or
-  more repeated `--quorum-rpc-url` values. Live execution requires exact
+- At least two independently operated read RPCs: one primary plus one or more
+  quorum endpoints. Live execution requires exact
   quote-block agreement on OpenOracle state, pool state, quotes, confirmed nonce,
   and balances, plus exact agreement on the pending nonce actually signed. A
   legitimate pending transaction visible to only one provider blocks signing until
-  the providers converge or the operator resolves it.
+  the providers converge or the operator resolves it. A flag, environment variable, or the
+  [persistent operator settings](#persistent-operator-settings) can supply
+  restart-time deployment values.
 - For execution, a dedicated key on the selected network with:
   - ETH for the atomic dispute transaction.
   - WETH for the total executor funding shown in the dashboard.
@@ -710,10 +710,22 @@ any dashboard save. `PRIVATE_KEY` is the exception: it is saved only through the
 explicit plaintext opt-in.
 
 Deployment identities remain restart-time trust roots, but the dashboard can validate
-and save REP, WETH, OpenOracle, coordinator, executor, manifest, quorum-RPC, and
-Uniswap V2/V3/V4 values for the next restart. The dashboard can also deploy and
-runtime-code-verify the executor through the canonical CREATE2 proxy; update the
-authenticated execution manifest after deployment.
+the syntax and shape of REP, WETH, OpenOracle, coordinator, executor, manifest,
+quorum-RPC, and Uniswap V2/V3/V4 values and save them for the next restart. Saving
+does not authenticate contracts or verify RPC independence.
+
+For dashboard deployment, configure a public submission RPC on the selected chain
+and set an active signer. If execution is armed, pause the bot first; pause blocks
+new entries but not lifecycle recovery, settlement, or withdrawal, so wait until
+there are no pending or in-flight signer operations before deploying. Enter the
+bytes32 salt and confirm the predicted address. The deploy action checks the RPC
+chain and canonical CREATE2 proxy. A fresh deployment verifies its successful
+receipt and runtime bytecode; if the predicted address is already deployed, the
+action verifies matching runtime bytecode without sending a transaction. It then
+saves the executor and clears the old manifest. Paste a reviewed manifest
+containing the new executor, save, and restart; startup authenticates every
+configured identity and the manifest through the read quorum before execution
+begins.
 
 Pause blocks new position entry. It deliberately does not block settlement,
 replacement recovery, or withdrawal for a position that already has capital at
@@ -962,23 +974,24 @@ Other startup-only options:
 | `--network` | `mainnet` | Select `mainnet` or `sepolia`; fixes the expected chain ID and address defaults. |
 | `--rpc-url` | Network public endpoint | Read RPC. Adjustable in the dashboard only after its chain check passes. |
 | `--public-rpc-url` | Read RPC | Public transaction endpoint. Repeat for up to eight; all receive the identical payload. |
-| `--rep-address` | Mainnet REP / required on Sepolia | Primary REP token for the portfolio summary and default monitored-token catalog; it does not restrict observed or configured game tokens. |
-| `--weth-address` | Network WETH | Override WETH for a custom test deployment. |
-| `--uniswap-factory` | Network Uniswap V3 factory | Override the factory for a custom test deployment. |
-| `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
-| `--executor-address` | none | Deployed atomic executor. Required in execution mode and authenticated against the manifest on every read RPC. |
-| `--uniswap-router` | none | SwapRouter used by the atomic hedge. Required and manifest-authenticated in execution mode. |
-| `--uniswap-v2-router` | none | Optional mainnet Uniswap V2 Router02. When set, it is manifest-authenticated as `uniswap-v2-router` and joins automatic best-route hedge selection. |
-| `--uniswap-v4-pool-manager` | none | Optional V4 PoolManager for direct hookless native-ETH/token hedges. Requires `--uniswap-v4-quoter` and manifest role `uniswap-v4-pool-manager`. |
-| `--uniswap-v4-quoter` | none | Optional V4 Quoter for exact-input and exact-output quorum quotes. Requires `--uniswap-v4-pool-manager` and manifest role `uniswap-v4-quoter`. |
-| `--deployment-manifest` | none | Reviewed chain/address/role/runtime-code-hash trust root. Required in execution mode. |
-| `--quorum-rpc-url` | none | Independent read RPC. Repeat as needed; at least one secondary is required in execution mode. |
-| `--coordinator-address` | none | Restart-time approved `OpenOraclePriceCoordinator`. Repeat as needed. Execution requires at least one and verifies each coordinator's immutable template against the configured OpenOracle and WETH. The comma-separated `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable is also accepted. |
+| `--open-oracle` | required | OpenOracle trust root; the flag overrides `OPEN_ORACLE_ADDRESS`, which overrides the saved value. Manifest-authenticated in execution mode. |
+| `--rep-address` | Mainnet REP / required on Sepolia | Primary REP token for the portfolio summary and default monitored-token catalog; explicit flag/environment values override the saved dashboard deployment value. |
+| `--weth-address` | Network WETH | Override WETH for a custom test deployment; explicit flag/environment values override the saved value. |
+| `--uniswap-factory` | Network Uniswap V3 factory | Override the factory; explicit flag/environment values override the saved value. |
+| `--uniswap-quoter` | Network QuoterV2 | Override the quoter; explicit flag/environment values override the saved value. |
+| `--executor-address` | none | Deployed atomic executor; explicit flag/environment values override the saved value. Required and manifest-authenticated in execution mode. |
+| `--uniswap-router` | none | V3 SwapRouter; explicit flag/environment values override the saved value. Required and manifest-authenticated in execution mode. |
+| `--uniswap-v2-router` | none | Optional V2 Router02; explicit flag/environment values override the saved value. When set, it is manifest-authenticated and joins best-route selection. |
+| `--uniswap-v4-pool-manager` | none | Optional V4 PoolManager; explicit flag/environment values override the saved value. Requires the V4 Quoter and matching manifest role. |
+| `--uniswap-v4-quoter` | none | Optional V4 Quoter; explicit flag/environment values override the saved value. Requires the V4 PoolManager and matching manifest role. |
+| `--deployment-manifest` | none | Reviewed trust root; an explicit path/environment value overrides the saved manifest. Required in execution mode. |
+| `--quorum-rpc-url` | none | Independent read RPC; explicit flag/environment lists override the saved list. At least one secondary is required in execution mode. |
+| `--coordinator-address` | none | Approved coordinator; explicit flag/environment lists override the saved list. Execution requires one and verifies its immutable template. |
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
 | `--ui-port` | `4173` | Local dashboard port. |
 | `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
 | `--position-file` | Network-specific JSON | Recovery-critical durable positions, entry/lifecycle transaction hashes, and lifecycle intent. Keep overrides separate by chain and signer. |
-| `--settings-file` | Network-specific JSON | Persistent dashboard strategy, endpoint, delivery, pause, and opt-in signer settings. |
+| `--settings-file` | Network-specific JSON | Persistent deployment identities, quorum RPCs, manifest, strategy, endpoint, delivery, pause, and opt-in signer settings. Protect its integrity even without a saved signer. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
 | `--execute` | off | Enable guarded bundle/executor submission. Requires an executor address, at least one approved coordinator, and `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
 | `--submission-mode` | `private` | `private` simulates/fans out atomic bundles; `public` submits one atomic entry transaction and requires pre-existing allowances. |

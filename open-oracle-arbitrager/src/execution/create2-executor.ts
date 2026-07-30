@@ -23,27 +23,38 @@ export function executorDeploymentPlan(saltValue: unknown): ExecutorDeploymentPl
 	}
 }
 
+export function assertExecutorDeploymentEnvironment(actualChainId: number, expectedChainId: number, proxyCode: Hex | undefined) {
+	if (actualChainId !== expectedChainId) throw new Error(`RPC chain mismatch: expected ${expectedChainId.toString()}, received ${actualChainId.toString()}`)
+	if (proxyCode?.toLowerCase() !== deterministicDeploymentProxyCode.toLowerCase()) throw new Error('Canonical CREATE2 deployment proxy is missing or has unexpected bytecode')
+}
+
+export function executorCodeStatus(code: Hex | undefined, expectedRuntimeCodeHash: Hex) {
+	if (code === undefined || code === '0x') return 'missing' as const
+	if (keccak256(code).toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) throw new Error('Executor address contains unexpected runtime bytecode')
+	return 'verified' as const
+}
+
+export function assertExecutorDeploymentReceipt(status: 'reverted' | 'success', transactionHash: Hash) {
+	if (status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${transactionHash}`)
+}
+
 export async function deployExecutorCreate2(parameters: { chain: Chain; privateKey: Hex; rpcUrl: string; salt: unknown }) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const publicClient = createPublicClient({ chain: parameters.chain, transport: http(parameters.rpcUrl) })
 	const chainId = await publicClient.getChainId()
-	if (chainId !== parameters.chain.id) throw new Error(`RPC chain mismatch: expected ${parameters.chain.id.toString()}, received ${chainId.toString()}`)
 	const proxyCode = await publicClient.getCode({ address: deterministicDeploymentProxy })
-	if (proxyCode?.toLowerCase() !== deterministicDeploymentProxyCode.toLowerCase()) throw new Error('Canonical CREATE2 deployment proxy is missing or has unexpected bytecode')
+	assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const existingCode = await publicClient.getCode({ address: plan.address })
-	if (existingCode !== undefined && existingCode !== '0x') {
-		if (keccak256(existingCode).toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) throw new Error(`Predicted executor address ${plan.address} already contains different bytecode`)
+	if (executorCodeStatus(existingCode, expectedRuntimeCodeHash) === 'verified') {
 		return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
 	}
 	const account = privateKeyToAccount(parameters.privateKey)
 	const wallet = createWalletClient({ account, chain: parameters.chain, transport: http(parameters.rpcUrl) })
 	const transactionHash = await wallet.sendTransaction({ data: plan.calldata, to: deterministicDeploymentProxy })
 	const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash })
-	if (receipt.status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${receipt.transactionHash}`)
+	assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
 	const deployedCode = await publicClient.getCode({ address: plan.address })
-	if (deployedCode === undefined || deployedCode === '0x' || keccak256(deployedCode).toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) {
-		throw new Error('CREATE2 deployment did not produce the expected executor runtime bytecode')
-	}
+	if (executorCodeStatus(deployedCode, expectedRuntimeCodeHash) !== 'verified') throw new Error('CREATE2 deployment did not produce executor runtime bytecode')
 	return { address: plan.address, alreadyDeployed: false, transactionHash: transactionHash as Hash }
 }

@@ -132,6 +132,41 @@ describe('startup configuration', () => {
 		expect(result.output).not.toContain('--execute requires private bundle submission')
 	})
 
+	test('loads an authenticated execution manifest from dashboard settings without requiring a manifest path', async () => {
+		const directory = await temporaryDirectory()
+		const settingsPath = join(directory, 'settings.json')
+		const address = '0x0000000000000000000000000000000000000001' as const
+		await saveOperatorSettings(settingsPath, 'mainnet', {
+			connectivity: { publicRpcUrls: ['http://127.0.0.1:1/'], readRpcUrl: 'http://127.0.0.1:1/' },
+			deployment: {
+				coordinatorAddresses: [address],
+				deploymentManifest: { chainId: 1, contracts: [{ address, role: 'executor', runtimeCodeHash: `0x${'11'.repeat(32)}` }], network: 'mainnet', version: 1 },
+				executor: address,
+				openOracle: oracle.slice('--open-oracle='.length) as `0x${string}`,
+				quorumRpcUrls: ['http://127.0.0.1:2/'],
+				rep: address,
+				uniswapFactory: address,
+				uniswapQuoter: address,
+				uniswapRouter: address,
+				uniswapV2Router: undefined,
+				uniswapV4PoolManager: undefined,
+				uniswapV4Quoter: undefined,
+				weth: address,
+			},
+			paused: true,
+			privateKey: undefined,
+			strategy: { maxSpotTwapTicks: 100n, minimumProfitBps: 100n, minimumProfitWeth: 10n ** 16n, minimumRemainingBlocks: 3n, minimumRemainingSeconds: 36n, pollMilliseconds: 1_000, twapSeconds: 1_800 },
+			submission: { minimumRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+		})
+		const environment = { ...process.env }
+		delete environment['PRIVATE_KEY']
+		const child = Bun.spawn([executable, '--execute', '--once', '--submission-mode=public', `--settings-file=${settingsPath}`], { env: environment, stderr: 'pipe', stdout: 'pipe' })
+		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+		expect(exitCode).toBe(1)
+		expect(`${stdout}${stderr}`).not.toContain('requires an authenticated deployment manifest')
+		expect(`${stdout}${stderr}`).toContain('--execute requires PRIVATE_KEY')
+	})
+
 	test('rejects a per-position limit larger than the total lock limit', async () => {
 		const result = await invalidStartup(['--max-position-weth=2', '--max-total-locked-weth=1'])
 		expect(result.exitCode).toBe(1)

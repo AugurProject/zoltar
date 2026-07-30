@@ -950,7 +950,10 @@ element<HTMLFormElement>('create2-form').addEventListener('submit', async event 
 			headers: { 'content-type': 'application/json' },
 			method: 'POST',
 		})
-		if (!window.confirm(`Deploy the executor at predictable address ${prediction.address} with the active local signer?`)) return
+		if (!window.confirm(`Deploy the executor at predictable address ${prediction.address} with the active local signer?`)) {
+			setText('create2-status', `Deployment cancelled. Predicted executor address: ${prediction.address}.`)
+			return
+		}
 		setText('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
 		const result = await api<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>('/api/executor-deployment', {
 			body: JSON.stringify({ salt }),

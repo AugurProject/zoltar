@@ -42,8 +42,9 @@ import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConne
 import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from '#config/configuration'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
-import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
@@ -2224,7 +2225,9 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	let activeSignerLock = initialSignerLock
 	let pendingSignerLock: ExclusiveProcessLock | undefined
 	let pendingTokenAddresses: Address[] | undefined
+	let restartTokenAddresses: Address[] | undefined
 	let signerUpdatePending = false
+	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
 	const currentPersistedSettings = (): PersistedOperatorSettings => ({
 		connectivity: pendingConnectivity ?? config.connectivity,
@@ -2233,7 +2236,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		privateKey: config.persistedPrivateKey,
 		strategy: pendingStrategy ?? config,
 		submission: pendingSubmission ?? config.submission,
-		tokenAddresses: pendingTokenAddresses ?? config.tokenAddresses,
+		tokenAddresses: restartTokenAddresses ?? pendingTokenAddresses ?? config.tokenAddresses,
 	})
 	const persistSettings = (settings: PersistedOperatorSettings) => saveOperatorSettings(config.settingsFile, config.network.name, settings)
 	let settingsUpdateQueue = Promise.resolve()
@@ -2279,8 +2282,12 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				updateDeployment: value => {
 					const next = validateDeploymentSettings(value)
 					return queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), deployment: next })
+						const previous = pendingDeployment ?? fixedState.deployment
+						const tokens = prepareDeploymentTokenTransition(pendingTokenAddresses ?? config.tokenAddresses, restartTokenAddresses, previous.rep, next.rep)
+						await persistSettings({ ...currentPersistedSettings(), deployment: next, tokenAddresses: tokens.restart })
 						pendingDeployment = next
+						pendingTokenAddresses = tokens.active
+						restartTokenAddresses = tokens.restart
 						fixedState.deployment = next
 						recordOperation(state, {
 							category: 'configuration',
@@ -2301,18 +2308,24 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				deployExecutor: async value => {
 					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
 					if (config.execute && !state.paused) throw new Error('Pause execution before deploying with the active signer')
-					const privateKey = pendingPrivateKey ?? config.privateKey
+					const privateKey = config.privateKey
 					if (privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
 					const connectivity = pendingConnectivity ?? config.connectivity
 					const deploymentRpcUrl = connectivity.publicRpcUrls[0]
 					if (deploymentRpcUrl === undefined) throw new Error('Configure a public submission RPC before deploying the executor')
 					const plan = executorDeploymentPlan(value['salt'])
-					const deployed = await deployExecutorCreate2({
-						chain: config.network.chain,
-						privateKey,
-						rpcUrl: deploymentRpcUrl,
-						salt: plan.salt,
-					})
+					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+					let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
+					try {
+						deployed = await deployExecutorCreate2({
+							chain: config.network.chain,
+							privateKey,
+							rpcUrl: deploymentRpcUrl,
+							salt: plan.salt,
+						})
+					} finally {
+						signerOperationGate.release('deployment')
+					}
 					const next = { ...(pendingDeployment ?? fixedState.deployment), deploymentManifest: undefined, executor: deployed.address }
 					await queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), deployment: next })
@@ -2412,8 +2425,10 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					}
 					const next = [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 					return queueSettingsUpdate(async () => {
-						await persistSettings({ ...currentPersistedSettings(), tokenAddresses: next })
+						const restartTokens = pendingDeployment === undefined ? next : replacePrimaryRepToken(next, config.network.rep, pendingDeployment.rep)
+						await persistSettings({ ...currentPersistedSettings(), tokenAddresses: restartTokens })
 						pendingTokenAddresses = next
+						restartTokenAddresses = restartTokens
 						recordOperation(state, {
 							category: 'configuration',
 							details: next.join(', '),
@@ -2467,278 +2482,283 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	try {
 		await pollUntilStopped(
 			async () => {
-				if (pendingStrategy !== undefined) {
-					applyStrategy(config, pendingStrategy)
-					pendingStrategy = undefined
-				}
-				if (pendingSubmission !== undefined) {
-					config.submission = pendingSubmission
-					pendingSubmission = undefined
-				}
-				if (pendingTokenAddresses !== undefined) {
-					config.tokenAddresses = pendingTokenAddresses
-					state.tokenAddresses = pendingTokenAddresses
-					pendingTokenAddresses = undefined
-				}
-				if (pendingConnectivity !== undefined) {
-					config.connectivity = pendingConnectivity
-					pendingConnectivity = undefined
-					client = createClient()
-					readClients = [client, ...config.quorumRpcUrls.map(url => createClient(url))]
-					wallet = createWallet()
-					coordinatorPolicies = await loadCoordinatorPolicies(client, config)
-					await authenticateConfiguredDeployments(readClients, config)
-				}
-				if (signerUpdatePending) {
-					const nextSignerLock = pendingPrivateKey === undefined ? undefined : (pendingSignerLock ?? activeSignerLock)
-					if (config.execute && pendingPrivateKey !== undefined && nextSignerLock === undefined) throw new Error('Queued execution signer does not hold an exclusive process lock')
-					const previousSignerLock = activeSignerLock
-					activeSignerLock = nextSignerLock
-					pendingSignerLock = undefined
-					config.privateKey = pendingPrivateKey
-					wallet = createWallet()
-					fixedState.wallet = wallet?.account.address
-					fixedState.queuedWallet = undefined
-					clearWalletDerivedState(state)
-					signerUpdatePending = false
-					if (previousSignerLock !== undefined && previousSignerLock !== activeSignerLock && lockManager !== undefined) await lockManager.release(previousSignerLock)
-				}
-				let nextError: string | undefined
-				if (positions.some(position => position.historyOutbox !== undefined)) {
-					try {
-						await flushHistoryOutboxes()
-					} catch (error) {
-						const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
-						nextError = message
-						console.error(`historyPersistenceFailed=${message}`)
+				if (!signerOperationGate.acquire('scan')) return false
+				try {
+					if (pendingStrategy !== undefined) {
+						applyStrategy(config, pendingStrategy)
+						pendingStrategy = undefined
 					}
-				}
-				const observedChainId = await client.getChainId()
-				if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
-				const block = await client.getBlock()
-				const blockNumber = block.number
-				if (blockNumber === undefined) throw new Error('Latest block is missing its number')
-				const blockHash = block.hash
-				if (blockHash === undefined) throw new Error('Latest block is missing its hash')
-				if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
-					const anchor = await client.getBlock({ blockNumber: cursor.finalityAnchorNumber })
-					if (anchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-					assertFinalityAnchor(cursor, cursor.finalityAnchorNumber, anchor.hash)
-				}
-				let lifecycleProcessed = false
-				if (config.execute && wallet !== undefined) {
-					for (const position of positions.filter(candidate => candidate.status !== 'recovery-required' && candidate.manualReconciliation === undefined && (candidate.expiredTransactionAttempts?.length ?? 0) !== 0)) {
+					if (pendingSubmission !== undefined) {
+						config.submission = pendingSubmission
+						pendingSubmission = undefined
+					}
+					if (pendingTokenAddresses !== undefined) {
+						config.tokenAddresses = pendingTokenAddresses
+						state.tokenAddresses = pendingTokenAddresses
+						pendingTokenAddresses = undefined
+					}
+					if (pendingConnectivity !== undefined) {
+						config.connectivity = pendingConnectivity
+						pendingConnectivity = undefined
+						client = createClient()
+						readClients = [client, ...config.quorumRpcUrls.map(url => createClient(url))]
+						wallet = createWallet()
+						coordinatorPolicies = await loadCoordinatorPolicies(client, config)
+						await authenticateConfiguredDeployments(readClients, config)
+					}
+					if (signerUpdatePending) {
+						const nextSignerLock = pendingPrivateKey === undefined ? undefined : (pendingSignerLock ?? activeSignerLock)
+						if (config.execute && pendingPrivateKey !== undefined && nextSignerLock === undefined) throw new Error('Queued execution signer does not hold an exclusive process lock')
+						const previousSignerLock = activeSignerLock
+						activeSignerLock = nextSignerLock
+						pendingSignerLock = undefined
+						config.privateKey = pendingPrivateKey
+						wallet = createWallet()
+						fixedState.wallet = wallet?.account.address
+						fixedState.queuedWallet = undefined
+						clearWalletDerivedState(state)
+						signerUpdatePending = false
+						if (previousSignerLock !== undefined && previousSignerLock !== activeSignerLock && lockManager !== undefined) await lockManager.release(previousSignerLock)
+					}
+					let nextError: string | undefined
+					if (positions.some(position => position.historyOutbox !== undefined)) {
 						try {
-							const reconciled = await reconcileExpiredAttemptsWithQuorum(readClients, config, position, blockNumber)
-							if (reconciled !== position) {
-								await persistPosition(reconciled)
-								recordOperation(state, {
-									category: 'transaction',
-									details: `entryGas=${reconciled.actualEntryGasCostEth} ETH lifecycleGas=${reconciled.lifecycleGasCostEth} ETH`,
-									level: 'info',
-									message: 'Late atomic revert gas reconciled',
-									reason: (reconciled.expiredTransactionAttempts?.length ?? 0) === 0 ? `Report ${position.reportId} expired transaction monitoring completed` : `Report ${position.reportId} expired transaction monitoring remains active`,
-									reportId: position.reportId,
-								})
-							}
+							await flushHistoryOutboxes()
 						} catch (error) {
-							const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
+							const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
 							nextError = message
-							recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
+							console.error(`historyPersistenceFailed=${message}`)
 						}
 					}
-					for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
-						try {
-							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, reports.get(BigInt(position.reportId)), persistPosition, trackTransaction)
-							if (result === 'processed' || result === 'progressed') {
-								lifecycleProcessed = true
-								const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
-								const replacementClaimed = updatedPosition?.status === 'replaced'
-								let lifecycleMessage = 'Position lifecycle advanced'
-								let lifecycleReason = `Report ${position.reportId} completed one durable public lifecycle transaction`
-								if (result === 'processed') {
-									lifecycleMessage = 'Position lifecycle completed'
-									lifecycleReason = `Report ${position.reportId} was settled and withdrawn`
+					const observedChainId = await client.getChainId()
+					if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
+					const block = await client.getBlock()
+					const blockNumber = block.number
+					if (blockNumber === undefined) throw new Error('Latest block is missing its number')
+					const blockHash = block.hash
+					if (blockHash === undefined) throw new Error('Latest block is missing its hash')
+					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
+						const anchor = await client.getBlock({ blockNumber: cursor.finalityAnchorNumber })
+						if (anchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+						assertFinalityAnchor(cursor, cursor.finalityAnchorNumber, anchor.hash)
+					}
+					let lifecycleProcessed = false
+					if (config.execute && wallet !== undefined) {
+						for (const position of positions.filter(candidate => candidate.status !== 'recovery-required' && candidate.manualReconciliation === undefined && (candidate.expiredTransactionAttempts?.length ?? 0) !== 0)) {
+							try {
+								const reconciled = await reconcileExpiredAttemptsWithQuorum(readClients, config, position, blockNumber)
+								if (reconciled !== position) {
+									await persistPosition(reconciled)
+									recordOperation(state, {
+										category: 'transaction',
+										details: `entryGas=${reconciled.actualEntryGasCostEth} ETH lifecycleGas=${reconciled.lifecycleGasCostEth} ETH`,
+										level: 'info',
+										message: 'Late atomic revert gas reconciled',
+										reason: (reconciled.expiredTransactionAttempts?.length ?? 0) === 0 ? `Report ${position.reportId} expired transaction monitoring completed` : `Report ${position.reportId} expired transaction monitoring remains active`,
+										reportId: position.reportId,
+									})
 								}
-								if (replacementClaimed) {
-									lifecycleMessage = 'Replacement credit claimed'
-									lifecycleReason = `Report ${position.reportId} credit is final; the one-sided inventory remains risk-consuming until reconciled`
-								}
-								recordOperation(state, {
-									category: 'transaction',
-									details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} WETH; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
-									level: 'info',
-									message: lifecycleMessage,
-									reason: lifecycleReason,
-									reportId: position.reportId,
-								})
+							} catch (error) {
+								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
+								nextError = message
+								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
 							}
-						} catch (error) {
-							const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
-							nextError = message
-							recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Position lifecycle failed closed', reason: message, reportId: position.reportId })
+						}
+						for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
+							try {
+								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, reports.get(BigInt(position.reportId)), persistPosition, trackTransaction)
+								if (result === 'processed' || result === 'progressed') {
+									lifecycleProcessed = true
+									const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
+									const replacementClaimed = updatedPosition?.status === 'replaced'
+									let lifecycleMessage = 'Position lifecycle advanced'
+									let lifecycleReason = `Report ${position.reportId} completed one durable public lifecycle transaction`
+									if (result === 'processed') {
+										lifecycleMessage = 'Position lifecycle completed'
+										lifecycleReason = `Report ${position.reportId} was settled and withdrawn`
+									}
+									if (replacementClaimed) {
+										lifecycleMessage = 'Replacement credit claimed'
+										lifecycleReason = `Report ${position.reportId} credit is final; the one-sided inventory remains risk-consuming until reconciled`
+									}
+									recordOperation(state, {
+										category: 'transaction',
+										details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} WETH; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
+										level: 'info',
+										message: lifecycleMessage,
+										reason: lifecycleReason,
+										reportId: position.reportId,
+									})
+								}
+							} catch (error) {
+								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
+								nextError = message
+								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Position lifecycle failed closed', reason: message, reportId: position.reportId })
+							}
 						}
 					}
-				}
-				if (lifecycleProcessed) {
-					state.lastError = nextError
-					state.lastPollAt = new Date().toISOString()
-					state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-					return config.once
-				}
-				const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
-				cursor ??= initialCursor(blockNumber, config.lookbackBlocks)
-				const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
-				if (scanCursor === undefined) {
-					state.lastError = nextError
-					state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-					state.blockNumber = blockNumber.toString()
-					state.blockTimestamp = block.timestamp.toString()
-					return config.once
-				}
-				const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
-				for (const range of ranges) {
-					const logs = await client.getLogs({
-						address: config.openOracle,
-						fromBlock: range.fromBlock,
-						toBlock: range.toBlock,
-						topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-					})
-					cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
-					reports.clear()
-					applyLogs(reports, cachedLogs)
-					cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
-				}
-				let completedOpportunityCount = 0
-				cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-					const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-					const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
-					state.tokenMarkets = await loadTokenMarkets(client, {
-						chainId: config.network.chain.id,
-						explorerUrl: config.network.explorerUrl,
-						factory: config.network.factory,
-						tokens: discoveredTokens,
-						weth: config.network.weth,
-						wallet: wallet?.account.address,
-					})
-					const sampledAt = new Date(Number(block.timestamp) * 1_000).toISOString()
-					const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
-					await appendPriceHistory(config.priceHistoryFile, samples)
-					state.priceHistory = [...state.priceHistory, ...samples]
-					const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
-					if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
-					const balances = await loadBalances(client, wallet, config, pools, discoveredTokens)
-					const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-					const opportunities: OpportunitySnapshot[] = []
-					const candidates: ExecutionCandidate[] = []
-					for (const report of reports.values()) {
-						if (report.settled) continue
-						try {
-							const reportId = report.latest.helper.reportId.toString()
-							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
-							if (metadata === undefined) throw new Error('Token metadata is unavailable')
-							const evaluated = await inspectReport(
-								client,
-								wallet,
-								config,
-								report.latest,
-								pools,
-								blockNumber,
-								block.timestamp,
-								gasPrice,
-								balances?.raw,
-								metadata,
-								executionTokenAllowed(executionTokens, report.latest.game.token2) && authenticatedExecutionToken(config, report.latest.game.token2),
-								executionReady,
-								state.paused,
-								coordinatorPolicies,
-								(message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }),
-							)
-							if (evaluated !== undefined) {
-								opportunities.push(evaluated.opportunity)
-								recordOperation(state, {
-									category: 'decision',
-									details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
-									level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
-									message: `Decision: ${evaluated.opportunity.decision}`,
-									reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
-									reportId: evaluated.opportunity.reportId,
-								})
-								if (evaluated.candidate !== undefined) {
-									const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, dateFromBlockTimestamp(block.timestamp))
-									if (mismatch === undefined) candidates.push(evaluated.candidate)
-									else {
-										evaluated.opportunity.decision = 'risk-limit'
-										recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Risk limit blocked report', reason: mismatch, reportId: evaluated.opportunity.reportId })
+					if (lifecycleProcessed) {
+						state.lastError = nextError
+						state.lastPollAt = new Date().toISOString()
+						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+						return config.once
+					}
+					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
+					cursor ??= initialCursor(blockNumber, config.lookbackBlocks)
+					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
+					if (scanCursor === undefined) {
+						state.lastError = nextError
+						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+						state.blockNumber = blockNumber.toString()
+						state.blockTimestamp = block.timestamp.toString()
+						return config.once
+					}
+					const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
+					for (const range of ranges) {
+						const logs = await client.getLogs({
+							address: config.openOracle,
+							fromBlock: range.fromBlock,
+							toBlock: range.toBlock,
+							topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+						})
+						cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
+						reports.clear()
+						applyLogs(reports, cachedLogs)
+						cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
+					}
+					let completedOpportunityCount = 0
+					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
+						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
+						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
+						state.tokenMarkets = await loadTokenMarkets(client, {
+							chainId: config.network.chain.id,
+							explorerUrl: config.network.explorerUrl,
+							factory: config.network.factory,
+							tokens: discoveredTokens,
+							weth: config.network.weth,
+							wallet: wallet?.account.address,
+						})
+						const sampledAt = new Date(Number(block.timestamp) * 1_000).toISOString()
+						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
+						await appendPriceHistory(config.priceHistoryFile, samples)
+						state.priceHistory = [...state.priceHistory, ...samples]
+						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
+						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
+						const balances = await loadBalances(client, wallet, config, pools, discoveredTokens)
+						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+						const opportunities: OpportunitySnapshot[] = []
+						const candidates: ExecutionCandidate[] = []
+						for (const report of reports.values()) {
+							if (report.settled) continue
+							try {
+								const reportId = report.latest.helper.reportId.toString()
+								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
+								if (metadata === undefined) throw new Error('Token metadata is unavailable')
+								const evaluated = await inspectReport(
+									client,
+									wallet,
+									config,
+									report.latest,
+									pools,
+									blockNumber,
+									block.timestamp,
+									gasPrice,
+									balances?.raw,
+									metadata,
+									executionTokenAllowed(executionTokens, report.latest.game.token2) && authenticatedExecutionToken(config, report.latest.game.token2),
+									executionReady,
+									state.paused,
+									coordinatorPolicies,
+									(message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }),
+								)
+								if (evaluated !== undefined) {
+									opportunities.push(evaluated.opportunity)
+									recordOperation(state, {
+										category: 'decision',
+										details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
+										level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
+										message: `Decision: ${evaluated.opportunity.decision}`,
+										reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
+										reportId: evaluated.opportunity.reportId,
+									})
+									if (evaluated.candidate !== undefined) {
+										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, dateFromBlockTimestamp(block.timestamp))
+										if (mismatch === undefined) candidates.push(evaluated.candidate)
+										else {
+											evaluated.opportunity.decision = 'risk-limit'
+											recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Risk limit blocked report', reason: mismatch, reportId: evaluated.opportunity.reportId })
+										}
 									}
 								}
-							}
-						} catch (error) {
-							const reportId = report.latest.helper.reportId.toString()
-							const message = errorMessage(error)
-							console.error(`report=${reportId} skipped=${message}`)
-							recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
-						}
-					}
-					state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
-					state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
-					state.balances = balances?.snapshot
-					state.blockNumber = blockNumber.toString()
-					state.blockTimestamp = block.timestamp.toString()
-					state.gameCapital = gameCapitalSnapshot(
-						[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
-						config.network.weth,
-					)
-					state.lastPollAt = new Date().toISOString()
-					state.opportunities = opportunities
-					const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
-					if (selected !== undefined && wallet !== undefined) {
-						selected.opportunity.decision = 'selected'
-						try {
-							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
-							if (metadata === undefined) throw new Error('Token metadata is unavailable')
-							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, () => state.paused, trackTransaction, persistPosition)
-							selected.opportunity.decision = 'submitted'
-							if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-							try {
-								await flushHistoryOutboxes()
 							} catch (error) {
-								const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
-								nextError = message
-								console.error(`historyPersistenceFailed=${message}`)
+								const reportId = report.latest.helper.reportId.toString()
+								const message = errorMessage(error)
+								console.error(`report=${reportId} skipped=${message}`)
+								recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
 							}
-						} catch (error) {
-							const message = errorMessage(error)
-							selected.opportunity.decision = executionFailureDecision(error)
-							if (selected.opportunity.decision === 'execution-failed') {
-								nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
-							}
-							console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
 						}
+						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
+						state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+						state.balances = balances?.snapshot
+						state.blockNumber = blockNumber.toString()
+						state.blockTimestamp = block.timestamp.toString()
+						state.gameCapital = gameCapitalSnapshot(
+							[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
+							config.network.weth,
+						)
+						state.lastPollAt = new Date().toISOString()
+						state.opportunities = opportunities
+						const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
+						if (selected !== undefined && wallet !== undefined) {
+							selected.opportunity.decision = 'selected'
+							try {
+								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
+								if (metadata === undefined) throw new Error('Token metadata is unavailable')
+								const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, () => state.paused, trackTransaction, persistPosition)
+								selected.opportunity.decision = 'submitted'
+								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
+								try {
+									await flushHistoryOutboxes()
+								} catch (error) {
+									const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
+									nextError = message
+									console.error(`historyPersistenceFailed=${message}`)
+								}
+							} catch (error) {
+								const message = errorMessage(error)
+								selected.opportunity.decision = executionFailureDecision(error)
+								if (selected.opportunity.decision === 'execution-failed') {
+									nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
+								}
+								console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
+							}
+						}
+						state.priceHistory = state.priceHistory.slice(-2_000)
+						completedOpportunityCount = opportunities.length
+					})
+					const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
+					const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
+					if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+					cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
+					const settledReportIds = new Set(
+						[...reports.entries()]
+							.filter(([, report]) => {
+								const settlement = report.steps.findLast(step => step.event === 'settled')
+								return report.settled && settlement !== undefined && blockNumber > BigInt(settlement.blockNumber) + REORG_OVERLAP_BLOCKS
+							})
+							.map(([id]) => id),
+					)
+					if (settledReportIds.size !== 0) {
+						for (const id of settledReportIds) reports.delete(id)
+						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
-					state.priceHistory = state.priceHistory.slice(-2_000)
-					completedOpportunityCount = opportunities.length
-				})
-				const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-				const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
-				if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-				cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
-				const settledReportIds = new Set(
-					[...reports.entries()]
-						.filter(([, report]) => {
-							const settlement = report.steps.findLast(step => step.event === 'settled')
-							return report.settled && settlement !== undefined && blockNumber > BigInt(settlement.blockNumber) + REORG_OVERLAP_BLOCKS
-						})
-						.map(([id]) => id),
-				)
-				if (settledReportIds.size !== 0) {
-					for (const id of settledReportIds) reports.delete(id)
-					cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
+					state.lastError = nextError
+					state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+					recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
+					return config.once
+				} finally {
+					signerOperationGate.release('scan')
 				}
-				state.lastError = nextError
-				state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-				recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
-				return config.once
 			},
 			() => Bun.sleep(config.pollMilliseconds),
 			config.once,

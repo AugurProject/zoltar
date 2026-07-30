@@ -174,7 +174,6 @@ export async function loadConfiguration(): Promise<Configuration> {
 	const coordinatorAddresses = [...new Map((configuredCoordinatorAddresses.length === 0 ? (saved?.deployment?.coordinatorAddresses ?? []) : configuredCoordinatorAddresses).map(value => getAddress(value)).map(address => [address.toLowerCase(), address])).values()]
 	if (execute && coordinatorAddresses.length === 0) throw new Error('--execute requires at least one --coordinator-address=0x... (or OPEN_ORACLE_COORDINATOR_ADDRESSES)')
 	const deploymentManifestPath = option('deployment-manifest') ?? process.env['OPEN_ORACLE_DEPLOYMENT_MANIFEST']
-	if (execute && deploymentManifestPath === undefined) throw new Error('--execute requires --deployment-manifest=PATH (or OPEN_ORACLE_DEPLOYMENT_MANIFEST)')
 	let deploymentManifest: DeploymentManifest | undefined = saved?.deployment?.deploymentManifest
 	if (deploymentManifestPath !== undefined) {
 		let value: unknown
@@ -186,6 +185,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		}
 		deploymentManifest = parseDeploymentManifest(value)
 	}
+	if (execute && deploymentManifest === undefined) throw new Error('--execute requires an authenticated deployment manifest from --deployment-manifest=PATH, OPEN_ORACLE_DEPLOYMENT_MANIFEST, or saved dashboard settings')
 	const maxHedgeSlippageBps = BigInt(option('max-hedge-slippage-bps') ?? '50')
 	if (maxHedgeSlippageBps < 0n || maxHedgeSlippageBps > 1_000n) throw new Error('max-hedge-slippage-bps must be from 0 to 1000')
 	const riskLimits = {

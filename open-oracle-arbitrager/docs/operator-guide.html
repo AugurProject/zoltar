@@ -291,8 +291,8 @@
 							</tr>
 							<tr>
 								<td>Deployment configuration</td>
-								<td>REP, WETH, OpenOracle, approved coordinators, executor, authenticated manifest, quorum RPCs, and Uniswap V2/V3/V4 contracts.</td>
-								<td>Validate and save reviewed values for restart. The executor deploy action uses the active signer, a bytes32 salt, and the canonical CREATE2 proxy, then verifies runtime bytecode before saving the predicted address.</td>
+								<td>REP, WETH, OpenOracle, approved coordinators, executor, manifest to authenticate, quorum RPCs, and Uniswap V2/V3/V4 contracts.</td>
+								<td>Syntax-check and save reviewed values for restart. Before executor deployment, configure a selected-chain public RPC and active signer, pause armed execution, and wait for signer operations to finish. Confirm the predicted address, deploy or verify the executor, replace the cleared manifest, and restart for quorum-backed authentication. <a href="/documentation/reference#persistent-operator-settings">Detailed branch behavior</a>.</td>
 							</tr>
 							<tr>
 								<td>Transactions and operations</td>
@@ -613,8 +613,8 @@
 						<tbody>
 							<tr>
 								<td><code>settings-NETWORK.json</code></td>
-								<td>Strategy, endpoints, submission mode, pause state, token list, and optional saved signer.</td>
-								<td>Owner-only; treat as a wallet secret when signer persistence is enabled.</td>
+								<td>Deployment identities, quorum RPCs, manifest, strategy, endpoints, submission mode, pause state, token list, and optional saved signer. <a href="/documentation/reference#persistent-operator-settings">Precedence and deployment procedure</a>.</td>
+								<td>Owner-only; protect integrity as execution policy, and treat as a wallet secret when signer persistence is enabled.</td>
 							</tr>
 							<tr>
 								<td><code>positions-NETWORK.json</code></td>

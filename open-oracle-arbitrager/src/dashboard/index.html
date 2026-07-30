@@ -207,7 +207,7 @@
 						<p class="eyebrow">Sepolia and mainnet identities</p>
 						<h2>Deployment configuration</h2>
 					</div>
-					<span class="muted">Saved for restart</span>
+					<span class="muted">Applies after restart</span>
 				</div>
 				<form id="deployment-form">
 					<fieldset id="deployment-fieldset" disabled>
@@ -224,8 +224,11 @@
 							<label><span>Uniswap V4 Quoter</span><input id="deployment-v4-quoter" class="mono" spellcheck="false" /></label>
 							<label><span>Approved coordinators · one per line</span><textarea id="deployment-coordinators" rows="3" spellcheck="false" required></textarea></label>
 							<label><span>Independent quorum RPCs · one per line</span><textarea id="deployment-quorum-rpcs" rows="3" spellcheck="false" placeholder="Required before execution"></textarea></label>
-							<label class="deployment-manifest-field"><span>Authenticated execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution"></textarea></label>
+							<label class="deployment-manifest-field"
+								><span>Execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea
+							></label>
 						</div>
+						<p id="deployment-manifest-help" class="section-note">Saving validates manifest structure only. The read quorum authenticates contract bytecode when the bot restarts.</p>
 						<div class="form-actions">
 							<span id="deployment-status" class="muted" aria-live="polite">Address, venue, manifest, and quorum changes take effect after restart.</span>
 							<button class="button" type="submit">Save deployment configuration</button>

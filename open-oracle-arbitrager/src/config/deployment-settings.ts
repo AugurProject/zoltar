@@ -66,3 +66,14 @@ export function validateDeploymentSettings(value: unknown): DeploymentSettings {
 		weth: getAddress(String(settings['weth'])),
 	}
 }
+
+export function replacePrimaryRepToken(tokenAddresses: readonly Address[], previousRep: Address, nextRep: Address) {
+	return [nextRep, ...tokenAddresses.filter(address => address.toLowerCase() !== previousRep.toLowerCase() && address.toLowerCase() !== nextRep.toLowerCase())]
+}
+
+export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly Address[], restartTokenAddresses: readonly Address[] | undefined, previousRep: Address, nextRep: Address) {
+	return {
+		active: [...activeTokenAddresses],
+		restart: replacePrimaryRepToken(restartTokenAddresses ?? activeTokenAddresses, previousRep, nextRep),
+	}
+}
