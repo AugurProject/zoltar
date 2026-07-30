@@ -3,12 +3,12 @@ const documentGroups = [
 		label: 'Whitepapers',
 		documents: [
 			{
-				path: 'statoblast-whitepaper.html',
+				path: 'whitepapers/statoblast-whitepaper.html',
 				title: 'Statoblast whitepaper',
 				description: 'The application layer, from markets and pools through resolution and migration.',
 			},
 			{
-				path: 'zoltar-whitepaper.html',
+				path: 'whitepapers/zoltar-whitepaper.html',
 				title: 'Zoltar whitepaper',
 				description: 'Universes, question encoding, global forks, and REP splitting.',
 			},
@@ -18,17 +18,17 @@ const documentGroups = [
 		label: 'Protocol design',
 		documents: [
 			{
-				path: 'truth-auction.html',
+				path: 'protocol-design/truth-auction.html',
 				title: 'Truth auction',
 				description: 'Auction clearing, settlement, and weak-demand loss allocation.',
 			},
 			{
-				path: 'open-oracle-integration.html',
+				path: 'protocol-design/open-oracle-integration.html',
 				title: 'OpenOracle integration',
 				description: 'REP/ETH price requests, corrections, settlement, and residual risk.',
 			},
 			{
-				path: 'liquidation.html',
+				path: 'protocol-design/liquidation.html',
 				title: 'Liquidation design',
 				description: 'Punitive REP seizure, chunking limits, health calculations, and incentives.',
 			},
@@ -38,27 +38,27 @@ const documentGroups = [
 		label: 'Safety and operations',
 		documents: [
 			{
-				path: 'security-model.html',
+				path: 'safety-operations/security-model.html',
 				title: 'Protocol security model',
 				description: 'Normative participant, market, deployment, client, and cryptographic assumptions.',
 			},
 			{
-				path: 'invariants.html',
+				path: 'safety-operations/invariants.html',
 				title: 'Protocol invariants',
 				description: 'Contract, lifecycle, cross-contract, liveness, and economic properties.',
 			},
 			{
-				path: 'operator-reference.md',
+				path: 'safety-operations/operator-reference.md',
 				title: 'Operator reference',
 				description: 'Launch guardrails, subsystem edge cases, and operational recovery paths.',
 			},
 			{
-				path: 'contract-interaction-reference.md',
+				path: 'safety-operations/contract-interaction-reference.md',
 				title: 'Contract interaction reference',
 				description: 'Transaction callers, prerequisites, effects, and emitted events.',
 			},
 			{
-				path: 'event-stream.md',
+				path: 'safety-operations/event-stream.md',
 				title: 'Event stream contract',
 				description: 'Deterministic event-only indexing, replay, and reorg rollback.',
 			},
@@ -68,22 +68,22 @@ const documentGroups = [
 		label: 'Architecture and deployment',
 		documents: [
 			{
-				path: 'contract-interactions.html',
+				path: 'architecture-deployment/contract-interactions.html',
 				title: 'Contract interaction map',
 				description: 'How deployed contracts call, deploy, and move assets between one another.',
 			},
 			{
-				path: 'escalation-game-architecture.html',
+				path: 'architecture-deployment/escalation-game-architecture.html',
 				title: 'EscalationGame architecture',
 				description: 'The Solidity module split, authority boundaries, and accounting responsibilities.',
 			},
 			{
-				path: 'deployment-status.html',
+				path: 'architecture-deployment/deployment-status.html',
 				title: 'Deployment status oracle',
 				description: 'Deployment progress bitmask semantics and the 256-step limit.',
 			},
 			{
-				path: 'merkle-mountain-range.html',
+				path: 'architecture-deployment/merkle-mountain-range.html',
 				title: 'Merkle Mountain Range proofs',
 				description: 'Carry-proof hashing, snapshot peaks, and nullifier replay protection.',
 			},
@@ -95,15 +95,10 @@ const documents = documentGroups.flatMap(group => group.documents)
 const documentByPath = new Map(documents.map(documentEntry => [documentEntry.path, documentEntry]))
 const documentsContainer = document.querySelector('[data-reader-documents]')
 const navigation = document.querySelector('[data-reader-navigation]')
-const navigationToggle = document.querySelector('[data-reader-nav-toggle]')
-const searchInput = document.querySelector('[data-doc-search]')
-const searchStatus = document.querySelector('[data-search-status]')
-const searchResults = document.querySelector('[data-search-results]')
-const emptyState = document.querySelector('[data-reader-empty]')
-const emptyStateGuidance = document.querySelector('[data-reader-empty-guidance]')
-const clearSearchButton = document.querySelector('[data-clear-search]')
-const retrySearchButton = document.querySelector('[data-retry-search]')
 const progress = document.querySelector('[data-reading-progress]')
+const readerShell = document.querySelector('.reader-shell')
+const sidebarToggle = document.querySelector('[data-sidebar-toggle]')
+const sidebarToggleLabel = document.querySelector('[data-sidebar-toggle-label]')
 const chapterByPath = new Map()
 const frameWrapByPath = new Map()
 const frameStatusByPath = new Map()
@@ -120,12 +115,6 @@ let activePath
 let navigationVersion = 0
 let pendingReaderScroll
 let readerScrollStabilizationTimeout
-const initialSearchIndex = window.docsReaderSearchIndex
-let readerSearchIndex = isSearchIndex(initialSearchIndex) ? initialSearchIndex : undefined
-let searchIndexState = readerSearchIndex === undefined ? 'idle' : 'ready'
-let searchIndexRequest
-let searchIndexEngaged = false
-let searchIndexRecoveryNotice = false
 const readerFrame = createDocumentFrame()
 
 window.history.scrollRestoration = 'manual'
@@ -140,6 +129,10 @@ function chapterId(path) {
 
 function sourceUrl(path) {
 	return new URL(path, window.location.href).href
+}
+
+function docsAssetUrl(path) {
+	return new URL(`assets/${path}`, window.location.href).href
 }
 
 function decodeFragment(fragment) {
@@ -157,64 +150,12 @@ function outlineSections(path) {
 	return outline[path]
 }
 
-function isSearchIndex(index) {
-	if (typeof index !== 'object' || index === null || Array.isArray(index)) return false
-	return documents.every(documentEntry => {
-		const entry = index[documentEntry.path]
-		if (typeof entry !== 'object' || entry === null || typeof entry.intro !== 'string' || !Array.isArray(entry.sections)) return false
-		return entry.sections.every(section => typeof section === 'object' && section !== null && typeof section.id === 'string' && (section.kind === 'section' || section.kind === 'tool') && typeof section.text === 'string' && typeof section.title === 'string')
-	})
-}
-
-function searchEntry(path) {
-	if (readerSearchIndex === undefined) return undefined
-	const entry = readerSearchIndex[path]
-	if (typeof entry !== 'object' || entry === null || typeof entry.intro !== 'string' || !Array.isArray(entry.sections)) return undefined
-	return entry
-}
-
-function failSearchIndex() {
-	readerSearchIndex = undefined
-	searchIndexState = 'failed'
-}
-
-async function loadSearchIndex() {
-	const response = await fetch('./docsReaderSearchIndex.json').catch(() => undefined)
-	if (response === undefined || !response.ok) {
-		failSearchIndex()
-		return
-	}
-	const index = await response.json().catch(() => undefined)
-	if (!isSearchIndex(index)) {
-		failSearchIndex()
-		return
-	}
-	readerSearchIndex = index
-	searchIndexState = 'ready'
-}
-
-async function ensureSearchIndex() {
-	searchIndexEngaged = true
-	if (searchIndexState === 'ready' || searchIndexState === 'failed') return
-	if (searchIndexRequest !== undefined) return searchIndexRequest
-	searchIndexState = 'loading'
-	applySearch()
-	searchIndexRequest = loadSearchIndex()
-	try {
-		await searchIndexRequest
-	} finally {
-		searchIndexRequest = undefined
-		applySearch()
-	}
-}
-
 function sectionLink(path, section) {
 	const item = document.createElement('li')
 	const link = document.createElement('a')
 	link.href = `#${chapterId(path)}--${encodeURIComponent(section.id)}`
 	link.dataset.documentPath = path
 	link.dataset.documentFragment = section.id
-	link.dataset.searchText = section.title.toLowerCase()
 	if (section.kind === 'tool') {
 		link.className = 'reader-nav-tool-link'
 		const label = document.createElement('span')
@@ -243,10 +184,14 @@ function createNavigation() {
 		groupDocuments.className = 'reader-nav-documents'
 
 		for (const documentEntry of group.documents) {
-			const documentElement = document.createElement('section')
+			const documentElement = document.createElement('details')
 			documentElement.className = 'reader-nav-document'
 			documentElement.dataset.navigationDocumentPath = documentEntry.path
 
+			const documentSummary = document.createElement('summary')
+			const documentToggle = document.createElement('span')
+			documentToggle.className = 'reader-nav-document-toggle'
+			documentToggle.setAttribute('aria-hidden', 'true')
 			const link = document.createElement('a')
 			link.className = 'reader-nav-document-link'
 			link.href = `#${chapterId(documentEntry.path)}`
@@ -255,6 +200,13 @@ function createNavigation() {
 			const title = document.createElement('strong')
 			title.textContent = documentEntry.title
 			link.append(title)
+			documentSummary.append(documentToggle, link)
+			documentSummary.addEventListener('click', event => {
+				if (event.target instanceof Element && event.target.closest('a') !== null) return
+				if (activePath === documentEntry.path) return
+				event.preventDefault()
+				void navigateToDocument(documentEntry.path, '')
+			})
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
@@ -262,7 +214,13 @@ function createNavigation() {
 			for (const section of outlineSections(documentEntry.path)) {
 				sectionList.append(sectionLink(documentEntry.path, section))
 			}
-			documentElement.append(link, sectionList)
+			documentElement.append(documentSummary, sectionList)
+			documentElement.addEventListener('toggle', () => {
+				if (!documentElement.open) return
+				for (const [path, candidate] of navigationDocumentByPath) {
+					if (path !== documentEntry.path && candidate instanceof HTMLDetailsElement) candidate.open = false
+				}
+			})
 			groupDocuments.append(documentElement)
 			navigationDocumentByPath.set(documentEntry.path, documentElement)
 		}
@@ -285,7 +243,8 @@ function markdownFrameSource(path, title) {
 				<meta name="viewport" content="width=device-width, initial-scale=1">
 				<base href="${sourceUrl(path)}">
 				<title>${title}</title>
-				<link rel="stylesheet" href="./shared-docs.css">
+				<link rel="stylesheet" href="${docsAssetUrl('css/shared-docs.css')}">
+				<script src="${docsAssetUrl('js/responsiveDocs.js')}"></script>
 			</head>
 			<body class="doc-openoracle markdown-reference reader-embedded">
 				<main><article>${content}</article></main>
@@ -304,13 +263,10 @@ function htmlFrameSource(path, source) {
 }
 
 function writeFrameSource(path, frame, source) {
-	const frameDocument = frame.contentDocument
-	if (frameDocument === null) return false
+	if (!frame.isConnected) return false
 	frame.dataset.readerSourceReady = 'true'
 	frame.dataset.readerSourceUrl = path
-	frameDocument.open()
-	frameDocument.write(source)
-	frameDocument.close()
+	frame.srcdoc = source
 	initializeFrame(path)
 	return true
 }
@@ -374,14 +330,7 @@ function createChapter(documentEntry, index, groupLabel) {
 	description.textContent = documentEntry.description
 	heading.append(category, title, description)
 
-	const sourceLink = document.createElement('a')
-	sourceLink.className = 'reader-source-link'
-	sourceLink.href = `./${documentEntry.path}`
-	sourceLink.textContent = 'Open source ↗'
-	sourceLink.target = '_blank'
-	sourceLink.rel = 'noreferrer'
-
-	header.append(number, heading, sourceLink)
+	header.append(number, heading)
 
 	const frameWrap = document.createElement('div')
 	frameWrap.className = 'reader-frame-wrap'
@@ -426,14 +375,7 @@ function unloadDocumentFrame(path) {
 	delete frame.dataset.readerSourceUrl
 	delete frame.dataset.readerInitialized
 	frame.style.removeProperty('height')
-	const frameDocument = frame.contentDocument
-	if (frameDocument !== null) {
-		frameDocument.open()
-		frameDocument.write('<!doctype html><title></title>')
-		frameDocument.close()
-	}
-	frame.removeAttribute('src')
-	frame.removeAttribute('srcdoc')
+	frame.hidden = true
 	delete frameWrap.dataset.loaded
 	frameWrap.setAttribute('aria-busy', 'false')
 	frameStatus.hidden = true
@@ -456,7 +398,7 @@ async function requestDocumentFrame(path) {
 	frameWrap.setAttribute('aria-busy', 'true')
 	frameStatus.hidden = false
 	frameStatus.textContent = 'Loading document…'
-	frame.hidden = false
+	frame.hidden = true
 	frameWrap.querySelector('.reader-frame-error')?.remove()
 	failedPaths.delete(path)
 	updateReaderBusyState()
@@ -526,7 +468,7 @@ function showFrameError(documentEntry) {
 	const title = document.createElement('strong')
 	title.textContent = `${documentEntry.title} could not be loaded`
 	const guidance = document.createElement('p')
-	guidance.textContent = 'Check your connection and try this document again. The direct source link remains available above.'
+	guidance.textContent = 'Check your connection and try this document again.'
 	const retry = document.createElement('button')
 	retry.type = 'button'
 	retry.textContent = 'Retry document'
@@ -551,11 +493,13 @@ function resizeFrame(frame) {
 function sourcePathFromHref(href, baseUrl) {
 	const target = new URL(href, baseUrl)
 	if (target.origin !== window.location.origin) return undefined
-	const fileName = target.pathname.split('/').pop()
-	if (fileName === undefined || !documentByPath.has(fileName)) return undefined
+	const docsDirectory = new URL('./', document.baseURI).pathname
+	if (!target.pathname.startsWith(docsDirectory)) return undefined
+	const documentPath = decodeURIComponent(target.pathname.slice(docsDirectory.length))
+	if (!documentByPath.has(documentPath)) return undefined
 	const fragment = decodeFragment(target.hash.slice(1))
 	if (fragment === undefined) return undefined
-	return { fragment, path: fileName }
+	return { fragment, path: documentPath }
 }
 
 function frameLinkClick(path, frame, event) {
@@ -683,6 +627,9 @@ function stabilizeReaderPosition(path) {
 }
 
 function setCurrentNavigation(path) {
+	for (const [documentPath, documentElement] of navigationDocumentByPath) {
+		if (documentElement instanceof HTMLDetailsElement) documentElement.open = documentPath === path
+	}
 	for (const link of document.querySelectorAll('.reader-nav-document-link')) {
 		if (!(link instanceof HTMLAnchorElement)) continue
 		if (link.dataset.documentPath === path) {
@@ -727,12 +674,17 @@ async function navigateToDocument(path, fragment = '', updateHistory = true) {
 	const currentNavigationVersion = navigationVersion + 1
 	navigationVersion = currentNavigationVersion
 	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
+	if (window.matchMedia('(max-width: 980px)').matches) {
+		const sidebarPanel = document.querySelector('[data-sidebar-panel]')
+		const shouldMoveFocus = sidebarPanel instanceof HTMLElement && sidebarPanel.contains(document.activeElement)
+		setSidebarCollapsed(true)
+		if (shouldMoveFocus) document.querySelector('#reader-content')?.focus()
+	}
 	await selectDocument(path, fragment)
 	if (updateHistory && navigationVersion === currentNavigationVersion && activePath === path) {
 		readerScrollByUrl.set(currentUrl, currentScrollY)
 		window.history.pushState({}, '', `#${readerHash}`)
 	}
-	setNavigationOpen(false)
 }
 
 function initializeFrame(path) {
@@ -747,7 +699,9 @@ function initializeFrame(path) {
 		if (documentEntry !== undefined) showFrameError(documentEntry)
 		return
 	}
+	if (frame.dataset.readerSourceReady !== 'true' || frame.dataset.readerSourceUrl !== path || frameDocument.baseURI !== sourceUrl(path)) return
 
+	frame.hidden = false
 	loadingPaths.delete(path)
 	loadedPaths.add(path)
 	failedPaths.delete(path)
@@ -792,158 +746,6 @@ function initializeFrame(path) {
 	updateReaderBusyState()
 }
 
-function tokenizeQuery(query) {
-	return query
-		.toLowerCase()
-		.normalize('NFKD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.split(/[^a-z0-9_/-]+/)
-		.filter(token => token.length > 0)
-}
-
-function includesTokens(text, tokens) {
-	const normalized = text.toLowerCase()
-	return tokens.every(token => normalized.includes(token))
-}
-
-function resultSnippet(text, tokens) {
-	if (text.length <= 170) return text
-	const lowerText = text.toLowerCase()
-	const firstMatch =
-		tokens
-			.map(token => lowerText.indexOf(token))
-			.filter(index => index >= 0)
-			.sort((left, right) => left - right)[0] ?? 0
-	const start = Math.max(0, firstMatch - 55)
-	const end = Math.min(text.length, start + 190)
-	return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`
-}
-
-function renderSearchResults(results, tokens) {
-	if (!(searchResults instanceof HTMLElement)) return
-	searchResults.replaceChildren()
-	searchResults.hidden = tokens.length === 0 || results.length === 0
-	if (searchResults.hidden) return
-
-	const heading = document.createElement('p')
-	heading.className = 'reader-search-results-heading'
-	heading.textContent = 'Best matches'
-	const list = document.createElement('ol')
-	const queryPhrase = tokens.join(' ')
-	const rankedResults = results.toSorted((left, right) => {
-		const score = result => {
-			const title = result.title.toLowerCase()
-			const titleTokenScore = tokens.filter(token => title.includes(token)).length * 12
-			const phraseScore = queryPhrase.length > 0 && title.includes(queryPhrase) ? 80 : 0
-			const toolScore = result.kind === 'tool' ? 8 : 0
-			return phraseScore + titleTokenScore + toolScore
-		}
-		return score(right) - score(left)
-	})
-	for (const result of rankedResults.slice(0, 8)) {
-		const item = document.createElement('li')
-		const link = document.createElement('a')
-		link.href = `#${chapterId(result.path)}${result.fragment.length > 0 ? `--${encodeURIComponent(result.fragment)}` : ''}`
-		link.dataset.documentPath = result.path
-		if (result.fragment.length > 0) link.dataset.documentFragment = result.fragment
-		const context = document.createElement('span')
-		context.textContent = result.kind === 'tool' ? `${result.documentTitle} · Interactive tool` : result.documentTitle
-		const title = document.createElement('strong')
-		title.textContent = result.title
-		const snippet = document.createElement('small')
-		snippet.textContent = resultSnippet(result.text, tokens)
-		link.append(context, title, snippet)
-		item.append(link)
-		list.append(item)
-	}
-	searchResults.append(heading, list)
-}
-
-function applySearch() {
-	if (!(searchInput instanceof HTMLInputElement)) return
-	const query = searchInput.value.trim()
-	const tokens = tokenizeQuery(query)
-	const matchingPaths = new Set()
-	const results = []
-	let matchingSections = 0
-
-	for (const documentEntry of documents) {
-		const entry = searchEntry(documentEntry.path)
-		const sectionText = entry?.sections.map(section => `${section.title} ${section.text}`).join(' ') ?? ''
-		const documentText = `${documentEntry.title} ${documentEntry.description} ${entry?.intro ?? ''} ${sectionText}`
-		const documentMatches = tokens.length === 0 || includesTokens(documentText, tokens)
-		if (documentMatches) matchingPaths.add(documentEntry.path)
-		const navigationDocument = navigationDocumentByPath.get(documentEntry.path)
-		if (navigationDocument !== undefined) navigationDocument.hidden = !documentMatches
-
-		for (const link of navigationDocument?.querySelectorAll('a[data-search-text]') ?? []) {
-			if (!(link instanceof HTMLAnchorElement)) continue
-			const indexedSection = entry?.sections.find(section => section.id === link.dataset.documentFragment)
-			const indexedText = indexedSection === undefined ? (link.dataset.searchText ?? '') : `${indexedSection.title} ${indexedSection.text}`
-			const sectionMatches = tokens.length === 0 || includesTokens(indexedText, tokens)
-			link.parentElement?.toggleAttribute('hidden', !sectionMatches)
-		}
-
-		if (tokens.length === 0) continue
-		const matchingEntrySections = entry?.sections.filter(section => includesTokens(`${section.title} ${section.text}`, tokens)) ?? []
-		matchingSections += matchingEntrySections.length
-		for (const section of matchingEntrySections) {
-			results.push({
-				documentTitle: documentEntry.title,
-				fragment: section.id,
-				kind: section.kind,
-				path: documentEntry.path,
-				text: section.text,
-				title: section.title,
-			})
-		}
-		if (matchingEntrySections.length === 0 && documentMatches) {
-			results.push({
-				documentTitle: documentEntry.title,
-				fragment: '',
-				kind: 'document',
-				path: documentEntry.path,
-				text: entry?.intro || documentEntry.description,
-				title: documentEntry.title,
-			})
-		}
-	}
-
-	for (const group of navigation?.querySelectorAll('.reader-nav-group') ?? []) {
-		if (!(group instanceof HTMLDetailsElement)) continue
-		const hasVisibleDocument = Array.from(group.querySelectorAll('.reader-nav-document')).some(documentElement => !documentElement.hasAttribute('hidden'))
-		group.hidden = !hasVisibleDocument
-		if (tokens.length > 0 && hasVisibleDocument) group.open = true
-	}
-
-	if (searchStatus instanceof HTMLElement) {
-		if (searchIndexState === 'loading') {
-			searchStatus.textContent = 'Loading full-text search…'
-		} else if (searchIndexState === 'failed' && tokens.length === 0) {
-			searchStatus.textContent = 'Full-text search unavailable; titles and summaries remain searchable'
-		} else if (searchIndexRecoveryNotice && searchIndexState === 'ready') {
-			searchStatus.textContent =
-				tokens.length === 0 ? `Full-text search restored; ${documents.length} documents` : `Full-text search restored; ${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}`
-			searchIndexRecoveryNotice = false
-		} else if (tokens.length === 0) {
-			searchStatus.textContent = searchIndexEngaged && searchIndexState === 'ready' ? `Full-text search ready; ${documents.length} documents` : `${documents.length} documents`
-		} else if (matchingPaths.size === 0) {
-			searchStatus.textContent = searchIndexState === 'failed' ? 'No title or summary matches; full-text search is unavailable' : 'No matching documents'
-		} else {
-			const availability = searchIndexState === 'failed' ? '; full-text search is unavailable' : ''
-			searchStatus.textContent = `${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}${availability}`
-		}
-	}
-	renderSearchResults(results, tokens)
-	const searchIsSettled = searchIndexState !== 'loading'
-	if (emptyState instanceof HTMLElement) emptyState.hidden = tokens.length === 0 || matchingPaths.size > 0 || !searchIsSettled
-	if (emptyStateGuidance instanceof HTMLElement) {
-		emptyStateGuidance.textContent = searchIndexState === 'failed' ? 'Only document titles and summaries are searchable while full-text search is unavailable. Retry full-text search from the contents panel.' : 'Search checks document titles, summaries, and the full rendered text.'
-	}
-	if (retrySearchButton instanceof HTMLButtonElement) retrySearchButton.hidden = searchIndexState !== 'failed'
-	if (documentsContainer instanceof HTMLElement) documentsContainer.hidden = tokens.length > 0 && matchingPaths.size === 0 && searchIsSettled
-}
-
 function updateReaderBusyState() {
 	if (!(documentsContainer instanceof HTMLElement)) return
 	documentsContainer.setAttribute('aria-busy', activePath !== undefined && loadingPaths.has(activePath) ? 'true' : 'false')
@@ -974,11 +776,14 @@ function restoreHash(positionFragment = true) {
 	return undefined
 }
 
-function setNavigationOpen(open) {
-	document.body.classList.toggle('reader-navigation-open', open)
-	if (navigationToggle instanceof HTMLButtonElement) {
-		navigationToggle.setAttribute('aria-expanded', String(open))
-		navigationToggle.textContent = open ? 'Close contents' : 'Browse contents'
+function setSidebarCollapsed(collapsed) {
+	if (!(readerShell instanceof HTMLElement) || !(sidebarToggle instanceof HTMLButtonElement)) return
+	readerShell.dataset.sidebarCollapsed = String(collapsed)
+	sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+	sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand menu' : 'Collapse menu')
+	sidebarToggle.title = collapsed ? 'Expand menu' : 'Collapse menu'
+	if (sidebarToggleLabel instanceof HTMLElement) {
+		sidebarToggleLabel.textContent = collapsed ? 'Expand menu' : 'Collapse menu'
 	}
 }
 
@@ -995,41 +800,14 @@ function handleReaderNavigationClick(event) {
 
 createNavigation()
 createChapters()
+setSidebarCollapsed(window.matchMedia('(max-width: 980px)').matches)
 if (restoreHash() === undefined) void selectDocument(documents[0].path, '', false)
-applySearch()
 updateProgress()
 
 navigation?.addEventListener('click', handleReaderNavigationClick)
-searchResults?.addEventListener('click', handleReaderNavigationClick)
-navigationToggle?.addEventListener('click', () => {
-	setNavigationOpen(!document.body.classList.contains('reader-navigation-open'))
-})
-searchInput?.addEventListener('focus', () => void ensureSearchIndex())
-searchInput?.addEventListener('input', () => {
-	if (searchInput instanceof HTMLInputElement && searchInput.value.trim().length > 0) void ensureSearchIndex()
-	applySearch()
-})
-retrySearchButton?.addEventListener('click', () => {
-	searchIndexState = 'idle'
-	searchIndexRecoveryNotice = true
-	void ensureSearchIndex()
-})
-clearSearchButton?.addEventListener('click', () => {
-	if (!(searchInput instanceof HTMLInputElement)) return
-	searchInput.value = ''
-	applySearch()
-	searchInput.focus()
-})
-document.addEventListener('keydown', event => {
-	if (event.key === 'Escape' && document.body.classList.contains('reader-navigation-open')) {
-		setNavigationOpen(false)
-		navigationToggle?.focus()
-		return
-	}
-	if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
-	if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
-	event.preventDefault()
-	searchInput?.focus()
+sidebarToggle?.addEventListener('click', () => {
+	const collapsed = readerShell instanceof HTMLElement && readerShell.dataset.sidebarCollapsed === 'true'
+	setSidebarCollapsed(!collapsed)
 })
 window.addEventListener('scroll', updateProgress, { passive: true })
 window.addEventListener('popstate', event => {
@@ -1062,6 +840,5 @@ window.addEventListener('resize', () => {
 		const frame = frameForPath(activePath)
 		if (frame !== undefined) resizeFrame(frame)
 	}
-	if (window.matchMedia('(min-width: 981px)').matches) setNavigationOpen(false)
 	updateProgress()
 })

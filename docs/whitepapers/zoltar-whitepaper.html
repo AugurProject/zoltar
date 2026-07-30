@@ -4,31 +4,10 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Zoltar White Paper</title>
-		<link rel="stylesheet" href="./shared-docs.css">
+		<link rel="stylesheet" href="../assets/css/shared-docs.css">
 	</head>
 	<body class="paper-page paper-zoltar">
-		<a class="skip-link" href="#main-content">Skip to document</a>
-		<div class="site-shell">
-			<aside class="sidebar" aria-label="Document navigation">
-				<div class="sidebar-header">
-					<span class="sidebar-series">Augur / Zoltar</span>
-				</div>
-					<nav aria-label="Document sections">
-						<a href="#abstract" aria-current="location">Abstract</a>
-						<a href="#timeline">Lifecycle Timeline</a>
-						<a href="#overview">System Overview</a>
-					<a href="#universe-model">Universe Model</a>
-					<a href="#economics">Fork Economics</a>
-					<a href="#splitting">REP Splitting</a>
-					<a href="#security">Security Model</a>
-					<a href="#questions">Question Encoding</a>
-					<a href="#question-types">Question Types</a>
-					<a href="#invalid">Invalid vs Malformed</a>
-					<a href="#thesis">Design Thesis</a>
-				</nav>
-			</aside>
-
-			<main id="main-content">
+		<main id="main-content">
 				<header class="hero">
 					<div class="hero-label-row">
 						<p class="kicker"><span class="layer-dot" aria-hidden="true"></span>Branching Oracle Base Layer</p>
@@ -38,14 +17,11 @@
 				</header>
 
 				<section class="paper-section" id="abstract">
-					<div class="section-heading">
-						<h2>Abstract</h2>
-						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
-					</div>
-					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and universe forks. A higher-level application may use a paid fork after local non-decision, but Zoltar itself permits any address able to commit the threshold REP to fork an unforked universe using any eligible ended global question. The fork changes the universe used by applications that choose to continue from that forked universe. </p>
-					<p> Once a fork is initiated, Zoltar creates child branches for the question's valid answers rather than forcing a single onchain answer. The protocol does not decide which branch is economically dominant or truthful; applications and their users make that coordination choice. </p>
+					<p> Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders may migrate or split their claims across one or more selected branches. </p>
 
-					<p> Zoltar supports binary, categorical and scalar questions. </p>
+					<p> The design closely follows the <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a> model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value. </p>
+
+					<p> Zoltar is not itself a prediction market or an outcome-reporting oracle. Instead, it provides the shared infrastructure for questions, REP tokens, and universe forks. Any application can build on top of it and define its own local dispute process. If disagreement cannot be resolved locally, anyone able to commit the required REP threshold may fork an unforked universe using an eligible ended global question. The resulting child universes become the new foundations from which applications may choose to continue. </p>
 				</section>
 
 					<section class="paper-section" id="timeline">
@@ -112,10 +88,10 @@
 
 					<h3>Zoltar Contracts</h3>
 					<ul class="contract-list">
-						<li><a href="../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a>: universe forks and REP splitting</li>
-						<li><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>: question registry and outcome encoding</li>
-						<li><a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>: child-universe REP minted and burned by Zoltar</li>
-						<li><a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>: scalar formatting and interpolation logic</li>
+						<li><a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a>: universe forks and REP splitting</li>
+						<li><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>: question registry and outcome encoding</li>
+						<li><a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>: child-universe REP minted and burned by Zoltar</li>
+						<li><a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>: scalar formatting and interpolation logic</li>
 					</ul>
 				</section>
 
@@ -126,14 +102,14 @@
 						</div>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a23">A23 verified deployment</a>,
-							<a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>,
+							<a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>,
+							<a href="../safety-operations/security-model.html#assumption-a26">A26 Ethereum execution</a>,
 							and
-							<a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.
+							<a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic identity</a>.
 						</p>
 						<p>
 						A universe is one branch of protocol state. The
-						<a href="../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:
+						<a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:
 					</p>
 					<ul class="clean-list">
 						<li><code>forkTime</code>: when the universe forked</li>
@@ -220,14 +196,14 @@
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
-							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
-							<a href="./security-model.html#assumption-a21"
+							<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>,
+							<a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>,
+							<a href="../safety-operations/security-model.html#assumption-a21"
 								>A21 genesis REP behavior</a
 							>,
 							and
-							<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.
+							<a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>.
 						</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals floor total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = floor(totalTheoreticalRepSupply / forkThresholdDivisor)">
@@ -297,7 +273,7 @@
 					<div class="implementation-grid">
 						<div class="implementation-note">
 							<b>Implementation entry point</b>
-							<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.</p>
+							<p><a href="../../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.</p>
 						</div>
 					</div>
 
@@ -310,7 +286,7 @@
 					<p>
 						Genesis REP cannot be burned natively, so the contract transfers it to the
 						configured burn address. Child-universe REP is minted and burned directly by
-						<a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
+						<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
 						under Zoltar’s control.
 					</p>
 					<p>
@@ -352,7 +328,7 @@
 								<tr>
 									<td><code>genesisReputationToken</code></td>
 									<td>Constructor parameter</td>
-									<td>Network-specific genesis-universe REP token address. Current values are published in the <a href="./mainnet-deployment-addresses.json">mainnet</a> and <a href="./sepolia-deployment-addresses.json">Sepolia</a> deployment manifests; Sepolia derives its value from the deterministic deployment init code and allocation list.</td>
+									<td>Network-specific genesis-universe REP token address. Current values are published in the <a href="../mainnet-deployment-addresses.json">mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> deployment manifests; Sepolia derives its value from the deterministic deployment init code and allocation list.</td>
 								</tr>
 								<tr>
 									<td><code>BURN_ADDRESS</code></td>
@@ -385,10 +361,10 @@
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a09">A09 truthful-branch value</a>,
-							<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
-							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, and
-							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
+							<a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch value</a>,
+							<a href="../safety-operations/security-model.html#assumption-a11">A11 practical migration</a>,
+							<a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>, and
+							<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>.
 						</p>
 					<p>
 						For categorical questions, <code>Invalid</code> and any in-range categorical
@@ -406,11 +382,11 @@
 					<div class="implementation-grid">
 						<div class="implementation-note">
 							<b>Implementation entry points</b>
-							<p><a href="../solidity/contracts/Zoltar.sol"><code>addRepToMigrationBalance</code></a> prepares additional REP, and <code>splitMigrationRep</code> mints child REP for selected outcomes.</p>
+							<p><a href="../../solidity/contracts/Zoltar.sol"><code>addRepToMigrationBalance</code></a> prepares additional REP, and <code>splitMigrationRep</code> mints child REP for selected outcomes.</p>
 						</div>
 						<div class="implementation-note">
 							<b>Validation dependency</b>
-							<p><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>isMalformedAnswerOption</code></a> distinguishes valid branches from rejected malformed answers.</p>
+							<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>isMalformedAnswerOption</code></a> distinguishes valid branches from rejected malformed answers.</p>
 						</div>
 					</div>
 
@@ -438,18 +414,18 @@
 						<p>
 							Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.
 							This is the security model's
-							<a href="./security-model.html#excluded-guarantee-eg01"
+							<a href="../safety-operations/security-model.html#excluded-guarantee-eg01"
 								>EG01 truth-selection exclusion</a
 							>.
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
-							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
-							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
+							<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+							<a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>,
+							<a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>,
 							and
-							<a href="./security-model.html#assumption-a15">A15 intended resolvable questions</a>.
+							<a href="../safety-operations/security-model.html#assumption-a15">A15 intended resolvable questions</a>.
 						</p>
 					<ul class="clean-list">
 						<li>users can choose which child universe (or child universes) to continue using after a fork</li>
@@ -467,7 +443,7 @@
 					<p>
 						The enforced recursive-fork gas bound and its implementation evidence
 						are maintained in
-						<a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
+						<a href="../safety-operations/invariants.html#ext-05"><code>EXT-05</code></a>.
 					</p>
 				</section>
 
@@ -477,18 +453,18 @@
 						<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
 					</div>
 						<p>
-							<a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
+							<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
 							stores title, description, start and end time, scalar metadata such as
 							<code>numTicks</code>, <code>displayValueMin</code>,
 							<code>displayValueMax</code>, and <code>answerUnit</code>.
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
-							<a href="./security-model.html#assumption-a20">A20 chain-data availability</a>,
-							<a href="./security-model.html#assumption-a27">A27 collision resistance</a>,
+							<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+							<a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data availability</a>,
+							<a href="../safety-operations/security-model.html#assumption-a27">A27 collision resistance</a>,
 							and
-							<a href="./security-model.html#assumption-a15">A15 question identity and resolvability</a>.
+							<a href="../safety-operations/security-model.html#assumption-a15">A15 question identity and resolvability</a>.
 						</p>
 					<p>
 						Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options.
@@ -528,7 +504,7 @@
 					<div class="implementation-grid">
 						<div class="implementation-note">
 							<b>Implementation entry points</b>
-							<p><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code></a> stores categorical or scalar questions, and <a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> formats scalar displays.</p>
+							<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code></a> stores categorical or scalar questions, and <a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> formats scalar displays.</p>
 						</div>
 						<div class="implementation-note">
 							<b>Scalar validity rule</b>
@@ -594,7 +570,7 @@
 						<p class="equation-caption"><span class="equation-label">Scalar Tick Encoding</span>The helper encodes a tick as left and right payout numerators.</p>
 					</div>
 					<p>
-						<a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
+						<a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
 						interprets <code>secondPayoutNumerator</code> as the position along the scalar
 						range:
 					</p>
@@ -641,7 +617,7 @@
 					</div>
 					<p>
 						At the Zoltar layer, market type support comes from how questions and outcomes
-						are encoded in <a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>.
+						are encoded in <a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>.
 					</p>
 					<ul class="clean-list">
 						<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
@@ -691,27 +667,9 @@
 					</p>
 				</section>
 
+		</main>
 
-				<section class="paper-section" id="thesis">
-					<div class="section-heading">
-						<h2>9. Design Thesis</h2>
-						<a class="anchor-link" href="#thesis" aria-label="Link to Design Thesis">#</a>
-					</div>
-					<p class="lede">
-						Zoltar provides a generalized branching oracle layer for categorical and scalar
-						questions. Rather than forcing a single answer when disagreement persists, it
-						turns unresolved decisions into explicit child universes and lets REP holders
-						split post-fork claims across one or more selected branches.
-					</p>
-					<p>
-						In that sense it closely follows the Colored Coins model: the protocol branches
-						state first, and later coordination determines which branch carries durable value.
-					</p>
-				</section>
-			</main>
-		</div>
-
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script>
 			const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'))
 			const sectionLinks = navLinks
@@ -768,7 +726,8 @@
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
 			}
 		</script>
-		<script src="./protocolTerms.js"></script>
-		<script src="./termTooltips.js"></script>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

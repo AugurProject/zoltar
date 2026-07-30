@@ -837,6 +837,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 
 			await selectReportingOutcome('Yes')
 			await driver.waitForBodyText('Your selected REP was committed to the chosen escalation side.')
+			await driver.waitForBodyWithoutText('Submitting report…')
 			await selectReportingOutcome('No')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')

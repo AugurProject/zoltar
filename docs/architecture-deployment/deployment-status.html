@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Deployment Status Oracle</title>
-		<link rel="stylesheet" href="./shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -12,11 +12,11 @@
 				<h1>Deployment Status Oracle</h1>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a23"
+					<a href="../safety-operations/security-model.html#assumption-a23"
 						>A23 verified canonical deployments</a
 					>
 					and
-					<a href="./security-model.html#assumption-a24"
+					<a href="../safety-operations/security-model.html#assumption-a24"
 						>A24 client and RPC integrity</a
 					>.
 				</p>
@@ -109,8 +109,8 @@
 				</p>
 				<p>
 					The tables below render the complete bit mappings directly from the canonical
-					<a href="./mainnet-deployment-addresses.json">mainnet</a> and
-					<a href="./sepolia-deployment-addresses.json">Sepolia</a> deployment manifests,
+					<a href="../mainnet-deployment-addresses.json">mainnet</a> and
+					<a href="../sepolia-deployment-addresses.json">Sepolia</a> deployment manifests,
 					excluding <code>deploymentStatusOracle</code>. Each manifest's ordered
 					<code>deploymentSteps</code> array is the canonical mapping for that network.
 				</p>
@@ -217,15 +217,15 @@
 			<section id="sources">
 				<h2>Sources</h2>
 				<ul>
-					<li><a href="../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
-					<li><a href="../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
-					<li><a href="./mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
-					<li><a href="./sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a></li>
+					<li><a href="../../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
+					<li><a href="../../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
+					<li><a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
+					<li><a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a></li>
 				</ul>
 			</section>
 		</main>
 
-		<script src="./chartRuntime.js"></script>
+		<script src="../assets/js/chartRuntime.js"></script>
 		<script type="module">
 			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
 			if (!(mappingBody instanceof HTMLTableSectionElement)) {
@@ -240,8 +240,8 @@
 				throw new Error('Missing deployment-mask decoder controls')
 			}
 
-			const manifestUrl = './mainnet-deployment-addresses.json'
-			const sepoliaManifestUrl = './sepolia-deployment-addresses.json'
+			const manifestUrl = '../mainnet-deployment-addresses.json'
+			const sepoliaManifestUrl = '../sepolia-deployment-addresses.json'
 			const sepoliaMappingBody = document.querySelector('#sepolia-deployment-status-bit-mapping')
 			if (!(sepoliaMappingBody instanceof HTMLTableSectionElement)) {
 				throw new Error('Missing Sepolia deployment-status mapping tbody')
@@ -444,6 +444,7 @@
 			retryButton.addEventListener('click', () => void loadMapping())
 			await Promise.all([loadMapping(), loadSepoliaMapping()])
 		</script>
-		<script type="module" src="./interactiveTools.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>
