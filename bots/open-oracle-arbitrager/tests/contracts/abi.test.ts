@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../../solidity/ts/types/contractArtifact'
+import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../../../solidity/ts/types/contractArtifact'
 import { openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 
 type AbiInput = {

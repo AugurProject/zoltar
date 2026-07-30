@@ -3,7 +3,7 @@ import path from 'node:path'
 import solc from 'solc'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
-const repositoryRoot = path.resolve(projectRoot, '..')
+const repositoryRoot = path.resolve(projectRoot, '..', '..')
 const outputPath = path.join(projectRoot, 'src', 'contracts', 'artifacts.generated.ts')
 const entrypoints = ['open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 'open-oracle-arbitrager/contracts/test/OpenOracleArbitrageExecutorHarnesses.sol'] as const
 
@@ -33,7 +33,8 @@ const importPattern = /import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]\s*;/g
 async function addSource(sourceName: string): Promise<void> {
 	const normalizedName = path.posix.normalize(sourceName)
 	if (sources[normalizedName] !== undefined) return
-	const content = await readFile(path.join(repositoryRoot, normalizedName), 'utf8')
+	const physicalName = normalizedName.startsWith('open-oracle-arbitrager/') ? path.posix.join('bots', normalizedName) : normalizedName
+	const content = await readFile(path.join(repositoryRoot, physicalName), 'utf8')
 	sources[normalizedName] = { content }
 	for (const match of content.matchAll(importPattern)) {
 		const importedName = match[1]

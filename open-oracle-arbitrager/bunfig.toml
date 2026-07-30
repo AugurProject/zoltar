@@ -1,3 +1,0 @@
-[test]
-timeout = 300000
-preload = ["../bun-test-setup-solidity.ts"]

@@ -33,7 +33,7 @@
 	},
 	"dependencies": {
 		"@noble/hashes": "2.2.0",
-		"@zoltar/shared": "file:../shared",
+		"@zoltar/shared": "file:../../shared",
 		"micro-eth-signer": "0.18.1"
 	},
 	"devDependencies": {

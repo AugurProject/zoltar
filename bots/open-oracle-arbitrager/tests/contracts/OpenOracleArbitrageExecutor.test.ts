@@ -1,12 +1,12 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, type Address } from '#ethereum'
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../solidity/ts/testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../../../solidity/ts/testSupport/simulator/utils/constants'
-import { ensureDefined } from '../../../solidity/ts/testSupport/simulator/utils/testUtils'
-import { setupTestAccounts } from '../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
+import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
+import { ensureDefined } from '../../../../solidity/ts/testSupport/simulator/utils/testUtils'
+import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { executorArtifact, feeTokenArtifact, routerArtifact, targetArtifact, tokenArtifact, v4PoolManagerArtifact, wethArtifact } from '#contracts/artifacts.generated'
-import { peripherals_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../solidity/ts/types/contractArtifact'
+import { peripherals_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

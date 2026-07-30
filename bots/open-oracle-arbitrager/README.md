@@ -39,8 +39,8 @@ The arbitrager is an independent project inside the monorepo:
 
 Its own `package.json`, lockfile, TypeScript configuration, test configuration, and
 generated contract artifacts define its build. The executor imports unchanged
-protocol ERC-20 utilities from the sibling Solidity project; it is not compiled into
-the protocol peripheral artifact set.
+protocol ERC-20 utilities from the monorepo's top-level `solidity/` project; it is
+not compiled into the protocol peripheral artifact set.
 
 ## How the flow works
 
@@ -168,7 +168,7 @@ end-user release. The commands below remain experimental operator references:
 From the monorepo root, enter the arbitrager project:
 
 ```bash
-cd open-oracle-arbitrager
+cd bots/open-oracle-arbitrager
 bun install --frozen-lockfile
 ```
 
