@@ -22,3 +22,6 @@
 !bots/open-oracle-arbitrager/scripts/check-market-fixture.mts
 !bots/open-oracle-arbitrager/src/
 !bots/open-oracle-arbitrager/src/**
+!bots/shared/package.json
+!bots/shared/bun.lock
+!bots/shared/src/**

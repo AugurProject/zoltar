@@ -1,0 +1,9 @@
+**
+!bots/shared/package.json
+!bots/shared/bun.lock
+!bots/shared/src/**
+!bots/liquidator/package.json
+!bots/liquidator/bun.lock
+!bots/liquidator/README.md
+!bots/liquidator/config/**
+!bots/liquidator/src/**

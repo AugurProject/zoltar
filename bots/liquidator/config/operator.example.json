@@ -1,0 +1,56 @@
+{
+	"version": 1,
+	"network": {
+		"name": "sepolia",
+		"chainId": 11155111,
+		"explorerUrl": "https://sepolia.etherscan.io"
+	},
+	"deployment": {
+		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
+		"weth": "0x0000000000000000000000000000000000000000"
+	},
+	"connectivity": {
+		"readRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+		"publicRpcUrls": ["https://ethereum-sepolia-rpc.publicnode.com"],
+		"quorumRpcUrls": []
+	},
+	"submission": {
+		"mode": "public",
+		"minimumRelaySuccesses": 1,
+		"relayUrls": []
+	},
+	"runtime": {
+		"execute": false,
+		"once": false,
+		"pollMilliseconds": 12000,
+		"ui": true,
+		"uiHost": "127.0.0.1",
+		"uiPort": 4183,
+		"stateFile": ".state/operator-state.json",
+		"maxVaultsPerPool": 1000
+	},
+	"selectedPools": [],
+	"strategy": {
+		"allowAutomaticDeposits": true,
+		"allowAutomaticWithdrawals": true,
+		"candidatePriority": "largest-bonus",
+		"fallbackRepPerEthPrice": "0",
+		"maximumGasCostEth": "0.02",
+		"maximumLiquidationDebtEth": "25",
+		"maximumOracleRequestCostEth": "0.02",
+		"maximumRepPerPool": "10000",
+		"maximumTotalDeployedRep": "25000",
+		"minimumLiquidationDebtEth": "1",
+		"minimumRepWithdrawal": "10",
+		"minimumRewardValueEth": "0.02",
+		"redeemFeesAboveEth": "0.01",
+		"stalePriceFundingBufferBps": 15000,
+		"stagedOperationValidForSeconds": 240,
+		"vaultTargetHealthBps": 12500,
+		"vaultTopUpHealthBps": 11000,
+		"vaultWithdrawHealthBps": 15000,
+		"walletRepReserve": "100"
+	},
+	"paused": false,
+	"privateKey": null
+}

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>Zoltar Liquidator</title>
+		<link rel="stylesheet" href="/dashboard.css" />
+	</head>
+	<body>
+		<header class="topbar">
+			<div>
+				<p class="eyebrow">Zoltar operator</p>
+				<h1>Pool liquidator</h1>
+			</div>
+			<div class="topbar-actions">
+				<span id="mode-badge" class="badge">Starting</span>
+				<span id="run-status-badge" class="badge">Loading</span>
+				<button id="pause-button" class="secondary" type="button">Pause</button>
+				<span id="pause-status" class="action-status" role="alert"></span>
+			</div>
+		</header>
+		<main>
+			<div id="global-error" class="notice error hidden" role="alert"></div>
+			<section aria-labelledby="overview-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Current position</p>
+						<h2 id="overview-title">Overview</h2>
+					</div>
+					<p id="last-scan" class="muted">Waiting for first scan</p>
+				</div>
+				<div id="metrics" class="metric-grid" aria-live="polite"></div>
+			</section>
+			<section aria-labelledby="pools-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Factory registry</p>
+						<h2 id="pools-title">Security pools</h2>
+					</div>
+					<label class="search">
+						<span>Filter pools</span>
+						<input id="pool-filter" type="search" placeholder="Address or question" />
+					</label>
+				</div>
+				<div id="configuration-status" class="notice hidden" role="status"></div>
+				<div class="table-shell">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Enabled</th>
+								<th scope="col">Pool</th>
+								<th scope="col">Question</th>
+								<th scope="col">Oracle</th>
+								<th scope="col">Pool totals</th>
+								<th scope="col">Bot vault</th>
+								<th scope="col">Targets</th>
+							</tr>
+						</thead>
+						<tbody id="pool-rows">
+							<tr><td colspan="7" class="empty">Scanning factory registry…</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+			<div class="two-column">
+				<section aria-labelledby="strategy-title">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Risk controls</p>
+							<h2 id="strategy-title">Strategy</h2>
+						</div>
+					</div>
+					<form id="strategy-form">
+					<fieldset id="strategy-fields" class="form-grid" disabled>
+						<label>Minimum debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
+						<label>Maximum debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
+						<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
+						<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
+						<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
+						<label>Fallback REP / ETH price<input name="fallbackRepPerEthPrice" inputmode="decimal" /></label>
+						<label>Wallet REP reserve<input name="walletRepReserve" inputmode="decimal" /></label>
+						<label>REP per pool limit<input name="maximumRepPerPool" inputmode="decimal" /></label>
+						<label>Total deployed REP limit<input name="maximumTotalDeployedRep" inputmode="decimal" /></label>
+						<label>Minimum REP withdrawal<input name="minimumRepWithdrawal" inputmode="decimal" /></label>
+						<label>Redeem fees above (ETH)<input name="redeemFeesAboveEth" inputmode="decimal" /></label>
+						<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label>
+						<label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label>
+						<label>Top-up health (bps)<input name="vaultTopUpHealthBps" inputmode="numeric" /></label>
+						<label>Target health (bps)<input name="vaultTargetHealthBps" inputmode="numeric" /></label>
+						<label>Withdrawal health (bps)<input name="vaultWithdrawHealthBps" inputmode="numeric" /></label>
+						<label>Candidate priority
+							<select name="candidatePriority">
+								<option value="largest-bonus">Largest bonus</option>
+								<option value="largest-debt">Largest debt</option>
+								<option value="lowest-top-up">Lowest REP top-up</option>
+							</select>
+						</label>
+						<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
+						<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
+						<div class="form-actions">
+							<button type="submit">Save strategy</button>
+							<span id="strategy-status" class="action-status" role="alert"></span>
+						</div>
+					</fieldset></form>
+				</section>
+				<section aria-labelledby="activity-title">
+					<div class="section-heading">
+						<div>
+							<h2 id="activity-title">Recent activity</h2>
+						</div>
+					</div>
+					<ol id="activity-list" class="activity-list">
+						<li class="empty">No activity yet</li>
+					</ol>
+				</section>
+			</div>
+			<section aria-labelledby="signer-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Execution authority</p>
+						<h2 id="signer-title">Signer</h2>
+					</div>
+					<p id="wallet-address" class="mono muted">No active signer</p>
+				</div>
+				<form id="signer-form" class="signer-form">
+					<label>Private key<input name="privateKey" type="password" autocomplete="off" placeholder="0x…" /></label>
+					<label class="check"><input name="rememberSigner" type="checkbox" />Save in the local operator file</label>
+					<button id="update-signer" type="submit" disabled>Update signer</button>
+					<button id="clear-signer" class="secondary" type="button">Clear signer</button>
+					<span id="signer-status" class="action-status" role="alert"></span>
+				</form>
+			</section>
+		</main>
+		<script type="module" src="/dashboard.js"></script>
+	</body>
+</html>
