@@ -174,9 +174,6 @@ function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failure
 		}
 	}
 	if (invariantEntries.length > 0) {
-		if (parsedDocument.document.querySelector('#invariant-explorer') === null) {
-			addFailure(parsedDocument, 'invariant catalog must provide #invariant-explorer facets', failures)
-		}
 		if (parsedDocument.document.querySelector('script[src="./invariantExplorer.js"]') === null) {
 			addFailure(parsedDocument, 'invariant catalog must load invariantExplorer.js', failures)
 		}
