@@ -71,3 +71,7 @@ export const deploymentRequiredDetail = 'Deploy the application contracts before
 export const currentApplicationSection = 'Current application section'
 export const protocolGuide = 'Protocol Guide'
 export const protocolGuideHref = 'https://augurproject.github.io/zoltar/docs/documentation.html'
+export const applicationErrorTitle = 'Application error'
+export const applicationErrorFallback = 'The current screen could not be displayed.'
+export const applicationInitializationErrorFallback = 'The application environment could not be initialized.'
+export const reloadApplication = 'Reload application'

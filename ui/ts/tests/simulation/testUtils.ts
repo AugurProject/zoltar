@@ -21,5 +21,5 @@ export async function createBootstrappedSimulationBackendWithRetry(scenario: Sim
 export async function resetSelectedAccountAndTransactionDelay(backend: SimulationBackend) {
 	const primaryAccount = backend.accounts[0]
 	if (primaryAccount !== undefined && backend.selectedAccount !== primaryAccount) await backend.selectAccount(primaryAccount)
-	backend.setTransactionDelayMilliseconds(0)
+	await backend.setTransactionDelayMilliseconds(0)
 }

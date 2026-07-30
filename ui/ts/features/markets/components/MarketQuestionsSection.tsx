@@ -9,6 +9,7 @@ import { PaginationControls } from '../../../components/PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
+import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { getSecurityPoolStatusBadgeLabel } from '../../security-pools/lib/securityPoolLabels.js'
@@ -30,6 +31,7 @@ type MarketQuestionsSectionProps = {
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
 	onCreateQuestion: () => void
+	onLoadZoltarQuestions: () => Promise<void>
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onLoadSecurityPools: () => void
 	onOpenForkTab: () => void
@@ -39,6 +41,7 @@ type MarketQuestionsSectionProps = {
 	securityPoolsLoadError: string | undefined
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
+	zoltarQuestionsError: string | undefined
 }
 export function MarketQuestionsSection({
 	environmentRefreshKey,
@@ -49,6 +52,7 @@ export function MarketQuestionsSection({
 	loadingZoltarQuestions,
 	onCreateQuestion,
 	onLoadSecurityPools,
+	onLoadZoltarQuestions,
 	onLoadZoltarQuestionPage,
 	onOpenForkTab,
 	onUseQuestionForFork,
@@ -57,6 +61,7 @@ export function MarketQuestionsSection({
 	securityPoolsLoadError,
 	zoltarQuestionCount,
 	zoltarQuestionPage,
+	zoltarQuestionsError,
 }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 	const [pageIndex, setPageIndex] = useState(0)
@@ -104,6 +109,24 @@ export function MarketQuestionsSection({
 	}, [activePageRequestKey, environmentRefreshKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
 	const hasPreviousPage = pageIndex > 0
 	const hasNextPage = getHasNextPaginationPage(pageIndex, questionPageCount)
+	const retryQuestionLoad = () => {
+		if (loadingZoltarQuestionCount || loadingZoltarQuestions) return
+		if (zoltarQuestionCount === undefined) {
+			void onLoadZoltarQuestions().catch(() => undefined)
+			return
+		}
+		const pageRequestKey = currentPageRequestKey
+		lastRequestedPageKeyRef.current = pageRequestKey
+		setLastFailedPageRequestKey(undefined)
+		setActivePageRequestKey(pageRequestKey)
+		void onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE)
+			.catch(() => {
+				setLastFailedPageRequestKey(current => (current === undefined ? pageRequestKey : current))
+			})
+			.finally(() => {
+				setActivePageRequestKey(current => (current === pageRequestKey ? undefined : current))
+			})
+	}
 	return (
 		<SectionBlock
 			density='compact'
@@ -120,6 +143,16 @@ export function MarketQuestionsSection({
 				/>
 			}
 		>
+			{zoltarQuestionsError === undefined ? undefined : (
+				<>
+					<ErrorNotice message={zoltarQuestionsError} />
+					<div className='actions'>
+						<button type='button' className='secondary' disabled={loadingZoltarQuestionCount || loadingZoltarQuestions} onClick={retryQuestionLoad}>
+							{loadingZoltarQuestionCount || loadingZoltarQuestions ? marketCopy.retryingQuestions : marketCopy.retryQuestions}
+						</button>
+					</div>
+				</>
+			)}
 			{visibleQuestions.length === 0 ? (
 				(() => {
 					if (loadingZoltarQuestionCount || loadingZoltarQuestions || isWaitingForPageData)
@@ -144,7 +177,7 @@ export function MarketQuestionsSection({
 								}
 							/>
 						)
-					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{marketCopy.questionPageUnavailable}</p>
+					if (zoltarQuestionsError === undefined && effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{marketCopy.questionPageUnavailable}</p>
 
 					return undefined
 				})()

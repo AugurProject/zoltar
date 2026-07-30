@@ -1745,14 +1745,15 @@
 						.
 					</p>
 					<figure class="diagram" id="fig-statoblast-proportional-migration">
-						<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent pool ownership determines migrated REP, and migrated REP
-								determines the child collateral transferred from the parent
-								collateral baseline.</span></div>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent pool ownership normally determines a floored migrated REP
+								delta. The migration that completes a child's ownership receives
+								the remaining REP; cumulative routed REP determines child
+								collateral.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Proportional Migration</span>Vault
-							migration first converts parent pool ownership into migrated REP,
-							then transfers parent collateral in the same REP-at-fork
-							proportion.
+							migration normally floors each ownership-based REP delta. The migration
+							that completes a child's ownership reconciles every remaining REP unit,
+							and cumulative routed REP sets the collateral target.
 						</p>
 					</figure>
 					<div class="equation" id="eq-statoblast-fork-migration-proportion">
@@ -1814,6 +1815,44 @@
 											<mi>parentPoolOwnershipDenominator</mi>
 										</mfrac>
 										<mo fence="true">&#x230B;</mo>
+									</mrow>
+								</mtd>
+							</mtr>
+							<mtr>
+								<mtd>
+									<mi>migratedRepDelta</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mrow>
+										<mo>{</mo>
+										<mtable columnalign="left left" rowspacing="0.35em">
+											<mtr>
+												<mtd>
+													<mrow>
+														<mi>migrationRepDenominatorAtFork</mi>
+														<mo>&#x2212;</mo>
+														<mi>priorMigratedRep</mi>
+													</mrow>
+												</mtd>
+												<mtd>
+													<mtext>if </mtext>
+													<mi>resultingMigratedPoolOwnership</mi>
+													<mo>=</mo>
+													<mi>parentPoolOwnershipDenominator</mi>
+												</mtd>
+											</mtr>
+											<mtr>
+												<mtd>
+													<mi>provisionalMigratedRepDelta</mi>
+												</mtd>
+												<mtd>
+													<mtext>otherwise</mtext>
+												</mtd>
+											</mtr>
+										</mtable>
 									</mrow>
 								</mtd>
 							</mtr>
@@ -3120,5 +3159,6 @@
 		</script>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
+		<script type="module" src="./interactiveTools.js"></script>
 	</body>
 </html>

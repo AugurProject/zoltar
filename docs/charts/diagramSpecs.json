@@ -6516,7 +6516,7 @@
 		"width": 920
 	},
 	"fig-statoblast-proportional-migration": {
-		"ariaDescription": "Parent pool ownership determines migrated REP, and migrated REP\n\t\t\t\t\t\t\t\tdetermines the child collateral transferred from the parent\n\t\t\t\t\t\t\t\tcollateral baseline.",
+		"ariaDescription": "Parent pool ownership normally determines a floored migrated REP\n\t\t\t\t\t\t\t\tdelta. The migration that completes a child's ownership receives\n\t\t\t\t\t\t\t\tthe remaining REP; cumulative routed REP determines child\n\t\t\t\t\t\t\t\tcollateral.",
 		"ariaLabel": "Proportional migration accounting",
 		"height": 330,
 		"nodes": [
@@ -6580,7 +6580,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tvault's denominator share\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tvault ownership delta\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6613,7 +6613,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tMigrated REP\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tMigrated REP Delta\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6627,7 +6627,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tparent REP at fork share\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tfloor, or final remainder\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6674,7 +6674,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tsame REP fraction of ETH\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tcumulative routed REP target\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6713,7 +6713,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tnormalization anchor\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tfork-bucket denominator\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6760,7 +6760,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\ttransferred by REP share\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tcumulative ceiling target\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"

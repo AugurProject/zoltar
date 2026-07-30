@@ -59,13 +59,13 @@ function createSimulationController(): SimulationController {
 			kind: 'scenario',
 			scenario: 'baseline',
 		},
-		setRepPerEthPrice: () => undefined,
-		setRepPerUsdcPrice: () => undefined,
-		setQueryDelayMilliseconds: () => undefined,
+		setRepPerEthPrice: async () => undefined,
+		setRepPerUsdcPrice: async () => undefined,
+		setQueryDelayMilliseconds: async () => undefined,
 		subscribe: () => () => undefined,
 		transactionCountSinceReset: 0n,
 		transactionDelayMilliseconds: 0,
-		setTransactionDelayMilliseconds: () => undefined,
+		setTransactionDelayMilliseconds: async () => undefined,
 		waitUntilReady: async () => undefined,
 	}
 }

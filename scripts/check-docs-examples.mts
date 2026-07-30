@@ -16,6 +16,7 @@ import {
 	normalizedEscalationCost,
 	parseLiquidationMultiplierBps,
 } from '../docs/charts/chartModels'
+import { updateDiagramControl } from '../docs/charts/diagramControl'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -42,6 +43,15 @@ type DeploymentManifestResponse = {
 	json: () => Promise<unknown>
 	ok: boolean
 	status: number
+}
+
+type DeploymentDecoderTransition = {
+	ariaInvalid: string | null
+	guidance: string
+	input: string
+	status: string | null
+	statusState: string | null
+	summary: string
 }
 
 async function loadInteractiveExample(filePath: string, exampleId: string): Promise<InteractiveExampleHarness> {
@@ -147,7 +157,27 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 	}
 }
 
-async function renderDeploymentMapping(response: DeploymentManifestResponse): Promise<{ busy: string | null; link: string | null; rowCount: number; text: string }> {
+async function renderDeploymentMapping(
+	response: DeploymentManifestResponse,
+	retryResponse?: DeploymentManifestResponse,
+): Promise<{
+	busy: string | null
+	decoderDisabled: boolean
+	decoderGuidance: string
+	decoderRetryDisabled: boolean
+	decoderRetryHidden: boolean
+	decoderTransitions: DeploymentDecoderTransition[]
+	decoderSummary: string
+	decoderStatus: string | null
+	decoderToolbarResetDisabled: boolean
+	decoderToolbarScenarioDisabled: boolean
+	decoderToolbarStatus: string
+	decoderValue: string
+	fetchCount: number
+	link: string | null
+	rowCount: number
+	text: string
+}> {
 	const filePath = 'docs/deployment-status.html'
 	const html = await readFile(filePath, 'utf8')
 	const window = new Window({
@@ -163,15 +193,89 @@ async function renderDeploymentMapping(response: DeploymentManifestResponse): Pr
 			throw new Error(`${filePath} is missing its manifest-rendering script`)
 		}
 
-		const runScript = new Function('document', 'fetch', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
-		await runScript(window.document, async () => response, window.HTMLTableSectionElement)
+		const responses = retryResponse === undefined ? [response] : [response, retryResponse]
+		let fetchCount = 0
+		const fetchManifest = async () => {
+			const selectedResponse = responses[Math.min(fetchCount, responses.length - 1)]
+			fetchCount += 1
+			return selectedResponse
+		}
+		const runScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
+		await runScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
+
+		const interactiveToolsSource = await readFile('docs/interactiveTools.js', 'utf8')
+		const runInteractiveTools = new Function('window', 'document', 'CustomEvent', 'DOMException', 'Event', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'URL', interactiveToolsSource)
+		runInteractiveTools(window, window.document, window.CustomEvent, window.DOMException, window.Event, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLSelectElement, window.navigator, window.URL)
 
 		const mappingBody = window.document.querySelector('#deployment-status-bit-mapping')
 		if (!(mappingBody instanceof window.HTMLTableSectionElement)) {
 			throw new Error(`${filePath} is missing its mapping tbody`)
 		}
+		const decoderInput = window.document.querySelector('[data-tool-input="deploymentMask"]')
+		const decoderSummary = window.document.querySelector('[data-deployment-mask-summary]')
+		const decoderGuidance = window.document.querySelector('[data-deployment-mask-guidance]')
+		if (!(decoderInput instanceof window.HTMLInputElement) || !(decoderSummary instanceof window.HTMLOutputElement) || !(decoderGuidance instanceof window.HTMLElement)) {
+			throw new Error(`${filePath} is missing its deployment-mask decoder`)
+		}
+		const decoder = window.document.querySelector('#deployment-mask-decoder')
+		const decoderToolbar = decoder?.querySelector('.interactive-tool-toolbar')
+		const decoderScenario = decoderToolbar?.querySelector('select')
+		const decoderToolbarStatus = decoderToolbar?.querySelector('.interactive-tool-status')
+		const decoderReset = Array.from(decoderToolbar?.querySelectorAll('button') ?? []).find(button => button.textContent === 'Reset')
+		const decoderRetry = decoder?.querySelector('[data-deployment-mask-retry]')
+		if (
+			!(decoder instanceof window.HTMLDetailsElement) ||
+			!(decoderToolbar instanceof window.HTMLElement) ||
+			!(decoderScenario instanceof window.HTMLSelectElement) ||
+			!(decoderToolbarStatus instanceof window.HTMLElement) ||
+			!(decoderReset instanceof window.HTMLButtonElement) ||
+			!(decoderRetry instanceof window.HTMLButtonElement)
+		) {
+			throw new Error(`${filePath} is missing its integrated scenario toolbar`)
+		}
+		if (retryResponse !== undefined) {
+			assert.equal(decoderInput.disabled, true, 'a failed initial deployment mapping load must disable decoding before retry')
+			assert.equal(decoderRetry.hidden, false, 'a failed initial deployment mapping load must reveal its retry action')
+			decoderInput.value = '0x5'
+			decoderRetry.click()
+			await new Promise(resolve => setTimeout(resolve, 0))
+		}
+		const decoderTransitions: DeploymentDecoderTransition[] = []
+		if (!decoderInput.disabled) {
+			if (retryResponse === undefined) {
+				for (const input of ['0x1', 'invalid', String(1n << 256n), '3']) {
+					decoderInput.value = input
+					decoderInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+					const statusCell = mappingBody.querySelector('[data-deployment-bit-status="0"]')
+					decoderTransitions.push({
+						ariaInvalid: decoderInput.getAttribute('aria-invalid'),
+						guidance: decoderGuidance.textContent.trim(),
+						input,
+						status: statusCell?.textContent ?? null,
+						statusState: statusCell?.getAttribute('data-mask-state') ?? null,
+						summary: decoderSummary.value,
+					})
+				}
+			}
+		} else {
+			decoderScenario.value = '0'
+			decoderScenario.dispatchEvent(new window.Event('change', { bubbles: true }))
+			decoderReset.click()
+		}
 		return {
 			busy: mappingBody.getAttribute('aria-busy'),
+			decoderDisabled: decoderInput.disabled,
+			decoderGuidance: decoderGuidance.textContent.trim(),
+			decoderRetryDisabled: decoderRetry.disabled,
+			decoderRetryHidden: decoderRetry.hidden,
+			decoderTransitions,
+			decoderSummary: decoderSummary.value,
+			decoderStatus: mappingBody.querySelector('[data-deployment-bit-status="0"]')?.textContent ?? null,
+			decoderToolbarResetDisabled: decoderReset.disabled,
+			decoderToolbarScenarioDisabled: decoderScenario.disabled,
+			decoderToolbarStatus: decoderToolbarStatus.textContent,
+			decoderValue: decoderInput.value,
+			fetchCount,
 			link: mappingBody.querySelector('a')?.getAttribute('href') ?? null,
 			rowCount: mappingBody.querySelectorAll(':scope > tr').length,
 			text: mappingBody.textContent.replaceAll(/\s+/g, ' ').trim(),
@@ -194,9 +298,54 @@ async function checkDeploymentMappingStates(): Promise<void> {
 	})
 	assert.deepEqual(success, {
 		busy: 'false',
+		decoderDisabled: false,
+		decoderGuidance: 'Additional untracked high bits are set (shifted value 1 hex). Verify the constructor event before interpreting them.',
+		decoderRetryDisabled: false,
+		decoderRetryHidden: true,
+		decoderTransitions: [
+			{
+				ariaInvalid: null,
+				guidance: 'No bits are set above the tracked manifest range.',
+				input: '0x1',
+				status: 'Set · code present',
+				statusState: 'set',
+				summary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
+			},
+			{
+				ariaInvalid: 'true',
+				guidance: 'Examples: 5, 0x5, or 0xff.',
+				input: 'invalid',
+				status: 'Unavailable · invalid mask',
+				statusState: null,
+				summary: 'Enter a non-negative decimal or hexadecimal integer.',
+			},
+			{
+				ariaInvalid: 'true',
+				guidance: 'Use a value between 0 and 2²⁵⁶ − 1.',
+				input: String(1n << 256n),
+				status: 'Unavailable · invalid mask',
+				statusState: null,
+				summary: 'The value is larger than a uint256.',
+			},
+			{
+				ariaInvalid: null,
+				guidance: 'Additional untracked high bits are set (shifted value 1 hex). Verify the constructor event before interpreting them.',
+				input: '3',
+				status: 'Set · code present',
+				statusState: 'set',
+				summary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
+			},
+		],
+		decoderSummary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
+		decoderStatus: 'Set · code present',
+		decoderToolbarResetDisabled: false,
+		decoderToolbarScenarioDisabled: false,
+		decoderToolbarStatus: '',
+		decoderValue: '3',
+		fetchCount: 1,
 		link: null,
 		rowCount: 1,
-		text: '0proxyDeployerProxy Deployer',
+		text: '0proxyDeployerProxy DeployerSet · code present',
 	})
 
 	for (const [scenario, response] of [
@@ -236,6 +385,838 @@ async function checkDeploymentMappingStates(): Promise<void> {
 		assert.equal(failure.rowCount, 1, `${scenario} must replace loading with one failure row`)
 		assert.equal(failure.text, 'Unable to load the deployment mapping. Open the canonical manifest.', `${scenario} must show a visible recovery message`)
 		assert.equal(failure.link, './mainnet-deployment-addresses.json', `${scenario} must link to the canonical manifest`)
+		assert.equal(failure.decoderDisabled, true, `${scenario} must disable decoding without a canonical mapping`)
+		assert.deepEqual(failure.decoderTransitions, [], `${scenario} must not decode values without a canonical mapping`)
+		assert.equal(failure.decoderSummary, 'The canonical mapping is unavailable, so this mask cannot be decoded safely.', `${scenario} must explain why decoding is unavailable`)
+		assert.equal(failure.decoderGuidance, 'Retry to restore bit decoding and high-bit reporting.', `${scenario} must replace stale high-bit guidance`)
+		assert.equal(failure.decoderRetryHidden, false, `${scenario} must expose an in-context retry action`)
+		assert.equal(failure.decoderRetryDisabled, false, `${scenario} must keep the retry action available`)
+		assert.equal(failure.decoderStatus, null, `${scenario} must not invent a bit status`)
+		assert.equal(failure.decoderToolbarScenarioDisabled, true, `${scenario} must disable deployment-mask presets`)
+		assert.equal(failure.decoderToolbarResetDisabled, true, `${scenario} must disable deployment-mask Reset`)
+		assert.equal(failure.decoderToolbarStatus, '', `${scenario} must not announce that unavailable decoder results were updated`)
+		assert.equal(failure.fetchCount, 1, `${scenario} must make only the initial manifest request`)
+	}
+
+	const recovered = await renderDeploymentMapping(
+		{ json: async () => ({}), ok: false, status: 503 },
+		{
+			json: async () => ({
+				deploymentSteps: [
+					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
+					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
+					{ id: 'openOracleFactory', label: 'Open Oracle Factory' },
+					{ id: 'uniformPriceDualCapBatchAuctionFactory', label: 'UniformPriceDualCapBatchAuctionFactory' },
+				],
+			}),
+			ok: true,
+			status: 200,
+		},
+	)
+	assert.deepEqual(
+		recovered,
+		{
+			busy: 'false',
+			decoderDisabled: false,
+			decoderGuidance: 'No bits are set above the tracked manifest range.',
+			decoderRetryDisabled: false,
+			decoderRetryHidden: true,
+			decoderTransitions: [],
+			decoderSummary: '2 of 3 tracked steps have set bits: Proxy Deployer, UniformPriceDualCapBatchAuctionFactory.',
+			decoderStatus: 'Set · code present',
+			decoderToolbarResetDisabled: false,
+			decoderToolbarScenarioDisabled: false,
+			decoderToolbarStatus: '',
+			decoderValue: '0x5',
+			fetchCount: 2,
+			link: null,
+			rowCount: 3,
+			text: '0proxyDeployerProxy DeployerSet · code present1openOracleFactoryOpen Oracle FactoryClear · no code2uniformPriceDualCapBatchAuctionFactoryUniformPriceDualCapBatchAuctionFactorySet · code present',
+		},
+		'a successful retry must preserve the mask, restore the canonical rows, recompute results, and re-enable decoder controls',
+	)
+}
+
+async function checkDeploymentLinkedScenarioRace(): Promise<void> {
+	const filePath = 'docs/deployment-status.html'
+	const html = await readFile(filePath, 'utf8')
+	const interactiveToolsSource = await readFile('docs/interactiveTools.js', 'utf8')
+	const linkedState = JSON.stringify({ deploymentMask: '0x5' })
+	const window = new Window({
+		url: `https://docs.example/deployment-status.html?tool=deployment-mask-decoder&state=${encodeURIComponent(linkedState)}#deployment-mask-decoder`,
+	})
+	try {
+		window.document.write(html)
+		window.document.close()
+
+		const script = window.document.querySelector('script[type="module"]:not([src])')
+		const scriptText = script?.textContent
+		if (scriptText === undefined || scriptText.trim().length === 0) {
+			throw new Error(`${filePath} is missing its manifest-rendering script`)
+		}
+
+		let resolveManifest: ((response: DeploymentManifestResponse) => void) | undefined
+		const manifestResponse = new Promise<DeploymentManifestResponse>(resolve => {
+			resolveManifest = resolve
+		})
+		const fetchManifest = async () => manifestResponse
+		const runManifestScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
+		const loaderPromise = runManifestScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
+
+		const runInteractiveTools = new Function('window', 'document', 'CustomEvent', 'DOMException', 'Event', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'URL', interactiveToolsSource)
+		runInteractiveTools(window, window.document, window.CustomEvent, window.DOMException, window.Event, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLSelectElement, window.navigator, window.URL)
+
+		const decoder = window.document.querySelector('#deployment-mask-decoder')
+		const decoderInput = decoder?.querySelector('[data-tool-input="deploymentMask"]')
+		const decoderSummary = decoder?.querySelector('[data-deployment-mask-summary]')
+		const decoderStatus = decoder?.querySelector('.interactive-tool-status')
+		if (!(decoder instanceof window.HTMLDetailsElement) || !(decoderInput instanceof window.HTMLInputElement) || !(decoderSummary instanceof window.HTMLOutputElement) || !(decoderStatus instanceof window.HTMLElement)) {
+			throw new Error('Deployment linked-scenario fixture is incomplete')
+		}
+		assert.equal(decoderInput.disabled, true, 'the decoder must remain unavailable while its canonical manifest is pending')
+
+		if (resolveManifest === undefined) throw new Error('Deployment manifest resolver was not initialized')
+		resolveManifest({
+			json: async () => ({
+				deploymentSteps: [
+					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
+					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
+					{ id: 'openOracle', label: 'Open Oracle' },
+					{ id: 'uniformPriceDualCapBatchAuctionFactory', label: 'UniformPriceDualCapBatchAuctionFactory' },
+				],
+			}),
+			ok: true,
+			status: 200,
+		})
+		await loaderPromise
+
+		assert.equal(decoderInput.value, '0x5', 'a linked decoder scenario must restore after the delayed manifest makes the tool available')
+		assert.equal(decoderSummary.value, '2 of 3 tracked steps have set bits: Proxy Deployer, UniformPriceDualCapBatchAuctionFactory.', 'the restored linked decoder scenario must recompute against the loaded canonical mapping')
+		assert.equal(decoderStatus.textContent, 'Shared scenario loaded; results updated.', 'delayed linked-state restoration must announce completion')
+
+		decoderInput.value = '0x1'
+		decoderInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+		decoder.dispatchEvent(new window.CustomEvent('docs:tool-availability'))
+		assert.equal(decoderInput.value, '0x1', 'later availability events must not reapply linked state over user edits')
+	} finally {
+		window.close()
+	}
+}
+
+async function checkMmrProofPlannerStates(): Promise<void> {
+	const html = await readFile('docs/merkle-mountain-range.html', 'utf8')
+	const source = await readFile('docs/mmrProofPlanner.js', 'utf8')
+	const window = new Window({
+		url: 'https://docs.example/merkle-mountain-range.html',
+	})
+	try {
+		window.document.write(html)
+		window.document.close()
+		const runScript = new Function('document', 'HTMLDetailsElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLSelectElement', source)
+		runScript(window.document, window.HTMLDetailsElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLSelectElement)
+
+		const planner = window.document.querySelector('#mmr-proof-planner')
+		const leafCount = planner?.querySelector('[data-tool-input="leafCount"]')
+		const peakHeight = planner?.querySelector('[data-tool-input="peakHeight"]')
+		const leafIndex = planner?.querySelector('[data-tool-input="leafIndex"]')
+		if (!(planner instanceof window.HTMLDetailsElement) || !(leafCount instanceof window.HTMLInputElement) || !(peakHeight instanceof window.HTMLSelectElement) || !(leafIndex instanceof window.HTMLInputElement)) {
+			throw new Error('MMR proof planner test controls are incomplete')
+		}
+		const output = (name: string) => {
+			const element = planner.querySelector(`[data-mmr-output="${name}"]`)
+			if (!(element instanceof window.HTMLOutputElement)) throw new Error(`Missing MMR planner output: ${name}`)
+			return element.value
+		}
+		const setInput = (input: typeof leafCount | typeof leafIndex, value: string) => {
+			input.value = value
+			input.dispatchEvent(new window.Event('input', { bubbles: true }))
+		}
+		const selectPeak = (height: number) => {
+			peakHeight.value = String(height)
+			peakHeight.dispatchEvent(new window.Event('change', { bubbles: true }))
+		}
+
+		assert.deepEqual(
+			{
+				binary: output('binary'),
+				capacity: output('capacity'),
+				mmrSiblings: output('mmrSiblings'),
+				nullifierSiblings: output('nullifierSiblings'),
+				peaks: output('peaks'),
+				selection: output('selection'),
+			},
+			{
+				binary: '1101₂',
+				capacity: '4 leaves; local indexes 0…3',
+				mmrSiblings: '4',
+				nullifierSiblings: '64',
+				peaks: '0, 2, 3',
+				selection: 'Valid peak-local index',
+			},
+			'MMR planner runtime defaults must match the static fallback',
+		)
+
+		setInput(leafCount, '1')
+		setInput(leafIndex, '0')
+		assert.deepEqual(
+			{
+				mmrSiblings: output('mmrSiblings'),
+				options: Array.from(peakHeight.options, option => option.value),
+				peaks: output('peaks'),
+				selection: output('selection'),
+			},
+			{
+				mmrSiblings: '0',
+				options: ['0'],
+				peaks: '0',
+				selection: 'Valid peak-local index',
+			},
+			'a one-leaf MMR must have one height-zero peak and no sibling hashes',
+		)
+		setInput(leafIndex, '1')
+		assert.equal(leafIndex.value, '1', 'MMR test harness must update the local leaf index')
+		assert.equal(output('selection'), 'Index must be between 0 and 0', 'a local index equal to peak capacity must be rejected')
+
+		setInput(leafCount, '21')
+		selectPeak(4)
+		setInput(leafIndex, '15')
+		assert.deepEqual(
+			{
+				mmrSiblings: output('mmrSiblings'),
+				options: Array.from(peakHeight.options, option => option.value),
+				peaks: output('peaks'),
+				selection: output('selection'),
+			},
+			{
+				mmrSiblings: '6',
+				options: ['0', '2', '4'],
+				peaks: '0, 2, 4',
+				selection: 'Valid peak-local index',
+			},
+			'a 21-leaf MMR must expose the height-four peak and six total MMR siblings',
+		)
+		setInput(leafIndex, '16')
+		assert.equal(output('selection'), 'Index must be between 0 and 15', 'the height-four capacity equality boundary must be rejected')
+
+		setInput(leafCount, String((1n << 64n) - 1n))
+		selectPeak(63)
+		setInput(leafIndex, String((1n << 63n) - 1n))
+		assert.equal(peakHeight.options.length, 64, 'the maximum uint64 leaf count must occupy all 64 peaks')
+		assert.equal(output('mmrSiblings'), '126', 'the maximum uint64 leaf count at height 63 must require 126 MMR siblings')
+		assert.equal(output('selection'), 'Valid peak-local index', 'the maximum local index below a height-63 peak capacity must be valid')
+
+		for (const invalidLeafCount of ['0', String(1n << 64n)]) {
+			setInput(leafCount, invalidLeafCount)
+			assert.equal(output('binary'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must be outside the supported leaf-count domain`)
+			assert.equal(output('selection'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must clear the prior selection result`)
+			assert.equal(output('nullifierSiblings'), '64', 'invalid MMR input must not change the protocol-fixed nullifier depth')
+			assert.equal(leafCount.getAttribute('aria-invalid'), 'true', `${invalidLeafCount} must expose the invalid leaf-count state`)
+			assert.equal(peakHeight.disabled, true, `${invalidLeafCount} must disable the occupied-peak selector`)
+			assert.deepEqual(
+				Array.from(peakHeight.options, option => ({ text: option.textContent, value: option.value })),
+				[{ text: 'Enter a valid leaf count', value: '' }],
+				`${invalidLeafCount} must replace stale occupied peaks with one invalid-state option`,
+			)
+		}
+		setInput(leafCount, '13')
+		assert.equal(leafCount.getAttribute('aria-invalid'), null, 'a valid leaf count must clear the invalid state')
+		assert.equal(peakHeight.disabled, false, 'a valid leaf count must re-enable occupied-peak selection')
+		assert.deepEqual(
+			Array.from(peakHeight.options, option => option.value),
+			['0', '2', '3'],
+			'a valid leaf count must restore only its occupied peaks after invalid input',
+		)
+		setInput(leafIndex, '0')
+		assert.equal(output('selection'), 'Valid peak-local index', 'MMR planning must recover after invalid leaf-count input')
+	} finally {
+		window.close()
+	}
+}
+
+function checkDiagramControlStates(): void {
+	const window = new Window()
+	try {
+		const button = window.document.createElement('button')
+		const cue = window.document.createElement('span')
+		button.setAttribute('aria-pressed', 'true')
+
+		updateDiagramControl(button, cue, true)
+		assert.equal(button.textContent, 'View full size', 'fit mode must name the action that reveals the full-size diagram')
+		assert.equal(button.getAttribute('aria-pressed'), null, 'an action-labeled diagram control must not announce a contradictory pressed state')
+		assert.equal(cue.textContent, 'Full size reveals detailed labels.', 'fit mode must explain the available detail')
+
+		updateDiagramControl(button, cue, false)
+		assert.equal(button.textContent, 'Fit to width', 'full-size mode must name the action that restores the fitted diagram')
+		assert.equal(button.getAttribute('aria-pressed'), null, 'full-size mode must remain an action button rather than a stateful toggle')
+		assert.equal(cue.textContent, 'Scroll horizontally to inspect labels.', 'full-size mode must explain horizontal inspection')
+	} finally {
+		window.close()
+	}
+}
+
+async function checkInteractiveToolControls(): Promise<void> {
+	const linkedState = JSON.stringify({ aliceEth: '9', ethRaiseCap: '24' })
+	const window = new Window({
+		url: `https://docs.example/truth-auction.html?tool=simple-auction-example&state=${encodeURIComponent(linkedState)}#simple-auction-example`,
+	})
+	try {
+		window.document.write(`
+			<details class="interactive-example" id="simple-auction-example">
+				<summary>Try a simple auction clearing run</summary>
+				<input data-example-input="aliceEth" value="1">
+				<input data-example-input="bobEth" value="2">
+				<input data-example-input="carolEth" value="3">
+				<input data-example-input="ethRaiseCap" value="4">
+				<input data-example-input="repInventory" value="5">
+				<div class="example-output-grid"><output>Default output</output></div>
+			</details>
+		`)
+		window.document.close()
+		let inputEventCount = 0
+		window.document.addEventListener('input', () => {
+			inputEventCount += 1
+		})
+		let copiedUrl = ''
+		Object.defineProperty(window.navigator, 'clipboard', {
+			configurable: true,
+			value: {
+				writeText: async (value: string) => {
+					copiedUrl = value
+				},
+			},
+		})
+		const source = await readFile('docs/interactiveTools.js', 'utf8')
+		const runScript = new Function('window', 'document', 'CustomEvent', 'DOMException', 'Event', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'URL', source)
+		runScript(window, window.document, window.CustomEvent, window.DOMException, window.Event, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLSelectElement, window.navigator, window.URL)
+
+		const tool = window.document.querySelector('#simple-auction-example')
+		if (!(tool instanceof window.HTMLDetailsElement)) throw new Error('Interactive tool test fixture is missing')
+		const value = (name: string) => {
+			const input = tool.querySelector(`[data-example-input="${name}"]`)
+			if (!(input instanceof window.HTMLInputElement)) throw new Error(`Missing interactive tool input: ${name}`)
+			return input.value
+		}
+		const toolbar = tool.querySelector('.interactive-tool-toolbar')
+		const scenario = toolbar?.querySelector('select')
+		const status = toolbar?.querySelector('.interactive-tool-status')
+		const buttons = Array.from(toolbar?.querySelectorAll('button') ?? [])
+		const reset = buttons.find(button => button.textContent === 'Reset')
+		const copy = buttons.find(button => button.textContent === 'Copy scenario link')
+		if (!(toolbar instanceof window.HTMLElement) || !(scenario instanceof window.HTMLSelectElement) || !(status instanceof window.HTMLElement) || !(reset instanceof window.HTMLButtonElement) || !(copy instanceof window.HTMLButtonElement)) {
+			throw new Error('Interactive tool toolbar is incomplete')
+		}
+
+		assert.equal(tool.open, true, 'a shared scenario must open its calculator')
+		assert.equal(value('aliceEth'), '9', 'a shared scenario must restore a linked input')
+		assert.equal(value('ethRaiseCap'), '24', 'a shared scenario must restore every linked input')
+		assert.equal(status.textContent, 'Shared scenario loaded; results updated.', 'shared-state restoration must announce completion')
+		assert.equal(tool.querySelector('.example-output-grid')?.getAttribute('aria-live'), 'polite', 'calculator output must be a live region')
+		assert(inputEventCount >= 2, 'shared-state restoration must notify the calculator runtime about changed inputs')
+
+		scenario.value = '0'
+		scenario.dispatchEvent(new window.Event('change', { bubbles: true }))
+		assert.deepEqual(
+			{
+				aliceEth: value('aliceEth'),
+				bobEth: value('bobEth'),
+				carolEth: value('carolEth'),
+				ethRaiseCap: value('ethRaiseCap'),
+				repInventory: value('repInventory'),
+			},
+			{
+				aliceEth: '3',
+				bobEth: '4',
+				carolEth: '6',
+				ethRaiseCap: '24',
+				repInventory: '8',
+			},
+			'a calculator preset must apply its complete input scenario',
+		)
+		assert.equal(status.textContent, 'Weak demand applied; results updated.', 'preset application must announce completion')
+
+		reset.click()
+		assert.deepEqual(
+			{
+				aliceEth: value('aliceEth'),
+				bobEth: value('bobEth'),
+				carolEth: value('carolEth'),
+				ethRaiseCap: value('ethRaiseCap'),
+				repInventory: value('repInventory'),
+			},
+			{
+				aliceEth: '1',
+				bobEth: '2',
+				carolEth: '3',
+				ethRaiseCap: '4',
+				repInventory: '5',
+			},
+			'Reset must restore the calculator values that were present before linked state was applied',
+		)
+		assert.equal(status.textContent, 'Default values restored.', 'Reset must announce completion')
+
+		copy.click()
+		await Promise.resolve()
+		const copied = new URL(copiedUrl)
+		assert.equal(copied.searchParams.get('tool'), 'simple-auction-example', 'a copied scenario must identify its calculator')
+		assert.deepEqual(JSON.parse(copied.searchParams.get('state') ?? ''), {
+			aliceEth: '1',
+			bobEth: '2',
+			carolEth: '3',
+			ethRaiseCap: '4',
+			repInventory: '5',
+		})
+		assert.equal(copied.hash, '#simple-auction-example', 'a copied scenario must include the stable calculator fragment')
+	} finally {
+		window.close()
+	}
+}
+
+async function checkInvariantExplorerStates(): Promise<void> {
+	const html = await readFile('docs/invariants.html', 'utf8')
+	const source = await readFile('docs/invariantExplorer.js', 'utf8')
+	const window = new Window({
+		url: 'https://docs.example/invariants.html#esc-10',
+	})
+	try {
+		window.document.write(html)
+		window.document.close()
+		window.HTMLElement.prototype.scrollIntoView = () => undefined
+		const runScript = new Function('window', 'document', 'DOMException', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'requestAnimationFrame', 'URIError', 'URL', source)
+		runScript(
+			window,
+			window.document,
+			window.DOMException,
+			window.HTMLButtonElement,
+			window.HTMLDetailsElement,
+			window.HTMLElement,
+			window.HTMLInputElement,
+			window.HTMLSelectElement,
+			window.navigator,
+			(callback: FrameRequestCallback) => {
+				callback(0)
+				return 1
+			},
+			window.URIError,
+			window.URL,
+		)
+
+		const explorer = window.document.querySelector('#invariant-explorer')
+		const search = explorer?.querySelector('[data-invariant-search]')
+		const type = explorer?.querySelector('[data-invariant-type]')
+		const status = explorer?.querySelector('[data-invariant-status]')
+		const subsystem = explorer?.querySelector('[data-invariant-subsystem]')
+		const count = explorer?.querySelector('[data-invariant-count]')
+		const reset = explorer?.querySelector('[data-invariant-reset]')
+		const expand = explorer?.querySelector('[data-invariant-expand]')
+		const collapse = explorer?.querySelector('[data-invariant-collapse]')
+		if (
+			!(search instanceof window.HTMLInputElement) ||
+			!(type instanceof window.HTMLSelectElement) ||
+			!(status instanceof window.HTMLSelectElement) ||
+			!(subsystem instanceof window.HTMLSelectElement) ||
+			!(count instanceof window.HTMLElement) ||
+			!(reset instanceof window.HTMLButtonElement) ||
+			!(expand instanceof window.HTMLButtonElement) ||
+			!(collapse instanceof window.HTMLButtonElement)
+		) {
+			throw new Error('Invariant explorer test controls are incomplete')
+		}
+		const entries = Array.from(window.document.querySelectorAll('details.invariant-entry')).flatMap(entry => (entry instanceof window.HTMLDetailsElement ? [entry] : []))
+		const visibleIds = () => entries.filter(entry => !entry.hidden).map(entry => entry.id)
+
+		assert.equal(entries.length, 93, 'the invariant explorer must index the complete catalog')
+		assert.equal(new Set(entries.map(entry => entry.id)).size, 93, 'every invariant explorer entry must have a unique stable id')
+		assert.equal(count.textContent, '93 of 93 invariants', 'the invariant explorer must report the complete default catalog')
+		assert.equal(window.document.querySelector('#esc-10')?.hasAttribute('open'), true, 'an invariant fragment must open its matching entry')
+		assert.deepEqual({ status: status.options.length, subsystem: subsystem.options.length, type: type.options.length }, { status: 5, subsystem: 10, type: 5 }, 'invariant facets must be derived from all catalog metadata values plus their All options')
+		assert.equal(window.document.querySelectorAll('.invariant-entry-actions').length, 93, 'every invariant must receive permalink actions')
+
+		search.value = 'replay'
+		search.dispatchEvent(new window.Event('input', { bubbles: true }))
+		assert.deepEqual(visibleIds(), ['esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
+		assert.equal(count.textContent, '4 of 93 invariants', 'filtered invariant count must remain explicit')
+		expand.click()
+		assert(
+			entries.filter(entry => !entry.hidden).every(entry => entry.open),
+			'Expand visible must open only the filtered results',
+		)
+		collapse.click()
+		assert(
+			entries.every(entry => !entry.open),
+			'Collapse all must close the complete catalog',
+		)
+
+		reset.click()
+		assert.equal(search.value, '', 'Reset filters must clear the search query')
+		assert.equal(count.textContent, '93 of 93 invariants', 'Reset filters must restore the complete result count')
+		assert.equal(visibleIds().length, 93, 'Reset filters must restore every catalog entry')
+	} finally {
+		window.close()
+	}
+}
+
+async function checkReaderRuntimeStates(): Promise<void> {
+	const html = await readFile('docs/documentation.html', 'utf8')
+	const generated = await readFile('docs/docsReaderMarkdown.js', 'utf8')
+	const searchIndex = JSON.parse(await readFile('docs/docsReaderSearchIndex.json', 'utf8'))
+	const source = await readFile('docs/docsReader.js', 'utf8')
+	const fetchRequests: Array<{
+		input: string
+		resolve: (response: { ok: boolean; text: () => Promise<string> }) => void
+	}> = []
+	const window = new Window({
+		url: 'https://docs.example/documentation.html#doc-truth-auction--simple-auction-example',
+	})
+	try {
+		window.document.write(html)
+		window.document.close()
+		window.HTMLElement.prototype.scrollIntoView = () => undefined
+		new Function('window', generated)(window)
+		Reflect.set(window, 'docsReaderSearchIndex', searchIndex)
+		const controlledFetch = (input: string) =>
+			new Promise<{ ok: boolean; text: () => Promise<string> }>(resolve => {
+				fetchRequests.push({ input, resolve })
+			})
+		const resolveFetch = async (index: number) => {
+			const request = fetchRequests[index]
+			if (request === undefined) throw new Error(`Reader fetch request ${index} is missing`)
+			request.resolve({
+				ok: true,
+				text: async () => '<!doctype html><html><head><title>Reader test</title></head><body><details id="simple-auction-example"></details><section id="deployment-mask-decoder"></section><section id="callback-rejection-and-recovery"></section></body></html>',
+			})
+			for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		}
+		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
+		runScript(window, window.document, window.CustomEvent, window.Element, controlledFetch, window.HTMLAnchorElement, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLTextAreaElement, undefined, window.URL, (callback: FrameRequestCallback) => {
+			callback(0)
+			return 1
+		})
+
+		const chapters = Array.from(window.document.querySelectorAll('.reader-chapter')).flatMap(chapter => (chapter instanceof window.HTMLElement ? [chapter] : []))
+		const activeChapters = chapters.filter(chapter => !chapter.hidden)
+		assert.equal(chapters.length, 14, 'reader runtime must create one lazy chapter shell per generated document')
+		assert.deepEqual(
+			activeChapters.map(chapter => chapter.getAttribute('data-document-path')),
+			['truth-auction.html'],
+			'a reader deep link must select only its target document',
+		)
+		assert.deepEqual(
+			fetchRequests.map(request => request.input),
+			['./truth-auction.html'],
+			'reader startup must request only the selected document',
+		)
+		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'non-selected reader frames must remain unsourced while the active request is pending')
+		assert.equal(window.document.querySelectorAll('.reader-nav-tool-link').length > 0, true, 'reader navigation must expose generated interactive-tool links')
+		const assertNavigationOrder = (documentPath: string, expectedFragments: string[]) => {
+			const expectedSet = new Set(expectedFragments)
+			const actualFragments = Array.from(window.document.querySelectorAll(`.reader-nav-document[data-navigation-document-path="${documentPath}"] a[data-document-fragment]`), link => link.getAttribute('data-document-fragment')).filter(fragment => fragment !== null && expectedSet.has(fragment))
+			assert.deepEqual(actualFragments, expectedFragments, `${documentPath} reader tools must remain in source order with their owning sections`)
+		}
+		assertNavigationOrder('deployment-status.html', ['ordering', 'deployment-mask-decoder', 'limit'])
+		assertNavigationOrder('merkle-mountain-range.html', ['proofs', 'mmr-proof-planner', 'snapshots'])
+		assertNavigationOrder('open-oracle-integration.html', ['security-guarantee', 'initial-report-estimator-example', 'callback-rejection-and-recovery', 'attack-model', 'binary-censorship-example', 'parameters'])
+		assertNavigationOrder('liquidation.html', ['sliders', 'liquidation-health-example', 'liquidation-path-example', 'incentives'])
+		assertNavigationOrder('statoblast-whitepaper.html', ['escalation', 'escalation-deposit-example', 'resolution-edge-example', 'migration', 'collateral-repair-example', 'auction'])
+
+		const search = window.document.querySelector('[data-doc-search]')
+		if (!(search instanceof window.HTMLInputElement)) throw new Error('Reader search input is missing')
+		search.value = 'MMR sibling hashes required'
+		search.dispatchEvent(new window.Event('input', { bubbles: true }))
+		const plannerResults = Array.from(window.document.querySelectorAll('[data-search-results] a[data-document-path]'))
+		assert.equal(plannerResults.length, 1, 'tool-specific search text must have one canonical generated result')
+		assert.equal(plannerResults[0]?.getAttribute('data-document-path'), 'merkle-mountain-range.html', 'tool-specific search must identify the MMR guide')
+		assert.equal(plannerResults[0]?.getAttribute('data-document-fragment'), 'mmr-proof-planner', 'tool-specific search must route only to its dedicated tool entry')
+
+		search.value = 'deployment mask'
+		search.dispatchEvent(new window.Event('input', { bubbles: true }))
+		const firstResult = window.document.querySelector('[data-search-results] a[data-document-path]')
+		if (!(firstResult instanceof window.HTMLAnchorElement)) throw new Error('Reader search did not render a result')
+		assert.equal(firstResult.dataset['documentPath'], 'deployment-status.html', 'reader search must rank the deployment document first for deployment mask')
+		assert.equal(firstResult.dataset['documentFragment'], 'deployment-mask-decoder', 'reader search must route directly to the deployment decoder')
+		assert.match(firstResult.textContent, /Decode a deployment mask/, 'reader search must label the matching interactive tool')
+		assert.deepEqual(
+			fetchRequests.map(request => request.input),
+			['./truth-auction.html'],
+			'searching the generated corpus must not fetch another document',
+		)
+
+		firstResult.click()
+		assert.deepEqual(
+			chapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath']),
+			['deployment-status.html'],
+			'reader navigation must switch to only the selected search result',
+		)
+		assert.deepEqual(
+			fetchRequests.map(request => request.input),
+			['./truth-auction.html', './deployment-status.html'],
+			'reader navigation must request its newly selected document',
+		)
+		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'navigating away must leave the stale and active pending frames unsourced')
+
+		await resolveFetch(0)
+		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'a stale request completion must not source its inactive frame')
+
+		await resolveFetch(1)
+		const sourcedAfterActiveResponse = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
+		assert.equal(sourcedAfterActiveResponse.length, 1, 'only the active frame may receive a source after its request completes')
+		assert.equal(sourcedAfterActiveResponse[0]?.getAttribute('data-document-frame'), 'deployment-status.html', 'the one sourced reader frame must belong to the active document')
+
+		const markdownLink = window.document.querySelector('.reader-nav-document-link[data-document-path="operator-reference.md"]')
+		if (!(markdownLink instanceof window.HTMLAnchorElement)) throw new Error('Reader Markdown navigation link is missing')
+		markdownLink.click()
+		const sourcedAfterMarkdownNavigation = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
+		assert.equal(sourcedAfterMarkdownNavigation.length, 1, 'sequential reader navigation must unload the previously sourced frame')
+		assert.equal(sourcedAfterMarkdownNavigation[0]?.getAttribute('data-document-frame'), 'operator-reference.md', 'the selected Markdown document must be the only sourced frame')
+
+		search.value = 'callback rejection'
+		search.dispatchEvent(new window.Event('input', { bubbles: true }))
+		const callbackResult = window.document.querySelector('[data-search-results] a[data-document-path]')
+		if (!(callbackResult instanceof window.HTMLAnchorElement)) throw new Error('Reader callback search did not render a result')
+		assert.equal(callbackResult.dataset['documentPath'], 'open-oracle-integration.html', 'callback search must identify the OpenOracle integration guide')
+		assert.equal(callbackResult.dataset['documentFragment'], 'callback-rejection-and-recovery', 'callback search must use the real stable callback section fragment')
+		callbackResult.click()
+		assert.deepEqual(
+			chapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath']),
+			['open-oracle-integration.html'],
+			'callback search navigation must select only the OpenOracle chapter',
+		)
+		await resolveFetch(2)
+		const sourcedAfterCallbackNavigation = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
+		assert.equal(sourcedAfterCallbackNavigation.length, 1, 'callback navigation must retain only its active sourced frame')
+		assert.equal(sourcedAfterCallbackNavigation[0]?.getAttribute('data-document-frame'), 'open-oracle-integration.html', 'callback navigation must source the OpenOracle frame')
+		assert.equal(window.location.hash, '#doc-open-oracle-integration--callback-rejection-and-recovery', 'callback search navigation must preserve its section fragment in reader history')
+	} finally {
+		window.close()
+	}
+
+	const lazySearchRequests: Array<{
+		input: string
+		resolve: (response: { json?: () => Promise<unknown>; ok: boolean; status: number; text?: () => Promise<string> }) => void
+	}> = []
+	const lazySearchWindow = new Window({
+		url: 'https://docs.example/documentation.html',
+	})
+	try {
+		lazySearchWindow.document.write(html)
+		lazySearchWindow.document.close()
+		lazySearchWindow.HTMLElement.prototype.scrollIntoView = () => undefined
+		new Function('window', generated)(lazySearchWindow)
+		const controlledFetch = (input: string) =>
+			new Promise<{ json?: () => Promise<unknown>; ok: boolean; status: number; text?: () => Promise<string> }>(resolve => {
+				lazySearchRequests.push({ input, resolve })
+			})
+		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
+		runScript(
+			lazySearchWindow,
+			lazySearchWindow.document,
+			lazySearchWindow.CustomEvent,
+			lazySearchWindow.Element,
+			controlledFetch,
+			lazySearchWindow.HTMLAnchorElement,
+			lazySearchWindow.HTMLButtonElement,
+			lazySearchWindow.HTMLDetailsElement,
+			lazySearchWindow.HTMLElement,
+			lazySearchWindow.HTMLInputElement,
+			lazySearchWindow.HTMLTextAreaElement,
+			undefined,
+			lazySearchWindow.URL,
+			(callback: FrameRequestCallback) => {
+				callback(0)
+				return 1
+			},
+		)
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html'],
+			'reader startup must not request the full-text search index',
+		)
+		const lazySearchInput = lazySearchWindow.document.querySelector('[data-doc-search]')
+		if (!(lazySearchInput instanceof lazySearchWindow.HTMLInputElement)) throw new Error('Lazy reader search input is missing')
+		const lazySearchStatus = lazySearchWindow.document.querySelector('[data-search-status]')
+		const lazyEmptyState = lazySearchWindow.document.querySelector('[data-reader-empty]')
+		const lazyEmptyGuidance = lazySearchWindow.document.querySelector('[data-reader-empty-guidance]')
+		const lazyRetry = lazySearchWindow.document.querySelector('[data-retry-search]')
+		lazySearchInput.focus()
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html', './docsReaderSearchIndex.json'],
+			'focusing reader search must request the full-text index on demand',
+		)
+		assert.equal(lazySearchStatus?.textContent, 'Loading full-text search…', 'search focus must announce full-text index loading before a query is entered')
+		const indexRequest = lazySearchRequests[1]
+		if (indexRequest === undefined) throw new Error('Lazy reader search-index request is missing')
+		indexRequest.resolve({ ok: false, status: 503 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, 'Full-text search unavailable; titles and summaries remain searchable', 'a failed index request must announce its metadata-only fallback before a query is entered')
+		lazySearchInput.value = 'MMR sibling hashes required'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		assert.equal(lazySearchStatus?.textContent, 'No title or summary matches; full-text search is unavailable', 'a failed index request must announce the remaining metadata-search scope')
+		assert.equal(lazyEmptyState?.hasAttribute('hidden'), false, 'a failed full-text query must reveal the empty state')
+		assert.match(lazyEmptyGuidance?.textContent ?? '', /Only document titles and summaries are searchable/, 'the failed-index empty state must not promise full-text results')
+		assert.equal(lazyRetry?.hasAttribute('hidden'), false, 'a failed index request must expose a retry action')
+
+		lazySearchInput.value = '256-step limit'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		const metadataResult = lazySearchWindow.document.querySelector('[data-search-results] a[data-document-path="deployment-status.html"]')
+		assert.equal(metadataResult?.hasAttribute('data-document-fragment'), false, 'title and summary search must remain available without the full-text index')
+		assert.equal(lazySearchWindow.document.querySelector('.reader-search-results-heading')?.textContent, 'Best matches', 'metadata-only fallback results must use a document-or-section-neutral heading')
+
+		if (!(lazyRetry instanceof lazySearchWindow.HTMLButtonElement)) throw new Error('Lazy reader search retry is missing')
+		lazyRetry.click()
+		assert.equal(lazySearchStatus?.textContent, 'Loading full-text search…', 'retrying the index must announce renewed loading even when a query is present')
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html', './docsReaderSearchIndex.json', './docsReaderSearchIndex.json'],
+			'retrying full-text search must issue a new index request',
+		)
+		const retryIndexRequest = lazySearchRequests[2]
+		if (retryIndexRequest === undefined) throw new Error('Retried reader search-index request is missing')
+		retryIndexRequest.resolve({
+			json: async () => {
+				throw new TypeError('Response body could not be read')
+			},
+			ok: true,
+			status: 200,
+		})
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, '1 document and 0 matching sections or tools; full-text search is unavailable', 'a rejected index response body must restore metadata-only search')
+		assert.equal(lazyRetry.hasAttribute('hidden'), false, 'a rejected index response body must expose retry')
+
+		lazyRetry.click()
+		const malformedIndexRequest = lazySearchRequests[3]
+		if (malformedIndexRequest === undefined) throw new Error('Malformed reader search-index request is missing')
+		malformedIndexRequest.resolve({ json: async () => ({}), ok: true, status: 200 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, '1 document and 0 matching sections or tools; full-text search is unavailable', 'an incomplete index payload must restore metadata-only search')
+		assert.equal(lazyRetry.hasAttribute('hidden'), false, 'an incomplete index payload must expose retry')
+
+		lazyRetry.click()
+		const recoveredIndexRequest = lazySearchRequests[4]
+		if (recoveredIndexRequest === undefined) throw new Error('Recovered reader search-index request is missing')
+		recoveredIndexRequest.resolve({ json: async () => searchIndex, ok: true, status: 200 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.match(lazySearchStatus?.textContent ?? '', /^Full-text search restored;/, 'a successful retry must announce restored full-text search before the next query change')
+		lazySearchInput.value = 'MMR sibling hashes required'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		const lazyResult = lazySearchWindow.document.querySelector('[data-search-results] a[data-document-path="merkle-mountain-range.html"]')
+		assert.equal(lazyResult?.getAttribute('data-document-fragment'), 'mmr-proof-planner', 'a retried lazy index must restore full-text tool results')
+	} finally {
+		lazySearchWindow.close()
+	}
+
+	const historyFetchRequests: Array<{
+		input: string
+		resolve: (response: { ok: boolean; text: () => Promise<string> }) => void
+	}> = []
+	const historyWindow = new Window({
+		url: 'https://docs.example/documentation.html',
+	})
+	try {
+		historyWindow.document.write(html)
+		historyWindow.document.close()
+		let simulatedScrollY = 0
+		historyWindow.HTMLElement.prototype.scrollIntoView = () => {
+			simulatedScrollY = 0
+		}
+		Object.defineProperty(historyWindow, 'scrollY', {
+			configurable: true,
+			get: () => simulatedScrollY,
+		})
+		Object.defineProperty(historyWindow, 'scrollTo', {
+			configurable: true,
+			value: (optionsOrX: ScrollToOptions | number, y?: number) => {
+				const nextScrollY = typeof optionsOrX === 'number' ? y : optionsOrX.top
+				if (typeof nextScrollY === 'number') simulatedScrollY = nextScrollY
+			},
+		})
+		new Function('window', generated)(historyWindow)
+		const controlledFetch = (input: string) =>
+			new Promise<{ ok: boolean; text: () => Promise<string> }>(resolve => {
+				historyFetchRequests.push({ input, resolve })
+			})
+		const resolveFetch = async (index: number) => {
+			const request = historyFetchRequests[index]
+			if (request === undefined) throw new Error(`Reader history fetch request ${index} is missing`)
+			request.resolve({
+				ok: true,
+				text: async () => '<!doctype html><html><head><title>Reader history test</title></head><body><main>Reader history test</main></body></html>',
+			})
+			for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		}
+		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
+		runScript(
+			historyWindow,
+			historyWindow.document,
+			historyWindow.CustomEvent,
+			historyWindow.Element,
+			controlledFetch,
+			historyWindow.HTMLAnchorElement,
+			historyWindow.HTMLButtonElement,
+			historyWindow.HTMLDetailsElement,
+			historyWindow.HTMLElement,
+			historyWindow.HTMLInputElement,
+			historyWindow.HTMLTextAreaElement,
+			undefined,
+			historyWindow.URL,
+			(callback: FrameRequestCallback) => {
+				callback(0)
+				return 1
+			},
+		)
+		const historyChapters = Array.from(historyWindow.document.querySelectorAll('.reader-chapter')).flatMap(chapter => (chapter instanceof historyWindow.HTMLElement ? [chapter] : []))
+		const activePaths = () => historyChapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath'])
+		const historyHash = () => historyWindow.location.hash
+		const settleScrollStabilization = () => new Promise(resolve => setTimeout(resolve, 700))
+
+		assert.deepEqual(activePaths(), ['statoblast-whitepaper.html'], 'a hashless reader must start on the default first chapter')
+		await resolveFetch(0)
+		historyWindow.scrollTo({ top: 240 })
+		const deploymentLink = historyWindow.document.querySelector('.reader-nav-document-link[data-document-path="deployment-status.html"]')
+		if (!(deploymentLink instanceof historyWindow.HTMLAnchorElement)) throw new Error('Reader deployment navigation link is missing')
+		deploymentLink.click()
+		await resolveFetch(1)
+		await settleScrollStabilization()
+		assert.deepEqual(activePaths(), ['deployment-status.html'], 'forward reader navigation must select the requested chapter before Back')
+		assert.equal(historyHash(), '#doc-deployment-status', 'forward reader navigation must create a chapter hash')
+		historyWindow.scrollTo({ top: 740 })
+
+		const oracleLink = historyWindow.document.querySelector('.reader-nav-document-link[data-document-path="open-oracle-integration.html"]')
+		if (!(oracleLink instanceof historyWindow.HTMLAnchorElement)) throw new Error('Reader OpenOracle navigation link is missing')
+		oracleLink.click()
+		await resolveFetch(2)
+		await settleScrollStabilization()
+		assert.deepEqual(activePaths(), ['open-oracle-integration.html'], 'a second forward reader navigation must select its requested chapter')
+		assert.equal(historyHash(), '#doc-open-oracle-integration', 'a second forward reader navigation must retain the prior chapter in history')
+
+		historyWindow.history.back()
+		for (let attempt = 0; attempt < 20 && historyHash() !== '#doc-deployment-status'; attempt += 1) {
+			await new Promise(resolve => setTimeout(resolve, 0))
+		}
+		assert.equal(historyHash(), '#doc-deployment-status', 'the first browser Back must restore the prior reader chapter URL')
+		assert.deepEqual(activePaths(), ['deployment-status.html'], 'the first browser Back must restore the prior reader chapter')
+		await resolveFetch(3)
+		await settleScrollStabilization()
+		assert.equal(simulatedScrollY, 740, 'browser Back must retain the prior reader scroll position after the restored frame finishes loading')
+
+		historyWindow.history.back()
+		for (let attempt = 0; attempt < 20 && historyHash().length > 0; attempt += 1) {
+			await new Promise(resolve => setTimeout(resolve, 0))
+		}
+		assert.equal(historyHash(), '', 'browser Back must restore the reader initial hashless URL')
+		assert.deepEqual(activePaths(), ['statoblast-whitepaper.html'], 'browser Back to the hashless URL must restore the default first chapter')
+		assert.deepEqual(
+			historyFetchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html', './deployment-status.html', './open-oracle-integration.html', './deployment-status.html', './statoblast-whitepaper.html'],
+			'sequential browser Back navigation must unload each later document and request the restored chapters in order',
+		)
+		await resolveFetch(4)
+		await settleScrollStabilization()
+		assert.equal(simulatedScrollY, 240, 'browser Back to the hashless reader URL must restore its saved scroll position')
+		const sourcedAfterBack = Array.from(historyWindow.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
+		assert.equal(sourcedAfterBack.length, 1, 'browser Back must leave exactly one sourced reader frame')
+		assert.equal(sourcedAfterBack[0]?.getAttribute('data-document-frame'), 'statoblast-whitepaper.html', 'the default first chapter must be the sole source after Back')
+	} finally {
+		historyWindow.close()
 	}
 }
 
@@ -710,6 +1691,12 @@ await checkEscalationDepositExample()
 await checkResolutionEdgeExample()
 await checkDynamicWethReportExample()
 await checkDeploymentMappingStates()
+await checkDeploymentLinkedScenarioRace()
+await checkMmrProofPlannerStates()
+checkDiagramControlStates()
+await checkInteractiveToolControls()
+await checkInvariantExplorerStates()
+await checkReaderRuntimeStates()
 await checkLiquidationMultiplierBoundaries()
 checkExactRepCapEquality()
 
@@ -1020,6 +2007,17 @@ assert.match(
 	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>provisionalMigratedRepDelta<\/mi>[\s\S]*Unlocked vault migration normally floors[\s\S]*completes the parent ownership denominator[\s\S]*exact remaining REP delta[\s\S]*tracks cumulative migrated parent ownership independently\s+for every child/i,
 	'whitepaper visible migration equation, caption, and prose should distinguish provisional per-vault floors from child-specific final REP reconciliation',
 )
+assert.match(
+	statoblastHtml,
+	/id="fig-statoblast-proportional-migration"[\s\S]*normally determines a floored migrated REP[\s\S]*completes a child's ownership receives[\s\S]*cumulative routed REP determines child[\s\S]*normally floors each ownership-based REP delta[\s\S]*reconciles every remaining REP unit/i,
+	'whitepaper migration figure fallback and caption should distinguish provisional floors from final full-ownership reconciliation',
+)
+assert.match(
+	statoblastHtml,
+	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDelta<\/mi>[\s\S]*<mi>migrationRepDenominatorAtFork<\/mi>[\s\S]*<mi>priorMigratedRep<\/mi>[\s\S]*<mi>resultingMigratedPoolOwnership<\/mi>[\s\S]*<mi>parentPoolOwnershipDenominator<\/mi>[\s\S]*<mi>provisionalMigratedRepDelta<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
+	'whitepaper visible migration equation should render the final full-ownership reconciliation branch',
+)
+assert.match(diagramSpecsSource, /"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*cumulative routed REP target[\s\S]*cumulative ceiling target/i, 'proportional migration diagram should show provisional REP flooring, final reconciliation, and cumulative collateral routing')
 assert.match(statoblastHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
