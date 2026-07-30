@@ -2262,6 +2262,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
 				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState, config.riskLimits),
+				hostname: config.uiHost,
 				setPaused: paused =>
 					queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), paused })

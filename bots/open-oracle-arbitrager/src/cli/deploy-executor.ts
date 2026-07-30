@@ -12,7 +12,7 @@ function option(name: string) {
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
 	console.log(`Deploy the OpenOracle arbitrage executor
 
-PRIVATE_KEY=0x... ./bin/deploy-executor [options]
+PRIVATE_KEY=0x... bun run deploy-executor -- [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...

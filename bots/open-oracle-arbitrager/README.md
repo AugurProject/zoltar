@@ -26,7 +26,8 @@ restart settings, or the local dashboard when `--ui` is enabled.
 
 The arbitrager is an independent project inside the monorepo:
 
-- `bin/` contains the operator-facing executables.
+- `src/cli/` contains the operator-facing runtime, deployment, and reconciliation
+  entrypoints; `src/config/execution-manifest.ts` owns the manifest CLI.
 - `config/` contains manifest examples and schemas.
 - `contracts/` contains the executor Solidity source and its local test harnesses.
 - `docs/` contains the rendered operator guide, market fixture, chart runtime, styles,
@@ -83,7 +84,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
   coordinator whose games this wallet may dispute.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
-  predictable CREATE2 address from the dashboard or with `./bin/deploy-executor`,
+  predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
   then authenticate that address in the execution manifest.
 - The exact Uniswap V3 SwapRouter address.
 - Optionally, the exact Uniswap V2 Router02 supplied with
@@ -124,9 +125,10 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   inventory still requires an operator-approved unwind before P&amp;L can be classified
   as realized.
 
-Do not use a key that controls unrelated protocol or treasury funds. The dashboard
-binds to `127.0.0.1`, but the execution key still lives in the bot process and must be
-protected like any hot wallet.
+Do not use a key that controls unrelated protocol or treasury funds. By default, the
+dashboard binds to `127.0.0.1`; the protected-container exception is documented
+under [Docker](#docker). The execution key still lives in the bot process and must
+be protected like any hot wallet.
 
 ## End-user readiness backlog
 
@@ -175,8 +177,64 @@ bun install --frozen-lockfile
 Run the executable from the arbitrager project:
 
 ```bash
-./bin/run --help
+bun run run -- --help
 ```
+
+The package scripts call the TypeScript entrypoints directly through Bun. No Bash
+wrapper scripts are required:
+
+```bash
+bun run run -- [operator options]
+bun run deploy-executor -- [deployment options]
+bun run manifest -- generate [manifest options]
+bun run reconcile -- [reconciliation options]
+```
+
+## Docker
+
+Build from the monorepo root so Docker can include the local `shared/` package:
+
+```bash
+docker build \
+  --file bots/open-oracle-arbitrager/Dockerfile \
+  --tag zoltar-open-oracle-arbitrager \
+  .
+```
+
+Run one dry scan and persist operator state in a named volume:
+
+```bash
+docker run --rm \
+  --env ETH_RPC_URL=https://your-mainnet-rpc.example \
+  --mount type=volume,source=zoltar-arbitrager-state,target=/app/bots/open-oracle-arbitrager/.state \
+  zoltar-open-oracle-arbitrager \
+  --open-oracle=0xYourOpenOracle \
+  --coordinator-address=0xYourPriceCoordinator \
+  --lookback-blocks=50000 \
+  --once
+```
+
+For the dashboard, bind the published host port to loopback and let the process
+listen on the container interface:
+
+```bash
+docker run --rm \
+  --env ETH_RPC_URL=https://your-mainnet-rpc.example \
+  --mount type=volume,source=zoltar-arbitrager-state,target=/app/bots/open-oracle-arbitrager/.state \
+  --publish 127.0.0.1:4173:4173 \
+  zoltar-open-oracle-arbitrager \
+  --open-oracle=0xYourOpenOracle \
+  --coordinator-address=0xYourPriceCoordinator \
+  --ui \
+  --ui-host=0.0.0.0
+```
+
+Open `http://127.0.0.1:4173`. Do not publish the dashboard on a public interface:
+it controls signer and execution settings. Do not bake `PRIVATE_KEY`, RPC
+credentials, or manifests containing private infrastructure into the image.
+Do not attach the bot to a Docker network shared with untrusted containers. Loopback
+RPC URLs refer to the container itself, so use a container-reachable RPC address
+when the node runs elsewhere.
 
 ## Monitor without trading
 
@@ -184,7 +242,7 @@ Run one scan:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./bin/run \
+  bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --lookback-blocks=50000 \
@@ -195,7 +253,7 @@ Run continuously with the local dashboard:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./bin/run \
+  bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --ui
@@ -247,7 +305,7 @@ There is no canonical REP deployment, so the REP and OpenOracle addresses must b
 supplied explicitly:
 
 ```bash
-./bin/run \
+bun run run -- \
   --network=sepolia \
   --rpc-url=https://your-sepolia-rpc.example \
   --public-rpc-url=https://your-sepolia-rpc.example \
@@ -275,7 +333,7 @@ chain where the canonical CREATE2 proxy and executor init code are identical:
 ```bash
 PRIVATE_KEY=0xYourDeploymentPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./bin/deploy-executor --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+  bun run deploy-executor -- --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 ### Executor ABI source
@@ -319,7 +377,7 @@ execution process:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./bin/run \
+  bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --executor-address=0xYourExecutor \
@@ -366,14 +424,14 @@ The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
 can verify the file.
 
 ```bash
-./bin/execution-manifest generate \
+bun run manifest -- generate \
   --network=sepolia \
   --rpc-url=https://first-provider.example \
   --contract=executor:0x... \
   --contract=open-oracle:0x... \
   --output=/secure/operator/sepolia-deployments.json
 
-./bin/execution-manifest verify \
+bun run manifest -- verify \
   --rpc-url=https://independent-provider.example \
   --manifest=/secure/operator/sepolia-deployments.json
 ```
@@ -395,7 +453,7 @@ dispute transaction to multiple bundle relays:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./bin/run \
+  bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xYourPriceCoordinator \
   --executor-address=0xYourExecutor \
@@ -597,7 +655,7 @@ can move sharply when REP/WETH liquidity is shallow.
 Start with `--ui` and optionally choose another local port:
 
 ```bash
-./bin/run \
+bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --ui-port=4180
@@ -648,9 +706,11 @@ The dashboard shows:
   and shows decisions, configuration changes, transaction states, and the reason for
   each action.
 
-The UI is intentionally local-only. A private key entered there is sent only to the
-loopback bot process over HTTP, immediately cleared from the input, and never echoed
-by the API or written to logs or transaction history. It is kept in memory unless
+The UI is local-only by default. A private key entered there is sent over HTTP to the
+loopback endpoint, immediately cleared from the input, and never echoed by the API
+or written to logs or transaction history. In the documented Docker setup, the
+process listens on the container interface while Docker publishes it only on host
+loopback; keep that container network free of untrusted peers. The key is kept in memory unless
 **Save this new key in plaintext for future restarts** is selected. That explicit
 choice stores the key in the owner-only operator settings file; protect the host,
 backups, and settings path as wallet credentials. **Forget saved key** atomically
@@ -739,7 +799,7 @@ Successful dispute submissions are appended to
 `.state/history-sepolia.jsonl` by default. Override the location with:
 
 ```bash
-./bin/run \
+bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --history-file=/secure/operator/open-oracle-history.jsonl
@@ -988,6 +1048,7 @@ Other startup-only options:
 | `--quorum-rpc-url` | none | Independent read RPC; explicit flag/environment lists override the saved list. At least one secondary is required in execution mode. |
 | `--coordinator-address` | none | Approved coordinator; explicit flag/environment lists override the saved list. Execution requires one and verifies its immutable template. |
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
+| `--ui-host` | `127.0.0.1` | Dashboard bind address. `0.0.0.0` is allowed only for a protected container published exclusively on host loopback as documented under [Docker](#docker). |
 | `--ui-port` | `4173` | Local dashboard port. |
 | `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
 | `--position-file` | Network-specific JSON | Recovery-critical durable positions, entry/lifecycle transaction hashes, and lifecycle intent. Keep overrides separate by chain and signer. |
@@ -1141,7 +1202,7 @@ an independently calculated realized P&amp;L or an explicit declaration that P&a
 is unavailable:
 
 ```bash
-PRIVATE_KEY=0x... ./bin/reconcile-position \
+PRIVATE_KEY=0x... bun run reconcile -- \
   --position-file=.state/positions-sepolia.json \
   --report-id=42 \
   --confirm-report-id=42 \

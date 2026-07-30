@@ -5,7 +5,7 @@ import { acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosit
 
 const usage = `Close one fully investigated recovery-required position without submitting a transaction.
 
-PRIVATE_KEY=0x... ./bin/reconcile-position \\
+PRIVATE_KEY=0x... bun run reconcile -- \\
   --position-file=PATH --report-id=ID --confirm-report-id=ID \\
   --evidence=TEXT --note=TEXT --external-cost-eth=ETH \\
   --final-wallet-weth=WETH --final-wallet-token=TOKEN \\

@@ -6,6 +6,7 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 
 type DashboardController = {
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
+	hostname?: '0.0.0.0' | '127.0.0.1'
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
 	updateDeployment?: (value: unknown) => DeploymentSettings | Promise<DeploymentSettings>
@@ -102,7 +103,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	const server = Bun.serve({
-		hostname: '127.0.0.1',
+		hostname: controller.hostname ?? '127.0.0.1',
 		port,
 		async fetch(request) {
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
@@ -247,6 +248,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		throw new Error('Dashboard server did not expose a listening port')
 	}
 	authority = `127.0.0.1:${server.port.toString()}`
-	console.log(`dashboard=http://${server.hostname}:${server.port}`)
+	console.log(`dashboard=http://127.0.0.1:${server.port}`)
 	return server
 }

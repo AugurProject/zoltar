@@ -308,3 +308,29 @@ test('returns a structured unavailable response when the initial state read fail
 	expect(response.status).toBe(503)
 	expect(await response.json()).toEqual({ error: 'RPC unavailable' })
 })
+
+test('supports a container bind while retaining loopback request authority', async () => {
+	const server = startDashboardServer(0, {
+		getSnapshot: () => {
+			throw new Error('Not needed')
+		},
+		hostname: '0.0.0.0',
+		setPaused: () => undefined,
+		updateConnectivity: () => {
+			throw new Error('Not needed')
+		},
+		updateSigner: () => {
+			throw new Error('Not needed')
+		},
+		updateSubmission: () => {
+			throw new Error('Not needed')
+		},
+		updateStrategy: () => {
+			throw new Error('Not needed')
+		},
+	})
+	servers.push(server)
+	expect(server.hostname).toBe('0.0.0.0')
+	const response = await fetch(`http://127.0.0.1:${server.port}`)
+	expect(response.status).toBe(200)
+})

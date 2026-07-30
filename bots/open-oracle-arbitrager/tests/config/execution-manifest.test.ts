@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { keccak256, type Hex } from '#ethereum'
 
-const executable = join(import.meta.dir, '..', '..', 'bin', 'execution-manifest')
+const executable = process.execPath
+const manifestSource = join(import.meta.dir, '..', '..', 'src', 'config', 'execution-manifest.ts')
 const directories: string[] = []
 const servers: Bun.Server<unknown>[] = []
 
@@ -32,7 +33,7 @@ function rpc(runtimeCode: Hex) {
 }
 
 async function run(arguments_: readonly string[]) {
-	const child = Bun.spawn([executable, ...arguments_], { stderr: 'pipe', stdout: 'pipe' })
+	const child = Bun.spawn([executable, manifestSource, ...arguments_], { stderr: 'pipe', stdout: 'pipe' })
 	const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 	return { exitCode, output: `${stdout}${stderr}` }
 }

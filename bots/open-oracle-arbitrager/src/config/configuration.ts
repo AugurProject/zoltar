@@ -35,6 +35,7 @@ export type Configuration = MutableStrategy & {
 	submission: SubmissionSettings
 	tokenAddresses: Address[]
 	ui: boolean
+	uiHost: '0.0.0.0' | '127.0.0.1'
 	uiPort: number
 	v2Router: Address | undefined
 	v4PoolManager: Address | undefined
@@ -61,7 +62,7 @@ export function printHelp() {
 	console.log(`OpenOracle arbitrager
 
 Usage:
-  ./bin/run --open-oracle=0x... [options]
+  bun run run -- --open-oracle=0x... [options]
 
 Modes:
   --once                         Scan once and exit
@@ -103,6 +104,7 @@ Data and connectivity:
   --uniswap-factory=0x...        Override the Uniswap V3 factory
   --uniswap-quoter=0x...         Override the Uniswap V3 quoter
   --lookback-blocks=50000        Initial event search range
+  --ui-host=127.0.0.1            Dashboard bind address; use 0.0.0.0 only in a protected container
   --ui-port=4173                 Local dashboard port
   --history-file=PATH            Confirmed-submission JSONL path
   --price-history-file=PATH      Current-head pool-price JSONL path
@@ -117,6 +119,8 @@ export async function loadConfiguration(): Promise<Configuration> {
 	if (privateKeyValue !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed hex value')
 	const networkName = parseNetworkName(option('network'))
 	const settingsFile = resolve(option('settings-file') ?? resolve(defaultStateDirectory, `settings-${networkName}.json`))
+	const uiHost = option('ui-host') ?? '127.0.0.1'
+	if (uiHost !== '127.0.0.1' && uiHost !== '0.0.0.0') throw new Error('ui-host must be 127.0.0.1 or 0.0.0.0')
 	const saved = await loadOperatorSettings(settingsFile, networkName)
 	const strategy = mutableStrategy(
 		saved?.strategy ?? {
@@ -229,6 +233,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		submission,
 		tokenAddresses: [...new Set([network.rep, ...(saved?.tokenAddresses ?? []), ...options('token-address').map(getAddress)])],
 		ui: process.argv.includes('--ui'),
+		uiHost,
 		uiPort: Number(option('ui-port') ?? '4173'),
 		v2Router: v2RouterValue === undefined ? undefined : getAddress(v2RouterValue),
 		v4PoolManager: v4PoolManagerValue === undefined ? undefined : getAddress(v4PoolManagerValue),

@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { privateKeyToAccount, type Hex } from '#ethereum'
 import { loadOperatorSettings, saveOperatorSettings } from '#config/settings-store'
 
-const executable = join(import.meta.dir, '..', '..', 'bin', 'run')
+const executable = process.execPath
+const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
 const oracle = '--open-oracle=0x0000000000000000000000000000000000000000'
 const temporaryDirectories: string[] = []
 const children: Bun.Subprocess[] = []
@@ -30,7 +31,7 @@ async function invalidStartup(argument: string | readonly string[]) {
 	const directory = await temporaryDirectory()
 	const environment = { ...process.env }
 	delete environment['PRIVATE_KEY']
-	const child = Bun.spawn([executable, oracle, '--once', `--settings-file=${join(directory, 'settings.json')}`, ...(typeof argument === 'string' ? [argument] : argument)], {
+	const child = Bun.spawn([executable, runSource, oracle, '--once', `--settings-file=${join(directory, 'settings.json')}`, ...(typeof argument === 'string' ? [argument] : argument)], {
 		env: environment,
 		stderr: 'pipe',
 		stdout: 'pipe',
@@ -72,7 +73,7 @@ function dashboardPut(origin: string, path: string, value: unknown) {
 
 describe('startup configuration', () => {
 	test('describes the UTC-day gas cap without claiming projected reserves are losses', async () => {
-		const child = Bun.spawn([executable, '--help'], { stderr: 'pipe', stdout: 'pipe' })
+		const child = Bun.spawn([executable, runSource, '--help'], { stderr: 'pipe', stdout: 'pipe' })
 		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 		expect(exitCode).toBe(0)
 		expect(`${stdout}${stderr}`).toContain('UTC-day recorded gas + projected entry/lifecycle reserve cap')
@@ -88,6 +89,7 @@ describe('startup configuration', () => {
 		['--submission-mode=unknown', 'Submission mode must be public or private'],
 		['--minimum-relay-successes=2', 'Minimum successful relays'],
 		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
+		['--ui-host=localhost', 'ui-host must be 127.0.0.1 or 0.0.0.0'],
 		['--uniswap-v4-pool-manager=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
 		['--uniswap-v4-quoter=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
 		['--execute', '--execute requires --executor-address'],
@@ -160,7 +162,7 @@ describe('startup configuration', () => {
 		})
 		const environment = { ...process.env }
 		delete environment['PRIVATE_KEY']
-		const child = Bun.spawn([executable, '--execute', '--once', '--submission-mode=public', `--settings-file=${settingsPath}`], { env: environment, stderr: 'pipe', stdout: 'pipe' })
+		const child = Bun.spawn([executable, runSource, '--execute', '--once', '--submission-mode=public', `--settings-file=${settingsPath}`], { env: environment, stderr: 'pipe', stdout: 'pipe' })
 		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 		expect(exitCode).toBe(1)
 		expect(`${stdout}${stderr}`).not.toContain('requires an authenticated deployment manifest')
@@ -189,7 +191,7 @@ describe('startup configuration', () => {
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
 		const environment = { ...process.env }
 		delete environment['PRIVATE_KEY']
-		const child = Bun.spawn([executable, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', `--rpc-url=http://127.0.0.1:${rpc.port.toString()}`, `--settings-file=${join(directory, 'settings.json')}`], {
+		const child = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', `--rpc-url=http://127.0.0.1:${rpc.port.toString()}`, `--settings-file=${join(directory, 'settings.json')}`], {
 			env: environment,
 			stderr: 'pipe',
 			stdout: 'pipe',
@@ -232,7 +234,7 @@ describe('startup configuration', () => {
 		})
 		const dashboardPort = unusedPort()
 		const environment = { ...process.env, PRIVATE_KEY: environmentPrivateKey }
-		const child = Bun.spawn([executable, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', '--minimum-relay-successes=1', `--settings-file=${settingsPath}`], {
+		const child = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', '--minimum-relay-successes=1', `--settings-file=${settingsPath}`], {
 			env: environment,
 			stderr: 'pipe',
 			stdout: 'pipe',
@@ -281,7 +283,7 @@ describe('startup configuration', () => {
 		const restartDashboardPort = unusedPort()
 		const restartEnvironment = { ...process.env }
 		delete restartEnvironment['PRIVATE_KEY']
-		const restart = Bun.spawn([executable, oracle, '--ui', `--ui-port=${restartDashboardPort.toString()}`, '--lookback-blocks=0', `--settings-file=${settingsPath}`], {
+		const restart = Bun.spawn([executable, runSource, oracle, '--ui', `--ui-port=${restartDashboardPort.toString()}`, '--lookback-blocks=0', `--settings-file=${settingsPath}`], {
 			env: restartEnvironment,
 			stderr: 'pipe',
 			stdout: 'pipe',

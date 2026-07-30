@@ -26,10 +26,10 @@
 		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --write 'contracts/**/*.sol'",
 		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --check 'contracts/**/*.sol'",
 		"check": "bun run typecheck && bun run check:generated && bun run test && bun run check:docs && bun run format:check",
-		"run": "./bin/run",
-		"deploy-executor": "./bin/deploy-executor",
-		"reconcile": "./bin/reconcile-position",
-		"manifest": "./bin/execution-manifest"
+		"run": "bun ./src/cli/run.ts",
+		"deploy-executor": "bun run compile-contracts && bun ./src/cli/deploy-executor.ts",
+		"reconcile": "bun ./src/cli/reconcile-position.ts",
+		"manifest": "bun ./src/config/execution-manifest.ts"
 	},
 	"dependencies": {
 		"@noble/hashes": "2.2.0",

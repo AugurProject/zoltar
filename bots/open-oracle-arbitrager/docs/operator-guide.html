@@ -105,18 +105,18 @@
 				<p>
 					Run commands from the arbitrager project root. The default is monitoring-only:
 					without <code>--execute</code>, no transaction can be signed or sent.
-					Use <code>./bin/run --help</code> for every option.
+					Use <code>bun run run -- --help</code> for every option.
 				</p>
 				<p><strong>One mainnet dry-run scan</strong></p>
 				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
-./bin/run \
+bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xReviewedCoordinator \
   --lookback-blocks=50000 \
   --once</code></pre>
 				<p><strong>Continuous monitoring with the local UI</strong></p>
 				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
-./bin/run \
+bun run run -- \
   --open-oracle=0xYourOpenOracle \
   --coordinator-address=0xReviewedCoordinator \
   --ui</code></pre>
@@ -129,7 +129,7 @@
 				</p>
 				<p><strong>Sepolia rehearsal with execution armed</strong></p>
 				<pre><code>PRIVATE_KEY=0xDedicatedTestKey \
-./bin/run \
+bun run run -- \
   --network=sepolia \
   --execute \
   --ui \
@@ -234,10 +234,12 @@
 				</ul>
 				<p>
 					The UI can accept a private key because the bot must sign unattended
-					transactions. The key is submitted only to the loopback process and is
-					not returned by the API. Saving it across restarts is an explicit
-					plaintext opt-in to an owner-only settings file; leaving that option off
-					keeps the key in process memory only.
+					transactions. By default, the key is submitted only to the loopback
+					process and is not returned by the API. The README documents the
+					protected-container exception and its network isolation requirements.
+					Saving the key across restarts is an explicit plaintext opt-in to an
+					owner-only settings file; leaving that option off keeps the key in
+					process memory only.
 				</p>
 			</section>
 
@@ -635,11 +637,13 @@
 					</table>
 				</div>
 				<p>
-					The dashboard binds to loopback and rejects unexpected Host authorities
-					and cross-origin mutations. Do not expose it through a reverse proxy
-					without adding authentication and transport security. RPC and relay
-					credentials may remain in the owner-only settings form, but operation
-					logs and endpoint status expose only URL origins.
+					The dashboard binds to loopback by default and rejects unexpected Host
+					authorities and cross-origin mutations. The README documents the protected
+					container exception, which binds the container interface while publishing
+					only on host loopback. Do not expose it through a reverse proxy or an
+					untrusted container network without adding authentication and transport
+					security. RPC and relay credentials may remain in the owner-only settings
+					form, but operation logs and endpoint status expose only URL origins.
 				</p>
 			</section>
 		</main>

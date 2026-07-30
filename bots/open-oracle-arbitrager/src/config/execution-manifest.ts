@@ -19,12 +19,12 @@ function options(name: string) {
 function usage() {
 	console.log(`Generate or verify a bot execution manifest
 
-./bin/execution-manifest generate \\
+bun run manifest -- generate \\
   --network=sepolia --rpc-url=https://... \\
   --contract=executor:0x... --contract=open-oracle:0x... \\
   --output=/secure/operator/sepolia-execution-manifest.json
 
-./bin/execution-manifest verify \\
+bun run manifest -- verify \\
   --rpc-url=https://... --manifest=/secure/operator/sepolia-execution-manifest.json
 
 Repeat --contract for every coordinator, token, router, factory, quoter, WETH,
