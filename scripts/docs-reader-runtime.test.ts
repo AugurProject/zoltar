@@ -85,8 +85,13 @@ test('documentation reader shows and navigates one document at a time', async ()
 	try {
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
 		expect(document.querySelector('[aria-current="location"]')?.getAttribute('data-document-path')).toBe('statoblast-whitepaper.html')
-		expect(document.querySelector('[data-doc-search]')).toBeNull()
-		expect(document.querySelectorAll('.reader-source-link')).toHaveLength(0)
+		for (const selector of ['[data-doc-search]', '[data-search-status]', '[data-search-results]', '[data-retry-search]', '[data-reader-empty]']) {
+			expect(document.querySelector(selector)).toBeNull()
+		}
+		const slashEvent = new reader.window.KeyboardEvent('keydown', { cancelable: true, key: '/' })
+		expect(reader.window.document.dispatchEvent(slashEvent)).toBeTrue()
+		const chapterActions = Array.from(document.querySelectorAll('.reader-chapter-header a, .reader-chapter-header button'))
+		expect(chapterActions.some(action => /open source/i.test(action.textContent ?? '') || /open source/i.test(action.getAttribute('aria-label') ?? ''))).toBeFalse()
 
 		documentLink('zoltar-whitepaper.html').click()
 		await waitForHistory()
@@ -149,6 +154,15 @@ test('documentation reader collapse state remains accessible on desktop and narr
 		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
 		expect(document.querySelector('[data-sidebar-toggle]')?.getAttribute('aria-expanded')).toBe('false')
 		expect(visibleDocumentPaths()).toEqual(['statoblast-whitepaper.html'])
+
+		document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()
+		const link = documentLink('zoltar-whitepaper.html')
+		link.focus()
+		link.click()
+		await waitForHistory()
+		expect(document.activeElement?.id).toBe('reader-content')
+		expect(document.querySelector('.reader-shell')?.getAttribute('data-sidebar-collapsed')).toBe('true')
+		expect(visibleDocumentPaths()).toEqual(['zoltar-whitepaper.html'])
 	} finally {
 		narrowReader.cleanup()
 	}
