@@ -7,6 +7,8 @@ export type DashboardController = {
 	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
 	setMarketConfiguration?: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
+	reconcileTransaction?: (value: unknown) => unknown | Promise<unknown>
+	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
 	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
@@ -94,6 +96,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				['/api/strategy', controller.setStrategy],
 			])
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)
+			if (controller.reconcileTransaction !== undefined) handlers.set('/api/reconcile-transaction', controller.reconcileTransaction)
+			if (controller.testMarketSources !== undefined) handlers.set('/api/test-market-sources', controller.testMarketSources)
 			const handler = handlers.get(url.pathname)
 			if (request.method === 'PUT' && handler !== undefined) {
 				try {

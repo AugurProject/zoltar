@@ -111,6 +111,19 @@ Configured sources and their liquidity are shown in the dashboard. Operators can
 add or remove CCXT exchanges from the market-configuration editor without any
 exchange adapter being hard-coded by the bot.
 
+The source-admission table explains whether each configured source is admitted
+or excluded and shows the current exclusion reason. **Test saved sources** runs
+a fresh read-only probe without changing configuration. The same probe is
+available for deployment smoke checks while the bot is running:
+
+```bash
+bun run smoke:markets -- http://127.0.0.1:4183
+```
+
+It exits unsuccessfully if any configured source cannot produce a usable
+observation and exercises the saved CCXT adapters, RPC connection, chain, pair
+addresses, and WETH deployment.
+
 When `venueConsensus` is configured, the liquidator also reads each explicit
 constant-product REP/WETH pair in `dexSources` directly from the chain. It probes
 both trade directions at `dexProbeDepthEth`, rejects pairs whose executable
@@ -120,8 +133,10 @@ are explicit so an untrusted discovery service cannot insert a venue.
 The CEX and DEX groups are aggregated separately. If both groups are internally
 reliable, they must agree within `maximumGroupDeviationBps`. If one group is
 dispersed while the other has the configured independent quorum and total source
-count, the coherent group can supply the guarded reference. Thus one manipulated
-CEX does not halt the bot when multiple sufficiently liquid DEX venues agree.
+count, the coherent group can supply the guarded reference only when
+`allowSingleGroupFallback` is explicitly enabled. Thus one manipulated CEX need
+not halt the bot when multiple sufficiently liquid DEX venues agree, but the
+dashboard warns that venue independence is reduced.
 If both coherent groups disagree, or neither has quorum, price-dependent actions
 stop in required mode. Configure at least three independent failure domains;
 multiple pools controlled by one venue must share a `sourceId` and receive only
@@ -239,11 +254,21 @@ exact protocol floor and rounding behavior, and selects at most one action:
 Transaction intent and outcomes are written to `runtime.stateFile`. The activity
 journal is restored on restart. A signed intent, nonce, serialized transaction,
 submission block, and validity ceiling are fsynced before relay or RPC
-submission. Restart recovery quorum-checks receipts and nonce state, resubmits
-the exact same signed transaction while it remains viable, and expires an
-unincluded private transaction only after every read head passes its validity
-ceiling. A failed live cycle pauses automatic execution in the running process
-and remains visible in the dashboard until the operator reviews and resumes it.
+submission. Restart recovery quorum-checks receipts and nonce state. It never
+rebroadcasts an ambiguous price-dependent intent using stale market evidence.
+Public intents remain blocked until the original receipt appears or a finalized
+replacement or cancellation proves that the same signer nonce was consumed.
+Private intents expire only after their relay validity ceiling plus twelve
+canonical confirmation blocks. Non-price-dependent intents can resubmit the
+exact durable signed transaction while it remains viable. A failed live cycle
+pauses automatic execution and remains visible until the operator reviews it.
+
+For a replaced or canceled public intent, pause the bot and use **Transaction
+recovery** to enter the finalized replacement hash. The replacement must have
+the same sender and nonce, quorum-confirmed receipt evidence, a canonical receipt
+block, and twelve confirmations. Successful reconciliation is recorded in the
+durable activity journal. There is deliberately no unsafe “forget transaction”
+action.
 
 When a coordinator price is stale, the bot wraps and approves the buffered
 minimum WETH report amount, approves the matching REP amount, and funds a staged
@@ -254,6 +279,21 @@ event reads; a failed execution or oracle-recovery consumption pauses execution
 and is recorded instead of being treated as a successful liquidation. Active
 staged liquidations are paged from the coordinator, reserved in REP exposure
 accounting, and excluded from candidate selection until consumed.
+
+## Market adapter limitations
+
+- CEX support uses CCXT's unified public ticker and order-book interface. Symbol
+  availability, timestamps, rate limits, maintenance behavior, and response
+  quality remain exchange-specific. Run the source smoke check before enabling
+  execution and after changing an adapter.
+- Configured DEX sources are Uniswap-V2-style constant-product REP/WETH pairs.
+  The arbitrager dynamically observes authenticated V2, V3, and V4 deployments,
+  but the liquidator does not claim a universal configurable V3/V4 format.
+- Single-group fallback weakens venue independence and is always surfaced as an
+  operator warning.
+- Required consensus fails closed. Missing depth, excessive dispersion, stale
+  timestamps, insufficient persistence, asset mismatch, or canonical-block
+  failure can intentionally stop price-dependent actions.
 
 ## Development
 

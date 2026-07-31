@@ -83,8 +83,18 @@ type MarketConsensus = {
 	sourceCount: number
 }
 
+type MarketSourceRow = {
+	assetId: string
+	id: string
+	kind: 'cex' | 'dex'
+	market: string
+	reason?: string
+	status: 'admitted' | 'excluded' | 'failed' | 'observed'
+}
+
 type Snapshot = {
 	activities: Activity[]
+	alerts: { message: string; severity: 'error' | 'warning' }[]
 	centralizedMarket?: CentralizedMarket
 	marketConsensus?: MarketConsensus
 	error?: string
@@ -102,9 +112,11 @@ type Snapshot = {
 		walletRep: string
 	}
 	paused: boolean
+	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
 	pools: Pool[]
 	scanning: boolean
 	status: string
+	marketSources: MarketSourceRow[]
 	universes: Universe[]
 	wallet?: string
 }
@@ -139,6 +151,14 @@ const marketConfigurationForm = element('market-configuration-form', HTMLFormEle
 const marketConfigurationFields = element('market-configuration-fields', HTMLFieldSetElement)
 const marketConfigurationJson = element('market-configuration-json', HTMLTextAreaElement)
 const marketConfigurationSaveStatus = element('market-configuration-save-status', HTMLSpanElement)
+const testMarketSourcesButton = element('test-market-sources', HTMLButtonElement)
+const showActiveAdmissionButton = element('show-active-admission', HTMLButtonElement)
+const marketSourceCaption = element('market-source-caption', HTMLTableCaptionElement)
+const marketSourceTestStatus = element('market-source-test-status', HTMLParagraphElement)
+const marketSourceRows = element('market-source-rows', HTMLTableSectionElement)
+const operatorAlerts = element('operator-alerts', HTMLUListElement)
+const recoveryList = element('recovery-list', HTMLDivElement)
+const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
 const universeRows = element('universe-rows', HTMLTableSectionElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
@@ -167,6 +187,9 @@ let pendingPoolMutations = 0
 let pendingUniverseMutations = 0
 const poolActionStates = new Map<string, { failed: boolean; message: string }>()
 const universeActionStates = new Map<string, { failed: boolean; message: string }>()
+const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
+let renderedAlertKey: string | undefined
+let marketSourceProbeRows: MarketSourceRow[] | undefined
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
 	const response = await fetch(path, options)
@@ -219,6 +242,115 @@ function renderMetrics(snapshot: Snapshot) {
 		metric('Assumed debt', `${snapshot.metrics.assumedDebtEth} ETH`),
 		metric('Wallet ETH', snapshot.metrics.walletEth),
 		metric('Wallet REP', snapshot.metrics.walletRep),
+	)
+}
+
+function renderAlerts(snapshot: Snapshot) {
+	const alertKey = snapshot.alerts.map(alert => `${alert.severity}:${alert.message}`).join('\n')
+	if (renderedAlertKey === alertKey) return
+	renderedAlertKey = alertKey
+	operatorAlerts.classList.toggle('hidden', snapshot.alerts.length === 0)
+	operatorAlerts.replaceChildren(
+		...snapshot.alerts.map(alert => {
+			const item = document.createElement('li')
+			item.className = `notice ${alert.severity}`
+			item.textContent = alert.message
+			return item
+		}),
+	)
+}
+
+function renderMarketSources(sources: MarketSourceRow[]) {
+	if (sources.length === 0) {
+		const row = document.createElement('tr')
+		const empty = cell('No market sources are configured.')
+		empty.colSpan = 6
+		empty.className = 'empty'
+		row.append(empty)
+		marketSourceRows.replaceChildren(row)
+		return
+	}
+	marketSourceRows.replaceChildren(
+		...sources.map(source => {
+			const row = document.createElement('tr')
+			const badge = document.createElement('span')
+			badge.className = `badge ${source.status === 'admitted' ? 'ok' : source.status === 'excluded' || source.status === 'failed' ? 'warning' : ''}`
+			badge.textContent = source.status === 'admitted' ? 'Admitted' : source.status === 'excluded' ? 'Excluded' : source.status === 'observed' ? 'Observed' : 'Failed'
+			const defaultReason =
+				source.status === 'admitted' ? 'Meets the active admission policy' : source.status === 'observed' ? 'Probe succeeded; admission still requires the persistence and consensus policy' : source.status === 'failed' ? 'Probe did not return usable evidence' : 'Excluded by the active admission policy'
+			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? defaultReason)]
+			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
+			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
+			for (const [index, value] of cells.entries()) {
+				value.dataset['label'] = labels[index]
+				value.headers = headings[index] ?? ''
+			}
+			row.append(...cells)
+			return row
+		}),
+	)
+}
+
+function renderRecovery(snapshot: Snapshot) {
+	if (document.activeElement instanceof HTMLElement && recoveryList.contains(document.activeElement)) return
+	if (snapshot.pendingTransactions.length === 0) {
+		const empty = document.createElement('p')
+		empty.className = 'empty'
+		empty.textContent = 'No pending transaction intents.'
+		recoveryList.replaceChildren(empty)
+		return
+	}
+	recoveryList.replaceChildren(
+		...snapshot.pendingTransactions.map(intent => {
+			const card = document.createElement('article')
+			card.className = 'recovery-card'
+			const heading = document.createElement('h3')
+			heading.textContent = intent.label
+			const metadata = document.createElement('p')
+			metadata.className = 'mono muted'
+			metadata.textContent = `${intent.mode} · nonce ${intent.nonce} · submitted at block ${intent.submissionBlock} · ${intent.hash}`
+			const form = document.createElement('form')
+			form.className = 'reconciliation-form'
+			const label = document.createElement('label')
+			label.textContent = 'Finalized replacement or cancellation hash'
+			const input = document.createElement('input')
+			input.autocomplete = 'off'
+			input.inputMode = 'text'
+			input.pattern = '0x[0-9a-fA-F]{64}'
+			input.placeholder = '0x…'
+			input.required = true
+			const button = document.createElement('button')
+			button.type = 'submit'
+			button.textContent = 'Verify & reconcile'
+			button.disabled = !snapshot.paused
+			const status = document.createElement('span')
+			status.className = 'action-status'
+			status.setAttribute('role', 'alert')
+			const saved = recoveryActionStates.get(intent.hash.toLowerCase())
+			if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
+			label.append(input)
+			form.append(label, button, status)
+			form.addEventListener('submit', async event => {
+				event.preventDefault()
+				if (!window.confirm('Reconcile only if this finalized transaction intentionally replaced or canceled the pending intent. Continue?')) return
+				button.disabled = true
+				actionStatus(status, 'Checking RPC quorum and canonical finality…')
+				try {
+					await put('/api/reconcile-transaction', { intentHash: intent.hash, replacementHash: input.value.trim() })
+					recoveryActionStates.delete(intent.hash.toLowerCase())
+					actionStatus(status, 'Reconciled')
+					await refresh()
+				} catch (error) {
+					const message = publicFailure(error, 'Could not reconcile this intent. Confirm the replacement hash and finality, then retry.')
+					recoveryActionStates.set(intent.hash.toLowerCase(), { failed: true, message })
+					actionStatus(status, message, true)
+				} finally {
+					button.disabled = !snapshot.paused
+				}
+			})
+			card.append(heading, metadata, form)
+			return card
+		}),
 	)
 }
 
@@ -561,7 +693,10 @@ function render(snapshot: Snapshot) {
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	setGlobalError(snapshot.error === undefined ? undefined : 'The bot scan failed. Check the bot logs; the dashboard will retry automatically.')
 	renderMetrics(snapshot)
+	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
+	renderMarketSources(marketSourceProbeRows ?? snapshot.marketSources)
+	renderRecovery(snapshot)
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
@@ -596,12 +731,60 @@ marketConfigurationForm.addEventListener('submit', async event => {
 	try {
 		const value: unknown = JSON.parse(marketConfigurationJson.value)
 		const configuration = await put<Configuration>('/api/market-configuration', value)
+		marketSourceProbeRows = undefined
+		marketSourceCaption.textContent = 'Configured source admission'
+		showActiveAdmissionButton.classList.add('hidden')
+		actionStatus(marketSourceTestStatus, '')
 		populateConfiguration(configuration)
 		actionStatus(marketConfigurationSaveStatus, 'Saved; changes apply on the next scan')
 	} catch (error) {
 		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the JSON and retry.'), true)
 	} finally {
 		marketConfigurationFields.disabled = false
+	}
+})
+
+testMarketSourcesButton.addEventListener('click', async () => {
+	testMarketSourcesButton.disabled = true
+	actionStatus(marketSourceTestStatus, 'Testing saved CEX and DEX sources…')
+	try {
+		const result = await put<{ assets: { assetId: string; sources: { id: string; kind: 'cex' | 'dex'; market: string; reason?: string; status: 'failed' | 'observed' }[] }[]; blockNumber: string }>('/api/test-market-sources', {})
+		marketSourceProbeRows = result.assets.flatMap(asset =>
+			asset.sources.map(source => ({
+				...source,
+				assetId: asset.assetId,
+				status: source.status,
+			})),
+		)
+		marketSourceCaption.textContent = 'Latest source probe (not admission)'
+		showActiveAdmissionButton.classList.remove('hidden')
+		renderMarketSources(marketSourceProbeRows)
+		actionStatus(marketSourceTestStatus, `Source test completed at block ${result.blockNumber}`)
+	} catch (error) {
+		marketSourceProbeRows = undefined
+		marketSourceCaption.textContent = 'Configured source admission'
+		showActiveAdmissionButton.classList.add('hidden')
+		if (currentSnapshot !== undefined) renderMarketSources(currentSnapshot.marketSources)
+		actionStatus(marketSourceTestStatus, publicFailure(error, 'Could not test saved market sources. Check the bot logs and retry.'), true)
+	} finally {
+		testMarketSourcesButton.disabled = false
+	}
+})
+
+showActiveAdmissionButton.addEventListener('click', () => {
+	marketSourceProbeRows = undefined
+	marketSourceCaption.textContent = 'Configured source admission'
+	showActiveAdmissionButton.classList.add('hidden')
+	actionStatus(marketSourceTestStatus, 'Showing active admission from persisted consensus evidence')
+	if (currentSnapshot !== undefined) renderMarketSources(currentSnapshot.marketSources)
+})
+
+recheckRecovery.addEventListener('click', async () => {
+	recheckRecovery.disabled = true
+	try {
+		await refresh()
+	} finally {
+		recheckRecovery.disabled = false
 	}
 })
 

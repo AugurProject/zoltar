@@ -11,10 +11,15 @@ describe('liquidator dashboard server', () => {
 	test('serves the dashboard and protects configuration mutations by origin', async () => {
 		let paused = false
 		let marketConfiguration: unknown
+		let reconciliation: unknown
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
 			getState: () => ({ paused }),
 			hostname: '127.0.0.1',
+			reconcileTransaction: value => {
+				reconciliation = value
+				return value
+			},
 			setApprovedUniverses: value => value,
 			setMarketConfiguration: value => {
 				marketConfiguration = value
@@ -27,6 +32,7 @@ describe('liquidator dashboard server', () => {
 			setSelectedPools: value => value,
 			setSigner: value => value,
 			setStrategy: value => value,
+			testMarketSources: () => ({ assets: [], blockNumber: '1' }),
 		})
 		servers.push(server)
 		const page = await fetch(server.url)
@@ -40,6 +46,8 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="dex-market-price"')
 		expect(pageSource).toContain('id="guarded-market-price"')
 		expect(pageSource).toContain('id="market-configuration-json"')
+		expect(pageSource).toContain('id="test-market-sources"')
+		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
@@ -69,6 +77,20 @@ describe('liquidator dashboard server', () => {
 		})
 		expect(marketMutation.status).toBe(200)
 		expect(marketConfiguration).toEqual({ sources: [] })
+		const sourceTest = await fetch(new URL('/api/test-market-sources', server.url), {
+			body: '{}',
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		expect(sourceTest.status).toBe(200)
+		const recoveryRequest = { intentHash: `0x${'1'.repeat(64)}`, replacementHash: `0x${'2'.repeat(64)}` }
+		const recovery = await fetch(new URL('/api/reconcile-transaction', server.url), {
+			body: JSON.stringify(recoveryRequest),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		expect(recovery.status).toBe(200)
+		expect(reconciliation).toEqual(recoveryRequest)
 	})
 
 	test('accepts loopback browser requests when bound to all interfaces', async () => {

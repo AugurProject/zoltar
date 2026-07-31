@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, initialRuntimeState, loadDurableState, recoveredIntentCanBeResubmitted, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
 
 describe('liquidator durable state', () => {
@@ -64,6 +64,75 @@ describe('liquidator durable state', () => {
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
+	})
+
+	test('retains an ambiguous journal across restart and resolves the same intent when its receipt appears later', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-late-receipt-'))
+		const path = join(directory, 'state.json')
+		try {
+			const account = privateKeyToAccount(`0x${'12'.repeat(32)}`)
+			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
+			const serializedTransaction = await account.signTransaction({
+				chainId: 1,
+				gas: 21_000n,
+				maxFeePerGas: 2n,
+				maxPriorityFeePerGas: 1n,
+				nonce: 3n,
+				to: getAddress('0x0000000000000000000000000000000000000020'),
+				value: 0n,
+			})
+			const hash = keccak256(serializedTransaction)
+			const state = initialRuntimeState(false, account.address)
+			state.pendingTransactions.push({
+				hash,
+				kind: 'liquidation',
+				label: 'Late receipt liquidation',
+				maxBlockNumber: 120n,
+				mode: 'public',
+				nonce: 3n,
+				receiptExpectation: { type: 'transaction' },
+				requiresMarketEvidence: true,
+				sender: account.address,
+				serializedTransaction,
+				submissionBlock: 100n,
+			})
+			expect(resolveRecoveredIntentJournal(state, hash, undefined)).toBe(false)
+			await saveDurableState(path, state)
+			const restarted = await loadDurableState(path)
+			expect(restarted.pendingTransactions).toHaveLength(1)
+			const recoveredState = initialRuntimeState(false, account.address)
+			recoveredState.pendingTransactions = restarted.pendingTransactions
+			expect(resolveRecoveredIntentJournal(recoveredState, hash, 'success')).toBe(true)
+			await saveDurableState(path, recoveredState)
+			expect((await loadDurableState(path)).pendingTransactions).toEqual([])
+		} finally {
+			await rm(directory, { recursive: true })
+		}
+	})
+
+	test('keeps a reconciled intent blocking in memory until its removal is durable', async () => {
+		const account = privateKeyToAccount(`0x${'13'.repeat(32)}`)
+		if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
+		const serializedTransaction = await account.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 4n, to: getAddress('0x0000000000000000000000000000000000000020'), value: 0n })
+		const hash = keccak256(serializedTransaction)
+		const state = initialRuntimeState(false, account.address)
+		state.pendingTransactions.push({ hash, kind: 'liquidation', label: 'Replacement persistence', maxBlockNumber: 120n, mode: 'public', nonce: 4n, receiptExpectation: { type: 'transaction' }, requiresMarketEvidence: true, sender: account.address, serializedTransaction, submissionBlock: 100n })
+		const activity = { hash, kind: 'recovery' as const, message: 'Replacement reconciled', status: 'confirmed' as const }
+		await expect(
+			commitReconciledIntent('unused', state, hash, activity, async (_path, next) => {
+				expect(next.pendingTransactions).toEqual([])
+				expect(state.pendingTransactions).toHaveLength(1)
+				throw new Error('durable write failed')
+			}),
+		).rejects.toThrow('durable write failed')
+		expect(state.pendingTransactions).toHaveLength(1)
+		expect(state.activities).toEqual([])
+		await commitReconciledIntent('unused', state, hash, activity, async (_path, next) => {
+			expect(next.pendingTransactions).toEqual([])
+			expect(state.pendingTransactions).toHaveLength(1)
+		})
+		expect(state.pendingTransactions).toEqual([])
+		expect(state.activities[0]?.kind).toBe('recovery')
 	})
 
 	test('rejects malformed persisted transaction intents instead of dropping them', async () => {

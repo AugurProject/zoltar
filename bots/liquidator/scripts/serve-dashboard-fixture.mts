@@ -152,6 +152,7 @@ const server = startDashboardServer(4183, {
 	},
 	getState: () => ({
 		activities,
+		alerts: [{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }],
 		centralizedMarket: {
 			assetId: '0x0000000000000000000000000000000000000abc',
 			askDepthEth: '6.3',
@@ -190,6 +191,18 @@ const server = startDashboardServer(4183, {
 			walletRep: '2508.19',
 		},
 		paused,
+		pendingTransactions: [
+			{
+				hash: `0x${'12'.repeat(32)}`,
+				kind: 'liquidation',
+				label: 'Liquidate vault 0x0000…0004',
+				maxBlockNumber: '8842020',
+				mode: 'public',
+				nonce: '19',
+				requiresMarketEvidence: true,
+				submissionBlock: '8842011',
+			},
+		],
 		pools: [
 			pool('0x1111111111111111111111111111111111111111', '42', true, true, 0, '0', false, undefined, '1'),
 			pool('0x2222222222222222222222222222222222222222', '42', false, true, 0, '101', true, '0x1111111111111111111111111111111111111111', '2', '1'),
@@ -198,6 +211,12 @@ const server = startDashboardServer(4183, {
 		scanning: false,
 		startedAt: new Date(Date.now() - 3_600_000).toISOString(),
 		status: paused ? 'paused' : 'dry-run',
+		marketSources: [
+			{ assetId: centralizedMarkets.assetAddress, id: 'kraken', kind: 'cex', market: 'REP/USD', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'coinbase', kind: 'cex', market: 'REP/ETH', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'uniswap-v2', kind: 'dex', market: '0xdddddddddddddddddddddddddddddddddddddddd', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'sushiswap-v2', kind: 'dex', market: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', reason: 'Observed but excluded by persistence policy', status: 'excluded' },
+		],
 		universes: [
 			{ approved: false, forkedPoolCount: 1, forkQuestionId: '42', forkTime: '1785416250', id: '0', migratableVaultCount: 0, operationalPoolCount: 0, poolCount: 1, repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', selectedPoolCount: 1 },
 			{ approved: true, forkedPoolCount: 0, forkQuestionId: '42', forkTime: '0', id: '101', migratableVaultCount: 1, operationalPoolCount: 0, outcomeIndex: '1', parentId: '0', poolCount: 1, repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', selectedPoolCount: 0 },
@@ -210,6 +229,10 @@ const server = startDashboardServer(4183, {
 		},
 	}),
 	hostname: '127.0.0.1',
+	reconcileTransaction: value => {
+		if (!paused) throw new Error('Pause the bot before reconciling a replacement transaction')
+		return { intentHash: Reflect.get(value as object, 'intentHash'), replacementHash: Reflect.get(value as object, 'replacementHash'), replacementStatus: 'success' }
+	},
 	setPaused: value => {
 		paused = Reflect.get(value as object, 'paused') === true
 		return { paused }
@@ -246,6 +269,21 @@ const server = startDashboardServer(4183, {
 		strategy = { ...strategy, ...value }
 		return { approvedUniverses, selectedPools, strategy }
 	},
+	testMarketSources: () => ({
+		assets: [
+			{
+				assetId: centralizedMarkets.assetAddress,
+				sources: [
+					{ id: 'kraken', kind: 'cex', market: 'REP/USD', status: 'observed' },
+					{ id: 'coinbase', kind: 'cex', market: 'REP/ETH', status: 'observed' },
+					{ id: 'uniswap-v2', kind: 'dex', market: '0xdddddddddddddddddddddddddddddddddddddddd', status: 'observed' },
+					{ id: 'sushiswap-v2', kind: 'dex', market: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', status: 'observed' },
+				],
+			},
+		],
+		blockNumber: '8842011',
+		observedAt: new Date().toISOString(),
+	}),
 })
 
 console.log(`Liquidator dashboard fixture: ${server.url}`)

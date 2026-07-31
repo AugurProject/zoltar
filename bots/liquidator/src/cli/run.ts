@@ -12,12 +12,13 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { stagedOperationOutcome } from '#core/staged-outcome'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, saveDurableState, type PoolObservation } from '#state/operator-state'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState, type PoolObservation } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed, sortCandidates } from '#core/strategy'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
+import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketObservationsForAsset, requireCanonicalBlock, requireCanonicalDexEvidence } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -184,7 +185,7 @@ async function recoverPendingTransactions(settings: OperatorSettings, wallet: Wa
 					target: intent.receiptExpectation.target,
 				})
 			}
-			state.pendingTransactions = state.pendingTransactions.filter(value => value.hash.toLowerCase() !== intent.hash.toLowerCase())
+			resolveRecoveredIntentJournal(state, intent.hash, receiptEvidence.status)
 			recordActivity(state, {
 				hash: intent.hash,
 				kind: intent.kind,
@@ -304,11 +305,106 @@ async function main() {
 		await result
 	}
 	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
+	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
+		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
+			const [token0, token1, reserves] = await Promise.all([
+				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
+				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
+				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
+			])
+			if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
+			return { blockHash: block.hash, blockNumber: block.number, blockTimestamp: block.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
+		})
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
 				getState: () => operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)),
 				hostname: settings.runtime.uiHost,
+				reconcileTransaction: value =>
+					configurationMutationGate.run(async () => {
+						if (!state.paused) throw new Error('Pause the bot before reconciling a replacement transaction')
+						const request = parseTransactionReconciliation(value)
+						const intent = state.pendingTransactions.find(candidate => candidate.hash.toLowerCase() === request.intentHash.toLowerCase())
+						if (intent === undefined) throw new Error('Pending transaction intent was not found')
+						validateReconciliationIntentChain(intent.serializedTransaction, settings.network.chainId)
+						const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
+						const observations = await Promise.all(
+							endpoints.map(async endpoint => {
+								const rpc = createPublicClient({ chain, transport: http(endpoint) })
+								try {
+									const [receipt, transaction] = await Promise.all([rpc.getTransactionReceipt({ hash: request.replacementHash }), rpc.getTransaction({ hash: request.replacementHash })])
+									if (receipt.blockHash === null) throw new Error('Replacement receipt is missing its block hash')
+									if (receipt.transactionHash.toLowerCase() !== request.replacementHash.toLowerCase() || transaction.hash.toLowerCase() !== request.replacementHash.toLowerCase()) throw new Error('Replacement RPC returned another transaction')
+									return {
+										endpoint,
+										value: {
+											blockHash: receipt.blockHash,
+											blockNumber: receipt.blockNumber,
+											from: transaction.from,
+											hash: transaction.hash,
+											nonce: transaction.nonce,
+											status: receipt.status,
+										},
+									}
+								} catch (error) {
+									if (error instanceof Error && error.message.includes('could not be found')) return { endpoint, value: undefined }
+									throw error
+								}
+							}),
+						)
+						const replacement = await verifyFinalizedReplacement(intent, request.replacementHash, PRIVATE_INTENT_FINALITY_BLOCKS, {
+							canonicalBlockHash: async blockNumber => await canonicalBlockHash(settings, blockNumber),
+							currentHeads: async () => await Promise.all(endpoints.map(async endpoint => await createPublicClient({ chain, transport: http(endpoint) }).getBlockNumber())),
+							replacement: async () => quorumValue(`replacement transaction ${request.replacementHash}`, observations),
+						})
+						await commitReconciledIntent(settings.runtime.stateFile, state, intent.hash, {
+							details: `original=${intent.hash} replacement=${replacement.hash} nonce=${intent.nonce.toString()} replacementStatus=${replacement.status}`,
+							hash: replacement.hash,
+							kind: 'recovery',
+							message: `Finalized replacement reconciled: ${intent.label}`,
+							status: 'confirmed',
+						})
+						return { intentHash: intent.hash, replacementHash: replacement.hash, replacementStatus: replacement.status }
+					}),
+				testMarketSources: () =>
+					configurationMutationGate.run(async () => {
+						let block: Awaited<ReturnType<typeof client.getBlock>>
+						try {
+							block = await client.getBlock()
+						} catch (error) {
+							console.error(`marketSourceTestBlock=${errorMessage(error)}`)
+							throw new Error('Market source test could not read the configured network')
+						}
+						if (block.hash === undefined || block.number === undefined) throw new Error('Market source test block is missing canonical identity')
+						const results = []
+						for (const configuration of marketConfigurations(settings)) {
+							const asset = getAddress(configuration.assetAddress)
+							const centralized = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
+							const dex = await observeConfiguredDex(configuration, { hash: block.hash, number: block.number, timestamp: block.timestamp })
+							results.push({
+								assetId: asset,
+								sources: [
+									...configuration.sources.map(source => {
+										const observed = centralized?.observations.some(observation => observation.exchangeId === source.exchangeId) === true
+										return {
+											id: source.exchangeId,
+											kind: 'cex' as const,
+											market: source.repMarket,
+											reason: observed ? undefined : (centralized?.reasons.find(reason => reason.startsWith(`${source.exchangeId} `)) ?? 'Observation was stale, shallow, or unavailable'),
+											status: observed ? ('observed' as const) : ('failed' as const),
+										}
+									}),
+									...(configuration.venueConsensus?.dexSources.map(source => {
+										const observed = dex.observations.some(observation => observation.sourceId === source.sourceId)
+										return { id: source.sourceId, kind: 'dex' as const, market: source.pair, reason: observed ? undefined : (dex.reasons.find(reason => reason.startsWith(`${source.sourceId} `)) ?? 'Observation unavailable'), status: observed ? ('observed' as const) : ('failed' as const) }
+									}) ?? []),
+								],
+							})
+						}
+						recordActivity(state, { details: `${results.reduce((total, result) => total + result.sources.filter(source => source.status === 'observed').length, 0).toString()} source(s) responded`, kind: 'configuration', message: 'Read-only market source test completed', status: 'info' })
+						await saveDurableState(settings.runtime.stateFile, state)
+						return { assets: results, blockNumber: block.number.toString(), observedAt: new Date().toISOString() }
+					}),
 				setPaused: async value => {
 					if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 						throw new Error('Pause request must be an object')
@@ -543,15 +639,7 @@ async function main() {
 					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
 					if (centralizedMarket !== undefined) state.centralizedMarketsByAsset.set(asset.toLowerCase(), centralizedMarket)
 					newMarketObservations.push(...centralizedMarketConsensusObservations(centralizedMarket))
-					const dexMarkets = await observeConstantProductMarkets(configuration, asset, settings.deployment.weth, async pair => {
-						const [token0, token1, reserves] = await Promise.all([
-							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, scannedBlockNumber),
-							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, scannedBlockNumber),
-							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, scannedBlockNumber),
-						])
-						if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
-						return { blockHash: scannedBlockHash, blockNumber: scannedBlockNumber, blockTimestamp: scannedBlock.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
-					})
+					const dexMarkets = await observeConfiguredDex(configuration, { hash: scannedBlockHash, number: scannedBlockNumber, timestamp: scannedBlock.timestamp })
 					newMarketObservations.push(...dexMarkets.observations)
 				}
 				try {

@@ -130,18 +130,41 @@ try {
 	await evaluate(`document.querySelector('#pause-button')?.click()`)
 	await Bun.sleep(500)
 	const pausedDesktop = await capture('liquidator-paused-desktop', 1440, 900)
+	const recoveryDesktopOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	if (typeof recoveryDesktopOffset !== 'number') throw new Error('Desktop recovery section offset is unavailable')
+	const recoveryDesktop = await capture('liquidator-recovery-desktop', 1440, 900, recoveryDesktopOffset)
 	const pausedMobile = await capture('liquidator-paused-mobile', 390, 844)
+	const recoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	if (typeof recoveryMobileOffset !== 'number') throw new Error('Mobile recovery section offset is unavailable')
+	const recoveryMobile = await capture('liquidator-recovery-mobile', 390, 844, recoveryMobileOffset)
 	const evidence = {
 		configurationLoading,
 		desktop,
 		expandedAddressDesktop,
 		pausedDesktop,
 		pausedMobile,
+		recoveryDesktop,
+		recoveryMobile,
 		interactions: await evaluate(`(async () => {
 			const pause = document.querySelector('#pause-button')
 			if (!(pause instanceof HTMLButtonElement)) throw new Error('Pause control missing')
 			const pausedMode = document.querySelector('#mode-badge')?.textContent
 			const pausedStatus = document.querySelector('#run-status-badge')?.textContent
+			const sourceTest = document.querySelector('#test-market-sources')
+			if (!(sourceTest instanceof HTMLButtonElement)) throw new Error('Market source test control missing')
+			sourceTest.click()
+			await new Promise(resolve => setTimeout(resolve, 500))
+			const sourceTestStatus = document.querySelector('#market-source-test-status')?.textContent
+			const replacement = document.querySelector('.reconciliation-form input')
+			const reconciliationForm = document.querySelector('.reconciliation-form')
+			if (!(replacement instanceof HTMLInputElement) || !(reconciliationForm instanceof HTMLFormElement)) throw new Error('Transaction reconciliation controls missing')
+			replacement.value = \`0x\${'2'.repeat(64)}\`
+			const originalRecoveryConfirm = window.confirm
+			window.confirm = () => true
+			reconciliationForm.requestSubmit()
+			await new Promise(resolve => setTimeout(resolve, 500))
+			const reconciliationStatus = reconciliationForm.querySelector('.action-status')?.textContent
+			window.confirm = originalRecoveryConfirm
 			pause.click()
 			await new Promise(resolve => setTimeout(resolve, 500))
 			const checkboxes = [...document.querySelectorAll('#pool-rows input[type="checkbox"]')]
@@ -210,6 +233,8 @@ try {
 				signerCleared,
 				poolCreationDisabled,
 				poolCreationEnabled,
+				reconciliationStatus,
+				sourceTestStatus,
 				strategyStatus
 			}
 		})()`),
@@ -295,6 +320,10 @@ try {
 	await evaluate(`window.fetch = window.__qaOriginalFetch`)
 	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
 	await Bun.sleep(1_000)
+	await evaluate(`document.querySelector('#test-market-sources')?.click()`)
+	await Bun.sleep(500)
+	const sourceProbeRows = await evaluate(`[...document.querySelectorAll('#market-source-rows tr')].map(row => row.textContent)`)
+	Object.assign(evidence, { sourceProbeRows })
 	evidence.mobileOverview = await capture('liquidator-mobile-overview', 390, 844)
 	const universesTop = await evaluate(`Math.max(0, (document.querySelector('#universes-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
 	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0)
@@ -307,6 +336,10 @@ try {
 		width: 1440,
 	})
 	const centralizedMarketsDesktopTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	const sourceProbeDesktop = await capture('liquidator-source-probe-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0)
+	Object.assign(evidence, { sourceProbeDesktop })
+	await evaluate(`document.querySelector('#show-active-admission')?.click()`)
+	await Bun.sleep(200)
 	evidence.centralizedMarketsDesktop = await capture('liquidator-centralized-markets-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0)
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressTop = await evaluate(`Math.max(0, (document.querySelector('.address-details')?.getBoundingClientRect().top ?? 0) + window.scrollY - 160)`)
@@ -321,6 +354,7 @@ try {
 	evidence.mobileMigrationControl = await capture('liquidator-mobile-migration-control', 390, 844, typeof migrationControlTop === 'number' ? migrationControlTop : 0)
 	Object.assign(evidence, { expandedAddressMobile })
 	const mobileOverflow = await evaluate(`[...document.querySelectorAll('*')]
+		.filter(element => element.closest('thead') === null && !element.classList.contains('visually-hidden'))
 		.map(element => ({ className: element.className, id: element.id, name: element.tagName, rect: element.getBoundingClientRect().toJSON(), scrollWidth: element.scrollWidth }))
 		.filter(item => item.rect.right > document.documentElement.clientWidth + 1 || item.scrollWidth > item.rect.width + 1)
 		.slice(0, 20)`)

@@ -21,7 +21,8 @@
 			</div>
 		</header>
 		<main>
-			<div id="global-error" class="notice error hidden" role="alert"></div>
+				<div id="global-error" class="notice error hidden" role="alert"></div>
+				<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
 			<section aria-labelledby="overview-title">
 				<div class="section-heading">
 					<div>
@@ -94,11 +95,19 @@
 						</tbody>
 					</table>
 				</div>
+				<div class="table-shell source-shell">
+					<table>
+						<caption id="market-source-caption">Configured source admission</caption>
+						<thead><tr><th id="source-kind-heading" scope="col">Venue</th><th id="source-id-heading" scope="col">Source</th><th id="source-asset-heading" scope="col">REP asset</th><th id="source-market-heading" scope="col">Market</th><th id="source-status-heading" scope="col">Status</th><th id="source-reason-heading" scope="col">Reason</th></tr></thead>
+						<tbody id="market-source-rows"><tr><td colspan="6" class="empty">No source evidence yet.</td></tr></tbody>
+					</table>
+				</div>
 				<form id="market-configuration-form">
 					<fieldset id="market-configuration-fields" disabled>
 						<label><span>Pool targets and per-universe market JSON</span><textarea id="market-configuration-json" rows="18" spellcheck="false" required></textarea></label>
 						<p class="muted">Configure root REP under <code>root</code>, exact child REP assets under <code>children</code>, and undeployed origin-pool parameters under <code>desiredPools</code>. Existing desired pools are selected; missing ones are created only when automatic pool creation is enabled.</p>
-						<div class="form-actions"><span id="market-configuration-save-status" class="muted" role="status" aria-live="polite"></span><button type="submit">Validate &amp; save markets</button></div>
+						<div class="form-actions"><span id="market-configuration-save-status" class="muted" role="status" aria-live="polite"></span><button id="show-active-admission" class="secondary hidden" type="button">Show active admission</button><button id="test-market-sources" class="secondary" type="button">Test saved sources</button><button type="submit">Validate &amp; save markets</button></div>
+						<p id="market-source-test-status" class="muted" role="status" aria-live="polite"></p>
 					</fieldset>
 				</form>
 			</section>
@@ -175,6 +184,11 @@
 							<span id="strategy-status" class="action-status" role="alert"></span>
 						</div>
 					</fieldset></form>
+				</section>
+				<section aria-labelledby="recovery-title">
+					<div class="section-heading"><div><p class="eyebrow">Durable transaction journal</p><h2 id="recovery-title">Transaction recovery</h2></div><button id="recheck-recovery" class="secondary compact" type="button">Recheck evidence</button></div>
+					<p class="muted">The bot blocks new execution while an intent is ambiguous. To reconcile a canceled or replaced public transaction, pause the bot and provide the finalized replacement hash. It must use the same sender and nonce and have 12 canonical confirmations.</p>
+					<div id="recovery-list" class="recovery-list"><p class="empty">No pending transaction intents.</p></div>
 				</section>
 				<section aria-labelledby="activity-title">
 					<div class="section-heading">

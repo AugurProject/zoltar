@@ -74,7 +74,7 @@ export type Activity = {
 	at: string
 	details?: string | undefined
 	hash?: Hex | undefined
-	kind: 'configuration' | 'deployment' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'migration' | 'scan' | 'withdrawal'
+	kind: 'configuration' | 'deployment' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'migration' | 'recovery' | 'scan' | 'withdrawal'
 	message: string
 	status: 'confirmed' | 'dry-run' | 'failed' | 'info' | 'pending'
 }
@@ -172,6 +172,12 @@ export function recoveredIntentCanBeResubmitted(intent: Pick<PendingTransactionI
 	return !intent.requiresMarketEvidence
 }
 
+export function resolveRecoveredIntentJournal(state: Pick<RuntimeState, 'pendingTransactions'>, hash: Hex, receiptStatus: 'reverted' | 'success' | undefined) {
+	if (receiptStatus === undefined) return false
+	state.pendingTransactions = state.pendingTransactions.filter(intent => intent.hash.toLowerCase() !== hash.toLowerCase())
+	return true
+}
+
 export function recordActivity(state: RuntimeState, activity: Omit<Activity, 'at'> & { at?: string | undefined }) {
 	state.activities.unshift({
 		at: activity.at ?? new Date().toISOString(),
@@ -182,6 +188,18 @@ export function recordActivity(state: RuntimeState, activity: Omit<Activity, 'at
 		status: activity.status,
 	})
 	state.activities = state.activities.slice(0, 500)
+}
+
+export async function commitReconciledIntent(path: string, state: RuntimeState, hash: Hex, activity: Omit<Activity, 'at'> & { at?: string | undefined }, persist: (path: string, state: RuntimeState) => Promise<void> = saveDurableState) {
+	const reconciledState = {
+		...state,
+		activities: [...state.activities],
+		pendingTransactions: state.pendingTransactions.filter(candidate => candidate.hash.toLowerCase() !== hash.toLowerCase()),
+	}
+	recordActivity(reconciledState, activity)
+	await persist(path, reconciledState)
+	state.activities = reconciledState.activities
+	state.pendingTransactions = reconciledState.pendingTransactions
 }
 
 export function assertIntentSender(intentSender: Address, activeSender: Address) {
@@ -220,6 +238,20 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.rep, 0n)
 	const assumedDebt = state.pools.reduce((total, pool) => total + pool.botVault.allowance, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
+	const rootConfiguration = configurations[0]
+	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
+	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
+	if (state.pendingTransactions.length > 0) alerts.push({ message: `${state.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`, severity: 'error' })
+	for (const configuration of configurations) {
+		if (configuration !== rootConfiguration && !discoveredRepAssets.has(configuration.assetAddress.toLowerCase())) continue
+		const consensus = state.marketConsensusByAsset.get(configuration.assetAddress.toLowerCase()) ?? (configuration === rootConfiguration ? state.marketConsensus : undefined)
+		const asset = `${configuration.assetAddress.slice(0, 6)}…${configuration.assetAddress.slice(-4)}`
+		if (configuration.requiredForExecution && consensus === undefined) alerts.push({ message: `Required REP market consensus is unavailable for ${asset}`, severity: 'error' })
+		else if (configuration.requiredForExecution && consensus?.reliable === false) alerts.push({ message: `Required REP market consensus is blocked for ${asset}: ${consensus.reasons.join('; ')}`, severity: 'error' })
+		else if (consensus?.reliable === true && (!consensus.cex.reliable || !consensus.dex.reliable)) alerts.push({ message: `REP market consensus for ${asset} is operating with the configured single-group fallback`, severity: 'warning' })
+	}
+	const recentReorgResets = state.activities.filter(activity => activity.message === 'DEX market evidence reset after canonical head replacement' && Date.now() - Date.parse(activity.at) <= 60 * 60 * 1_000).length
+	if (recentReorgResets >= 2) alerts.push({ message: `${recentReorgResets.toString()} canonical market-evidence resets occurred during the last hour`, severity: 'warning' })
 	const universeMap = new Map<
 		string,
 		{
@@ -282,6 +314,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	}
 	return {
 		activities: state.activities,
+		alerts,
 		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
 		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, formatDecimalAmount),
 		error: state.error,
@@ -300,6 +333,16 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			walletRep: formatDecimalAmount(walletRep),
 		},
 		paused: state.paused,
+		pendingTransactions: state.pendingTransactions.map(intent => ({
+			hash: intent.hash,
+			kind: intent.kind,
+			label: intent.label,
+			maxBlockNumber: intent.maxBlockNumber.toString(),
+			mode: intent.mode,
+			nonce: intent.nonce.toString(),
+			requiresMarketEvidence: intent.requiresMarketEvidence,
+			submissionBlock: intent.submissionBlock.toString(),
+		})),
 		pools: state.pools.map(pool => {
 			const centralizedMarkets = marketConfigurationFor(pool.repToken)
 			const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.centralizedMarket : undefined)
@@ -366,6 +409,40 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			}
 		}),
 		scanning: state.scanning,
+		marketSources: configurations.flatMap(configuration => {
+			const assetKey = configuration.assetAddress.toLowerCase()
+			const centralized = state.centralizedMarketsByAsset.get(assetKey) ?? (configuration === rootConfiguration ? state.centralizedMarket : undefined)
+			const consensus = state.marketConsensusByAsset.get(assetKey) ?? (configuration === rootConfiguration ? state.marketConsensus : undefined)
+			const rawDex = state.marketObservations.filter(observation => observation.kind === 'dex' && observation.assetId.toLowerCase() === assetKey)
+			return [
+				...configuration.sources.map(source => {
+					const observed = centralized?.observations.some(observation => observation.exchangeId === source.exchangeId) === true
+					const admitted = configuration.venueConsensus === undefined ? observed : consensus?.cex.observations.some(observation => observation.sourceId === source.exchangeId) === true
+					const unavailable = centralized?.reasons.find(reason => reason.startsWith(`${source.exchangeId} `))
+					return {
+						assetId: configuration.assetAddress,
+						id: source.exchangeId,
+						kind: 'cex' as const,
+						market: source.repMarket,
+						reason: admitted ? undefined : (unavailable ?? (observed ? 'Observed but excluded by persistence, depth, or dispersion policy' : 'Not admitted: stale, shallow, or unavailable')),
+						status: admitted ? ('admitted' as const) : ('excluded' as const),
+					}
+				}),
+				...(configuration.venueConsensus?.dexSources.map(source => {
+					const admitted = consensus?.dex.observations.some(observation => observation.sourceId === source.sourceId) === true
+					const observed = rawDex.some(observation => observation.sourceId === source.sourceId)
+					const unavailable = consensus?.dex.reasons.find(reason => reason.startsWith(`${source.sourceId} `))
+					return {
+						assetId: configuration.assetAddress,
+						id: source.sourceId,
+						kind: 'dex' as const,
+						market: source.pair,
+						reason: admitted ? undefined : (unavailable ?? (observed ? 'Observed but excluded by persistence, depth, or dispersion policy' : 'Observation unavailable')),
+						status: admitted ? ('admitted' as const) : ('excluded' as const),
+					}
+				}) ?? []),
+			]
+		}),
 		startedAt: state.startedAt,
 		status: state.status,
 		universes: [...universeMap.values()]
@@ -413,7 +490,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 			const message = Reflect.get(activity, 'message')
 			const status = Reflect.get(activity, 'status')
 			if (typeof at !== 'string' || typeof message !== 'string') return []
-			if (kind !== 'configuration' && kind !== 'deployment' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'scan' && kind !== 'withdrawal') return []
+			if (kind !== 'configuration' && kind !== 'deployment' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'recovery' && kind !== 'scan' && kind !== 'withdrawal') return []
 			if (status !== 'confirmed' && status !== 'dry-run' && status !== 'failed' && status !== 'info' && status !== 'pending') return []
 			const details = Reflect.get(activity, 'details')
 			const hash = Reflect.get(activity, 'hash')

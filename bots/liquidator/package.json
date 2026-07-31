@@ -18,6 +18,7 @@
 		"format": "bun x @biomejs/biome format --write package.json tsconfig.json README.md src tests scripts config",
 		"format:check": "bun x @biomejs/biome format package.json tsconfig.json README.md src tests scripts config",
 		"run": "bun ./src/cli/run.ts",
+		"smoke:markets": "bun ./scripts/check-market-sources.mts",
 		"test": "bun test ./tests --timeout 300000",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit",
 		"ui:fixture": "bun ./scripts/serve-dashboard-fixture.mts"

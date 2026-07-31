@@ -10,9 +10,10 @@ afterEach(async () => {
 	for (const browser of browsers.splice(0)) await browser.close()
 })
 
-function state(error?: string) {
+function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = []) {
 	return {
 		activities: [],
+		alerts,
 		error,
 		execute: false,
 		metrics: {
@@ -27,6 +28,7 @@ function state(error?: string) {
 			walletRep: '2',
 		},
 		paused: false,
+		pendingTransactions: [],
 		pools: [
 			{
 				activeVaultCount: '0',
@@ -50,6 +52,7 @@ function state(error?: string) {
 		],
 		scanning: false,
 		status: 'running',
+		marketSources: [],
 		universes: [
 			{
 				approved: true,
@@ -92,6 +95,7 @@ async function dashboard() {
 	const window = page.mainFrame.window
 	Reflect.set(window, 'Map', Map)
 	Reflect.set(window, 'Set', Set)
+	Reflect.set(window, 'JSON', JSON)
 	const refreshCallbacks: (() => unknown)[] = []
 	window.setInterval = handler => {
 		if (typeof handler === 'function') refreshCallbacks.push(() => handler())
@@ -111,6 +115,9 @@ async function dashboard() {
 			})
 		}
 		if (url.pathname === '/api/state') return new window.Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })
+		if (url.pathname === '/api/test-market-sources') {
+			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
+		}
 		if (url.pathname === '/api/paused' && rejectPause) {
 			return new window.Response(JSON.stringify({ error: 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		}
@@ -158,7 +165,10 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('does not repeat unchanged alerts and sanitizes mutation failures', async () => {
 		const page = await dashboard()
 		const globalError = page.window.document.getElementById('global-error')
-		if (globalError === null) throw new Error('Expected global error')
+		const operatorAlerts = page.window.document.getElementById('operator-alerts')
+		if (globalError === null || operatorAlerts === null) throw new Error('Expected dashboard alerts')
+		expect(operatorAlerts.getAttribute('role')).toBe('alert')
+		expect(operatorAlerts.getAttribute('aria-live')).toBe('assertive')
 		expect(globalError.textContent).toContain('Check the bot logs')
 		expect(globalError.textContent).not.toContain('/api/internal')
 		let mutations = 0
@@ -170,6 +180,35 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.refresh()
 		await page.refresh()
 		expect(mutations).toBe(0)
+		page.setSnapshot(state(undefined, [{ message: 'Execution is blocked for recovery', severity: 'error' }]))
+		await page.refresh()
+		let alertMutations = 0
+		const alertObserver = new page.window.MutationObserver(records => {
+			alertMutations += records.length
+		})
+		alertObserver.observe(operatorAlerts, { attributes: true, childList: true, subtree: true })
+		await page.refresh()
+		expect(alertMutations).toBe(0)
+		const testSources = page.window.document.getElementById('test-market-sources')
+		if (!(testSources instanceof page.window.HTMLButtonElement)) throw new Error('Expected source test control')
+		testSources.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		const sourceRows = page.window.document.getElementById('market-source-rows')
+		expect(sourceRows?.textContent).toContain('Observed')
+		expect(sourceRows?.textContent).toContain('admission still requires the persistence and consensus policy')
+		expect(sourceRows?.textContent).not.toContain('Admitted')
+		await page.refresh()
+		expect(sourceRows?.textContent).toContain('Observed')
+		expect(sourceRows?.textContent).not.toContain('Admitted')
+		expect(page.window.document.getElementById('market-source-test-status')?.textContent).toBe('Source test completed at block 42')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Latest source probe (not admission)')
+		const showAdmission = page.window.document.getElementById('show-active-admission')
+		if (!(showAdmission instanceof page.window.HTMLButtonElement)) throw new Error('Expected active admission control')
+		showAdmission.click()
+		expect(sourceRows?.textContent).toContain('No market sources are configured.')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
+		expect(page.window.document.getElementById('market-source-test-status')?.textContent).toBe('Showing active admission from persisted consensus evidence')
 
 		page.setSnapshot(state())
 		await page.refresh()

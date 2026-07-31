@@ -1206,6 +1206,12 @@ entry from depending on wallet inventory already committed to recovery.
 
 ## Operational limitations
 
+- CEX evidence depends on each configured CCXT exchange's public symbol catalog,
+  timestamps, rate limits, maintenance behavior, and order-book quality. The unified
+  API normalizes access but cannot make exchange-specific data semantics identical.
+- Explicit operator-configured DEX sources use constant-product V2 pair semantics.
+  Dynamic authenticated arbitrager discovery and execution supports V2, V3, and V4,
+  but there is intentionally no claimed universal configurable V3/V4 adapter schema.
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
   and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
 	  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Router` is configured.

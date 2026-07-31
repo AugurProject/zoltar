@@ -6,4 +6,5 @@
 !bots/liquidator/bun.lock
 !bots/liquidator/README.md
 !bots/liquidator/config/**
+!bots/liquidator/scripts/check-market-sources.mts
 !bots/liquidator/src/**

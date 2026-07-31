@@ -59,7 +59,8 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
 	outline: 3px solid color-mix(in srgb, var(--accent), transparent 25%);
 	outline-offset: 2px;
 }
@@ -175,6 +176,7 @@ section {
 	background: var(--surface-raised);
 	font-size: 0.75rem;
 	font-weight: 700;
+	white-space: nowrap;
 }
 
 .badge.ok {
@@ -196,6 +198,19 @@ section {
 .notice.error {
 	color: var(--error);
 	background: color-mix(in srgb, var(--error), transparent 92%);
+}
+
+.notice.warning {
+	color: var(--warning);
+	background: color-mix(in srgb, var(--warning), transparent 92%);
+}
+
+.operator-alerts {
+	display: grid;
+	gap: 0.55rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .action-status {
@@ -326,6 +341,11 @@ caption {
 	overflow-wrap: anywhere;
 }
 
+.source-shell td {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 @media (min-width: 42.01rem) {
 	.universe-shell table {
 		table-layout: fixed;
@@ -444,11 +464,17 @@ td small {
 .two-column {
 	display: grid;
 	grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+	grid-template-rows: auto 1fr;
+	align-items: start;
 	gap: 1rem;
 }
 
 .two-column > * {
 	min-width: 0;
+}
+
+.two-column > :first-child {
+	grid-row: 1 / span 2;
 }
 
 .form-grid {
@@ -474,6 +500,41 @@ td small {
 }
 
 .form-actions {
+	grid-column: 1 / -1;
+}
+
+.recovery-list {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.recovery-card {
+	padding: 0.85rem;
+	border: 1px solid var(--line);
+	border-radius: 0.75rem;
+	background: var(--surface-raised);
+}
+
+.recovery-card h3 {
+	margin: 0 0 0.35rem;
+	font-size: 1rem;
+}
+
+.reconciliation-form {
+	display: grid;
+	grid-template-columns: minmax(16rem, 1fr) auto;
+	align-items: end;
+	gap: 0.75rem;
+}
+
+.reconciliation-form label {
+	display: grid;
+	gap: 0.3rem;
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+
+.reconciliation-form .action-status {
 	grid-column: 1 / -1;
 }
 
@@ -531,13 +592,30 @@ td small {
 
 	.topbar,
 	.section-heading,
-	.signer-form {
+	.form-actions,
+	.signer-form,
+	.reconciliation-form {
 		align-items: stretch;
 		flex-direction: column;
 	}
 
+	.reconciliation-form {
+		display: flex;
+	}
+
 	.topbar-actions {
+		flex-wrap: wrap;
 		justify-content: space-between;
+	}
+
+	.topbar-actions .action-status {
+		flex-basis: 100%;
+		order: 1;
+	}
+
+	button.compact {
+		min-height: 2.75rem;
+		padding: 0.65rem 1rem;
 	}
 
 	.metric-grid,
@@ -589,9 +667,11 @@ td small {
 	tbody td {
 		display: grid;
 		grid-template-columns: 6.25rem minmax(0, 1fr);
+		min-width: 0;
 		gap: 0.65rem;
 		padding: 0.55rem 0.8rem;
 		border: 0;
+		overflow-wrap: anywhere;
 	}
 
 	tbody td::before {

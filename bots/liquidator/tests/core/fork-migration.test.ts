@@ -4,7 +4,6 @@ import { FORK_MIGRATION_WINDOW_SECONDS, inheritedChildPoolSelections, isPoolExec
 import { validatePoolUniverseRep } from '../../src/monitoring/pool-monitor.ts'
 import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
 import { getAddress, zeroAddress } from '../helpers/ethereum.ts'
-import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
 const forker = getAddress('0x0000000000000000000000000000000000000008')
@@ -297,7 +296,7 @@ describe('fork migration strategy', () => {
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(false)
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceDeviationBps).toBeUndefined()
 
-		const childObservation = (observation: MarketConsensusObservation) => ({ ...observation, assetId: childRep, observationId: `${observation.observationId}:child` })
+		const childObservation = (observation: (typeof state.marketConsensus.cex.observations)[number]) => ({ ...observation, assetId: childRep, observationId: `${observation.observationId}:child` })
 		const childConsensus = {
 			...state.marketConsensus,
 			assetId: childRep,
@@ -308,6 +307,42 @@ describe('fork migration strategy', () => {
 		const childConfiguration = { ...centralizedMarkets, assetAddress: childRep }
 		const childSnapshot = operatorSnapshot(state, false, [centralizedMarkets, childConfiguration])
 		expect(childSnapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(true)
+		const inactiveConfiguration = { ...centralizedMarkets, assetAddress: getAddress('0x0000000000000000000000000000000000000099') }
+		state.marketConsensusByAsset.delete(childRep.toLowerCase())
+		const missingChildSnapshot = operatorSnapshot(state, false, [centralizedMarkets, childConfiguration, inactiveConfiguration])
+		expect(missingChildSnapshot.alerts.some(alert => alert.message.includes('0x0000…0088') && alert.message.includes('unavailable'))).toBe(true)
+		expect(missingChildSnapshot.alerts.some(alert => alert.message.includes('0x0000…0099'))).toBe(false)
+		state.marketConsensus = { ...state.marketConsensus, cex: { ...state.marketConsensus.cex, reliable: false } }
+		state.activities.push({ at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' }, { at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' })
+		const warningSnapshot = operatorSnapshot(state, false, centralizedMarkets)
+		expect(warningSnapshot.alerts.some(alert => alert.message.includes('single-group fallback'))).toBe(true)
+		expect(warningSnapshot.alerts.some(alert => alert.message.includes('2 canonical market-evidence resets'))).toBe(true)
+
+		const centralizedObservation = {
+			assetId: rootRep,
+			askDepthEth: 2n * 10n ** 18n,
+			bestAskQuote: '0.1',
+			bestBidQuote: '0.09',
+			bidDepthEth: 2n * 10n ** 18n,
+			chainId: 1,
+			exchangeId: 'alpha',
+			ethTickerTimestamp: observedAt,
+			observedAt,
+			orderBookTimestamp: observedAt,
+			priceRepPerEth: 10n * 10n ** 18n,
+			repMarket: 'REP/USD',
+			usesEthTicker: true,
+		}
+		state.centralizedMarket = { ...state.centralizedMarket, observations: [centralizedObservation] }
+		state.marketObservations = [marketObservation('dex', 'one')]
+		state.marketConsensus = {
+			...state.marketConsensus,
+			cex: { ...state.marketConsensus.cex, observations: state.marketConsensus.cex.observations.filter(observation => observation.sourceId !== 'alpha') },
+			dex: { ...state.marketConsensus.dex, observations: state.marketConsensus.dex.observations.filter(observation => observation.sourceId !== 'one') },
+		}
+		const persistenceSnapshot = operatorSnapshot(state, false, centralizedMarkets)
+		expect(persistenceSnapshot.marketSources.find(source => source.id === 'alpha')).toMatchObject({ reason: 'Observed but excluded by persistence, depth, or dispersion policy', status: 'excluded' })
+		expect(persistenceSnapshot.marketSources.find(source => source.id === 'one')).toMatchObject({ reason: 'Observed but excluded by persistence, depth, or dispersion policy', status: 'excluded' })
 	})
 
 	test('waits while a staged operation still involves the bot vault', () => {

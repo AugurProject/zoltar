@@ -13,6 +13,7 @@ RUN cd bots/liquidator \
 
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/
+COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/check-market-sources.mts
 COPY bots/liquidator/src/ ./bots/liquidator/src/
 RUN install -d -m 0700 -o bun -g bun bots/liquidator/.state
 
