@@ -2,6 +2,17 @@
 	"plugins": ["prettier-plugin-solidity"],
 	"overrides": [
 		{
+			"files": "**/*.html",
+			"options": {
+				"htmlWhitespaceSensitivity": "css",
+				"printWidth": 100000,
+				"proseWrap": "never",
+				"singleAttributePerLine": true,
+				"tabWidth": 4,
+				"useTabs": true
+			}
+		},
+		{
 			"files": "**/*.sol",
 			"options": {
 				"parser": "slang",

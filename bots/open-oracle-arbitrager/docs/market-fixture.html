@@ -2,9 +2,15 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1"
+		/>
 		<title>OpenOracle Arbitrager Market Fixture</title>
-		<link rel="stylesheet" href="./shared.css" />
+		<link
+			rel="stylesheet"
+			href="./shared.css"
+		/>
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -15,40 +21,23 @@
 				<div class="callout">
 					<p>
 						<strong>Historical evidence is not a launch guarantee.</strong>
-						Execution requires an available arbitrager, a robust reference market,
-						and a correction that remains profitable after actual execution costs.
+						Execution requires an available arbitrager, a robust reference market, and a correction that remains profitable after actual execution costs.
 					</p>
 				</div>
 				<p>
 					At Ethereum block
-					<code data-fixture-field="blockNumber">25,600,852</code> on
-					<span data-fixture-field="blockDate">2026-07-24</span>, the pinned
-					executable REP/WETH fixture constructed two hypothetical reports around
-					a
-					<code data-fixture-field="midReportRep"
-						>2,121.147070719536334508 REP</code
-					>
-					midpoint. Both reports used
-					the base-fee-derived minimum WETH side of
-					<code data-fixture-field="minimumWethReport"
-						>0.817262744792307693 WETH</code
-					>, a <code data-fixture-field="reporterFee">0.1%</code> reporter fee, a
-					<code data-fixture-field="protocolFee">1%</code> protocol fee, and the
-					<code data-fixture-field="uniswapPoolFee">1%</code> Uniswap V3 REP/WETH
-					pool. The sell-REP scenario used
-					<code data-fixture-field="sellReportRep"
-						>2,227.204424255513151233 REP</code
-					>, exactly <code data-fixture-field="deviationMagnitude">5%</code> above
-					the midpoint; the buy-REP scenario used
-					<code data-fixture-field="buyReportRep"
-						>2,015.089717183559517782 REP</code
-					>, exactly <code data-fixture-field="deviationMagnitude">5%</code> below
-					it. Gas was deliberately set to
-					<code data-fixture-field="gasCostWeth">0 WETH</code> so the result
-					isolates pre-gas market and fee economics.
+					<code data-fixture-field="blockNumber">25,600,852</code> on <span data-fixture-field="blockDate">2026-07-24</span>, the pinned executable REP/WETH fixture constructed two hypothetical reports around a
+					<code data-fixture-field="midReportRep">2,121.147070719536334508 REP</code>
+					midpoint. Both reports used the base-fee-derived minimum WETH side of
+					<code data-fixture-field="minimumWethReport">0.817262744792307693 WETH</code>, a <code data-fixture-field="reporterFee">0.1%</code> reporter fee, a <code data-fixture-field="protocolFee">1%</code> protocol fee, and the <code data-fixture-field="uniswapPoolFee">1%</code> Uniswap V3 REP/WETH pool. The sell-REP scenario used <code data-fixture-field="sellReportRep">2,227.204424255513151233 REP</code>, exactly <code data-fixture-field="deviationMagnitude">5%</code> above the midpoint; the buy-REP scenario used <code data-fixture-field="buyReportRep">2,015.089717183559517782 REP</code>, exactly <code data-fixture-field="deviationMagnitude">5%</code> below it. Gas was deliberately set to <code data-fixture-field="gasCostWeth">0 WETH</code> so the result isolates pre-gas market and fee economics.
 				</p>
-				<div class="table-scroll" tabindex="0" aria-label="Scrollable pinned market fixture inputs">
-					<table id="open-oracle-market-fixture-inputs"
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Scrollable pinned market fixture inputs"
+				>
+					<table
+						id="open-oracle-market-fixture-inputs"
 						data-block-number="25600852"
 						data-base-fee-wei-per-gas="118491126"
 						data-minimum-weth-report="817262744792307693"
@@ -61,7 +50,8 @@
 						data-uniswap-pool-fee="10000"
 						data-gas-cost-weth="0"
 						data-sell-profit-weth="-255235735754674523"
-						data-buy-profit-weth="-626254311426940506">
+						data-buy-profit-weth="-626254311426940506"
+					>
 						<thead>
 							<tr>
 								<th>Scenario</th>
@@ -87,35 +77,18 @@
 					</table>
 				</div>
 				<p>
-					Under only those two constructed report scenarios, the fixture produced
-					pre-gas results of
-					<code data-fixture-field="sellProfitWeth"
-						>-0.255235735754674523 WETH</code
-					>
+					Under only those two constructed report scenarios, the fixture produced pre-gas results of
+					<code data-fixture-field="sellProfitWeth">-0.255235735754674523 WETH</code>
 					for the sell-REP correction and
-					<code data-fixture-field="buyProfitWeth"
-						>-0.626254311426940506 WETH</code
-					>
-					for the buy-REP correction.
-					Both modeled paths were unprofitable before gas; the result does not
-					generalize to another report size, deviation, fee schedule, pool, block,
-					or gas cost.
+					<code data-fixture-field="buyProfitWeth">-0.626254311426940506 WETH</code>
+					for the buy-REP correction. Both modeled paths were unprofitable before gas; the result does not generalize to another report size, deviation, fee schedule, pool, block, or gas cost.
 				</p>
-				<p>
-					Run <code>bun ./scripts/check-market-fixture.mts</code> to reproduce
-					the calculations. Set <code>OPEN_ORACLE_ARCHIVE_RPC_URL</code> to also
-					replay the pinned block and quotes. Operators must repeat the analysis
-					against current executable liquidity before taking risk; this dated
-					fixture does not establish that a profitable corrector exists now.
-				</p>
+				<p>Run <code>bun ./scripts/check-market-fixture.mts</code> to reproduce the calculations. Set <code>OPEN_ORACLE_ARCHIVE_RPC_URL</code> to also replay the pinned block and quotes. Operators must repeat the analysis against current executable liquidity before taking risk; this dated fixture does not establish that a profitable corrector exists now.</p>
 				<p>
 					Implementation and test evidence:
-					<a href="/scripts/check-market-fixture.mts"><code>check-market-fixture.mts</code></a>,
-					<a href="/src/core/strategy.ts"><code>strategy.ts</code></a>,
-					and
-					<a href="/documentation/reference#profit-and-history-semantics"
-						>the arbitrager profit model</a
-					>.
+					<a href="/scripts/check-market-fixture.mts"><code>check-market-fixture.mts</code></a
+					>, <a href="/src/core/strategy.ts"><code>strategy.ts</code></a
+					>, and <a href="/documentation/reference#profit-and-history-semantics">the arbitrager profit model</a>.
 				</p>
 			</section>
 		</main>

@@ -2,10 +2,19 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta name="color-scheme" content="dark" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0"
+		/>
+		<meta
+			name="color-scheme"
+			content="dark"
+		/>
 		<title>OpenOracle Arbitrager</title>
-		<link rel="stylesheet" href="/dashboard.css" />
+		<link
+			rel="stylesheet"
+			href="/dashboard.css"
+		/>
 	</head>
 	<body>
 		<header class="app-header">
@@ -14,12 +23,32 @@
 				<h1>OpenOracle Arbitrager</h1>
 			</div>
 			<div class="header-actions">
-				<span id="mode-badge" class="badge">Mode —</span>
-				<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
-				<button id="pause-button" class="button" type="button" disabled>Pause bot</button>
+				<span
+					id="mode-badge"
+					class="badge"
+					>Mode —</span
+				>
+				<button
+					id="refresh-button"
+					class="button button-secondary"
+					type="button"
+				>
+					Refresh
+				</button>
+				<button
+					id="pause-button"
+					class="button"
+					type="button"
+					disabled
+				>
+					Pause bot
+				</button>
 			</div>
 		</header>
-		<nav class="app-nav" aria-label="Dashboard pages">
+		<nav
+			class="app-nav"
+			aria-label="Dashboard pages"
+		>
 			<a href="#operations">Operations</a>
 			<a href="#games">Games &amp; dispute paths</a>
 			<a href="#markets">Tokens &amp; market history</a>
@@ -27,17 +56,28 @@
 		</nav>
 
 		<main>
-			<section id="launch-notice" class="notice" aria-live="polite">
+			<section
+				id="launch-notice"
+				class="notice"
+				aria-live="polite"
+			>
 				<strong id="launch-notice-title">Checking execution network</strong>
 				<span id="launch-notice-copy">Waiting for the selected network.</span>
 			</section>
 
-			<section id="notice" class="notice" aria-live="polite">
+			<section
+				id="notice"
+				class="notice"
+				aria-live="polite"
+			>
 				<strong id="notice-title">Connecting to bot</strong>
 				<span id="notice-copy">Waiting for the first local state snapshot.</span>
 			</section>
 
-			<section class="metric-grid" aria-label="Bot summary">
+			<section
+				class="metric-grid"
+				aria-label="Bot summary"
+			>
 				<div class="metric">
 					<span class="metric-label">Status</span>
 					<strong id="status-value">—</strong>
@@ -82,12 +122,17 @@
 							<p class="eyebrow">Inventory</p>
 							<h2>Wallet balances</h2>
 						</div>
-						<span id="wallet-address" class="mono muted">No execution wallet</span>
+						<span
+							id="wallet-address"
+							class="mono muted"
+							>No execution wallet</span
+						>
 					</div>
-					<div id="balance-list" class="balance-list"></div>
-					<p class="section-note">
-						Portfolio value treats 1 ETH as 1 WETH and values the entire REP balance with the best executable Uniswap quote. It is an estimate, not accounting profit.
-					</p>
+					<div
+						id="balance-list"
+						class="balance-list"
+					></div>
+					<p class="section-note">Portfolio value treats 1 ETH as 1 WETH and values the entire REP balance with the best executable Uniswap quote. It is an estimate, not accounting profit.</p>
 				</section>
 
 				<section class="panel strategy-panel">
@@ -99,40 +144,100 @@
 						<span class="muted">Applies to the next scan</span>
 					</div>
 					<form id="strategy-form">
-						<fieldset id="strategy-fieldset" disabled>
+						<fieldset
+							id="strategy-fieldset"
+							disabled
+						>
 							<div class="field-grid">
 								<label>
 									<span>Minimum profit (WETH)</span>
-									<input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required />
+									<input
+										name="minimumProfitWeth"
+										type="number"
+										min="0"
+										max="1000"
+										step="any"
+										required
+									/>
 								</label>
 								<label>
 									<span>Minimum return (bps)</span>
-									<input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required />
+									<input
+										name="minimumProfitBps"
+										type="number"
+										min="0"
+										max="100000"
+										step="1"
+										required
+									/>
 								</label>
 								<label>
 									<span>Maximum spot/TWAP ticks</span>
-									<input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required />
+									<input
+										name="maxSpotTwapTicks"
+										type="number"
+										min="0"
+										max="100000"
+										step="1"
+										required
+									/>
 								</label>
 								<label>
 									<span>TWAP window (seconds)</span>
-									<input name="twapSeconds" type="number" min="60" max="86400" required />
+									<input
+										name="twapSeconds"
+										type="number"
+										min="60"
+										max="86400"
+										required
+									/>
 								</label>
 								<label>
 									<span>Minimum remaining blocks</span>
-									<input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required />
+									<input
+										name="minimumRemainingBlocks"
+										type="number"
+										min="1"
+										max="1000"
+										step="1"
+										required
+									/>
 								</label>
 								<label>
 									<span>Minimum remaining seconds</span>
-									<input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required />
+									<input
+										name="minimumRemainingSeconds"
+										type="number"
+										min="1"
+										max="86400"
+										step="1"
+										required
+									/>
 								</label>
 								<label>
 									<span>Poll interval (milliseconds)</span>
-									<input name="pollMilliseconds" type="number" min="1000" max="3600000" required />
+									<input
+										name="pollMilliseconds"
+										type="number"
+										min="1000"
+										max="3600000"
+										required
+									/>
 								</label>
 							</div>
 							<div class="form-actions">
-								<span id="form-status" class="muted" aria-live="polite">Changes do not enable execution.</span>
-								<button class="button" type="submit">Apply strategy</button>
+								<span
+									id="form-status"
+									class="muted"
+									aria-live="polite"
+									>Changes do not enable execution.</span
+								>
+								<button
+									class="button"
+									type="submit"
+								>
+									Apply strategy
+								</button>
 							</div>
 						</fieldset>
 					</form>
@@ -146,27 +251,58 @@
 							<p class="eyebrow">Network safety</p>
 							<h2>RPC connectivity</h2>
 						</div>
-						<span id="network-value" class="badge">Unknown network</span>
+						<span
+							id="network-value"
+							class="badge"
+							>Unknown network</span
+						>
 					</div>
 					<form id="connectivity-form">
-						<fieldset id="connectivity-fieldset" disabled>
+						<fieldset
+							id="connectivity-fieldset"
+							disabled
+						>
 							<div class="connectivity-grid">
 								<label>
 									<span>Read RPC URL</span>
-									<input id="read-rpc-url" type="url" spellcheck="false" required />
+									<input
+										id="read-rpc-url"
+										type="url"
+										spellcheck="false"
+										required
+									/>
 								</label>
 								<label>
 									<span>Public submission RPC URLs · one per line, up to 8</span>
-									<textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea>
+									<textarea
+										id="public-rpc-urls"
+										rows="3"
+										spellcheck="false"
+										required
+									></textarea>
 								</label>
 							</div>
 							<div class="form-actions">
-								<span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span>
-								<button class="button" type="submit">Check &amp; apply RPCs</button>
+								<span
+									id="connectivity-status"
+									class="muted"
+									aria-live="polite"
+									>Every endpoint is checked against the selected chain before it is accepted.</span
+								>
+								<button
+									class="button"
+									type="submit"
+								>
+									Check &amp; apply RPCs
+								</button>
 							</div>
 						</fieldset>
 					</form>
-					<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
+					<div
+						id="endpoint-checks"
+						class="endpoint-checks"
+						aria-label="Endpoint health checks"
+					></div>
 				</section>
 
 				<section class="panel">
@@ -175,24 +311,63 @@
 							<p class="eyebrow">Local signer</p>
 							<h2>Execution wallet</h2>
 						</div>
-						<span id="signer-status" class="muted" role="status" aria-live="polite">Locked</span>
+						<span
+							id="signer-status"
+							class="muted"
+							role="status"
+							aria-live="polite"
+							>Locked</span
+						>
 					</div>
 					<form id="signer-form">
-						<fieldset id="signer-fieldset" disabled>
+						<fieldset
+							id="signer-fieldset"
+							disabled
+						>
 							<label>
 								<span>Private key</span>
-								<input id="private-key" type="password" autocomplete="off" aria-describedby="signer-status" placeholder="0x…" spellcheck="false" required />
+								<input
+									id="private-key"
+									type="password"
+									autocomplete="off"
+									aria-describedby="signer-status"
+									placeholder="0x…"
+									spellcheck="false"
+									required
+								/>
 							</label>
 							<label class="remember-signer">
-								<input id="remember-signer" type="checkbox" />
+								<input
+									id="remember-signer"
+									type="checkbox"
+								/>
 								<span>Save this new key in plaintext for future restarts</span>
 							</label>
 							<div class="form-actions">
 								<span class="muted">Remembered keys are stored in the owner-only settings file. Keys are never returned by the API, stored in history, or written to logs.</span>
 								<div class="button-group">
-									<button id="forget-signer-button" class="button button-secondary" type="button">Forget saved key</button>
-									<button id="clear-signer-button" class="button button-secondary" type="button">Clear signer &amp; saved key</button>
-									<button id="set-signer-button" class="button" type="submit" disabled>Set signer</button>
+									<button
+										id="forget-signer-button"
+										class="button button-secondary"
+										type="button"
+									>
+										Forget saved key
+									</button>
+									<button
+										id="clear-signer-button"
+										class="button button-secondary"
+										type="button"
+									>
+										Clear signer &amp; saved key
+									</button>
+									<button
+										id="set-signer-button"
+										class="button"
+										type="submit"
+										disabled
+									>
+										Set signer
+									</button>
 								</div>
 							</div>
 						</fieldset>
@@ -201,7 +376,10 @@
 				</section>
 			</div>
 
-			<section id="deployment-configuration" class="panel">
+			<section
+				id="deployment-configuration"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Sepolia and mainnet identities</p>
@@ -210,40 +388,171 @@
 					<span class="muted">Applies after restart</span>
 				</div>
 				<form id="deployment-form">
-					<fieldset id="deployment-fieldset" disabled>
+					<fieldset
+						id="deployment-fieldset"
+						disabled
+					>
 						<div class="deployment-grid">
-							<label><span>REP</span><input id="deployment-rep" class="mono" spellcheck="false" required /></label>
-							<label><span>WETH</span><input id="deployment-weth" class="mono" spellcheck="false" required /></label>
-							<label><span>OpenOracle</span><input id="deployment-open-oracle" class="mono" spellcheck="false" required /></label>
-							<label><span>Executor</span><input id="deployment-executor" class="mono" spellcheck="false" placeholder="Deploy below or enter an address" /></label>
-							<label><span>Uniswap V3 factory</span><input id="deployment-v3-factory" class="mono" spellcheck="false" required /></label>
-							<label><span>Uniswap V3 quoter</span><input id="deployment-v3-quoter" class="mono" spellcheck="false" required /></label>
-							<label><span>Uniswap V3 router</span><input id="deployment-v3-router" class="mono" spellcheck="false" /></label>
-							<label><span>Uniswap V2 router</span><input id="deployment-v2-router" class="mono" spellcheck="false" /></label>
-							<label><span>Uniswap V4 PoolManager</span><input id="deployment-v4-pool-manager" class="mono" spellcheck="false" /></label>
-							<label><span>Uniswap V4 Quoter</span><input id="deployment-v4-quoter" class="mono" spellcheck="false" /></label>
-							<label><span>Approved coordinators · one per line</span><textarea id="deployment-coordinators" rows="3" spellcheck="false" required></textarea></label>
-							<label><span>Independent quorum RPCs · one per line</span><textarea id="deployment-quorum-rpcs" rows="3" spellcheck="false" placeholder="Required before execution"></textarea></label>
+							<label
+								><span>REP</span
+								><input
+									id="deployment-rep"
+									class="mono"
+									spellcheck="false"
+									required
+							/></label>
+							<label
+								><span>WETH</span
+								><input
+									id="deployment-weth"
+									class="mono"
+									spellcheck="false"
+									required
+							/></label>
+							<label
+								><span>OpenOracle</span
+								><input
+									id="deployment-open-oracle"
+									class="mono"
+									spellcheck="false"
+									required
+							/></label>
+							<label
+								><span>Executor</span
+								><input
+									id="deployment-executor"
+									class="mono"
+									spellcheck="false"
+									placeholder="Deploy below or enter an address"
+							/></label>
+							<label
+								><span>Uniswap V3 factory</span
+								><input
+									id="deployment-v3-factory"
+									class="mono"
+									spellcheck="false"
+									required
+							/></label>
+							<label
+								><span>Uniswap V3 quoter</span
+								><input
+									id="deployment-v3-quoter"
+									class="mono"
+									spellcheck="false"
+									required
+							/></label>
+							<label
+								><span>Uniswap V3 router</span
+								><input
+									id="deployment-v3-router"
+									class="mono"
+									spellcheck="false"
+							/></label>
+							<label
+								><span>Uniswap V2 router</span
+								><input
+									id="deployment-v2-router"
+									class="mono"
+									spellcheck="false"
+							/></label>
+							<label
+								><span>Uniswap V4 PoolManager</span
+								><input
+									id="deployment-v4-pool-manager"
+									class="mono"
+									spellcheck="false"
+							/></label>
+							<label
+								><span>Uniswap V4 Quoter</span
+								><input
+									id="deployment-v4-quoter"
+									class="mono"
+									spellcheck="false"
+							/></label>
+							<label
+								><span>Approved coordinators · one per line</span
+								><textarea
+									id="deployment-coordinators"
+									rows="3"
+									spellcheck="false"
+									required
+								></textarea>
+							</label>
+							<label
+								><span>Independent quorum RPCs · one per line</span
+								><textarea
+									id="deployment-quorum-rpcs"
+									rows="3"
+									spellcheck="false"
+									placeholder="Required before execution"
+								></textarea>
+							</label>
 							<label class="deployment-manifest-field"
-								><span>Execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea
-							></label>
+								><span>Execution manifest JSON</span
+								><textarea
+									id="deployment-manifest"
+									rows="8"
+									spellcheck="false"
+									placeholder="Required before execution"
+									aria-describedby="deployment-manifest-help"
+								></textarea>
+							</label>
 						</div>
-						<p id="deployment-manifest-help" class="section-note">Saving validates manifest structure only. The read quorum authenticates contract bytecode when the bot restarts.</p>
+						<p
+							id="deployment-manifest-help"
+							class="section-note"
+						>
+							Saving validates manifest structure only. The read quorum authenticates contract bytecode when the bot restarts.
+						</p>
 						<div class="form-actions">
-							<span id="deployment-status" class="muted" aria-live="polite">Address, venue, manifest, and quorum changes take effect after restart.</span>
-							<button class="button" type="submit">Save deployment configuration</button>
+							<span
+								id="deployment-status"
+								class="muted"
+								aria-live="polite"
+								>Address, venue, manifest, and quorum changes take effect after restart.</span
+							>
+							<button
+								class="button"
+								type="submit"
+							>
+								Save deployment configuration
+							</button>
 						</div>
 					</fieldset>
 				</form>
-				<form id="create2-form" class="create2-form">
-					<fieldset id="create2-fieldset" disabled>
+				<form
+					id="create2-form"
+					class="create2-form"
+				>
+					<fieldset
+						id="create2-fieldset"
+						disabled
+					>
 						<label>
 							<span>CREATE2 salt · 32-byte hex</span>
-							<input id="create2-salt" class="mono" value="0x0000000000000000000000000000000000000000000000000000000000000000" pattern="0x[0-9a-fA-F]{64}" spellcheck="false" required />
+							<input
+								id="create2-salt"
+								class="mono"
+								value="0x0000000000000000000000000000000000000000000000000000000000000000"
+								pattern="0x[0-9a-fA-F]{64}"
+								spellcheck="false"
+								required
+							/>
 						</label>
 						<div class="form-actions">
-							<span id="create2-status" class="muted" aria-live="polite">Deployment uses the canonical deterministic deployment proxy and the active local signer.</span>
-							<button id="deploy-executor-button" class="button" type="submit">Deploy predictable executor</button>
+							<span
+								id="create2-status"
+								class="muted"
+								aria-live="polite"
+								>Deployment uses the canonical deterministic deployment proxy and the active local signer.</span
+							>
+							<button
+								id="deploy-executor-button"
+								class="button"
+								type="submit"
+							>
+								Deploy predictable executor
+							</button>
 						</div>
 					</fieldset>
 				</form>
@@ -258,27 +567,55 @@
 					<span class="muted">Applies to the next scan</span>
 				</div>
 				<form id="submission-form">
-					<fieldset id="submission-fieldset" disabled>
+					<fieldset
+						id="submission-fieldset"
+						disabled
+					>
 						<div class="submission-grid">
 							<label>
 								<span>Delivery mode</span>
-								<select id="submission-mode" name="submissionMode">
+								<select
+									id="submission-mode"
+									name="submissionMode"
+								>
 									<option value="private">Private relays</option>
 									<option value="public">Public mempool</option>
 								</select>
 							</label>
 							<label class="relay-urls-field">
 								<span>Private relay URLs · one per line, up to 8</span>
-								<textarea id="relay-urls" name="relayUrls" rows="3" spellcheck="false"></textarea>
+								<textarea
+									id="relay-urls"
+									name="relayUrls"
+									rows="3"
+									spellcheck="false"
+								></textarea>
 							</label>
 							<label>
 								<span>Required successful relay simulations</span>
-								<input id="minimum-relay-successes" type="number" min="1" max="8" step="1" required />
+								<input
+									id="minimum-relay-successes"
+									type="number"
+									min="1"
+									max="8"
+									step="1"
+									required
+								/>
 							</label>
 						</div>
 						<div class="form-actions">
-							<span id="submission-status" class="muted" aria-live="polite">Both delivery modes submit one parent-bound atomic entry transaction and require sufficient pre-existing ERC-20 and OpenOracle internal allowances before an opportunity is eligible.</span>
-							<button class="button" type="submit">Apply submission</button>
+							<span
+								id="submission-status"
+								class="muted"
+								aria-live="polite"
+								>Both delivery modes submit one parent-bound atomic entry transaction and require sufficient pre-existing ERC-20 and OpenOracle internal allowances before an opportunity is eligible.</span
+							>
+							<button
+								class="button"
+								type="submit"
+							>
+								Apply submission
+							</button>
 						</div>
 					</fieldset>
 				</form>
@@ -302,50 +639,107 @@
 				<p class="section-note">Risk limits are stored in the complete configuration below and apply after restart.</p>
 			</section>
 
-			<section id="complete-configuration" class="panel">
+			<section
+				id="complete-configuration"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Single source of truth</p>
 						<h2>Complete bot configuration</h2>
 					</div>
-					<button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button>
+					<button
+						id="reload-configuration-button"
+						class="button button-secondary"
+						type="button"
+						disabled
+					>
+						Reload configuration
+					</button>
 				</div>
 				<form id="configuration-form">
-					<fieldset id="configuration-fieldset" disabled>
+					<fieldset
+						id="configuration-fieldset"
+						disabled
+					>
 						<label>
 							<span>Operator configuration JSON</span>
-							<textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" required></textarea>
+							<textarea
+								id="configuration-json"
+								class="configuration-json mono"
+								rows="24"
+								spellcheck="false"
+								required
+							></textarea>
 						</label>
 						<p class="section-note">Every bot setting is represented here. A saved private key is shown as a preserve marker and is never sent to the browser. Replace the marker with a new key only when intentionally rotating it.</p>
 						<div class="form-actions">
-							<span id="configuration-status" class="muted" aria-live="polite">Changes are schema-validated before the owner-only configuration file is replaced.</span>
-							<button class="button" type="submit">Validate &amp; save</button>
+							<span
+								id="configuration-status"
+								class="muted"
+								aria-live="polite"
+								>Changes are schema-validated before the owner-only configuration file is replaced.</span
+							>
+							<button
+								class="button"
+								type="submit"
+							>
+								Validate &amp; save
+							</button>
 						</div>
 					</fieldset>
 				</form>
 			</section>
 
-			<section id="markets" class="panel">
+			<section
+				id="markets"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Market discovery</p>
 						<h2>REP and observed tokens</h2>
 					</div>
-					<span id="token-count" class="muted">Discovering tokens</span>
+					<span
+						id="token-count"
+						class="muted"
+						>Discovering tokens</span
+					>
 				</div>
 				<form id="tokens-form">
-					<fieldset id="tokens-fieldset" disabled>
+					<fieldset
+						id="tokens-fieldset"
+						disabled
+					>
 						<label>
 							<span>Execution token allowlist · one address per line</span>
-							<textarea id="token-addresses" rows="3" spellcheck="false"></textarea>
+							<textarea
+								id="token-addresses"
+								rows="3"
+								spellcheck="false"
+							></textarea>
 						</label>
 						<div class="form-actions">
-							<span id="tokens-status" class="muted" aria-live="polite">The configured primary REP is allowlisted automatically; on mainnet, discovered Augur fork REP is too. Observed-only tokens stay monitor-only until explicitly added here.</span>
-							<button class="button" type="submit">Save token list</button>
+							<span
+								id="tokens-status"
+								class="muted"
+								aria-live="polite"
+								>The configured primary REP is allowlisted automatically; on mainnet, discovered Augur fork REP is too. Observed-only tokens stay monitor-only until explicitly added here.</span
+							>
+							<button
+								class="button"
+								type="submit"
+							>
+								Save token list
+							</button>
 						</div>
 					</fieldset>
 				</form>
-				<div class="table-scroll" tabindex="0" aria-label="Token pools table">
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Token pools table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -363,46 +757,88 @@
 						<tbody id="token-markets-body"></tbody>
 					</table>
 				</div>
-				<p id="token-markets-empty" class="empty-state">Token discovery has not completed.</p>
+				<p
+					id="token-markets-empty"
+					class="empty-state"
+				>
+					Token discovery has not completed.
+				</p>
 			</section>
 
-			<section id="market-history" class="panel">
+			<section
+				id="market-history"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current-head valuation</p>
 						<h2>Asset value across markets</h2>
 					</div>
-					<span id="price-point-count" class="muted">0 samples</span>
+					<span
+						id="price-point-count"
+						class="muted"
+						>0 samples</span
+					>
 				</div>
 				<label class="chart-selector">
 					<span>Asset</span>
 					<select id="price-token"></select>
 				</label>
-				<div id="market-price-chart" class="market-price-chart" aria-label="Token price in WETH over time by exchange pool"></div>
+				<div
+					id="market-price-chart"
+					class="market-price-chart"
+					aria-label="Token price in WETH over time by exchange pool"
+				></div>
 				<p class="section-note">Each series is a supported WETH/token pool spot price sampled once at each newly observed head.</p>
 			</section>
 
-			<section id="games" class="panel">
+			<section
+				id="games"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Oracle lifecycle</p>
 						<h2>Observed dispute paths</h2>
 					</div>
-					<span id="dispute-path-count" class="muted">0 games</span>
+					<span
+						id="dispute-path-count"
+						class="muted"
+						>0 games</span
+					>
 				</div>
-				<div id="dispute-paths" class="dispute-paths"></div>
-				<p id="dispute-paths-empty" class="empty-state">No OpenOracle game was found in the configured historical lookback. Paths include only events observed inside that lookback and during this process.</p>
+				<div
+					id="dispute-paths"
+					class="dispute-paths"
+				></div>
+				<p
+					id="dispute-paths-empty"
+					class="empty-state"
+				>
+					No OpenOracle game was found in the configured historical lookback. Paths include only events observed inside that lookback and during this process.
+				</p>
 			</section>
 
-			<section id="operations" class="panel">
+			<section
+				id="operations"
+				class="panel"
+			>
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current scan</p>
 						<h2>Open opportunities</h2>
 					</div>
-					<span id="opportunity-count" class="muted">0 evaluated</span>
+					<span
+						id="opportunity-count"
+						class="muted"
+						>0 evaluated</span
+					>
 				</div>
-				<div class="table-scroll" tabindex="0" aria-label="Open opportunities table">
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Open opportunities table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -421,7 +857,12 @@
 						<tbody id="opportunities-body"></tbody>
 					</table>
 				</div>
-				<p id="opportunities-empty" class="empty-state">No eligible WETH/token report was found in the latest scan.</p>
+				<p
+					id="opportunities-empty"
+					class="empty-state"
+				>
+					No eligible WETH/token report was found in the latest scan.
+				</p>
 			</section>
 
 			<section class="panel">
@@ -430,9 +871,17 @@
 						<p class="eyebrow">Durable accounting</p>
 						<h2>Position lifecycle</h2>
 					</div>
-					<span id="position-count" class="muted">0 durable positions</span>
+					<span
+						id="position-count"
+						class="muted"
+						>0 durable positions</span
+					>
 				</div>
-				<div class="table-scroll" tabindex="0" aria-label="Position lifecycle table">
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Position lifecycle table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -452,7 +901,12 @@
 						<tbody id="positions-body"></tbody>
 					</table>
 				</div>
-				<p id="positions-empty" class="empty-state">No durable OpenOracle positions have been recorded.</p>
+				<p
+					id="positions-empty"
+					class="empty-state"
+				>
+					No durable OpenOracle positions have been recorded.
+				</p>
 			</section>
 
 			<section class="panel">
@@ -461,9 +915,17 @@
 						<p class="eyebrow">Decision journal</p>
 						<h2>Operations log</h2>
 					</div>
-					<span id="operation-count" class="muted">0 entries</span>
+					<span
+						id="operation-count"
+						class="muted"
+						>0 entries</span
+					>
 				</div>
-				<div class="table-scroll operation-scroll" tabindex="0" aria-label="Operations log table">
+				<div
+					class="table-scroll operation-scroll"
+					tabindex="0"
+					aria-label="Operations log table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -479,7 +941,12 @@
 						<tbody id="operations-body"></tbody>
 					</table>
 				</div>
-				<p id="operations-empty" class="empty-state">No operation has been recorded yet.</p>
+				<p
+					id="operations-empty"
+					class="empty-state"
+				>
+					No operation has been recorded yet.
+				</p>
 			</section>
 
 			<section class="panel">
@@ -488,9 +955,17 @@
 						<p class="eyebrow">Broadcast lifecycle</p>
 						<h2>Transaction tracking</h2>
 					</div>
-					<span id="transaction-count" class="muted">0 tracked</span>
+					<span
+						id="transaction-count"
+						class="muted"
+						>0 tracked</span
+					>
 				</div>
-				<div class="table-scroll" tabindex="0" aria-label="Transaction tracking table">
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Transaction tracking table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -509,7 +984,12 @@
 						<tbody id="transactions-body"></tbody>
 					</table>
 				</div>
-				<p id="transactions-empty" class="empty-state">No transaction has been signed by this process.</p>
+				<p
+					id="transactions-empty"
+					class="empty-state"
+				>
+					No transaction has been signed by this process.
+				</p>
 			</section>
 
 			<section class="panel">
@@ -520,8 +1000,16 @@
 					</div>
 					<span class="muted">Stored on this operator host</span>
 				</div>
-				<div id="profit-chart" class="profit-chart" aria-label="Tracked net profit in ETH for displayed history"></div>
-				<div class="table-scroll" tabindex="0" aria-label="Execution history table">
+				<div
+					id="profit-chart"
+					class="profit-chart"
+					aria-label="Tracked net profit in ETH for displayed history"
+				></div>
+				<div
+					class="table-scroll"
+					tabindex="0"
+					aria-label="Execution history table"
+				>
 					<table>
 						<thead>
 							<tr>
@@ -538,15 +1026,31 @@
 						<tbody id="history-body"></tbody>
 					</table>
 				</div>
-				<p id="history-empty" class="empty-state">No disputes have been submitted by this bot.</p>
+				<p
+					id="history-empty"
+					class="empty-state"
+				>
+					No disputes have been submitted by this bot.
+				</p>
 			</section>
 		</main>
 
 		<footer>
-			<span id="oracle-address" class="mono">Oracle —</span>
-			<span id="executor-address" class="mono">Executor —</span>
+			<span
+				id="oracle-address"
+				class="mono"
+				>Oracle —</span
+			>
+			<span
+				id="executor-address"
+				class="mono"
+				>Executor —</span
+			>
 			<span id="chain-safety">Waiting for chain verification.</span>
 		</footer>
-		<script type="module" src="/dashboard.js"></script>
+		<script
+			type="module"
+			src="/dashboard.js"
+		></script>
 	</body>
 </html>
