@@ -759,21 +759,22 @@ export function SecurityPoolWorkflowSection({
 			/>
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
-					<div className='selected-pool-context-lookup'>
-						<LookupFieldRow
-							label={commonCopy.securityPoolAddress}
-							value={securityPoolAddress}
-							onInput={onSecurityPoolAddressChange}
-							placeholder={commonCopy.hexValuePlaceholder}
-							resolvedValue={selectedPool === undefined ? undefined : <AddressValue address={selectedPool.securityPoolAddress} />}
-							resolvedValueLabel={securityPoolCopy.selectedPool}
-							action={
-								<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
-									{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
-								</button>
-							}
-						/>
-					</div>
+					<details className='selected-pool-change-control'>
+						<summary>{securityPoolCopy.changePool}</summary>
+						<div className='selected-pool-context-lookup'>
+							<LookupFieldRow
+								label={commonCopy.securityPoolAddress}
+								value={securityPoolAddress}
+								onInput={onSecurityPoolAddressChange}
+								placeholder={commonCopy.hexValuePlaceholder}
+								action={
+									<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
+										{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
+									</button>
+								}
+							/>
+						</div>
+					</details>
 				</div>
 				{selectedPoolSummaryContent === undefined ? undefined : (
 					<details className='selected-pool-context-details'>

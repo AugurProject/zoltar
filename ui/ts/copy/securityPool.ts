@@ -92,6 +92,7 @@ export const requestPricePendingReportRisk = 'This creates a pending Open Oracle
 export const requestPriceFundingRisk = 'You Pay includes the 20% request buffer transferred with this transaction. Wallet gas and any additional initial-report REP or WETH funding are checked and submitted separately.'
 export const liquidationWorkflowDescription = 'Inspect the liquidation quote, timeout, and execution path before queueing liquidation.'
 export const selectedPool = 'Selected Pool'
+export const changePool = 'Change pool'
 export const selectedPoolVaultViews = 'Selected pool vault views'
 export const poolContextAndMetrics = 'Pool context and metrics'
 export const selectedPoolViews = 'Selected pool views'

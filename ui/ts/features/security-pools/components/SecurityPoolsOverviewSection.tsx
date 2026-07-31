@@ -6,14 +6,13 @@ import { AddressValue } from '../../../components/AddressValue.js'
 import { IdentifierValue } from '../../../components/IdentifierValue.js'
 import { Badge } from '../../../components/Badge.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { EntityCard } from '../../../components/EntityCard.js'
+import { ComparisonRecord } from '../../../components/ComparisonRecord.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
-import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { Question, getQuestionTitle } from '../../markets/components/Question.js'
@@ -27,7 +26,6 @@ import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { formatStatoblastSecurityMultiplier, getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
-import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
 export function SecurityPoolsOverviewSection({
@@ -203,7 +201,7 @@ export function SecurityPoolsOverviewSection({
 				if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: securityPoolCopy.poolFiltersEmpty }} />
 
 				return (
-					<div className='entity-card-list'>
+					<div className='comparison-record-list'>
 						{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 							const displayState = poolState.lifecycleState
 							const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
@@ -220,79 +218,53 @@ export function SecurityPoolsOverviewSection({
 								return 'warning'
 							})()
 							return (
-								<EntityCard
+								<ComparisonRecord
 									key={pool.securityPoolAddress}
-									className='security-pool-card'
 									title={getQuestionTitle(pool.marketDetails)}
-									variant='record'
 									badge={
 										<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
 											{statusBadgeLabel}
 										</Badge>
 									}
-									actions={
+									action={
 										onSelectSecurityPool === undefined ? undefined : (
 											<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
 												{securityPoolCopy.openPool}
 											</button>
 										)
 									}
+									metrics={[
+										{
+											label: securityPoolCopy.poolCollateralization,
+											value: <CollateralizationCircle className='comparison-record-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={securityPoolCopy.poolCollateralization} />,
+										},
+										{ label: securityPoolCopy.vaults, value: pool.vaultCount.toString() },
+										{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
+										{
+											label: commonCopy.openOraclePrice,
+											value: <OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />,
+										},
+										{
+											label: securityPoolCopy.openInterestMinted,
+											value: (
+												<span className='comparison-record-value-stack'>
+													<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
+													<span className='detail'>
+														{securityPoolCopy.maxLead}
+														<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} copyable={false} />
+													</span>
+												</span>
+											),
+										},
+									]}
 								>
-									<div className='security-pool-card-surface'>
-										<div className='security-pool-card-title-row' aria-label={securityPoolCopy.poolCollateralization}>
-											<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={securityPoolCopy.poolCollateralization} />
-										</div>
-										<div className='security-pool-strip'>
-											<div className='security-pool-strip-story'>
-												<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
-												<div className='security-pool-strip-stats'>
-													<div>
-														<span>{securityPoolCopy.vaults}</span>
-														<strong>{pool.vaultCount.toString()}</strong>
-													</div>
-													<div>
-														<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
-														<strong>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
-													</div>
-													<div>
-														<span>{securityPoolCopy.annualFee}</span>
-														<strong>
-															<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
-														</strong>
-													</div>
-												</div>
-											</div>
-											<div className='security-pool-strip-signal'>
-												<div className='security-pool-strip-price'>
-													<span>{commonCopy.openOraclePrice}</span>
-													<strong>
-														<OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
-													</strong>
-												</div>
-												<div className='security-pool-card-progress security-pool-strip-meters'>
-													<ProgressMeter
-														className='security-pool-strip-meter'
-														label={securityPoolCopy.openInterestMinted}
-														maxValue={pool.totalSecurityBondAllowance}
-														secondaryValue={
-															<span className='detail'>
-																{securityPoolCopy.maxLead}
-																<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
-															</span>
-														}
-														tone={getToneRatioThreshold({
-															ratio: getVisualRatio({ value: pool.completeSetCollateralAmount, maxValue: pool.totalSecurityBondAllowance }),
-															successThreshold: 0.6,
-															warningThreshold: 0.85,
-														})}
-														value={pool.completeSetCollateralAmount}
-														valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} />}
-													/>
-												</div>
-											</div>
-										</div>
-										<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+									<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+										<div className='comparison-record-expanded'>
+											<Question question={pool.marketDetails} showTitle={false} variant='preview' />
 											<div className='security-pool-detail-rail security-pool-card-inline-details'>
+												<MetricField label={securityPoolCopy.annualFee}>
+													<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
+												</MetricField>
 												<MetricField label={securityPoolCopy.poolAddress}>
 													<AddressValue address={pool.securityPoolAddress} />
 												</MetricField>
@@ -306,9 +278,9 @@ export function SecurityPoolsOverviewSection({
 													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>
 											</div>
-										</ReadOnlyDetailAccordion>
-									</div>
-								</EntityCard>
+										</div>
+									</ReadOnlyDetailAccordion>
+								</ComparisonRecord>
 							)
 						})}
 					</div>

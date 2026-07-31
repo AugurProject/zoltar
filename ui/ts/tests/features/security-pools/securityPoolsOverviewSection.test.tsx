@@ -165,7 +165,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		if (titleHeading === undefined) {
 			throw new Error(`Expected security pool card heading for "${headingText}"`)
 		}
-		const poolCard = titleHeading.closest('.entity-card')
+		const poolCard = titleHeading.closest('.comparison-record')
 		if (!(poolCard instanceof HTMLElement)) {
 			throw new Error(`Expected security pool card for "${headingText}"`)
 		}
@@ -436,7 +436,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
@@ -486,7 +486,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Migration')
 	})
 
@@ -545,7 +545,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
@@ -902,7 +902,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('2 vaults are registered. Open the pool to load individual vault details.')).toBeNull()
 		expect(poolCardQueries.queryByText('Vault preview unavailable.')).toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
-		expect(poolCard.querySelector('.security-pool-strip-stats')?.textContent).toContain('Vaults2')
+		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Vaults')
+		expect(vaultMetric?.querySelector('dd')?.textContent).toBe('2')
 	})
 
 	test('keeps browse pool cards focused on pool-level information', async () => {

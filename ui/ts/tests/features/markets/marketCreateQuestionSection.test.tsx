@@ -113,10 +113,10 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.input(documentQueries.getByLabelText('Start Time') as HTMLInputElement, { target: { value: '1200' } })
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
 		})
 
-		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Connect a wallet before creating a question.')
 		expect(updates.some(update => update.marketType === 'categorical')).toBe(true)
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
@@ -212,11 +212,20 @@ describe('MarketCreateQuestionSection', () => {
 		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create question', 'Fix invalid fields: End time must be after start time')
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Fix invalid fields: End time must be after start time')
 	})
 
-	test('warns but allows creation when the question end time has passed', async () => {
+	test('keeps scalar details and ended-state risk visible through reversible review and submission', async () => {
 		let createCount = 0
+		const scalarForm = createMarketForm({
+			answerUnit: 'USD',
+			endTime: '2000',
+			marketType: 'scalar',
+			scalarIncrement: '0.5',
+			scalarMax: '10',
+			scalarMin: '0',
+			startTime: '',
+		})
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={2_000_000_000n}>
 				<MarketCreateQuestionSection
@@ -225,7 +234,7 @@ describe('MarketCreateQuestionSection', () => {
 					isOnActiveAppChain={true}
 					marketCreating={false}
 					marketError={undefined}
-					marketForm={createMarketForm({ startTime: '', endTime: '2000' })}
+					marketForm={scalarForm}
 					marketResult={undefined}
 					loadingZoltarQuestions={false}
 					onCreateMarket={() => {
@@ -244,11 +253,36 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
-		const createButton = documentQueries.getByRole('button', { name: 'Create question' }) as HTMLButtonElement
-		expect(createButton.disabled).toBe(false)
+		const reviewButton = documentQueries.getByRole('button', { name: 'Review question' }) as HTMLButtonElement
+		expect(reviewButton.disabled).toBe(false)
 
 		await act(() => {
-			fireEvent.click(createButton)
+			fireEvent.click(reviewButton)
+		})
+		expect(createCount).toBe(0)
+		const review = documentQueries.getByRole('heading', { name: 'Transaction Review' }).closest('section')
+		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
+		const reviewQueries = within(review)
+		expect(reviewQueries.getByText('Scalar Min')).not.toBeNull()
+		expect(reviewQueries.getByText('Scalar Max')).not.toBeNull()
+		expect(reviewQueries.getByText('Scalar Increment')).not.toBeNull()
+		expect(reviewQueries.getByText('Answer Unit')).not.toBeNull()
+		for (const value of ['0', '10', '0.5', 'USD']) expect(reviewQueries.getByText(value)).not.toBeNull()
+		expect(reviewQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Back to question' }))
+		})
+		expect((documentQueries.getByLabelText('Scalar Min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
+		expect((documentQueries.getByLabelText('Scalar Max') as HTMLInputElement).value).toBe(scalarForm.scalarMax)
+		expect((documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement).value).toBe(scalarForm.scalarIncrement)
+		expect((documentQueries.getByLabelText('Answer Unit') as HTMLInputElement).value).toBe(scalarForm.answerUnit)
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
 		})
 		expect(createCount).toBe(1)
 	})
@@ -594,7 +628,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create question')
+		expectTransactionButtonDisabled(document.body, 'Review question')
 	})
 
 	test('marks scalar range fields required and associates their contextual errors', async () => {
@@ -668,6 +702,11 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Review question' }))
+		})
+		expect(createCallCount).toBe(0)
+		expect(document.body.querySelector('.question-create-editor')?.hasAttribute('hidden')).toBe(true)
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
 		})
