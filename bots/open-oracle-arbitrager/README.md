@@ -867,6 +867,42 @@ unsupported venue.
 Price samples are stored at `runtime.priceHistoryFile`. The example uses
 `.state/prices-mainnet.jsonl`; keep files network-specific.
 
+### Centralized-market manipulation guard
+
+The shared market observer uses CCXT's public unified `fetchTicker` and
+`fetchOrderBook` APIs. Configure independent exchanges under
+`centralizedMarkets.sources` with an exchange id, a unified `REP/QUOTE` market,
+and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
+dashboard shows each normalized REP/ETH observation and its executable bid and
+ask depth inside the configured `depthBps` band.
+
+The reference estimate is the median of fresh venue prices. Reliability requires
+`minimumSourceCount`, minimum bid and ask depth, and venue dispersion within
+`maximumVenueDispersionBps`. With `requiredForExecution` enabled, at least two
+independent exchanges are required and the bot rejects a DEX opportunity when
+the executable REP/ETH quote differs by more than
+`maximumDexDeviationBps`. The guard runs during opportunity selection and again
+against the canonical final execution quote. If required confirmation becomes
+stale or unavailable, execution fails closed.
+
+This reference does not replace executable Uniswap quotes, spot/TWAP checks,
+quorum reads, slippage limits, or profitability accounting. It is a second,
+off-chain manipulation signal. Operators must verify that each configured
+ticker is the correct REP asset; fork REP tokens without matching CEX markets
+remain ineligible when CEX confirmation is required.
+
+CCXT uses unified market symbols:
+
+```json
+"sources": [
+  { "exchangeId": "kraken", "repMarket": "REP/USD", "ethMarket": "ETH/USD" },
+  { "exchangeId": "anotherexchange", "repMarket": "REP/ETH", "ethMarket": null }
+]
+```
+
+Only configure symbols verified on that venue; the example names illustrate the
+schema and are not an assertion that a venue currently lists REP.
+
 ## Transaction delivery and tracking
 
 Public mode broadcasts one signed atomic executor call to every configured public

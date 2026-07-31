@@ -5,6 +5,7 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
+import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -37,6 +38,7 @@ export type StoredStrategySettings = {
 
 export type OperatorSettings = {
 	approvedUniverses: bigint[]
+	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings & {
 		quorumRpcUrls: string[]
 	}
@@ -189,6 +191,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const privateKey = signerCandidate(root['privateKey']).privateKey
 	const settings: OperatorSettings = {
 		approvedUniverses: parsedApprovedUniverses,
+		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
 		connectivity: {
 			...parsedConnectivity,
 			quorumRpcUrls,
@@ -241,6 +244,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	return {
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
+		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
 		connectivity: {
 			...settings.connectivity,
 		},

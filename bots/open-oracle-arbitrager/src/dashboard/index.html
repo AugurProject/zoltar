@@ -333,6 +333,30 @@
 					</div>
 					<span id="token-count" class="muted">Discovering tokens</span>
 				</div>
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Independent reference</p>
+						<h3>Centralized-market REP estimate</h3>
+					</div>
+					<span id="centralized-market-status" class="muted">No CEX sources configured</span>
+				</div>
+				<div id="centralized-market-summary" class="metric-grid" aria-live="polite"></div>
+				<div class="table-scroll" tabindex="0" aria-label="Centralized market observations">
+					<table>
+						<thead>
+							<tr>
+								<th>Exchange</th>
+								<th>Market</th>
+								<th>REP / ETH</th>
+								<th>Bid depth</th>
+								<th>Ask depth</th>
+								<th>Observed</th>
+							</tr>
+						</thead>
+						<tbody id="centralized-market-body"></tbody>
+					</table>
+				</div>
+				<p id="centralized-market-empty" class="empty-state">Configure public CCXT sources in the complete configuration.</p>
 				<form id="tokens-form">
 					<fieldset id="tokens-fieldset" disabled>
 						<label>

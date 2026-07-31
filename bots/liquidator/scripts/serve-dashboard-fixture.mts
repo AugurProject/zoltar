@@ -51,6 +51,8 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 			topUpRep: '362.5',
 		})),
 		collateralEth: '1942.73',
+		centralizedPriceAllowed: true,
+		centralizedPriceDeviationBps: '86',
 		currentRetentionRate: '999999987000000000',
 		forkActivationTime: systemState === '1' ? '1785416250' : '0',
 		forkOutcomeIndex,
@@ -112,6 +114,19 @@ const server = startDashboardServer(4183, {
 	},
 	getState: () => ({
 		activities,
+		centralizedMarket: {
+			askDepthEth: '6.3',
+			bidDepthEth: '7.1',
+			maximumPriceRepPerEth: '10.42',
+			minimumPriceRepPerEth: '10.31',
+			observations: [
+				{ askDepthEth: '3.4', bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: '3.8', exchangeId: 'kraken', observedAt: new Date().toISOString(), priceRepPerEth: '10.31', repMarket: 'REP/USD' },
+				{ askDepthEth: '2.9', bestAskQuote: '0.097', bestBidQuote: '0.096', bidDepthEth: '3.3', exchangeId: 'coinbase', observedAt: new Date().toISOString(), priceRepPerEth: '10.42', repMarket: 'REP/ETH' },
+			],
+			priceRepPerEth: '10.365',
+			reasons: [],
+			reliable: true,
+		},
 		execute: false,
 		lastScanAt: new Date().toISOString(),
 		lastScannedBlock: '8842011',

@@ -83,6 +83,7 @@ describe('dashboard exact ETH formatting', () => {
 
 	test('describes risk limits as capital and UTC-day gas-spend controls', () => {
 		expect(opportunityDecisionReason({ decision: 'risk-limit', tokenSymbol: 'REP' })).toBe('A concurrent-position, position-notional, total-locked-capital, or UTC-day gas-spend limit blocks execution')
+		expect(opportunityDecisionReason({ decision: 'market-risk', tokenSymbol: 'REP' })).toBe('The executable DEX price is not confirmed by reliable centralized-market price and depth')
 	})
 
 	test('describes current-head pool samples without claiming one sample per unseen block', () => {

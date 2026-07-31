@@ -11,6 +11,19 @@ const forker = getAddress('0x0000000000000000000000000000000000000008')
 function settings(approvedUniverses = ['101']) {
 	return parseSettings({
 		approvedUniverses,
+		centralizedMarkets: {
+			depthBps: 500,
+			maximumDexDeviationBps: 1000,
+			maximumObservationAgeMilliseconds: 30000,
+			maximumVenueDispersionBps: 500,
+			minimumAskDepthEth: '0',
+			minimumBidDepthEth: '0',
+			minimumSourceCount: 1,
+			orderBookLimit: 20,
+			requestTimeoutMilliseconds: 5000,
+			requiredForExecution: false,
+			sources: [],
+		},
 		connectivity: {
 			publicRpcUrls: ['https://public.example'],
 			quorumRpcUrls: [],

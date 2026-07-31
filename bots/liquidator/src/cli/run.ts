@@ -18,6 +18,7 @@ import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } fr
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
+import { centralizedPriceAllowsExecution, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -208,7 +209,7 @@ async function main() {
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
-				getState: () => operatorSnapshot(state, settings.runtime.execute),
+				getState: () => operatorSnapshot(state, settings.runtime.execute, settings.centralizedMarkets),
 				hostname: settings.runtime.uiHost,
 				setPaused: async value => {
 					if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -381,6 +382,7 @@ async function main() {
 				state.walletRepByToken = primary.walletRepByToken
 				state.lastScannedBlock = scannedBlock.number
 				state.lastScannedTimestamp = scannedBlock.timestamp
+				state.centralizedMarket = await observeCentralizedMarkets(settings.centralizedMarkets)
 				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
 				const inheritedSelections = inheritedChildPoolSelections(state.pools, settings.selectedPools)
 				if (inheritedSelections.length > 0) {
@@ -416,6 +418,7 @@ async function main() {
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					for (const pool of state.pools) {
+						if (!centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) continue
 						if (await maintainVault(wallet, settings, state, pool)) {
 							await saveDurableState(settings.runtime.stateFile, state)
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
@@ -424,6 +427,15 @@ async function main() {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
 						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) {
+							recordActivity(state, {
+								details: `pool=${selected.pool.address}`,
+								kind: 'scan',
+								message: 'Candidate skipped because its REP price disagrees with centralized markets',
+								status: 'info',
+							})
+							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+						}
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate)
@@ -431,6 +443,9 @@ async function main() {
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
+						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) {
+							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+						}
 						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)

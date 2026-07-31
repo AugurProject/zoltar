@@ -249,6 +249,8 @@ try {
 			}
 		})()`),
 		configurationFailure,
+		centralizedMarketsDesktop: undefined as unknown,
+		centralizedMarketsMobile: undefined as unknown,
 		livePaused: undefined as unknown,
 		mobileOverview: undefined as unknown,
 		mobileMigrationControl: undefined as unknown,
@@ -284,6 +286,16 @@ try {
 	evidence.mobileOverview = await capture('liquidator-mobile-overview', 390, 844)
 	const universesTop = await evaluate(`Math.max(0, (document.querySelector('#universes-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
 	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0)
+	const centralizedMarketsMobileTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	evidence.centralizedMarketsMobile = await capture('liquidator-centralized-markets-mobile', 390, 844, typeof centralizedMarketsMobileTop === 'number' ? centralizedMarketsMobileTop : 0)
+	await command('Emulation.setDeviceMetricsOverride', {
+		deviceScaleFactor: 1,
+		height: 900,
+		mobile: false,
+		width: 1440,
+	})
+	const centralizedMarketsDesktopTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	evidence.centralizedMarketsDesktop = await capture('liquidator-centralized-markets-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0)
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressTop = await evaluate(`Math.max(0, (document.querySelector('.address-details')?.getBoundingClientRect().top ?? 0) + window.scrollY - 160)`)
 	const expandedAddressScroll = typeof expandedAddressTop === 'number' ? expandedAddressTop : 0

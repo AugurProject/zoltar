@@ -1,6 +1,19 @@
 {
 	"version": 1,
 	"approvedUniverses": ["0"],
+	"centralizedMarkets": {
+		"depthBps": 500,
+		"maximumDexDeviationBps": 1000,
+		"maximumObservationAgeMilliseconds": 30000,
+		"maximumVenueDispersionBps": 500,
+		"minimumAskDepthEth": "2",
+		"minimumBidDepthEth": "2",
+		"minimumSourceCount": 2,
+		"orderBookLimit": 20,
+		"requestTimeoutMilliseconds": 5000,
+		"requiredForExecution": false,
+		"sources": []
+	},
 	"network": {
 		"name": "sepolia",
 		"chainId": 11155111,

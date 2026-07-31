@@ -5,6 +5,7 @@ import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, typ
 import { formatDecimalAmount } from '#config/settings'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
+import { centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 export type PoolObservation = {
 	activeVaultCount: bigint
@@ -106,6 +107,7 @@ export type PendingTransactionIntent = {
 
 export type RuntimeState = {
 	activities: Activity[]
+	centralizedMarket: CentralizedMarketEstimate | undefined
 	error: string | undefined
 	lastScanAt: string | undefined
 	lastScannedBlock: bigint | undefined
@@ -126,6 +128,7 @@ export type RuntimeState = {
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined): RuntimeState {
 	return {
 		activities: [],
+		centralizedMarket: undefined,
 		error: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
@@ -186,7 +189,7 @@ function candidateView(candidate: LiquidationCandidate) {
 	}
 }
 
-export function operatorSnapshot(state: RuntimeState, execute: boolean) {
+export function operatorSnapshot(state: RuntimeState, execute: boolean, centralizedMarkets?: CentralizedMarketSettings) {
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.rep, 0n)
 	const assumedDebt = state.pools.reduce((total, pool) => total + pool.botVault.allowance, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
@@ -252,6 +255,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 	}
 	return {
 		activities: state.activities,
+		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
 		error: state.error,
 		execute,
 		lastScanAt: state.lastScanAt,
@@ -275,12 +279,14 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 			botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
 			candidates: pool.candidates.map(candidateView),
 			collateralEth: formatDecimalAmount(pool.collateralEth),
+			centralizedPriceAllowed: centralizedMarkets === undefined ? true : centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, centralizedMarkets),
 			currentRetentionRate: pool.currentRetentionRate.toString(),
 			forkActivationTime: pool.forkActivationTime.toString(),
 			forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
 			initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
 			isPriceValid: pool.isPriceValid,
 			lastPrice: formatDecimalAmount(pool.lastPrice),
+			centralizedPriceDeviationBps: state.centralizedMarket === undefined || centralizedMarkets === undefined ? undefined : centralizedPriceDeviationBps(pool.lastPrice, state.centralizedMarket)?.toString(),
 			lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
 			manager: pool.manager,
 			minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),

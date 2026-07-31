@@ -3,6 +3,19 @@ import { parseSettings, parseStrategy, serializedSettings } from '../../src/conf
 
 const settings = {
 	approvedUniverses: ['0'],
+	centralizedMarkets: {
+		depthBps: 500,
+		maximumDexDeviationBps: 1000,
+		maximumObservationAgeMilliseconds: 30000,
+		maximumVenueDispersionBps: 500,
+		minimumAskDepthEth: '2',
+		minimumBidDepthEth: '2',
+		minimumSourceCount: 2,
+		orderBookLimit: 20,
+		requestTimeoutMilliseconds: 5000,
+		requiredForExecution: false,
+		sources: [],
+	},
 	connectivity: {
 		publicRpcUrls: ['https://public.example'],
 		quorumRpcUrls: [],

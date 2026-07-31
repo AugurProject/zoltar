@@ -452,6 +452,41 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	setText('token-count', `${countLabel(snapshot.tokenMarkets.length, 'token')} · ${countLabel(poolCount, 'pool')}`)
 }
 
+function renderCentralizedMarket(snapshot: OperatorSnapshot) {
+	const body = element<HTMLTableSectionElement>('centralized-market-body')
+	body.replaceChildren()
+	const market = snapshot.centralizedMarket
+	const summary = element('centralized-market-summary')
+	summary.replaceChildren()
+	if (market === undefined) {
+		setText('centralized-market-status', 'No CEX sources configured')
+		element('centralized-market-empty').hidden = false
+		return
+	}
+	setText('centralized-market-status', market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · '))
+	const values = [
+		['Estimated REP / ETH', market.priceRepPerEth],
+		['Bid depth', `${market.bidDepthEth} ETH`],
+		['Ask depth', `${market.askDepthEth} ETH`],
+		['Fresh sources', market.observations.length.toString()],
+	]
+	for (const [label, value] of values) {
+		const metric = document.createElement('div')
+		metric.className = 'metric'
+		const term = document.createElement('span')
+		term.className = 'metric-label'
+		term.textContent = label ?? ''
+		const description = document.createElement('strong')
+		description.textContent = value ?? ''
+		metric.append(term, description)
+		summary.append(metric)
+	}
+	for (const observation of market.observations) {
+		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()]))
+	}
+	element('centralized-market-empty').hidden = market.observations.length !== 0
+}
+
 function renderDisputePaths(snapshot: OperatorSnapshot) {
 	const container = element('dispute-paths')
 	const disclosureState = new Map(Array.from(container.querySelectorAll<HTMLDetailsElement>('details[data-report-id]')).map(details => [details.dataset['reportId'] ?? '', { focused: details.querySelector('summary') === document.activeElement, open: details.open }]))
@@ -782,6 +817,7 @@ function render(snapshot: OperatorSnapshot) {
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
 	renderPositions(snapshot.positions, snapshot.positionRecordCount)
 	renderTokenMarkets(snapshot)
+	renderCentralizedMarket(snapshot)
 	renderDisputePaths(snapshot)
 	renderMarketPriceChart(snapshot)
 	if (focusKey !== undefined) {

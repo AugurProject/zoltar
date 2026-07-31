@@ -86,6 +86,42 @@ on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 The active-vault scan is capped by `runtime.maxVaultsPerPool`. A capped scan is
 marked in the dashboard and must not be treated as a complete opportunity view.
 
+## Centralized-market reference
+
+Both bots use the shared CCXT public market-data API to normalize order books
+from independently configured exchanges. Each `centralizedMarkets.sources`
+entry identifies an exchange with its CCXT `exchangeId`, a unified `REP/QUOTE`
+market, and an `ETH/QUOTE` market when REP is not quoted directly in ETH. Public
+ticker and order-book reads do not require exchange credentials.
+
+The bot converts each venue into REP per ETH, sums executable bid and ask depth
+inside `depthBps`, and uses the median of fresh venue prices. An estimate is
+reliable only when it has `minimumSourceCount` independent exchanges, minimum
+two-sided depth, and no more than `maximumVenueDispersionBps` disagreement.
+Configured sources and their liquidity are shown in the dashboard.
+
+When `requiredForExecution` is true, use at least two sources. Liquidation and
+price-dependent vault maintenance stop when CEX evidence is stale, shallow,
+dispersed, unavailable, or differs from the coordinator REP price by more than
+`maximumDexDeviationBps`. Migration and transaction recovery continue because
+they do not rely on a REP market price. When `requiredForExecution` is false,
+healthy CEX evidence can still reject an outlying coordinator price, but
+unavailable or unreliable CEX data remains advisory.
+
+The CEX estimate is an independent manipulation guard; it never replaces the
+coordinator price in protocol arithmetic and never authorizes a transaction by
+itself. Confirm that the configured market is the intended REP asset rather than
+another token that shares its ticker.
+
+Example source entries (only use venues where these exact markets exist):
+
+```json
+"sources": [
+  { "exchangeId": "kraken", "repMarket": "REP/USD", "ethMarket": "ETH/USD" },
+  { "exchangeId": "anotherexchange", "repMarket": "REP/ETH", "ethMarket": null }
+]
+```
+
 ## Strategy controls
 
 Amounts use 18-decimal ETH or REP units in the operator JSON.

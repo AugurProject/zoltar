@@ -70,6 +70,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
 			['dashboard-markets.png', 'markets'],
+			['dashboard-markets-mobile.png', 'markets'],
 			...(process.env['OPEN_ORACLE_CAPTURE_DEPLOYMENT'] === '1'
 				? ([
 						['deployment-desktop.png', 'deployment-configuration'],
@@ -84,12 +85,22 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					] as const)
 				: []),
 		] as const) {
-			const mobile = name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
+			const mobile = name === 'dashboard-markets-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
 			if (section !== undefined) {
-				await command('Runtime.evaluate', { expression: `document.getElementById(${JSON.stringify(section)})?.scrollIntoView()` }, sessionId)
+				await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const section = document.getElementById(${JSON.stringify(section)})
+							if (section === null) return
+							window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - 16))
+						})()`,
+					},
+					sessionId,
+				)
 				await Bun.sleep(250)
 			}
 			const capture = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true }, sessionId)
@@ -284,6 +295,19 @@ const positionDerivedSnapshot = operatorSnapshot(
 		balances: undefined,
 		blockNumber: '23842152',
 		blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
+		centralizedMarket: {
+			askDepthEth: 63n * 10n ** 17n,
+			bidDepthEth: 71n * 10n ** 17n,
+			maximumPriceRepPerEth: 1042n * 10n ** 16n,
+			minimumPriceRepPerEth: 1031n * 10n ** 16n,
+			observations: [
+				{ askDepthEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: 38n * 10n ** 17n, exchangeId: 'kraken', observedAt: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', sourceTimestamp: now },
+				{ askDepthEth: 29n * 10n ** 17n, bestAskQuote: '0.097', bestBidQuote: '0.096', bidDepthEth: 33n * 10n ** 17n, exchangeId: 'coinbase', observedAt: now, priceRepPerEth: 1042n * 10n ** 16n, repMarket: 'REP/ETH', sourceTimestamp: now },
+			],
+			priceRepPerEth: 10365n * 10n ** 15n,
+			reasons: [],
+			reliable: true,
+		},
 		endpointChecks: [],
 		executionHistory: [],
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
@@ -320,6 +344,7 @@ const snapshot = {
 	balances: { availableEth: '1.842', availableRep: '184.25', availableWeth: '2.375', repValueWeth: '0.770165', totalValueWeth: '4.987165' },
 	blockNumber: '23842152',
 	blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
+	centralizedMarket: positionDerivedSnapshot.centralizedMarket,
 	connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
 	deployment: positionDerivedSnapshot.deployment,
 	endpointChecks: [

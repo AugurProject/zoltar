@@ -100,6 +100,7 @@ import {
 } from '#state/operator-state'
 import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
+import { centralizedPriceAllowsExecution, observeCentralizedMarkets, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from '#core/position-accounting'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type DurableTransactionIntent, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { quorumValue } from '#monitoring/read-quorum'
@@ -872,6 +873,7 @@ async function executeDispute(
 	hedgeFee: (typeof FEES)[number],
 	tokenMetadata: { decimals: number; symbol: string },
 	positions: readonly PositionRecord[],
+	centralizedMarket: CentralizedMarketEstimate | undefined,
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	persistPosition: (position: PositionRecord) => Promise<void>,
@@ -928,6 +930,12 @@ async function executeDispute(
 	)
 	if (refreshedQuote === undefined) throw new Error('Canonical execution snapshot did not produce an arbitrage quote')
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
+	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
+	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountRep * 10n ** 18n) / referenceWeth
+	const primaryRep = game.token2.toLowerCase() === config.network.rep.toLowerCase()
+	if ((primaryRep && !centralizedPriceAllowsExecution(refreshedDexPriceRepPerEth, centralizedMarket, config.centralizedMarkets)) || (!primaryRep && config.centralizedMarkets.requiredForExecution)) {
+		throw new Error('Final executable DEX price is not confirmed by centralized markets')
+	}
 	const newAmount2 = executionSnapshot.replacementAmount2
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Final replacement ratio does not derive the selected arbitrage direction')
@@ -2164,6 +2172,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		balances: undefined,
 		blockNumber: undefined,
 		blockTimestamp: undefined,
+		centralizedMarket: undefined,
 		executionHistory,
 		endpointChecks: [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))],
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
@@ -2666,6 +2675,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					}
 					let completedOpportunityCount = 0
 					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
+						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
 						state.tokenMarkets = await loadTokenMarkets(client, {
@@ -2720,6 +2730,22 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 										reportId: evaluated.opportunity.reportId,
 									})
 									if (evaluated.candidate !== undefined) {
+										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsWeth : evaluated.candidate.quote.hedgeCostWeth
+										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountRep * 10n ** 18n) / referenceWeth
+										const primaryRep = evaluated.candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
+										const marketAllowed = primaryRep ? centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets) : !config.centralizedMarkets.requiredForExecution
+										if (!marketAllowed) {
+											evaluated.opportunity.decision = 'market-risk'
+											recordOperation(state, {
+												category: 'decision',
+												details: `dexRepPerEth=${decimalSignedEth(dexPriceRepPerEth)}`,
+												level: 'warning',
+												message: 'Centralized-market guard blocked report',
+												reason: primaryRep ? 'DEX price exceeded the configured CEX deviation or CEX depth was unreliable' : 'Required centralized-market confirmation is unavailable for this REP token',
+												reportId: evaluated.opportunity.reportId,
+											})
+											continue
+										}
 										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, dateFromBlockTimestamp(block.timestamp))
 										if (mismatch === undefined) candidates.push(evaluated.candidate)
 										else {
@@ -2752,7 +2778,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 							try {
 								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 								if (metadata === undefined) throw new Error('Token metadata is unavailable')
-								const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, () => state.paused, trackTransaction, persistPosition)
+								const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, state.centralizedMarket, () => state.paused, trackTransaction, persistPosition)
 								selected.opportunity.decision = 'submitted'
 								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
 								try {

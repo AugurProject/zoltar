@@ -10,6 +10,7 @@
 		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
+		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts"
 	},
@@ -22,6 +23,7 @@
 	},
 	"dependencies": {
 		"@noble/hashes": "2.2.0",
+		"ccxt": "4.5.70",
 		"micro-eth-signer": "0.18.1"
 	},
 	"devDependencies": {

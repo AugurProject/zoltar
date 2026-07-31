@@ -14,6 +14,19 @@ afterEach(async () => {
 
 function settings(privateKeyValue: Hex | undefined) {
 	return {
+		centralizedMarkets: {
+			depthBps: 500n,
+			maximumDexDeviationBps: 1_000n,
+			maximumObservationAgeMilliseconds: 30_000,
+			maximumVenueDispersionBps: 500n,
+			minimumAskDepthEth: 0n,
+			minimumBidDepthEth: 0n,
+			minimumSourceCount: 1,
+			orderBookLimit: 20,
+			requestTimeoutMilliseconds: 5_000,
+			requiredForExecution: false,
+			sources: [],
+		},
 		connectivity: {
 			publicRpcUrls: ['https://submit-one.example/', 'https://submit-two.example/'],
 			readRpcUrl: 'https://read.example/',

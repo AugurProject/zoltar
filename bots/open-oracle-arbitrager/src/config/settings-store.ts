@@ -8,6 +8,7 @@ import { signerCandidate } from '#config/signer'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { RiskLimits } from '#core/safety-controls'
+import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -27,6 +28,7 @@ export type RuntimeSettings = {
 }
 
 export type PersistedOperatorSettings = {
+	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
 	deployment: DeploymentSettings
 	network: NetworkName
@@ -61,6 +63,20 @@ const operatorSettingsFilesystem: OperatorSettingsFilesystem = {
 	rm,
 }
 
+const defaultCentralizedMarkets = {
+	depthBps: 500,
+	maximumDexDeviationBps: 1_000,
+	maximumObservationAgeMilliseconds: 30_000,
+	maximumVenueDispersionBps: 500,
+	minimumAskDepthEth: '0',
+	minimumBidDepthEth: '0',
+	minimumSourceCount: 1,
+	orderBookLimit: 20,
+	requestTimeoutMilliseconds: 5_000,
+	requiredForExecution: false,
+	sources: [],
+}
+
 type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeSlippageBps' | 'riskLimits'> & {
 	lookbackBlocks: string
 	maxHedgeSlippageBps: string
@@ -74,6 +90,7 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 }
 
 export type StoredOperatorSettings = {
+	centralizedMarkets: ReturnType<typeof serializeCentralizedMarketSettings>
 	connectivity: ConnectivitySettings
 	deployment: DeploymentSettings
 	network: NetworkName
@@ -92,7 +109,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['connectivity', 'deployment', 'network', 'paused', 'privateKey', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'paused', 'privateKey', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -177,6 +194,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const candidate = signerCandidate(privateKeyValue ?? null)
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	return {
+		centralizedMarkets: parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets),
 		connectivity: validateConnectivitySettings(record['connectivity']),
 		deployment: validateDeploymentSettings(record['deployment']),
 		network: record['network'],
@@ -191,6 +209,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
 	return {
+		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
 		connectivity: settings.connectivity,
 		deployment: settings.deployment,
 		network: settings.network,

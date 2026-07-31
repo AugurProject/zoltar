@@ -29,6 +29,8 @@ type Pool = {
 	botVault: Vault
 	candidates: Candidate[]
 	collateralEth: string
+	centralizedPriceAllowed: boolean
+	centralizedPriceDeviationBps?: string
 	isPriceValid: boolean
 	lastPrice: string
 	multiplierBps: string
@@ -56,8 +58,25 @@ type Universe = {
 	selectedPoolCount: number
 }
 
+type CentralizedMarket = {
+	askDepthEth: string
+	bidDepthEth: string
+	observations: {
+		askDepthEth: string
+		bidDepthEth: string
+		exchangeId: string
+		observedAt: string
+		priceRepPerEth: string
+		repMarket: string
+	}[]
+	priceRepPerEth: string
+	reasons: string[]
+	reliable: boolean
+}
+
 type Snapshot = {
 	activities: Activity[]
+	centralizedMarket?: CentralizedMarket
 	error?: string
 	execute: boolean
 	lastScanAt?: string
@@ -93,6 +112,9 @@ function element<T extends Element>(id: string, constructor: { new (): T }) {
 }
 
 const metrics = element('metrics', HTMLDivElement)
+const centralizedMarketSummary = element('centralized-market-summary', HTMLDivElement)
+const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
+const centralizedMarketStatus = element('centralized-market-status', HTMLParagraphElement)
 const universeRows = element('universe-rows', HTMLTableSectionElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
@@ -165,6 +187,33 @@ function renderMetrics(snapshot: Snapshot) {
 		metric('Assumed debt', `${snapshot.metrics.assumedDebtEth} ETH`),
 		metric('Wallet ETH', snapshot.metrics.walletEth),
 		metric('Wallet REP', snapshot.metrics.walletRep),
+	)
+}
+
+function renderCentralizedMarket(snapshot: Snapshot) {
+	const market = snapshot.centralizedMarket
+	if (market === undefined) {
+		centralizedMarketStatus.textContent = 'No CEX sources configured'
+		centralizedMarketSummary.replaceChildren()
+		const row = document.createElement('tr')
+		const empty = cell('Configure public CEX sources to observe independent prices.')
+		empty.colSpan = 6
+		empty.className = 'empty'
+		row.append(empty)
+		centralizedMarketRows.replaceChildren(row)
+		return
+	}
+	centralizedMarketStatus.textContent = market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · ')
+	centralizedMarketSummary.replaceChildren(metric('Estimated REP / ETH', market.priceRepPerEth), metric('Bid depth', `${market.bidDepthEth} ETH`), metric('Ask depth', `${market.askDepthEth} ETH`), metric('Fresh sources', market.observations.length.toString()))
+	centralizedMarketRows.replaceChildren(
+		...market.observations.map(observation => {
+			const row = document.createElement('tr')
+			const cells = [cell(observation.exchangeId), cell(observation.repMarket), cell(observation.priceRepPerEth), cell(`${observation.bidDepthEth} ETH`), cell(`${observation.askDepthEth} ETH`), cell(new Date(observation.observedAt).toLocaleTimeString())]
+			const labels = ['Exchange', 'Market', 'REP / ETH', 'Bid depth', 'Ask depth', 'Observed']
+			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
+			row.append(...cells)
+			return row
+		}),
 	)
 }
 
@@ -302,7 +351,7 @@ function renderPools(snapshot: Snapshot) {
 			toggle.append(checkbox, toggleText)
 			const poolStatus = document.createElement('span')
 			poolStatus.className = 'action-status'
-			poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : pool.selected ? 'Eligible' : ''
+			poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'CEX price guard' : pool.selected ? 'Eligible' : ''
 			checkbox.addEventListener('change', async () => {
 				checkbox.disabled = true
 				actionStatus(poolStatus, 'Saving…')
@@ -339,7 +388,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(toggle, poolStatus),
 				cell(addressDetails),
 				cell(stacked(`#${pool.questionId}`, `${pool.multiplierBps} bps collateral`)),
-				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH`)),
+				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from CEX`}`)),
 				cell(stacked(`${pool.totalRep} REP`, `${pool.totalAllowanceEth} ETH allowance · ${pool.activeVaultCount} vaults`)),
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.rep} REP · ${pool.botVault.allowanceEth} ETH assumed · ${pool.botVault.unpaidEthFees} ETH fees`)),
 				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
@@ -403,6 +452,7 @@ function render(snapshot: Snapshot) {
 		globalError.textContent = snapshot.error
 	}
 	renderMetrics(snapshot)
+	renderCentralizedMarket(snapshot)
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)

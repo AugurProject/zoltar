@@ -9,6 +9,7 @@ import type { Venue } from '#core/venue-strategy'
 import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-monitor'
 import type { PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
+import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
@@ -79,7 +80,7 @@ export type ReportPathSnapshot = {
 }
 
 export type OpportunitySnapshot = {
-	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'risk-limit' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
+	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'market-risk' | 'paused' | 'risk-limit' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
 	estimatedNetProfitEth: string
@@ -147,6 +148,7 @@ export type OperatorSnapshot = {
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
+	centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
 	execute: boolean
 	executor: Address | undefined
 	executionHistory: readonly ExecutionRecord[]
@@ -210,6 +212,7 @@ export type OperatorState = {
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
+	centralizedMarket?: CentralizedMarketEstimate | undefined
 	executionHistory: ExecutionRecord[]
 	endpointChecks: EndpointCheck[]
 	gameCapital: GameCapitalSnapshot
@@ -529,6 +532,7 @@ export function operatorSnapshot(
 		balances: state.balances,
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,
+		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
 		execute: fixed.execute,
 		executor: fixed.executor,
 		executionHistory: state.executionHistory.slice(0, 500),
