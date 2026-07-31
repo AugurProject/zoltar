@@ -94,4 +94,23 @@ describe('liquidator settings', () => {
 			}),
 		).toThrow('independent quorum RPC')
 	})
+
+	test('requires a deployed WETH contract for live execution', () => {
+		expect(() =>
+			parseSettings({
+				...settings,
+				connectivity: {
+					...settings.connectivity,
+					quorumRpcUrls: ['https://quorum.example'],
+				},
+				deployment: {
+					...settings.deployment,
+					securityPoolFactory: '0x0000000000000000000000000000000000000001',
+					zoltar: '0x0000000000000000000000000000000000000002',
+				},
+				privateKey: `0x${'11'.repeat(32)}`,
+				runtime: { ...settings.runtime, execute: true },
+			}),
+		).toThrow('deployed WETH contract')
+	})
 })

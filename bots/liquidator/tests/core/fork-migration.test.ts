@@ -227,6 +227,14 @@ describe('fork migration strategy', () => {
 		expect(() => validateApprovedUniverseSelection([rootUniverse, approvedChildUniverse, competingChildUniverse], [101n, 102n])).toThrow('Select only one truthful child of universe 0')
 	})
 
+	test('rejects a descendant whose implied truth path conflicts with another approval', () => {
+		const competingChildUniverse = universe(102n, false, 0n, 2n)
+		const competingGrandchildUniverse = universe(201n, true, 102n, 1n)
+		const tree = [rootUniverse, approvedChildUniverse, competingChildUniverse, competingGrandchildUniverse]
+		expect(() => validateApprovedUniverseSelection(tree, [101n, 201n])).toThrow('Select only one truthful child of universe 0')
+		expect(() => validateApprovedUniverseSelection(tree, [102n, 201n])).not.toThrow()
+	})
+
 	test('only executes pool strategy for selected operational pools in approved universes', () => {
 		expect(isPoolExecutionEligible({ approvedUniverse: true, selected: true, systemState: 0n })).toBe(true)
 		expect(isPoolExecutionEligible({ approvedUniverse: false, selected: true, systemState: 0n })).toBe(false)

@@ -39,25 +39,27 @@ export function inheritedChildPoolSelections(pools: readonly PoolObservation[], 
 	})
 }
 
-function approvedChildUniverses(universes: readonly UniverseObservation[], approvedUniverses: readonly bigint[]) {
-	const childrenByParentUniverse = new Map<string, Set<string>>()
-	for (const universe of universes) {
-		if (universe.parentId === undefined || !approvedUniverses.includes(universe.id)) continue
-		const key = universe.parentId.toString()
-		const children = childrenByParentUniverse.get(key) ?? new Set<string>()
-		children.add(universe.id.toString())
-		childrenByParentUniverse.set(key, children)
-	}
-	return childrenByParentUniverse
-}
-
 export function validateApprovedUniverseSelection(universes: readonly UniverseObservation[], approvedUniverses: readonly bigint[]) {
-	const knownUniverses = new Set(universes.map(universe => universe.id.toString()))
-	const unknown = approvedUniverses.find(universe => !knownUniverses.has(universe.toString()))
+	const universesById = new Map(universes.map(universe => [universe.id.toString(), universe]))
+	const unknown = approvedUniverses.find(universe => !universesById.has(universe.toString()))
 	if (unknown !== undefined) throw new Error(`Universe ${unknown.toString()} is not present in the Zoltar universe tree`)
-	for (const [parentUniverse, children] of approvedChildUniverses(universes, approvedUniverses)) {
-		if (children.size > 1) {
-			throw new Error(`Select only one truthful child of universe ${parentUniverse}`)
+	const childChoiceByParent = new Map<string, string>()
+	for (const approvedId of approvedUniverses) {
+		let child = universesById.get(approvedId.toString())
+		const visited = new Set<string>()
+		while (child?.parentId !== undefined) {
+			const childId = child.id.toString()
+			if (visited.has(childId)) throw new Error(`Universe ${childId} has a cyclic parent lineage`)
+			visited.add(childId)
+			const parentId = child.parentId.toString()
+			const selectedChild = childChoiceByParent.get(parentId)
+			if (selectedChild !== undefined && selectedChild !== childId) {
+				throw new Error(`Select only one truthful child of universe ${parentId}`)
+			}
+			childChoiceByParent.set(parentId, childId)
+			const parent = universesById.get(parentId)
+			if (parent === undefined) throw new Error(`Universe ${childId} references unknown parent universe ${parentId}`)
+			child = parent
 		}
 	}
 }

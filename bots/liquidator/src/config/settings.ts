@@ -233,6 +233,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 		throw new Error('Public submission minimumRelaySuccesses cannot exceed the configured public RPC count')
 	}
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
+	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
 	return settings
 }
