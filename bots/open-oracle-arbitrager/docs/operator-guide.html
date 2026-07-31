@@ -28,10 +28,7 @@
 
 			<section id="architecture">
 				<h2>What the bot does</h2>
-				<p>
-					The bot follows approved <code>OpenOraclePriceCoordinator</code>
-					reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Uniswap V3 remains the reference and TWAP anchor. Only the best currently eligible opportunity may be selected.
-				</p>
+				<p>The bot follows approved <code>OpenOraclePriceCoordinator</code> reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Uniswap V3 remains the reference and TWAP anchor. Only the best currently eligible opportunity may be selected.</p>
 				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle" tabindex="0" aria-label="Scrollable OpenOracle arbitrager execution and recovery lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-lifecycle" data-plot-width="1160" data-plot-height="390" role="img" aria-label="OpenOracle arbitrager execution and recovery lifecycle">
 						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after every configured read RPC serves the same twelfth-descendant block hash; ambiguous evidence stays in durable recovery.</span>
@@ -64,11 +61,7 @@ install -m 600 config/operator.example.json .state/operator.json
 bun run run</code></pre>
 				<p>Direct file editing is an offline workflow: stop the bot, edit the configuration, and restart it. While the bot is running, use the dashboard only; do not edit the file concurrently with a dashboard save.</p>
 				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Syncing</strong>; after the bounded historical scan reaches the head, the state becomes <strong>Running</strong>. The bot then queries every newly observed block and evaluates opportunities at the newest canonical head.</p>
-				<p>
-					For Sepolia, set <code>network</code> to <code>sepolia</code>, replace the deployment addresses and RPC URLs, keep
-					<code>runtime.execute</code>
-					off for the first rehearsal, and save the complete JSON in the UI when you need to change a startup-only field.
-				</p>
+				<p>For Sepolia, set <code>network</code> to <code>sepolia</code>, replace the deployment addresses and RPC URLs, keep <code>runtime.execute</code> off for the first rehearsal, and save the complete JSON in the UI when you need to change a startup-only field.</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
 					Execution also requires an authenticated manifest, at least two independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected.
@@ -232,10 +225,7 @@ bun run run</code></pre>
 							<msub><mi>fee</mi><mi>protocol</mi></msub>
 						</mrow>
 					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Sell-token hedge P&amp;L before gas</span>
-						The signed minimum-output limit reserves the full configured adverse slippage.
-					</p>
+					<p class="equation-caption"><span class="equation-label">Sell-token hedge P&amp;L before gas</span> The signed minimum-output limit reserves the full configured adverse slippage.</p>
 				</div>
 				<p><strong>Buy-token direction.</strong> The bot requests an exact-output quote for the report token plus both token fees:</p>
 				<div class="equation" id="eq-arbitrager-buy-profit" tabindex="0">
@@ -248,10 +238,7 @@ bun run run</code></pre>
 							<msub><mi>WETH</mi><mi>in</mi></msub>
 						</mrow>
 					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Buy-token hedge P&amp;L before gas</span>
-						The signed maximum-input limit rounds upward and is fully funded before entry.
-					</p>
+					<p class="equation-caption"><span class="equation-label">Buy-token hedge P&amp;L before gas</span> The signed maximum-input limit rounds upward and is fully funded before entry.</p>
 				</div>
 				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-profit" tabindex="0" aria-label="Scrollable OpenOracle arbitrager profit accounting lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-profit" data-plot-width="980" data-plot-height="300" role="img" aria-label="OpenOracle arbitrager modeled and realized profit accounting">
@@ -274,20 +261,10 @@ bun run run</code></pre>
 							<msub><mi>R</mi><mi>lifecycle</mi></msub>
 						</mrow>
 					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Modeled net</span>Every term is measured in WETH. It must meet both the absolute WETH floor and <code>P<sub>modeled</sub> × 10,000 ≥ B<sub>return</sub> × minimumProfitBps</code>.
-					</p>
+					<p class="equation-caption"><span class="equation-label">Modeled net</span>Every term is measured in WETH. It must meet both the absolute WETH floor and <code>P<sub>modeled</sub> × 10,000 ≥ B<sub>return</sub> × minimumProfitBps</code>.</p>
 				</div>
-				<p>
-					For a sell-token hedge, <code>B<sub>return</sub></code> is the report's WETH contribution plus its WETH fees. For a buy-token hedge it is the exact-output Uniswap quote's required WETH input. Equality passes the threshold; integer comparison occurs in WETH wei before display formatting.
-				</p>
-				<p>
-					For a direct Uniswap V2 WETH/token pair with input reserve
-					<code>R<sub>in</sub></code
-					>, output reserve <code>R<sub>out</sub></code
-					>, and input <code>A<sub>in</sub></code
-					>, the bot applies Router02's 0.30% fee and integer rounding exactly: <code>A<sub>out</sub> = floor(997 × A<sub>in</sub> × R<sub>out</sub> / (1000 × R<sub>in</sub> + 997 × A<sub>in</sub>))</code>. For exact output it uses Router02's rounded-up inverse. The strategy then compares every configured V2, V3, and V4 executable quote using the same profit, slippage, and gas policy; it never selects a venue from display spot price alone.
-				</p>
+				<p>For a sell-token hedge, <code>B<sub>return</sub></code> is the report's WETH contribution plus its WETH fees. For a buy-token hedge it is the exact-output Uniswap quote's required WETH input. Equality passes the threshold; integer comparison occurs in WETH wei before display formatting.</p>
+				<p>For a direct Uniswap V2 WETH/token pair with input reserve <code>R<sub>in</sub></code >, output reserve <code>R<sub>out</sub></code >, and input <code>A<sub>in</sub></code >, the bot applies Router02's 0.30% fee and integer rounding exactly: <code>A<sub>out</sub> = floor(997 × A<sub>in</sub> × R<sub>out</sub> / (1000 × R<sub>in</sub> + 997 × A<sub>in</sub>))</code>. For exact output it uses Router02's rounded-up inverse. The strategy then compares every configured V2, V3, and V4 executable quote using the same profit, slippage, and gas policy; it never selects a venue from display spot price alone.</p>
 				<ul>
 					<li>Entry gas reserves <code>1,200,000 × gas price</code>; private mode replaces the gas amount with the largest successful relay simulation.</li>
 					<li>The slippage reserve is the complete distance between the quote and the signed Uniswap limit, not merely expected slippage.</li>
@@ -381,10 +358,7 @@ bun run run</code></pre>
 				</ul>
 				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until it rereads the receipt and every configured read RPC serves the same twelfth-descendant block hash. A lagging RPC delays closure; the primary RPC's head alone cannot release risk or record realized profit.</p>
 				<p>If a shallow reorganization removes that receipt, provisional gas and withdrawals are rolled back, the old signed hash is archived for late revert monitoring, and the position returns to <code>open</code> for a fresh parent-bound lifecycle attempt. If evidence disagrees, an executor event is missing or exact assets cannot be attributed, the state becomes <code>recovery-required</code> and continues consuming the risk limit.</p>
-				<p>
-					A canonical immediate replacement is handled separately. The bot derives the exact credited token and amount from its durable entry report and the immediate successor, submits one parent-bound exact withdrawal, and waits for the normal twelve-descendant RPC quorum. Success becomes
-					<code>replaced</code>, not <code>closed</code>: the claimed credit is known, but the hedge's remaining one-sided inventory has not been valued or unwound automatically.
-				</p>
+				<p>A canonical immediate replacement is handled separately. The bot derives the exact credited token and amount from its durable entry report and the immediate successor, submits one parent-bound exact withdrawal, and waits for the normal twelve-descendant RPC quorum. Success becomes <code>replaced</code>, not <code>closed</code>: the claimed credit is known, but the hedge's remaining one-sided inventory has not been valued or unwound automatically.</p>
 				<div class="callout">
 					<strong>Never delete a recovery record to make the bot trade again</strong>
 					Preserve the journal, stop new entries, compare all configured read RPCs and an explorer, verify the signer, chain, OpenOracle, executor, report, nonce, calldata, receipt event, wallet balances, and OpenOracle internal balances, then use the signer-authorized reconciliation command documented in

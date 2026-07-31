@@ -19,11 +19,7 @@
 			<section class="paper-section" id="abstract">
 				<p>Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders may migrate or split their claims across one or more selected branches.</p>
 
-				<p>
-					The design closely follows the
-					<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>
-					model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value.
-				</p>
+				<p>The design closely follows the <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a> model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value.</p>
 
 				<p>Zoltar is not itself a prediction market or an outcome-reporting oracle. Instead, it provides the shared infrastructure for questions, REP tokens, and universe forks. Any application can build on top of it and define its own local dispute process. If disagreement cannot be resolved locally, anyone able to commit the required REP threshold may fork an unforked universe using an eligible ended global question. The resulting child universes become the new foundations from which applications may choose to continue.</p>
 			</section>
@@ -103,15 +99,8 @@
 					<h2>2. Universe Model</h2>
 					<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
 				</div>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, <a href="../safety-operations/security-model.html#assumption-a26">A26 Ethereum execution</a>, and <a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic identity</a>.
-				</p>
-				<p>
-					A universe is one branch of protocol state. The
-					<a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a>
-					struct stores the minimum data needed to identify that branch and connect it to its parent:
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, <a href="../safety-operations/security-model.html#assumption-a26">A26 Ethereum execution</a>, and <a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic identity</a>.</p>
+				<p>A universe is one branch of protocol state. The <a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:</p>
 				<ul class="clean-list">
 					<li><code>forkTime</code>: when the universe forked</li>
 					<li><code>forkQuestionId</code>: the question id recorded by <code>forkUniverse</code> and used to define child branches</li>
@@ -160,10 +149,7 @@
 					Zoltar defines the branch set. It does not select one canonical child universe or delete the others.
 				</div>
 				<h3 id="global-question-scope">Global Question Scope</h3>
-				<p>
-					Questions are global protocol objects in Zoltar.
-					<code>forkUniverse</code> checks that the target universe exists, still has supply, has not already forked, and that the supplied question exists and has ended. It does not require the question to have been created for that universe. Applications that need a stricter universe/question relationship enforce it above Zoltar.
-				</p>
+				<p>Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks that the target universe exists, still has supply, has not already forked, and that the supplied question exists and has ended. It does not require the question to have been created for that universe. Applications that need a stricter universe/question relationship enforce it above Zoltar.</p>
 				<div class="callout">
 					<p><strong>Accepted eligibility boundary</strong> Zoltar intentionally accepts any existing ended global question. It does not require a minimum creation age, prior universe registration, or proof that the fork's disruption is smaller than its economic benefit. The fork-threshold REP commitment and configured haircut are the protocol's admission mechanism. A stricter relevance, aging, or cost-benefit rule is not a Zoltar invariant.</p>
 				</div>
@@ -174,15 +160,9 @@
 					<h2>3. Fork Thresholds and REP Economics</h2>
 					<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 				</div>
-				<p>
-					To trigger a Zoltar fork, the caller must commit the
-					<code>forkThreshold</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.
-				</p>
+				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThreshold</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
 				<p>Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.</p>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../safety-operations/security-model.html#assumption-a21">A21 genesis REP behavior</a>, and <a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>.
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../safety-operations/security-model.html#assumption-a21">A21 genesis REP behavior</a>, and <a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
 				<div class="equation" id="eq-zoltar-fork-threshold">
 					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = ⌊totalTheoreticalRepSupply / forkThresholdDivisor⌋">
 						<mrow>
@@ -232,10 +212,7 @@
 				<div class="implementation-grid">
 					<div class="implementation-note">
 						<b>Implementation entry point</b>
-						<p>
-							<a href="../../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a>
-							applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.
-						</p>
+						<p><a href="../../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.</p>
 					</div>
 				</div>
 
@@ -247,16 +224,8 @@
 					<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</p>
 				</figure>
 
-				<p>
-					Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by
-					<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
-					under Zoltar’s control.
-				</p>
-				<p>
-					A child's theoretical supply is a maximum for REP that can be minted in that branch. It starts from the parent's pre-fork theoretical supply and subtracts only the uncredited haircut. Later REP added to a migration balance converts 1:1; only fork initiation pays this admission cost. A holder can voluntarily remove REP and reduce theoretical supply through
-					<code>Zoltar.burnRep</code>; the child token's <code>burn</code>
-					entrypoint itself is restricted to Zoltar.
-				</p>
+				<p>Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a> under Zoltar’s control.</p>
+				<p>A child's theoretical supply is a maximum for REP that can be minted in that branch. It starts from the parent's pre-fork theoretical supply and subtracts only the uncredited haircut. Later REP added to a migration balance converts 1:1; only fork initiation pays this admission cost. A holder can voluntarily remove REP and reduce theoretical supply through <code>Zoltar.burnRep</code>; the child token's <code>burn</code> entrypoint itself is restricted to Zoltar.</p>
 
 				<h3>Repeated-fork threshold decay</h3>
 				<p>Along one lineage, each fork subtracts its floored haircut from child theoretical supply. With threshold divisor <code>20</code> and burn divisor <code>5</code>, supply is close to 99% of the previous generation, subject to Solidity integer flooring.</p>
@@ -315,33 +284,18 @@
 					<h2>4. Child Universes and REP Splitting</h2>
 					<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
 				</div>
-				<p>
-					Once a universe forks, child universes can be deployed lazily through
-					<code>deployChild</code>. A user can also add more REP into the migration balance with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.
-				</p>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch value</a>, <a href="../safety-operations/security-model.html#assumption-a11">A11 practical migration</a>, <a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>, and <a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>.
-				</p>
+				<p>Once a universe forks, child universes can be deployed lazily through <code>deployChild</code>. A user can also add more REP into the migration balance with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch value</a>, <a href="../safety-operations/security-model.html#assumption-a11">A11 practical migration</a>, <a href="../safety-operations/security-model.html#assumption-a13">A13 REP liquidity</a>, and <a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<p>For categorical questions, <code>Invalid</code> and any in-range categorical outcome are allowed, while out-of-range values are rejected. For scalar questions, only well-formed scalar encodings are allowed.</p>
-				<p>
-					The fork question defines the child-branch shape for the whole universe. A child branch may therefore be keyed by
-					<code>Invalid</code>, a categorical outcome index, or a scalar encoding depending on which parent-universe question <code>forkUniverse</code> used for the fork. Downstream applications should treat that branch selector as universe-level metadata rather than assume every child branch is binary.
-				</p>
+				<p>The fork question defines the child-branch shape for the whole universe. A child branch may therefore be keyed by <code>Invalid</code>, a categorical outcome index, or a scalar encoding depending on which parent-universe question <code>forkUniverse</code> used for the fork. Downstream applications should treat that branch selector as universe-level metadata rather than assume every child branch is binary.</p>
 				<div class="implementation-grid">
 					<div class="implementation-note">
 						<b>Implementation entry points</b>
-						<p>
-							<a href="../../solidity/contracts/Zoltar.sol"><code>addRepToMigrationBalance</code></a>
-							prepares additional REP, and <code>splitMigrationRep</code> mints child REP for selected outcomes.
-						</p>
+						<p><a href="../../solidity/contracts/Zoltar.sol"><code>addRepToMigrationBalance</code></a> prepares additional REP, and <code>splitMigrationRep</code> mints child REP for selected outcomes.</p>
 					</div>
 					<div class="implementation-note">
 						<b>Validation dependency</b>
-						<p>
-							<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>isMalformedAnswerOption</code></a>
-							distinguishes valid branches from rejected malformed answers.
-						</p>
+						<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>isMalformedAnswerOption</code></a> distinguishes valid branches from rejected malformed answers.</p>
 					</div>
 				</div>
 
@@ -365,14 +319,8 @@
 					<h2>5. Assumptions and Security Model</h2>
 					<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
 				</div>
-				<p>
-					Zoltar is a
-					<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain. This is the security model's <a href="../safety-operations/security-model.html#excluded-guarantee-eg01">EG01 truth-selection exclusion</a>.
-				</p>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>, and <a href="../safety-operations/security-model.html#assumption-a15">A15 intended resolvable questions</a>.
-				</p>
+				<p>Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain. This is the security model's <a href="../safety-operations/security-model.html#excluded-guarantee-eg01">EG01 truth-selection exclusion</a>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../safety-operations/security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>, and <a href="../safety-operations/security-model.html#assumption-a15">A15 intended resolvable questions</a>.</p>
 				<ul class="clean-list">
 					<li>users can choose which child universe (or child universes) to continue using after a fork</li>
 					<li>users prefer to continue in the universes they regard as truthful</li>
@@ -381,11 +329,7 @@
 					<li>dishonest or abandoned branches may continue to exist, but are assumed to retain little long-term value compared with the branch that market participants keep coordinating around</li>
 				</ul>
 				<p>A fork only creates branches. If users and future activity concentrate in the branch they regard as truthful, the value of child-universe REP also concentrates there. Holders can reproduce a migration balance into multiple valid child universes, subject to the per-child cap and the gas and coordination costs of doing so. The economic pressure is therefore value concentration: REP in an abandoned branch may keep existing, but it is expected to have little long-term value compared with REP in the branch that markets keep using.</p>
-				<p>
-					The enforced recursive-fork gas bound and its implementation evidence are maintained in
-					<a href="../safety-operations/invariants.html#ext-05"><code>EXT-05</code></a
-					>.
-				</p>
+				<p>The enforced recursive-fork gas bound and its implementation evidence are maintained in <a href="../safety-operations/invariants.html#ext-05"><code>EXT-05</code></a >.</p>
 			</section>
 
 			<section class="paper-section" id="questions">
@@ -393,33 +337,17 @@
 					<h2>6. Questions and Outcome Encoding</h2>
 					<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
 				</div>
-				<p>
-					<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
-					stores title, description, start and end time, scalar metadata such as
-					<code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code>.
-				</p>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data availability</a>, <a href="../safety-operations/security-model.html#assumption-a27">A27 collision resistance</a>, and <a href="../safety-operations/security-model.html#assumption-a15">A15 question identity and resolvability</a>.
-				</p>
+				<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a> stores title, description, start and end time, scalar metadata such as <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data availability</a>, <a href="../safety-operations/security-model.html#assumption-a27">A27 collision resistance</a>, and <a href="../safety-operations/security-model.html#assumption-a15">A15 question identity and resolvability</a>.</p>
 				<p>Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options. For scalar questions, there are no categorical labels to include, so the id is determined from the scalar question fields alone.</p>
 				<p>Every call to <code>createQuestion</code> also requires <code>endTime &gt;= startTime</code>. The contract rejects any question whose end time is earlier than its start time before it reaches scalar or categorical validation.</p>
 
 				<h3>Categorical Questions</h3>
-				<p>
-					Categorical questions store sorted outcome labels. The implementation requires labels to be non-empty and strictly ordered by hash: each label's
-					<code>keccak256(abi.encode(label))</code> value must be lower than the previous label's hash, so callers provide labels in descending hash order. The contract stores the labels in <code>outcomeLabels[questionId]</code>. Any number of categorical outcomes can exist at the Zoltar level as long as those conditions hold.
-				</p>
+				<p>Categorical questions store sorted outcome labels. The implementation requires labels to be non-empty and strictly ordered by hash: each label's <code>keccak256(abi.encode(label))</code> value must be lower than the previous label's hash, so callers provide labels in descending hash order. The contract stores the labels in <code>outcomeLabels[questionId]</code>. Any number of categorical outcomes can exist at the Zoltar level as long as those conditions hold.</p>
 
 				<h3>Scalar Questions</h3>
-				<p>
-					Scalar questions store no categorical labels. Instead,
-					<code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code> define the answer space. At creation time, scalar questions must satisfy <code>numTicks &gt; 0</code> and <code>displayValueMax &gt; displayValueMin</code>.
-				</p>
-				<p>
-					Onchain, each scalar answer is encoded into a single
-					<code>uint256</code> that packs:
-				</p>
+				<p>Scalar questions store no categorical labels. Instead, <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code> define the answer space. At creation time, scalar questions must satisfy <code>numTicks &gt; 0</code> and <code>displayValueMax &gt; displayValueMin</code>.</p>
+				<p>Onchain, each scalar answer is encoded into a single <code>uint256</code> that packs:</p>
 				<ul class="clean-list">
 					<li>the highest bit as an invalid flag</li>
 					<li>a 120-bit first payout numerator</li>
@@ -428,12 +356,7 @@
 				<div class="implementation-grid">
 					<div class="implementation-note">
 						<b>Implementation entry points</b>
-						<p>
-							<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code></a>
-							stores categorical or scalar questions, and
-							<a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
-							formats scalar displays.
-						</p>
+						<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code></a> stores categorical or scalar questions, and <a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> formats scalar displays.</p>
 					</div>
 					<div class="implementation-note">
 						<b>Scalar validity rule</b>
@@ -467,14 +390,8 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Scalar Validity</span>A valid scalar answer must allocate all ticks across the two payout numerators.</p>
 				</div>
-				<p>
-					The all-zero word is the only canonical scalar
-					<code>Invalid</code> value. Any other word with the highest bit clear is malformed, and any word with a nonzero reserved bit in <code>254...240</code> is malformed even if the payout fields would otherwise decode cleanly.
-				</p>
-				<p>
-					At the helper and UI level, a scalar tick index named
-					<code>tickIndex</code> is encoded as:
-				</p>
+				<p>The all-zero word is the only canonical scalar <code>Invalid</code> value. Any other word with the highest bit clear is malformed, and any word with a nonzero reserved bit in <code>254...240</code> is malformed even if the payout fields would otherwise decode cleanly.</p>
+				<p>At the helper and UI level, a scalar tick index named <code>tickIndex</code> is encoded as:</p>
 				<ul class="clean-list">
 					<li><code>firstPayoutNumerator = numTicks - tickIndex</code></li>
 					<li><code>secondPayoutNumerator = tickIndex</code></li>
@@ -494,10 +411,7 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Scalar Tick Encoding</span>The helper encodes a tick as left and right payout numerators.</p>
 				</div>
-				<p>
-					<a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
-					interprets <code>secondPayoutNumerator</code> as the position along the scalar range:
-				</p>
+				<p><a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> interprets <code>secondPayoutNumerator</code> as the position along the scalar range:</p>
 				<div class="equation" id="eq-zoltar-scalar-display-value">
 					<math display="block" aria-label="displayed atomic value equals display value min plus floor second payout numerator times display range divided by num ticks" data-source="displayedAtomic = displayValueMin + ⌊secondPayoutNumerator * (displayValueMax - displayValueMin) / numTicks⌋">
 						<mrow>
@@ -531,11 +445,7 @@
 					<h2>7. Question Types Supported by Zoltar</h2>
 					<a class="anchor-link" href="#question-types" aria-label="Link to Question Types Supported by Zoltar">#</a>
 				</div>
-				<p>
-					At the Zoltar layer, market type support comes from how questions and outcomes are encoded in
-					<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a
-					>.
-				</p>
+				<p>At the Zoltar layer, market type support comes from how questions and outcomes are encoded in <a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a >.</p>
 				<ul class="clean-list">
 					<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
 					<li>binary questions, represented by the higher-level Statoblast convention of categorical <code>Yes</code> and <code>No</code> labels plus the implicit <code>Invalid</code> resolution</li>
@@ -573,10 +483,7 @@
 						</tbody>
 					</table>
 				</div>
-				<p>
-					This distinction matters because malformed answers are rejected, while
-					<code>Invalid</code> remains a valid branch and a valid final outcome.
-				</p>
+				<p>This distinction matters because malformed answers are rejected, while <code>Invalid</code> remains a valid branch and a valid final outcome.</p>
 			</section>
 		</main>
 

@@ -10,22 +10,14 @@
 		<main>
 			<header>
 				<h1>Deployment Status Oracle</h1>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="../safety-operations/security-model.html#assumption-a23">A23 verified canonical deployments</a>
-					and
-					<a href="../safety-operations/security-model.html#assumption-a24">A24 client and RPC integrity</a>.
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a23">A23 verified canonical deployments</a> and <a href="../safety-operations/security-model.html#assumption-a24">A24 client and RPC integrity</a>.</p>
 				<p><code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not measure protocol readiness or initialization success. It only reports which configured deployment-step addresses currently contain runtime bytecode.</p>
 				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and frontends need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
 			</header>
 
 			<section id="mask">
 				<h2>What <code>getDeploymentMask()</code> Returns</h2>
-				<p>
-					The constructor stores one ordered
-					<code>address[] deploymentAddresses</code>. <code>getDeploymentMask()</code> loops over that array and checks <code>deploymentAddresses[index].code.length</code>. When code exists, the oracle sets bit <code>index</code> in the returned <code>uint256</code>.
-				</p>
+				<p>The constructor stores one ordered <code>address[] deploymentAddresses</code>. <code>getDeploymentMask()</code> loops over that array and checks <code>deploymentAddresses[index].code.length</code>. When code exists, the oracle sets bit <code>index</code> in the returned <code>uint256</code>.</p>
 				<p>This is a code-presence bitmap. A set bit means code exists at the configured address. A clear bit means the address currently has no code. The oracle does not verify constructor args, ownership wiring, or post-deployment setup.</p>
 				<figure class="diagram diagram-wide" id="fig-deployment-mask">
 					<div class="plot-chart" data-plot-chart="fig-deployment-mask" data-plot-width="920" data-plot-height="220" role="img" aria-label="Deployment mask maps ordered deployment steps to bits">
@@ -63,19 +55,9 @@
 			<section id="ordering">
 				<h2>How Bits Map To Deployment Steps</h2>
 				<p>Bit positions are array positions. Bit <code>0</code> maps to the first constructor address, bit <code>1</code> to the second, and so on. Offchain decoding must use the same ordered list that seeded the oracle.</p>
-				<p>
-					The constructor emits
-					<code>DeploymentAddressesSet(address[] deploymentAddresses)</code>
-					with that exact ordered list. It is the onchain source for recovering a particular oracle instance's bit mapping; the manifest below describes the current planned deployment and must match the constructor event for that instance.
-				</p>
-				<p>
-					The current UI and deployment helpers derive the constructor list from
-					<code>deploymentSteps</code> with one exception: the oracle does not include its own address in its constructor array. The manifest still lists <code>deploymentStatusOracle</code> as a deployment step, but the UI tracks that step out-of-band and starts consuming mask bits from the remaining addresses.
-				</p>
-				<p>
-					The tables below render the complete bit mappings directly from the canonical
-					<a href="../mainnet-deployment-addresses.json">mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> deployment manifests, excluding <code>deploymentStatusOracle</code>. Each manifest's ordered <code>deploymentSteps</code> array is the canonical mapping for that network.
-				</p>
+				<p>The constructor emits <code>DeploymentAddressesSet(address[] deploymentAddresses)</code> with that exact ordered list. It is the onchain source for recovering a particular oracle instance's bit mapping; the manifest below describes the current planned deployment and must match the constructor event for that instance.</p>
+				<p>The current UI and deployment helpers derive the constructor list from <code>deploymentSteps</code> with one exception: the oracle does not include its own address in its constructor array. The manifest still lists <code>deploymentStatusOracle</code> as a deployment step, but the UI tracks that step out-of-band and starts consuming mask bits from the remaining addresses.</p>
+				<p>The tables below render the complete bit mappings directly from the canonical <a href="../mainnet-deployment-addresses.json">mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> deployment manifests, excluding <code>deploymentStatusOracle</code>. Each manifest's ordered <code>deploymentSteps</code> array is the canonical mapping for that network.</p>
 				<table aria-label="Current mainnet deployment-status bit mapping">
 					<thead>
 						<tr>
@@ -101,10 +83,7 @@
 						</label>
 					</div>
 					<div class="example-output" data-tool-output-region>
-						<p>
-							<strong>Decoded status:</strong>
-							<output data-deployment-mask-summary>Waiting for the deployment mapping…</output>
-						</p>
+						<p><strong>Decoded status:</strong> <output data-deployment-mask-summary>Waiting for the deployment mapping…</output></p>
 						<p class="detail" data-deployment-mask-guidance>Bits above the tracked manifest range are reported separately.</p>
 						<button type="button" class="interactive-tool-retry" data-deployment-mask-retry hidden>Retry mapping</button>
 					</div>
@@ -129,10 +108,7 @@
 
 			<section id="limit">
 				<h2>Why The Cap Is 256 Steps</h2>
-				<p>
-					The constructor requires
-					<code>deploymentAddresses.length &lt;= uint256(type(uint8).max) + 1</code>, which is <code>256</code>. The limit exists because the result is a single <code>uint256</code>, and each tracked step consumes one bit.
-				</p>
+				<p>The constructor requires <code>deploymentAddresses.length &lt;= uint256(type(uint8).max) + 1</code>, which is <code>256</code>. The limit exists because the result is a single <code>uint256</code>, and each tracked step consumes one bit.</p>
 				<p>Indices <code>0...255</code> are supported. A deployment process with more than <code>256</code> tracked addresses must split status across multiple masks or use a different representation.</p>
 			</section>
 

@@ -2,11 +2,13 @@ import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
+import { paragraphSourceSpans } from './format-html-prose.mts'
 
 type ParsedHtmlDocument = {
 	document: Document
 	filePath: string
 	ids: Set<string>
+	rawHtml: string
 	relativePath: string
 	window: Window
 }
@@ -47,6 +49,7 @@ async function validateHtmlStructure(): Promise<ValidationFailure[]> {
 
 	for (const parsedDocument of parsedDocuments) {
 		validateDocumentEnvelope(parsedDocument, failures)
+		validateParagraphLayout(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
 		validateAriaIdReferences(parsedDocument, failures)
 		await validateLocalHtmlLinks(parsedDocument, parsedDocumentsByPath, failures)
@@ -57,16 +60,24 @@ async function validateHtmlStructure(): Promise<ValidationFailure[]> {
 }
 
 async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> {
+	const rawHtml = await readFile(filePath, 'utf8')
 	const window = new Window({ url: pathToFileURL(filePath).href })
-	window.document.write(await readFile(filePath, 'utf8'))
+	window.document.write(rawHtml)
 	window.document.close()
 	return {
 		document: window.document,
 		filePath,
 		ids: new Set(Array.from(window.document.querySelectorAll('[id]')).map(element => element.getAttribute('id') ?? '')),
+		rawHtml,
 		relativePath: path.relative(repositoryRootPath, filePath),
 		window,
 	}
+}
+
+function validateParagraphLayout(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const paragraphs = paragraphSourceSpans(parsedDocument.rawHtml).map(span => parsedDocument.rawHtml.slice(span.start, span.end))
+	const multilineParagraphCount = paragraphs.filter(paragraph => /\r?\n/.test(paragraph)).length
+	if (multilineParagraphCount > 0) addFailure(parsedDocument, `has ${multilineParagraphCount} <p> element(s) split across lines`, failures)
 }
 
 function validateDocumentEnvelope(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {

@@ -12,14 +12,7 @@
 				<h1>Statoblast And Zoltar Invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
 				<p>The catalog separates local contract guards from cross-contract properties and economic assumptions. It also records launch-critical properties that the current contracts do not preserve. A documented implementation choice is not automatically a safe invariant.</p>
-				<p>
-					The <a href="./security-model.html">Protocol Security Model</a>
-					is normative for assumptions A01–A28. The
-					<a href="../protocol-design/truth-auction.html#clearing">Truth Auction clearing guide</a>
-					owns funded and underfunded clearing mechanics, while
-					<a href="../protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs">OpenOracle Integration</a>
-					owns the oracle notional and residual-loss analysis.
-				</p>
+				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for assumptions A01–A28. The <a href="../protocol-design/truth-auction.html#clearing">Truth Auction clearing guide</a> owns funded and underfunded clearing mechanics, while <a href="../protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs">OpenOracle Integration</a> owns the oracle notional and residual-loss analysis.</p>
 				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="260" role="img" aria-label="Protocol invariant layers">
 						<span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span>
@@ -439,12 +432,7 @@
 
 			<section id="authority">
 				<h2>Authority and Deployment Identity</h2>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a23">A23 verified deployments</a>
-					and
-					<a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a23">A23 verified deployments</a> and <a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="auth-01">
 						<summary><code>AUTH-01</code><span class="invariant-title">Coordinator and forker-only operations</span></summary>
@@ -625,11 +613,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Every factory deployment record names one unique pool whose runtime parent, share token, universe, and question match the record. Its pool-to-origin reverse lookup and origin/universe forward lookup are mutual inverses, and its recorded share token authorizes that pool.</div>
-							<p class="invariant-example">
-								<strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an
-								<a href="../whitepapers/statoblast-whitepaper.html#pools">independent origin lineage</a>
-								in that universe.
-							</p>
+							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an <a href="../whitepapers/statoblast-whitepaper.html#pools">independent origin lineage</a> in that universe.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1795,15 +1779,9 @@
 
 			<section id="oracle">
 				<h2>REP/ETH Oracle Operations</h2>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
-					<p>
-						<strong>Accepted oracle design properties—not security findings.</strong>
-						Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, allowance changes, pool assets, or cumulative operations that use an accepted price.
-					</p>
+					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, allowance changes, pool assets, or cumulative operations that use an accepted price.</p>
 					<p>The protocol also makes no bounded-liveness claim for a pending sponsor lane. Every valid dispute restarts settlement, incurs transaction execution, and must fund the contract-specified replacement position. Under ordinary non-dust parameters, protocol fees and the required position also accumulate; before the escalation halt, integer flooring can leave dust-sized rounds unchanged. A participant willing and able to keep submitting and funding disputes may therefore delay unrelated users without a coordinator-level deadline. This paid, capital-unbounded pause is intentional and is not a violation of a Zoltar liveness invariant.</p>
 					<p>Security review should verify the correction-profit calculation, report accounting, dispute access, and the stated inclusion assumption. A concrete bypass of the required position or fee, capital reuse, invalid deadline transition, or cache-conformance failure remains a finding. The mere absence of a report-notional bound or absolute pending-report duration does not.</p>
 				</div>
@@ -2351,10 +2329,7 @@
 
 			<section id="lifecycle">
 				<h2>Lifecycle, Liveness, Observability, and External Calls</h2>
-				<p class="security-assumption-ref">
-					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.
-				</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="life-01">
 						<summary><code>LIFE-01</code><span class="invariant-title">Pool state transitions</span></summary>
