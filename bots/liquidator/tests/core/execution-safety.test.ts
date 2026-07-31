@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { coordinatorAbi } from '../../src/contracts/abi.ts'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import { assertExecutionActive, assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
+import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 

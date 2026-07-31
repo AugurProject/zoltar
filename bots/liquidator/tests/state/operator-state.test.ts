@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getAddress, keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { assertIntentSender, initialRuntimeState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
 
 describe('liquidator durable state', () => {
 	test('persists a signed intent before submission for restart recovery', async () => {
