@@ -26,7 +26,13 @@ describe('liquidator dashboard server', () => {
 		servers.push(server)
 		const page = await fetch(server.url)
 		expect(page.status).toBe(200)
-		expect(await page.text()).toContain('Pool liquidator')
+		const pageSource = await page.text()
+		expect(pageSource).toContain('Pool liquidator')
+		expect(pageSource).toContain('id="centralized-market-status" class="muted" role="status" aria-live="polite"')
+		expect(pageSource).toContain('id="centralized-market-summary" class="metric-grid"')
+		expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')
+		expect(pageSource).toContain('id="centralized-market-price"')
+		expect(pageSource).not.toContain('public CCXT sources')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {

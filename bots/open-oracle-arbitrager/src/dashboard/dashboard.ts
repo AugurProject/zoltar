@@ -44,7 +44,8 @@ function element<T extends HTMLElement>(id: string) {
 }
 
 function setText(id: string, value: string) {
-	element(id).textContent = value
+	const target = element(id)
+	if (target.textContent !== value) target.textContent = value
 }
 
 function prettyJson(value: unknown) {
@@ -456,31 +457,20 @@ function renderCentralizedMarket(snapshot: OperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('centralized-market-body')
 	body.replaceChildren()
 	const market = snapshot.centralizedMarket
-	const summary = element('centralized-market-summary')
-	summary.replaceChildren()
 	if (market === undefined) {
-		setText('centralized-market-status', 'No CEX sources configured')
+		setText('centralized-market-status', 'No exchange sources configured')
+		setText('centralized-market-price', '—')
+		setText('centralized-market-bid-depth', '—')
+		setText('centralized-market-ask-depth', '—')
+		setText('centralized-market-source-count', '0')
 		element('centralized-market-empty').hidden = false
 		return
 	}
 	setText('centralized-market-status', market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · '))
-	const values = [
-		['Estimated REP / ETH', market.priceRepPerEth],
-		['Bid depth', `${market.bidDepthEth} ETH`],
-		['Ask depth', `${market.askDepthEth} ETH`],
-		['Fresh sources', market.observations.length.toString()],
-	]
-	for (const [label, value] of values) {
-		const metric = document.createElement('div')
-		metric.className = 'metric'
-		const term = document.createElement('span')
-		term.className = 'metric-label'
-		term.textContent = label ?? ''
-		const description = document.createElement('strong')
-		description.textContent = value ?? ''
-		metric.append(term, description)
-		summary.append(metric)
-	}
+	setText('centralized-market-price', market.priceRepPerEth)
+	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
+	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
+	setText('centralized-market-source-count', market.observations.length.toString())
 	for (const observation of market.observations) {
 		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()]))
 	}

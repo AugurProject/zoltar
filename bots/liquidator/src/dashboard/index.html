@@ -64,9 +64,14 @@
 						<p class="eyebrow">Independent market reference</p>
 						<h2 id="centralized-markets-title">Centralized markets</h2>
 					</div>
-					<p id="centralized-market-status" class="muted">No CEX sources configured</p>
+					<p id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</p>
 				</div>
-				<div id="centralized-market-summary" class="metric-grid" aria-live="polite"></div>
+				<div id="centralized-market-summary" class="metric-grid">
+					<dl class="metric"><dt>Estimated REP / ETH</dt><dd id="centralized-market-price">—</dd></dl>
+					<dl class="metric"><dt>Bid depth</dt><dd id="centralized-market-bid-depth">—</dd></dl>
+					<dl class="metric"><dt>Ask depth</dt><dd id="centralized-market-ask-depth">—</dd></dl>
+					<dl class="metric"><dt>Fresh sources</dt><dd id="centralized-market-source-count">0</dd></dl>
+				</div>
 				<div class="table-shell">
 					<table>
 						<thead>
@@ -80,7 +85,7 @@
 							</tr>
 						</thead>
 						<tbody id="centralized-market-rows">
-							<tr><td colspan="6" class="empty">Configure public CEX sources to observe independent prices.</td></tr>
+							<tr><td colspan="6" class="empty">Add public exchange sources in the operator configuration.</td></tr>
 						</tbody>
 					</table>
 				</div>

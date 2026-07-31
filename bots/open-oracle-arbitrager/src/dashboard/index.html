@@ -338,9 +338,14 @@
 						<p class="eyebrow">Independent reference</p>
 						<h3>Centralized-market REP estimate</h3>
 					</div>
-					<span id="centralized-market-status" class="muted">No CEX sources configured</span>
+					<span id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</span>
 				</div>
-				<div id="centralized-market-summary" class="metric-grid" aria-live="polite"></div>
+				<div id="centralized-market-summary" class="metric-grid">
+					<div class="metric"><span class="metric-label">Estimated REP / ETH</span><strong id="centralized-market-price">—</strong></div>
+					<div class="metric"><span class="metric-label">Bid depth</span><strong id="centralized-market-bid-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">Ask depth</span><strong id="centralized-market-ask-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">Fresh sources</span><strong id="centralized-market-source-count">0</strong></div>
+				</div>
 				<div class="table-scroll" tabindex="0" aria-label="Centralized market observations">
 					<table>
 						<thead>
@@ -356,7 +361,7 @@
 						<tbody id="centralized-market-body"></tbody>
 					</table>
 				</div>
-				<p id="centralized-market-empty" class="empty-state">Configure public CCXT sources in the complete configuration.</p>
+				<p id="centralized-market-empty" class="empty-state">Add public exchange sources in Complete bot configuration.</p>
 				<form id="tokens-form">
 					<fieldset id="tokens-fieldset" disabled>
 						<label>

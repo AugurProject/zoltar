@@ -112,9 +112,12 @@ function element<T extends Element>(id: string, constructor: { new (): T }) {
 }
 
 const metrics = element('metrics', HTMLDivElement)
-const centralizedMarketSummary = element('centralized-market-summary', HTMLDivElement)
 const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
 const centralizedMarketStatus = element('centralized-market-status', HTMLParagraphElement)
+const centralizedMarketPrice = element('centralized-market-price', HTMLElement)
+const centralizedMarketBidDepth = element('centralized-market-bid-depth', HTMLElement)
+const centralizedMarketAskDepth = element('centralized-market-ask-depth', HTMLElement)
+const centralizedMarketSourceCount = element('centralized-market-source-count', HTMLElement)
 const universeRows = element('universe-rows', HTMLTableSectionElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
@@ -176,6 +179,10 @@ function metric(label: string, value: string) {
 	return container
 }
 
+function updateText(target: Element, value: string) {
+	if (target.textContent !== value) target.textContent = value
+}
+
 function renderMetrics(snapshot: Snapshot) {
 	metrics.replaceChildren(
 		metric('Pools', snapshot.metrics.poolCount.toString()),
@@ -193,18 +200,24 @@ function renderMetrics(snapshot: Snapshot) {
 function renderCentralizedMarket(snapshot: Snapshot) {
 	const market = snapshot.centralizedMarket
 	if (market === undefined) {
-		centralizedMarketStatus.textContent = 'No CEX sources configured'
-		centralizedMarketSummary.replaceChildren()
+		updateText(centralizedMarketStatus, 'No exchange sources configured')
+		updateText(centralizedMarketPrice, '—')
+		updateText(centralizedMarketBidDepth, '—')
+		updateText(centralizedMarketAskDepth, '—')
+		updateText(centralizedMarketSourceCount, '0')
 		const row = document.createElement('tr')
-		const empty = cell('Configure public CEX sources to observe independent prices.')
+		const empty = cell('Add public exchange sources in the operator configuration.')
 		empty.colSpan = 6
 		empty.className = 'empty'
 		row.append(empty)
 		centralizedMarketRows.replaceChildren(row)
 		return
 	}
-	centralizedMarketStatus.textContent = market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · ')
-	centralizedMarketSummary.replaceChildren(metric('Estimated REP / ETH', market.priceRepPerEth), metric('Bid depth', `${market.bidDepthEth} ETH`), metric('Ask depth', `${market.askDepthEth} ETH`), metric('Fresh sources', market.observations.length.toString()))
+	updateText(centralizedMarketStatus, market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · '))
+	updateText(centralizedMarketPrice, market.priceRepPerEth)
+	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
+	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
+	updateText(centralizedMarketSourceCount, market.observations.length.toString())
 	centralizedMarketRows.replaceChildren(
 		...market.observations.map(observation => {
 			const row = document.createElement('tr')
