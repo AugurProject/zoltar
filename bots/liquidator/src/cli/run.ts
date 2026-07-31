@@ -367,16 +367,16 @@ async function main() {
 							endpoint: rpcUrl,
 							value: { pools: observation.pools, universes: observation.universes },
 						})
-						}
-						quorumValue('liquidation execution snapshot', observations)
 					}
-					const scannedBlock = await client.getBlock()
-					state.pools = primary.pools
-					state.universes = primary.universes
-					state.walletRepByToken = primary.walletRepByToken
-					state.lastScannedBlock = scannedBlock.number
-					state.lastScannedTimestamp = scannedBlock.timestamp
-					validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
+					quorumValue('liquidation execution snapshot', observations)
+				}
+				const scannedBlock = await client.getBlock()
+				state.pools = primary.pools
+				state.universes = primary.universes
+				state.walletRepByToken = primary.walletRepByToken
+				state.lastScannedBlock = scannedBlock.number
+				state.lastScannedTimestamp = scannedBlock.timestamp
+				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
 				const inheritedSelections = inheritedChildPoolSelections(state.pools, settings.selectedPools)
 				if (inheritedSelections.length > 0) {
 					await persistSettings(current => ({
@@ -385,7 +385,7 @@ async function main() {
 					}))
 					for (const pool of inheritedSelections) pool.selected = true
 				}
-					state.lastScanAt = new Date().toISOString()
+				state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
 					state.walletEth = await client.getBalance({ address: state.wallet })
 				}
