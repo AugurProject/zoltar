@@ -1636,7 +1636,7 @@ assert.match(auctionDesignHtml, /assigns the REP cap by\s+differencing cumulativ
 assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
 assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
-assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ceil\(ethRaiseCap \* PRICE_PRECISION \/ maxRepBeingSold\)"/i, 'auction design should derive the underfunded qualification threshold from both caps')
+assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈ethRaiseCap \* PRICE_PRECISION \/ maxRepBeingSold⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
 assert.match(auctionDesignHtml, /activates with legitimate migration collateral plus retained bid[\s\S]*rejects caller contribution ETH/i, 'auction design should document value-free weak-demand activation')
 assert.match(auctionDesignHtml, /forced ETH remains unaccounted surplus/i, 'auction design should exclude forced ETH from child collateral')
 assert.match(auctionDesignHtml, /Qualifying bidders collectively purchase[\s\S]*maxRepBeingSold/i, 'auction design should assign the complete REP cap when demand qualifies')
@@ -1919,7 +1919,7 @@ assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-ti
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\); migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator \? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"/i,
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; provisionalMigratedRepDelta = ⌊parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator⌋; migratedRepDelta = resultingMigratedPoolOwnership == parentPoolOwnershipDenominator \? migrationRepDenominatorAtFork - priorMigratedRep : provisionalMigratedRepDelta"/i,
 	'whitepaper should document the fork-specific migrated REP denominator, provisional Solidity floor, and final full-ownership reconciliation',
 )
 assert.match(
@@ -1942,7 +1942,7 @@ assert.match(statoblastHtml, /data-source="ethCollateralToBuy = max\(0, parentCo
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ migrationRepDenominatorAtFork\)/i,
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ⌈parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ migrationRepDenominatorAtFork⌉/i,
 	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
 )
 assert.doesNotMatch(statoblastHtml, /data-source="cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ vaultRepAtFork\)/i, 'whitepaper should not present the own-fork denominator as the generalized collateral migration formula')

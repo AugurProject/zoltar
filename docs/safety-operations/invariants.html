@@ -307,11 +307,11 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								The fork threshold is
-								<code>floor(parent theoretical supply / forkThresholdDivisor)</code>.
+								<code>⌊parent theoretical supply / forkThresholdDivisor⌋</code>.
 								Starting a fork burns that amount of the initiator's parent REP,
 								reduces the parent theoretical supply by the same amount, and
 								credits the threshold minus
-								<code>floor(threshold / forkBurnDivisor)</code> for migration.
+								<code>⌊threshold / forkBurnDivisor⌋</code> for migration.
 								The configured <code>forkBurnDivisor</code> is at least
 								<code>5</code>, so the uncredited haircut cannot exceed 20%.
 							</div>
@@ -998,7 +998,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Before outcome finalization, burning <code>B</code> complete sets
-								returns <code>floor(B × tracked collateral / complete-set supply)</code>
+								returns <code>⌊B × tracked collateral / complete-set supply⌋</code>
 								after the fee checkpoint, then reduces supply by <code>B</code> and
 								collateral by the ETH returned.
 							</div>
@@ -1381,8 +1381,8 @@
 								cannot resume until its game balance covers all effective
 								unrelated-fork principal. For an own fork, initial backing must cover
 								<code
-									>sourcePrincipalAtFork -
-									floor(sourcePrincipalAtFork / 5)</code
+										>sourcePrincipalAtFork -
+										⌊sourcePrincipalAtFork / 5⌋</code
 								>, the rounded-up 80% minimum, and the live balance must cover the
 								unexported remainder after valid direct pre-resume claims.
 								<a href="../whitepapers/statoblast-whitepaper.html#source-principal-at-fork"
@@ -1430,7 +1430,7 @@
 								the fork collateral snapshot and is derived from cumulative
 								migrated REP, not per-call rounding.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>ceil(fork collateral × R / denominator)</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtFork</code> for an own fork and <code>auctionableRepAtFork</code> otherwise.</p>
+							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>⌈fork collateral × R / denominator⌉</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtFork</code> for an own fork and <code>auctionableRepAtFork</code> otherwise.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -1827,7 +1827,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								For a positive fork threshold <code>F</code>, non-decision requires
-								<code>ceil(F / 2)</code> REP on two outcomes. Therefore the two
+								<code>⌈F / 2⌉</code> REP on two outcomes. Therefore the two
 								threshold balances total at least <code>F</code>, while one wei
 								less on both outcomes totals strictly less than <code>F</code>.
 								The configured start bond is at least 1 REP and a new origin requires

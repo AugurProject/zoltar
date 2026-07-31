@@ -609,14 +609,14 @@
 					<math
 						display="block"
 						aria-label="minimum token one report adds the priority fee report to the larger base fee or open interest report; escalation halt is the greater of the open interest report and the initial report times the halt multiplier"
-						data-source="report(gasPrice) = ceil(gasPrice \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))); priorityFeeReport = report(initialReportPriorityFeeWeiPerGas); baseFeeReport = report(block.basefee); openInterestReport = ceil(completeSetCollateralAmount / 100); minimumToken1Report = priorityFeeReport + max(baseFeeReport, openInterestReport); escalationHalt = max(floor(initialWethReport \cdot escalationHaltMultiplierBps / 10000), openInterestReport)"
+						data-source="report(gasPrice) = ⌈gasPrice \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))⌉; priorityFeeReport = report(initialReportPriorityFeeWeiPerGas); baseFeeReport = report(block.basefee); openInterestReport = ⌈completeSetCollateralAmount / 100⌉; minimumToken1Report = priorityFeeReport + max(baseFeeReport, openInterestReport); escalationHalt = max(⌊initialWethReport \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReport)"
 					>
 						<mtable>
 							<mtr>
 								<mtd><mi>report</mi><mo>(</mo><mi>gasPrice</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>ceil</mi><mo>(</mo>
+									<mo form="prefix" stretchy="true">⌈</mo>
 									<mfrac>
 										<mrow>
 											<mi>gasPrice</mi><mo>&#x22C5;</mo><mi>gasUnitsForOneDispute</mi><mo>&#x22C5;</mo><mi>openOracleSecurityMultiplierBps</mi>
@@ -626,13 +626,13 @@
 											<mn>10000</mn><mo>&#x22C5;</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>reporterFee</mi><mo>)</mo>
 										</mrow>
 									</mfrac>
-									<mo>)</mo>
+									<mo form="postfix" stretchy="true">⌉</mo>
 								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>openInterestReport</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>ceil</mi><mo>(</mo><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac><mo>)</mo></mtd>
+								<mtd><mo form="prefix" stretchy="true">⌈</mo><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac><mo form="postfix" stretchy="true">⌉</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>minimumToken1Report</mi></mtd>
@@ -646,7 +646,7 @@
 							<mtr>
 								<mtd><mi>escalationHalt</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow><mn>10000</mn></mfrac><mo>)</mo><mo>,</mo><mi>openInterestReport</mi><mo>)</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mo form="prefix" stretchy="true">⌊</mo><mfrac><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow><mn>10000</mn></mfrac><mo form="postfix" stretchy="true">⌋</mo><mo>,</mo><mi>openInterestReport</mi><mo>)</mo></mtd>
 							</mtr>
 						</mtable>
 					</math>
@@ -666,14 +666,14 @@
 					protected-operation notional enters the minimum initial WETH calculation.
 					The immutable priority fee is selected when the origin pool is created and
 					inherited unchanged by its children. Pool open interest contributes
-					<code>ceil(completeSetCollateralAmount / OPEN_INTEREST_DIVIDER)</code>, with
+					<code>⌈completeSetCollateralAmount / OPEN_INTEREST_DIVIDER⌉</code>, with
 					<code>OPEN_INTEREST_DIVIDER = 100</code>, before the priority-derived report
 					is added. The sponsor
 					may pass zero to use that minimum or request a larger initial WETH amount.
 					The coordinator sets
 					<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>,
 					sets OpenOracle <code>currentAmount1</code> to that selected amount, and derives
-					<code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
+					<code>amount2 = ⌈initialWethReport * proposedRepPerEthPrice / 1e18⌉</code>
 					inside the same transaction. If that price is wrong
 					by at least the configured target error (initially five percent), the resulting correction opportunity is
 					designed to pay the modeled base-fee plus configured-priority-fee gas cost with the configured
@@ -1052,14 +1052,14 @@
 					<math
 						display="block"
 						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
-						data-source="thresholdPrice = floor(vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)); currentPrice > thresholdPrice; floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice) >= minLiquidationPriceDistanceBps"
+						data-source="thresholdPrice = ⌊vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)⌋; currentPrice > thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ >= minLiquidationPriceDistanceBps"
 					>
 						<mtable>
 							<mtr>
 								<mtd><mi>thresholdPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mi>floor</mi><mo>(</mo
+									><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow
 											><mi>vaultRep</mi><mo>&#x22C5;</mo
@@ -1069,7 +1069,7 @@
 											><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo
 											><mi>statoblastSecurityMultiplierBps</mi></mrow
 										></mfrac
-									><mo>)</mo></mtd
+									><mo form="postfix" stretchy="true">⌋</mo></mtd
 								>
 							</mtr>
 							<mtr>
@@ -1081,14 +1081,14 @@
 								<mtd><mi>distanceBps</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mi>floor</mi><mo>(</mo
+									><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow
 											><mo>(</mo><mi>currentPrice</mi><mo>-</mo
 											><mi>thresholdPrice</mi><mo>)</mo><mo>&#x22C5;</mo
 											><mi>BPS_DENOMINATOR</mi></mrow
 										><mi>currentPrice</mi></mfrac
-									><mo>)</mo></mtd
+									><mo form="postfix" stretchy="true">⌋</mo></mtd
 								>
 							</mtr>
 							<mtr>
@@ -1496,7 +1496,7 @@
 					variable is WETH. Before <code>escalationHalt</code>, OpenOracle
 					requires
 					<code
-						>min(floor(oldAmount1 × multiplier / 100),
+						>min(⌊oldAmount1 × multiplier / 100⌋,
 						escalationHalt)</code
 					>. With the configured multiplier of <code>115</code>, prior token-one
 					amounts from one through six wei therefore remain unchanged rather
@@ -1506,7 +1506,7 @@
 					initial amount is
 					<code>max(minimumToken1Report(), requestedInitialWeth)</code>, and the
 					selected initial amount determines one halt candidate. The other is
-					<code>ceil(completeSetCollateralAmount / OPEN_INTEREST_DIVIDER)</code>,
+					<code>⌈completeSetCollateralAmount / OPEN_INTEREST_DIVIDER⌉</code>,
 					and <code>escalationHalt</code> takes their maximum. See
 					<a href="#eq-openoracle-initial-report-size">Dynamic Report and Escalation Threshold</a>.
 				</p>
@@ -1662,7 +1662,7 @@
 							<td>
 								Before <code>escalationHalt</code>, requires WETH
 								<code>token1</code> equal to
-								<code>floor(prior amount × 1.15)</code>, capped at the halt.
+								<code>⌊prior amount × 1.15⌋</code>, capped at the halt.
 								Integer flooring leaves prior amounts of one through six wei
 								unchanged. At or above the halt, each dispute requires one more
 								atomic WETH unit.
