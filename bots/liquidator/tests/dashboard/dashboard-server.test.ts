@@ -47,4 +47,35 @@ describe('liquidator dashboard server', () => {
 		expect(accepted.status).toBe(200)
 		expect(paused).toBe(true)
 	})
+
+	test('accepts loopback browser requests when bound to all interfaces', async () => {
+		let paused = false
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => ({ paused }),
+			hostname: '0.0.0.0',
+			setApprovedUniverses: value => value,
+			setPaused: value => {
+				paused = Reflect.get(value as object, 'paused') === true
+				return { paused }
+			},
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+		const origin = `http://127.0.0.1:${server.port}`
+		const page = await fetch(origin)
+		expect(page.status).toBe(200)
+		const mutation = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: true }),
+			headers: {
+				'content-type': 'application/json',
+				origin,
+			},
+			method: 'PUT',
+		})
+		expect(mutation.status).toBe(200)
+		expect(paused).toBe(true)
+	})
 })

@@ -107,6 +107,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		},
 	})
 	if (server.port === undefined) throw new Error('Dashboard server did not expose its listening port')
-	authority = `${server.hostname}:${server.port.toString()}`
+	authority = `127.0.0.1:${server.port.toString()}`
 	return server
 }

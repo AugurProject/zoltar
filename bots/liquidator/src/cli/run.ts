@@ -17,6 +17,7 @@ import { evaluateCandidate, sortCandidates } from '#core/strategy'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
+import { commitSignerMutation } from '#core/signer-mutation'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -284,19 +285,23 @@ async function main() {
 							throw new Error('Signer request requires privateKey and rememberSigner')
 						}
 						const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
-						activePrivateKey = candidate.privateKey
-						wallet =
-							activePrivateKey === undefined
-								? undefined
-								: createWalletClient({
-										account: privateKeyToAccount(activePrivateKey),
-										chain,
-										transport: http(settings.connectivity.readRpcUrl),
-									})
-						state.wallet = wallet?.account.address
-						if (rememberSigner) {
-							await persistSettings(current => ({ ...current, privateKey: candidate.privateKey }))
-						}
+						await commitSignerMutation(
+							candidate,
+							rememberSigner,
+							async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
+							signer => {
+								activePrivateKey = signer.privateKey
+								wallet =
+									activePrivateKey === undefined
+										? undefined
+										: createWalletClient({
+												account: privateKeyToAccount(activePrivateKey),
+												chain,
+												transport: http(settings.connectivity.readRpcUrl),
+											})
+								state.wallet = wallet?.account.address
+							},
+						)
 						recordActivity(state, {
 							kind: 'configuration',
 							message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
