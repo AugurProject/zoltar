@@ -41,13 +41,42 @@ enabled:
 - `privateKey` is stored in the local operator file only when explicitly saved.
   The dashboard never returns it.
 
-## Pool selection and discovery
+## Universe and pool selection
 
-The pool table is loaded automatically from
+The universe browser walks Zoltar's deployed child-universe tree from universe
+zero, including deployed universes that do not have a security pool yet. The
+pool table is loaded automatically from
 `securityPoolDeploymentCount()` and `securityPoolDeploymentsRange()`. Selecting a
-pool enables candidate evaluation and execution; it does not deploy a new
-security-pool contract. Fork-created child pools appear in the registry but must
-be selected independently.
+pool enables candidate evaluation and execution only while its universe is also
+approved and its system state is operational. It does not deploy a new
+security-pool contract. The universe table shows parent and fork-outcome lineage,
+operational and forked pool counts, pool selection, and whether a bot vault can
+migrate into that universe.
+
+`deployment.zoltar` identifies the universe registry, and
+`approvedUniverses` is the operator's explicit truth policy. A root universe or
+fork-created child remains inert until it is approved. For a given forked parent
+universe, the bot rejects configuration that approves more than one direct child
+outcome. This prevents an ambiguous vault route. Universe approval does not
+enable every pool in that universe: both the universe and each individual pool
+must be selected before the bot liquidates or maintains its vault there.
+Every discovered pool's REP token must identify the configured Zoltar contract;
+a mismatch fails the scan instead of applying the truth policy to another
+universe tree.
+
+When `allowAutomaticVaultMigrations` is enabled, the bot looks for a selected
+forked parent pool where its signer has an unlocked vault and one deployed direct
+child universe is approved. During the protocol's eight-week migration window
+it calls the
+parent's `SecurityPoolForker.migrateVault(parent, outcomeIndex)`. The migration
+moves the signer's complete unlocked vault to the chosen child and atomically
+creates the child security pool when it does not exist. The bot does not split a
+parent vault across outcomes. Once the child becomes operational, normal vault
+maintenance and liquidation continue there because the next registry scan
+inherits the selected parent pool onto its approved child. A missing approved
+child, closed migration window, empty vault, active staged operation involving
+the bot vault, disabled migration setting, or conflicting child approval
+produces no migration.
 
 The active-vault scan is capped by `runtime.maxVaultsPerPool`. A capped scan is
 marked in the dashboard and must not be treated as a complete opportunity view.
@@ -71,6 +100,7 @@ Amounts use 18-decimal ETH or REP units in the operator JSON.
 - `redeemFeesAboveEth` controls ETH fee redemption.
 - `stalePriceFundingBufferBps` conservatively pre-funds the liquidator vault before a stale-price operation is queued.
 - `fallbackRepPerEthPrice` is used only for a never-seeded stale coordinator.
+- `allowAutomaticVaultMigrations` permits the fork migration described above.
 - Stale full-close candidates are rejected because the target can add REP and
   the eventual oracle price is not bounded on-chain; that branch cannot
   guarantee the configured REP exposure limits.
@@ -83,10 +113,12 @@ the target, and the withdrawal threshold must be above the target.
 Each cycle performs an authoritative factory read, loads active vaults, computes
 exact protocol floor and rounding behavior, and selects at most one action:
 
-1. Top up an existing bot vault that is approaching its safety boundary.
-2. Withdraw REP that is safely above the configured threshold.
-3. Redeem accrued ETH fees.
-4. Pre-fund a liquidation vault and submit the best liquidation candidate.
+1. Migrate an applicable selected parent vault into its one approved child
+   universe.
+2. Top up an existing bot vault that is approaching its safety boundary.
+3. Withdraw REP that is safely above the configured threshold.
+4. Redeem accrued ETH fees.
+5. Pre-fund a liquidation vault and submit the best liquidation candidate.
 
 Transaction intent and outcomes are written to `runtime.stateFile`. The activity
 journal is restored on restart. A signed intent, nonce, serialized transaction,

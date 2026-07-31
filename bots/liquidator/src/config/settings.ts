@@ -10,6 +10,7 @@ export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-u
 
 export type StrategySettings = {
 	allowAutomaticDeposits: boolean
+	allowAutomaticVaultMigrations: boolean
 	allowAutomaticWithdrawals: boolean
 	candidatePriority: CandidatePriority
 	fallbackRepPerEthPrice: bigint
@@ -35,12 +36,14 @@ export type StoredStrategySettings = {
 }
 
 export type OperatorSettings = {
+	approvedUniverses: bigint[]
 	connectivity: ConnectivitySettings & {
 		quorumRpcUrls: string[]
 	}
 	deployment: {
 		securityPoolFactory: Address
 		weth: Address
+		zoltar: Address
 	}
 	network: {
 		chainId: number
@@ -112,10 +115,18 @@ function parseCandidatePriority(value: unknown): CandidatePriority {
 	throw new Error('strategy.candidatePriority is invalid')
 }
 
+function universeId(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
+	const parsed = BigInt(value)
+	if (parsed >= 2n ** 248n) throw new Error(`${label} must fit in uint248`)
+	return parsed
+}
+
 export function parseStrategy(value: unknown): StrategySettings {
 	const strategy = record(value, 'strategy')
 	const parsed: StrategySettings = {
 		allowAutomaticDeposits: boolean(strategy['allowAutomaticDeposits'], 'strategy.allowAutomaticDeposits'),
+		allowAutomaticVaultMigrations: boolean(strategy['allowAutomaticVaultMigrations'], 'strategy.allowAutomaticVaultMigrations'),
 		allowAutomaticWithdrawals: boolean(strategy['allowAutomaticWithdrawals'], 'strategy.allowAutomaticWithdrawals'),
 		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
 		fallbackRepPerEthPrice: parseDecimalAmount(strategy['fallbackRepPerEthPrice'], 'strategy.fallbackRepPerEthPrice'),
@@ -164,6 +175,9 @@ export function parseSettings(value: unknown): OperatorSettings {
 	)
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
+	const approvedUniverses = root['approvedUniverses']
+	if (!Array.isArray(approvedUniverses)) throw new Error('approvedUniverses must be an array')
+	const parsedApprovedUniverses = [...new Set(approvedUniverses.map(value => universeId(value, 'approved universe')))]
 	const parsedSelectedPools = [
 		...new Map(
 			selectedPools.map(value => {
@@ -174,6 +188,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	]
 	const privateKey = signerCandidate(root['privateKey']).privateKey
 	const settings: OperatorSettings = {
+		approvedUniverses: parsedApprovedUniverses,
 		connectivity: {
 			...parsedConnectivity,
 			quorumRpcUrls,
@@ -181,6 +196,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 		deployment: {
 			securityPoolFactory: getAddress(string(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
 			weth: getAddress(string(deployment['weth'], 'deployment.weth')),
+			zoltar: getAddress(string(deployment['zoltar'], 'deployment.zoltar')),
 		},
 		network: {
 			chainId: integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1),
@@ -217,11 +233,13 @@ export function parseSettings(value: unknown): OperatorSettings {
 		throw new Error('Public submission minimumRelaySuccesses cannot exceed the configured public RPC count')
 	}
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
+	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
 	return settings
 }
 
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	return {
+		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		connectivity: {
 			...settings.connectivity,
 		},

@@ -2,11 +2,11 @@ import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 type CdpResponse = {
-	error?: { message?: string }
-	id?: number
-	method?: string
-	params?: unknown
-	result?: unknown
+	error: { message: string | undefined } | undefined
+	id: number | undefined
+	method: string | undefined
+	params: unknown
+	result: unknown
 }
 
 const qaDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
@@ -34,7 +34,19 @@ try {
 	const diagnostics: CdpResponse[] = []
 	let requestId = 0
 	socket.addEventListener('message', event => {
-		const message: CdpResponse = JSON.parse(String(event.data))
+		const parsed: unknown = JSON.parse(String(event.data))
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return
+		const error = Reflect.get(parsed, 'error')
+		const errorMessage = typeof error === 'object' && error !== null ? Reflect.get(error, 'message') : undefined
+		const id = Reflect.get(parsed, 'id')
+		const method = Reflect.get(parsed, 'method')
+		const message: CdpResponse = {
+			error: typeof error === 'object' && error !== null ? { message: typeof errorMessage === 'string' ? errorMessage : undefined } : undefined,
+			id: typeof id === 'number' ? id : undefined,
+			method: typeof method === 'string' ? method : undefined,
+			params: Reflect.get(parsed, 'params'),
+			result: Reflect.get(parsed, 'result'),
+		}
 		if (message.id !== undefined) {
 			const handler = pending.get(message.id)
 			if (handler === undefined) return
@@ -137,6 +149,11 @@ try {
 			if (!(second instanceof HTMLInputElement)) throw new Error('Second pool control missing')
 			second.click()
 			await new Promise(resolve => setTimeout(resolve, 500))
+			const universeCheckboxes = [...document.querySelectorAll('#universe-rows input[type="checkbox"]')]
+			const unapprovedUniverse = universeCheckboxes.at(-1)
+			if (!(unapprovedUniverse instanceof HTMLInputElement)) throw new Error('Universe approval control missing')
+			unapprovedUniverse.click()
+			await new Promise(resolve => setTimeout(resolve, 500))
 			const filter = document.querySelector('#pool-filter')
 			if (!(filter instanceof HTMLInputElement)) throw new Error('Pool filter missing')
 			filter.value = '900719925474099312345'
@@ -177,6 +194,7 @@ try {
 				pausedMode,
 				pausedStatus,
 				secondSelected: second.checked,
+				universeApproved: unapprovedUniverse.checked,
 				signerActivated,
 				signerClearCancelled,
 				signerCleared,
@@ -203,6 +221,12 @@ try {
 				checkbox.click()
 				await new Promise(resolve => setTimeout(resolve, 100))
 				const pool = checkbox.closest('td')?.querySelector('.action-status')?.textContent
+				failedPath = '/api/approved-universes'
+				const universeCheckbox = document.querySelector('#universe-rows input[type="checkbox"]')
+				if (!(universeCheckbox instanceof HTMLInputElement)) throw new Error('Universe checkbox missing')
+				universeCheckbox.click()
+				await new Promise(resolve => setTimeout(resolve, 100))
+				const universe = universeCheckbox.closest('td')?.querySelector('.action-status')?.textContent
 				failedPath = '/api/strategy'
 				document.querySelector('#strategy-form')?.requestSubmit()
 				await new Promise(resolve => setTimeout(resolve, 100))
@@ -219,7 +243,7 @@ try {
 				document.querySelector('#pause-button')?.click()
 				await new Promise(resolve => setTimeout(resolve, 100))
 				const pause = document.querySelector('#pause-status')?.textContent
-				return { pause, pool, signer, strategy }
+				return { pause, pool, signer, strategy, universe }
 			} finally {
 				window.fetch = originalFetch
 			}
@@ -227,8 +251,10 @@ try {
 		configurationFailure,
 		livePaused: undefined as unknown,
 		mobileOverview: undefined as unknown,
+		mobileMigrationControl: undefined as unknown,
 		mobilePools: undefined as unknown,
 		mobileStrategy: undefined as unknown,
+		mobileUniverses: undefined as unknown,
 	}
 	await evaluate(`(() => {
 		window.__qaOriginalFetch = window.fetch
@@ -256,13 +282,19 @@ try {
 	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
 	await Bun.sleep(1_000)
 	evidence.mobileOverview = await capture('liquidator-mobile-overview', 390, 844)
+	const universesTop = await evaluate(`Math.max(0, (document.querySelector('#universes-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
+	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0)
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressTop = await evaluate(`Math.max(0, (document.querySelector('.address-details')?.getBoundingClientRect().top ?? 0) + window.scrollY - 160)`)
 	const expandedAddressScroll = typeof expandedAddressTop === 'number' ? expandedAddressTop : 0
 	const expandedAddressMobile = await capture('liquidator-address-expanded-mobile', 390, 844, expandedAddressScroll)
 	await evaluate(`document.querySelector('.address-details')?.removeAttribute('open')`)
-	evidence.mobilePools = await capture('liquidator-mobile-pools', 390, 844, 875)
-	evidence.mobileStrategy = await capture('liquidator-mobile-strategy', 390, 844, 1_850)
+	const poolsTop = await evaluate(`Math.max(0, (document.querySelector('#pools-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
+	const strategyTop = await evaluate(`Math.max(0, (document.querySelector('#strategy-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
+	evidence.mobilePools = await capture('liquidator-mobile-pools', 390, 844, typeof poolsTop === 'number' ? poolsTop : 0)
+	evidence.mobileStrategy = await capture('liquidator-mobile-strategy', 390, 844, typeof strategyTop === 'number' ? strategyTop : 0)
+	const migrationControlTop = await evaluate(`Math.max(0, (document.querySelector('input[name="allowAutomaticVaultMigrations"]')?.getBoundingClientRect().top ?? 0) + window.scrollY - 500)`)
+	evidence.mobileMigrationControl = await capture('liquidator-mobile-migration-control', 390, 844, typeof migrationControlTop === 'number' ? migrationControlTop : 0)
 	Object.assign(evidence, { expandedAddressMobile })
 	const mobileOverflow = await evaluate(`[...document.querySelectorAll('*')]
 		.map(element => ({ className: element.className, id: element.id, name: element.tagName, rect: element.getBoundingClientRect().toJSON(), scrollWidth: element.scrollWidth }))

@@ -14,6 +14,7 @@ describe('liquidator dashboard server', () => {
 			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
 			getState: () => ({ paused }),
 			hostname: '127.0.0.1',
+			setApprovedUniverses: value => value,
 			setPaused: value => {
 				paused = Reflect.get(value as object, 'paused') === true
 				return { paused }

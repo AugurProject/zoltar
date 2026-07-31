@@ -3,7 +3,8 @@ import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, securityPoolAbi, wethAbi } from '#contracts/abi'
+import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
+import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, requiredRepForAllowance, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 
@@ -28,7 +29,7 @@ export function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, ma
 	}
 }
 
-async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, call: Call, kind: 'deposit' | 'fees' | 'liquidation' | 'withdrawal') {
+async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, call: Call, kind: 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal') {
 	const account = wallet.account
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
 		throw new Error('Execution signer cannot sign transactions')
@@ -120,6 +121,29 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 	})
 	await saveDurableState(settings.runtime.stateFile, state)
 	return receipt.transactionHash
+}
+
+export async function executeVaultMigration(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, migration: VaultMigration) {
+	if (migration.parent.systemState !== 1n) throw new Error('Vault migration parent is not forked')
+	if (!settings.approvedUniverses.includes(migration.childUniverse.id)) throw new Error('Vault migration child universe is not approved')
+	if (migration.childUniverse.parentId !== migration.parent.universeId) throw new Error('Vault migration child universe does not descend from the parent universe')
+	if (migration.childPool !== undefined && migration.childPool.parent.toLowerCase() !== migration.parent.address.toLowerCase()) throw new Error('Vault migration child pool does not descend from the parent pool')
+	await submitCall(
+		wallet,
+		settings,
+		state,
+		{
+			data: encodeFunctionData({
+				abi: securityPoolForkerAbi,
+				args: [migration.parent.address, migration.outcomeIndex],
+				functionName: 'migrateVault',
+			}),
+			gas: 4_000_000n,
+			label: `Migrate liquidator vault to approved universe ${migration.childUniverse.id.toString()}`,
+			to: migration.parent.securityPoolForker,
+		},
+		'migration',
+	)
 }
 
 async function agreedPendingNonce(wallet: WriteClient, settings: OperatorSettings, address: Address) {
@@ -399,7 +423,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 }
 
 export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation) {
-	if (!pool.selected || pool.systemState !== 0n || pool.lastPrice === 0n) return false
+	if (!isPoolExecutionEligible(pool) || pool.lastPrice === 0n) return false
 	const health = vaultHealthBps(pool.botVault.rep, pool.botVault.allowance, pool.multiplierBps, pool.lastPrice)
 	if (pool.botVault.allowance > 0n && health !== undefined && health < settings.strategy.vaultTopUpHealthBps) {
 		const targetRep = requiredRepForAllowance(pool.botVault.allowance, pool.multiplierBps, pool.lastPrice, settings.strategy.vaultTargetHealthBps)

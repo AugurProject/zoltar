@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
 
 const settings = {
+	approvedUniverses: ['0'],
 	connectivity: {
 		publicRpcUrls: ['https://public.example'],
 		quorumRpcUrls: [],
@@ -10,6 +11,7 @@ const settings = {
 	deployment: {
 		securityPoolFactory: '0x0000000000000000000000000000000000000000',
 		weth: '0x0000000000000000000000000000000000000000',
+		zoltar: '0x0000000000000000000000000000000000000000',
 	},
 	network: {
 		chainId: 11155111,
@@ -31,6 +33,7 @@ const settings = {
 	selectedPools: [],
 	strategy: {
 		allowAutomaticDeposits: true,
+		allowAutomaticVaultMigrations: true,
 		allowAutomaticWithdrawals: true,
 		candidatePriority: 'largest-bonus',
 		fallbackRepPerEthPrice: '0',
@@ -69,6 +72,7 @@ describe('liquidator settings', () => {
 			readRpcUrl: 'https://read.example/',
 		})
 		expect(serialized.runtime.stateFile.endsWith('/bots/liquidator/.state/operator-state.json')).toBe(true)
+		expect(serialized.approvedUniverses).toEqual(['0'])
 	})
 
 	test('rejects overlapping health-management thresholds', () => {

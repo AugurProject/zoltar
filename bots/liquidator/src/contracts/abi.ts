@@ -28,6 +28,16 @@ export const erc20Abi = [
 	},
 ] as const
 
+export const reputationTokenAbi = [
+	{
+		inputs: [],
+		name: 'zoltar',
+		outputs: [{ name: 'address', type: 'address' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
+
 const deploymentComponents = [
 	{ name: 'securityPool', type: 'address' },
 	{ name: 'truthAuction', type: 'address' },
@@ -57,6 +67,39 @@ export const securityPoolFactoryAbi = [
 		],
 		name: 'securityPoolDeploymentsRange',
 		outputs: [{ components: deploymentComponents, name: 'deployments', type: 'tuple[]' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
+
+const universeComponents = [
+	{ name: 'forkTime', type: 'uint256' },
+	{ name: 'forkQuestionId', type: 'uint256' },
+	{ name: 'forkingOutcomeIndex', type: 'uint256' },
+	{ name: 'reputationToken', type: 'address' },
+	{ name: 'parentUniverseId', type: 'uint248' },
+] as const
+
+export const zoltarAbi = [
+	{
+		inputs: [{ name: 'universeId', type: 'uint248' }],
+		name: 'universes',
+		outputs: universeComponents,
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		name: 'getDeployedChildUniverses',
+		outputs: [
+			{ name: 'outcomeIndexes', type: 'uint256[]' },
+			{ name: 'childUniverseIds', type: 'uint248[]' },
+			{ components: universeComponents, name: 'childUniverses', type: 'tuple[]' },
+		],
 		stateMutability: 'view',
 		type: 'function',
 	},
@@ -142,6 +185,13 @@ export const securityPoolAbi = [
 		type: 'function',
 	},
 	{
+		inputs: [],
+		name: 'securityPoolForker',
+		outputs: [{ name: 'forker', type: 'address' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
 		inputs: [{ name: 'repAmount', type: 'uint256' }],
 		name: 'depositRep',
 		outputs: [],
@@ -151,6 +201,45 @@ export const securityPoolAbi = [
 	{
 		inputs: [{ name: 'vault', type: 'address' }],
 		name: 'redeemFees',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const securityPoolForkerAbi = [
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'forkData',
+		outputs: [
+			{ name: 'auctionableRepAtFork', type: 'uint256' },
+			{ name: 'truthAuction', type: 'address' },
+			{ name: 'truthAuctionStarted', type: 'uint256' },
+			{ name: 'migratedRep', type: 'uint256' },
+			{ name: 'auctionedSecurityBondAllowance', type: 'uint256' },
+			{ name: 'escalationElapsedAtFork', type: 'uint256' },
+			{ name: 'escalationStartBondAtFork', type: 'uint256' },
+			{ name: 'escalationNonDecisionThresholdAtFork', type: 'uint256' },
+			{ name: 'ownFork', type: 'bool' },
+			{ name: 'unresolvedEscalationAtFork', type: 'bool' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getForkActivationTime',
+		outputs: [{ name: 'timestamp', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		name: 'migrateVault',
 		outputs: [],
 		stateMutability: 'nonpayable',
 		type: 'function',

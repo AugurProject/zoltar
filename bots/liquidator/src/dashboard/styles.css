@@ -293,6 +293,37 @@ table {
 	border-collapse: collapse;
 }
 
+.universe-shell td {
+	overflow-wrap: anywhere;
+}
+
+@media (min-width: 42.01rem) {
+	.universe-shell table {
+		table-layout: fixed;
+	}
+
+	.universe-shell th:nth-child(1) {
+		width: 8%;
+	}
+
+	.universe-shell th:nth-child(2) {
+		width: 30%;
+	}
+
+	.universe-shell th:nth-child(3) {
+		width: 18%;
+	}
+
+	.universe-shell th:nth-child(4) {
+		width: 12%;
+	}
+
+	.universe-shell th:nth-child(5),
+	.universe-shell th:nth-child(6) {
+		width: 16%;
+	}
+}
+
 th,
 td {
 	padding: 0.8rem;

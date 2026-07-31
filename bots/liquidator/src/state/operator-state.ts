@@ -8,10 +8,13 @@ import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#
 export type PoolObservation = {
 	activeVaultCount: bigint
 	address: Address
+	approvedUniverse: boolean
 	botVault: VaultPosition
 	candidates: LiquidationCandidate[]
 	collateralEth: bigint
 	currentRetentionRate: bigint
+	forkActivationTime: bigint
+	forkOutcomeIndex: bigint | undefined
 	initialReportPriorityFeeWeiPerGas: bigint
 	isPriceValid: boolean
 	lastPrice: bigint
@@ -21,12 +24,14 @@ export type PoolObservation = {
 	minimumToken1Report: bigint
 	multiplierBps: bigint
 	parent: Address
+	parentUniverseId: bigint | undefined
 	pendingReportId: bigint
 	pendingReportSponsor: Address
 	questionId: bigint
 	repToken: Address
 	requestPriceCostEth: bigint
 	selected: boolean
+	securityPoolForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
 	totalAllowanceEth: bigint
@@ -34,6 +39,16 @@ export type PoolObservation = {
 	truncatedVaults: boolean
 	universeId: bigint
 	vaults: VaultPosition[]
+}
+
+export type UniverseObservation = {
+	approved: boolean
+	forkQuestionId: bigint
+	forkTime: bigint
+	id: bigint
+	outcomeIndex: bigint | undefined
+	parentId: bigint | undefined
+	repToken: Address
 }
 
 export type StagedOperationObservation = {
@@ -55,7 +70,7 @@ export type Activity = {
 	at: string
 	details?: string | undefined
 	hash?: Hex | undefined
-	kind: 'configuration' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'scan' | 'withdrawal'
+	kind: 'configuration' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'migration' | 'scan' | 'withdrawal'
 	message: string
 	status: 'confirmed' | 'dry-run' | 'failed' | 'info' | 'pending'
 }
@@ -77,7 +92,7 @@ export type PendingStagedOperation = {
 
 export type PendingTransactionIntent = {
 	hash: Hex
-	kind: 'deposit' | 'fees' | 'liquidation' | 'withdrawal'
+	kind: 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
@@ -100,6 +115,7 @@ export type RuntimeState = {
 	scanning: boolean
 	startedAt: string
 	status: 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
+	universes: UniverseObservation[]
 	wallet: Address | undefined
 	walletEth: bigint
 	walletRepByToken: Map<string, bigint>
@@ -118,6 +134,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		scanning: false,
 		startedAt: new Date().toISOString(),
 		status: paused ? 'paused' : 'starting',
+		universes: [],
 		wallet,
 		walletEth: 0n,
 		walletRepByToken: new Map(),
@@ -170,6 +187,72 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.rep, 0n)
 	const assumedDebt = state.pools.reduce((total, pool) => total + pool.botVault.allowance, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
+	const universeMap = new Map<
+		string,
+		{
+			approved: boolean
+			forkedPoolCount: number
+			forkQuestionId: bigint
+			forkTime: bigint
+			id: bigint
+			migratableVaultCount: number
+			operationalPoolCount: number
+			outcomeIndex: bigint | undefined
+			parentId: bigint | undefined
+			poolCount: number
+			repToken: Address
+			selectedPoolCount: number
+		}
+	>()
+	for (const universe of state.universes) {
+		universeMap.set(universe.id.toString(), {
+			approved: universe.approved,
+			forkedPoolCount: 0,
+			forkQuestionId: universe.forkQuestionId,
+			forkTime: universe.forkTime,
+			id: universe.id,
+			migratableVaultCount: 0,
+			operationalPoolCount: 0,
+			outcomeIndex: universe.outcomeIndex,
+			parentId: universe.parentId,
+			poolCount: 0,
+			repToken: universe.repToken,
+			selectedPoolCount: 0,
+		})
+	}
+	for (const pool of state.pools) {
+		const key = pool.universeId.toString()
+		const existing = universeMap.get(key) ?? {
+			approved: pool.approvedUniverse,
+			forkedPoolCount: 0,
+			forkQuestionId: 0n,
+			forkTime: 0n,
+			id: pool.universeId,
+			migratableVaultCount: 0,
+			operationalPoolCount: 0,
+			outcomeIndex: pool.forkOutcomeIndex,
+			parentId: pool.parentUniverseId,
+			poolCount: 0,
+			repToken: pool.repToken,
+			selectedPoolCount: 0,
+		}
+		existing.poolCount += 1
+		if (pool.selected) existing.selectedPoolCount += 1
+		if (pool.systemState === 0n) existing.operationalPoolCount += 1
+		if (pool.systemState === 1n) existing.forkedPoolCount += 1
+		universeMap.set(key, existing)
+	}
+	for (const universe of universeMap.values()) {
+		if (!universe.approved || universe.parentId === undefined || universe.outcomeIndex === undefined) continue
+		universe.migratableVaultCount = state.pools.filter(
+			parent =>
+				parent.universeId === universe.parentId &&
+				parent.selected &&
+				parent.systemState === 1n &&
+				(parent.botVault.ownership > 0n || parent.botVault.allowance > 0n) &&
+				!parent.stagedOperations.some(operation => operation.initiatorVault.toLowerCase() === parent.botVault.address.toLowerCase() || operation.targetVault.toLowerCase() === parent.botVault.address.toLowerCase()),
+		).length
+	}
 	return {
 		activities: state.activities,
 		error: state.error,
@@ -177,9 +260,11 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 		lastScanAt: state.lastScanAt,
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		metrics: {
+			approvedUniverseCount: [...universeMap.values()].filter(universe => universe.approved).length,
 			assumedDebtEth: formatDecimalAmount(assumedDebt),
 			candidateCount: state.pools.reduce((total, pool) => total + pool.candidates.length, 0),
 			deployedRep: formatDecimalAmount(deployedRep),
+			eligiblePoolCount: state.pools.filter(pool => pool.selected && pool.approvedUniverse && pool.systemState === 0n).length,
 			poolCount: state.pools.length,
 			selectedPoolCount: state.pools.filter(pool => pool.selected).length,
 			walletEth: formatDecimalAmount(state.walletEth),
@@ -189,10 +274,13 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 		pools: state.pools.map(pool => ({
 			activeVaultCount: pool.activeVaultCount.toString(),
 			address: pool.address,
+			approvedUniverse: pool.approvedUniverse,
 			botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
 			candidates: pool.candidates.map(candidateView),
 			collateralEth: formatDecimalAmount(pool.collateralEth),
 			currentRetentionRate: pool.currentRetentionRate.toString(),
+			forkActivationTime: pool.forkActivationTime.toString(),
+			forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
 			initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
 			isPriceValid: pool.isPriceValid,
 			lastPrice: formatDecimalAmount(pool.lastPrice),
@@ -202,12 +290,14 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 			minimumToken1Report: formatDecimalAmount(pool.minimumToken1Report),
 			multiplierBps: pool.multiplierBps.toString(),
 			parent: pool.parent,
+			parentUniverseId: pool.parentUniverseId?.toString(),
 			pendingReportId: pool.pendingReportId.toString(),
 			pendingReportSponsor: pool.pendingReportSponsor,
 			questionId: pool.questionId.toString(),
 			repToken: pool.repToken,
 			requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostEth),
 			selected: pool.selected,
+			securityPoolForker: pool.securityPoolForker,
 			systemState: pool.systemState.toString(),
 			totalAllowanceEth: formatDecimalAmount(pool.totalAllowanceEth),
 			totalRep: formatDecimalAmount(pool.totalRep),
@@ -218,6 +308,22 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 		scanning: state.scanning,
 		startedAt: state.startedAt,
 		status: state.status,
+		universes: [...universeMap.values()]
+			.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+			.map(universe => ({
+				approved: universe.approved,
+				forkedPoolCount: universe.forkedPoolCount,
+				forkQuestionId: universe.forkQuestionId.toString(),
+				forkTime: universe.forkTime.toString(),
+				id: universe.id.toString(),
+				migratableVaultCount: universe.migratableVaultCount,
+				operationalPoolCount: universe.operationalPoolCount,
+				outcomeIndex: universe.outcomeIndex?.toString(),
+				parentId: universe.parentId?.toString(),
+				poolCount: universe.poolCount,
+				repToken: universe.repToken,
+				selectedPoolCount: universe.selectedPoolCount,
+			})),
 		wallet: state.wallet,
 		walletRep: Object.fromEntries([...state.walletRepByToken.entries()].map(([token, amount]) => [token, formatDecimalAmount(amount)])),
 	}
@@ -247,7 +353,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 			const message = Reflect.get(activity, 'message')
 			const status = Reflect.get(activity, 'status')
 			if (typeof at !== 'string' || typeof message !== 'string') return []
-			if (kind !== 'configuration' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'scan' && kind !== 'withdrawal') return []
+			if (kind !== 'configuration' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'scan' && kind !== 'withdrawal') return []
 			if (status !== 'confirmed' && status !== 'dry-run' && status !== 'failed' && status !== 'info' && status !== 'pending') return []
 			const details = Reflect.get(activity, 'details')
 			const hash = Reflect.get(activity, 'hash')
@@ -291,7 +397,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				const submissionBlock = Reflect.get(intent, 'submissionBlock')
 				if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash) || typeof serializedTransaction !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
 				if (keccak256(serializedTransaction as Hex).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
-				if (typeof label !== 'string' || (kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
+				if (typeof label !== 'string' || (kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
 				if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
 				if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
 				if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')

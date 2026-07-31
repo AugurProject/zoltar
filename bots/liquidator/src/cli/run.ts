@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, zeroAddress, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
@@ -10,11 +10,12 @@ import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectiv
 import { loadSettings, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { stagedOperationOutcome } from '#core/staged-outcome'
-import { dryRunCandidate, executeLiquidation, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState, type PoolObservation } from '#state/operator-state'
 import { evaluateCandidate, sortCandidates } from '#core/strategy'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -221,6 +222,24 @@ async function main() {
 					})
 					return { paused }
 				},
+				setApprovedUniverses: async value => {
+					if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
+						throw new Error('Approved universes must be an array of non-negative integer strings')
+					}
+					const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
+					if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
+					validateApprovedUniverseSelection(state.universes, approvedUniverses)
+					await persistSettings(current => ({ ...current, approvedUniverses }))
+					for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
+					for (const pool of state.pools) pool.approvedUniverse = approvedUniverses.includes(pool.universeId)
+					recordActivity(state, {
+						details: approvedUniverses.map(universe => universe.toString()).join(', '),
+						kind: 'configuration',
+						message: 'Truthful universe selection saved',
+						status: 'info',
+					})
+					return serializedSettings(settings, true)
+				},
 				setSelectedPools: async value => {
 					if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) {
 						throw new Error('Selected pools must be an array of addresses')
@@ -322,7 +341,7 @@ async function main() {
 					const observations = [
 						{
 							endpoint: settings.connectivity.readRpcUrl,
-							value: primary.pools,
+							value: { pools: primary.pools, universes: primary.universes },
 						},
 					]
 					for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
@@ -333,13 +352,30 @@ async function main() {
 						const observation = await scanPools(quorumClient, settings, state.wallet)
 						observations.push({
 							endpoint: rpcUrl,
-							value: observation.pools,
+							value: { pools: observation.pools, universes: observation.universes },
 						})
 					}
 					quorumValue('liquidation execution snapshot', observations)
 				}
 				state.pools = primary.pools
+				state.universes = primary.universes
 				state.walletRepByToken = primary.walletRepByToken
+				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
+				if (settings.runtime.execute && settings.strategy.allowAutomaticVaultMigrations) {
+					const selectedAddresses = new Set(settings.selectedPools.map(pool => pool.toLowerCase()))
+					const inheritedSelections = state.pools.filter(pool => {
+						if (!pool.approvedUniverse || pool.parent === zeroAddress) return false
+						const parent = state.pools.find(candidate => candidate.address.toLowerCase() === pool.parent.toLowerCase())
+						return parent?.selected === true && !selectedAddresses.has(pool.address.toLowerCase())
+					})
+					if (inheritedSelections.length > 0) {
+						await persistSettings(current => ({
+							...current,
+							selectedPools: [...current.selectedPools, ...inheritedSelections.map(pool => pool.address)],
+						}))
+						for (const pool of inheritedSelections) pool.selected = true
+					}
+				}
 				state.lastScannedBlock = await client.getBlockNumber()
 				state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
@@ -350,6 +386,20 @@ async function main() {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
 					await reconcilePendingStagedOperations(settings, wallet, state)
 					if (await recoverPendingTransactions(settings, wallet, state)) {
+						await saveDurableState(settings.runtime.stateFile, state)
+						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+					}
+					const currentBlock = await client.getBlock()
+					const migration = selectVaultMigration(state.pools, state.universes, settings, currentBlock.timestamp)
+					if (migration !== undefined) {
+						const childPool = migration.childPool
+						if (childPool !== undefined && !settings.selectedPools.some(pool => pool.toLowerCase() === childPool.address.toLowerCase())) {
+							await persistSettings(current => ({
+								...current,
+								selectedPools: [...current.selectedPools, childPool.address],
+							}))
+						}
+						await executeVaultMigration(wallet, settings, state, migration)
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}

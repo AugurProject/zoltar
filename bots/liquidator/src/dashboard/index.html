@@ -32,6 +32,32 @@
 				</div>
 				<div id="metrics" class="metric-grid" aria-live="polite"></div>
 			</section>
+			<section aria-labelledby="universes-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Fork truth paths</p>
+						<h2 id="universes-title">Universes</h2>
+					</div>
+					<p class="muted">Approve one truthful child per parent universe.</p>
+				</div>
+				<div class="table-shell universe-shell">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Approved</th>
+								<th scope="col">Universe</th>
+								<th scope="col">Parent</th>
+								<th scope="col">Fork outcome</th>
+								<th scope="col">Pool state</th>
+								<th scope="col">Vault migration</th>
+							</tr>
+						</thead>
+						<tbody id="universe-rows">
+							<tr><td colspan="6" class="empty">Scanning universe registry…</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
 			<section aria-labelledby="pools-title">
 				<div class="section-heading">
 					<div>
@@ -48,7 +74,7 @@
 					<table>
 						<thead>
 							<tr>
-								<th scope="col">Enabled</th>
+								<th scope="col">Selected</th>
 								<th scope="col">Pool</th>
 								<th scope="col">Question</th>
 								<th scope="col">Oracle</th>
@@ -97,6 +123,7 @@
 							</select>
 						</label>
 						<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
+						<label class="check"><input name="allowAutomaticVaultMigrations" type="checkbox" />Automatic approved-universe vault migrations</label>
 						<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
 						<div class="form-actions">
 							<button type="submit">Save strategy</button>

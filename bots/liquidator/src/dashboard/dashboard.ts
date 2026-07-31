@@ -25,6 +25,7 @@ type Candidate = {
 type Pool = {
 	activeVaultCount: string
 	address: string
+	approvedUniverse: boolean
 	botVault: Vault
 	candidates: Candidate[]
 	collateralEth: string
@@ -37,6 +38,22 @@ type Pool = {
 	totalAllowanceEth: string
 	totalRep: string
 	truncatedVaults: boolean
+	universeId: string
+}
+
+type Universe = {
+	approved: boolean
+	forkedPoolCount: number
+	forkQuestionId: string
+	forkTime: string
+	id: string
+	migratableVaultCount: number
+	operationalPoolCount: number
+	outcomeIndex?: string
+	parentId?: string
+	poolCount: number
+	repToken: string
+	selectedPoolCount: number
 }
 
 type Snapshot = {
@@ -45,9 +62,11 @@ type Snapshot = {
 	execute: boolean
 	lastScanAt?: string
 	metrics: {
+		approvedUniverseCount: number
 		assumedDebtEth: string
 		candidateCount: number
 		deployedRep: string
+		eligiblePoolCount: number
 		poolCount: number
 		selectedPoolCount: number
 		walletEth: string
@@ -57,10 +76,12 @@ type Snapshot = {
 	pools: Pool[]
 	scanning: boolean
 	status: string
+	universes: Universe[]
 	wallet?: string
 }
 
 type Configuration = {
+	approvedUniverses: string[]
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -72,6 +93,7 @@ function element<T extends Element>(id: string, constructor: { new (): T }) {
 }
 
 const metrics = element('metrics', HTMLDivElement)
+const universeRows = element('universe-rows', HTMLTableSectionElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
@@ -93,21 +115,25 @@ const walletAddress = element('wallet-address', HTMLParagraphElement)
 
 let currentSnapshot: Snapshot | undefined
 let currentConfiguration: Configuration | undefined
+let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
 	const response = await fetch(path, options)
 	const value: unknown = await response.json()
 	if (!response.ok) {
-		const message = typeof value === 'object' && value !== null && typeof Reflect.get(value, 'error') === 'string' ? Reflect.get(value, 'error') : `Request failed with HTTP ${response.status.toString()}`
+		const error = typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
+		const message = typeof error === 'string' ? error : `Request failed with HTTP ${response.status.toString()}`
 		throw new Error(message)
 	}
 	return value as T
 }
 
 function put<T = unknown>(path: string, value: unknown) {
+	const body = JSON.stringify(value)
+	if (body === undefined) throw new Error('Request body is not JSON serializable')
 	return api<T>(path, {
-		body: JSON.stringify(value),
+		body,
 		headers: { 'content-type': 'application/json' },
 		method: 'PUT',
 	})
@@ -131,12 +157,89 @@ function metric(label: string, value: string) {
 function renderMetrics(snapshot: Snapshot) {
 	metrics.replaceChildren(
 		metric('Pools', snapshot.metrics.poolCount.toString()),
-		metric('Enabled', snapshot.metrics.selectedPoolCount.toString()),
+		metric('Selected', snapshot.metrics.selectedPoolCount.toString()),
+		metric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
+		metric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
 		metric('Candidates', snapshot.metrics.candidateCount.toString()),
 		metric('Deployed REP', snapshot.metrics.deployedRep),
 		metric('Assumed debt', `${snapshot.metrics.assumedDebtEth} ETH`),
 		metric('Wallet ETH', snapshot.metrics.walletEth),
 		metric('Wallet REP', snapshot.metrics.walletRep),
+	)
+}
+
+function forkOutcome(outcomeIndex?: string) {
+	if (outcomeIndex === undefined) return 'Origin'
+	if (outcomeIndex === '0') return 'Invalid'
+	if (outcomeIndex === '1') return 'Yes'
+	if (outcomeIndex === '2') return 'No'
+	return `Outcome ${outcomeIndex}`
+}
+
+function universeState(universe: Universe) {
+	if (universe.poolCount === 0) return 'No security pool yet'
+	if (universe.operationalPoolCount > 0) return `${universe.operationalPoolCount.toString()} operational`
+	if (universe.forkedPoolCount > 0) return `${universe.forkedPoolCount.toString()} forked`
+	return 'Migration / settlement'
+}
+
+function renderUniverses(snapshot: Snapshot) {
+	if (snapshot.universes.length === 0) {
+		const row = document.createElement('tr')
+		const empty = cell('No universes are registered.')
+		empty.colSpan = 6
+		empty.className = 'empty'
+		row.append(empty)
+		universeRows.replaceChildren(row)
+		return
+	}
+	universeRows.replaceChildren(
+		...snapshot.universes.map(universe => {
+			const row = document.createElement('tr')
+			const checkbox = document.createElement('input')
+			checkbox.type = 'checkbox'
+			checkbox.checked = approvedUniverses.has(universe.id)
+			checkbox.disabled = currentConfiguration === undefined
+			checkbox.setAttribute('aria-label', `Approve universe ${universe.id}`)
+			const toggle = document.createElement('label')
+			toggle.className = 'pool-toggle'
+			const hidden = document.createElement('span')
+			hidden.className = 'visually-hidden'
+			hidden.textContent = `Approve universe ${universe.id}`
+			toggle.append(checkbox, hidden)
+			const status = document.createElement('span')
+			status.className = 'action-status'
+			checkbox.addEventListener('change', async () => {
+				checkbox.disabled = true
+				actionStatus(status, 'Saving…')
+				const next = new Set(approvedUniverses)
+				if (checkbox.checked) next.add(universe.id)
+				else next.delete(universe.id)
+				try {
+					await put('/api/approved-universes', [...next])
+					approvedUniverses = next
+					actionStatus(status, 'Saved')
+				} catch (error) {
+					checkbox.checked = !checkbox.checked
+					actionStatus(status, error instanceof Error ? error.message : String(error), true)
+				} finally {
+					checkbox.disabled = false
+				}
+			})
+			const migration = universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} eligible parent vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No eligible parent vault'
+			const cells = [
+				cell(toggle, status),
+				cell(stacked(`#${universe.id}`, `${universe.poolCount.toString()} pool${universe.poolCount === 1 ? '' : 's'} · question #${universe.forkQuestionId}`)),
+				cell(universe.parentId === undefined ? 'Root universe' : `#${universe.parentId}`),
+				cell(forkOutcome(universe.outcomeIndex)),
+				cell(stacked(universeState(universe), `${universe.selectedPoolCount.toString()} selected pool${universe.selectedPoolCount === 1 ? '' : 's'}`)),
+				cell(migration),
+			]
+			const labels = ['Approved', 'Universe', 'Parent', 'Fork outcome', 'Pool state', 'Vault migration']
+			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
+			row.append(...cells)
+			return row
+		}),
 	)
 }
 
@@ -189,16 +292,17 @@ function renderPools(snapshot: Snapshot) {
 			const checkbox = document.createElement('input')
 			checkbox.type = 'checkbox'
 			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
-			checkbox.setAttribute('aria-label', `Enable pool ${pool.address}`)
+			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
 			checkbox.disabled = currentConfiguration === undefined
 			const toggle = document.createElement('label')
 			toggle.className = 'pool-toggle'
 			const toggleText = document.createElement('span')
 			toggleText.className = 'visually-hidden'
-			toggleText.textContent = `Enable pool ${pool.address}`
+			toggleText.textContent = `Select pool ${pool.address}`
 			toggle.append(checkbox, toggleText)
 			const poolStatus = document.createElement('span')
 			poolStatus.className = 'action-status'
+			poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : pool.selected ? 'Eligible' : ''
 			checkbox.addEventListener('change', async () => {
 				checkbox.disabled = true
 				actionStatus(poolStatus, 'Saving…')
@@ -240,7 +344,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.rep} REP · ${pool.botVault.allowanceEth} ETH assumed · ${pool.botVault.unpaidEthFees} ETH fees`)),
 				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
 			]
-			const labels = ['Enabled', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
+			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
 			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
 			row.append(...cells)
 			return row
@@ -299,6 +403,7 @@ function render(snapshot: Snapshot) {
 		globalError.textContent = snapshot.error
 	}
 	renderMetrics(snapshot)
+	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
 }
@@ -311,12 +416,16 @@ function setFormValue(name: string, value: string | number | boolean) {
 
 function populateConfiguration(configuration: Configuration) {
 	currentConfiguration = configuration
+	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
 	strategyFields.disabled = false
 	configurationStatus.classList.add('hidden')
 	configurationStatus.replaceChildren()
-	if (currentSnapshot !== undefined) renderPools(currentSnapshot)
+	if (currentSnapshot !== undefined) {
+		renderUniverses(currentSnapshot)
+		renderPools(currentSnapshot)
+	}
 }
 
 function showGlobalError(error: unknown) {
@@ -350,7 +459,7 @@ strategyForm.addEventListener('submit', async event => {
 	const data = new FormData(strategyForm)
 	const next = { ...currentConfiguration.strategy }
 	for (const [name, value] of data.entries()) next[name] = String(value)
-	for (const name of ['allowAutomaticDeposits', 'allowAutomaticWithdrawals']) {
+	for (const name of ['allowAutomaticDeposits', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals']) {
 		const field = strategyForm.elements.namedItem(name)
 		next[name] = field instanceof HTMLInputElement && field.checked
 	}

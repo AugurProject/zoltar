@@ -4,6 +4,7 @@ export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
+	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
@@ -85,6 +86,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return json({ error: 'Cross-origin requests are not accepted' }, 403)
 			}
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
+				['/api/approved-universes', controller.setApprovedUniverses],
 				['/api/paused', controller.setPaused],
 				['/api/selected-pools', controller.setSelectedPools],
 				['/api/signer', controller.setSigner],

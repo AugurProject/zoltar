@@ -12,6 +12,7 @@ const targetAddress = getAddress('0x0000000000000000000000000000000000000040')
 function strategy() {
 	return parseStrategy({
 		allowAutomaticDeposits: true,
+		allowAutomaticVaultMigrations: true,
 		allowAutomaticWithdrawals: true,
 		candidatePriority: 'largest-bonus',
 		fallbackRepPerEthPrice: '0',
