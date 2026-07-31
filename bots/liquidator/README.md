@@ -92,7 +92,8 @@ Both bots use the shared CCXT public market-data API to normalize order books
 from independently configured exchanges. Each `centralizedMarkets.sources`
 entry identifies an exchange with its CCXT `exchangeId`, a unified `REP/QUOTE`
 market, and an `ETH/QUOTE` market when REP is not quoted directly in ETH. Public
-ticker and order-book reads do not require exchange credentials.
+ticker and order-book reads do not require exchange credentials. A cross-quoted
+observation is fresh only when both its REP order book and ETH ticker are fresh.
 
 The bot converts each venue into REP per ETH, sums executable bid and ask depth
 inside `depthBps`, and uses the median of fresh venue prices. An estimate is
@@ -110,8 +111,10 @@ unavailable or unreliable CEX data remains advisory.
 
 The CEX estimate is an independent manipulation guard; it never replaces the
 coordinator price in protocol arithmetic and never authorizes a transaction by
-itself. Confirm that the configured market is the intended REP asset rather than
-another token that shares its ticker.
+itself. It is bound to universe 0 REP. Child-universe REP is never compared with
+that unrelated market: required mode blocks price-dependent child-pool actions,
+while advisory mode leaves them unconfirmed. Price-independent fee redemption
+continues during either condition.
 
 Example source entries (only use venues where these exact markets exist):
 

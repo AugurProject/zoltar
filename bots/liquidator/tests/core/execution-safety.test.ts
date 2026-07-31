@@ -3,7 +3,7 @@ import { coordinatorAbi } from '../../src/contracts/abi.ts'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
-import { assertExecutionActive, assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
+import { assertExecutionActive, assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, planVaultMaintenance, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
@@ -128,6 +128,32 @@ describe('liquidator execution safety', () => {
 				maximumTotalRep: 1_000n,
 			}),
 		).toThrow('maximumRepPerPool')
+	})
+
+	test('keeps fee redemption available when price-dependent maintenance is blocked', () => {
+		const wallet = getAddress('0x0000000000000000000000000000000000000020')
+		const pool = {
+			botVault: {
+				address: wallet,
+				allowance: 10n,
+				ownership: 0n,
+				rep: 0n,
+				unpaidEthFees: 2n,
+			},
+			isPriceValid: false,
+			lastPrice: 0n,
+			multiplierBps: 20_000n,
+		}
+		const strategy = {
+			allowAutomaticWithdrawals: true,
+			minimumRepWithdrawal: 1n,
+			redeemFeesAboveEth: 1n,
+			vaultTargetHealthBps: 12_500n,
+			vaultTopUpHealthBps: 11_000n,
+			vaultWithdrawHealthBps: 15_000n,
+		}
+		expect(planVaultMaintenance(pool, strategy, wallet, false)).toEqual({ kind: 'fees' })
+		expect(planVaultMaintenance(pool, strategy, wallet, true)).toEqual({ kind: 'fees' })
 	})
 
 	test('pre-funds stale liquidations against the configured higher price bound', () => {

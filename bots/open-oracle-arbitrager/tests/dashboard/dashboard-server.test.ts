@@ -120,6 +120,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')
 	expect(pageSource).toContain('id="centralized-market-price"')
 	expect(pageSource).not.toContain('public CCXT sources')
+	expect(pageSource).toContain('<th>Executable REP / ETH</th>')
+	expect(pageSource).toContain('<th>CEX deviation</th>')
 	expect(pageSource).toContain('aria-describedby="signer-status"')
 	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
 	expect(pageSource).toContain('id="forget-signer-button"')

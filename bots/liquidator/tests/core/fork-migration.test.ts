@@ -212,6 +212,39 @@ describe('fork migration strategy', () => {
 		expect(expired?.migratableVaultCount).toBe(0)
 	})
 
+	test('does not apply root REP market evidence to a child-universe REP pool', () => {
+		const rootRep = getAddress('0x0000000000000000000000000000000000000077')
+		const childRep = getAddress('0x0000000000000000000000000000000000000088')
+		const rootPool = { ...parent, lastPrice: 10n * 10n ** 18n, repToken: rootRep }
+		const childPool = { ...approvedChild, lastPrice: 10n * 10n ** 18n, repToken: childRep }
+		const state = initialRuntimeState(false, wallet)
+		state.pools = [rootPool, childPool]
+		state.centralizedMarket = {
+			assetId: rootRep,
+			askDepthEth: 4n * 10n ** 18n,
+			bidDepthEth: 4n * 10n ** 18n,
+			maximumPriceRepPerEth: 10n * 10n ** 18n,
+			minimumPriceRepPerEth: 10n * 10n ** 18n,
+			observations: [],
+			priceRepPerEth: 10n * 10n ** 18n,
+			reasons: [],
+			reliable: true,
+		}
+		const centralizedMarkets = {
+			...settings().centralizedMarkets,
+			minimumSourceCount: 2,
+			requiredForExecution: true,
+			sources: [
+				{ ethMarket: 'ETH/USD', exchangeId: 'alpha', repMarket: 'REP/USD' },
+				{ ethMarket: 'ETH/USD', exchangeId: 'beta', repMarket: 'REP/USD' },
+			],
+		}
+		const snapshot = operatorSnapshot(state, false, centralizedMarkets)
+		expect(snapshot.pools.find(candidate => candidate.address === rootPool.address)?.centralizedPriceAllowed).toBe(true)
+		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(false)
+		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceDeviationBps).toBeUndefined()
+	})
+
 	test('waits while a staged operation still involves the bot vault', () => {
 		const stagedParent: PoolObservation = {
 			...parent,

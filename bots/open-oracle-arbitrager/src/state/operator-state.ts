@@ -80,10 +80,12 @@ export type ReportPathSnapshot = {
 }
 
 export type OpportunitySnapshot = {
+	centralizedPriceDeviationBps: string | undefined
 	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'market-risk' | 'paused' | 'risk-limit' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
 	estimatedNetProfitEth: string
+	executablePriceRepPerEth: string
 	hasRequiredInventory: boolean | undefined
 	pool: Address
 	poolFee: number

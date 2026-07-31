@@ -237,6 +237,8 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 			row([
 				opportunity.reportId,
 				decisionBadge(opportunity),
+				opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
+				amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
 				opportunityDecisionReason(opportunity),
 				opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
 				amount(opportunity.estimatedNetProfitEth, 'ETH'),

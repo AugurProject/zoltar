@@ -2,7 +2,7 @@ import { createPublicClient, decodeEventLog, encodeFunctionData, http, type Acco
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import type { OperatorSettings } from '#config/settings'
+import type { OperatorSettings, StrategySettings } from '#config/settings'
 import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, requiredRepForAllowance, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
@@ -432,38 +432,57 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 	)
 }
 
-export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation) {
-	if (!isPoolExecutionEligible(pool) || pool.lastPrice === 0n) return false
-	const health = vaultHealthBps(pool.botVault.rep, pool.botVault.allowance, pool.multiplierBps, pool.lastPrice)
-	if (pool.botVault.allowance > 0n && health !== undefined && health < settings.strategy.vaultTopUpHealthBps) {
-		const targetRep = requiredRepForAllowance(pool.botVault.allowance, pool.multiplierBps, pool.lastPrice, settings.strategy.vaultTargetHealthBps)
-		await depositRep(wallet, settings, state, pool, targetRep > pool.botVault.rep ? targetRep - pool.botVault.rep : 0n)
-		return true
-	}
-	if (settings.strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === wallet.account.address.toLowerCase()) {
-		const surplus = surplusRepForWithdrawal(pool.botVault, { multiplierBps: pool.multiplierBps, price: pool.lastPrice }, settings.strategy)
-		if (surplus > 0n) {
-			await submitCall(
-				wallet,
-				settings,
-				state,
-				{
-					data: encodeFunctionData({
-						abi: coordinatorAbi,
-						args: [1, wallet.account.address, surplus, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
-						functionName: 'requestPriceIfNeededAndStageOperation',
-					}),
-					gas: 700_000n,
-					label: 'Withdraw surplus REP from liquidator vault',
-					receiptExpectation: { coordinator: pool.manager, operation: 1, type: 'staged-success' },
-					to: pool.manager,
-				},
-				'withdrawal',
-			)
-			return true
+type VaultMaintenancePlan = { amount: bigint; kind: 'deposit' | 'withdraw' } | { kind: 'fees' } | undefined
+
+export function planVaultMaintenance(
+	pool: Pick<PoolObservation, 'botVault' | 'isPriceValid' | 'lastPrice' | 'multiplierBps'>,
+	strategy: Pick<StrategySettings, 'allowAutomaticWithdrawals' | 'minimumRepWithdrawal' | 'redeemFeesAboveEth' | 'vaultTargetHealthBps' | 'vaultTopUpHealthBps' | 'vaultWithdrawHealthBps'>,
+	walletAddress: Address,
+	priceDependentMaintenanceAllowed: boolean,
+): VaultMaintenancePlan {
+	if (priceDependentMaintenanceAllowed && pool.lastPrice > 0n) {
+		const health = vaultHealthBps(pool.botVault.rep, pool.botVault.allowance, pool.multiplierBps, pool.lastPrice)
+		if (pool.botVault.allowance > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
+			const targetRep = requiredRepForAllowance(pool.botVault.allowance, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps)
+			return { amount: targetRep > pool.botVault.rep ? targetRep - pool.botVault.rep : 0n, kind: 'deposit' }
+		}
+		if (strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === walletAddress.toLowerCase()) {
+			const surplus = surplusRepForWithdrawal(pool.botVault, { multiplierBps: pool.multiplierBps, price: pool.lastPrice }, strategy)
+			if (surplus > 0n) return { amount: surplus, kind: 'withdraw' }
 		}
 	}
-	if (pool.botVault.unpaidEthFees >= settings.strategy.redeemFeesAboveEth) {
+	if (pool.botVault.unpaidEthFees >= strategy.redeemFeesAboveEth) return { kind: 'fees' }
+	return undefined
+}
+
+export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, priceDependentMaintenanceAllowed: boolean) {
+	if (!isPoolExecutionEligible(pool)) return false
+	const plan = planVaultMaintenance(pool, settings.strategy, wallet.account.address, priceDependentMaintenanceAllowed)
+	if (plan?.kind === 'deposit') {
+		await depositRep(wallet, settings, state, pool, plan.amount)
+		return true
+	}
+	if (plan?.kind === 'withdraw') {
+		await submitCall(
+			wallet,
+			settings,
+			state,
+			{
+				data: encodeFunctionData({
+					abi: coordinatorAbi,
+					args: [1, wallet.account.address, plan.amount, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
+					functionName: 'requestPriceIfNeededAndStageOperation',
+				}),
+				gas: 700_000n,
+				label: 'Withdraw surplus REP from liquidator vault',
+				receiptExpectation: { coordinator: pool.manager, operation: 1, type: 'staged-success' },
+				to: pool.manager,
+			},
+			'withdrawal',
+		)
+		return true
+	}
+	if (plan?.kind === 'fees') {
 		await submitCall(
 			wallet,
 			settings,

@@ -100,7 +100,7 @@ import {
 } from '#state/operator-state'
 import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
-import { centralizedPriceAllowsExecution, observeCentralizedMarkets, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { centralizedPriceAllowsExecution, centralizedPriceDeviationBps, observeCentralizedMarkets, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from '#core/position-accounting'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type DurableTransactionIntent, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { quorumValue } from '#monitoring/read-quorum'
@@ -932,8 +932,7 @@ async function executeDispute(
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
 	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
 	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountRep * 10n ** 18n) / referenceWeth
-	const primaryRep = game.token2.toLowerCase() === config.network.rep.toLowerCase()
-	if ((primaryRep && !centralizedPriceAllowsExecution(refreshedDexPriceRepPerEth, centralizedMarket, config.centralizedMarkets)) || (!primaryRep && config.centralizedMarkets.requiredForExecution)) {
+	if (!centralizedPriceAllowsExecution(refreshedDexPriceRepPerEth, centralizedMarket, config.centralizedMarkets, game.token2)) {
 		throw new Error('Final executable DEX price is not confirmed by centralized markets')
 	}
 	const newAmount2 = executionSnapshot.replacementAmount2
@@ -2090,12 +2089,16 @@ async function inspectReport(
 		paused,
 		profitable,
 	})
+	const executableReferenceWeth = best.quote.direction === 'sell-rep' ? best.quote.grossProceedsWeth : best.quote.hedgeCostWeth
+	const executablePriceRepPerEth = executableReferenceWeth === 0n ? 0n : (best.quote.hedgeAmountRep * 10n ** 18n) / executableReferenceWeth
 	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.hedgeFee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
 	const opportunity = {
+		centralizedPriceDeviationBps: undefined,
 		decision,
 		direction: best.quote.direction,
 		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitWeth),
 		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitWeth),
+		executablePriceRepPerEth: decimalSignedEth(executablePriceRepPerEth),
 		hasRequiredInventory,
 		pool: best.hedgePool,
 		poolFee: best.hedgeFee,
@@ -2675,7 +2678,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					}
 					let completedOpportunityCount = 0
 					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets)
+						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
 						state.tokenMarkets = await loadTokenMarkets(client, {
@@ -2733,7 +2736,8 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsWeth : evaluated.candidate.quote.hedgeCostWeth
 										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountRep * 10n ** 18n) / referenceWeth
 										const primaryRep = evaluated.candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
-										const marketAllowed = primaryRep ? centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets) : !config.centralizedMarkets.requiredForExecution
+										evaluated.opportunity.centralizedPriceDeviationBps = state.centralizedMarket === undefined ? undefined : centralizedPriceDeviationBps(dexPriceRepPerEth, state.centralizedMarket, evaluated.candidate.report.game.token2)?.toString()
+										const marketAllowed = centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets, evaluated.candidate.report.game.token2)
 										if (!marketAllowed) {
 											evaluated.opportunity.decision = 'market-risk'
 											recordOperation(state, {

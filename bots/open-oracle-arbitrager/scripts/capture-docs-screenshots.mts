@@ -71,6 +71,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			['dashboard-overview.png', undefined],
 			['dashboard-markets.png', 'markets'],
 			['dashboard-markets-mobile.png', 'markets'],
+			['dashboard-opportunities.png', 'operations'],
+			['dashboard-opportunities-mobile.png', 'operations'],
 			...(process.env['OPEN_ORACLE_CAPTURE_DEPLOYMENT'] === '1'
 				? ([
 						['deployment-desktop.png', 'deployment-configuration'],
@@ -85,7 +87,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					] as const)
 				: []),
 		] as const) {
-			const mobile = name === 'dashboard-markets-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
+			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
@@ -96,6 +98,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						expression: `(() => {
 							const section = document.getElementById(${JSON.stringify(section)})
 							if (section === null) return
+							for (const scroller of document.querySelectorAll('.table-scroll')) scroller.scrollLeft = 0
 							window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - 16))
 						})()`,
 					},
@@ -296,13 +299,14 @@ const positionDerivedSnapshot = operatorSnapshot(
 		blockNumber: '23842152',
 		blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
 		centralizedMarket: {
+			assetId: rep,
 			askDepthEth: 63n * 10n ** 17n,
 			bidDepthEth: 71n * 10n ** 17n,
 			maximumPriceRepPerEth: 1042n * 10n ** 16n,
 			minimumPriceRepPerEth: 1031n * 10n ** 16n,
 			observations: [
-				{ askDepthEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: 38n * 10n ** 17n, exchangeId: 'kraken', observedAt: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', sourceTimestamp: now },
-				{ askDepthEth: 29n * 10n ** 17n, bestAskQuote: '0.097', bestBidQuote: '0.096', bidDepthEth: 33n * 10n ** 17n, exchangeId: 'coinbase', observedAt: now, priceRepPerEth: 1042n * 10n ** 16n, repMarket: 'REP/ETH', sourceTimestamp: now },
+				{ assetId: rep, askDepthEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: 38n * 10n ** 17n, ethTickerTimestamp: now, exchangeId: 'kraken', observedAt: now, orderBookTimestamp: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', usesEthTicker: true },
+				{ assetId: rep, askDepthEth: 29n * 10n ** 17n, bestAskQuote: '0.097', bestBidQuote: '0.096', bidDepthEth: 33n * 10n ** 17n, ethTickerTimestamp: undefined, exchangeId: 'coinbase', observedAt: now, orderBookTimestamp: now, priceRepPerEth: 1042n * 10n ** 16n, repMarket: 'REP/ETH', usesEthTicker: false },
 			],
 			priceRepPerEth: 10365n * 10n ** 15n,
 			reasons: [],
@@ -371,10 +375,12 @@ const snapshot = {
 	],
 	opportunities: [
 		{
+			centralizedPriceDeviationBps: '86',
 			decision: 'selected' as const,
 			direction: 'sell-rep' as const,
 			estimatedNetProfitEth: '0.0158',
 			estimatedNetProfitWeth: '0.0158',
+			executablePriceRepPerEth: '10.284',
 			hasRequiredInventory: true,
 			pool,
 			poolFee: 3_000,
@@ -388,10 +394,12 @@ const snapshot = {
 			windowUnit: 'blocks' as const,
 		},
 		{
+			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable' as const,
 			direction: 'buy-rep' as const,
 			estimatedNetProfitEth: '-0.0012',
 			estimatedNetProfitWeth: '-0.0012',
+			executablePriceRepPerEth: '9.845',
 			hasRequiredInventory: true,
 			pool: address(0x3201),
 			poolFee: 10_000,

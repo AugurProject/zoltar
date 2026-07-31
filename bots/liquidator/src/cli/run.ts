@@ -382,7 +382,9 @@ async function main() {
 				state.walletRepByToken = primary.walletRepByToken
 				state.lastScannedBlock = scannedBlock.number
 				state.lastScannedTimestamp = scannedBlock.timestamp
-				state.centralizedMarket = await observeCentralizedMarkets(settings.centralizedMarkets)
+				const rootUniverse = state.universes.find(universe => universe.parentId === undefined)
+				if (rootUniverse === undefined) throw new Error('Universe scan did not return the root REP asset')
+				state.centralizedMarket = await observeCentralizedMarkets(settings.centralizedMarkets, rootUniverse.repToken)
 				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
 				const inheritedSelections = inheritedChildPoolSelections(state.pools, settings.selectedPools)
 				if (inheritedSelections.length > 0) {
@@ -418,8 +420,8 @@ async function main() {
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					for (const pool of state.pools) {
-						if (!centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) continue
-						if (await maintainVault(wallet, settings, state, pool)) {
+						const priceDependentMaintenanceAllowed = centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, pool.repToken)
+						if (await maintainVault(wallet, settings, state, pool, priceDependentMaintenanceAllowed)) {
 							await saveDurableState(settings.runtime.stateFile, state)
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
@@ -427,7 +429,7 @@ async function main() {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
 						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) {
+						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)) {
 							recordActivity(state, {
 								details: `pool=${selected.pool.address}`,
 								kind: 'scan',
@@ -443,7 +445,7 @@ async function main() {
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
-						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets)) {
+						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)) {
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
 						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`

@@ -874,7 +874,8 @@ The shared market observer uses CCXT's public unified `fetchTicker` and
 `centralizedMarkets.sources` with an exchange id, a unified `REP/QUOTE` market,
 and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
 dashboard shows each normalized REP/ETH observation and its executable bid and
-ask depth inside the configured `depthBps` band.
+ask depth inside the configured `depthBps` band. A cross-quoted observation is
+fresh only when both the REP order book and ETH reference ticker are fresh.
 
 The reference estimate is the median of fresh venue prices. Reliability requires
 `minimumSourceCount`, minimum bid and ask depth, and venue dispersion within
@@ -888,8 +889,9 @@ stale or unavailable, execution fails closed.
 This reference does not replace executable Uniswap quotes, spot/TWAP checks,
 quorum reads, slippage limits, or profitability accounting. It is a second,
 off-chain manipulation signal. Operators must verify that each configured
-ticker is the correct REP asset; fork REP tokens without matching CEX markets
-remain ineligible when CEX confirmation is required.
+ticker is the configured primary REP asset. The estimate is bound to that token;
+fork REP tokens without matching CEX markets remain ineligible when CEX
+confirmation is required and do not inherit the primary token's estimate.
 
 CCXT uses unified market symbols:
 

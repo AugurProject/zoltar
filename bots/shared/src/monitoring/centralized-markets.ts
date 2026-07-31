@@ -24,18 +24,22 @@ export type CentralizedMarketSettings = {
 }
 
 export type CentralizedMarketObservation = {
+	assetId: string
 	askDepthEth: bigint
 	bestAskQuote: string
 	bestBidQuote: string
 	bidDepthEth: bigint
 	exchangeId: string
+	ethTickerTimestamp: number | undefined
 	observedAt: number
+	orderBookTimestamp: number | undefined
 	priceRepPerEth: bigint
 	repMarket: string
-	sourceTimestamp: number | undefined
+	usesEthTicker: boolean
 }
 
 export type CentralizedMarketEstimate = {
+	assetId: string
 	askDepthEth: bigint
 	bidDepthEth: bigint
 	maximumPriceRepPerEth: bigint
@@ -56,6 +60,7 @@ type MarketTicker = {
 	ask: number | undefined
 	bid: number | undefined
 	last: number | undefined
+	timestamp: number | undefined
 }
 
 type MarketExchange = {
@@ -178,6 +183,7 @@ function formatFixed(value: bigint) {
 export function serializeCentralizedMarketEstimate(estimate: CentralizedMarketEstimate | undefined) {
 	if (estimate === undefined) return undefined
 	return {
+		assetId: estimate.assetId,
 		askDepthEth: formatFixed(estimate.askDepthEth),
 		bidDepthEth: formatFixed(estimate.bidDepthEth),
 		maximumPriceRepPerEth: formatFixed(estimate.maximumPriceRepPerEth),
@@ -188,9 +194,12 @@ export function serializeCentralizedMarketEstimate(estimate: CentralizedMarketEs
 			bestBidQuote: observation.bestBidQuote,
 			bidDepthEth: formatFixed(observation.bidDepthEth),
 			exchangeId: observation.exchangeId,
+			ethTickerTimestamp: observation.ethTickerTimestamp === undefined ? undefined : new Date(observation.ethTickerTimestamp).toISOString(),
 			observedAt: new Date(observation.observedAt).toISOString(),
+			orderBookTimestamp: observation.orderBookTimestamp === undefined ? undefined : new Date(observation.orderBookTimestamp).toISOString(),
 			priceRepPerEth: formatFixed(observation.priceRepPerEth),
 			repMarket: observation.repMarket,
+			usesEthTicker: observation.usesEthTicker,
 		})),
 		priceRepPerEth: formatFixed(estimate.priceRepPerEth),
 		reasons: estimate.reasons,
@@ -256,6 +265,7 @@ function ccxtExchangeFactory(exchangeId: string, timeoutMilliseconds: number): M
 				ask: ticker.ask,
 				bid: ticker.bid,
 				last: ticker.last,
+				timestamp: optionalTimestamp(ticker.timestamp),
 			}
 		},
 		loadMarkets: () => exchange.loadMarkets(),
@@ -264,7 +274,7 @@ function ccxtExchangeFactory(exchangeId: string, timeoutMilliseconds: number): M
 	return wrapped
 }
 
-async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
+async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, assetId: string, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
 	const exchange = factory(source.exchangeId, settings.requestTimeoutMilliseconds)
 	await exchange.loadMarkets()
 	const [orderBook, ethTicker] = await Promise.all([exchange.fetchOrderBook(source.repMarket, settings.orderBookLimit), source.ethMarket === undefined ? Promise.resolve(undefined) : exchange.fetchTicker(source.ethMarket)])
@@ -276,15 +286,18 @@ async function observeSource(source: CentralizedMarketSource, settings: Centrali
 	const bidDepthEth = quoteDepth(orderBook.bids, midpoint, settings.depthBps, 'bid') / quotePerEth
 	const askDepthEth = quoteDepth(orderBook.asks, midpoint, settings.depthBps, 'ask') / quotePerEth
 	return {
+		assetId,
 		askDepthEth: fixed(askDepthEth, `${source.exchangeId} ask depth`),
 		bestAskQuote: bestAsk.toString(),
 		bestBidQuote: bestBid.toString(),
 		bidDepthEth: fixed(bidDepthEth, `${source.exchangeId} bid depth`),
 		exchangeId: source.exchangeId,
+		ethTickerTimestamp: optionalTimestamp(ethTicker?.timestamp),
 		observedAt,
+		orderBookTimestamp: optionalTimestamp(orderBook.timestamp),
 		priceRepPerEth: fixed(quotePerEth / midpoint, `${source.exchangeId} REP/ETH price`),
 		repMarket: source.repMarket,
-		sourceTimestamp: optionalTimestamp(orderBook.timestamp),
+		usesEthTicker: ethTicker !== undefined,
 	}
 }
 
@@ -300,16 +313,20 @@ function median(values: readonly bigint[]) {
 	return (lower + upper) / 2n
 }
 
-export function aggregateCentralizedMarketObservations(observations: readonly CentralizedMarketObservation[], settings: CentralizedMarketSettings, now = Date.now()): CentralizedMarketEstimate | undefined {
+export function aggregateCentralizedMarketObservations(observations: readonly CentralizedMarketObservation[], settings: CentralizedMarketSettings, assetId: string, now = Date.now()): CentralizedMarketEstimate | undefined {
 	if (settings.sources.length === 0 && observations.length === 0) return undefined
+	if (observations.some(observation => observation.assetId.toLowerCase() !== assetId.toLowerCase())) {
+		throw new Error('Centralized market observations must describe one exact REP asset')
+	}
 	const fresh = observations.filter(observation => {
-		const timestamp = observation.sourceTimestamp ?? observation.observedAt
-		return timestamp <= now && now - timestamp <= settings.maximumObservationAgeMilliseconds
+		const timestamps = [observation.orderBookTimestamp ?? observation.observedAt, ...(observation.usesEthTicker ? [observation.ethTickerTimestamp ?? observation.observedAt] : [])]
+		return timestamps.every(timestamp => timestamp <= now && now - timestamp <= settings.maximumObservationAgeMilliseconds)
 	})
 	const reasons: string[] = []
 	if (fresh.length < settings.minimumSourceCount) reasons.push(`Only ${fresh.length.toString()} fresh CEX source(s); ${settings.minimumSourceCount.toString()} required`)
 	if (fresh.length === 0) {
 		return {
+			assetId,
 			askDepthEth: 0n,
 			bidDepthEth: 0n,
 			maximumPriceRepPerEth: 0n,
@@ -331,6 +348,7 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	if (bidDepthEth < settings.minimumBidDepthEth) reasons.push('CEX bid depth is below the configured minimum')
 	if (askDepthEth < settings.minimumAskDepthEth) reasons.push('CEX ask depth is below the configured minimum')
 	return {
+		assetId,
 		askDepthEth,
 		bidDepthEth,
 		maximumPriceRepPerEth,
@@ -342,11 +360,11 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	}
 }
 
-export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now = Date.now()): Promise<CentralizedMarketEstimate | undefined> {
+export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now = Date.now()): Promise<CentralizedMarketEstimate | undefined> {
 	if (settings.sources.length === 0) return undefined
-	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, factory, now)))
+	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, assetId, factory, now)))
 	const observations = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
-	const estimate = aggregateCentralizedMarketObservations(observations, settings, now)
+	const estimate = aggregateCentralizedMarketObservations(observations, settings, assetId, now)
 	if (estimate === undefined) return undefined
 	const errors = settled.flatMap((result, index) => {
 		if (result.status === 'fulfilled') return []
@@ -356,24 +374,26 @@ export async function observeCentralizedMarkets(settings: CentralizedMarketSetti
 	return errors.length === 0 ? estimate : { ...estimate, reasons: [...estimate.reasons, ...errors] }
 }
 
-export function centralizedPriceDeviationBps(priceRepPerEth: bigint, estimate: CentralizedMarketEstimate) {
+export function centralizedPriceDeviationBps(priceRepPerEth: bigint, estimate: CentralizedMarketEstimate, assetId: string) {
+	if (estimate.assetId.toLowerCase() !== assetId.toLowerCase()) return undefined
 	if (priceRepPerEth <= 0n || estimate.priceRepPerEth <= 0n) return undefined
 	const distance = priceRepPerEth > estimate.priceRepPerEth ? priceRepPerEth - estimate.priceRepPerEth : estimate.priceRepPerEth - priceRepPerEth
 	return (distance * BPS) / estimate.priceRepPerEth
 }
 
-export function centralizedPriceAllowsExecution(priceRepPerEth: bigint, estimate: CentralizedMarketEstimate | undefined, settings: CentralizedMarketSettings, now = Date.now()) {
+export function centralizedPriceAllowsExecution(priceRepPerEth: bigint, estimate: CentralizedMarketEstimate | undefined, settings: CentralizedMarketSettings, assetId: string, now = Date.now()) {
 	if (estimate === undefined) return !settings.requiredForExecution
+	if (estimate.assetId.toLowerCase() !== assetId.toLowerCase()) return !settings.requiredForExecution
 	if (!estimate.reliable) return !settings.requiredForExecution
 	if (
 		estimate.observations.some(observation => {
-			const timestamp = observation.sourceTimestamp ?? observation.observedAt
-			return timestamp > now || now - timestamp > settings.maximumObservationAgeMilliseconds
+			const timestamps = [observation.orderBookTimestamp ?? observation.observedAt, ...(observation.usesEthTicker ? [observation.ethTickerTimestamp ?? observation.observedAt] : [])]
+			return timestamps.some(timestamp => timestamp > now || now - timestamp > settings.maximumObservationAgeMilliseconds)
 		})
 	) {
 		return !settings.requiredForExecution
 	}
-	const deviationBps = centralizedPriceDeviationBps(priceRepPerEth, estimate)
+	const deviationBps = centralizedPriceDeviationBps(priceRepPerEth, estimate, assetId)
 	if (deviationBps === undefined) return !settings.requiredForExecution
 	return deviationBps <= settings.maximumDexDeviationBps
 }

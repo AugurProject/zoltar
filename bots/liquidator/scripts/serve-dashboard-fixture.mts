@@ -115,6 +115,7 @@ const server = startDashboardServer(4183, {
 	getState: () => ({
 		activities,
 		centralizedMarket: {
+			assetId: '0x0000000000000000000000000000000000000abc',
 			askDepthEth: '6.3',
 			bidDepthEth: '7.1',
 			maximumPriceRepPerEth: '10.42',

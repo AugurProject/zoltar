@@ -156,7 +156,7 @@ export function sortCandidates(candidates: readonly LiquidationCandidate[], prio
 	})
 }
 
-export function surplusRepForWithdrawal(caller: VaultPosition, pool: Pick<PoolRiskContext, 'multiplierBps' | 'price'>, strategy: StrategySettings) {
+export function surplusRepForWithdrawal(caller: VaultPosition, pool: Pick<PoolRiskContext, 'multiplierBps' | 'price'>, strategy: Pick<StrategySettings, 'minimumRepWithdrawal' | 'vaultTargetHealthBps' | 'vaultWithdrawHealthBps'>) {
 	if (caller.rep === 0n) return 0n
 	const retainedRep = requiredRepForAllowance(caller.allowance, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)
 	if (caller.allowance > 0n) {
