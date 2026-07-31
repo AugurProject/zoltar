@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, zeroAddress, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
@@ -15,7 +15,8 @@ import { scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState, type PoolObservation } from '#state/operator-state'
 import { evaluateCandidate, sortCandidates } from '#core/strategy'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
-import { selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
+import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
+import { createConfigurationMutationGate } from '#core/configuration-gate'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -202,6 +203,7 @@ async function main() {
 		result = settingsQueue
 		await result
 	}
+	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
@@ -213,8 +215,15 @@ async function main() {
 					}
 					const paused = Reflect.get(value, 'paused')
 					if (typeof paused !== 'boolean') throw new Error('paused must be a boolean')
-					await persistSettings(current => ({ ...current, paused }))
-					state.paused = paused
+					if (paused) {
+						state.paused = true
+						await persistSettings(current => ({ ...current, paused: true }))
+					} else {
+						await configurationMutationGate.run(async () => {
+							await persistSettings(current => ({ ...current, paused: false }))
+							state.paused = false
+						})
+					}
 					recordActivity(state, {
 						kind: 'configuration',
 						message: paused ? 'Operator paused' : 'Operator resumed',
@@ -222,87 +231,90 @@ async function main() {
 					})
 					return { paused }
 				},
-				setApprovedUniverses: async value => {
-					if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
-						throw new Error('Approved universes must be an array of non-negative integer strings')
-					}
-					const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
-					if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
-					validateApprovedUniverseSelection(state.universes, approvedUniverses)
-					await persistSettings(current => ({ ...current, approvedUniverses }))
-					for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
-					for (const pool of state.pools) pool.approvedUniverse = approvedUniverses.includes(pool.universeId)
-					recordActivity(state, {
-						details: approvedUniverses.map(universe => universe.toString()).join(', '),
-						kind: 'configuration',
-						message: 'Truthful universe selection saved',
-						status: 'info',
-					})
-					return serializedSettings(settings, true)
-				},
-				setSelectedPools: async value => {
-					if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) {
-						throw new Error('Selected pools must be an array of addresses')
-					}
-					const selectedPools = [
-						...new Map(
-							value.map(raw => {
-								if (typeof raw !== 'string') throw new Error('Selected pools must contain addresses')
-								const address = getAddress(raw)
-								return [address.toLowerCase(), address] as const
-							}),
-						).values(),
-					]
-					await persistSettings(current => ({ ...current, selectedPools }))
-					recordActivity(state, {
-						details: selectedPools.join(', '),
-						kind: 'configuration',
-						message: 'Pool selection saved',
-						status: 'info',
-					})
-					return serializedSettings(settings, true)
-				},
-				setSigner: async value => {
-					if (state.scanning) throw new Error('Wait for the active scan or transaction to finish before changing the signer')
-					if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-						throw new Error('Signer request must be an object')
-					}
-					const rawPrivateKey = Reflect.get(value, 'privateKey')
-					const rememberSigner = Reflect.get(value, 'rememberSigner')
-					if (typeof rawPrivateKey !== 'string' || typeof rememberSigner !== 'boolean') {
-						throw new Error('Signer request requires privateKey and rememberSigner')
-					}
-					const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
-					activePrivateKey = candidate.privateKey
-					wallet =
-						activePrivateKey === undefined
-							? undefined
-							: createWalletClient({
-									account: privateKeyToAccount(activePrivateKey),
-									chain,
-									transport: http(settings.connectivity.readRpcUrl),
-								})
-					state.wallet = wallet?.account.address
-					if (rememberSigner) {
-						await persistSettings(current => ({ ...current, privateKey: candidate.privateKey }))
-					}
-					recordActivity(state, {
-						kind: 'configuration',
-						message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
-						status: 'info',
-					})
-					return { wallet: candidate.address }
-				},
-				setStrategy: async value => {
-					const strategy = parseStrategy(value)
-					await persistSettings(current => ({ ...current, strategy }))
-					recordActivity(state, {
-						kind: 'configuration',
-						message: 'Liquidation strategy saved',
-						status: 'info',
-					})
-					return serializedSettings(settings, true)
-				},
+				setApprovedUniverses: value =>
+					configurationMutationGate.run(async () => {
+						if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
+							throw new Error('Approved universes must be an array of non-negative integer strings')
+						}
+						const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
+						if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
+						validateApprovedUniverseSelection(state.universes, approvedUniverses)
+						await persistSettings(current => ({ ...current, approvedUniverses }))
+						for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
+						for (const pool of state.pools) pool.approvedUniverse = approvedUniverses.includes(pool.universeId)
+						recordActivity(state, {
+							details: approvedUniverses.map(universe => universe.toString()).join(', '),
+							kind: 'configuration',
+							message: 'Truthful universe selection saved',
+							status: 'info',
+						})
+						return serializedSettings(settings, true)
+					}),
+				setSelectedPools: value =>
+					configurationMutationGate.run(async () => {
+						if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) {
+							throw new Error('Selected pools must be an array of addresses')
+						}
+						const selectedPools = [
+							...new Map(
+								value.map(raw => {
+									if (typeof raw !== 'string') throw new Error('Selected pools must contain addresses')
+									const address = getAddress(raw)
+									return [address.toLowerCase(), address] as const
+								}),
+							).values(),
+						]
+						await persistSettings(current => ({ ...current, selectedPools }))
+						recordActivity(state, {
+							details: selectedPools.join(', '),
+							kind: 'configuration',
+							message: 'Pool selection saved',
+							status: 'info',
+						})
+						return serializedSettings(settings, true)
+					}),
+				setSigner: value =>
+					configurationMutationGate.run(async () => {
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+							throw new Error('Signer request must be an object')
+						}
+						const rawPrivateKey = Reflect.get(value, 'privateKey')
+						const rememberSigner = Reflect.get(value, 'rememberSigner')
+						if (typeof rawPrivateKey !== 'string' || typeof rememberSigner !== 'boolean') {
+							throw new Error('Signer request requires privateKey and rememberSigner')
+						}
+						const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
+						activePrivateKey = candidate.privateKey
+						wallet =
+							activePrivateKey === undefined
+								? undefined
+								: createWalletClient({
+										account: privateKeyToAccount(activePrivateKey),
+										chain,
+										transport: http(settings.connectivity.readRpcUrl),
+									})
+						state.wallet = wallet?.account.address
+						if (rememberSigner) {
+							await persistSettings(current => ({ ...current, privateKey: candidate.privateKey }))
+						}
+						recordActivity(state, {
+							kind: 'configuration',
+							message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
+							status: 'info',
+						})
+						return { wallet: candidate.address }
+					}),
+				setStrategy: value =>
+					configurationMutationGate.run(async () => {
+						const strategy = parseStrategy(value)
+						await persistSettings(current => ({ ...current, strategy }))
+						recordActivity(state, {
+							kind: 'configuration',
+							message: 'Liquidation strategy saved',
+							status: 'info',
+						})
+						return serializedSettings(settings, true)
+					}),
 			})
 		: undefined
 	if (dashboard !== undefined) {
@@ -328,6 +340,7 @@ async function main() {
 	let lastDryRunKey: string | undefined
 	await pollUntilStopped(
 		async () => {
+			if (configurationMutationGate.isActive()) return false
 			state.scanning = true
 			state.error = undefined
 			try {
@@ -354,30 +367,25 @@ async function main() {
 							endpoint: rpcUrl,
 							value: { pools: observation.pools, universes: observation.universes },
 						})
+						}
+						quorumValue('liquidation execution snapshot', observations)
 					}
-					quorumValue('liquidation execution snapshot', observations)
+					const scannedBlock = await client.getBlock()
+					state.pools = primary.pools
+					state.universes = primary.universes
+					state.walletRepByToken = primary.walletRepByToken
+					state.lastScannedBlock = scannedBlock.number
+					state.lastScannedTimestamp = scannedBlock.timestamp
+					validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
+				const inheritedSelections = inheritedChildPoolSelections(state.pools, settings.selectedPools)
+				if (inheritedSelections.length > 0) {
+					await persistSettings(current => ({
+						...current,
+						selectedPools: [...current.selectedPools, ...inheritedSelections.map(pool => pool.address)],
+					}))
+					for (const pool of inheritedSelections) pool.selected = true
 				}
-				state.pools = primary.pools
-				state.universes = primary.universes
-				state.walletRepByToken = primary.walletRepByToken
-				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
-				if (settings.runtime.execute && settings.strategy.allowAutomaticVaultMigrations) {
-					const selectedAddresses = new Set(settings.selectedPools.map(pool => pool.toLowerCase()))
-					const inheritedSelections = state.pools.filter(pool => {
-						if (!pool.approvedUniverse || pool.parent === zeroAddress) return false
-						const parent = state.pools.find(candidate => candidate.address.toLowerCase() === pool.parent.toLowerCase())
-						return parent?.selected === true && !selectedAddresses.has(pool.address.toLowerCase())
-					})
-					if (inheritedSelections.length > 0) {
-						await persistSettings(current => ({
-							...current,
-							selectedPools: [...current.selectedPools, ...inheritedSelections.map(pool => pool.address)],
-						}))
-						for (const pool of inheritedSelections) pool.selected = true
-					}
-				}
-				state.lastScannedBlock = await client.getBlockNumber()
-				state.lastScanAt = new Date().toISOString()
+					state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
 					state.walletEth = await client.getBalance({ address: state.wallet })
 				}
@@ -389,8 +397,7 @@ async function main() {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
-					const currentBlock = await client.getBlock()
-					const migration = selectVaultMigration(state.pools, state.universes, settings, currentBlock.timestamp)
+					const migration = selectVaultMigration(state.pools, state.universes, settings, scannedBlock.timestamp)
 					if (migration !== undefined) {
 						const childPool = migration.childPool
 						if (childPool !== undefined && !settings.selectedPools.some(pool => pool.toLowerCase() === childPool.address.toLowerCase())) {

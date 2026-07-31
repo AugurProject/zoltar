@@ -28,16 +28,6 @@ export const erc20Abi = [
 	},
 ] as const
 
-export const reputationTokenAbi = [
-	{
-		inputs: [],
-		name: 'zoltar',
-		outputs: [{ name: 'address', type: 'address' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
-
 const deploymentComponents = [
 	{ name: 'securityPool', type: 'address' },
 	{ name: 'truthAuction', type: 'address' },

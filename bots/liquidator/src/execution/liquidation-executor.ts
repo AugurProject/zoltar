@@ -29,7 +29,12 @@ export function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, ma
 	}
 }
 
+export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
+	if (state.paused) throw new Error('Operator paused before transaction submission')
+}
+
 async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, call: Call, kind: 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal') {
+	assertExecutionActive(state)
 	const account = wallet.account
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
 		throw new Error('Execution signer cannot sign transactions')
@@ -38,6 +43,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 	if (block.number === undefined || block.baseFeePerGas === undefined) {
 		throw new Error('Latest block is missing number or base fee')
 	}
+	assertExecutionActive(state)
 	assertGasCostLimit(call.gas, maximumFeePerGas(block.baseFeePerGas), settings.strategy.maximumGasCostEth, call.label)
 	await wallet.call({
 		account,
@@ -46,6 +52,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		to: call.to,
 		value: call.value,
 	})
+	assertExecutionActive(state)
 	recordActivity(state, {
 		details: `to=${call.to} data=${call.data} value=${(call.value ?? 0n).toString()}`,
 		kind,
@@ -53,6 +60,8 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		status: 'info',
 	})
 	await saveDurableState(settings.runtime.stateFile, state)
+	const nonce = await agreedPendingNonce(wallet, settings, account.address)
+	assertExecutionActive(state)
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: block.baseFeePerGas,
 		blockNumber: block.number,
@@ -60,7 +69,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		data: call.data,
 		from: account.address,
 		gasEstimate: call.gas,
-		nonce: await agreedPendingNonce(wallet, settings, account.address),
+		nonce,
 		signTransaction: account.signTransaction,
 		to: call.to,
 		value: call.value,
@@ -84,6 +93,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		status: 'pending',
 	})
 	await saveDurableState(settings.runtime.stateFile, state)
+	assertExecutionActive(state)
 	await submitSignedTransaction({
 		address: account.address,
 		hash: signed.hash,

@@ -60,9 +60,10 @@ universe, the bot rejects configuration that approves more than one direct child
 outcome. This prevents an ambiguous vault route. Universe approval does not
 enable every pool in that universe: both the universe and each individual pool
 must be selected before the bot liquidates or maintains its vault there.
-Every discovered pool's REP token must identify the configured Zoltar contract;
-a mismatch fails the scan instead of applying the truth policy to another
-universe tree.
+Every discovered pool's REP token must match the configured Zoltar registry's
+token for that universe. A mismatch fails the scan instead of applying the truth
+policy to another universe tree; this also supports the external genesis REP
+token, which does not expose a Zoltar accessor.
 
 When `allowAutomaticVaultMigrations` is enabled, the bot looks for a selected
 forked parent pool where its signer has an unlocked vault and one deployed direct
@@ -77,6 +78,10 @@ inherits the selected parent pool onto its approved child. A missing approved
 child, closed migration window, empty vault, active staged operation involving
 the bot vault, disabled migration setting, or conflicting child approval
 produces no migration.
+
+Pool-selection inheritance is a configuration reconciliation and remains active
+in dry-run mode and when automatic vault migrations are disabled. Only the
+on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
 The active-vault scan is capped by `runtime.maxVaultsPerPool`. A capped scan is
 marked in the dashboard and must not be treated as a complete opportunity view.

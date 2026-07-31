@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { parseSettings } from '../../src/config/settings.ts'
-import { FORK_MIGRATION_WINDOW_SECONDS, isPoolExecutionEligible, selectVaultMigration, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
-import type { PoolObservation, UniverseObservation } from '../../src/state/operator-state.ts'
+import { FORK_MIGRATION_WINDOW_SECONDS, inheritedChildPoolSelections, isPoolExecutionEligible, isVaultMigrationSourceEligible, selectVaultMigration, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
+import { validatePoolUniverseRep } from '../../src/monitoring/pool-monitor.ts'
+import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
 const forker = getAddress('0x0000000000000000000000000000000000000008')
@@ -148,6 +149,15 @@ const rootUniverse = universe(0n, false)
 const approvedChildUniverse = universe(101n, true, 0n, 1n)
 
 describe('fork migration strategy', () => {
+	test('trusts genesis REP through the configured Zoltar universe record without a token accessor', () => {
+		const genesisRep = getAddress('0x0000000000000000000000000000000000000077')
+		const genesisPool = { ...parent, repToken: genesisRep }
+		const genesisUniverse = { ...rootUniverse, repToken: genesisRep }
+		expect(() => validatePoolUniverseRep(genesisPool, [genesisUniverse])).not.toThrow()
+		expect(() => validatePoolUniverseRep({ ...genesisPool, repToken: wallet }, [genesisUniverse])).toThrow('does not match universe 0 REP')
+		expect(() => validatePoolUniverseRep({ ...genesisPool, universeId: 999n }, [genesisUniverse])).toThrow('belongs to unknown universe 999')
+	})
+
 	test('routes a selected parent vault to its approved direct child during the migration window', () => {
 		const migration = selectVaultMigration([parent, approvedChild], [rootUniverse, approvedChildUniverse], settings(), 1_000n)
 		expect(migration?.parent.address).toBe(parent.address)
@@ -163,8 +173,30 @@ describe('fork migration strategy', () => {
 		expect(migration?.childUniverse.id).toBe(101n)
 	})
 
+	test('inherits a selected parent pool onto its registered approved child independent of execution settings', () => {
+		expect(inheritedChildPoolSelections([parent, approvedChild], [parent.address]).map(pool => pool.address)).toEqual([approvedChild.address])
+		expect(inheritedChildPoolSelections([parent, approvedChild], [parent.address, approvedChild.address])).toEqual([])
+	})
+
 	test('does not migrate after the fork migration window closes', () => {
 		expect(selectVaultMigration([parent, approvedChild], [rootUniverse, approvedChildUniverse], settings(), 1_000n + FORK_MIGRATION_WINDOW_SECONDS + 1n)).toBeUndefined()
+	})
+
+	test('uses the exact migration window boundary for planning and dashboard eligibility', () => {
+		const deadline = parent.forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
+		expect(isVaultMigrationSourceEligible(parent, deadline)).toBe(true)
+		expect(isVaultMigrationSourceEligible(parent, deadline + 1n)).toBe(false)
+		expect(isVaultMigrationSourceEligible({ ...parent, forkActivationTime: 0n }, 0n)).toBe(false)
+
+		const state = initialRuntimeState(false, wallet)
+		state.pools = [parent]
+		state.universes = [rootUniverse, approvedChildUniverse]
+		state.lastScannedTimestamp = deadline
+		const eligible = operatorSnapshot(state, false).universes.find(universe => universe.id === '101')
+		expect(eligible?.migratableVaultCount).toBe(1)
+		state.lastScannedTimestamp = deadline + 1n
+		const expired = operatorSnapshot(state, false).universes.find(universe => universe.id === '101')
+		expect(expired?.migratableVaultCount).toBe(0)
 	})
 
 	test('waits while a staged operation still involves the bot vault', () => {

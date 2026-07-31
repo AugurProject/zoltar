@@ -4,7 +4,7 @@ import { coordinatorAbi } from '../../src/contracts/abi.ts'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
-import { assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
+import { assertExecutionActive, assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -81,6 +81,11 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 }
 
 describe('liquidator execution safety', () => {
+	test('rechecks an operator pause at transaction boundaries', () => {
+		expect(() => assertExecutionActive({ paused: false })).not.toThrow()
+		expect(() => assertExecutionActive({ paused: true })).toThrow('Operator paused before transaction submission')
+	})
+
 	test('continues successful polling unless once mode is enabled', () => {
 		expect(shouldStopAfterSuccessfulCycle(false)).toBe(false)
 		expect(shouldStopAfterSuccessfulCycle(true)).toBe(true)

@@ -1,3 +1,4 @@
+import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
 import type { PoolObservation, UniverseObservation } from '#state/operator-state'
 
@@ -22,6 +23,20 @@ function hasBotStagedOperation(pool: PoolObservation) {
 
 export function isPoolExecutionEligible(pool: Pick<PoolObservation, 'approvedUniverse' | 'selected' | 'systemState'>) {
 	return pool.selected && pool.approvedUniverse && pool.systemState === 0n
+}
+
+export function isVaultMigrationSourceEligible(pool: PoolObservation, currentTimestamp: bigint) {
+	if (!pool.selected || pool.systemState !== 1n || !hasVaultPosition(pool) || hasBotStagedOperation(pool) || pool.forkActivationTime === 0n) return false
+	return currentTimestamp <= pool.forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
+}
+
+export function inheritedChildPoolSelections(pools: readonly PoolObservation[], selectedPools: readonly `0x${string}`[]) {
+	const selectedAddresses = new Set(selectedPools.map(pool => pool.toLowerCase()))
+	return pools.filter(pool => {
+		if (!pool.approvedUniverse || pool.parent === zeroAddress || selectedAddresses.has(pool.address.toLowerCase())) return false
+		const parent = pools.find(candidate => candidate.address.toLowerCase() === pool.parent.toLowerCase())
+		return parent?.selected === true
+	})
 }
 
 function approvedChildUniverses(universes: readonly UniverseObservation[], approvedUniverses: readonly bigint[]) {
@@ -51,7 +66,7 @@ export function selectVaultMigration(pools: readonly PoolObservation[], universe
 	if (!settings.strategy.allowAutomaticVaultMigrations) return undefined
 	validateApprovedUniverseSelection(universes, settings.approvedUniverses)
 	for (const parent of pools) {
-		if (!parent.selected || parent.systemState !== 1n || !hasVaultPosition(parent) || hasBotStagedOperation(parent) || parent.forkActivationTime === 0n) continue
+		if (!isVaultMigrationSourceEligible(parent, currentTimestamp)) continue
 		const approvedChildren = universes.filter(universe => universe.parentId === parent.universeId && settings.approvedUniverses.includes(universe.id))
 		const childUniverse = approvedChildren[0]
 		if (childUniverse === undefined || childUniverse.outcomeIndex === undefined) continue
@@ -60,7 +75,6 @@ export function selectVaultMigration(pools: readonly PoolObservation[], universe
 			throw new Error(`Forker mismatch between parent pool ${parent.address} and child pool ${childPool.address}`)
 		}
 		const deadline = parent.forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
-		if (currentTimestamp > deadline) continue
 		return {
 			childPool,
 			childUniverse,

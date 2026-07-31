@@ -1,6 +1,6 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, reputationTokenAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, zoltarAbi } from '#contracts/abi'
+import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, repForOwnership, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -14,6 +14,14 @@ function sameAddress(left: Address, right: Address) {
 
 export function candidateScreeningPrice(lastPrice: bigint, fallbackPrice: bigint) {
 	return lastPrice > 0n ? lastPrice : fallbackPrice
+}
+
+export function validatePoolUniverseRep(pool: Pick<PoolObservation, 'address' | 'repToken' | 'universeId'>, universes: readonly UniverseObservation[]) {
+	const universe = universes.find(candidate => candidate.id === pool.universeId)
+	if (universe === undefined) throw new Error(`Pool ${pool.address} belongs to unknown universe ${pool.universeId.toString()}`)
+	if (!sameAddress(pool.repToken, universe.repToken)) {
+		throw new Error(`Pool ${pool.address} REP token ${pool.repToken} does not match universe ${pool.universeId.toString()} REP ${universe.repToken}`)
+	}
 }
 
 function emptyVault(address: Address): VaultPosition {
@@ -157,15 +165,6 @@ async function loadPool(
 		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'forkData' }),
 		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'getForkActivationTime' }),
 	])
-	const poolZoltar = await client.readContract({
-		abi: reputationTokenAbi,
-		address: repToken,
-		args: [],
-		functionName: 'zoltar',
-	})
-	if (!sameAddress(poolZoltar, settings.deployment.zoltar)) {
-		throw new Error(`Pool ${address} REP token belongs to Zoltar ${poolZoltar}, not configured ${settings.deployment.zoltar}`)
-	}
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
 	const { addresses, truncated } = await loadVaultAddresses(client, address, activeVaultCount, settings.runtime.maxVaultsPerPool)
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
@@ -279,24 +278,24 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	}
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
-		loadedPools.push(
-			await loadPool(
-				client,
-				settings,
-				{
-					completeSetCollateralAmount: deployment.completeSetCollateralAmount,
-					currentRetentionRate: deployment.currentRetentionRate,
-					initialReportPriorityFeeWeiPerGas: deployment.initialReportPriorityFeeWeiPerGas,
-					parent: getAddress(deployment.parent),
-					priceOracleManagerAndOperatorQueuer: getAddress(deployment.priceOracleManagerAndOperatorQueuer),
-					questionId: deployment.questionId,
-					securityPool: getAddress(deployment.securityPool),
-					statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,
-					universeId: deployment.universeId,
-				},
-				wallet,
-			),
+		const pool = await loadPool(
+			client,
+			settings,
+			{
+				completeSetCollateralAmount: deployment.completeSetCollateralAmount,
+				currentRetentionRate: deployment.currentRetentionRate,
+				initialReportPriorityFeeWeiPerGas: deployment.initialReportPriorityFeeWeiPerGas,
+				parent: getAddress(deployment.parent),
+				priceOracleManagerAndOperatorQueuer: getAddress(deployment.priceOracleManagerAndOperatorQueuer),
+				questionId: deployment.questionId,
+				securityPool: getAddress(deployment.securityPool),
+				statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,
+				universeId: deployment.universeId,
+			},
+			wallet,
 		)
+		validatePoolUniverseRep(pool, universes)
+		loadedPools.push(pool)
 	}
 	const poolsByAddress = new Map(loadedPools.map(pool => [pool.address.toLowerCase(), pool]))
 	const pools = loadedPools.map(pool => ({

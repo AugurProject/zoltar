@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { formatDecimalAmount } from '#config/settings'
+import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 
 export type PoolObservation = {
@@ -108,6 +109,7 @@ export type RuntimeState = {
 	error: string | undefined
 	lastScanAt: string | undefined
 	lastScannedBlock: bigint | undefined
+	lastScannedTimestamp: bigint | undefined
 	paused: boolean
 	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
@@ -127,6 +129,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		error: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
+		lastScannedTimestamp: undefined,
 		paused,
 		pendingStagedOperations: [],
 		pendingTransactions: [],
@@ -243,15 +246,9 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean) {
 		universeMap.set(key, existing)
 	}
 	for (const universe of universeMap.values()) {
-		if (!universe.approved || universe.parentId === undefined || universe.outcomeIndex === undefined) continue
-		universe.migratableVaultCount = state.pools.filter(
-			parent =>
-				parent.universeId === universe.parentId &&
-				parent.selected &&
-				parent.systemState === 1n &&
-				(parent.botVault.ownership > 0n || parent.botVault.allowance > 0n) &&
-				!parent.stagedOperations.some(operation => operation.initiatorVault.toLowerCase() === parent.botVault.address.toLowerCase() || operation.targetVault.toLowerCase() === parent.botVault.address.toLowerCase()),
-		).length
+		const scannedTimestamp = state.lastScannedTimestamp
+		if (!universe.approved || universe.parentId === undefined || universe.outcomeIndex === undefined || scannedTimestamp === undefined) continue
+		universe.migratableVaultCount = state.pools.filter(parent => parent.universeId === universe.parentId && isVaultMigrationSourceEligible(parent, scannedTimestamp)).length
 	}
 	return {
 		activities: state.activities,
