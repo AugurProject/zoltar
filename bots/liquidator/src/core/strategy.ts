@@ -7,6 +7,10 @@ export const LIQUIDATION_REP_BONUS_BPS = 500n
 export const MIN_REP_DEPOSIT = 10n * PRICE_PRECISION
 export const MIN_SECURITY_BOND_DEBT = PRICE_PRECISION
 
+export function liquidationExecutionAllowed(coordinatorPrice: bigint, centralizedPriceAllowed: boolean) {
+	return coordinatorPrice > 0n && centralizedPriceAllowed
+}
+
 export type VaultPosition = {
 	address: Address
 	allowance: bigint

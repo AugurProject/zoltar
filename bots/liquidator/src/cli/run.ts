@@ -13,7 +13,7 @@ import { stagedOperationOutcome } from '#core/staged-outcome'
 import { dryRunCandidate, executeLiquidation, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState, type PoolObservation } from '#state/operator-state'
-import { evaluateCandidate, sortCandidates } from '#core/strategy'
+import { evaluateCandidate, liquidationExecutionAllowed, sortCandidates } from '#core/strategy'
 import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
@@ -429,11 +429,12 @@ async function main() {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
 						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)) {
+						const centralizedPriceAllowed = centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)
+						if (!liquidationExecutionAllowed(selected.pool.lastPrice, centralizedPriceAllowed)) {
 							recordActivity(state, {
 								details: `pool=${selected.pool.address}`,
 								kind: 'scan',
-								message: 'Candidate skipped because its REP price disagrees with centralized markets',
+								message: selected.pool.lastPrice === 0n ? 'Candidate skipped because its pool has no coordinator REP price' : 'Candidate skipped because its REP price disagrees with centralized markets',
 								status: 'info',
 							})
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)

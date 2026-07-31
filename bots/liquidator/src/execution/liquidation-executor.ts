@@ -451,7 +451,7 @@ export function planVaultMaintenance(
 			if (surplus > 0n) return { amount: surplus, kind: 'withdraw' }
 		}
 	}
-	if (pool.botVault.unpaidEthFees >= strategy.redeemFeesAboveEth) return { kind: 'fees' }
+	if (pool.botVault.unpaidEthFees > 0n && pool.botVault.unpaidEthFees >= strategy.redeemFeesAboveEth) return { kind: 'fees' }
 	return undefined
 }
 

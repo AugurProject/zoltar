@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { candidateScreeningPrice } from '../../src/monitoring/pool-monitor.ts'
 import { getAddress } from '../helpers/ethereum.ts'
 
@@ -83,6 +83,12 @@ describe('liquidation strategy', () => {
 	test('uses the configured fallback to screen a never-seeded pool', () => {
 		expect(candidateScreeningPrice(0n, 10n * PRICE_PRECISION)).toBe(10n * PRICE_PRECISION)
 		expect(candidateScreeningPrice(0n, 0n)).toBe(0n)
+	})
+
+	test('does not execute a fallback-screened liquidation without a coordinator price', () => {
+		expect(liquidationExecutionAllowed(0n, true)).toBe(false)
+		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, false)).toBe(false)
+		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, true)).toBe(true)
 	})
 
 	test('caps stale exposure using the buffered acquisition ceiling', () => {

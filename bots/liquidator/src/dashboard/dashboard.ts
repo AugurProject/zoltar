@@ -311,9 +311,9 @@ function renderUniverses(snapshot: Snapshot) {
 					approvedUniverses = next
 					universeActionStates.set(universe.id, { failed: false, message: 'Saved' })
 					actionStatus(status, 'Saved')
-				} catch {
+				} catch (error) {
 					checkbox.checked = !checkbox.checked
-					const message = 'Could not save universe approval. Retry this selection.'
+					const message = publicFailure(error, 'Could not save universe approval. Retry this selection.')
 					universeActionStates.set(universe.id, { failed: true, message })
 					actionStatus(status, message, true)
 				} finally {
@@ -360,6 +360,11 @@ function stacked(primary: string, secondary: string) {
 function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.textContent !== message) element.textContent = message
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
+}
+
+function publicFailure(error: unknown, message: string) {
+	void error
+	return message
 }
 
 function botVaultState(vault: Vault) {
@@ -427,9 +432,9 @@ function renderPools(snapshot: Snapshot) {
 					selectedPools = next
 					poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saved' })
 					actionStatus(poolStatus, 'Saved')
-				} catch {
+				} catch (error) {
 					checkbox.checked = !checkbox.checked
-					const message = 'Could not save pool selection. Retry this selection.'
+					const message = publicFailure(error, 'Could not save pool selection. Retry this selection.')
 					poolActionStates.set(pool.address.toLowerCase(), { failed: true, message })
 					actionStatus(poolStatus, message, true)
 				} finally {
@@ -554,8 +559,8 @@ function setGlobalError(message?: string) {
 	if (globalError.textContent !== message) globalError.textContent = message
 }
 
-function showGlobalError() {
-	setGlobalError('Dashboard data is unavailable. Check the bot connection; the dashboard will retry automatically.')
+function showGlobalError(error: unknown) {
+	setGlobalError(publicFailure(error, 'Dashboard data is unavailable. Check the bot connection; the dashboard will retry automatically.'))
 }
 
 pauseButton.addEventListener('click', async () => {
@@ -566,8 +571,8 @@ pauseButton.addEventListener('click', async () => {
 		await put('/api/paused', { paused: !currentSnapshot.paused })
 		await refresh()
 		actionStatus(pauseStatus, '')
-	} catch {
-		actionStatus(pauseStatus, 'Could not change bot status. Check the bot connection and retry.', true)
+	} catch (error) {
+		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.'), true)
 	} finally {
 		pauseButton.disabled = false
 	}
@@ -592,8 +597,8 @@ strategyForm.addEventListener('submit', async event => {
 		const configuration = await put<Configuration>('/api/strategy', next)
 		populateConfiguration(configuration)
 		actionStatus(strategyStatus, 'Saved')
-	} catch {
-		actionStatus(strategyStatus, 'Could not save strategy. Review the fields and retry.', true)
+	} catch (error) {
+		actionStatus(strategyStatus, publicFailure(error, 'Could not save strategy. Review the fields and retry.'), true)
 	}
 })
 
@@ -615,8 +620,8 @@ signerForm.addEventListener('submit', async event => {
 		privateKeyField.value = ''
 		updateSignerButton.disabled = true
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shortAddress(result.wallet)}`)
-	} catch {
-		actionStatus(signerStatus, 'Could not update the signer. Check the bot connection and retry.', true)
+	} catch (error) {
+		actionStatus(signerStatus, publicFailure(error, 'Could not update the signer. Check the bot connection and retry.'), true)
 	}
 })
 
@@ -636,8 +641,8 @@ clearSignerButton.addEventListener('click', async () => {
 		})
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 		await refresh()
-	} catch {
-		actionStatus(signerStatus, 'Could not clear the signer. Check the bot connection and retry.', true)
+	} catch (error) {
+		actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.'), true)
 	} finally {
 		clearSignerButton.disabled = false
 	}
@@ -646,8 +651,8 @@ clearSignerButton.addEventListener('click', async () => {
 async function refresh() {
 	try {
 		render(await api<Snapshot>('/api/state'))
-	} catch {
-		showGlobalError()
+	} catch (error) {
+		showGlobalError(error)
 	}
 }
 
@@ -658,10 +663,10 @@ async function loadConfiguration() {
 	configurationStatus.textContent = 'Loading pool selection and strategy…'
 	try {
 		populateConfiguration(await api<Configuration>('/api/configuration'))
-	} catch {
+	} catch (error) {
 		configurationStatus.classList.add('error')
 		const message = document.createElement('span')
-		message.textContent = 'Configuration is unavailable. Check the bot connection, then retry. '
+		message.textContent = publicFailure(error, 'Configuration is unavailable. Check the bot connection, then retry. ')
 		const retry = document.createElement('button')
 		retry.className = 'secondary compact'
 		retry.type = 'button'

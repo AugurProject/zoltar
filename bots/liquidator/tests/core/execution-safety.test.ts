@@ -156,6 +156,32 @@ describe('liquidator execution safety', () => {
 		expect(planVaultMaintenance(pool, strategy, wallet, true)).toEqual({ kind: 'fees' })
 	})
 
+	test('does not redeem zero fees when the configured threshold is zero', () => {
+		const wallet = getAddress('0x0000000000000000000000000000000000000020')
+		const pool = {
+			botVault: {
+				address: wallet,
+				allowance: 0n,
+				ownership: 0n,
+				rep: 0n,
+				unpaidEthFees: 0n,
+			},
+			isPriceValid: false,
+			lastPrice: 0n,
+			multiplierBps: 20_000n,
+		}
+		const strategy = {
+			allowAutomaticWithdrawals: false,
+			minimumRepWithdrawal: 1n,
+			redeemFeesAboveEth: 0n,
+			vaultTargetHealthBps: 12_500n,
+			vaultTopUpHealthBps: 11_000n,
+			vaultWithdrawHealthBps: 15_000n,
+		}
+		expect(planVaultMaintenance(pool, strategy, wallet, false)).toBeUndefined()
+		expect(planVaultMaintenance({ ...pool, botVault: { ...pool.botVault, unpaidEthFees: 1n } }, strategy, wallet, false)).toEqual({ kind: 'fees' })
+	})
+
 	test('pre-funds stale liquidations against the configured higher price bound', () => {
 		expect(
 			conservativeStaleTopUp({
