@@ -104,4 +104,22 @@ describe('centralized market observations', () => {
 		expect(estimate?.priceRepPerEth).toBe(200n * 10n ** 18n)
 		expect(estimate?.reliable).toBe(true)
 	})
+
+	test('does not expose exchange adapter failures in operator-facing reasons', async () => {
+		const factory: CentralizedExchangeFactory = exchangeId => ({
+			fetchOrderBook: async () => {
+				throw new Error(`CCXT ${exchangeId} socket timeout at api.exchange.example/private-detail`)
+			},
+			fetchTicker: async () => {
+				throw new Error('Ticker should not be requested after the order book fails')
+			},
+			loadMarkets: async () => ({}),
+		})
+		const estimate = await observeCentralizedMarkets(settings, factory, 10_000)
+		expect(estimate?.reasons).toContain('alpha observation unavailable')
+		expect(estimate?.reasons).toContain('beta observation unavailable')
+		expect(estimate?.reasons.join(' ')).not.toContain('CCXT')
+		expect(estimate?.reasons.join(' ')).not.toContain('socket timeout')
+		expect(estimate?.reasons.join(' ')).not.toContain('api.exchange.example')
+	})
 })

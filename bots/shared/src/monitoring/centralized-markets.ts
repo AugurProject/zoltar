@@ -351,7 +351,7 @@ export async function observeCentralizedMarkets(settings: CentralizedMarketSetti
 	const errors = settled.flatMap((result, index) => {
 		if (result.status === 'fulfilled') return []
 		const source = settings.sources[index]
-		return [`${source?.exchangeId ?? 'unknown'}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
+		return [`${source?.exchangeId ?? 'Unknown exchange'} observation unavailable`]
 	})
 	return errors.length === 0 ? estimate : { ...estimate, reasons: [...estimate.reasons, ...errors] }
 }
