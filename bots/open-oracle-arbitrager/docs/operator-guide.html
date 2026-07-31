@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>OpenOracle Arbitrager Operator Guide</title>
-		<link
-			rel="stylesheet"
-			href="./operator-guide.css"
-		/>
+		<link rel="stylesheet" href="./operator-guide.css" />
 	</head>
 	<body class="doc-openoracle open-oracle-arbitrager-guide">
 		<main>
@@ -21,10 +15,7 @@
 					<strong>Experimental operator software</strong>
 					Dry-run first, rehearse with a dedicated low-balance key on Sepolia, and supervise every funded position. A modeled profit is not a guarantee: fees, failed inclusion, later disputes, token behavior, RPC failure, MEV, and market movement can still cause loss.
 				</div>
-				<nav
-					class="guide-nav"
-					aria-label="Guide sections"
-				>
+				<nav class="guide-nav" aria-label="Guide sections">
 					<a href="#quick-start">Quick start</a>
 					<a href="#dashboard">Dashboard</a>
 					<a href="#math">Strategy math</a>
@@ -41,20 +32,8 @@
 					The bot follows approved <code>OpenOraclePriceCoordinator</code>
 					reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Uniswap V3 remains the reference and TWAP anchor. Only the best currently eligible opportunity may be selected.
 				</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-open-oracle-arbitrager-lifecycle"
-					tabindex="0"
-					aria-label="Scrollable OpenOracle arbitrager execution and recovery lifecycle"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-open-oracle-arbitrager-lifecycle"
-						data-plot-width="1160"
-						data-plot-height="390"
-						role="img"
-						aria-label="OpenOracle arbitrager execution and recovery lifecycle"
-					>
+				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle" tabindex="0" aria-label="Scrollable OpenOracle arbitrager execution and recovery lifecycle">
+					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-lifecycle" data-plot-width="1160" data-plot-height="390" role="img" aria-label="OpenOracle arbitrager execution and recovery lifecycle">
 						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after every configured read RPC serves the same twelfth-descendant block hash; ambiguous evidence stays in durable recovery.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Execution lifecycle</span>Both public and private delivery sign a parent-bound executor transaction. A missed target cannot later succeed; after twelve descendants and unanimous missing-receipt evidence, the bot safely expires the entry or retries the lifecycle while continuing to watch the old hash for late revert gas.</p>
@@ -94,11 +73,7 @@ bun run run</code></pre>
 					<strong>Execution prerequisites</strong>
 					Execution also requires an authenticated manifest, at least two independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected.
 				</div>
-				<div
-					class="table-scroll"
-					tabindex="0"
-					aria-label="Important configuration groups"
-				>
+				<div class="table-scroll" tabindex="0" aria-label="Important configuration groups">
 					<table>
 						<thead>
 							<tr>
@@ -168,19 +143,10 @@ bun run run</code></pre>
 				<h2>Using the dashboard</h2>
 				<p>Set <code>runtime.ui</code> to <code>true</code> in the operator configuration and start the bot. The header shows whether execution is armed and whether the scanner is syncing, running, paused, stopped, or in error. Pausing prevents new entries but deliberately continues recovery, settlement, and withdrawal for capital already at risk.</p>
 				<figure class="screenshot">
-					<img
-						src="./assets/dashboard-overview.png"
-						alt="Populated OpenOracle arbitrager dashboard showing running state, current block age, wallet balances, realized and open profit, capital in games, and active risk limits"
-						width="1440"
-						height="900"
-					/>
+					<img src="./assets/dashboard-overview.png" alt="Populated OpenOracle arbitrager dashboard showing running state, current block age, wallet balances, realized and open profit, capital in games, and active risk limits" width="1440" height="900" />
 					<figcaption>Populated documentation fixture at 1440 × 900—not evidence of live execution. Addresses, balances, reports, and P&amp;L are illustrative. Summary cards separate realized, open, and pre-gas economics; the connected wallet and strategy controls remain visible beside the simulated running status.</figcaption>
 				</figure>
-				<div
-					class="table-scroll"
-					tabindex="0"
-					aria-label="Dashboard control reference"
-				>
+				<div class="table-scroll" tabindex="0" aria-label="Dashboard control reference">
 					<table>
 						<thead>
 							<tr>
@@ -227,12 +193,7 @@ bun run run</code></pre>
 					</table>
 				</div>
 				<figure class="screenshot">
-					<img
-						src="./assets/dashboard-markets.png"
-						alt="OpenOracle arbitrager market dashboard showing REP tokens, Uniswap pools, price and liquidity columns, a token with no supported pool, and a multi-pool price history chart"
-						width="1440"
-						height="900"
-					/>
+					<img src="./assets/dashboard-markets.png" alt="OpenOracle arbitrager market dashboard showing REP tokens, Uniswap pools, price and liquidity columns, a token with no supported pool, and a multi-pool price history chart" width="1440" height="900" />
 					<figcaption>Populated documentation fixture at 1440 × 900—not current-market or funded-rehearsal evidence. Token addresses, pools, liquidity, balances, and prices are illustrative. In a running bot, addresses link to the selected network explorer and price series are grouped by pool so venue differences and shallow-liquidity outliers remain visible.</figcaption>
 				</figure>
 			</section>
@@ -240,16 +201,8 @@ bun run run</code></pre>
 			<section id="math">
 				<h2>How the strategy math works</h2>
 				<p>All contract amounts use integer token units. OpenOracle percentage rates use precision <code>10,000,000</code>, and fee multiplication floors exactly like Solidity:</p>
-				<div
-					class="equation"
-					id="eq-arbitrager-openoracle-fee"
-					tabindex="0"
-				>
-					<math
-						display="block"
-						aria-label="fee equals floor of amount times rate divided by ten million"
-						data-source="fee = floor(amount * rate / 10000000)"
-					>
+				<div class="equation" id="eq-arbitrager-openoracle-fee" tabindex="0">
+					<math display="block" aria-label="fee equals floor of amount times rate divided by ten million" data-source="fee = floor(amount * rate / 10000000)">
 						<mrow>
 							<mi>fee</mi>
 							<mo>=</mo>
@@ -265,16 +218,8 @@ bun run run</code></pre>
 				</div>
 				<p>The next WETH-side report amount is the current amount multiplied by the game multiplier and capped at <code>escalationHalt</code>. Once the halt has been reached, OpenOracle advances by one atomic unit. The token-side amount comes from an executable Uniswap quote at that replacement ratio.</p>
 				<p><strong>Sell-token direction.</strong> The bot receives a size-aware quote for selling the current token amount:</p>
-				<div
-					class="equation"
-					id="eq-arbitrager-sell-profit"
-					tabindex="0"
-				>
-					<math
-						display="block"
-						aria-label="sell profit equals WETH output minus report WETH minus reporter fee minus protocol fee"
-						data-source="P_sell = WETH_out - WETH_report - fee_reporter - fee_protocol"
-					>
+				<div class="equation" id="eq-arbitrager-sell-profit" tabindex="0">
+					<math display="block" aria-label="sell profit equals WETH output minus report WETH minus reporter fee minus protocol fee" data-source="P_sell = WETH_out - WETH_report - fee_reporter - fee_protocol">
 						<mrow>
 							<msub><mi>P</mi><mi>sell</mi></msub>
 							<mo>=</mo>
@@ -293,16 +238,8 @@ bun run run</code></pre>
 					</p>
 				</div>
 				<p><strong>Buy-token direction.</strong> The bot requests an exact-output quote for the report token plus both token fees:</p>
-				<div
-					class="equation"
-					id="eq-arbitrager-buy-profit"
-					tabindex="0"
-				>
-					<math
-						display="block"
-						aria-label="buy profit equals report WETH minus WETH input"
-						data-source="P_buy = WETH_report - WETH_in"
-					>
+				<div class="equation" id="eq-arbitrager-buy-profit" tabindex="0">
+					<math display="block" aria-label="buy profit equals report WETH minus WETH input" data-source="P_buy = WETH_report - WETH_in">
 						<mrow>
 							<msub><mi>P</mi><mi>buy</mi></msub>
 							<mo>=</mo>
@@ -316,35 +253,15 @@ bun run run</code></pre>
 						The signed maximum-input limit rounds upward and is fully funded before entry.
 					</p>
 				</div>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-open-oracle-arbitrager-profit"
-					tabindex="0"
-					aria-label="Scrollable OpenOracle arbitrager profit accounting lifecycle"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-open-oracle-arbitrager-profit"
-						data-plot-width="980"
-						data-plot-height="300"
-						role="img"
-						aria-label="OpenOracle arbitrager modeled and realized profit accounting"
-					>
+				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-profit" tabindex="0" aria-label="Scrollable OpenOracle arbitrager profit accounting lifecycle">
+					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-profit" data-plot-width="980" data-plot-height="300" role="img" aria-label="OpenOracle arbitrager modeled and realized profit accounting">
 						<span class="plot-chart-fallback">Gross hedge profit is reduced by entry gas, worst-case signed slippage, and lifecycle gas before thresholds are applied. Tracked profit uses the actual hedge and gas so far; realized profit adds the exact settler reward and waits for finalized exact withdrawal.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Profit layers</span>Quote-time modeled profit, tracked open hedge economics, and realized net profit answer different questions and are deliberately shown separately.</p>
 				</figure>
 				<p>The conservative selection value is:</p>
-				<div
-					class="equation"
-					id="eq-arbitrager-modeled-profit"
-					tabindex="0"
-				>
-					<math
-						display="block"
-						aria-label="modeled profit equals hedge profit minus entry gas minus slippage reserve minus lifecycle reserve"
-						data-source="P_modeled = P_hedge - G_entry - R_slippage - R_lifecycle"
-					>
+				<div class="equation" id="eq-arbitrager-modeled-profit" tabindex="0">
+					<math display="block" aria-label="modeled profit equals hedge profit minus entry gas minus slippage reserve minus lifecycle reserve" data-source="P_modeled = P_hedge - G_entry - R_slippage - R_lifecycle">
 						<mrow>
 							<msub><mi>P</mi><mi>modeled</mi></msub>
 							<mo>=</mo>
@@ -384,11 +301,7 @@ bun run run</code></pre>
 
 			<section id="exchanges">
 				<h2>Supported exchanges and price charts</h2>
-				<div
-					class="table-scroll"
-					tabindex="0"
-					aria-label="Supported exchange matrix"
-				>
+				<div class="table-scroll" tabindex="0" aria-label="Supported exchange matrix">
 					<table>
 						<thead>
 							<tr>
@@ -454,20 +367,14 @@ bun run run</code></pre>
 
 			<section id="recovery">
 				<h2>Finality and durable recovery</h2>
-				<ul
-					class="status-sequence"
-					aria-label="Normal durable position states"
-				>
+				<ul class="status-sequence" aria-label="Normal durable position states">
 					<li>pending-entry</li>
 					<li>open</li>
 					<li>withdrawing</li>
 					<li>closed-pending-finality</li>
 					<li>closed</li>
 				</ul>
-				<ul
-					class="status-sequence"
-					aria-label="Reporter replacement position states"
-				>
+				<ul class="status-sequence" aria-label="Reporter replacement position states">
 					<li>open</li>
 					<li>withdrawing (replacement credit)</li>
 					<li>replaced</li>
@@ -487,11 +394,7 @@ bun run run</code></pre>
 
 			<section id="files">
 				<h2>Persistent files and operational boundaries</h2>
-				<div
-					class="table-scroll"
-					tabindex="0"
-					aria-label="Persistent bot files"
-				>
+				<div class="table-scroll" tabindex="0" aria-label="Persistent bot files">
 					<table>
 						<thead>
 							<tr>

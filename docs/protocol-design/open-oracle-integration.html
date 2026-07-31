@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>OpenOracle Integration</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -40,11 +34,7 @@
 				<p>The generic oracle lifecycle comes first. Statoblast's coordinator calls OpenOracle and becomes the initial reporter, then consumes the settled result through OpenOracle's callback.</p>
 				<p>
 					OpenOracle atomically creates and funds a report for a token pair. Its state hash remains authoritative and the full preimage is emitted as packed report data. With <code>STORE_ALL</code>, OpenOracle also materializes <code>storedGame</code> and <code>storedHelper</code> when the report is created, updates the live game fields after each dispute, and retains the settled game. Later reporters can dispute by posting the contract-required replacement amounts. A dispute is valid only while <code>currentTime &lt; reportTimestamp + settlementTime</code>; settlement becomes valid at equality, when a dispute is already too late. When a
-					<span
-						class="term"
-						tabindex="0"
-						>callback</span
-					>
+					<span class="term" tabindex="0">callback</span>
 					contract is configured, settlement calls that contract with the settled amounts.
 				</p>
 				<p>The dispute calldata does not select <code>tokenToSwap</code>, and the history record does not store it. OpenOracle derives the swap side from the proposed ratio: token2 is the contribution token only when <code>newAmount2 * oldAmount1 &gt; oldAmount2 * newAmount1</code>; equality and lower ratios use token1. The UI applies the same strict comparison, verifies that the selected token matches the derived side, and revalidates the latest state hash immediately before submitting the reduced dispute calldata. The on-chain comparison remains authoritative.</p>
@@ -54,15 +44,8 @@
 					owns packed-log decoding, chronological replacement, hash verification, and settlement-block reconstruction.
 				</p>
 				<p>In this repository the pair is WETH as <code>token1</code> and REP as <code>token2</code>. The coordinator converts the callback amounts into the following REP per ETH price:</p>
-				<figure
-					class="equation"
-					id="eq-rep-eth-price"
-				>
-					<math
-						display="block"
-						aria-label="last price equals amount two times ten to the eighteenth divided by amount one"
-						data-source="lastPrice = amount2 \cdot pow10(18) / amount1"
-					>
+				<figure class="equation" id="eq-rep-eth-price">
+					<math display="block" aria-label="last price equals amount two times ten to the eighteenth divided by amount one" data-source="lastPrice = amount2 \cdot pow10(18) / amount1">
 						<mrow>
 							<mi>lastPrice</mi>
 							<mo>=</mo>
@@ -83,39 +66,19 @@
 				<p>Four coordinator terms drive the rest of the integration behavior: staged operation, fresh price, liquidation threshold, and report liquidity.</p>
 				<p>
 					A
-					<span
-						class="term"
-						tabindex="0"
-						>staged operation</span
-					>
+					<span class="term" tabindex="0">staged operation</span>
 					is a liquidation, REP withdrawal, or allowance update queued behind the coordinator until it can use a
-					<span
-						class="term"
-						tabindex="0"
-						>fresh price</span
-					>, meaning a settled coordinator price still inside <code>PRICE_VALID_FOR_SECONDS</code>, currently a five-minute cache window.
+					<span class="term" tabindex="0">fresh price</span>, meaning a settled coordinator price still inside <code>PRICE_VALID_FOR_SECONDS</code>, currently a five-minute cache window.
 				</p>
 				<p>
 					For liquidations, the relevant boundary is the
-					<span
-						class="term"
-						tabindex="0"
-						>liquidation threshold</span
-					>. A staged liquidation can execute only when the current REP/ETH price is strictly above that threshold and at least the configured
-					<span
-						class="term"
-						tabindex="0"
-						>liquidation distance</span
-					>
+					<span class="term" tabindex="0">liquidation threshold</span>. A staged liquidation can execute only when the current REP/ETH price is strictly above that threshold and at least the configured
+					<span class="term" tabindex="0">liquidation distance</span>
 					beyond it, with that extra margin currently set by <code>minLiquidationPriceDistanceBps</code>.
 				</p>
 				<p>
 					OpenOracle disputes scale with
-					<span
-						class="term"
-						tabindex="0"
-						>report liquidity</span
-					>. The coordinator computes the initial WETH side from request-time inputs, and the sponsor may request more. The <a href="#security-guarantee">sizing section</a> owns the derivation.
+					<span class="term" tabindex="0">report liquidity</span>. The coordinator computes the initial WETH side from request-time inputs, and the sponsor may request more. The <a href="#security-guarantee">sizing section</a> owns the derivation.
 				</p>
 			</section>
 
@@ -128,49 +91,23 @@
 					The factory contract still uses its older internal name, but it is the active deployment path for <code>OpenOraclePriceCoordinator</code>
 					instances.
 				</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-openoracle-integration-flow"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-openoracle-integration-flow"
-						data-plot-width="980"
-						data-plot-height="320"
-						role="img"
-						aria-label="OpenOracle integration flow"
-					>
+				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
+					<div class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-width="980" data-plot-height="320" role="img" aria-label="OpenOracle integration flow">
 						<span class="plot-chart-fallback">Statoblast queues solvency-sensitive operations behind a bounded OpenOracle REP/ETH report and executes them only with a fresh accepted price.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. It applies guardrails before request and staging, then again after callback before execution.</p>
 				</figure>
 				<p>If the cached price is valid, the coordinator attempts immediate execution after staging the operation record. Liquidation-specific gates, snapshot staleness, zero-effect withdrawals, or downstream pool checks can still consume the operation as a failed staged operation. Otherwise the coordinator can create one OpenOracle report and attach up to four staged operations to the settlement callback. Additional staged operations remain active but outside the auto-executed callback batch; if the fresh price remains valid and they have not expired, they require a later manual <code>executeStagedOperation</code> call.</p>
 				<p>
-					<span
-						class="term"
-						tabindex="0"
-						>Staged operation</span
-					>
+					<span class="term" tabindex="0">Staged operation</span>
 					inputs are constrained before any oracle report is requested. Liquidation and withdrawal amounts must be non-zero, allowance updates may set zero, <code>validForSeconds</code> must be positive and no more than five minutes, liquidation must target a different vault, non-liquidation operations must target the caller's own vault, and staging is disabled after the security pool's local escalation has already resolved. Same-vault liquidation is rejected with <code>Caller bad</code> before the coordinator requests or uses an oracle report.
 				</p>
 				<p>
 					Report funding is caller supplied. The coordinator computes
-					<code>requestPriceEthCost</code>, the caller-funded
-					<span
-						class="term"
-						tabindex="0"
-						>request bounty</span
-					>, from the current base fee, the callback gas limit, and the gas the coordinator expects to spend on report submission and processing:
+					<code>requestPriceEthCost</code>, the caller-funded <span class="term" tabindex="0">request bounty</span>, from the current base fee, the callback gas limit, and the gas the coordinator expects to spend on report submission and processing:
 				</p>
-				<figure
-					class="equation"
-					id="eq-openoracle-request-price-cost"
-				>
-					<math
-						display="block"
-						aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101"
-						data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"
-					>
+				<figure class="equation" id="eq-openoracle-request-price-cost">
+					<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
 						<mrow>
 							<mi>requestPriceEthCost</mi>
 							<mo>=</mo>
@@ -207,10 +144,7 @@
 					<a href="#intentional-economic-tradeoffs">economic tradeoffs</a>
 					section owns the resulting cost and liveness analysis.
 				</p>
-				<div
-					class="callout"
-					id="rolling-dispute-security-classification"
-				>
+				<div class="callout" id="rolling-dispute-security-classification">
 					<p><strong>Dust self-dispute attempt.</strong> A reporter can choose <code>amount2 = 1</code>, meaning one atomic REP unit. On a token2-side self-dispute, the 1% protocol fee then floors to zero. After <code>amount1</code> reaches <code>escalationHalt</code>, each replacement requires only <code>oldAmount1 + 1</code>, so the reporter can mechanically reset the settlement clock with one additional WETH wei plus transaction gas. The coordinator makes that halt at least one percent of pool open interest, raising the capital needed to enter this post-halt regime but not changing its one-wei marginal step.</p>
 					<p>
 						That sequence still exposes a profitable correction. An OpenOracle dispute executes one of the current reporter's limit orders as it installs the replacement. Against a report holding
@@ -230,15 +164,8 @@
 					Worked example using a market snapshot taken at
 					<code>2026-07-09 09:49:35 UTC</code>: at that moment Ethereum base fee was <code>69,594,403 wei</code> per gas (<code>0.069594403 gwei</code>), ETH traded at <code>$1,750.34</code>, and REP traded at <code>$0.792188</code> or <code>0.00045231 ETH</code> per REP. The USD quotes and the ETH-per-REP quote are independently rounded snapshot values, so reconstructing one from the other may differ by a few basis points. With the coordinator defaults used in this documentation revision, <code>gasConsumedOpenOracleReportPrice = 100,000</code>, <code>gasConsumedSettlement = 1,000,000</code>, and <code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code>, the callback gas limit is:
 				</p>
-				<figure
-					class="equation"
-					id="eq-openoracle-request-price-worked-example"
-				>
-					<math
-						display="block"
-						aria-label="callback gas limit equals one million times four equals four million"
-						data-source="callbackGasLimit = 1,000,000 \cdot 4 = 4,000,000"
-					>
+				<figure class="equation" id="eq-openoracle-request-price-worked-example">
+					<math display="block" aria-label="callback gas limit equals one million times four equals four million" data-source="callbackGasLimit = 1,000,000 \cdot 4 = 4,000,000">
 						<mrow>
 							<mi>callbackGasLimit</mi>
 							<mo>=</mo>
@@ -251,15 +178,8 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Worked Callback Gas Limit</span>The current coordinator parameters reserve four settlement-operation gas budgets inside one callback.</p>
 				</figure>
-				<figure
-					class="equation"
-					id="eq-openoracle-request-price-snapshot-example"
-				>
-					<math
-						display="block"
-						aria-label="Worked request bounty calculation using the snapshot base fee"
-						data-source="requestPriceEthCost = 69,594,403 \cdot 4 \cdot (4,000,000 + 100,000) + 101 = 1,141,348,209,200,101 wei"
-					>
+				<figure class="equation" id="eq-openoracle-request-price-snapshot-example">
+					<math display="block" aria-label="Worked request bounty calculation using the snapshot base fee" data-source="requestPriceEthCost = 69,594,403 \cdot 4 \cdot (4,000,000 + 100,000) + 101 = 1,141,348,209,200,101 wei">
 						<mrow>
 							<mi>requestPriceEthCost</mi>
 							<mo>=</mo>
@@ -282,15 +202,8 @@
 					<p class="equation-caption"><span class="equation-label">Worked Trigger Cost</span>The caller who opens a fresh price request sends <code>0.001141348209200101 ETH</code>, about <code>$2.00</code> at that snapshot's ETH/USD price. This bounty is separate from the normal gas burned by the caller's own transaction.</p>
 				</figure>
 				<p>The refresh sponsor's coordinator call supplies a proposed REP/ETH price and passes <code>requestedInitialWeth = 0</code>. For this worked example, the pool has no open interest, so the coordinator atomically computes and posts the priority-, base-fee-, and open-interest-sized minimum WETH amount and its matching REP <code>amount2</code>. At the snapshot base fee of <code>69,594,403 wei</code> and a <code>10 gwei</code> lineage priority fee, the minimum side is <code>0.813313394088461540 WETH</code>. Using the snapshot price of <code>2,210 REP/ETH</code> gives:</p>
-				<figure
-					class="equation"
-					id="eq-openoracle-initial-report-snapshot-example"
-				>
-					<math
-						display="block"
-						aria-label="Worked REP amount from the dynamic minimum WETH report and the snapshot REP per ETH price"
-						data-source="amount2 = 0.813313394088461540 \cdot 2,210 = 1,797.422600935500003400 REP"
-					>
+				<figure class="equation" id="eq-openoracle-initial-report-snapshot-example">
+					<math display="block" aria-label="Worked REP amount from the dynamic minimum WETH report and the snapshot REP per ETH price" data-source="amount2 = 0.813313394088461540 \cdot 2,210 = 1,797.422600935500003400 REP">
 						<mrow>
 							<msub><mi>amount</mi><mn>2</mn></msub>
 							<mo>&#x2248;</mo>
@@ -325,12 +238,7 @@
 					<li>Liquidations use a queue-time snapshot and fail if target allowance changes or ownership decreases before execution.</li>
 					<li>
 						Liquidations must remain at least
-						<code>minLiquidationPriceDistanceBps</code> beyond the computed
-						<span
-							class="term"
-							tabindex="0"
-							>liquidation threshold</span
-						>.
+						<code>minLiquidationPriceDistanceBps</code> beyond the computed <span class="term" tabindex="0">liquidation threshold</span>.
 					</li>
 					<li>The callback rejects zero or saturated report counters, final reports that are uneconomic to dispute, computed zero prices, unexpected report ids, and settlements during excessive base fee.</li>
 				</ul>
@@ -338,50 +246,27 @@
 					The minimum side is WETH. The coordinator adds a report derived from the lineage's immutable priority-fee assumption to the larger of a report derived from the current block's base fee and one percent of current pool open interest. In the conservative correction direction, the true REP/ETH price is
 					<code>(1 + targetError)</code> times the reported price. Correcting that report releases the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position before gas. The report multiplies one modeled dispute's gas cost by the required profit buffer and divides by that correction-profit fraction.
 				</p>
-				<div
-					class="equation"
-					id="eq-openoracle-initial-report-size"
-				>
-					<math
-						display="block"
-						aria-label="minimum token one report adds the priority fee report to the larger base fee or open interest report; escalation halt is the greater of the open interest report and the initial report times the halt multiplier"
-						data-source="report(gasPrice) = ⌈gasPrice \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))⌉; priorityFeeReport = report(initialReportPriorityFeeWeiPerGas); baseFeeReport = report(block.basefee); openInterestReport = ⌈completeSetCollateralAmount / 100⌉; minimumToken1Report = priorityFeeReport + max(baseFeeReport, openInterestReport); escalationHalt = max(⌊initialWethReport \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReport)"
-					>
+				<div class="equation" id="eq-openoracle-initial-report-size">
+					<math display="block" aria-label="minimum token one report adds the priority fee report to the larger base fee or open interest report; escalation halt is the greater of the open interest report and the initial report times the halt multiplier" data-source="report(gasPrice) = ⌈gasPrice \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))⌉; priorityFeeReport = report(initialReportPriorityFeeWeiPerGas); baseFeeReport = report(block.basefee); openInterestReport = ⌈completeSetCollateralAmount / 100⌉; minimumToken1Report = priorityFeeReport + max(baseFeeReport, openInterestReport); escalationHalt = max(⌊initialWethReport \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReport)">
 						<mtable>
 							<mtr>
 								<mtd><mi>report</mi><mo>(</mo><mi>gasPrice</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mo
-										form="prefix"
-										stretchy="true"
-										>⌈</mo
-									>
+									<mo form="prefix" stretchy="true">⌈</mo>
 									<mfrac>
 										<mrow> <mi>gasPrice</mi><mo>&#x22C5;</mo><mi>gasUnitsForOneDispute</mi><mo>&#x22C5;</mo><mi>openOracleSecurityMultiplierBps</mi> <mo>&#x22C5;</mo><mo>(</mo><mi>percentagePrecision</mi><mo>+</mo><mi>targetPriceErrorForDispute</mi><mo>)</mo> </mrow>
 										<mrow> <mn>10000</mn><mo>&#x22C5;</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>reporterFee</mi><mo>)</mo> </mrow>
 									</mfrac>
-									<mo
-										form="postfix"
-										stretchy="true"
-										>⌉</mo
-									>
+									<mo form="postfix" stretchy="true">⌉</mo>
 								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>openInterestReport</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mo
-										form="prefix"
-										stretchy="true"
-										>⌈</mo
-									><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac
-									><mo
-										form="postfix"
-										stretchy="true"
-										>⌉</mo
-									></mtd
+									><mo form="prefix" stretchy="true">⌈</mo><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac
+									><mo form="postfix" stretchy="true">⌉</mo></mtd
 								>
 							</mtr>
 							<mtr>
@@ -397,19 +282,11 @@
 								<mtd><mi>escalationHalt</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mi>max</mi><mo>(</mo
-									><mo
-										form="prefix"
-										stretchy="true"
-										>⌊</mo
+									><mi>max</mi><mo>(</mo><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow
 										><mn>10000</mn></mfrac
-									><mo
-										form="postfix"
-										stretchy="true"
-										>⌋</mo
-									><mo>,</mo><mi>openInterestReport</mi><mo>)</mo></mtd
+									><mo form="postfix" stretchy="true">⌋</mo><mo>,</mo><mi>openInterestReport</mi><mo>)</mo></mtd
 								>
 							</mtr>
 						</mtable>
@@ -490,173 +367,59 @@
 				</p>
 				<div class="callout">The immutable priority fee is an operator-selected transaction-inclusion assumption, not a tip observed from the request block. Setting it too low weakens the modeled incentive for a disputer when prevailing priority fees are higher. Setting it too high raises the sponsor's initial WETH and REP requirements and the initial-report-derived escalation halt, and can make requests impractical. Child pools inherit the origin's value.</div>
 				<p>At a <code>30 gwei</code> base fee and <code>10 gwei</code> configured priority fee, the modeled gas cost is <code>0.012 ETH</code>. After the <code>10x</code> Open Oracle Security multiplier and the worst-direction five-percent correction fraction after fees, the minimum report with 100 WETH of open interest is <code>3.230769230769230770 WETH</code>, producing an initial-report-derived halt of <code>32.307692307692307700 WETH</code> at the configured <code>10x</code> halt multiplier.</p>
-				<details
-					class="interactive-example"
-					id="initial-report-estimator-example"
-					open
-				>
+				<details class="interactive-example" id="initial-report-estimator-example" open>
 					<summary>Dynamic WETH report estimator</summary>
 					<p>This calculator mirrors the onchain formula. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and pool open interest can change from one request block to another.</p>
 					<div class="example-grid">
 						<label>
 							Block base fee
-							<input
-								type="range"
-								min="0"
-								max="200"
-								step="1"
-								value="30"
-								data-example-input="blockBaseFeeGwei"
-							/>
-							<span
-								class="example-value"
-								data-example-value="blockBaseFeeGwei"
-								>30 gwei</span
-							>
+							<input type="range" min="0" max="200" step="1" value="30" data-example-input="blockBaseFeeGwei" />
+							<span class="example-value" data-example-value="blockBaseFeeGwei">30 gwei</span>
 						</label>
 						<label>
 							Initial-report priority fee
-							<input
-								type="range"
-								min="1"
-								max="100"
-								step="1"
-								value="10"
-								data-example-input="initialReportPriorityFeeGwei"
-							/>
-							<span
-								class="example-value"
-								data-example-value="initialReportPriorityFeeGwei"
-								>10 gwei</span
-							>
+							<input type="range" min="1" max="100" step="1" value="10" data-example-input="initialReportPriorityFeeGwei" />
+							<span class="example-value" data-example-value="initialReportPriorityFeeGwei">10 gwei</span>
 						</label>
 						<label>
 							Pool open interest
-							<input
-								type="range"
-								min="0"
-								max="10000"
-								step="100"
-								value="100"
-								data-example-input="openInterestWeth"
-							/>
-							<span
-								class="example-value"
-								data-example-value="openInterestWeth"
-								>100 WETH</span
-							>
+							<input type="range" min="0" max="10000" step="100" value="100" data-example-input="openInterestWeth" />
+							<span class="example-value" data-example-value="openInterestWeth">100 WETH</span>
 						</label>
 						<label>
 							Gas units for one dispute
-							<input
-								type="range"
-								min="100000"
-								max="1000000"
-								step="10000"
-								value="300000"
-								data-example-input="gasUnitsForOneDispute"
-							/>
-							<span
-								class="example-value"
-								data-example-value="gasUnitsForOneDispute"
-								>300,000 gas</span
-							>
+							<input type="range" min="100000" max="1000000" step="10000" value="300000" data-example-input="gasUnitsForOneDispute" />
+							<span class="example-value" data-example-value="gasUnitsForOneDispute">300,000 gas</span>
 						</label>
 						<label>
 							Open Oracle Security multiplier
-							<input
-								type="range"
-								min="1"
-								max="20"
-								step="0.5"
-								value="10"
-								data-example-input="openOracleSecurityMultiplier"
-							/>
-							<span
-								class="example-value"
-								data-example-value="openOracleSecurityMultiplier"
-								>10.0x</span
-							>
+							<input type="range" min="1" max="20" step="0.5" value="10" data-example-input="openOracleSecurityMultiplier" />
+							<span class="example-value" data-example-value="openOracleSecurityMultiplier">10.0x</span>
 						</label>
 						<label>
 							Target wrong-price error
-							<input
-								type="range"
-								min="1.2"
-								max="25"
-								step="0.1"
-								value="5"
-								data-example-input="targetPriceErrorForDispute"
-							/>
-							<span
-								class="example-value"
-								data-example-value="targetPriceErrorForDispute"
-								>5.0%</span
-							>
+							<input type="range" min="1.2" max="25" step="0.1" value="5" data-example-input="targetPriceErrorForDispute" />
+							<span class="example-value" data-example-value="targetPriceErrorForDispute">5.0%</span>
 						</label>
 						<label>
 							OpenOracle protocol fee
-							<input
-								type="range"
-								min="0"
-								max="5"
-								step="0.1"
-								value="1"
-								data-example-input="openOracleProtocolFee"
-							/>
-							<span
-								class="example-value"
-								data-example-value="openOracleProtocolFee"
-								>1.0%</span
-							>
+							<input type="range" min="0" max="5" step="0.1" value="1" data-example-input="openOracleProtocolFee" />
+							<span class="example-value" data-example-value="openOracleProtocolFee">1.0%</span>
 						</label>
 						<label>
 							OpenOracle reporter fee
-							<input
-								type="range"
-								min="0"
-								max="2"
-								step="0.1"
-								value="0.1"
-								data-example-input="openOracleReporterFee"
-							/>
-							<span
-								class="example-value"
-								data-example-value="openOracleReporterFee"
-								>0.1%</span
-							>
+							<input type="range" min="0" max="2" step="0.1" value="0.1" data-example-input="openOracleReporterFee" />
+							<span class="example-value" data-example-value="openOracleReporterFee">0.1%</span>
 						</label>
 						<label>
 							Requested initial WETH
-							<input
-								type="range"
-								min="0"
-								max="25"
-								step="0.25"
-								value="0"
-								data-example-input="requestedInitialWeth"
-							/>
-							<span
-								class="example-value"
-								data-example-value="requestedInitialWeth"
-								>0.00 WETH</span
-							>
+							<input type="range" min="0" max="25" step="0.25" value="0" data-example-input="requestedInitialWeth" />
+							<span class="example-value" data-example-value="requestedInitialWeth">0.00 WETH</span>
 						</label>
 						<label>
 							Escalation halt multiplier
-							<input
-								type="range"
-								min="1"
-								max="20"
-								step="1"
-								value="10"
-								data-example-input="escalationHaltMultiplier"
-							/>
-							<span
-								class="example-value"
-								data-example-value="escalationHaltMultiplier"
-								>10x</span
-							>
+							<input type="range" min="1" max="20" step="1" value="10" data-example-input="escalationHaltMultiplier" />
+							<span class="example-value" data-example-value="escalationHaltMultiplier">10x</span>
 						</label>
 					</div>
 					<div class="example-output-grid">
@@ -720,15 +483,8 @@
 					converts basis-point parameters into fractions in the formulas below.
 				</p>
 				<p>The first boundary is how far the manipulated price must move before the liquidation can execute. The distance guard discounts the honest price, then the execution threshold and reported price error are measured against that honest baseline. The formulas in this attack model are continuous approximations for reasoning about payoff and censorship cost; the contract guard below them shows the integer check that actually gates staged liquidation execution.</p>
-				<div
-					class="equation"
-					id="eq-openoracle-binary-threshold"
-				>
-					<math
-						display="block"
-						aria-label="binary liquidation threshold and upward manipulated price error"
-						data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / BPS_DENOMINATOR; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice)"
-					>
+				<div class="equation" id="eq-openoracle-binary-threshold">
+					<math display="block" aria-label="binary liquidation threshold and upward manipulated price error" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / BPS_DENOMINATOR; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice)">
 						<mtable>
 							<mtr>
 								<mtd><mi>liquidationDistanceFraction</mi></mtd>
@@ -765,32 +521,18 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Execution Error Threshold</span>The manipulated price only creates liquidation payoff when its fractional error meets the guarded liquidation threshold.</p>
 				</div>
-				<div
-					class="equation"
-					id="eq-openoracle-contract-liquidation-guard"
-				>
-					<math
-						display="block"
-						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
-						data-source="thresholdPrice = ⌊vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)⌋; currentPrice > thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ >= minLiquidationPriceDistanceBps"
-					>
+				<div class="equation" id="eq-openoracle-contract-liquidation-guard">
+					<math display="block" aria-label="contract liquidation guard uses floored threshold price and floored distance basis points" data-source="thresholdPrice = ⌊vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)⌋; currentPrice > thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ >= minLiquidationPriceDistanceBps">
 						<mtable>
 							<mtr>
 								<mtd><mi>thresholdPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mo
-										form="prefix"
-										stretchy="true"
-										>⌊</mo
+									><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow><mi>vaultRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow
 										><mrow><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo><mi>statoblastSecurityMultiplierBps</mi></mrow></mfrac
-									><mo
-										form="postfix"
-										stretchy="true"
-										>⌋</mo
-									></mtd
+									><mo form="postfix" stretchy="true">⌋</mo></mtd
 								>
 							</mtr>
 							<mtr>
@@ -802,18 +544,11 @@
 								<mtd><mi>distanceBps</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
-									><mo
-										form="prefix"
-										stretchy="true"
-										>⌊</mo
+									><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow><mo>(</mo><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi><mo>)</mo><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow
 										><mi>currentPrice</mi></mfrac
-									><mo
-										form="postfix"
-										stretchy="true"
-										>⌋</mo
-									></mtd
+									><mo form="postfix" stretchy="true">⌋</mo></mtd
 								>
 							</mtr>
 							<mtr>
@@ -829,15 +564,8 @@
 					The attack model separates attacker payoff from delay cost. The payoff is binary: only a price strictly above the liquidation threshold and far enough past the guarded distance unlocks
 					<code>externalPayoff</code>; everything else unlocks nothing. The censorship cost grows with duration, the dispute barrier, and the report liquidity honest reporters can use.
 				</p>
-				<div
-					class="equation"
-					id="eq-openoracle-binary-payoff-cost"
-				>
-					<math
-						display="block"
-						aria-label="binary attacker payoff and censorship cost"
-						data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerProfit = { externalPayoff, liquidationExecutable; 0, otherwise }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity"
-					>
+				<div class="equation" id="eq-openoracle-binary-payoff-cost">
+					<math display="block" aria-label="binary attacker payoff and censorship cost" data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerProfit = { externalPayoff, liquidationExecutable; 0, otherwise }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity">
 						<mtable>
 							<mtr>
 								<mtd><mi>liquidationExecutable</mi></mtd>
@@ -878,15 +606,8 @@
 					<p class="equation-caption"><span class="equation-label">Binary Payoff and Censorship Cost</span>Here <code>externalPayoff</code> is the attacker's outside ETH-denominated payoff, and <code>oracleReportLiquidity</code> is the report's WETH-denominated liquidity.</p>
 				</div>
 				<p>The final bound is how long censorship would need to remain cheap for the attack to be attractive. The safety duration shrinks as the censorship rate and liquidity ratio grow.</p>
-				<div
-					class="equation"
-					id="eq-openoracle-safe-censorship-duration"
-				>
-					<math
-						display="block"
-						aria-label="safe censorship duration equals target grief ratio plus one divided by censorship rate times oracle liquidity ratio"
-						data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)"
-					>
+				<div class="equation" id="eq-openoracle-safe-censorship-duration">
+					<math display="block" aria-label="safe censorship duration equals target grief ratio plus one divided by censorship rate times oracle liquidity ratio" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)">
 						<mtable>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
@@ -909,174 +630,62 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Safe Censorship Duration</span>The bound is strongest when report liquidity is large relative to the payoff and each additional unit of price error is costly to keep undisputed.</p>
 				</div>
-				<details
-					class="interactive-example"
-					id="binary-censorship-example"
-				>
+				<details class="interactive-example" id="binary-censorship-example">
 					<summary>Adjust a binary censorship example</summary>
 					<p>The liquidation distance, manipulated price, report liquidity, and payoff determine the attacker's payoff and delay cost.</p>
 					<div class="example-grid">
 						<label>
 							Honest price
-							<input
-								type="range"
-								min="50"
-								max="200"
-								step="1"
-								value="100"
-								data-example-input="honestPrice"
-							/>
-							<span
-								class="example-value"
-								data-example-value="honestPrice"
-								>100</span
-							>
+							<input type="range" min="50" max="200" step="1" value="100" data-example-input="honestPrice" />
+							<span class="example-value" data-example-value="honestPrice">100</span>
 						</label>
 						<label>
 							Manipulated price
-							<input
-								type="range"
-								min="50"
-								max="250"
-								step="1"
-								value="113"
-								data-example-input="manipulatedPrice"
-							/>
-							<span
-								class="example-value"
-								data-example-value="manipulatedPrice"
-								>113</span
-							>
+							<input type="range" min="50" max="250" step="1" value="113" data-example-input="manipulatedPrice" />
+							<span class="example-value" data-example-value="manipulatedPrice">113</span>
 						</label>
 						<label>
 							Liquidation threshold
-							<input
-								type="range"
-								min="50"
-								max="200"
-								step="1"
-								value="101"
-								data-example-input="liquidationThresholdPrice"
-							/>
-							<span
-								class="example-value"
-								data-example-value="liquidationThresholdPrice"
-								>101</span
-							>
+							<input type="range" min="50" max="200" step="1" value="101" data-example-input="liquidationThresholdPrice" />
+							<span class="example-value" data-example-value="liquidationThresholdPrice">101</span>
 						</label>
 						<label>
 							Liquidation distance bps
-							<input
-								type="range"
-								min="0"
-								max="3000"
-								step="100"
-								value="1000"
-								data-example-input="minLiquidationPriceDistanceBps"
-							/>
-							<span
-								class="example-value"
-								data-example-value="minLiquidationPriceDistanceBps"
-								>1000 bps</span
-							>
+							<input type="range" min="0" max="3000" step="100" value="1000" data-example-input="minLiquidationPriceDistanceBps" />
+							<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
 						</label>
 						<label>
 							External payoff ETH
-							<input
-								type="range"
-								min="100"
-								max="10000"
-								step="100"
-								value="1000"
-								data-example-input="externalPayoff"
-							/>
-							<span
-								class="example-value"
-								data-example-value="externalPayoff"
-								>1000 ETH</span
-							>
+							<input type="range" min="100" max="10000" step="100" value="1000" data-example-input="externalPayoff" />
+							<span class="example-value" data-example-value="externalPayoff">1000 ETH</span>
 						</label>
 						<label>
 							Report liquidity ETH value
-							<input
-								type="range"
-								min="100"
-								max="20000"
-								step="100"
-								value="4000"
-								data-example-input="oracleReportLiquidity"
-							/>
-							<span
-								class="example-value"
-								data-example-value="oracleReportLiquidity"
-								>4000 ETH</span
-							>
+							<input type="range" min="100" max="20000" step="100" value="4000" data-example-input="oracleReportLiquidity" />
+							<span class="example-value" data-example-value="oracleReportLiquidity">4000 ETH</span>
 						</label>
 						<label>
 							Honest dispute barrier
-							<input
-								type="range"
-								min="0"
-								max="0.1"
-								step="0.005"
-								value="0.01"
-								data-example-input="honestDisputeBarrierFraction"
-							/>
-							<span
-								class="example-value"
-								data-example-value="honestDisputeBarrierFraction"
-								>1.00%</span
-							>
+							<input type="range" min="0" max="0.1" step="0.005" value="0.01" data-example-input="honestDisputeBarrierFraction" />
+							<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.00%</span>
 						</label>
 						<label>
 							Censorship duration (steps)
-							<input
-								type="range"
-								min="0"
-								max="168"
-								step="1"
-								value="24"
-								data-example-input="censorshipDuration"
-							/>
-							<span
-								class="example-value"
-								data-example-value="censorshipDuration"
-								>24 steps</span
-							>
+							<input type="range" min="0" max="168" step="1" value="24" data-example-input="censorshipDuration" />
+							<span class="example-value" data-example-value="censorshipDuration">24 steps</span>
 						</label>
 						<label>
 							Target grief ratio
-							<input
-								type="range"
-								min="0"
-								max="5"
-								step="0.1"
-								value="1"
-								data-example-input="targetGriefRatio"
-							/>
-							<span
-								class="example-value"
-								data-example-value="targetGriefRatio"
-								>1.0</span
-							>
+							<input type="range" min="0" max="5" step="0.1" value="1" data-example-input="targetGriefRatio" />
+							<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
 						</label>
 					</div>
 					<div class="example-visual">
-						<div
-							class="plot-chart"
-							data-plot-chart="plot-open-oracle-integration-2"
-							data-plot-width="760"
-							data-plot-height="210"
-							role="img"
-							aria-label="Binary censorship threshold and cost comparison"
-						>
+						<div class="plot-chart" data-plot-chart="plot-open-oracle-integration-2" data-plot-width="760" data-plot-height="210" role="img" aria-label="Binary censorship threshold and cost comparison">
 							<span class="plot-chart-fallback">Binary censorship threshold and cost comparison</span>
 						</div>
 					</div>
-					<ul
-						class="example-output"
-						aria-live="polite"
-					>
+					<ul class="example-output" aria-live="polite">
 						<li>
 							Execution error threshold:
 							<output data-example-output="executionErrorThreshold">12.22%</output>
@@ -1115,9 +724,7 @@
 					</li>
 					<li>
 						<strong>Binary threshold attacks:</strong> staged liquidations must satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so
-						<math
-							aria-label="current price minus threshold price divided by current price"
-							data-source="(currentPrice - thresholdPrice) / currentPrice"
+						<math aria-label="current price minus threshold price divided by current price" data-source="(currentPrice - thresholdPrice) / currentPrice"
 							><mfrac
 								><mrow><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow
 								><mi>currentPrice</mi></mfrac
@@ -1495,10 +1102,7 @@
 		</script>
 		<script src="../assets/js/protocolTerms.js"></script>
 		<script src="../assets/js/termTooltips.js"></script>
-		<script
-			type="module"
-			src="../assets/js/interactiveTools.js"
-		></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

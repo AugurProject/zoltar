@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>EscalationGame Architecture</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -27,31 +21,14 @@
 			<section id="module-split">
 				<h2>Module Split</h2>
 				<p>The first question in this stack is always ownership: which file is allowed to mutate which part of the game. The state-owning modules form one inheritance ladder over <code>EscalationGameStorage</code>. The deposit delegate uses the same layout and may mutate it only while the game invokes it with <code>delegatecall</code>. The proof verifier stays outside both mutation paths because it should never write live game state.</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-escalation-game-module-split"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-escalation-game-module-split"
-						data-plot-width="920"
-						data-plot-height="360"
-						role="img"
-						aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier"
-					>
+				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split">
+					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier">
 						<span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
-				<div
-					class="equation"
-					id="eq-escalation-game-outcome-carry"
-				>
-					<math
-						display="block"
-						aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total"
-						data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal"
-					>
+				<div class="equation" id="eq-escalation-game-outcome-carry">
+					<math display="block" aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal">
 						<mrow>
 							<mi>currentCarryTotal</mi>
 							<mo>=</mo>
@@ -258,12 +235,7 @@
 					<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, and <a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
 				</p>
 				<p>The proof verifier and deposit delegate splits also exist because bytecode headroom is tight. Keeping proof math and the cohesive deposit mutation path outside the deployed game bytecode keeps the contract under the current bytecode budgets and leaves only limited headroom for small execution changes without collapsing the public game contract into an unreviewable blob.</p>
-				<div
-					class="table-scroll"
-					role="region"
-					aria-label="Escalation game bytecode measurements"
-					tabindex="0"
-				>
+				<div class="table-scroll" role="region" aria-label="Escalation game bytecode measurements" tabindex="0">
 					<table>
 						<thead>
 							<tr>

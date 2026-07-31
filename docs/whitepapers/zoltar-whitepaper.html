@@ -2,36 +2,21 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Zoltar White Paper</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="paper-page paper-zoltar">
 		<main id="main-content">
 			<header class="hero">
 				<div class="hero-label-row">
-					<p class="kicker">
-						<span
-							class="layer-dot"
-							aria-hidden="true"
-						></span
-						>Branching Oracle Base Layer
-					</p>
+					<p class="kicker"><span class="layer-dot" aria-hidden="true"></span>Branching Oracle Base Layer</p>
 					<p class="paper-status">Draft</p>
 				</div>
 				<h1>Zoltar White Paper</h1>
 			</header>
 
-			<section
-				class="paper-section"
-				id="abstract"
-			>
+			<section class="paper-section" id="abstract">
 				<p>Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders may migrate or split their claims across one or more selected branches.</p>
 
 				<p>
@@ -43,18 +28,10 @@
 				<p>Zoltar is not itself a prediction market or an outcome-reporting oracle. Instead, it provides the shared infrastructure for questions, REP tokens, and universe forks. Any application can build on top of it and define its own local dispute process. If disagreement cannot be resolved locally, anyone able to commit the required REP threshold may fork an unforked universe using an eligible ended global question. The resulting child universes become the new foundations from which applications may choose to continue.</p>
 			</section>
 
-			<section
-				class="paper-section"
-				id="timeline"
-			>
+			<section class="paper-section" id="timeline">
 				<div class="section-heading">
 					<h2>Lifecycle Timeline</h2>
-					<a
-						class="anchor-link"
-						href="#timeline"
-						aria-label="Link to Lifecycle Timeline"
-						>#</a
-					>
+					<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
 				</div>
 				<p>Zoltar's lifecycle has six conceptual steps, from question registration through post-fork coordination.</p>
 				<div class="timeline-grid">
@@ -85,18 +62,10 @@
 				</div>
 			</section>
 
-			<section
-				class="paper-section"
-				id="overview"
-			>
+			<section class="paper-section" id="overview">
 				<div class="section-heading">
 					<h2>1. System Overview</h2>
-					<a
-						class="anchor-link"
-						href="#overview"
-						aria-label="Link to System Overview"
-						>#</a
-					>
+					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 				</div>
 				<p>Zoltar has one job: define the valid universes that higher-level applications can rely on. It does not implement the market, collateral, or underwriting system built on top of it elsewhere in the repo. Its role is narrower and more fundamental:</p>
 				<ul class="clean-list">
@@ -129,18 +98,10 @@
 				</ul>
 			</section>
 
-			<section
-				class="paper-section"
-				id="universe-model"
-			>
+			<section class="paper-section" id="universe-model">
 				<div class="section-heading">
 					<h2>2. Universe Model</h2>
-					<a
-						class="anchor-link"
-						href="#universe-model"
-						aria-label="Link to Universe Model"
-						>#</a
-					>
+					<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
 				</div>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
@@ -159,15 +120,8 @@
 					<li><code>parentUniverseId</code>: the parent branch</li>
 				</ul>
 				<p>Universe <code>0</code> is the genesis universe. Its network-specific REP token is supplied to the <code>Zoltar</code> constructor. Mainnet uses the existing REP deployment; Sepolia deterministically deploys a genesis REP token from the configured initial-holder allocations before deploying <code>Zoltar</code>. Child universes are identified deterministically as:</p>
-				<div
-					class="equation"
-					id="eq-zoltar-child-universe-id"
-				>
-					<math
-						display="block"
-						aria-label="child universe id equals uint248 of keccak256 of abi encode parent universe id and outcome index"
-						data-source="childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))"
-					>
+				<div class="equation" id="eq-zoltar-child-universe-id">
+					<math display="block" aria-label="child universe id equals uint248 of keccak256 of abi encode parent universe id and outcome index" data-source="childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))">
 						<mrow>
 							<mi>childUniverseId</mi>
 							<mo>=</mo>
@@ -189,31 +143,12 @@
 				</div>
 				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
 
-				<figure
-					class="diagram"
-					id="fig-zoltar-fork-branch-set"
-					aria-labelledby="universe-diagram-title"
-				>
-					<p
-						class="diagram-title"
-						id="universe-diagram-title"
-					>
-						Universe Tree
-					</p>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-zoltar-fork-branch-set"
-						data-plot-width="920"
-						data-plot-height="430"
-						role="img"
-						aria-label="A parent universe forks into children for Invalid and each valid outcome."
-					>
+				<figure class="diagram" id="fig-zoltar-fork-branch-set" aria-labelledby="universe-diagram-title">
+					<p class="diagram-title" id="universe-diagram-title">Universe Tree</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-branch-set" data-plot-width="920" data-plot-height="430" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome.">
 						<span class="plot-chart-fallback">Universe tree. A fork creates the full valid branch set; no branch is privileged by the contract.</span>
 					</div>
-					<div
-						class="legend"
-						aria-label="Universe diagram legend"
-					>
+					<div class="legend" aria-label="Universe diagram legend">
 						<span class="legend-item"><span class="legend-swatch gold"></span>Forking parent</span>
 						<span class="legend-item"><span class="legend-swatch teal"></span>Invalid branch</span>
 						<span class="legend-item"><span class="legend-swatch blue"></span>Valid outcome branches</span>
@@ -234,18 +169,10 @@
 				</div>
 			</section>
 
-			<section
-				class="paper-section"
-				id="economics"
-			>
+			<section class="paper-section" id="economics">
 				<div class="section-heading">
 					<h2>3. Fork Thresholds and REP Economics</h2>
-					<a
-						class="anchor-link"
-						href="#economics"
-						aria-label="Link to Fork Thresholds and REP Economics"
-						>#</a
-					>
+					<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 				</div>
 				<p>
 					To trigger a Zoltar fork, the caller must commit the
@@ -256,33 +183,18 @@
 					<strong>Security assumptions:</strong>
 					<a href="../safety-operations/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../safety-operations/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../safety-operations/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../safety-operations/security-model.html#assumption-a21">A21 genesis REP behavior</a>, and <a href="../safety-operations/security-model.html#assumption-a25">A25 safe immutable parameters</a>.
 				</p>
-				<div
-					class="equation"
-					id="eq-zoltar-fork-threshold"
-				>
-					<math
-						display="block"
-						aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor"
-						data-source="forkThreshold = ⌊totalTheoreticalRepSupply / forkThresholdDivisor⌋"
-					>
+				<div class="equation" id="eq-zoltar-fork-threshold">
+					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = ⌊totalTheoreticalRepSupply / forkThresholdDivisor⌋">
 						<mrow>
 							<mi>forkThreshold</mi>
 							<mo>=</mo>
 							<mrow>
-								<mo
-									form="prefix"
-									stretchy="true"
-									>⌊</mo
-								>
+								<mo form="prefix" stretchy="true">⌊</mo>
 								<mfrac>
 									<mi>totalTheoreticalRepSupply</mi>
 									<mi>forkThresholdDivisor</mi>
 								</mfrac>
-								<mo
-									form="postfix"
-									stretchy="true"
-									>⌋
-								</mo>
+								<mo form="postfix" stretchy="true">⌋ </mo>
 							</mrow>
 						</mrow>
 					</math>
@@ -290,45 +202,23 @@
 				</div>
 				<p>After triggering the fork, the full threshold leaves the parent universe: <code>forkUniverse</code> removes that parent REP and reduces parent theoretical supply by the full threshold. The burn divisor then controls the child-REP minting credit. With <code>forkBurnDivisor = 5</code>, the uncredited haircut is <code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold. The remaining <code>forkThreshold - ⌊forkThreshold / 5⌋</code> becomes migration credit: equivalently <code>⌈4 × forkThreshold / 5⌉</code>, approximately 80%.</p>
 				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code>. This caps the uncredited haircut at 20%: a larger haircut can leave an <a href="./statoblast-whitepaper.html#migration">own-fork escalation continuation</a>—the child game carrying unresolved deposits after its pool's escalation game triggers the universe fork—with less REP than its maximum winning payout.</p>
-				<div
-					class="equation"
-					id="eq-zoltar-fork-burn"
-				>
-					<math
-						display="block"
-						aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor"
-						data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋"
-					>
+				<div class="equation" id="eq-zoltar-fork-burn">
+					<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋">
 						<mrow>
 							<mi>uncreditedForkHaircut</mi>
 							<mo>=</mo>
-							<mo
-								form="prefix"
-								stretchy="true"
-								>⌊</mo
-							>
+							<mo form="prefix" stretchy="true">⌊</mo>
 							<mfrac>
 								<mi>forkThreshold</mi>
 								<mi>forkBurnDivisor</mi>
 							</mfrac>
-							<mo
-								form="postfix"
-								stretchy="true"
-								>⌋</mo
-							>
+							<mo form="postfix" stretchy="true">⌋</mo>
 						</mrow>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is <code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold deposit and rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
 				</div>
-				<div
-					class="equation"
-					id="eq-zoltar-initiator-migration-balance"
-				>
-					<math
-						display="block"
-						aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut"
-						data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut"
-					>
+				<div class="equation" id="eq-zoltar-initiator-migration-balance">
+					<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
 						<mrow>
 							<mi>forkInitiatorMigrationBalance</mi>
 							<mo>=</mo>
@@ -349,26 +239,9 @@
 					</div>
 				</div>
 
-				<figure
-					class="diagram"
-					id="fig-zoltar-threshold-deposit"
-					aria-labelledby="deposit-diagram-title"
-				>
-					<p
-						class="diagram-title"
-						id="deposit-diagram-title"
-					>
-						Threshold Deposit Split
-					</p>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-zoltar-threshold-deposit"
-						data-plot-width="860"
-						data-plot-height="360"
-						data-rounding="integer-flooring"
-						role="img"
-						aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance."
-					>
+				<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
+					<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="360" data-rounding="integer-flooring" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance.">
 						<span class="plot-chart-fallback">Threshold Deposit Split. The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</p>
@@ -387,18 +260,8 @@
 
 				<h3>Repeated-fork threshold decay</h3>
 				<p>Along one lineage, each fork subtracts its floored haircut from child theoretical supply. With threshold divisor <code>20</code> and burn divisor <code>5</code>, supply is close to 99% of the previous generation, subject to Solidity integer flooring.</p>
-				<figure
-					class="diagram"
-					id="fig-zoltar-fork-threshold-decay"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-zoltar-fork-threshold-decay"
-						data-plot-width="900"
-						data-plot-height="420"
-						role="img"
-						aria-label="Theoretical REP supply and fork threshold across repeated forks"
-					>
+				<figure class="diagram" id="fig-zoltar-fork-threshold-decay">
+					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-threshold-decay" data-plot-width="900" data-plot-height="420" role="img" aria-label="Theoretical REP supply and fork threshold across repeated forks">
 						<span class="plot-chart-fallback">Repeated-fork economics. Each default fork leaves approximately 99% of the previous generation's theoretical REP supply, and the next fork threshold remains 5% of that declining supply.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Repeated-Fork Decay</span>The filled curve normalizes genesis theoretical supply to 100%. The dashed curve is the next fork threshold. Integer flooring can shift exact onchain values slightly from this continuous approximation.</p>
@@ -447,18 +310,10 @@
 				</div>
 			</section>
 
-			<section
-				class="paper-section"
-				id="splitting"
-			>
+			<section class="paper-section" id="splitting">
 				<div class="section-heading">
 					<h2>4. Child Universes and REP Splitting</h2>
-					<a
-						class="anchor-link"
-						href="#splitting"
-						aria-label="Link to Child Universes and REP Splitting"
-						>#</a
-					>
+					<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
 				</div>
 				<p>
 					Once a universe forks, child universes can be deployed lazily through
@@ -490,25 +345,9 @@
 					</div>
 				</div>
 
-				<figure
-					class="diagram"
-					id="fig-zoltar-migration-reproduction"
-					aria-labelledby="split-diagram-title"
-				>
-					<p
-						class="diagram-title"
-						id="split-diagram-title"
-					>
-						Migration Balance Reproduction
-					</p>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-zoltar-migration-reproduction"
-						data-plot-width="930"
-						data-plot-height="520"
-						role="img"
-						aria-label="A migration balance can mint REP into one selected child or be reproduced across multiple selected children."
-					>
+				<figure class="diagram" id="fig-zoltar-migration-reproduction" aria-labelledby="split-diagram-title">
+					<p class="diagram-title" id="split-diagram-title">Migration Balance Reproduction</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-migration-reproduction" data-plot-width="930" data-plot-height="520" role="img" aria-label="A migration balance can mint REP into one selected child or be reproduced across multiple selected children.">
 						<span class="plot-chart-fallback">Migration Balance Reproduction. Selecting multiple branches mints child REP in each selected child universe from the same migration balance.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Migration Balance Reproduction</span>Selecting multiple branches mints child REP in each selected child universe from the same migration balance.</p>
@@ -521,18 +360,10 @@
 				<p>At the implementation level, <code>splitMigrationRep</code> validates each selected outcome against the parent universe's fork question, lazily deploys any missing child universe, and records how much of the caller's migration balance has already been minted into each child. A caller cannot mint more into one child than the source migration balance available to that caller, but the same source balance can be reproduced into multiple valid children.</p>
 			</section>
 
-			<section
-				class="paper-section"
-				id="security"
-			>
+			<section class="paper-section" id="security">
 				<div class="section-heading">
 					<h2>5. Assumptions and Security Model</h2>
-					<a
-						class="anchor-link"
-						href="#security"
-						aria-label="Link to Assumptions and Security Model"
-						>#</a
-					>
+					<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
 				</div>
 				<p>
 					Zoltar is a
@@ -557,18 +388,10 @@
 				</p>
 			</section>
 
-			<section
-				class="paper-section"
-				id="questions"
-			>
+			<section class="paper-section" id="questions">
 				<div class="section-heading">
 					<h2>6. Questions and Outcome Encoding</h2>
-					<a
-						class="anchor-link"
-						href="#questions"
-						aria-label="Link to Questions and Outcome Encoding"
-						>#</a
-					>
+					<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
 				</div>
 				<p>
 					<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
@@ -618,31 +441,12 @@
 					</div>
 				</div>
 
-				<figure
-					class="diagram"
-					id="fig-zoltar-packed-scalar-answer"
-					aria-labelledby="packed-diagram-title"
-				>
-					<p
-						class="diagram-title"
-						id="packed-diagram-title"
-					>
-						Packed Scalar Answer
-					</p>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-zoltar-packed-scalar-answer"
-						data-plot-width="920"
-						data-plot-height="520"
-						role="img"
-						aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators."
-					>
+				<figure class="diagram" id="fig-zoltar-packed-scalar-answer" aria-labelledby="packed-diagram-title">
+					<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-packed-scalar-answer" data-plot-width="920" data-plot-height="520" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
 						<span class="plot-chart-fallback">Packed Scalar Answer. A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits 254...240 must be zero, 0 in bit 255 is the invalid namespace, and 1 means the payout fields must sum to numTicks.</span>
 					</div>
-					<div
-						class="legend"
-						aria-label="Scalar encoding diagram legend"
-					>
+					<div class="legend" aria-label="Scalar encoding diagram legend">
 						<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
 						<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
 						<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
@@ -651,15 +455,8 @@
 				</figure>
 
 				<p>The all-zero encoding is the canonical <code>Invalid</code> answer for scalar questions. For a valid scalar answer, the two payout numerators must sum exactly to <code>numTicks</code>:</p>
-				<div
-					class="equation"
-					id="eq-zoltar-scalar-validity"
-				>
-					<math
-						display="block"
-						aria-label="first payout numerator plus second payout numerator equals num ticks"
-						data-source="firstPayoutNumerator + secondPayoutNumerator = numTicks"
-					>
+				<div class="equation" id="eq-zoltar-scalar-validity">
+					<math display="block" aria-label="first payout numerator plus second payout numerator equals num ticks" data-source="firstPayoutNumerator + secondPayoutNumerator = numTicks">
 						<mrow>
 							<mi>firstPayoutNumerator</mi>
 							<mo>+</mo>
@@ -683,15 +480,8 @@
 					<li><code>secondPayoutNumerator = tickIndex</code></li>
 					<li><code>highest bit = 1</code></li>
 				</ul>
-				<div
-					class="equation"
-					id="eq-zoltar-scalar-tick-encoding"
-				>
-					<math
-						display="block"
-						aria-label="scalar tick encoding is an ordered pair of num ticks minus tick index, and tick index"
-						data-source="(numTicks - tickIndex, tickIndex)"
-					>
+				<div class="equation" id="eq-zoltar-scalar-tick-encoding">
+					<math display="block" aria-label="scalar tick encoding is an ordered pair of num ticks minus tick index, and tick index" data-source="(numTicks - tickIndex, tickIndex)">
 						<mrow>
 							<mo>(</mo>
 							<mi>numTicks</mi>
@@ -708,15 +498,8 @@
 					<a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
 					interprets <code>secondPayoutNumerator</code> as the position along the scalar range:
 				</p>
-				<div
-					class="equation"
-					id="eq-zoltar-scalar-display-value"
-				>
-					<math
-						display="block"
-						aria-label="displayed atomic value equals display value min plus floor second payout numerator times display range divided by num ticks"
-						data-source="displayedAtomic = displayValueMin + ⌊secondPayoutNumerator * (displayValueMax - displayValueMin) / numTicks⌋"
-					>
+				<div class="equation" id="eq-zoltar-scalar-display-value">
+					<math display="block" aria-label="displayed atomic value equals display value min plus floor second payout numerator times display range divided by num ticks" data-source="displayedAtomic = displayValueMin + ⌊secondPayoutNumerator * (displayValueMax - displayValueMin) / numTicks⌋">
 						<mrow>
 							<mi>displayedAtomic</mi>
 							<mo>=</mo>
@@ -743,18 +526,10 @@
 				<p><code>displayValueMin</code> and <code>displayValueMax</code> are stored as 18-decimal fixed-point display bounds. Formatting divides the atomic result by <code>1e18</code> and trims trailing zeroes. For example, with <code>displayValueMin = 0</code>, <code>displayValueMax = 10e18</code>, <code>numTicks = 6</code>, and <code>secondPayoutNumerator = 1</code>, the atomic value is <code>⌊10e18 / 6⌋</code>, which displays as <code>1.666666666666666666</code> rather than an unrounded real number.</p>
 			</section>
 
-			<section
-				class="paper-section"
-				id="question-types"
-			>
+			<section class="paper-section" id="question-types">
 				<div class="section-heading">
 					<h2>7. Question Types Supported by Zoltar</h2>
-					<a
-						class="anchor-link"
-						href="#question-types"
-						aria-label="Link to Question Types Supported by Zoltar"
-						>#</a
-					>
+					<a class="anchor-link" href="#question-types" aria-label="Link to Question Types Supported by Zoltar">#</a>
 				</div>
 				<p>
 					At the Zoltar layer, market type support comes from how questions and outcomes are encoded in
@@ -769,18 +544,10 @@
 				<p>Zoltar can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose narrower market shapes on top of it. It defines answer spaces and forkable resolution state, not the collateralized trading mechanics that may later be attached to those questions.</p>
 			</section>
 
-			<section
-				class="paper-section"
-				id="invalid"
-			>
+			<section class="paper-section" id="invalid">
 				<div class="section-heading">
 					<h2>8. Invalid vs Malformed</h2>
-					<a
-						class="anchor-link"
-						href="#invalid"
-						aria-label="Link to Invalid vs Malformed"
-						>#</a
-					>
+					<a class="anchor-link" href="#invalid" aria-label="Link to Invalid vs Malformed">#</a>
 				</div>
 				<p>Zoltar distinguishes <code>Invalid</code> answers from <code>Malformed</code> answers.</p>
 				<div class="table-wrap">

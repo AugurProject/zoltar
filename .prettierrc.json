@@ -7,7 +7,7 @@
 				"htmlWhitespaceSensitivity": "css",
 				"printWidth": 100000,
 				"proseWrap": "never",
-				"singleAttributePerLine": true,
+				"singleAttributePerLine": false,
 				"tabWidth": 4,
 				"useTabs": true
 			}

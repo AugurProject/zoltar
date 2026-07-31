@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Statoblast And Zoltar Invariants</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle invariants-catalog">
 		<main>
@@ -26,42 +20,21 @@
 					<a href="../protocol-design/open-oracle-integration.html#intentional-economic-tradeoffs">OpenOracle Integration</a>
 					owns the oracle notional and residual-loss analysis.
 				</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-invariant-layers"
-					role="region"
-					tabindex="0"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-invariant-layers"
-						data-plot-width="920"
-						data-plot-height="260"
-						role="img"
-						aria-label="Protocol invariant layers"
-					>
+				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
+					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="260" role="img" aria-label="Protocol invariant layers">
 						<span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Invariant Dependency</span>Correct callers are necessary but insufficient. Their actions must conserve assets, every mandatory state transition must remain reachable, and the named participation and inclusion assumptions must hold where the protocol deliberately relies on economic incentives.</p>
 				</figure>
 			</header>
 
-			<section
-				class="interactive-example invariant-explorer"
-				id="invariant-explorer"
-				aria-label="Invariant explorer"
-			>
+			<section class="interactive-example invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer">
 				<h2>Find an Invariant</h2>
 				<p>Search the full property, example, status, and evidence text, or narrow the catalog by property type, enforcement status, and subsystem.</p>
 				<div class="invariant-explorer-controls">
 					<label>
 						<span>Search</span>
-						<input
-							type="search"
-							placeholder="Try “replay” or “auction allowance”"
-							autocomplete="off"
-							data-invariant-search
-						/>
+						<input type="search" placeholder="Try “replay” or “auction allowance”" autocomplete="off" data-invariant-search />
 					</label>
 					<label>
 						<span>Property type</span>
@@ -83,51 +56,18 @@
 					</label>
 				</div>
 				<div class="invariant-explorer-actions">
-					<button
-						type="button"
-						data-invariant-expand
-					>
-						Expand visible
-					</button>
-					<button
-						type="button"
-						data-invariant-collapse
-					>
-						Collapse all
-					</button>
-					<button
-						type="button"
-						data-invariant-reset
-					>
-						Reset filters
-					</button>
+					<button type="button" data-invariant-expand>Expand visible</button>
+					<button type="button" data-invariant-collapse>Collapse all</button>
+					<button type="button" data-invariant-reset>Reset filters</button>
 				</div>
-				<p
-					class="invariant-result-count"
-					role="status"
-					aria-live="polite"
-					data-invariant-count
-				>
-					93 of 93 invariants
-				</p>
-				<p
-					class="invariant-no-results"
-					hidden
-					data-invariant-empty
-				>
-					No invariants match every active filter.
-				</p>
+				<p class="invariant-result-count" role="status" aria-live="polite" data-invariant-count>93 of 93 invariants</p>
+				<p class="invariant-no-results" hidden data-invariant-empty>No invariants match every active filter.</p>
 			</section>
 
 			<section id="standing">
 				<h2>Classification and Scope</h2>
 				<p>Each entry separates the kind of property from its current enforcement status. A status describes the strongest claim supported by the local implementation and tests; it is not a formal proof. Changes to any contract named in the evidence column must preserve the full statement, not only the check performed in one function.</p>
-				<div
-					class="table-scroll"
-					role="region"
-					aria-label="Invariant property types"
-					tabindex="0"
-				>
+				<div class="table-scroll" role="region" aria-label="Invariant property types" tabindex="0">
 					<table>
 						<thead>
 							<tr>
@@ -155,12 +95,7 @@
 						</tbody>
 					</table>
 				</div>
-				<div
-					class="table-scroll"
-					role="region"
-					aria-label="Invariant enforcement status definitions"
-					tabindex="0"
-				>
+				<div class="table-scroll" role="region" aria-label="Invariant enforcement status definitions" tabindex="0">
 					<table>
 						<thead>
 							<tr>
@@ -222,10 +157,7 @@
 				</dl>
 			</section>
 
-			<section
-				class="callout"
-				id="zoltar-invariants"
-			>
+			<section class="callout" id="zoltar-invariants">
 				<h2>Zoltar Invariants</h2>
 				<p>These properties govern core universe creation, REP supply, universe forks, deterministic child identities, and branch-specific REP migration.</p>
 			</section>
@@ -233,10 +165,7 @@
 			<section id="universes">
 				<h2>Universes, REP Supply, and Migration</h2>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="uni-01"
-					>
+					<details class="invariant-entry" id="uni-01">
 						<summary><code>UNI-01</code><span class="invariant-title">One fork per universe</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -260,10 +189,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-02"
-					>
+					<details class="invariant-entry" id="uni-02">
 						<summary><code>UNI-02</code><span class="invariant-title">Valid fork questions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -295,10 +221,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-03"
-					>
+					<details class="invariant-entry" id="uni-03">
 						<summary><code>UNI-03</code><span class="invariant-title">Fork threshold burn and credit</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -325,10 +248,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-04"
-					>
+					<details class="invariant-entry" id="uni-04">
 						<summary><code>UNI-04</code><span class="invariant-title">Deterministic child universe IDs</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -352,10 +272,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-05"
-					>
+					<details class="invariant-entry" id="uni-05">
 						<summary><code>UNI-05</code><span class="invariant-title">Well-formed child outcomes</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -379,10 +296,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-06"
-					>
+					<details class="invariant-entry" id="uni-06">
 						<summary><code>UNI-06</code><span class="invariant-title">Per-child migration mint limit</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -406,10 +320,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-07"
-					>
+					<details class="invariant-entry" id="uni-07">
 						<summary><code>UNI-07</code><span class="invariant-title">Branch-specific child REP</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -435,10 +346,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-08"
-					>
+					<details class="invariant-entry" id="uni-08">
 						<summary><code>UNI-08</code><span class="invariant-title">Child theoretical supply snapshot</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -462,10 +370,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="uni-09"
-					>
+					<details class="invariant-entry" id="uni-09">
 						<summary><code>UNI-09</code><span class="invariant-title">Child REP supply coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -496,10 +401,7 @@
 			<section id="questions">
 				<h2>Questions and Answer Classification</h2>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="qst-01"
-					>
+					<details class="invariant-entry" id="qst-01">
 						<summary><code>QST-01</code><span class="invariant-title">Question registry and classifier coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -530,10 +432,7 @@
 				</div>
 			</section>
 
-			<section
-				class="callout"
-				id="statoblast-invariants"
-			>
+			<section class="callout" id="statoblast-invariants">
 				<h2>Augur Statoblast Invariants</h2>
 				<p>These properties govern Statoblast deployment, SecurityPool accounting, fork migration, escalation, oracle operations, truth auctions, and the cross-contract lifecycle built on Zoltar universes.</p>
 			</section>
@@ -547,10 +446,7 @@
 					<a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.
 				</p>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="auth-01"
-					>
+					<details class="invariant-entry" id="auth-01">
 						<summary><code>AUTH-01</code><span class="invariant-title">Coordinator and forker-only operations</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -574,10 +470,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-02"
-					>
+					<details class="invariant-entry" id="auth-02">
 						<summary><code>AUTH-02</code><span class="invariant-title">Atomic pool and coordinator binding</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -603,10 +496,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-03"
-					>
+					<details class="invariant-entry" id="auth-03">
 						<summary><code>AUTH-03</code><span class="invariant-title">Immutable protocol logic</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -630,10 +520,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-04"
-					>
+					<details class="invariant-entry" id="auth-04">
 						<summary><code>AUTH-04</code><span class="invariant-title">Deterministic deployment identity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -659,10 +546,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-05"
-					>
+					<details class="invariant-entry" id="auth-05">
 						<summary><code>AUTH-05</code><span class="invariant-title">Delegate storage compatibility</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -687,10 +571,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-06"
-					>
+					<details class="invariant-entry" id="auth-06">
 						<summary><code>AUTH-06</code><span class="invariant-title">Permissionless settlement beneficiaries</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -714,10 +595,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-07"
-					>
+					<details class="invariant-entry" id="auth-07">
 						<summary><code>AUTH-07</code><span class="invariant-title">Published deployment verification</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -742,10 +620,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auth-08"
-					>
+					<details class="invariant-entry" id="auth-08">
 						<summary><code>AUTH-08</code><span class="invariant-title">Factory registry and lineage bijection</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -780,18 +655,8 @@
 			<section id="pool-accounting">
 				<h2>Pool Assets, Shares, and Vaults</h2>
 				<p>The raw ETH balance needs an explicit surplus term. Without it, forced ETH is indistinguishable from collateral and can change an exchange rate or lifecycle precondition.</p>
-				<div
-					class="equation"
-					id="eq-pool-eth-conservation"
-					role="region"
-					aria-label="ETH conservation equation"
-					tabindex="0"
-				>
-					<math
-						display="block"
-						aria-label="Raw ETH balance equals complete set collateral plus unallocated fee reserve plus total fees owed to vaults plus explicit surplus"
-						data-source="rawEthBalance = completeSetCollateral + unallocatedFeeReserve + totalFeesOwedToVaults + explicitSurplus"
-					>
+				<div class="equation" id="eq-pool-eth-conservation" role="region" aria-label="ETH conservation equation" tabindex="0">
+					<math display="block" aria-label="Raw ETH balance equals complete set collateral plus unallocated fee reserve plus total fees owed to vaults plus explicit surplus" data-source="rawEthBalance = completeSetCollateral + unallocatedFeeReserve + totalFeesOwedToVaults + explicitSurplus">
 						<mrow>
 							<mi>rawEthBalance</mi>
 							<mo>=</mo>
@@ -807,10 +672,7 @@
 					<p class="equation-caption"><span class="equation-label">ETH Conservation Boundary</span>Every successful external call should reconcile raw ETH into named liabilities or an explicit surplus bucket. Raw balance alone must not define collateral.</p>
 				</div>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="bal-01"
-					>
+					<details class="invariant-entry" id="bal-01">
 						<summary><code>BAL-01</code><span class="invariant-title">ETH conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -838,10 +700,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-02"
-					>
+					<details class="invariant-entry" id="bal-02">
 						<summary><code>BAL-02</code><span class="invariant-title">Unsolicited ETH isolation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -866,10 +725,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-03"
-					>
+					<details class="invariant-entry" id="bal-03">
 						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -894,10 +750,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-04"
-					>
+					<details class="invariant-entry" id="bal-04">
 						<summary><code>BAL-04</code><span class="invariant-title">REP coverage boundaries</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -921,10 +774,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-05"
-					>
+					<details class="invariant-entry" id="bal-05">
 						<summary><code>BAL-05</code><span class="invariant-title">REP ownership conversion consistency</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -948,10 +798,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-06"
-					>
+					<details class="invariant-entry" id="bal-06">
 						<summary><code>BAL-06</code><span class="invariant-title">Fee liability accounting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -975,10 +822,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-07"
-					>
+					<details class="invariant-entry" id="bal-07">
 						<summary><code>BAL-07</code><span class="invariant-title">Fee reserve protection</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1002,10 +846,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="bal-08"
-					>
+					<details class="invariant-entry" id="bal-08">
 						<summary><code>BAL-08</code><span class="invariant-title">Aggregate pool-ledger coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1036,10 +877,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-01"
-					>
+					<details class="invariant-entry" id="share-01">
 						<summary><code>SHARE-01</code><span class="invariant-title">Complete-set symmetry</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1063,10 +901,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-02"
-					>
+					<details class="invariant-entry" id="share-02">
 						<summary><code>SHARE-02</code><span class="invariant-title">Complete-set redemption</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1095,10 +930,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-03"
-					>
+					<details class="invariant-entry" id="share-03">
 						<summary><code>SHARE-03</code><span class="invariant-title">Positive-output minting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1122,10 +954,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-04"
-					>
+					<details class="invariant-entry" id="share-04">
 						<summary><code>SHARE-04</code><span class="invariant-title">Child supply denominators</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1151,10 +980,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-05"
-					>
+					<details class="invariant-entry" id="share-05">
 						<summary><code>SHARE-05</code><span class="invariant-title">Winning-share payout cap</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1178,10 +1004,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="share-06"
-					>
+					<details class="invariant-entry" id="share-06">
 						<summary><code>SHARE-06</code><span class="invariant-title">Share supply conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1210,10 +1033,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="vault-01"
-					>
+					<details class="invariant-entry" id="vault-01">
 						<summary><code>VAULT-01</code><span class="invariant-title">Escrowed REP isolation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1238,10 +1058,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="vault-02"
-					>
+					<details class="invariant-entry" id="vault-02">
 						<summary><code>VAULT-02</code><span class="invariant-title">Liquidation conservation and freshness</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1266,10 +1083,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="vault-03"
-					>
+					<details class="invariant-entry" id="vault-03">
 						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1301,10 +1115,7 @@
 			<section id="forks">
 				<h2>Forks and Child Isolation</h2>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="fork-01"
-					>
+					<details class="invariant-entry" id="fork-01">
 						<summary><code>FORK-01</code><span class="invariant-title">Parent pool finality</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1331,10 +1142,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-02"
-					>
+					<details class="invariant-entry" id="fork-02">
 						<summary><code>FORK-02</code><span class="invariant-title">Immutable fork snapshot</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1358,10 +1166,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-03"
-					>
+					<details class="invariant-entry" id="fork-03">
 						<summary><code>FORK-03</code><span class="invariant-title">Isolated migration proxy</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1385,10 +1190,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-04"
-					>
+					<details class="invariant-entry" id="fork-04">
 						<summary><code>FORK-04</code><span class="invariant-title">Prefunded proxy isolation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1412,10 +1214,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-05"
-					>
+					<details class="invariant-entry" id="fork-05">
 						<summary><code>FORK-05</code><span class="invariant-title">Eight-week migration boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1443,10 +1242,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-06"
-					>
+					<details class="invariant-entry" id="fork-06">
 						<summary><code>FORK-06</code><span class="invariant-title">Child deployment identity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1473,10 +1269,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-07"
-					>
+					<details class="invariant-entry" id="fork-07">
 						<summary><code>FORK-07</code><span class="invariant-title">Single-use unlocked vault migration</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1500,10 +1293,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-08"
-					>
+					<details class="invariant-entry" id="fork-08">
 						<summary><code>FORK-08</code><span class="invariant-title">One-time aggregate continuation backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1538,10 +1328,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-09"
-					>
+					<details class="invariant-entry" id="fork-09">
 						<summary><code>FORK-09</code><span class="invariant-title">Cumulative child collateral</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1565,10 +1352,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-10"
-					>
+					<details class="invariant-entry" id="fork-10">
 						<summary><code>FORK-10</code><span class="invariant-title">Share migration integrity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1592,10 +1376,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-11"
-					>
+					<details class="invariant-entry" id="fork-11">
 						<summary><code>FORK-11</code><span class="invariant-title">Unequal child share supplies</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1625,10 +1406,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="fork-12"
-					>
+					<details class="invariant-entry" id="fork-12">
 						<summary><code>FORK-12</code><span class="invariant-title">Child activation after settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1658,10 +1436,7 @@
 			<section id="escalation">
 				<h2>Escalation Games and Carried Claims</h2>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="esc-01"
-					>
+					<details class="invariant-entry" id="esc-01">
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1685,10 +1460,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-02"
-					>
+					<details class="invariant-entry" id="esc-02">
 						<summary><code>ESC-02</code><span class="invariant-title">Local unresolved REP reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1712,10 +1484,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-03"
-					>
+					<details class="invariant-entry" id="esc-03">
 						<summary><code>ESC-03</code><span class="invariant-title">Outcome carry reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1739,10 +1508,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-04"
-					>
+					<details class="invariant-entry" id="esc-04">
 						<summary><code>ESC-04</code><span class="invariant-title">Stable deposit identifiers</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1766,10 +1532,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-05"
-					>
+					<details class="invariant-entry" id="esc-05">
 						<summary><code>ESC-05</code><span class="invariant-title">Single-use claims per branch</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1794,10 +1557,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-06"
-					>
+					<details class="invariant-entry" id="esc-06">
 						<summary><code>ESC-06</code><span class="invariant-title">Aggregate export accounting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1821,10 +1581,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-07"
-					>
+					<details class="invariant-entry" id="esc-07">
 						<summary><code>ESC-07</code><span class="invariant-title">Authenticated carried winner payout</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1848,10 +1605,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-08"
-					>
+					<details class="invariant-entry" id="esc-08">
 						<summary><code>ESC-08</code><span class="invariant-title">Game REP settlement conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1875,10 +1629,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-09"
-					>
+					<details class="invariant-entry" id="esc-09">
 						<summary><code>ESC-09</code><span class="invariant-title">Terminal game outcomes</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1902,10 +1653,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-10"
-					>
+					<details class="invariant-entry" id="esc-10">
 						<summary><code>ESC-10</code><span class="invariant-title">Ancestor claim replay protection</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1929,10 +1677,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-11"
-					>
+					<details class="invariant-entry" id="esc-11">
 						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1959,10 +1704,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-12"
-					>
+					<details class="invariant-entry" id="esc-12">
 						<summary><code>ESC-12</code><span class="invariant-title">Pool and continuation payout agreement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1989,10 +1731,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-13"
-					>
+					<details class="invariant-entry" id="esc-13">
 						<summary><code>ESC-13</code><span class="invariant-title">Non-decision threshold and live start-bond arithmetic</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2020,10 +1759,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="esc-14"
-					>
+					<details class="invariant-entry" id="esc-14">
 						<summary><code>ESC-14</code><span class="invariant-title">Carry commitment structural integrity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2063,10 +1799,7 @@
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
 				</p>
-				<div
-					class="callout"
-					id="oracle-accepted-non-invariants"
-				>
+				<div class="callout" id="oracle-accepted-non-invariants">
 					<p>
 						<strong>Accepted oracle design properties—not security findings.</strong>
 						Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, allowance changes, pool assets, or cumulative operations that use an accepted price.
@@ -2075,10 +1808,7 @@
 					<p>Security review should verify the correction-profit calculation, report accounting, dispute access, and the stated inclusion assumption. A concrete bypass of the required position or fee, capital reuse, invalid deadline transition, or cache-conformance failure remains a finding. The mere absence of a report-notional bound or absolute pending-report duration does not.</p>
 				</div>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="ora-01"
-					>
+					<details class="invariant-entry" id="ora-01">
 						<summary><code>ORA-01</code><span class="invariant-title">Authorized settlement callbacks</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2102,10 +1832,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-02"
-					>
+					<details class="invariant-entry" id="ora-02">
 						<summary><code>ORA-02</code><span class="invariant-title">REP-per-ETH price direction</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2134,10 +1861,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-03"
-					>
+					<details class="invariant-entry" id="ora-03">
 						<summary><code>ORA-03</code><span class="invariant-title">Five-minute price validity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2161,10 +1885,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-04"
-					>
+					<details class="invariant-entry" id="ora-04">
 						<summary><code>ORA-04</code><span class="invariant-title">Single-use staged operations</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2188,10 +1909,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-05"
-					>
+					<details class="invariant-entry" id="ora-05">
 						<summary><code>ORA-05</code><span class="invariant-title">Staged operation targets</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2215,10 +1933,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-06"
-					>
+					<details class="invariant-entry" id="ora-06">
 						<summary><code>ORA-06</code><span class="invariant-title">Consumed execution failures</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2242,10 +1957,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-07"
-					>
+					<details class="invariant-entry" id="ora-07">
 						<summary><code>ORA-07</code><span class="invariant-title">Staged-operation queue and index bijection</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2273,10 +1985,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-08"
-					>
+					<details class="invariant-entry" id="ora-08">
 						<summary><code>ORA-08</code><span class="invariant-title">Dispute and settlement boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2300,10 +2009,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ora-09"
-					>
+					<details class="invariant-entry" id="ora-09">
 						<summary><code>ORA-09</code><span class="invariant-title">Oracle balance-domain boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2336,10 +2042,7 @@
 			<section id="auctions">
 				<h2>Truth Auctions</h2>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="auc-01"
-					>
+					<details class="invariant-entry" id="auc-01">
 						<summary><code>AUC-01</code><span class="invariant-title">Bid admission</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2363,10 +2066,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-02"
-					>
+					<details class="invariant-entry" id="auc-02">
 						<summary><code>AUC-02</code><span class="invariant-title">Auction caps</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2390,10 +2090,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-03"
-					>
+					<details class="invariant-entry" id="auc-03">
 						<summary><code>AUC-03</code><span class="invariant-title">Single-use bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2417,10 +2114,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-04"
-					>
+					<details class="invariant-entry" id="auc-04">
 						<summary><code>AUC-04</code><span class="invariant-title">Claim-order independence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2444,10 +2138,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-05"
-					>
+					<details class="invariant-entry" id="auc-05">
 						<summary><code>AUC-05</code><span class="invariant-title">Allocation and refund reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2471,10 +2162,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-06"
-					>
+					<details class="invariant-entry" id="auc-06">
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2498,10 +2186,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-07"
-					>
+					<details class="invariant-entry" id="auc-07">
 						<summary><code>AUC-07</code><span class="invariant-title">Uniform weak-demand allocation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2528,10 +2213,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-08"
-					>
+					<details class="invariant-entry" id="auc-08">
 						<summary><code>AUC-08</code><span class="invariant-title">Forced-ETH-resistant finalization</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2555,10 +2237,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-09"
-					>
+					<details class="invariant-entry" id="auc-09">
 						<summary><code>AUC-09</code><span class="invariant-title">Bounded bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2583,10 +2262,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-10"
-					>
+					<details class="invariant-entry" id="auc-10">
 						<summary><code>AUC-10</code><span class="invariant-title">Persistent tick bid history</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2612,10 +2288,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-11"
-					>
+					<details class="invariant-entry" id="auc-11">
 						<summary><code>AUC-11</code><span class="invariant-title">Auction tree and public-model equivalence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2645,10 +2318,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="auc-12"
-					>
+					<details class="invariant-entry" id="auc-12">
 						<summary><code>AUC-12</code><span class="invariant-title">Auction ETH liability conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2686,10 +2356,7 @@
 					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.
 				</p>
 				<div class="invariant-list">
-					<details
-						class="invariant-entry"
-						id="life-01"
-					>
+					<details class="invariant-entry" id="life-01">
 						<summary><code>LIFE-01</code><span class="invariant-title">Pool state transitions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2719,10 +2386,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="life-02"
-					>
+					<details class="invariant-entry" id="life-02">
 						<summary><code>LIFE-02</code><span class="invariant-title">Permissionless transition liveness</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2747,10 +2411,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="life-03"
-					>
+					<details class="invariant-entry" id="life-03">
 						<summary><code>LIFE-03</code><span class="invariant-title">Atomic failure behavior</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2772,10 +2433,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="life-04"
-					>
+					<details class="invariant-entry" id="life-04">
 						<summary><code>LIFE-04</code><span class="invariant-title">Deadline equality rules</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2797,10 +2455,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="life-05"
-					>
+					<details class="invariant-entry" id="life-05">
 						<summary><code>LIFE-05</code><span class="invariant-title">Bounded transition work</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2822,10 +2477,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="obs-01"
-					>
+					<details class="invariant-entry" id="obs-01">
 						<summary><code>OBS-01</code><span class="invariant-title">Event-state replay equivalence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2850,10 +2502,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ext-01"
-					>
+					<details class="invariant-entry" id="ext-01">
 						<summary><code>EXT-01</code><span class="invariant-title">Genesis token behavior boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2892,10 +2541,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ext-02"
-					>
+					<details class="invariant-entry" id="ext-02">
 						<summary><code>EXT-02</code><span class="invariant-title">Callback-safe accounting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2923,10 +2569,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ext-03"
-					>
+					<details class="invariant-entry" id="ext-03">
 						<summary><code>EXT-03</code><span class="invariant-title">ERC-1155 callback safety</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2957,10 +2600,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ext-04"
-					>
+					<details class="invariant-entry" id="ext-04">
 						<summary><code>EXT-04</code><span class="invariant-title">Same-block deadline ordering</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2982,10 +2622,7 @@
 							</dl>
 						</div>
 					</details>
-					<details
-						class="invariant-entry"
-						id="ext-05"
-					>
+					<details class="invariant-entry" id="ext-05">
 						<summary><code>EXT-05</code><span class="invariant-title">Recursive fork gas bound</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -3014,10 +2651,7 @@
 		<script src="../assets/js/termTooltips.js"></script>
 
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script
-			type="module"
-			src="../assets/js/invariantExplorer.js"
-		></script>
+		<script type="module" src="../assets/js/invariantExplorer.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

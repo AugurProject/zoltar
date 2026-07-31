@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Truth Auction</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -51,18 +45,8 @@
 
 				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive ownership in the child pool plus their proportional share of the auctioned security-bond allowance, rather than a direct REP token transfer.</p>
 
-				<figure
-					class="diagram diagram-wide"
-					id="fig-auction-lifecycle"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-auction-lifecycle"
-						data-plot-width="880"
-						data-plot-height="180"
-						role="img"
-						aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting."
-					>
+				<figure class="diagram diagram-wide" id="fig-auction-lifecycle">
+					<div class="plot-chart" data-plot-chart="fig-auction-lifecycle" data-plot-width="880" data-plot-height="180" role="img" aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting.">
 						<span class="plot-chart-fallback">Auction Lifecycle After migration closes, a child-pool shortfall can be repaired through auction. ETH bids restore collateral, while winning claims are settled into vault accounting. REP doesn't leave the system. Finalization accounts the ETH actually raised and rejects contribution-only ETH, so bidder settlement never depends on a donor.</span>
 					</div>
 
@@ -177,23 +161,12 @@
 					<code>underfundedThreshold = ⌈ethRaiseCap · 1e18 / maxRepBeingSold⌉</code>, stores the lowest tick whose price reaches that qualification threshold as <code>clearingTick</code>. Only bids at or above the cap-implied qualification threshold are retained; lower ticks refund. Qualifying bidders collectively purchase <code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so the common effective price is their retained ETH divided by the REP cap. That effective price can be lower than the qualification threshold; the threshold is not an execution-price floor. If no ETH qualifies, every bid refunds.
 				</p>
 				<p>The child activates with the ETH actually routed during migration plus the ETH retained by the auction. It may remain undercollateralized, and open-interest holders are not guaranteed to be made whole. That shortfall is the intended consequence of insufficient demand: non-migrating security positions lose the auctioned economic value, while users of the affected child bear any remaining collateral impairment.</p>
-				<div
-					class="equation"
-					id="eq-auction-underfunded-threshold"
-				>
-					<math
-						display="block"
-						aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold"
-						data-source="underfundedThreshold = ⌈ethRaiseCap * PRICE_PRECISION / maxRepBeingSold⌉"
-					>
+				<div class="equation" id="eq-auction-underfunded-threshold">
+					<math display="block" aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold" data-source="underfundedThreshold = ⌈ethRaiseCap * PRICE_PRECISION / maxRepBeingSold⌉">
 						<mrow>
 							<mi>underfundedThreshold</mi>
 							<mo>=</mo>
-							<mo
-								form="prefix"
-								stretchy="true"
-								>⌈</mo
-							>
+							<mo form="prefix" stretchy="true">⌈</mo>
 							<mfrac>
 								<mrow>
 									<mi>ethRaiseCap</mi>
@@ -202,11 +175,7 @@
 								</mrow>
 								<mi>maxRepBeingSold</mi>
 							</mfrac>
-							<mo
-								form="postfix"
-								stretchy="true"
-								>⌉</mo
-							>
+							<mo form="postfix" stretchy="true">⌉</mo>
 						</mrow>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Underfunded Threshold</span><code>PRICE_PRECISION = 1e18</code>. The ceiling tick is the bid-eligibility boundary, not an execution-price floor. Solidity assigns the REP cap by differencing cumulative floor allocations at fixed bid positions.</p>
@@ -397,10 +366,7 @@
 			<section id="interactive-example">
 				<h2>Interactive Clearing Example</h2>
 				<p>The slider example shows the uniform-clearing path, the underfunded path, and how the same bid ladder reacts when the ETH cap, REP cap, and bid sizes change.</p>
-				<details
-					class="interactive-example"
-					id="simple-auction-example"
-				>
+				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
 					<p>
 						The simplified calculator visualizes both finalized branches with three fixed price levels and real-number arithmetic. The
@@ -409,97 +375,32 @@
 					<div class="example-grid">
 						<label>
 							ETH raise cap
-							<input
-								type="range"
-								min="1"
-								max="30"
-								step="1"
-								value="12"
-								data-example-input="ethRaiseCap"
-							/>
-							<span
-								class="example-value"
-								data-example-value="ethRaiseCap"
-								>12 ETH</span
-							>
+							<input type="range" min="1" max="30" step="1" value="12" data-example-input="ethRaiseCap" />
+							<span class="example-value" data-example-value="ethRaiseCap">12 ETH</span>
 						</label>
 						<label>
 							REP inventory
-							<input
-								type="range"
-								min="1"
-								max="12"
-								step="1"
-								value="4"
-								data-example-input="repInventory"
-							/>
-							<span
-								class="example-value"
-								data-example-value="repInventory"
-								>4 REP</span
-							>
+							<input type="range" min="1" max="12" step="1" value="4" data-example-input="repInventory" />
+							<span class="example-value" data-example-value="repInventory">4 REP</span>
 						</label>
 						<label>
 							Alice bid near 5 ETH/REP
-							<input
-								type="range"
-								min="0"
-								max="20"
-								step="1"
-								value="3"
-								data-example-input="aliceEth"
-							/>
-							<span
-								class="example-value"
-								data-example-value="aliceEth"
-								>3 ETH</span
-							>
+							<input type="range" min="0" max="20" step="1" value="3" data-example-input="aliceEth" />
+							<span class="example-value" data-example-value="aliceEth">3 ETH</span>
 						</label>
 						<label>
 							Bob bid near 4 ETH/REP
-							<input
-								type="range"
-								min="0"
-								max="20"
-								step="1"
-								value="4"
-								data-example-input="bobEth"
-							/>
-							<span
-								class="example-value"
-								data-example-value="bobEth"
-								>4 ETH</span
-							>
+							<input type="range" min="0" max="20" step="1" value="4" data-example-input="bobEth" />
+							<span class="example-value" data-example-value="bobEth">4 ETH</span>
 						</label>
 						<label>
 							Carol bid near 3 ETH/REP
-							<input
-								type="range"
-								min="0"
-								max="20"
-								step="1"
-								value="6"
-								data-example-input="carolEth"
-							/>
-							<span
-								class="example-value"
-								data-example-value="carolEth"
-								>6 ETH</span
-							>
+							<input type="range" min="0" max="20" step="1" value="6" data-example-input="carolEth" />
+							<span class="example-value" data-example-value="carolEth">6 ETH</span>
 						</label>
 					</div>
-					<figure
-						class="diagram diagram-wide"
-						id="fig-auction-clearing-ladder"
-					>
-						<div
-							class="plot-chart"
-							data-plot-chart="fig-auction-clearing-ladder"
-							data-plot-width="980"
-							data-plot-height="360"
-							role="img"
-							aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"
-						>
+					<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
+						<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing">
 							<span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span>
 						</div>
 						<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing or qualification price, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates from the auction controls directly above it.</p>
@@ -669,10 +570,7 @@
 				update();
 			}
 		</script>
-		<script
-			type="module"
-			src="../assets/js/interactiveTools.js"
-		></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

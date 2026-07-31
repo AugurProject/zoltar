@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Liquidation Design</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -41,36 +35,14 @@
 				</p>
 				<p id="client-liquidation-preview">The official client may separately show a Uniswap-derived market preview when staging a liquidation. Quote availability and representativeness are client limitations, not protocol security assumptions or the contract's liquidatable condition. Contract execution uses the settled coordinator price under A19.</p>
 				<p>A vault is liquidatable when its unlocked REP backing is below the required threshold. Allowance admission keeps the affected vault on the non-liquidatable side of this boundary and independently applies the same multiplier-adjusted inequality to aggregate pool backing. Only vaults are liquidation targets:</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-liquidation-punitive-flow"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-liquidation-punitive-flow"
-						data-plot-width="900"
-						data-plot-height="200"
-						role="img"
-						aria-label="Unsafe vault debt and unlocked REP move from the target vault to a non-liquidatable liquidator vault."
-					>
+				<figure class="diagram diagram-wide" id="fig-liquidation-punitive-flow">
+					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="200" role="img" aria-label="Unsafe vault debt and unlocked REP move from the target vault to a non-liquidatable liquidator vault.">
 						<span class="plot-chart-fallback">Punitive Flow. The liquidator takes debt and receives unlocked REP from the target vault. The target is punished, the liquidator is rewarded, and the target becomes healthier only because required REP backing falls faster than REP is seized. The ordinary path uses bonus-priced REP; a full staged-allowance close can instead sweep all current unlocked REP when the ordinary conversion would consume all ownership or leave forbidden REP dust.</span>
 					</div>
-					<p
-						class="diagram-caption"
-						data-liquidation-summary="normal-plus-full-close"
-					>
-						<span class="figure-label">Punitive Flow</span>The liquidator takes debt and receives unlocked REP from the target vault. The target is punished, the liquidator is rewarded, and the target becomes healthier only because required REP backing falls faster than REP is seized. The ordinary path uses bonus-priced REP; a full staged-allowance close can instead sweep all current unlocked REP when the ordinary conversion would consume all ownership or leave forbidden REP dust.
-					</p>
+					<p class="diagram-caption" data-liquidation-summary="normal-plus-full-close"><span class="figure-label">Punitive Flow</span>The liquidator takes debt and receives unlocked REP from the target vault. The target is punished, the liquidator is rewarded, and the target becomes healthier only because required REP backing falls faster than REP is seized. The ordinary path uses bonus-priced REP; a full staged-allowance close can instead sweep all current unlocked REP when the ordinary conversion would consume all ownership or leave forbidden REP dust.</p>
 				</figure>
-				<div
-					class="equation"
-					id="eq-liquidatable-condition"
-				>
-					<math
-						display="block"
-						aria-label="target vault is liquidatable when target allowance times the Statoblast security multiplier in basis points times current REP per ETH price is greater than target unlocked REP times PRICE_PRECISION times BPS_DENOMINATOR"
-						data-source="targetAllowanceEth * statoblastSecurityMultiplierBps * currentRepPerEthPrice > targetUnlockedRep * PRICE_PRECISION * BPS_DENOMINATOR"
-					>
+				<div class="equation" id="eq-liquidatable-condition">
+					<math display="block" aria-label="target vault is liquidatable when target allowance times the Statoblast security multiplier in basis points times current REP per ETH price is greater than target unlocked REP times PRICE_PRECISION times BPS_DENOMINATOR" data-source="targetAllowanceEth * statoblastSecurityMultiplierBps * currentRepPerEthPrice > targetUnlockedRep * PRICE_PRECISION * BPS_DENOMINATOR">
 						<mrow>
 							<mi>targetAllowanceEth</mi>
 							<mo>&#x22C5;</mo>
@@ -99,18 +71,8 @@
 					<a href="./open-oracle-integration.html">OpenOracle integration</a>
 					for the full settlement and distance-check flow.
 				</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-liquidation-execution-decision"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-liquidation-execution-decision"
-						data-plot-width="980"
-						data-plot-height="840"
-						role="img"
-						aria-label="A staged liquidation selects an ordinary or full-close REP candidate before pool validation either fails or completes the transfer"
-					>
+				<figure class="diagram diagram-wide" id="fig-liquidation-execution-decision">
+					<div class="plot-chart" data-plot-chart="fig-liquidation-execution-decision" data-plot-width="980" data-plot-height="840" role="img" aria-label="A staged liquidation selects an ordinary or full-close REP candidate before pool validation either fails or completes the transfer">
 						<span class="plot-chart-fallback">A stale price leaves the operation queued. Coordinator expiry, snapshot, or distance failures consume the staged operation without a pool call. After those gates pass, the pool computes capped debt and rounded REP, applies the full-close override when required, and then validates and applies that candidate. A pool-level failure is consumed and emitted as failed; success completes the selected REP transfer.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Liquidation Decision Flow</span>Price freshness is the only illustrated failure that leaves the operation queued. Once a valid price reaches execution, later coordinator or pool failures consume the staged operation. The pool selects the ordinary or full-close REP candidate before checking target gain, liquidator health, and final-balance rules.</p>
@@ -175,34 +137,19 @@
 						</tr>
 					</tbody>
 				</table>
-				<div
-					class="equation"
-					id="eq-liquidation-rep-penalty"
-				>
-					<math
-						display="block"
-						aria-label="liquidation first computes the fixed-bonus REP seizure and its ownership conversion, then applies an explicit full-close branch that sweeps all current unlocked target REP when the computed ownership move would consume all current ownership or leave less than the minimum REP deposit"
-						data-source="computedRepToMove = ⌈debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉; computedOwnershipToMove = repToPoolOwnership(computedRepToMove); repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove"
-					>
+				<div class="equation" id="eq-liquidation-rep-penalty">
+					<math display="block" aria-label="liquidation first computes the fixed-bonus REP seizure and its ownership conversion, then applies an explicit full-close branch that sweeps all current unlocked target REP when the computed ownership move would consume all current ownership or leave less than the minimum REP deposit" data-source="computedRepToMove = ⌈debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉; computedOwnershipToMove = repToPoolOwnership(computedRepToMove); repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove">
 						<mtable>
 							<mtr>
 								<mtd><mi>computedRepToMove</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mo
-										form="prefix"
-										stretchy="true"
-										>⌈</mo
-									>
+									<mo form="prefix" stretchy="true">⌈</mo>
 									<mfrac>
 										<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
 										<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 									</mfrac>
-									<mo
-										form="postfix"
-										stretchy="true"
-										>⌉</mo
-									>
+									<mo form="postfix" stretchy="true">⌉</mo>
 								</mtd>
 							</mtr>
 							<mtr>
@@ -237,22 +184,12 @@
 					The contract first computes an initial REP-bound cap from the target's queued snapshot REP, then applies the debt-floor clamp, and only after that can a full-close liquidation sweep current ownership. Partial liquidations preserve the target's final
 					<code>MIN_REP_DEPOSIT</code>, but a full-close liquidation may consume all current unlocked REP when it also clears all staged target debt.
 				</p>
-				<p
-					class="detail"
-					data-liquidation-note="variable-legend"
-				>
+				<p class="detail" data-liquidation-note="variable-legend">
 					Variable legend:
 					<code>snapshotTargetUnlockedRep</code> and <code>snapshotTargetAllowanceEth</code> are the queued liquidation inputs; <code>currentTargetOwnership</code> and <code>currentTargetUnlockedRep</code> are read at execution time for the final ownership sweep.
 				</p>
-				<div
-					class="equation"
-					id="eq-liquidation-dust-rounding"
-				>
-					<math
-						display="block"
-						aria-label="rep-bounded debt cap equals the rounded-down ratio of snapshot target unlocked REP minus minimum REP deposit times price precision times basis-point denominator to current REP per ETH price times basis-point denominator plus liquidation bonus when the snapshot REP is above the minimum and zero otherwise; target cap before debt floor equals the smaller of the queued snapshot allowance and that REP bound; when the capped remainder is nonzero and at or below the debt floor, leave exactly the minimum debt floor if the queued snapshot allowance is above it, otherwise execute the whole minimum-sized allowance; debt to move equals the minimum of requested debt and the executable maximum"
-						data-source="repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? ⌊(snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))⌋ : 0; targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)"
-					>
+				<div class="equation" id="eq-liquidation-dust-rounding">
+					<math display="block" aria-label="rep-bounded debt cap equals the rounded-down ratio of snapshot target unlocked REP minus minimum REP deposit times price precision times basis-point denominator to current REP per ETH price times basis-point denominator plus liquidation bonus when the snapshot REP is above the minimum and zero otherwise; target cap before debt floor equals the smaller of the queued snapshot allowance and that REP bound; when the capped remainder is nonzero and at or below the debt floor, leave exactly the minimum debt floor if the queued snapshot allowance is above it, otherwise execute the whole minimum-sized allowance; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? ⌊(snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))⌋ : 0; targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
 						<mtable>
 							<mtr>
 								<mtd><mi>repBoundDebt</mi></mtd>
@@ -261,20 +198,12 @@
 									<mi>if</mi><mo>&#xA0;</mo><mi>snapshotTargetUnlockedRep</mi><mo>&gt;</mo><mi>MIN_REP_DEPOSIT</mi>
 									<mo>,</mo>
 									<mo>&#xA0;</mo>
-									<mo
-										form="prefix"
-										stretchy="true"
-										>⌊</mo
-									>
+									<mo form="prefix" stretchy="true">⌊</mo>
 									<mfrac>
 										<mrow><mo>(</mo><mi>snapshotTargetUnlockedRep</mi><mo>-</mo><mi>MIN_REP_DEPOSIT</mi><mo>)</mo><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 										<mrow><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
 									</mfrac>
-									<mo
-										form="postfix"
-										stretchy="true"
-										>⌋</mo
-									>
+									<mo form="postfix" stretchy="true">⌋</mo>
 									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mn>0</mn>
 								</mtd>
 							</mtr>
@@ -303,15 +232,8 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Executable Bound</span>The requested debt chunk is capped by the target's queued snapshot REP and then checked against the minimum debt floors. That final debt-floor clamp leaves exactly <code>MIN_SECURITY_BOND_DEBT</code> when the target allowance starts above the floor, but executes the whole allowance when the target itself is already at the minimum-sized <code>1 ETH</code> debt floor. The later full-close sweep can then consume current target ownership.</p>
 				</div>
-				<div
-					class="equation"
-					id="eq-liquidation-health-guard"
-				>
-					<math
-						display="block"
-						aria-label="debt moved times the Statoblast security multiplier in basis points times current REP per ETH price must be strictly greater than REP seized times price precision times BPS_DENOMINATOR"
-						data-source="debtToMove * statoblastSecurityMultiplierBps * currentRepPerEthPrice > repToMove * PRICE_PRECISION * BPS_DENOMINATOR"
-					>
+				<div class="equation" id="eq-liquidation-health-guard">
+					<math display="block" aria-label="debt moved times the Statoblast security multiplier in basis points times current REP per ETH price must be strictly greater than REP seized times price precision times BPS_DENOMINATOR" data-source="debtToMove * statoblastSecurityMultiplierBps * currentRepPerEthPrice > repToMove * PRICE_PRECISION * BPS_DENOMINATOR">
 						<mrow>
 							<mi>debtToMove</mi>
 							<mo>&#x22C5;</mo>
@@ -409,76 +331,28 @@
 			<section id="sliders">
 				<h2>Slider Examples</h2>
 				<p>These calculators use whole ETH and REP units for readability. The equations above describe the scaled integer math used onchain.</p>
-				<details
-					class="interactive-example"
-					id="liquidation-health-example"
-					open
-				>
+				<details class="interactive-example" id="liquidation-health-example" open>
 					<summary>Punitive liquidation calculator</summary>
 					<div class="example-grid">
 						<label>
 							Unlocked REP
-							<input
-								data-liquidation-input="rep"
-								type="range"
-								min="0"
-								max="2000"
-								step="10"
-								value="1000"
-							/>
-							<span
-								class="example-value"
-								data-liquidation-value="rep"
-								>1000 REP</span
-							>
+							<input data-liquidation-input="rep" type="range" min="0" max="2000" step="10" value="1000" />
+							<span class="example-value" data-liquidation-value="rep">1000 REP</span>
 						</label>
 						<label>
 							Allowance
-							<input
-								data-liquidation-input="debt"
-								type="range"
-								min="1"
-								max="200"
-								step="1"
-								value="75"
-							/>
-							<span
-								class="example-value"
-								data-liquidation-value="debt"
-								>75 ETH</span
-							>
+							<input data-liquidation-input="debt" type="range" min="1" max="200" step="1" value="75" />
+							<span class="example-value" data-liquidation-value="debt">75 ETH</span>
 						</label>
 						<label>
 							Statoblast security multiplier
-							<input
-								data-liquidation-input="multiplier"
-								type="range"
-								min="1.0001"
-								max="4"
-								step="0.0001"
-								value="2"
-							/>
-							<span
-								class="example-value"
-								data-liquidation-value="multiplier"
-								>2x</span
-							>
+							<input data-liquidation-input="multiplier" type="range" min="1.0001" max="4" step="0.0001" value="2" />
+							<span class="example-value" data-liquidation-value="multiplier">2x</span>
 						</label>
 						<label>
 							Price
-							<input
-								data-liquidation-input="price"
-								type="range"
-								min="1"
-								max="20"
-								step="1"
-								value="10"
-							/>
-							<span
-								class="example-value"
-								data-liquidation-value="price"
-								>10 REP / ETH</span
-							>
+							<input data-liquidation-input="price" type="range" min="1" max="20" step="1" value="10" />
+							<span class="example-value" data-liquidation-value="price">10 REP / ETH</span>
 						</label>
 					</div>
 					<div class="example-output">
@@ -507,18 +381,8 @@
 							<span data-liquidation-output="repMoved">787.50 REP</span>
 						</p>
 					</div>
-					<figure
-						class="diagram diagram-wide"
-						id="fig-liquidation-health-curve"
-					>
-						<div
-							class="plot-chart"
-							data-plot-chart="fig-liquidation-health-curve"
-							data-plot-width="900"
-							data-plot-height="430"
-							role="img"
-							aria-label="Vault backing requirement and liquidation threshold across REP per ETH prices"
-						>
+					<figure class="diagram diagram-wide" id="fig-liquidation-health-curve">
+						<div class="plot-chart" data-plot-chart="fig-liquidation-health-curve" data-plot-width="900" data-plot-height="430" role="img" aria-label="Vault backing requirement and liquidation threshold across REP per ETH prices">
 							<span class="plot-chart-fallback">Liquidation threshold curve. Required REP rises with price while the selected vault's unlocked REP remains fixed. The point where those lines cross is the liquidation boundary.</span>
 						</div>
 						<p class="diagram-caption"><span class="figure-label">Liquidation Threshold</span>The red curve is required REP backing across the full price range; the green rule is the selected vault's unlocked REP. The highlighted point follows the price slider and changes state when it crosses the boundary.</p>
@@ -526,43 +390,18 @@
 					<p class="detail">This calculator only models the target-side cap. A real execution can still revert if the caller vault would fail its own debt-floor or post-liquidation non-liquidatable checks. It also clamps away non-deployable low multipliers, but it remains a whole-unit target-side illustration rather than a wei-level requested-chunk simulator for the strict health-improvement guard.</p>
 				</details>
 
-				<details
-					class="interactive-example"
-					id="liquidation-path-example"
-				>
+				<details class="interactive-example" id="liquidation-path-example">
 					<summary>Path dependence check</summary>
 					<div class="example-grid">
 						<label>
 							Requested debt, first liquidation
-							<input
-								data-path-input="first"
-								type="range"
-								min="1"
-								max="100"
-								step="1"
-								value="10"
-							/>
-							<span
-								class="example-value"
-								data-path-value="first"
-								>10 ETH</span
-							>
+							<input data-path-input="first" type="range" min="1" max="100" step="1" value="10" />
+							<span class="example-value" data-path-value="first">10 ETH</span>
 						</label>
 						<label>
 							Requested debt, second liquidation
-							<input
-								data-path-input="second"
-								type="range"
-								min="1"
-								max="100"
-								step="1"
-								value="15"
-							/>
-							<span
-								class="example-value"
-								data-path-value="second"
-								>15 ETH</span
-							>
+							<input data-path-input="second" type="range" min="1" max="100" step="1" value="15" />
+							<span class="example-value" data-path-value="second">15 ETH</span>
 						</label>
 					</div>
 					<p>
@@ -759,10 +598,7 @@
 			updateLiquidationExample();
 			updatePathExample();
 		</script>
-		<script
-			type="module"
-			src="../assets/js/interactiveTools.js"
-		></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

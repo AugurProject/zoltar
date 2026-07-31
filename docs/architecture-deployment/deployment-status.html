@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Deployment Status Oracle</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -33,31 +27,14 @@
 					<code>address[] deploymentAddresses</code>. <code>getDeploymentMask()</code> loops over that array and checks <code>deploymentAddresses[index].code.length</code>. When code exists, the oracle sets bit <code>index</code> in the returned <code>uint256</code>.
 				</p>
 				<p>This is a code-presence bitmap. A set bit means code exists at the configured address. A clear bit means the address currently has no code. The oracle does not verify constructor args, ownership wiring, or post-deployment setup.</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-deployment-mask"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-deployment-mask"
-						data-plot-width="920"
-						data-plot-height="220"
-						role="img"
-						aria-label="Deployment mask maps ordered deployment steps to bits"
-					>
+				<figure class="diagram diagram-wide" id="fig-deployment-mask">
+					<div class="plot-chart" data-plot-chart="fig-deployment-mask" data-plot-width="920" data-plot-height="220" role="img" aria-label="Deployment mask maps ordered deployment steps to bits">
 						<span class="plot-chart-fallback">A row of deployment steps on the left maps by index into bit positions in a uint256 mask on the right. Each step sets its bit only when code exists at that configured address.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Deployment Status Mask</span>Each configured deployment step owns one bit position in the returned word. The oracle sets that bit only if the step's address currently contains code.</p>
 				</figure>
-				<div
-					class="equation"
-					id="eq-deployment-mask"
-				>
-					<math
-						display="block"
-						aria-label="deployed mask equals the sum over each configured address of code present at i times two to the i"
-						data-source="deployedMask = sum(codePresent(i) * 2^i)"
-					>
+				<div class="equation" id="eq-deployment-mask">
+					<math display="block" aria-label="deployed mask equals the sum over each configured address of code present at i times two to the i" data-source="deployedMask = sum(codePresent(i) * 2^i)">
 						<mrow>
 							<mi>deployedMask</mi>
 							<mo>=</mo>
@@ -108,61 +85,28 @@
 							<th>Status in entered mask</th>
 						</tr>
 					</thead>
-					<tbody
-						id="deployment-status-bit-mapping"
-						aria-live="polite"
-						aria-atomic="true"
-						aria-busy="true"
-					>
+					<tbody id="deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
 						<tr>
 							<td colspan="4">Loading the canonical manifest…</td>
 						</tr>
 					</tbody>
 				</table>
-				<details
-					class="interactive-example"
-					id="deployment-mask-decoder"
-					data-tool-unavailable="true"
-					open
-				>
+				<details class="interactive-example" id="deployment-mask-decoder" data-tool-unavailable="true" open>
 					<summary>Decode a mainnet deployment mask</summary>
 					<p>Paste the decimal or hexadecimal <code>uint256</code> returned by the mainnet <code>getDeploymentMask()</code>. The status column above updates against the mainnet constructor order. Sepolia has a different order; use the Sepolia table below instead of this decoder when interpreting its mask.</p>
 					<div class="example-grid">
 						<label>
 							Deployment mask
-							<input
-								type="text"
-								inputmode="text"
-								value="0x0"
-								placeholder="0x0 or 0"
-								spellcheck="false"
-								data-tool-input="deploymentMask"
-								disabled
-							/>
+							<input type="text" inputmode="text" value="0x0" placeholder="0x0 or 0" spellcheck="false" data-tool-input="deploymentMask" disabled />
 						</label>
 					</div>
-					<div
-						class="example-output"
-						data-tool-output-region
-					>
+					<div class="example-output" data-tool-output-region>
 						<p>
 							<strong>Decoded status:</strong>
 							<output data-deployment-mask-summary>Waiting for the deployment mapping…</output>
 						</p>
-						<p
-							class="detail"
-							data-deployment-mask-guidance
-						>
-							Bits above the tracked manifest range are reported separately.
-						</p>
-						<button
-							type="button"
-							class="interactive-tool-retry"
-							data-deployment-mask-retry
-							hidden
-						>
-							Retry mapping
-						</button>
+						<p class="detail" data-deployment-mask-guidance>Bits above the tracked manifest range are reported separately.</p>
+						<button type="button" class="interactive-tool-retry" data-deployment-mask-retry hidden>Retry mapping</button>
 					</div>
 				</details>
 				<table aria-label="Current Sepolia deployment-status bit mapping">
@@ -173,12 +117,7 @@
 							<th>Label</th>
 						</tr>
 					</thead>
-					<tbody
-						id="sepolia-deployment-status-bit-mapping"
-						aria-live="polite"
-						aria-atomic="true"
-						aria-busy="true"
-					>
+					<tbody id="sepolia-deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
 						<tr>
 							<td colspan="3">Loading the canonical manifest…</td>
 						</tr>
@@ -430,10 +369,7 @@
 			retryButton.addEventListener("click", () => void loadMapping());
 			await Promise.all([loadMapping(), loadSepoliaMapping()]);
 		</script>
-		<script
-			type="module"
-			src="../assets/js/interactiveTools.js"
-		></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 	</body>
 </html>

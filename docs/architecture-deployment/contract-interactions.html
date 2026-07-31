@@ -2,15 +2,9 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1"
-		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Contract Interaction Map</title>
-		<link
-			rel="stylesheet"
-			href="../assets/css/shared-docs.css"
-		/>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -32,18 +26,8 @@
 			<section id="overview">
 				<h2>Primary Interaction Flow</h2>
 				<p>Arrows point from the contract initiating an interaction to the contract receiving it. The map repeats a contract when it participates in more than one phase, separating construction-time wiring, recurring runtime calls, and fork repair into three readable panels. Users and keepers enter through several of these contracts, but are omitted so the plot can focus on contract-to-contract boundaries.</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-contract-interaction-map"
-				>
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-contract-interaction-map"
-						data-plot-width="1120"
-						data-plot-height="880"
-						role="img"
-						aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"
-					>
+				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
+					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="880" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases">
 						<span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span>
 					</div>
 					<p class="diagram-caption"><span class="figure-label">Contract Interaction Map</span>Each panel is a distinct protocol phase; repeated contracts preserve local reading order and prevent unrelated lifecycle edges from crossing. Blue nodes are registries or oracle infrastructure, green nodes hold market state and claims, red marks local resolution, and gold marks deployment or fork coordination. Short edge labels state the action; the table below supplies its exact contract-level meaning.</p>
@@ -52,12 +36,7 @@
 
 			<section id="edges">
 				<h2>What Each Arrow Means</h2>
-				<div
-					class="table-scroll"
-					tabindex="0"
-					role="region"
-					aria-label="Contract interaction details"
-				>
+				<div class="table-scroll" tabindex="0" role="region" aria-label="Contract interaction details">
 					<table>
 						<thead>
 							<tr>
@@ -68,210 +47,115 @@
 							</tr>
 						</thead>
 						<tbody data-contract-interaction-table>
-							<tr
-								data-edge-id="factory-question-validation"
-								data-source="Pool Factory"
-								data-receiver="Question Data"
-								data-phase="Deployment"
-							>
+							<tr data-edge-id="factory-question-validation" data-source="Pool Factory" data-receiver="Question Data" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>ZoltarQuestionData</code></td>
 								<td>Deployment</td>
 								<td>Confirms that the question exists and is the required Yes/No categorical shape before reserving the canonical pool identity.</td>
 							</tr>
-							<tr
-								data-edge-id="factory-universe-lookup"
-								data-source="Pool Factory"
-								data-receiver="Zoltar"
-								data-phase="Deployment"
-							>
+							<tr data-edge-id="factory-universe-lookup" data-source="Pool Factory" data-receiver="Zoltar" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>Zoltar</code></td>
 								<td>Deployment</td>
 								<td>Checks the universe and resolves its REP token for the new pool and price coordinator.</td>
 							</tr>
-							<tr
-								data-edge-id="factory-pool-deployment"
-								data-source="Pool Factory"
-								data-receiver="Security Pool"
-								data-phase="Deployment"
-							>
+							<tr data-edge-id="factory-pool-deployment" data-source="Pool Factory" data-receiver="Security Pool" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>SecurityPool</code></td>
 								<td>Deployment</td>
 								<td>Deploys and records the canonical origin pool. Forker-requested child deployment copies the lineage and fork state.</td>
 							</tr>
-							<tr
-								data-edge-id="factory-share-token-deployment"
-								data-source="Pool Factory"
-								data-receiver="Share Token"
-								data-phase="Deployment"
-							>
+							<tr data-edge-id="factory-share-token-deployment" data-source="Pool Factory" data-receiver="Share Token" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>ShareToken</code></td>
 								<td>Deployment</td>
 								<td>Deploys the origin lineage token and authorizes the canonical pool; child pools reuse that same token.</td>
 							</tr>
-							<tr
-								data-edge-id="factory-price-coordinator-deployment"
-								data-source="Pool Factory"
-								data-receiver="Price Coordinator"
-								data-phase="Deployment"
-							>
+							<tr data-edge-id="factory-price-coordinator-deployment" data-source="Pool Factory" data-receiver="Price Coordinator" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td>Deployment</td>
 								<td>Deploys the REP/WETH price coordinator and wires it to the newly created pool.</td>
 							</tr>
-							<tr
-								data-edge-id="zoltar-reputation-token-lifecycle"
-								data-source="Zoltar"
-								data-receiver="Reputation Token"
-								data-phase="Universe lifecycle"
-							>
+							<tr data-edge-id="zoltar-reputation-token-lifecycle" data-source="Zoltar" data-receiver="Reputation Token" data-phase="Universe lifecycle">
 								<td><code>Zoltar</code></td>
 								<td><code>ReputationToken</code></td>
 								<td>Universe lifecycle</td>
 								<td>Deploys child-universe REP, sets its theoretical supply, and exclusively mints or burns that child REP during migration and voluntary burns.</td>
 							</tr>
-							<tr
-								data-edge-id="pool-share-token-claims"
-								data-source="Security Pool"
-								data-receiver="Share Token"
-								data-phase="Market runtime"
-							>
+							<tr data-edge-id="pool-share-token-claims" data-source="Security Pool" data-receiver="Share Token" data-phase="Market runtime">
 								<td><code>SecurityPool</code></td>
 								<td><code>ShareToken</code></td>
 								<td>Market runtime</td>
 								<td>Mints complete sets, burns complete sets or winning shares, and authorizes canonical child pools to continue the same lineage claims.</td>
 							</tr>
-							<tr
-								data-edge-id="pool-escalation-game-resolution"
-								data-source="Security Pool"
-								data-receiver="Escalation Game"
-								data-phase="Resolution"
-							>
+							<tr data-edge-id="pool-escalation-game-resolution" data-source="Security Pool" data-receiver="Escalation Game" data-phase="Resolution">
 								<td><code>SecurityPool</code></td>
 								<td><code>EscalationGame</code></td>
 								<td>Resolution</td>
 								<td>Deploys the local game on first use and transfers vault REP into outcome-specific escrow. Settlement returns winning value or carries proofs across a fork.</td>
 							</tr>
-							<tr
-								data-edge-id="pool-price-read"
-								data-source="Security Pool"
-								data-receiver="Price Coordinator"
-								data-phase="Risk operations"
-							>
+							<tr data-edge-id="pool-price-read" data-source="Security Pool" data-receiver="Price Coordinator" data-phase="Risk operations">
 								<td><code>SecurityPool</code></td>
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td>Risk operations</td>
 								<td>Reads the coordinator's last valid REP/ETH price. Vault users and liquidators stage withdrawals, allowance changes, and liquidations directly on the coordinator before restricted pool execution.</td>
 							</tr>
-							<tr
-								data-edge-id="coordinator-oracle-report"
-								data-source="Price Coordinator"
-								data-receiver="OpenOracle"
-								data-phase="Price discovery"
-							>
+							<tr data-edge-id="coordinator-oracle-report" data-source="Price Coordinator" data-receiver="OpenOracle" data-phase="Price discovery">
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td><code>OpenOracle</code></td>
 								<td>Price discovery</td>
 								<td>Funds a REP/WETH report and later withdraws the settled reporter balances that it validates and returns to the report sponsor.</td>
 							</tr>
-							<tr
-								data-edge-id="oracle-coordinator-callback"
-								data-source="OpenOracle"
-								data-receiver="Price Coordinator"
-								data-phase="Price settlement"
-							>
+							<tr data-edge-id="oracle-coordinator-callback" data-source="OpenOracle" data-receiver="Price Coordinator" data-phase="Price settlement">
 								<td><code>OpenOracle</code></td>
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td>Price settlement</td>
 								<td>Calls <code>openOracleCallback</code> after settlement so the coordinator can validate the final report, update its cached price, and attempt bounded staged-operation execution.</td>
 							</tr>
-							<tr
-								data-edge-id="coordinator-pool-execute"
-								data-source="Price Coordinator"
-								data-receiver="Security Pool"
-								data-phase="Risk execution"
-							>
+							<tr data-edge-id="coordinator-pool-execute" data-source="Price Coordinator" data-receiver="Security Pool" data-phase="Risk execution">
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td><code>SecurityPool</code></td>
 								<td>Risk execution</td>
 								<td>After price and snapshot checks, calls the pool-only execution entrypoints for liquidation, REP withdrawal, or security-bond allowance changes.</td>
 							</tr>
-							<tr
-								data-edge-id="share-token-forker-migration"
-								data-source="Share Token"
-								data-receiver="Pool Forker"
-								data-phase="Share migration"
-							>
+							<tr data-edge-id="share-token-forker-migration" data-source="Share Token" data-receiver="Pool Forker" data-phase="Share migration">
 								<td><code>ShareToken</code></td>
 								<td><code>SecurityPoolForker</code></td>
 								<td>Share migration</td>
 								<td>Initiates a source-pool fork when needed and asks the forker to create a missing canonical child before migrating a holder's shares.</td>
 							</tr>
-							<tr
-								data-edge-id="forker-escalation-snapshot"
-								data-source="Pool Forker"
-								data-receiver="Escalation Game"
-								data-phase="Fork snapshot"
-							>
+							<tr data-edge-id="forker-escalation-snapshot" data-source="Pool Forker" data-receiver="Escalation Game" data-phase="Fork snapshot">
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>EscalationGame</code></td>
 								<td>Fork snapshot</td>
 								<td>Reads carry peaks, roots, outcome balances, timing, and fork parameters so unresolved escalation state can continue in child pools.</td>
 							</tr>
-							<tr
-								data-edge-id="forker-migration-proxy"
-								data-source="Pool Forker"
-								data-receiver="Migration Proxy"
-								data-phase="Fork migration"
-							>
+							<tr data-edge-id="forker-migration-proxy" data-source="Pool Forker" data-receiver="Migration Proxy" data-phase="Fork migration">
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td>Fork migration</td>
 								<td>Deploys and owns the pool-specific adapter, transfers parent REP to it, and instructs it to lock, fork, split, and sweep child REP.</td>
 							</tr>
-							<tr
-								data-edge-id="migration-proxy-zoltar"
-								data-source="Migration Proxy"
-								data-receiver="Zoltar"
-								data-phase="Fork migration"
-							>
+							<tr data-edge-id="migration-proxy-zoltar" data-source="Migration Proxy" data-receiver="Zoltar" data-phase="Fork migration">
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td><code>Zoltar</code></td>
 								<td>Fork migration</td>
 								<td>Acts as the literal Zoltar caller whose stable address owns the migration ledger balance while parent REP is locked and split into child-universe REP.</td>
 							</tr>
-							<tr
-								data-edge-id="forker-child-deployment"
-								data-source="Pool Forker"
-								data-receiver="Pool Factory"
-								data-phase="Fork migration"
-							>
+							<tr data-edge-id="forker-child-deployment" data-source="Pool Forker" data-receiver="Pool Factory" data-phase="Fork migration">
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>SecurityPoolFactory</code></td>
 								<td>Fork migration</td>
 								<td>Requests canonical child-pool deployment for selected child universes.</td>
 							</tr>
-							<tr
-								data-edge-id="forker-pool-migration"
-								data-source="Pool Forker"
-								data-receiver="Security Pool"
-								data-phase="Fork migration"
-							>
+							<tr data-edge-id="forker-pool-migration" data-source="Pool Forker" data-receiver="Security Pool" data-phase="Fork migration">
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>SecurityPool</code></td>
 								<td>Fork migration</td>
 								<td>Copies or recomputes financial state, migrates vaults and collateral, and activates the selected child lifecycle.</td>
 							</tr>
-							<tr
-								data-edge-id="forker-truth-auction"
-								data-source="Pool Forker"
-								data-receiver="Truth Auction"
-								data-phase="Backing repair"
-							>
+							<tr data-edge-id="forker-truth-auction" data-source="Pool Forker" data-receiver="Truth Auction" data-phase="Backing repair">
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>UniformPriceDualCapBatchAuction</code></td>
 								<td>Backing repair</td>
