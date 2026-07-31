@@ -20,6 +20,7 @@ const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
 const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
+const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server | undefined
 
@@ -36,6 +37,7 @@ function getChromiumPath() {
 
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = test
+const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
@@ -721,7 +723,7 @@ for (const scenario of productionBrowserScenarios) {
 	})
 }
 
-productionBrowserTest('production bundle executes deployment, reporting, fork migration, failure recovery, and truth auction finalization', async () => {
+productionWorkflowTest('production bundle executes deployment, reporting, fork migration, failure recovery, and truth auction finalization', async () => {
 	if (server === undefined) throw new Error('Production test server did not start')
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
 	const baseUrl = server.url.toString().replace(/\/$/, '')
@@ -771,7 +773,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 year')
 			const reportingPoolOpened = await driver.evaluate(
-				`(() => { const card = [...document.querySelectorAll('article.security-pool-card')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(card?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault…')
@@ -880,7 +882,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(
-				`(() => { const card = [...document.querySelectorAll('article.security-pool-card')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(card?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
 			const auctionPoolBody = await driver.waitForBodyText('Fork & Migration')

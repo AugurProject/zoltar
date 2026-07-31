@@ -189,10 +189,17 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Next step' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to browse' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create another' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Standalone Oracle Report' })).toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Oracle Action' })).toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create another' }))
+		})
+		expect(documentQueries.getByRole('heading', { name: 'Standalone Oracle Report' })).not.toBeNull()
 	})
 
 	test('keeps standalone create disabled off mainnet and explains recovery', async () => {
@@ -796,6 +803,10 @@ describe('OpenOracleSection route create view', () => {
 			)
 		})
 
+		expect(document.querySelector('input[aria-label="Base Token Address"]')).toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create another' }))
+		})
 		const resetBaseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')
 		const resetQuoteTokenAddressInput = documentQueries.getByLabelText('Quote Token Address')
 		expect(resetBaseTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)

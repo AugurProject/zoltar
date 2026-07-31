@@ -128,8 +128,8 @@ function assertAggregateEscalationContinuationDocs(): void {
 	assert.match(normalizedOperatorReference, /resumeFromFork` remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims/)
 	assert.match(normalizedInvariants, /continuation cannot resume until its game balance covers/)
 	assert.match(normalizedInvariants, /id="fork-08"/)
-	assert.match(normalizedInvariants, /sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
-	assert.match(normalizedContractReference, /resumeFromFork\(\)[\s\S]*sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
+	assert.match(normalizedInvariants, /sourcePrincipalAtFork - ⌊sourcePrincipalAtFork \/ 5⌋/)
+	assert.match(normalizedContractReference, /resumeFromFork\(\)[\s\S]*sourcePrincipalAtFork - ⌊sourcePrincipalAtFork \/ 5⌋/)
 	assert.match(normalizedStatoblast, /id="source-principal-at-fork"[\s\S]*aggregate raw unresolved principal[\s\S]*before effective direct-claim deductions/)
 	assert.match(normalizedInvariants, /href="\.\.\/whitepapers\/statoblast-whitepaper\.html#source-principal-at-fork"/)
 	assert.match(normalizedContractReference, /sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions/)
@@ -483,7 +483,7 @@ function assertLiquidationFullCloseDocs(): void {
 	const normalizedLiquidation = liquidationHtml.replaceAll(/\s+/g, ' ')
 
 	for (const documentedClaim of [
-		'repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? floor((snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0',
+		'repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? ⌊(snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))⌋ : 0',
 		'targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt)',
 		'targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor',
 		'computedOwnershipToMove = repToPoolOwnership(computedRepToMove)',

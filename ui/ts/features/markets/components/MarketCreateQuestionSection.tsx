@@ -10,6 +10,8 @@ import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { MetricField } from '../../../components/MetricField.js'
@@ -23,6 +25,7 @@ import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../../../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkMessage } from '../../../lib/network.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -142,6 +145,7 @@ export function MarketCreateQuestionSection({
 	zoltarQuestions,
 }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
+	const [reviewingQuestion, setReviewingQuestion] = useState(false)
 	const currentTimestamp = useChainTimestamp()
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
@@ -173,6 +177,9 @@ export function MarketCreateQuestionSection({
 		if (clampedTick === scalarCreatePreviewTick) return
 		setScalarCreatePreviewTick(clampedTick)
 	}, [scalarCreatePreviewDetails?.numTicks, scalarCreatePreviewTick])
+	useEffect(() => {
+		setReviewingQuestion(false)
+	}, [marketForm])
 	const updateCategoricalOutcome = (outcomeIndex: number, value: string) => {
 		onMarketFormChange({
 			categoricalOutcomes: marketForm.categoricalOutcomes.map((outcome, index) => (index === outcomeIndex ? value : outcome)),
@@ -248,217 +255,252 @@ export function MarketCreateQuestionSection({
 						onSubmit={event => {
 							event.preventDefault()
 							if (!canCreateQuestion) return
+							if (!reviewingQuestion) {
+								setReviewingQuestion(true)
+								return
+							}
 							onCreateMarket()
 						}}
 					>
-						<p className='field-help'>{marketCopy.requiredFieldsNote}</p>
-						<div className='field'>
-							<span>{marketCopy.questionType}</span>
-							<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
-							<p className='field-help'>{marketTypeGuidance}</p>
-						</div>
-
-						<div className='field'>
-							<label>
-								<span>{renderRequiredFieldLabel(marketCopy.title)}</span>
-								<FormInput
-									aria-label={marketCopy.title}
-									aria-describedby={getFieldErrorDescribedBy('title', getVisibleFieldError('title'))}
-									invalid={getVisibleFieldError('title') !== undefined}
-									value={marketForm.title}
-									onBlur={() => markFieldTouched('title')}
-									onInput={event => onMarketFormChange({ title: event.currentTarget.value })}
-									placeholder={marketCopy.questionTitlePlaceholder}
-									required
-								/>
-							</label>
-							{renderFieldError('title', getVisibleFieldError('title'))}
-						</div>
-
-						<div className='field'>
-							<label htmlFor='market-create-description'>
-								<span>{marketCopy.description}</span>
-							</label>
-							<textarea id='market-create-description' value={marketForm.description} onInput={event => onMarketFormChange({ description: event.currentTarget.value })} placeholder={marketCopy.optionalQuestionContext} />
-							<p className='field-help'>{marketCopy.resolutionSourceHelpText}</p>
-						</div>
-
-						<div className='field-row'>
+						<div className='question-create-editor' hidden={reviewingQuestion}>
+							<p className='field-help'>{marketCopy.requiredFieldsNote}</p>
 							<div className='field'>
-								<label>
-									<span>{marketCopy.startTime}</span>
-									<FormInput
-										aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('startTime', startTimeError) : timingRelationshipErrorId}
-										invalid={startTimeError !== undefined}
-										type='datetime-local'
-										value={marketForm.startTime}
-										onBlur={() => markFieldTouched('startTime')}
-										onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })}
-									/>
-								</label>
-								{timingRelationshipError === undefined ? renderFieldError('startTime', startTimeError) : undefined}
+								<span>{marketCopy.questionType}</span>
+								<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
+								<p className='field-help'>{marketTypeGuidance}</p>
 							</div>
+
 							<div className='field'>
 								<label>
-									<span>{renderRequiredFieldLabel(marketCopy.endTime)}</span>
+									<span>{renderRequiredFieldLabel(marketCopy.title)}</span>
 									<FormInput
-										aria-label={marketCopy.endTime}
-										aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('endTime', endTimeError) : timingRelationshipErrorId}
-										invalid={endTimeError !== undefined}
-										type='datetime-local'
-										value={marketForm.endTime}
+										aria-label={marketCopy.title}
+										aria-describedby={getFieldErrorDescribedBy('title', getVisibleFieldError('title'))}
+										invalid={getVisibleFieldError('title') !== undefined}
+										value={marketForm.title}
+										onBlur={() => markFieldTouched('title')}
+										onInput={event => onMarketFormChange({ title: event.currentTarget.value })}
+										placeholder={marketCopy.questionTitlePlaceholder}
 										required
-										onBlur={() => markFieldTouched('endTime')}
-										onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })}
 									/>
 								</label>
-								{timingRelationshipError === undefined ? renderFieldError('endTime', endTimeError) : undefined}
+								{renderFieldError('title', getVisibleFieldError('title'))}
 							</div>
-						</div>
-						{timingRelationshipError === undefined ? undefined : (
-							<p className='field-error' id={timingRelationshipErrorId}>
-								{timingRelationshipError}
-							</p>
-						)}
-						<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
-						{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
-						{marketForm.marketType === 'categorical' ? (
-							<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
-								<span id='market-create-outcomes-label'>{renderRequiredFieldLabel(marketCopy.outcomes)}</span>
-								<div className='categorical-outcomes'>
-									{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
-										<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
-											<label className='field'>
-												<span className='visually-hidden'>{`${commonCopy.outcome} ${outcomeIndex + 1}`}</span>
-												<FormInput
-													aria-describedby={getFieldErrorDescribedBy('categoricalOutcomes', getVisibleFieldError('categoricalOutcomes'))}
-													invalid={getVisibleFieldError('categoricalOutcomes') !== undefined}
-													required={outcomeIndex < 2}
-													value={outcome}
-													onBlur={() => markFieldTouched('categoricalOutcomes')}
-													onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)}
-													placeholder={`${commonCopy.outcome} ${outcomeIndex + 1}`}
-												/>
-											</label>
-											<button className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
-												{marketCopy.remove}
-											</button>
-										</div>
-									))}
-								</div>
-								{renderFieldError('categoricalOutcomes', getVisibleFieldError('categoricalOutcomes'))}
-								<p className='field-help'>{marketCopy.categoricalOutcomeLabelsHelpText}</p>
-								<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
-									{marketCopy.addOutcome}
-								</button>
-							</div>
-						) : undefined}
-
-						{marketForm.marketType === 'scalar' ? (
-							<div className='field-row'>
-								<div className='field'>
-									<label>
-										<span>{renderRequiredFieldLabel(marketCopy.scalarMin)}</span>
-										<FormInput
-											aria-label={marketCopy.scalarMin}
-											aria-describedby={getFieldErrorDescribedBy('scalarMin', getVisibleFieldError('scalarMin'))}
-											invalid={getVisibleFieldError('scalarMin') !== undefined}
-											value={marketForm.scalarMin}
-											onBlur={() => markFieldTouched('scalarMin')}
-											onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })}
-											placeholder={marketCopy.scalarMinExample}
-											required
-										/>
-									</label>
-									{renderFieldError('scalarMin', getVisibleFieldError('scalarMin'))}
-								</div>
-								<label className='field'>
-									<span>{marketCopy.answerUnit}</span>
-									<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.usd} />
+							<div className='field'>
+								<label htmlFor='market-create-description'>
+									<span>{marketCopy.description}</span>
 								</label>
+								<textarea id='market-create-description' value={marketForm.description} onInput={event => onMarketFormChange({ description: event.currentTarget.value })} placeholder={marketCopy.optionalQuestionContext} />
+								<p className='field-help'>{marketCopy.resolutionSourceHelpText}</p>
 							</div>
-						) : undefined}
 
-						{marketForm.marketType === 'scalar' ? (
 							<div className='field-row'>
 								<div className='field'>
 									<label>
-										<span>{renderRequiredFieldLabel(marketCopy.scalarIncrement)}</span>
+										<span>{marketCopy.startTime}</span>
 										<FormInput
-											aria-label={marketCopy.scalarIncrement}
-											aria-describedby={getFieldErrorDescribedBy('scalarIncrement', getVisibleFieldError('scalarIncrement'))}
-											invalid={getVisibleFieldError('scalarIncrement') !== undefined}
-											value={marketForm.scalarIncrement}
-											onBlur={() => markFieldTouched('scalarIncrement')}
-											onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })}
-											placeholder={marketCopy.scalarIncrementExample}
-											required
+											aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('startTime', startTimeError) : timingRelationshipErrorId}
+											invalid={startTimeError !== undefined}
+											type='datetime-local'
+											value={marketForm.startTime}
+											onBlur={() => markFieldTouched('startTime')}
+											onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })}
 										/>
 									</label>
-									{renderFieldError('scalarIncrement', getVisibleFieldError('scalarIncrement'))}
+									{timingRelationshipError === undefined ? renderFieldError('startTime', startTimeError) : undefined}
 								</div>
 								<div className='field'>
 									<label>
-										<span>{renderRequiredFieldLabel(marketCopy.scalarMax)}</span>
+										<span>{renderRequiredFieldLabel(marketCopy.endTime)}</span>
 										<FormInput
-											aria-label={marketCopy.scalarMax}
-											aria-describedby={getFieldErrorDescribedBy('scalarMax', getVisibleFieldError('scalarMax'))}
-											invalid={getVisibleFieldError('scalarMax') !== undefined}
-											value={marketForm.scalarMax}
-											onBlur={() => markFieldTouched('scalarMax')}
-											onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })}
-											placeholder={marketCopy.scalarMaxExample}
+											aria-label={marketCopy.endTime}
+											aria-describedby={timingRelationshipError === undefined ? getFieldErrorDescribedBy('endTime', endTimeError) : timingRelationshipErrorId}
+											invalid={endTimeError !== undefined}
+											type='datetime-local'
+											value={marketForm.endTime}
 											required
+											onBlur={() => markFieldTouched('endTime')}
+											onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })}
 										/>
 									</label>
-									{renderFieldError('scalarMax', getVisibleFieldError('scalarMax'))}
+									{timingRelationshipError === undefined ? renderFieldError('endTime', endTimeError) : undefined}
 								</div>
 							</div>
-						) : undefined}
-						{marketForm.marketType === 'scalar' ? <p className='field-help'>{marketCopy.scalarResolutionHelpText}</p> : undefined}
-						{showEndedQuestionWarning ? (
-							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
-								<p>{marketCopy.endedQuestionWarning}</p>
-							</WarningSurface>
-						) : undefined}
+							{timingRelationshipError === undefined ? undefined : (
+								<p className='field-error' id={timingRelationshipErrorId}>
+									{timingRelationshipError}
+								</p>
+							)}
+							<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
+							{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
-						{(() => {
-							if (marketForm.marketType === 'scalar') {
-								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{marketCopy.scalarPreviewInputHint}</p>
-
-								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
-							}
-
-							return undefined
-						})()}
-
-						<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded'>
-							<div className='question-draft-preview'>
-								<div className='question-draft-preview-header'>
-									<div className='question-summary-heading'>
-										<strong>{draftTitle}</strong>
-										{draftDescription === undefined ? undefined : <p className='detail'>{draftDescription}</p>}
+							{marketForm.marketType === 'categorical' ? (
+								<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
+									<span id='market-create-outcomes-label'>{renderRequiredFieldLabel(marketCopy.outcomes)}</span>
+									<div className='categorical-outcomes'>
+										{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
+											<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
+												<label className='field'>
+													<span className='visually-hidden'>{`${commonCopy.outcome} ${outcomeIndex + 1}`}</span>
+													<FormInput
+														aria-describedby={getFieldErrorDescribedBy('categoricalOutcomes', getVisibleFieldError('categoricalOutcomes'))}
+														invalid={getVisibleFieldError('categoricalOutcomes') !== undefined}
+														required={outcomeIndex < 2}
+														value={outcome}
+														onBlur={() => markFieldTouched('categoricalOutcomes')}
+														onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)}
+														placeholder={`${commonCopy.outcome} ${outcomeIndex + 1}`}
+													/>
+												</label>
+												<button className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
+													{marketCopy.remove}
+												</button>
+											</div>
+										))}
 									</div>
-									<span className='question-draft-preview-chip'>{getMarketTypeLabel(marketForm.marketType)}</span>
+									{renderFieldError('categoricalOutcomes', getVisibleFieldError('categoricalOutcomes'))}
+									<p className='field-help'>{marketCopy.categoricalOutcomeLabelsHelpText}</p>
+									<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
+										{marketCopy.addOutcome}
+									</button>
 								</div>
-								<OutcomeChipRow items={draftOutcomeItems} />
-								<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
-									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>{commonCopy.starts}</span>
-										<strong>{marketForm.startTime.trim() === '' ? marketCopy.immediatelyAfterCreation : marketForm.startTime}</strong>
+							) : undefined}
+
+							{marketForm.marketType === 'scalar' ? (
+								<div className='field-row'>
+									<div className='field'>
+										<label>
+											<span>{renderRequiredFieldLabel(marketCopy.scalarMin)}</span>
+											<FormInput
+												aria-label={marketCopy.scalarMin}
+												aria-describedby={getFieldErrorDescribedBy('scalarMin', getVisibleFieldError('scalarMin'))}
+												invalid={getVisibleFieldError('scalarMin') !== undefined}
+												value={marketForm.scalarMin}
+												onBlur={() => markFieldTouched('scalarMin')}
+												onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })}
+												placeholder={marketCopy.scalarMinExample}
+												required
+											/>
+										</label>
+										{renderFieldError('scalarMin', getVisibleFieldError('scalarMin'))}
 									</div>
-									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>{commonCopy.ends}</span>
-										<strong>{marketForm.endTime.trim() === '' ? marketCopy.endTimeRequired : marketForm.endTime}</strong>
+									<label className='field'>
+										<span>{marketCopy.answerUnit}</span>
+										<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.usd} />
+									</label>
+								</div>
+							) : undefined}
+
+							{marketForm.marketType === 'scalar' ? (
+								<div className='field-row'>
+									<div className='field'>
+										<label>
+											<span>{renderRequiredFieldLabel(marketCopy.scalarIncrement)}</span>
+											<FormInput
+												aria-label={marketCopy.scalarIncrement}
+												aria-describedby={getFieldErrorDescribedBy('scalarIncrement', getVisibleFieldError('scalarIncrement'))}
+												invalid={getVisibleFieldError('scalarIncrement') !== undefined}
+												value={marketForm.scalarIncrement}
+												onBlur={() => markFieldTouched('scalarIncrement')}
+												onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })}
+												placeholder={marketCopy.scalarIncrementExample}
+												required
+											/>
+										</label>
+										{renderFieldError('scalarIncrement', getVisibleFieldError('scalarIncrement'))}
+									</div>
+									<div className='field'>
+										<label>
+											<span>{renderRequiredFieldLabel(marketCopy.scalarMax)}</span>
+											<FormInput
+												aria-label={marketCopy.scalarMax}
+												aria-describedby={getFieldErrorDescribedBy('scalarMax', getVisibleFieldError('scalarMax'))}
+												invalid={getVisibleFieldError('scalarMax') !== undefined}
+												value={marketForm.scalarMax}
+												onBlur={() => markFieldTouched('scalarMax')}
+												onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })}
+												placeholder={marketCopy.scalarMaxExample}
+												required
+											/>
+										</label>
+										{renderFieldError('scalarMax', getVisibleFieldError('scalarMax'))}
 									</div>
 								</div>
-							</div>
-						</SectionBlock>
+							) : undefined}
+							{marketForm.marketType === 'scalar' ? <p className='field-help'>{marketCopy.scalarResolutionHelpText}</p> : undefined}
+							{showEndedQuestionWarning ? (
+								<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
+									<p>{marketCopy.endedQuestionWarning}</p>
+								</WarningSurface>
+							) : undefined}
 
+							{(() => {
+								if (marketForm.marketType === 'scalar') {
+									if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{marketCopy.scalarPreviewInputHint}</p>
+
+									return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
+								}
+
+								return undefined
+							})()}
+
+							<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded'>
+								<div className='question-draft-preview'>
+									<div className='question-draft-preview-header'>
+										<div className='question-summary-heading'>
+											<strong>{draftTitle}</strong>
+											{draftDescription === undefined ? undefined : <p className='detail'>{draftDescription}</p>}
+										</div>
+										<span className='question-draft-preview-chip'>{getMarketTypeLabel(marketForm.marketType)}</span>
+									</div>
+									<OutcomeChipRow items={draftOutcomeItems} />
+									<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
+										<div className='question-draft-preview-meta-item' role='listitem'>
+											<span>{commonCopy.starts}</span>
+											<strong>{marketForm.startTime.trim() === '' ? marketCopy.immediatelyAfterCreation : marketForm.startTime}</strong>
+										</div>
+										<div className='question-draft-preview-meta-item' role='listitem'>
+											<span>{commonCopy.ends}</span>
+											<strong>{marketForm.endTime.trim() === '' ? marketCopy.endTimeRequired : marketForm.endTime}</strong>
+										</div>
+									</div>
+								</div>
+							</SectionBlock>
+						</div>
+
+						{reviewingQuestion ? (
+							<TransactionReview
+								context={[
+									{ label: marketCopy.questionType, value: getMarketTypeLabel(marketForm.marketType) },
+									{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+								]}
+								details={
+									marketForm.marketType === 'scalar'
+										? [
+												{ label: marketCopy.scalarMin, value: marketForm.scalarMin.trim() },
+												{ label: marketCopy.scalarMax, value: marketForm.scalarMax.trim() },
+												{ label: marketCopy.scalarIncrement, value: marketForm.scalarIncrement.trim() },
+												{ label: marketCopy.answerUnit, value: marketForm.answerUnit.trim() === '' ? commonCopy.none : marketForm.answerUnit.trim() },
+											]
+										: []
+								}
+								primary={[
+									{ label: commonCopy.question, value: draftTitle },
+									{ label: marketCopy.outcomes, value: getDraftOutcomeLabels(marketForm, marketFormValidation.fieldErrors.categoricalOutcomes).join(' / ') },
+									{ label: marketCopy.endTime, value: marketForm.endTime },
+								]}
+								risks={[marketCopy.questionCreationConsequence, ...(showEndedQuestionWarning ? [marketCopy.endedQuestionWarning] : [])]}
+							/>
+						) : undefined}
 						<div className='actions'>
+							{reviewingQuestion ? (
+								<button className='secondary' type='button' onClick={() => setReviewingQuestion(false)} disabled={marketCreating}>
+									{marketCopy.backToQuestion}
+								</button>
+							) : undefined}
 							<TransactionActionButton
-								idleLabel={commonCopy.createQuestionAction}
+								idleLabel={reviewingQuestion ? commonCopy.createQuestionAction : marketCopy.reviewQuestion}
 								pendingLabel={marketCopy.createQuestionPendingLabel}
 								onClick={() => undefined}
 								pending={marketCreating}

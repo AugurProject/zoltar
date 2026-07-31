@@ -1217,7 +1217,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Records the resume timestamp and starts the remaining continuation clock. After the deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
-					'Fork-continuation mode; not previously resumed; aggregate REP funding is complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - floor(sourcePrincipalAtFork / 5)`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
+					'Fork-continuation mode; not previously resumed; aggregate REP funding is complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
 				signals: '`ForkContinuationResumed`',
 			},
 			{
