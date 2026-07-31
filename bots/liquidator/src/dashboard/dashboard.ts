@@ -142,6 +142,10 @@ let currentSnapshot: Snapshot | undefined
 let currentConfiguration: Configuration | undefined
 let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
+let pendingPoolMutations = 0
+let pendingUniverseMutations = 0
+const poolActionStates = new Map<string, { failed: boolean; message: string }>()
+const universeActionStates = new Map<string, { failed: boolean; message: string }>()
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
 	const response = await fetch(path, options)
@@ -245,7 +249,24 @@ function universeState(universe: Universe) {
 	return 'Migration / settlement'
 }
 
+function activeRecordKey(container: HTMLElement) {
+	const active = document.activeElement
+	if (!(active instanceof HTMLElement) || !container.contains(active)) return undefined
+	return active.dataset['recordKey']
+}
+
+function restoreRecordFocus(container: HTMLElement, recordKey?: string) {
+	if (recordKey === undefined) return
+	for (const candidate of container.querySelectorAll<HTMLElement>('[data-record-key]')) {
+		if (candidate.dataset['recordKey'] !== recordKey) continue
+		candidate.focus()
+		return
+	}
+}
+
 function renderUniverses(snapshot: Snapshot) {
+	if (pendingUniverseMutations > 0) return
+	const focusedRecord = activeRecordKey(universeRows)
 	if (snapshot.universes.length === 0) {
 		const row = document.createElement('tr')
 		const empty = cell('No universes are registered.')
@@ -260,6 +281,7 @@ function renderUniverses(snapshot: Snapshot) {
 			const row = document.createElement('tr')
 			const checkbox = document.createElement('input')
 			checkbox.type = 'checkbox'
+			checkbox.dataset['recordKey'] = `universe:${universe.id}`
 			checkbox.checked = approvedUniverses.has(universe.id)
 			checkbox.disabled = currentConfiguration === undefined
 			checkbox.setAttribute('aria-label', `Approve universe ${universe.id}`)
@@ -271,8 +293,15 @@ function renderUniverses(snapshot: Snapshot) {
 			toggle.append(checkbox, hidden)
 			const status = document.createElement('span')
 			status.className = 'action-status'
+			const savedActionState = universeActionStates.get(universe.id)
+			if (savedActionState !== undefined) {
+				actionStatus(status, savedActionState.message, savedActionState.failed)
+				if (!savedActionState.failed && savedActionState.message === 'Saved') universeActionStates.delete(universe.id)
+			}
 			checkbox.addEventListener('change', async () => {
 				checkbox.disabled = true
+				pendingUniverseMutations += 1
+				universeActionStates.set(universe.id, { failed: false, message: 'Saving…' })
 				actionStatus(status, 'Saving…')
 				const next = new Set(approvedUniverses)
 				if (checkbox.checked) next.add(universe.id)
@@ -280,12 +309,16 @@ function renderUniverses(snapshot: Snapshot) {
 				try {
 					await put('/api/approved-universes', [...next])
 					approvedUniverses = next
+					universeActionStates.set(universe.id, { failed: false, message: 'Saved' })
 					actionStatus(status, 'Saved')
-				} catch (error) {
+				} catch {
 					checkbox.checked = !checkbox.checked
-					actionStatus(status, error instanceof Error ? error.message : String(error), true)
+					const message = 'Could not save universe approval. Retry this selection.'
+					universeActionStates.set(universe.id, { failed: true, message })
+					actionStatus(status, message, true)
 				} finally {
 					checkbox.disabled = false
+					pendingUniverseMutations -= 1
 				}
 			})
 			const migration = universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} eligible parent vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No eligible parent vault'
@@ -303,6 +336,7 @@ function renderUniverses(snapshot: Snapshot) {
 			return row
 		}),
 	)
+	restoreRecordFocus(universeRows, focusedRecord)
 }
 
 function cell(...children: (Node | string)[]) {
@@ -324,8 +358,8 @@ function stacked(primary: string, secondary: string) {
 }
 
 function actionStatus(element: HTMLElement, message: string, failed = false) {
-	element.textContent = message
-	element.classList.toggle('error', failed)
+	if (element.textContent !== message) element.textContent = message
+	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
 }
 
 function botVaultState(vault: Vault) {
@@ -337,6 +371,14 @@ function botVaultState(vault: Vault) {
 }
 
 function renderPools(snapshot: Snapshot) {
+	if (pendingPoolMutations > 0) return
+	const focusedRecord = activeRecordKey(poolRows)
+	const expandedAddresses = new Set(
+		[...poolRows.querySelectorAll<HTMLDetailsElement>('details[data-pool-address]')]
+			.filter(details => details.open)
+			.map(details => details.dataset['poolAddress'])
+			.filter(address => address !== undefined),
+	)
 	const filter = poolFilter.value.trim().toLowerCase()
 	const visible = snapshot.pools.filter(pool => filter === '' || pool.address.toLowerCase().includes(filter) || pool.questionId.toLowerCase().includes(filter))
 	if (visible.length === 0) {
@@ -353,6 +395,7 @@ function renderPools(snapshot: Snapshot) {
 			const row = document.createElement('tr')
 			const checkbox = document.createElement('input')
 			checkbox.type = 'checkbox'
+			checkbox.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
 			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
 			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
 			checkbox.disabled = currentConfiguration === undefined
@@ -364,9 +407,17 @@ function renderPools(snapshot: Snapshot) {
 			toggle.append(checkbox, toggleText)
 			const poolStatus = document.createElement('span')
 			poolStatus.className = 'action-status'
-			poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'CEX price guard' : pool.selected ? 'Eligible' : ''
+			const savedActionState = poolActionStates.get(pool.address.toLowerCase())
+			if (savedActionState === undefined) {
+				poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'CEX price guard' : pool.selected ? 'Eligible' : ''
+			} else {
+				actionStatus(poolStatus, savedActionState.message, savedActionState.failed)
+				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
+			}
 			checkbox.addEventListener('change', async () => {
 				checkbox.disabled = true
+				pendingPoolMutations += 1
+				poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saving…' })
 				actionStatus(poolStatus, 'Saving…')
 				const next = new Set(selectedPools)
 				if (checkbox.checked) next.add(pool.address.toLowerCase())
@@ -374,18 +425,25 @@ function renderPools(snapshot: Snapshot) {
 				try {
 					await put('/api/selected-pools', [...next])
 					selectedPools = next
+					poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saved' })
 					actionStatus(poolStatus, 'Saved')
-				} catch (error) {
+				} catch {
 					checkbox.checked = !checkbox.checked
-					actionStatus(poolStatus, error instanceof Error ? error.message : String(error), true)
+					const message = 'Could not save pool selection. Retry this selection.'
+					poolActionStates.set(pool.address.toLowerCase(), { failed: true, message })
+					actionStatus(poolStatus, message, true)
 				} finally {
 					checkbox.disabled = false
+					pendingPoolMutations -= 1
 				}
 			})
 			const addressDetails = document.createElement('details')
 			addressDetails.className = 'address-details'
+			addressDetails.dataset['poolAddress'] = pool.address.toLowerCase()
+			addressDetails.open = expandedAddresses.has(pool.address.toLowerCase())
 			const address = document.createElement('summary')
 			address.className = 'address'
+			address.dataset['recordKey'] = `pool-address:${pool.address.toLowerCase()}`
 			const addressText = document.createElement('span')
 			addressText.className = 'address-text'
 			addressText.textContent = shortAddress(pool.address)
@@ -412,6 +470,7 @@ function renderPools(snapshot: Snapshot) {
 			return row
 		}),
 	)
+	restoreRecordFocus(poolRows, focusedRecord)
 }
 
 function renderActivities(activities: Activity[]) {
@@ -457,13 +516,7 @@ function render(snapshot: Snapshot) {
 	pauseButton.textContent = snapshot.paused ? 'Resume' : 'Pause'
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	if (snapshot.error === undefined) {
-		globalError.classList.add('hidden')
-		globalError.textContent = ''
-	} else {
-		globalError.classList.remove('hidden')
-		globalError.textContent = snapshot.error
-	}
+	setGlobalError(snapshot.error === undefined ? undefined : 'The bot scan failed. Check the bot logs; the dashboard will retry automatically.')
 	renderMetrics(snapshot)
 	renderCentralizedMarket(snapshot)
 	renderUniverses(snapshot)
@@ -491,9 +544,18 @@ function populateConfiguration(configuration: Configuration) {
 	}
 }
 
-function showGlobalError(error: unknown) {
-	globalError.classList.remove('hidden')
-	globalError.textContent = error instanceof Error ? error.message : String(error)
+function setGlobalError(message?: string) {
+	if (message === undefined) {
+		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
+		if (globalError.textContent !== '') globalError.textContent = ''
+		return
+	}
+	if (globalError.classList.contains('hidden')) globalError.classList.remove('hidden')
+	if (globalError.textContent !== message) globalError.textContent = message
+}
+
+function showGlobalError() {
+	setGlobalError('Dashboard data is unavailable. Check the bot connection; the dashboard will retry automatically.')
 }
 
 pauseButton.addEventListener('click', async () => {
@@ -504,8 +566,8 @@ pauseButton.addEventListener('click', async () => {
 		await put('/api/paused', { paused: !currentSnapshot.paused })
 		await refresh()
 		actionStatus(pauseStatus, '')
-	} catch (error) {
-		actionStatus(pauseStatus, error instanceof Error ? error.message : String(error), true)
+	} catch {
+		actionStatus(pauseStatus, 'Could not change bot status. Check the bot connection and retry.', true)
 	} finally {
 		pauseButton.disabled = false
 	}
@@ -530,8 +592,8 @@ strategyForm.addEventListener('submit', async event => {
 		const configuration = await put<Configuration>('/api/strategy', next)
 		populateConfiguration(configuration)
 		actionStatus(strategyStatus, 'Saved')
-	} catch (error) {
-		actionStatus(strategyStatus, error instanceof Error ? error.message : String(error), true)
+	} catch {
+		actionStatus(strategyStatus, 'Could not save strategy. Review the fields and retry.', true)
 	}
 })
 
@@ -553,8 +615,8 @@ signerForm.addEventListener('submit', async event => {
 		privateKeyField.value = ''
 		updateSignerButton.disabled = true
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shortAddress(result.wallet)}`)
-	} catch (error) {
-		actionStatus(signerStatus, error instanceof Error ? error.message : String(error), true)
+	} catch {
+		actionStatus(signerStatus, 'Could not update the signer. Check the bot connection and retry.', true)
 	}
 })
 
@@ -574,8 +636,8 @@ clearSignerButton.addEventListener('click', async () => {
 		})
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 		await refresh()
-	} catch (error) {
-		actionStatus(signerStatus, error instanceof Error ? error.message : String(error), true)
+	} catch {
+		actionStatus(signerStatus, 'Could not clear the signer. Check the bot connection and retry.', true)
 	} finally {
 		clearSignerButton.disabled = false
 	}
@@ -584,8 +646,8 @@ clearSignerButton.addEventListener('click', async () => {
 async function refresh() {
 	try {
 		render(await api<Snapshot>('/api/state'))
-	} catch (error) {
-		showGlobalError(error)
+	} catch {
+		showGlobalError()
 	}
 }
 
@@ -596,10 +658,10 @@ async function loadConfiguration() {
 	configurationStatus.textContent = 'Loading pool selection and strategy…'
 	try {
 		populateConfiguration(await api<Configuration>('/api/configuration'))
-	} catch (error) {
+	} catch {
 		configurationStatus.classList.add('error')
 		const message = document.createElement('span')
-		message.textContent = `${error instanceof Error ? error.message : String(error)} `
+		message.textContent = 'Configuration is unavailable. Check the bot connection, then retry. '
 		const retry = document.createElement('button')
 		retry.className = 'secondary compact'
 		retry.type = 'button'
