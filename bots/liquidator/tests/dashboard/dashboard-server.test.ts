@@ -33,6 +33,8 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')
 		expect(pageSource).toContain('id="centralized-market-price"')
 		expect(pageSource).not.toContain('public CCXT sources')
+		expect(pageSource).toContain('id="metrics" class="metric-grid"')
+		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {
