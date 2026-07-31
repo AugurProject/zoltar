@@ -1,4 +1,5 @@
 import ccxt, { type Exchange } from 'ccxt'
+import type { MarketConsensusObservation, MarketConsensusSettings } from './market-consensus.ts'
 
 const FIXED_UNIT = 10n ** 18n
 const BPS = 10_000n
@@ -10,6 +11,9 @@ export type CentralizedMarketSource = {
 }
 
 export type CentralizedMarketSettings = {
+	assetAddress: `0x${string}`
+	assetChainId: number
+	assetSymbol: string
 	depthBps: bigint
 	maximumDexDeviationBps: bigint
 	maximumObservationAgeMilliseconds: number
@@ -21,6 +25,22 @@ export type CentralizedMarketSettings = {
 	requestTimeoutMilliseconds: number
 	requiredForExecution: boolean
 	sources: readonly CentralizedMarketSource[]
+	venueConsensus?: {
+		allowSingleGroupFallback: boolean
+		dexProbeDepthEth: bigint
+		dexSources: readonly {
+			feeBps: number
+			pair: `0x${string}`
+			sourceId: string
+		}[]
+		maximumGroupDeviationBps: bigint
+		minimumDexAskDepthEth: bigint
+		minimumDexBidDepthEth: bigint
+		minimumDexSourceCount: number
+		minimumSourceObservationCount: number
+		minimumSourceObservationSpanMilliseconds: number
+		minimumTotalSourceCount: number
+	}
 }
 
 export type CentralizedMarketObservation = {
@@ -29,6 +49,7 @@ export type CentralizedMarketObservation = {
 	bestAskQuote: string
 	bestBidQuote: string
 	bidDepthEth: bigint
+	chainId: number
 	exchangeId: string
 	ethTickerTimestamp: number | undefined
 	observedAt: number
@@ -42,6 +63,7 @@ export type CentralizedMarketEstimate = {
 	assetId: string
 	askDepthEth: bigint
 	bidDepthEth: bigint
+	chainId: number
 	maximumPriceRepPerEth: bigint
 	minimumPriceRepPerEth: bigint
 	observations: readonly CentralizedMarketObservation[]
@@ -98,16 +120,44 @@ function market(value: unknown, label: string) {
 	return value
 }
 
+function address(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new Error(`${label} must be an address`)
+	return value as `0x${string}`
+}
+
+function assetSymbol(value: unknown) {
+	if (typeof value !== 'string' || !/^[A-Z0-9][A-Z0-9._-]*$/.test(value)) throw new Error('centralizedMarkets.assetSymbol is invalid')
+	if (value !== 'REP') throw new Error('centralizedMarkets.assetSymbol must be REP')
+	return value
+}
+
 export function parseCentralizedMarketSettings(value: unknown): CentralizedMarketSettings {
 	const settings = record(value, 'centralizedMarkets')
-	const allowed = new Set(['depthBps', 'maximumDexDeviationBps', 'maximumObservationAgeMilliseconds', 'maximumVenueDispersionBps', 'minimumAskDepthEth', 'minimumBidDepthEth', 'minimumSourceCount', 'orderBookLimit', 'requestTimeoutMilliseconds', 'requiredForExecution', 'sources'])
+	const allowed = new Set([
+		'assetAddress',
+		'assetChainId',
+		'assetSymbol',
+		'depthBps',
+		'maximumDexDeviationBps',
+		'maximumObservationAgeMilliseconds',
+		'maximumVenueDispersionBps',
+		'minimumAskDepthEth',
+		'minimumBidDepthEth',
+		'minimumSourceCount',
+		'orderBookLimit',
+		'requestTimeoutMilliseconds',
+		'requiredForExecution',
+		'sources',
+		'venueConsensus',
+	])
 	for (const key of Object.keys(settings)) {
 		if (!allowed.has(key)) throw new Error(`Unknown centralizedMarkets field: ${key}`)
 	}
-	for (const key of allowed) {
+	for (const key of [...allowed].filter(key => key !== 'venueConsensus')) {
 		if (!(key in settings)) throw new Error(`centralizedMarkets is missing ${key}`)
 	}
 	if (!Array.isArray(settings['sources'])) throw new Error('centralizedMarkets.sources must be an array')
+	const configuredAssetSymbol = assetSymbol(settings['assetSymbol'])
 	const sources = settings['sources'].map((rawSource, index) => {
 		const source = record(rawSource, `centralizedMarkets.sources[${index.toString()}]`)
 		if (Object.keys(source).some(key => key !== 'exchangeId' && key !== 'repMarket' && key !== 'ethMarket')) {
@@ -117,14 +167,11 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 			throw new Error(`centralizedMarkets.sources[${index.toString()}].exchangeId must be a lowercase CCXT exchange id`)
 		}
 		const repMarket = market(source['repMarket'], `centralizedMarkets.sources[${index.toString()}].repMarket`)
+		if (repMarket.split('/')[0] !== configuredAssetSymbol) throw new Error(`centralizedMarkets.sources[${index.toString()}].repMarket base must match centralizedMarkets.assetSymbol`)
 		const quoteAsset = repMarket.split('/')[1]
 		const ethMarket = source['ethMarket'] === null || source['ethMarket'] === undefined ? undefined : market(source['ethMarket'], `centralizedMarkets.sources[${index.toString()}].ethMarket`)
-		if (quoteAsset !== 'ETH' && ethMarket === undefined) {
-			throw new Error(`centralizedMarkets.sources[${index.toString()}].ethMarket is required unless REP is quoted in ETH`)
-		}
-		if (ethMarket !== undefined && ethMarket.split('/')[1] !== quoteAsset) {
-			throw new Error(`centralizedMarkets.sources[${index.toString()}] markets must share a quote asset`)
-		}
+		if (quoteAsset === 'ETH' && ethMarket !== undefined) throw new Error(`centralizedMarkets.sources[${index.toString()}].ethMarket must be absent when REP is quoted in ETH`)
+		if (quoteAsset !== 'ETH' && ethMarket !== `ETH/${quoteAsset}`) throw new Error(`centralizedMarkets.sources[${index.toString()}].ethMarket must be ETH/${quoteAsset ?? 'QUOTE'}`)
 		return { ethMarket, exchangeId: source['exchangeId'], repMarket }
 	})
 	const uniqueSources = new Set(sources.map(source => `${source.exchangeId}:${source.repMarket}:${source.ethMarket ?? ''}`))
@@ -133,16 +180,65 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 	if (uniqueExchanges.size !== sources.length) throw new Error('centralizedMarkets.sources must use distinct exchanges')
 	const depthBps = BigInt(integer(settings['depthBps'], 'centralizedMarkets.depthBps', 1, 5_000))
 	const maximumDexDeviationBps = BigInt(integer(settings['maximumDexDeviationBps'], 'centralizedMarkets.maximumDexDeviationBps', 1, 10_000))
+	const maximumObservationAgeMilliseconds = integer(settings['maximumObservationAgeMilliseconds'], 'centralizedMarkets.maximumObservationAgeMilliseconds', 1_000, 3_600_000)
 	const maximumVenueDispersionBps = BigInt(integer(settings['maximumVenueDispersionBps'], 'centralizedMarkets.maximumVenueDispersionBps', 1, 10_000))
 	const minimumSourceCount = integer(settings['minimumSourceCount'], 'centralizedMarkets.minimumSourceCount', 1, 100)
 	if (sources.length > 0 && minimumSourceCount > sources.length) throw new Error('centralizedMarkets.minimumSourceCount cannot exceed the configured source count')
 	if (typeof settings['requiredForExecution'] !== 'boolean') throw new Error('centralizedMarkets.requiredForExecution must be a boolean')
 	if (settings['requiredForExecution'] && sources.length === 0) throw new Error('centralizedMarkets.requiredForExecution needs at least one source')
 	if (settings['requiredForExecution'] && minimumSourceCount < 2) throw new Error('centralizedMarkets.requiredForExecution needs at least two independent sources')
+	const rawVenueConsensus = settings['venueConsensus']
+	if (settings['requiredForExecution'] && rawVenueConsensus === undefined) throw new Error('centralizedMarkets.requiredForExecution needs venueConsensus')
+	const venueConsensus =
+		rawVenueConsensus === undefined
+			? undefined
+			: (() => {
+					const consensus = record(rawVenueConsensus, 'centralizedMarkets.venueConsensus')
+					const consensusKeys = new Set(['allowSingleGroupFallback', 'dexProbeDepthEth', 'dexSources', 'maximumGroupDeviationBps', 'minimumDexAskDepthEth', 'minimumDexBidDepthEth', 'minimumDexSourceCount', 'minimumSourceObservationCount', 'minimumSourceObservationSpanMilliseconds', 'minimumTotalSourceCount'])
+					for (const key of Object.keys(consensus)) if (!consensusKeys.has(key)) throw new Error(`Unknown centralizedMarkets.venueConsensus field: ${key}`)
+					for (const key of consensusKeys) if (!(key in consensus)) throw new Error(`centralizedMarkets.venueConsensus is missing ${key}`)
+					if (!Array.isArray(consensus['dexSources'])) throw new Error('centralizedMarkets.venueConsensus.dexSources must be an array')
+					const dexSources = consensus['dexSources'].map((value, index) => {
+						const source = record(value, `centralizedMarkets.venueConsensus.dexSources[${index.toString()}]`)
+						if (Object.keys(source).some(key => key !== 'feeBps' && key !== 'pair' && key !== 'sourceId')) throw new Error(`centralizedMarkets.venueConsensus.dexSources[${index.toString()}] has an unknown field`)
+						if (typeof source['sourceId'] !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(source['sourceId'])) throw new Error(`centralizedMarkets.venueConsensus.dexSources[${index.toString()}].sourceId is invalid`)
+						if (typeof source['pair'] !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(source['pair'])) throw new Error(`centralizedMarkets.venueConsensus.dexSources[${index.toString()}].pair must be an address`)
+						return { feeBps: integer(source['feeBps'], `centralizedMarkets.venueConsensus.dexSources[${index.toString()}].feeBps`, 0, 1_000), pair: source['pair'] as `0x${string}`, sourceId: source['sourceId'] }
+					})
+					if (new Set(dexSources.map(source => source.sourceId)).size !== dexSources.length) throw new Error('centralizedMarkets.venueConsensus.dexSources must use distinct sourceId values')
+					if (new Set(dexSources.map(source => source.pair.toLowerCase())).size !== dexSources.length) throw new Error('centralizedMarkets.venueConsensus.dexSources must use distinct pair addresses')
+					if (dexSources.some(source => sources.some(cexSource => cexSource.exchangeId === source.sourceId))) throw new Error('CEX and DEX sources must use globally distinct failure-domain IDs')
+					if (typeof consensus['allowSingleGroupFallback'] !== 'boolean') throw new Error('centralizedMarkets.venueConsensus.allowSingleGroupFallback must be a boolean')
+					return {
+						allowSingleGroupFallback: consensus['allowSingleGroupFallback'],
+						dexProbeDepthEth: decimalEth(consensus['dexProbeDepthEth'], 'centralizedMarkets.venueConsensus.dexProbeDepthEth'),
+						dexSources,
+						maximumGroupDeviationBps: BigInt(integer(consensus['maximumGroupDeviationBps'], 'centralizedMarkets.venueConsensus.maximumGroupDeviationBps', 1, 10_000)),
+						minimumDexAskDepthEth: decimalEth(consensus['minimumDexAskDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexAskDepthEth'),
+						minimumDexBidDepthEth: decimalEth(consensus['minimumDexBidDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexBidDepthEth'),
+						minimumDexSourceCount: integer(consensus['minimumDexSourceCount'], 'centralizedMarkets.venueConsensus.minimumDexSourceCount', 1, 100),
+						minimumSourceObservationCount: integer(consensus['minimumSourceObservationCount'], 'centralizedMarkets.venueConsensus.minimumSourceObservationCount', 1, 100),
+						minimumSourceObservationSpanMilliseconds: integer(consensus['minimumSourceObservationSpanMilliseconds'], 'centralizedMarkets.venueConsensus.minimumSourceObservationSpanMilliseconds', 0, 3_600_000),
+						minimumTotalSourceCount: integer(consensus['minimumTotalSourceCount'], 'centralizedMarkets.venueConsensus.minimumTotalSourceCount', 2, 200),
+					}
+				})()
+	if (settings['requiredForExecution'] && venueConsensus !== undefined) {
+		if (venueConsensus.minimumDexSourceCount < 2) throw new Error('Required venue consensus needs at least two independent DEX sources')
+		if (venueConsensus.dexSources.length < venueConsensus.minimumDexSourceCount) throw new Error('Required venue consensus needs enough configured DEX sources to satisfy minimumDexSourceCount')
+		if (venueConsensus.minimumTotalSourceCount < 3) throw new Error('Required venue consensus needs at least three total independent sources')
+		if (sources.length + venueConsensus.dexSources.length < venueConsensus.minimumTotalSourceCount) throw new Error('Required venue consensus needs enough configured CEX and DEX sources to satisfy minimumTotalSourceCount')
+		if (venueConsensus.minimumSourceObservationCount < 2 || venueConsensus.minimumSourceObservationSpanMilliseconds < 1_000) {
+			throw new Error('Required venue consensus needs multiple observations spanning at least one second')
+		}
+		if (venueConsensus.minimumSourceObservationSpanMilliseconds > maximumObservationAgeMilliseconds) throw new Error('Required venue consensus observation span cannot exceed maximumObservationAgeMilliseconds')
+	}
 	return {
+		assetAddress: address(settings['assetAddress'], 'centralizedMarkets.assetAddress'),
+		assetChainId: integer(settings['assetChainId'], 'centralizedMarkets.assetChainId', 1, 2 ** 31 - 1),
+		assetSymbol: configuredAssetSymbol,
 		depthBps,
 		maximumDexDeviationBps,
-		maximumObservationAgeMilliseconds: integer(settings['maximumObservationAgeMilliseconds'], 'centralizedMarkets.maximumObservationAgeMilliseconds', 1_000, 3_600_000),
+		maximumObservationAgeMilliseconds,
 		maximumVenueDispersionBps,
 		minimumAskDepthEth: decimalEth(settings['minimumAskDepthEth'], 'centralizedMarkets.minimumAskDepthEth'),
 		minimumBidDepthEth: decimalEth(settings['minimumBidDepthEth'], 'centralizedMarkets.minimumBidDepthEth'),
@@ -151,11 +247,45 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 		requestTimeoutMilliseconds: integer(settings['requestTimeoutMilliseconds'], 'centralizedMarkets.requestTimeoutMilliseconds', 250, 60_000),
 		requiredForExecution: settings['requiredForExecution'],
 		sources,
+		...(venueConsensus === undefined ? {} : { venueConsensus }),
 	}
+}
+
+export function centralizedMarketConfigurationAllowsExecution(settings: CentralizedMarketSettings) {
+	if (!settings.requiredForExecution) return true
+	let validated: CentralizedMarketSettings
+	try {
+		validated = parseCentralizedMarketSettings(serializeCentralizedMarketSettings(settings))
+	} catch (error) {
+		void error
+		return false
+	}
+	const venueConsensus = validated.venueConsensus
+	const uniqueCexExchanges = new Set(validated.sources.map(source => source.exchangeId))
+	const uniqueDexSources = new Set(venueConsensus?.dexSources.map(source => source.sourceId))
+	const uniqueDexPairs = new Set(venueConsensus?.dexSources.map(source => source.pair.toLowerCase()))
+	return (
+		venueConsensus !== undefined &&
+		validated.minimumSourceCount >= 2 &&
+		uniqueCexExchanges.size === validated.sources.length &&
+		validated.sources.length >= validated.minimumSourceCount &&
+		venueConsensus.minimumDexSourceCount >= 2 &&
+		uniqueDexSources.size === venueConsensus.dexSources.length &&
+		uniqueDexPairs.size === venueConsensus.dexSources.length &&
+		venueConsensus.dexSources.length >= venueConsensus.minimumDexSourceCount &&
+		venueConsensus.minimumTotalSourceCount >= 3 &&
+		validated.sources.length + venueConsensus.dexSources.length >= venueConsensus.minimumTotalSourceCount &&
+		venueConsensus.minimumSourceObservationCount >= 2 &&
+		venueConsensus.minimumSourceObservationSpanMilliseconds >= 1_000 &&
+		venueConsensus.minimumSourceObservationSpanMilliseconds <= validated.maximumObservationAgeMilliseconds
+	)
 }
 
 export function serializeCentralizedMarketSettings(settings: CentralizedMarketSettings) {
 	return {
+		assetAddress: settings.assetAddress,
+		assetChainId: settings.assetChainId,
+		assetSymbol: settings.assetSymbol,
 		depthBps: Number(settings.depthBps),
 		maximumDexDeviationBps: Number(settings.maximumDexDeviationBps),
 		maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
@@ -171,7 +301,61 @@ export function serializeCentralizedMarketSettings(settings: CentralizedMarketSe
 			exchangeId: source.exchangeId,
 			repMarket: source.repMarket,
 		})),
+		...(settings.venueConsensus === undefined
+			? {}
+			: {
+					venueConsensus: {
+						allowSingleGroupFallback: settings.venueConsensus.allowSingleGroupFallback,
+						dexProbeDepthEth: formatFixed(settings.venueConsensus.dexProbeDepthEth),
+						dexSources: settings.venueConsensus.dexSources,
+						maximumGroupDeviationBps: Number(settings.venueConsensus.maximumGroupDeviationBps),
+						minimumDexAskDepthEth: formatFixed(settings.venueConsensus.minimumDexAskDepthEth),
+						minimumDexBidDepthEth: formatFixed(settings.venueConsensus.minimumDexBidDepthEth),
+						minimumDexSourceCount: settings.venueConsensus.minimumDexSourceCount,
+						minimumSourceObservationCount: settings.venueConsensus.minimumSourceObservationCount,
+						minimumSourceObservationSpanMilliseconds: settings.venueConsensus.minimumSourceObservationSpanMilliseconds,
+						minimumTotalSourceCount: settings.venueConsensus.minimumTotalSourceCount,
+					},
+				}),
 	}
+}
+
+export function marketConsensusSettings(settings: CentralizedMarketSettings): MarketConsensusSettings {
+	return {
+		allowSingleGroupFallback: settings.venueConsensus?.allowSingleGroupFallback ?? false,
+		maximumGroupDeviationBps: settings.venueConsensus?.maximumGroupDeviationBps ?? settings.maximumDexDeviationBps,
+		maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
+		maximumVenueDispersionBps: settings.maximumVenueDispersionBps,
+		minimumAskDepthEthPerSource: settings.venueConsensus?.minimumDexAskDepthEth ?? 0n,
+		minimumBidDepthEthPerSource: settings.venueConsensus?.minimumDexBidDepthEth ?? 0n,
+		minimumCexAskDepthEth: settings.minimumAskDepthEth,
+		minimumCexBidDepthEth: settings.minimumBidDepthEth,
+		minimumCexSourceCount: settings.minimumSourceCount,
+		minimumDexSourceCount: settings.venueConsensus?.minimumDexSourceCount ?? 2,
+		minimumSourceObservationCount: settings.venueConsensus?.minimumSourceObservationCount ?? 1,
+		minimumSourceObservationSpanMilliseconds: settings.venueConsensus?.minimumSourceObservationSpanMilliseconds ?? 0,
+		minimumTotalSourceCount: settings.venueConsensus?.minimumTotalSourceCount ?? 3,
+	}
+}
+
+export function centralizedMarketConsensusObservations(estimate: CentralizedMarketEstimate | undefined): MarketConsensusObservation[] {
+	if (estimate === undefined) return []
+	return estimate.observations.flatMap(observation => {
+		if (observation.orderBookTimestamp === undefined || (observation.usesEthTicker && observation.ethTickerTimestamp === undefined)) return []
+		return [
+			{
+				assetId: observation.assetId,
+				askDepthEth: observation.askDepthEth,
+				bidDepthEth: observation.bidDepthEth,
+				chainId: observation.chainId,
+				kind: 'cex' as const,
+				observationId: `${observation.exchangeId}:${observation.orderBookTimestamp.toString()}:${(observation.ethTickerTimestamp ?? observation.orderBookTimestamp).toString()}`,
+				observedAt: Math.min(observation.orderBookTimestamp, observation.ethTickerTimestamp ?? observation.orderBookTimestamp),
+				priceRepPerEth: observation.priceRepPerEth,
+				sourceId: observation.exchangeId,
+			},
+		]
+	})
 }
 
 function formatFixed(value: bigint) {
@@ -186,6 +370,7 @@ export function serializeCentralizedMarketEstimate(estimate: CentralizedMarketEs
 		assetId: estimate.assetId,
 		askDepthEth: formatFixed(estimate.askDepthEth),
 		bidDepthEth: formatFixed(estimate.bidDepthEth),
+		chainId: estimate.chainId,
 		maximumPriceRepPerEth: formatFixed(estimate.maximumPriceRepPerEth),
 		minimumPriceRepPerEth: formatFixed(estimate.minimumPriceRepPerEth),
 		observations: estimate.observations.map(observation => ({
@@ -193,6 +378,7 @@ export function serializeCentralizedMarketEstimate(estimate: CentralizedMarketEs
 			bestAskQuote: observation.bestAskQuote,
 			bestBidQuote: observation.bestBidQuote,
 			bidDepthEth: formatFixed(observation.bidDepthEth),
+			chainId: observation.chainId,
 			exchangeId: observation.exchangeId,
 			ethTickerTimestamp: observation.ethTickerTimestamp === undefined ? undefined : new Date(observation.ethTickerTimestamp).toISOString(),
 			observedAt: new Date(observation.observedAt).toISOString(),
@@ -274,7 +460,7 @@ function ccxtExchangeFactory(exchangeId: string, timeoutMilliseconds: number): M
 	return wrapped
 }
 
-async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, assetId: string, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
+async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
 	const exchange = factory(source.exchangeId, settings.requestTimeoutMilliseconds)
 	await exchange.loadMarkets()
 	const [orderBook, ethTicker] = await Promise.all([exchange.fetchOrderBook(source.repMarket, settings.orderBookLimit), source.ethMarket === undefined ? Promise.resolve(undefined) : exchange.fetchTicker(source.ethMarket)])
@@ -291,6 +477,7 @@ async function observeSource(source: CentralizedMarketSource, settings: Centrali
 		bestAskQuote: bestAsk.toString(),
 		bestBidQuote: bestBid.toString(),
 		bidDepthEth: fixed(bidDepthEth, `${source.exchangeId} bid depth`),
+		chainId,
 		exchangeId: source.exchangeId,
 		ethTickerTimestamp: optionalTimestamp(ethTicker?.timestamp),
 		observedAt,
@@ -315,10 +502,11 @@ function median(values: readonly bigint[]) {
 
 export function aggregateCentralizedMarketObservations(observations: readonly CentralizedMarketObservation[], settings: CentralizedMarketSettings, assetId: string, now = Date.now()): CentralizedMarketEstimate | undefined {
 	if (settings.sources.length === 0 && observations.length === 0) return undefined
-	if (observations.some(observation => observation.assetId.toLowerCase() !== assetId.toLowerCase())) {
-		throw new Error('Centralized market observations must describe one exact REP asset')
+	if (settings.assetAddress.toLowerCase() !== assetId.toLowerCase() || observations.some(observation => observation.assetId.toLowerCase() !== assetId.toLowerCase() || observation.chainId !== settings.assetChainId)) {
+		throw new Error('Centralized market observations must describe one exact REP asset and chain')
 	}
 	const fresh = observations.filter(observation => {
+		if (settings.requiredForExecution && (observation.orderBookTimestamp === undefined || (observation.usesEthTicker && observation.ethTickerTimestamp === undefined))) return false
 		const timestamps = [observation.orderBookTimestamp ?? observation.observedAt, ...(observation.usesEthTicker ? [observation.ethTickerTimestamp ?? observation.observedAt] : [])]
 		return timestamps.every(timestamp => timestamp <= now && now - timestamp <= settings.maximumObservationAgeMilliseconds)
 	})
@@ -329,6 +517,7 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 			assetId,
 			askDepthEth: 0n,
 			bidDepthEth: 0n,
+			chainId: settings.assetChainId,
 			maximumPriceRepPerEth: 0n,
 			minimumPriceRepPerEth: 0n,
 			observations: fresh,
@@ -351,6 +540,7 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 		assetId,
 		askDepthEth,
 		bidDepthEth,
+		chainId: settings.assetChainId,
 		maximumPriceRepPerEth,
 		minimumPriceRepPerEth,
 		observations: fresh,
@@ -360,9 +550,10 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	}
 }
 
-export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now = Date.now()): Promise<CentralizedMarketEstimate | undefined> {
+export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now = Date.now()): Promise<CentralizedMarketEstimate | undefined> {
 	if (settings.sources.length === 0) return undefined
-	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, assetId, factory, now)))
+	if (settings.assetAddress.toLowerCase() !== assetId.toLowerCase() || settings.assetChainId !== chainId) throw new Error('Centralized market configuration does not match the exact REP asset and chain')
+	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, assetId, chainId, factory, now)))
 	const observations = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 	const estimate = aggregateCentralizedMarketObservations(observations, settings, assetId, now)
 	if (estimate === undefined) return undefined
@@ -382,11 +573,13 @@ export function centralizedPriceDeviationBps(priceRepPerEth: bigint, estimate: C
 }
 
 export function centralizedPriceAllowsExecution(priceRepPerEth: bigint, estimate: CentralizedMarketEstimate | undefined, settings: CentralizedMarketSettings, assetId: string, now = Date.now()) {
+	if (!centralizedMarketConfigurationAllowsExecution(settings)) return false
 	if (estimate === undefined) return !settings.requiredForExecution
-	if (estimate.assetId.toLowerCase() !== assetId.toLowerCase()) return !settings.requiredForExecution
+	if (estimate.assetId.toLowerCase() !== assetId.toLowerCase() || estimate.chainId !== settings.assetChainId) return !settings.requiredForExecution
 	if (!estimate.reliable) return !settings.requiredForExecution
 	if (
 		estimate.observations.some(observation => {
+			if (settings.requiredForExecution && (observation.orderBookTimestamp === undefined || (observation.usesEthTicker && observation.ethTickerTimestamp === undefined))) return true
 			const timestamps = [observation.orderBookTimestamp ?? observation.observedAt, ...(observation.usesEthTicker ? [observation.ethTickerTimestamp ?? observation.observedAt] : [])]
 			return timestamps.some(timestamp => timestamp > now || now - timestamp > settings.maximumObservationAgeMilliseconds)
 		})

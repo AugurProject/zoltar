@@ -30,6 +30,9 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
 		centralizedMarkets: {
+			assetAddress: address,
+			assetChainId: 1,
+			assetSymbol: 'REP',
 			depthBps: 500n,
 			maximumDexDeviationBps: 1_000n,
 			maximumObservationAgeMilliseconds: 30_000,

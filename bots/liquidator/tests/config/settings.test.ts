@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+import { getAddress } from '../helpers/ethereum.ts'
 import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
 
 const settings = {
 	approvedUniverses: ['0'],
 	centralizedMarkets: {
+		assetAddress: '0x0000000000000000000000000000000000000000',
+		assetChainId: 11155111,
+		assetSymbol: 'REP',
 		depthBps: 500,
 		maximumDexDeviationBps: 1000,
 		maximumObservationAgeMilliseconds: 30000,
@@ -46,6 +50,7 @@ const settings = {
 	selectedPools: [],
 	strategy: {
 		allowAutomaticDeposits: true,
+		allowAutomaticPoolCreation: false,
 		allowAutomaticVaultMigrations: true,
 		allowAutomaticWithdrawals: true,
 		candidatePriority: 'largest-bonus',
@@ -125,5 +130,16 @@ describe('liquidator settings', () => {
 				runtime: { ...settings.runtime, execute: true },
 			}),
 		).toThrow('deployed WETH contract')
+	})
+
+	test('parses desired origin pools and exact child REP market configurations', () => {
+		const childMarket = { ...settings.centralizedMarkets, assetAddress: '0x0000000000000000000000000000000000000011' }
+		const parsed = parseSettings({
+			...settings,
+			childMarketConfigurations: [childMarket],
+			desiredPools: [{ initialReportPriorityFeeWeiPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: '12500', universeId: '0' }],
+		})
+		expect(parsed.childMarketConfigurations[0]?.assetAddress).toBe(getAddress(childMarket.assetAddress))
+		expect(parsed.desiredPools[0]).toEqual({ initialReportPriorityFeeWeiPerGas: 1_000_000_000n, questionId: 7n, statoblastSecurityMultiplierBps: 12_500n, universeId: 0n })
 	})
 })

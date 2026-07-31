@@ -1,24 +1,33 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, readContractAtBlock, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { loadSettings, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
+import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type DesiredPoolSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { stagedOperationOutcome } from '#core/staged-outcome'
-import { dryRunCandidate, executeLiquidation, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
-import { assertIntentSender, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState, type PoolObservation } from '#state/operator-state'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, saveDurableState, type PoolObservation } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed, sortCandidates } from '#core/strategy'
-import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
-import { centralizedPriceAllowsExecution, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
+import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketObservationsForAsset, requireCanonicalBlock, requireCanonicalDexEvidence } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { securityPoolFactoryAbi } from '#contracts/abi'
+
+const constantProductPairAbi = [
+	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'token1', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getReserves', outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], stateMutability: 'view', type: 'function' },
+] as const
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -41,6 +50,46 @@ function chainFor(settings: OperatorSettings) {
 	})
 }
 
+async function canonicalBlockHash(settings: OperatorSettings, blockNumber: bigint) {
+	const currentChain = chainFor(settings)
+	const observations = await Promise.all(
+		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
+			const block = await createPublicClient({ chain: currentChain, transport: http(endpoint) }).getBlock({ blockNumber })
+			if (block.hash === undefined) throw new Error('Canonical block is missing its hash')
+			return { endpoint, value: block.hash }
+		}),
+	)
+	return quorumValue('market evidence canonical block', observations)
+}
+
+async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings) {
+	const currentChain = chainFor(settings)
+	const observations = await Promise.all(
+		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
+			const client = createPublicClient({ chain: currentChain, transport: http(endpoint) })
+			const originId = await client.readContract({
+				abi: securityPoolFactoryAbi,
+				address: settings.deployment.securityPoolFactory,
+				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeWeiPerGas],
+				functionName: 'getOriginId',
+			})
+			return {
+				endpoint,
+				value: getAddress(
+					await client.readContract({
+						abi: securityPoolFactoryAbi,
+						address: settings.deployment.securityPoolFactory,
+						args: [originId, desired.universeId],
+						functionName: 'getSecurityPool',
+					}),
+				),
+			}
+		}),
+	)
+	const address = quorumValue('desired origin security pool', observations)
+	return { address, desired }
+}
+
 function selectedCandidate(pools: readonly PoolObservation[], settings: OperatorSettings) {
 	const candidates = pools.flatMap(pool => pool.candidates)
 	const candidate = sortCandidates(candidates, settings.strategy.candidatePriority)[0]
@@ -48,6 +97,48 @@ function selectedCandidate(pools: readonly PoolObservation[], settings: Operator
 	const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
 	if (pool === undefined) throw new Error('Selected candidate pool disappeared from the scan')
 	return { candidate, pool }
+}
+
+function marketConfigurations(settings: OperatorSettings) {
+	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]
+}
+
+function marketConfigurationForPool(pool: PoolObservation, settings: OperatorSettings) {
+	return marketConfigurations(settings).find(configuration => configuration.assetAddress.toLowerCase() === pool.repToken.toLowerCase())
+}
+
+function marketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>) {
+	const configuration = marketConfigurationForPool(pool, settings)
+	if (configuration === undefined || !centralizedMarketConfigurationAllowsExecution(configuration)) return false
+	const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase())
+	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
+	if (configuration.venueConsensus === undefined) return configuration.requiredForExecution ? false : centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, configuration, pool.repToken)
+	return marketConsensusAllowsExecution(
+		pool.lastPrice,
+		marketConsensus,
+		{
+			maximumDeviationBps: configuration.maximumDexDeviationBps,
+			maximumObservationAgeMilliseconds: configuration.maximumObservationAgeMilliseconds,
+			requiredForExecution: configuration.requiredForExecution,
+		},
+		pool.repToken,
+		settings.network.chainId,
+	)
+}
+
+async function canonicalMarketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {
+	if (!marketPriceAllowsExecution(pool, settings, state)) return false
+	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
+	try {
+		await requireCanonicalDexEvidence(marketConsensus, readCanonicalHash)
+		return true
+	} catch (error) {
+		void error
+		state.marketObservations = discardDexMarketObservations(state.marketObservations)
+		state.marketConsensus = undefined
+		state.marketConsensusByAsset.clear()
+		return false
+	}
 }
 
 async function recoverPendingTransactions(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>) {
@@ -109,12 +200,19 @@ async function recoverPendingTransactions(settings: OperatorSettings, wallet: Wa
 			throw new Error(`Transaction ${intent.hash} has no receipt but signer nonce ${intent.nonce.toString()} was consumed; manual reconciliation is required`)
 		}
 		const blocks = await Promise.all(clients.map(async ({ client }) => await client.getBlockNumber()))
-		if (intent.mode === 'private' && blocks.every(block => block > intent.maxBlockNumber)) {
+		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
+		if (recoveryAction === 'expire-private') {
+			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS)
 			state.pendingTransactions = state.pendingTransactions.filter(value => value.hash.toLowerCase() !== intent.hash.toLowerCase())
-			recordActivity(state, { hash: intent.hash, kind: intent.kind, message: `Private intent expired without inclusion: ${intent.label}`, status: 'failed' })
+			recordActivity(state, { hash: intent.hash, kind: intent.kind, message: `Private price-dependent intent expired after canonical finality without inclusion: ${intent.label}`, status: 'failed' })
 			await saveDurableState(settings.runtime.stateFile, state)
 			continue
 		}
+		if (recoveryAction === 'retain') {
+			const recovery = intent.mode === 'public' ? 'manual reconciliation or a later receipt is required' : `private validity and ${PRIVATE_INTENT_FINALITY_BLOCKS.toString()} canonical confirmation blocks must pass`
+			throw new Error(`Price-dependent transaction ${intent.hash} remains ambiguous; ${recovery}`)
+		}
+		if (!recoveredIntentCanBeResubmitted(intent)) throw new Error(`Price-dependent transaction ${intent.hash} cannot be resubmitted without fresh market evidence`)
 		if (wallet.account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
 		await submitSignedTransaction({
 			address: intent.sender,
@@ -209,7 +307,7 @@ async function main() {
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
-				getState: () => operatorSnapshot(state, settings.runtime.execute, settings.centralizedMarkets),
+				getState: () => operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)),
 				hostname: settings.runtime.uiHost,
 				setPaused: async value => {
 					if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -248,6 +346,41 @@ async function main() {
 							details: approvedUniverses.map(universe => universe.toString()).join(', '),
 							kind: 'configuration',
 							message: 'Truthful universe selection saved',
+							status: 'info',
+						})
+						return serializedSettings(settings, true)
+					}),
+				setMarketConfiguration: value =>
+					configurationMutationGate.run(async () => {
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Market configuration must be an object')
+						const rootValue = Reflect.get(value, 'root')
+						const childrenValue = Reflect.get(value, 'children')
+						const desiredPools = parseDesiredPools(
+							Reflect.get(value, 'desiredPools') ??
+								settings.desiredPools.map(pool => ({
+									initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+									questionId: pool.questionId.toString(),
+									statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
+									universeId: pool.universeId.toString(),
+								})),
+						)
+						const centralizedMarkets = parseCentralizedMarketSettings(rootValue ?? value)
+						if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
+						const childMarketConfigurations = (childrenValue ?? []).map(parseCentralizedMarketSettings)
+						if (centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Market consensus configuration targets another chain')
+						if (childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configuration targets another chain')
+						const configuredAssets = [centralizedMarkets, ...childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
+						if (new Set(configuredAssets).size !== configuredAssets.length) throw new Error('Market configurations must target distinct REP assets')
+						const rootUniverse = state.universes.find(universe => universe.parentId === undefined)
+						if (rootUniverse !== undefined && centralizedMarkets.assetAddress.toLowerCase() !== rootUniverse.repToken.toLowerCase()) throw new Error('Market consensus configuration targets another REP asset')
+						const knownChildRep = new Set(state.universes.filter(universe => universe.parentId !== undefined).map(universe => universe.repToken.toLowerCase()))
+						if (knownChildRep.size > 0 && childMarketConfigurations.some(configuration => !knownChildRep.has(configuration.assetAddress.toLowerCase()))) throw new Error('Child market configuration targets an unknown universe REP asset')
+						await persistSettings(current => ({ ...current, centralizedMarkets, childMarketConfigurations, desiredPools }))
+						clearMarketEvidenceForConfigurationChange(state)
+						recordActivity(state, {
+							details: `${(centralizedMarkets.sources.length + childMarketConfigurations.reduce((total, configuration) => total + configuration.sources.length, 0)).toString()} CEX source(s) across ${(childMarketConfigurations.length + 1).toString()} REP asset(s)`,
+							kind: 'configuration',
+							message: 'Market consensus configuration saved',
 							status: 'info',
 						})
 						return serializedSettings(settings, true)
@@ -377,15 +510,79 @@ async function main() {
 					quorumValue('liquidation execution snapshot', observations)
 				}
 				const scannedBlock = await client.getBlock()
+				if (scannedBlock.hash === undefined || scannedBlock.number === undefined) throw new Error('Latest block is missing canonical identity')
+				const scannedBlockHash = scannedBlock.hash
+				const scannedBlockNumber = scannedBlock.number
+				const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlockHash, number: scannedBlockNumber }, state, previousBlockNumber => canonicalBlockHash(settings, previousBlockNumber))
+				state.lastScannedBlock = scannedBlockNumber
+				state.lastScannedBlockHash = scannedBlockHash
+				state.lastScannedTimestamp = scannedBlock.timestamp
+				if (replacedMarketHead) {
+					recordActivity(state, {
+						details: `block=${scannedBlockNumber.toString()}`,
+						kind: 'scan',
+						message: 'DEX market evidence reset after canonical head replacement',
+						status: 'info',
+					})
+					state.lastScanAt = new Date().toISOString()
+					await saveDurableState(settings.runtime.stateFile, state)
+					return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+				}
 				state.pools = primary.pools
 				state.universes = primary.universes
 				state.walletRepByToken = primary.walletRepByToken
-				state.lastScannedBlock = scannedBlock.number
-				state.lastScannedTimestamp = scannedBlock.timestamp
 				const rootUniverse = state.universes.find(universe => universe.parentId === undefined)
 				if (rootUniverse === undefined) throw new Error('Universe scan did not return the root REP asset')
-				state.centralizedMarket = await observeCentralizedMarkets(settings.centralizedMarkets, rootUniverse.repToken)
+				const universeRep = new Set(state.universes.map(universe => universe.repToken.toLowerCase()))
+				const activeMarketConfigurations = marketConfigurations(settings).filter(configuration => universeRep.has(configuration.assetAddress.toLowerCase()))
+				state.centralizedMarketsByAsset.clear()
+				state.marketConsensusByAsset.clear()
+				const newMarketObservations = []
+				for (const configuration of activeMarketConfigurations) {
+					const asset = getAddress(configuration.assetAddress)
+					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
+					if (centralizedMarket !== undefined) state.centralizedMarketsByAsset.set(asset.toLowerCase(), centralizedMarket)
+					newMarketObservations.push(...centralizedMarketConsensusObservations(centralizedMarket))
+					const dexMarkets = await observeConstantProductMarkets(configuration, asset, settings.deployment.weth, async pair => {
+						const [token0, token1, reserves] = await Promise.all([
+							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, scannedBlockNumber),
+							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, scannedBlockNumber),
+							readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, scannedBlockNumber),
+						])
+						if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
+						return { blockHash: scannedBlockHash, blockNumber: scannedBlockNumber, blockTimestamp: scannedBlock.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
+					})
+					newMarketObservations.push(...dexMarkets.observations)
+				}
+				try {
+					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => (await client.getBlock({ blockNumber })).hash)
+				} catch (error) {
+					state.marketObservations = discardDexMarketObservations(state.marketObservations)
+					state.marketConsensus = undefined
+					state.marketConsensusByAsset.clear()
+					throw error
+				}
+				const observedAt = Date.now()
+				const maximumMarketAge = activeMarketConfigurations.reduce((maximum, configuration) => Math.max(maximum, configuration.maximumObservationAgeMilliseconds), 0)
+				state.marketObservations = [...state.marketObservations, ...newMarketObservations].filter(observation => observation.observedAt <= observedAt && observedAt - observation.observedAt <= maximumMarketAge).slice(-2_000)
+				for (const configuration of activeMarketConfigurations) {
+					if (configuration.venueConsensus === undefined) continue
+					const assetObservations = marketObservationsForAsset(state.marketObservations, configuration.assetAddress, settings.network.chainId)
+					const estimate = estimateMarketConsensus(assetObservations, marketConsensusSettings(configuration), configuration.assetAddress, settings.network.chainId, observedAt)
+					state.marketConsensusByAsset.set(configuration.assetAddress.toLowerCase(), estimate)
+				}
+				state.centralizedMarket = state.centralizedMarketsByAsset.get(rootUniverse.repToken.toLowerCase())
+				state.marketConsensus = state.marketConsensusByAsset.get(rootUniverse.repToken.toLowerCase())
 				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
+				const desiredPoolStatuses = await Promise.all(settings.desiredPools.map(desired => desiredPoolStatus(settings, desired)))
+				const deployedDesiredPools = desiredPoolStatuses.filter(status => status.address !== getAddress('0x0000000000000000000000000000000000000000'))
+				const desiredSelections = deployedDesiredPools.filter(status => !settings.selectedPools.some(pool => pool.toLowerCase() === status.address.toLowerCase()))
+				if (desiredSelections.length > 0) {
+					await persistSettings(current => ({ ...current, selectedPools: [...current.selectedPools, ...desiredSelections.map(status => status.address)] }))
+					for (const pool of state.pools) {
+						if (desiredSelections.some(status => status.address.toLowerCase() === pool.address.toLowerCase())) pool.selected = true
+					}
+				}
 				const inheritedSelections = inheritedChildPoolSelections(state.pools, settings.selectedPools)
 				if (inheritedSelections.length > 0) {
 					await persistSettings(current => ({
@@ -406,6 +603,12 @@ async function main() {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
+					const missingDesiredPool = desiredPoolStatuses.find(status => status.address === getAddress('0x0000000000000000000000000000000000000000') && settings.approvedUniverses.includes(status.desired.universeId))
+					if (missingDesiredPool !== undefined && settings.strategy.allowAutomaticPoolCreation) {
+						await executeOriginPoolDeployment(wallet, settings, state, missingDesiredPool.desired)
+						await saveDurableState(settings.runtime.stateFile, state)
+						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+					}
 					const migration = selectVaultMigration(state.pools, state.universes, settings, scannedBlock.timestamp)
 					if (migration !== undefined) {
 						const childPool = migration.childPool
@@ -420,8 +623,7 @@ async function main() {
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					for (const pool of state.pools) {
-						const priceDependentMaintenanceAllowed = centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, pool.repToken)
-						if (await maintainVault(wallet, settings, state, pool, priceDependentMaintenanceAllowed)) {
+						if (await maintainVault(wallet, settings, state, pool, () => canonicalMarketPriceAllowsExecution(pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))) {
 							await saveDurableState(settings.runtime.stateFile, state)
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
@@ -429,24 +631,24 @@ async function main() {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
 						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						const centralizedPriceAllowed = centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)
+						const centralizedPriceAllowed = marketPriceAllowsExecution(selected.pool, settings, state)
 						if (!liquidationExecutionAllowed(selected.pool.lastPrice, centralizedPriceAllowed)) {
 							recordActivity(state, {
 								details: `pool=${selected.pool.address}`,
 								kind: 'scan',
-								message: selected.pool.lastPrice === 0n ? 'Candidate skipped because its pool has no coordinator REP price' : 'Candidate skipped because its REP price disagrees with centralized markets',
+								message: selected.pool.lastPrice === 0n ? 'Candidate skipped because its pool has no coordinator REP price' : 'Candidate skipped because its REP price disagrees with the independent market reference',
 								status: 'info',
 							})
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate)
+						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))
 					}
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings)
 					if (selected !== undefined) {
-						if (!centralizedPriceAllowsExecution(selected.pool.lastPrice, state.centralizedMarket, settings.centralizedMarkets, selected.pool.repToken)) {
+						if (!marketPriceAllowsExecution(selected.pool, settings, state)) {
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
 						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`

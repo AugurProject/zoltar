@@ -4,6 +4,7 @@ import { FORK_MIGRATION_WINDOW_SECONDS, inheritedChildPoolSelections, isPoolExec
 import { validatePoolUniverseRep } from '../../src/monitoring/pool-monitor.ts'
 import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
 import { getAddress, zeroAddress } from '../helpers/ethereum.ts'
+import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
 const forker = getAddress('0x0000000000000000000000000000000000000008')
@@ -12,6 +13,9 @@ function settings(approvedUniverses = ['101']) {
 	return parseSettings({
 		approvedUniverses,
 		centralizedMarkets: {
+			assetAddress: zeroAddress,
+			assetChainId: 1,
+			assetSymbol: 'REP',
 			depthBps: 500,
 			maximumDexDeviationBps: 1000,
 			maximumObservationAgeMilliseconds: 30000,
@@ -223,6 +227,7 @@ describe('fork migration strategy', () => {
 			assetId: rootRep,
 			askDepthEth: 4n * 10n ** 18n,
 			bidDepthEth: 4n * 10n ** 18n,
+			chainId: 1,
 			maximumPriceRepPerEth: 10n * 10n ** 18n,
 			minimumPriceRepPerEth: 10n * 10n ** 18n,
 			observations: [],
@@ -230,19 +235,79 @@ describe('fork migration strategy', () => {
 			reasons: [],
 			reliable: true,
 		}
+		const observedAt = Date.now()
+		const marketObservation = (kind: 'cex' | 'dex', sourceId: string) => ({ assetId: rootRep, askDepthEth: 2n * 10n ** 18n, bidDepthEth: 2n * 10n ** 18n, chainId: 1, kind, observationId: `${kind}:${sourceId}:1`, observedAt, priceRepPerEth: 10n * 10n ** 18n, sourceId })
+		state.marketConsensus = {
+			assetId: rootRep,
+			cex: {
+				askDepthEth: 4n * 10n ** 18n,
+				bidDepthEth: 4n * 10n ** 18n,
+				kind: 'cex',
+				maximumPriceRepPerEth: 10n * 10n ** 18n,
+				minimumPriceRepPerEth: 10n * 10n ** 18n,
+				observations: [marketObservation('cex', 'alpha'), marketObservation('cex', 'beta')],
+				priceRepPerEth: 10n * 10n ** 18n,
+				reasons: [],
+				reliable: true,
+			},
+			chainId: 1,
+			dex: {
+				askDepthEth: 4n * 10n ** 18n,
+				bidDepthEth: 4n * 10n ** 18n,
+				kind: 'dex',
+				maximumPriceRepPerEth: 10n * 10n ** 18n,
+				minimumPriceRepPerEth: 10n * 10n ** 18n,
+				observations: [marketObservation('dex', 'one'), marketObservation('dex', 'two')],
+				priceRepPerEth: 10n * 10n ** 18n,
+				reasons: [],
+				reliable: true,
+			},
+			priceRepPerEth: 10n * 10n ** 18n,
+			reasons: [],
+			reliable: true,
+			sourceCount: 4,
+		}
 		const centralizedMarkets = {
 			...settings().centralizedMarkets,
+			assetAddress: rootRep,
 			minimumSourceCount: 2,
 			requiredForExecution: true,
 			sources: [
 				{ ethMarket: 'ETH/USD', exchangeId: 'alpha', repMarket: 'REP/USD' },
 				{ ethMarket: 'ETH/USD', exchangeId: 'beta', repMarket: 'REP/USD' },
 			],
+			venueConsensus: {
+				allowSingleGroupFallback: false,
+				dexProbeDepthEth: 1n * 10n ** 18n,
+				dexSources: [
+					{ feeBps: 30, pair: getAddress('0x0000000000000000000000000000000000000011'), sourceId: 'one' },
+					{ feeBps: 30, pair: getAddress('0x0000000000000000000000000000000000000012'), sourceId: 'two' },
+				],
+				maximumGroupDeviationBps: 500n,
+				minimumDexAskDepthEth: 1n * 10n ** 18n,
+				minimumDexBidDepthEth: 1n * 10n ** 18n,
+				minimumDexSourceCount: 2,
+				minimumSourceObservationCount: 2,
+				minimumSourceObservationSpanMilliseconds: 10_000,
+				minimumTotalSourceCount: 3,
+			},
 		}
 		const snapshot = operatorSnapshot(state, false, centralizedMarkets)
 		expect(snapshot.pools.find(candidate => candidate.address === rootPool.address)?.centralizedPriceAllowed).toBe(true)
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(false)
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceDeviationBps).toBeUndefined()
+
+		const childObservation = (observation: MarketConsensusObservation) => ({ ...observation, assetId: childRep, observationId: `${observation.observationId}:child` })
+		const childConsensus = {
+			...state.marketConsensus,
+			assetId: childRep,
+			cex: { ...state.marketConsensus.cex, observations: state.marketConsensus.cex.observations.map(childObservation) },
+			dex: { ...state.marketConsensus.dex, observations: state.marketConsensus.dex.observations.map(childObservation) },
+		}
+		state.marketConsensusByAsset.set(childRep.toLowerCase(), childConsensus)
+		const childConfiguration = { ...centralizedMarkets, assetAddress: childRep }
+		const childSnapshot = operatorSnapshot(state, false, [centralizedMarkets, childConfiguration])
+		expect(childSnapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(true)
 	})
 
 	test('waits while a staged operation still involves the bot vault', () => {

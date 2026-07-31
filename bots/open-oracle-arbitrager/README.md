@@ -867,29 +867,70 @@ unsupported venue.
 Price samples are stored at `runtime.priceHistoryFile`. The example uses
 `.state/prices-mainnet.jsonl`; keep files network-specific.
 
-### Centralized-market manipulation guard
+### Independent CEX and DEX manipulation guard
 
 The shared market observer uses CCXT's public unified `fetchTicker` and
 `fetchOrderBook` APIs. Configure independent exchanges under
 `centralizedMarkets.sources` with an exchange id, a unified `REP/QUOTE` market,
 and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
-dashboard shows each normalized REP/ETH observation and its executable bid and
+cross market must be exactly `ETH/<REP quote>`; direct `REP/ETH` books must omit
+it. The
+configuration also declares `assetAddress`, `assetChainId`, and the required
+`REP` base symbol; startup rejects a mapping that does not match the configured
+REP deployment and chain. CEX and DEX source IDs share one global namespace so
+one failure domain cannot vote in both groups. The dashboard shows each
+normalized REP/ETH observation and its executable bid and
 ask depth inside the configured `depthBps` band. A cross-quoted observation is
 fresh only when both the REP order book and ETH reference ticker are fresh.
+Exchange-provided timestamps are retained (using the older timestamp for a
+cross-quoted observation), so polling cached data cannot extend freshness or
+manufacture temporal persistence. Required consensus does not admit a CEX
+observation without a native order-book timestamp and, for cross quotes, a
+native ETH-ticker timestamp.
 
-The reference estimate is the median of fresh venue prices. Reliability requires
+The CEX estimate is the median of fresh venue prices. Reliability requires
 `minimumSourceCount`, minimum bid and ask depth, and venue dispersion within
-`maximumVenueDispersionBps`. With `requiredForExecution` enabled, at least two
-independent exchanges are required and the bot rejects a DEX opportunity when
-the executable REP/ETH quote differs by more than
-`maximumDexDeviationBps`. The guard runs during opportunity selection and again
-against the canonical final execution quote. If required confirmation becomes
-stale or unavailable, execution fails closed.
+`maximumVenueDispersionBps`. With `requiredForExecution` enabled,
+`venueConsensus` is mandatory, at least two independent exchanges are required,
+the configured source lists must be large enough to satisfy every CEX, DEX, and
+total-source minimum, and the complete CEX/DEX/temporal quorum fails closed. The current price regime
+itself must persist for the configured count and span; old observations cannot
+warm up a newly changed price. The guard runs during opportunity selection and
+again against the canonical final execution quote. That final check revalidates
+evidence age after simulation and canonical-chain preflight, before the durable
+pending-position journal is written, so an expired quote cannot authorize
+submission or leave an intent that recovery might broadcast.
+
+With `venueConsensus` configured, the bot also builds a separate DEX consensus
+from executable two-sided Uniswap V2, V3, and V4 quotes. Each protocol is one
+failure domain regardless of its number of fee tiers. The venue selected for an
+opportunity is excluded from that opportunity's reference, so a candidate never
+votes for itself. Explicit constant-product pair sources can supplement those
+discovered venues; the bot pins their reserve reads and every executable quote
+to the scanned canonical block. Repeated polls of the same block retain the same
+native observation identity and cannot build temporal persistence. The bot
+rechecks the block hash after each market-read batch and discards DEX history if
+the canonical hash changes.
+
+The two groups must agree within `maximumGroupDeviationBps` when both are
+reliable. Single-group fallback is disabled by default and is used only when
+`allowSingleGroupFallback` is explicitly enabled; rejected-group observations
+never count toward its total-source quorum. Two coherent but disagreeing groups
+stop execution because the bot cannot identify the truthful group. Per-source DEX
+depth, minimum DEX and total source counts, freshness, venue dispersion, and the
+final candidate deviation are all configurable. The dashboard reports the CEX
+median, DEX consensus, guarded reference, and DEX depth separately.
+`minimumSourceObservationCount` and
+`minimumSourceObservationSpanMilliseconds` additionally require each source to
+remain coherent across multiple polls before it can vote. The span cannot exceed
+`maximumObservationAgeMilliseconds`, and leaving then returning to an earlier
+price regime restarts its history.
 
 This reference does not replace executable Uniswap quotes, spot/TWAP checks,
 quorum reads, slippage limits, or profitability accounting. It is a second,
-off-chain manipulation signal. Operators must verify that each configured
-ticker is the configured primary REP asset. The estimate is bound to that token;
+off-chain manipulation signal. Operators must still verify that each configured
+exchange ticker represents the declared REP contract. The estimate is bound to
+that contract and chain;
 fork REP tokens without matching CEX markets remain ineligible when CEX
 confirmation is required and do not inherit the primary token's estimate.
 

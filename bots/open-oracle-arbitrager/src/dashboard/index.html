@@ -336,18 +336,23 @@
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Independent reference</p>
-						<h3>Centralized-market REP estimate</h3>
+						<h3>REP market consensus</h3>
 					</div>
 					<span id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</span>
 				</div>
 				<div id="centralized-market-summary" class="metric-grid">
-					<div class="metric"><span class="metric-label">Estimated REP / ETH</span><strong id="centralized-market-price">—</strong></div>
-					<div class="metric"><span class="metric-label">Bid depth</span><strong id="centralized-market-bid-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">Ask depth</span><strong id="centralized-market-ask-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">Fresh sources</span><strong id="centralized-market-source-count">0</strong></div>
+					<div class="metric"><span class="metric-label">CEX median REP / ETH</span><strong id="centralized-market-price">—</strong></div>
+					<div class="metric"><span class="metric-label">DEX consensus REP / ETH</span><strong id="dex-market-price">—</strong></div>
+					<div class="metric"><span class="metric-label">Guarded reference REP / ETH</span><strong id="guarded-market-price">—</strong></div>
+					<div class="metric"><span class="metric-label">DEX bid depth</span><strong id="dex-market-bid-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">DEX ask depth</span><strong id="dex-market-ask-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">CEX bid depth</span><strong id="centralized-market-bid-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">CEX ask depth</span><strong id="centralized-market-ask-depth">—</strong></div>
+					<div class="metric"><span class="metric-label">Consensus sources</span><strong id="centralized-market-source-count">0 CEX</strong></div>
 				</div>
 				<div class="table-scroll" tabindex="0" aria-label="Centralized market observations">
 					<table>
+						<caption>CEX observations</caption>
 						<thead>
 							<tr>
 								<th>Exchange</th>
@@ -437,7 +442,7 @@
 							<tr>
 								<th>Report</th>
 								<th>Decision</th>
-								<th>CEX deviation</th>
+								<th>Reference deviation</th>
 								<th>Executable REP / ETH</th>
 								<th>Reason</th>
 								<th>Direction</th>

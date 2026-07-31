@@ -243,7 +243,8 @@ section {
 }
 
 input,
-select {
+select,
+textarea {
 	width: 100%;
 	min-height: 2.65rem;
 	padding: 0.55rem 0.7rem;
@@ -251,6 +252,24 @@ select {
 	border-radius: 0.55rem;
 	color: var(--text);
 	background: var(--bg);
+}
+
+textarea {
+	min-height: 20rem;
+	resize: vertical;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	line-height: 1.45;
+}
+
+#market-configuration-form {
+	margin-top: 1rem;
+}
+
+#market-configuration-form label {
+	display: grid;
+	gap: 0.35rem;
+	color: var(--muted);
+	font-size: 0.78rem;
 }
 
 input[type="checkbox"] {
@@ -291,6 +310,16 @@ table {
 	width: 100%;
 	min-width: 72rem;
 	border-collapse: collapse;
+}
+
+caption {
+	padding: 0.65rem 0.8rem;
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 750;
+	letter-spacing: 0.06em;
+	text-align: left;
+	text-transform: uppercase;
 }
 
 .universe-shell td {
@@ -537,7 +566,15 @@ td small {
 	}
 
 	thead {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	tbody tr {

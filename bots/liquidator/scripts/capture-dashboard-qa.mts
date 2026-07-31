@@ -168,6 +168,16 @@ try {
 			strategyForm.requestSubmit()
 			await new Promise(resolve => setTimeout(resolve, 500))
 			const strategyStatus = document.querySelector('#strategy-status')?.textContent
+			const poolCreation = document.querySelector('input[name="allowAutomaticPoolCreation"]')
+			if (!(poolCreation instanceof HTMLInputElement)) throw new Error('Pool creation control missing')
+			poolCreation.checked = true
+			strategyForm.requestSubmit()
+			await new Promise(resolve => setTimeout(resolve, 500))
+			const poolCreationEnabled = poolCreation.checked && document.querySelector('#strategy-status')?.textContent === 'Saved'
+			poolCreation.checked = false
+			strategyForm.requestSubmit()
+			await new Promise(resolve => setTimeout(resolve, 500))
+			const poolCreationDisabled = !poolCreation.checked && document.querySelector('#strategy-status')?.textContent === 'Saved'
 			const privateKey = document.querySelector('input[name="privateKey"]')
 			const updateSigner = document.querySelector('#update-signer')
 			const signerForm = document.querySelector('#signer-form')
@@ -198,6 +208,8 @@ try {
 				signerActivated,
 				signerClearCancelled,
 				signerCleared,
+				poolCreationDisabled,
+				poolCreationEnabled,
 				strategyStatus
 			}
 		})()`),

@@ -5,7 +5,9 @@ import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, typ
 import { formatDecimalAmount } from '#config/settings'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
-import { centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
+import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 export type PoolObservation = {
 	activeVaultCount: bigint
@@ -72,7 +74,7 @@ export type Activity = {
 	at: string
 	details?: string | undefined
 	hash?: Hex | undefined
-	kind: 'configuration' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'migration' | 'scan' | 'withdrawal'
+	kind: 'configuration' | 'deployment' | 'deposit' | 'error' | 'fees' | 'liquidation' | 'migration' | 'scan' | 'withdrawal'
 	message: string
 	status: 'confirmed' | 'dry-run' | 'failed' | 'info' | 'pending'
 }
@@ -94,12 +96,13 @@ export type PendingStagedOperation = {
 
 export type PendingTransactionIntent = {
 	hash: Hex
-	kind: 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
+	kind: 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
 	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; initiator: Address; target: Address; type: 'pending-liquidation' }
+	requiresMarketEvidence: boolean
 	sender: Address
 	serializedTransaction: Hex
 	submissionBlock: bigint
@@ -108,9 +111,14 @@ export type PendingTransactionIntent = {
 export type RuntimeState = {
 	activities: Activity[]
 	centralizedMarket: CentralizedMarketEstimate | undefined
+	centralizedMarketsByAsset: Map<string, CentralizedMarketEstimate>
+	marketConsensus: MarketConsensusEstimate | undefined
+	marketConsensusByAsset: Map<string, MarketConsensusEstimate>
+	marketObservations: MarketConsensusObservation[]
 	error: string | undefined
 	lastScanAt: string | undefined
 	lastScannedBlock: bigint | undefined
+	lastScannedBlockHash: Hex | undefined
 	lastScannedTimestamp: bigint | undefined
 	paused: boolean
 	pendingStagedOperations: PendingStagedOperation[]
@@ -129,9 +137,14 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 	return {
 		activities: [],
 		centralizedMarket: undefined,
+		centralizedMarketsByAsset: new Map(),
+		marketConsensus: undefined,
+		marketConsensusByAsset: new Map(),
+		marketObservations: [],
 		error: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
+		lastScannedBlockHash: undefined,
 		lastScannedTimestamp: undefined,
 		paused,
 		pendingStagedOperations: [],
@@ -145,6 +158,18 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		walletEth: 0n,
 		walletRepByToken: new Map(),
 	}
+}
+
+export function clearMarketEvidenceForConfigurationChange(state: { centralizedMarket: unknown; centralizedMarketsByAsset?: Map<string, unknown> | undefined; marketConsensus: unknown; marketConsensusByAsset?: Map<string, unknown> | undefined; marketObservations: unknown[] }) {
+	state.centralizedMarket = undefined
+	state.centralizedMarketsByAsset?.clear()
+	state.marketConsensus = undefined
+	state.marketConsensusByAsset?.clear()
+	state.marketObservations = []
+}
+
+export function recoveredIntentCanBeResubmitted(intent: Pick<PendingTransactionIntent, 'requiresMarketEvidence'>) {
+	return !intent.requiresMarketEvidence
 }
 
 export function recordActivity(state: RuntimeState, activity: Omit<Activity, 'at'> & { at?: string | undefined }) {
@@ -189,7 +214,9 @@ function candidateView(candidate: LiquidationCandidate) {
 	}
 }
 
-export function operatorSnapshot(state: RuntimeState, execute: boolean, centralizedMarkets?: CentralizedMarketSettings) {
+export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
+	const configurations: readonly CentralizedMarketSettings[] = marketConfigurations === undefined ? [] : 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
+	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.rep, 0n)
 	const assumedDebt = state.pools.reduce((total, pool) => total + pool.botVault.allowance, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
@@ -256,6 +283,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, centrali
 	return {
 		activities: state.activities,
 		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
+		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, formatDecimalAmount),
 		error: state.error,
 		execute,
 		lastScanAt: state.lastScanAt,
@@ -272,42 +300,71 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, centrali
 			walletRep: formatDecimalAmount(walletRep),
 		},
 		paused: state.paused,
-		pools: state.pools.map(pool => ({
-			activeVaultCount: pool.activeVaultCount.toString(),
-			address: pool.address,
-			approvedUniverse: pool.approvedUniverse,
-			botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
-			candidates: pool.candidates.map(candidateView),
-			collateralEth: formatDecimalAmount(pool.collateralEth),
-			centralizedPriceAllowed: centralizedMarkets === undefined ? true : centralizedPriceAllowsExecution(pool.lastPrice, state.centralizedMarket, centralizedMarkets, pool.repToken),
-			currentRetentionRate: pool.currentRetentionRate.toString(),
-			forkActivationTime: pool.forkActivationTime.toString(),
-			forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
-			initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
-			isPriceValid: pool.isPriceValid,
-			lastPrice: formatDecimalAmount(pool.lastPrice),
-			centralizedPriceDeviationBps: state.centralizedMarket === undefined || centralizedMarkets === undefined ? undefined : centralizedPriceDeviationBps(pool.lastPrice, state.centralizedMarket, pool.repToken)?.toString(),
-			lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
-			manager: pool.manager,
-			minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),
-			minimumToken1Report: formatDecimalAmount(pool.minimumToken1Report),
-			multiplierBps: pool.multiplierBps.toString(),
-			parent: pool.parent,
-			parentUniverseId: pool.parentUniverseId?.toString(),
-			pendingReportId: pool.pendingReportId.toString(),
-			pendingReportSponsor: pool.pendingReportSponsor,
-			questionId: pool.questionId.toString(),
-			repToken: pool.repToken,
-			requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostEth),
-			selected: pool.selected,
-			securityPoolForker: pool.securityPoolForker,
-			systemState: pool.systemState.toString(),
-			totalAllowanceEth: formatDecimalAmount(pool.totalAllowanceEth),
-			totalRep: formatDecimalAmount(pool.totalRep),
-			truncatedVaults: pool.truncatedVaults,
-			universeId: pool.universeId.toString(),
-			vaults: pool.vaults.map(vault => vaultView(vault)),
-		})),
+		pools: state.pools.map(pool => {
+			const centralizedMarkets = marketConfigurationFor(pool.repToken)
+			const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.centralizedMarket : undefined)
+			const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.marketConsensus : undefined)
+			return {
+				activeVaultCount: pool.activeVaultCount.toString(),
+				address: pool.address,
+				approvedUniverse: pool.approvedUniverse,
+				botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
+				candidates: pool.candidates.map(candidateView),
+				collateralEth: formatDecimalAmount(pool.collateralEth),
+				centralizedPriceAllowed:
+					centralizedMarkets === undefined
+						? configurations.length === 0
+						: !centralizedMarketConfigurationAllowsExecution(centralizedMarkets)
+							? false
+							: centralizedMarkets.venueConsensus === undefined
+								? centralizedMarkets.requiredForExecution
+									? false
+									: centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, centralizedMarkets, pool.repToken)
+								: marketConsensusAllowsExecution(
+										pool.lastPrice,
+										marketConsensus,
+										{
+											maximumDeviationBps: centralizedMarkets.maximumDexDeviationBps,
+											maximumObservationAgeMilliseconds: centralizedMarkets.maximumObservationAgeMilliseconds,
+											requiredForExecution: centralizedMarkets.requiredForExecution,
+										},
+										pool.repToken,
+										centralizedMarkets.assetChainId,
+									),
+				currentRetentionRate: pool.currentRetentionRate.toString(),
+				forkActivationTime: pool.forkActivationTime.toString(),
+				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
+				initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+				isPriceValid: pool.isPriceValid,
+				lastPrice: formatDecimalAmount(pool.lastPrice),
+				centralizedPriceDeviationBps:
+					centralizedMarkets?.venueConsensus === undefined
+						? centralizedMarket === undefined || centralizedMarkets === undefined
+							? undefined
+							: centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)?.toString()
+						: marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)?.toString(),
+				lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
+				manager: pool.manager,
+				minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),
+				minimumToken1Report: formatDecimalAmount(pool.minimumToken1Report),
+				multiplierBps: pool.multiplierBps.toString(),
+				parent: pool.parent,
+				parentUniverseId: pool.parentUniverseId?.toString(),
+				pendingReportId: pool.pendingReportId.toString(),
+				pendingReportSponsor: pool.pendingReportSponsor,
+				questionId: pool.questionId.toString(),
+				repToken: pool.repToken,
+				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostEth),
+				selected: pool.selected,
+				securityPoolForker: pool.securityPoolForker,
+				systemState: pool.systemState.toString(),
+				totalAllowanceEth: formatDecimalAmount(pool.totalAllowanceEth),
+				totalRep: formatDecimalAmount(pool.totalRep),
+				truncatedVaults: pool.truncatedVaults,
+				universeId: pool.universeId.toString(),
+				vaults: pool.vaults.map(vault => vaultView(vault)),
+			}
+		}),
 		scanning: state.scanning,
 		startedAt: state.startedAt,
 		status: state.status,
@@ -356,7 +413,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 			const message = Reflect.get(activity, 'message')
 			const status = Reflect.get(activity, 'status')
 			if (typeof at !== 'string' || typeof message !== 'string') return []
-			if (kind !== 'configuration' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'scan' && kind !== 'withdrawal') return []
+			if (kind !== 'configuration' && kind !== 'deployment' && kind !== 'deposit' && kind !== 'error' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'scan' && kind !== 'withdrawal') return []
 			if (status !== 'confirmed' && status !== 'dry-run' && status !== 'failed' && status !== 'info' && status !== 'pending') return []
 			const details = Reflect.get(activity, 'details')
 			const hash = Reflect.get(activity, 'hash')
@@ -395,12 +452,13 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				const mode = Reflect.get(intent, 'mode')
 				const nonce = Reflect.get(intent, 'nonce')
 				const rawExpectation = Reflect.get(intent, 'receiptExpectation')
+				const rawRequiresMarketEvidence = Reflect.get(intent, 'requiresMarketEvidence')
 				const sender = Reflect.get(intent, 'sender')
 				const serializedTransaction = Reflect.get(intent, 'serializedTransaction')
 				const submissionBlock = Reflect.get(intent, 'submissionBlock')
 				if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash) || typeof serializedTransaction !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
 				if (keccak256(serializedTransaction as Hex).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
-				if (typeof label !== 'string' || (kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
+				if (typeof label !== 'string' || (kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
 				if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
 				if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
 				if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
@@ -439,7 +497,8 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 								: (() => {
 										throw new Error('Pending transaction intent has invalid receipt expectation')
 									})()
-				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
+				const requiresMarketEvidence = typeof rawRequiresMarketEvidence === 'boolean' ? rawRequiresMarketEvidence : kind === 'deposit' || kind === 'liquidation' || kind === 'withdrawal'
+				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, requiresMarketEvidence, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
 			}) ?? [],
 		)) as PendingTransactionIntent[],
 		version: 1,

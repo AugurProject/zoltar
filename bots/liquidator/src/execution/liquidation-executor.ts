@@ -2,8 +2,8 @@ import { createPublicClient, decodeEventLog, encodeFunctionData, http, type Acco
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import type { OperatorSettings, StrategySettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
+import type { DesiredPoolSettings, OperatorSettings, StrategySettings } from '#config/settings'
+import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, requiredRepForAllowance, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
@@ -14,6 +14,7 @@ type Call = {
 	data: Hex
 	gas: bigint
 	label: string
+	preSubmit?: (() => Promise<unknown> | unknown) | undefined
 	receiptExpectation?: PendingTransactionIntent['receiptExpectation'] | undefined
 	to: Address
 	value?: bigint | undefined
@@ -33,7 +34,11 @@ export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
 	if (state.paused) throw new Error('Operator paused before transaction submission')
 }
 
-async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, call: Call, kind: 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal') {
+export async function assertMarketPriceStillAllowed(priceStillAllowed: () => boolean | Promise<boolean>) {
+	if (!(await priceStillAllowed())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
+}
+
+async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, call: Call, kind: PendingTransactionIntent['kind']) {
 	assertExecutionActive(state)
 	const account = wallet.account
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
@@ -74,6 +79,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		to: call.to,
 		value: call.value,
 	})
+	await call.preSubmit?.()
 	state.pendingTransactions.push({
 		hash: signed.hash,
 		kind,
@@ -82,6 +88,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		mode: settings.submission.mode,
 		nonce: signed.transaction.nonce,
 		receiptExpectation: call.receiptExpectation ?? { type: 'transaction' },
+		requiresMarketEvidence: call.preSubmit !== undefined,
 		sender: account.address,
 		serializedTransaction: signed.serializedTransaction,
 		submissionBlock: block.number,
@@ -94,6 +101,19 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 	})
 	await saveDurableState(settings.runtime.stateFile, state)
 	assertExecutionActive(state)
+	try {
+		await call.preSubmit?.()
+	} catch (error) {
+		state.pendingTransactions = state.pendingTransactions.filter(intent => intent.hash.toLowerCase() !== signed.hash.toLowerCase())
+		recordActivity(state, {
+			hash: signed.hash,
+			kind,
+			message: `Persisted intent abandoned after final market check: ${call.label}`,
+			status: 'failed',
+		})
+		await saveDurableState(settings.runtime.stateFile, state)
+		throw error
+	}
 	await submitSignedTransaction({
 		address: account.address,
 		hash: signed.hash,
@@ -133,6 +153,27 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 	return receipt.transactionHash
 }
 
+export async function executeOriginPoolDeployment(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, desired: DesiredPoolSettings) {
+	if (!settings.strategy.allowAutomaticPoolCreation) throw new Error('Automatic origin-pool creation is disabled')
+	if (!settings.approvedUniverses.includes(desired.universeId)) throw new Error('Desired origin pool universe is not approved')
+	return submitCall(
+		wallet,
+		settings,
+		state,
+		{
+			data: encodeFunctionData({
+				abi: securityPoolFactoryAbi,
+				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeWeiPerGas],
+				functionName: 'deployOriginSecurityPool',
+			}),
+			gas: 7_000_000n,
+			label: `Deploy origin security pool for question ${desired.questionId.toString()} in universe ${desired.universeId.toString()}`,
+			to: settings.deployment.securityPoolFactory,
+		},
+		'deployment',
+	)
+}
+
 export async function executeVaultMigration(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, migration: VaultMigration) {
 	if (migration.parent.systemState !== 1n) throw new Error('Vault migration parent is not forked')
 	if (!settings.approvedUniverses.includes(migration.childUniverse.id)) throw new Error('Vault migration child universe is not approved')
@@ -170,7 +211,7 @@ async function agreedPendingNonce(wallet: WriteClient, settings: OperatorSetting
 	return quorumValue('pending signer nonce', observations)
 }
 
-async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, token: Address, spender: Address, amount: bigint, kind: 'deposit' | 'liquidation') {
+async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, token: Address, spender: Address, amount: bigint, kind: 'deposit' | 'liquidation', priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined) {
 	const allowance = await wallet.readContract({
 		abi: erc20Abi,
 		address: token,
@@ -190,6 +231,7 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 			}),
 			gas: 80_000n,
 			label: `Approve ${kind === 'deposit' ? 'pool' : 'oracle'} REP funding`,
+			...(priceStillAllowed === undefined ? {} : { preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed) }),
 			to: token,
 		},
 		kind,
@@ -231,7 +273,7 @@ function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSetting
 	}, 0n)
 }
 
-async function depositRep(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, amount: bigint) {
+async function depositRep(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, amount: bigint, priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined) {
 	if (amount === 0n) return
 	assertRepExposureLimits(settings, state, pool, amount)
 	if (!settings.strategy.allowAutomaticDeposits) {
@@ -246,7 +288,7 @@ async function depositRep(wallet: WriteClient, settings: OperatorSettings, state
 	if (walletBalance < amount + settings.strategy.walletRepReserve) {
 		throw new Error('Wallet REP reserve would be breached by the required pool deposit')
 	}
-	await ensureAllowance(wallet, settings, state, pool.repToken, pool.address, amount, 'deposit')
+	await ensureAllowance(wallet, settings, state, pool.repToken, pool.address, amount, 'deposit', priceStillAllowed)
 	await submitCall(
 		wallet,
 		settings,
@@ -259,6 +301,7 @@ async function depositRep(wallet: WriteClient, settings: OperatorSettings, state
 			}),
 			gas: 300_000n,
 			label: 'Deposit REP for liquidator vault health',
+			...(priceStillAllowed === undefined ? {} : { preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed) }),
 			to: pool.address,
 		},
 		'deposit',
@@ -320,7 +363,7 @@ export function assertStaleLiquidationExposureBound(candidate: Pick<LiquidationC
 	}
 }
 
-async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, reservedTopUpRep: bigint) {
+async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, reservedTopUpRep: bigint, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (pool.requestPriceCostEth > settings.strategy.maximumOracleRequestCostEth) {
 		throw new Error('Oracle request cost exceeds strategy.maximumOracleRequestCostEth')
 	}
@@ -354,13 +397,14 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 				data: encodeFunctionData({ abi: wethAbi, args: [], functionName: 'deposit' }),
 				gas: 80_000n,
 				label: 'Wrap ETH for oracle initial report',
+				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 				to: settings.deployment.weth,
 				value: initialWeth - currentWeth,
 			},
 			'liquidation',
 		)
 	}
-	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialRep, 'liquidation')
+	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialRep, 'liquidation', priceStillAllowed)
 	const wethAllowance = await wallet.readContract({
 		abi: erc20Abi,
 		address: settings.deployment.weth,
@@ -380,6 +424,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 				}),
 				gas: 80_000n,
 				label: 'Approve oracle WETH funding',
+				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 				to: settings.deployment.weth,
 			},
 			'liquidation',
@@ -388,7 +433,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 	return { initialWeth, proposedPrice }
 }
 
-export async function executeLiquidation(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, candidate: LiquidationCandidate) {
+export async function executeLiquidation(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, candidate: LiquidationCandidate, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!pool.isPriceValid) assertStaleLiquidationExposureBound(candidate)
 	const topUpRep = pool.isPriceValid
 		? candidate.topUpRep
@@ -406,12 +451,12 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 	const acquisitionPrice = pool.isPriceValid ? candidate.pool.price : (candidate.pool.price * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 	const acquiredRepCeiling = conservativeLiquidationRep(candidate, acquisitionPrice)
 	assertRepExposureLimits(settings, state, pool, topUpRep, acquiredRepCeiling)
-	await depositRep(wallet, settings, state, pool, topUpRep)
+	await depositRep(wallet, settings, state, pool, topUpRep, priceStillAllowed)
 	const usesExistingPendingReport = !pool.isPriceValid && pool.pendingReportId > 0n
 	if (usesExistingPendingReport && pool.pendingReportSponsor.toLowerCase() !== wallet.account.address.toLowerCase()) {
 		throw new Error('A different sponsor owns the pool pending price report')
 	}
-	const oracleFunding = pool.isPriceValid || usesExistingPendingReport ? { initialWeth: 0n, proposedPrice: 0n } : await fundStaleOracle(wallet, settings, state, pool, 0n)
+	const oracleFunding = pool.isPriceValid || usesExistingPendingReport ? { initialWeth: 0n, proposedPrice: 0n } : await fundStaleOracle(wallet, settings, state, pool, 0n, priceStillAllowed)
 	await submitCall(
 		wallet,
 		settings,
@@ -424,6 +469,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 			}),
 			gas: pool.isPriceValid ? 1_000_000n : 2_000_000n,
 			label: pool.isPriceValid ? 'Execute security-pool liquidation' : usesExistingPendingReport ? 'Queue liquidation behind the existing price report' : 'Queue liquidation and request a fresh REP price',
+			preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 			receiptExpectation: pool.isPriceValid ? { coordinator: pool.manager, operation: 0, type: 'staged-success' } : { amount: candidate.debtToMove, coordinator: pool.manager, initiator: wallet.account.address, target: candidate.target.address, type: 'pending-liquidation' },
 			to: pool.manager,
 			value: pool.isPriceValid || usesExistingPendingReport ? 0n : pool.requestPriceCostEth,
@@ -455,11 +501,11 @@ export function planVaultMaintenance(
 	return undefined
 }
 
-export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, priceDependentMaintenanceAllowed: boolean) {
+export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!isPoolExecutionEligible(pool)) return false
-	const plan = planVaultMaintenance(pool, settings.strategy, wallet.account.address, priceDependentMaintenanceAllowed)
+	const plan = planVaultMaintenance(pool, settings.strategy, wallet.account.address, await priceStillAllowed())
 	if (plan?.kind === 'deposit') {
-		await depositRep(wallet, settings, state, pool, plan.amount)
+		await depositRep(wallet, settings, state, pool, plan.amount, priceStillAllowed)
 		return true
 	}
 	if (plan?.kind === 'withdraw') {
@@ -475,6 +521,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 				}),
 				gas: 700_000n,
 				label: 'Withdraw surplus REP from liquidator vault',
+				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 				receiptExpectation: { coordinator: pool.manager, operation: 1, type: 'staged-success' },
 				to: pool.manager,
 			},

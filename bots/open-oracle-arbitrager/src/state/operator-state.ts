@@ -10,6 +10,8 @@ import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-m
 import type { PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
+import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
@@ -151,6 +153,7 @@ export type OperatorSnapshot = {
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
 	centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
+	marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
 	execute: boolean
 	executor: Address | undefined
 	executionHistory: readonly ExecutionRecord[]
@@ -215,6 +218,8 @@ export type OperatorState = {
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
 	centralizedMarket?: CentralizedMarketEstimate | undefined
+	marketConsensus?: MarketConsensusEstimate | undefined
+	marketObservations?: MarketConsensusObservation[] | undefined
 	executionHistory: ExecutionRecord[]
 	endpointChecks: EndpointCheck[]
 	gameCapital: GameCapitalSnapshot
@@ -535,6 +540,7 @@ export function operatorSnapshot(
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,
 		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
+		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, decimalWeth),
 		execute: fixed.execute,
 		executor: fixed.executor,
 		executionHistory: state.executionHistory.slice(0, 500),

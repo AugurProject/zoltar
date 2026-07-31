@@ -9,8 +9,16 @@ import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, typ
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
+export type DesiredPoolSettings = {
+	initialReportPriorityFeeWeiPerGas: bigint
+	questionId: bigint
+	statoblastSecurityMultiplierBps: bigint
+	universeId: bigint
+}
+
 export type StrategySettings = {
 	allowAutomaticDeposits: boolean
+	allowAutomaticPoolCreation: boolean
 	allowAutomaticVaultMigrations: boolean
 	allowAutomaticWithdrawals: boolean
 	candidatePriority: CandidatePriority
@@ -38,6 +46,7 @@ export type StoredStrategySettings = {
 
 export type OperatorSettings = {
 	approvedUniverses: bigint[]
+	childMarketConfigurations: CentralizedMarketSettings[]
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings & {
 		quorumRpcUrls: string[]
@@ -47,6 +56,7 @@ export type OperatorSettings = {
 		weth: Address
 		zoltar: Address
 	}
+	desiredPools: DesiredPoolSettings[]
 	network: {
 		chainId: number
 		explorerUrl: string
@@ -124,10 +134,36 @@ function universeId(value: unknown, label: string) {
 	return parsed
 }
 
+function uint256(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
+	const parsed = BigInt(value)
+	if (parsed >= 2n ** 256n) throw new Error(`${label} must fit in uint256`)
+	return parsed
+}
+
+export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
+	if (!Array.isArray(value)) throw new Error('desiredPools must be an array')
+	const parsed = value.map((entry, index) => {
+		const desired = record(entry, `desiredPools[${index.toString()}]`)
+		const pool = {
+			initialReportPriorityFeeWeiPerGas: uint256(desired['initialReportPriorityFeeWeiPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeWeiPerGas`),
+			questionId: uint256(desired['questionId'], `desiredPools[${index.toString()}].questionId`),
+			statoblastSecurityMultiplierBps: uint256(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`),
+			universeId: universeId(desired['universeId'], `desiredPools[${index.toString()}].universeId`),
+		}
+		if (pool.statoblastSecurityMultiplierBps <= 10_000n) throw new Error(`desiredPools[${index.toString()}].statoblastSecurityMultiplierBps must exceed 10000`)
+		return pool
+	})
+	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeWeiPerGas.toString()}`)
+	if (new Set(ids).size !== ids.length) throw new Error('desiredPools must not contain duplicates')
+	return parsed
+}
+
 export function parseStrategy(value: unknown): StrategySettings {
 	const strategy = record(value, 'strategy')
 	const parsed: StrategySettings = {
 		allowAutomaticDeposits: boolean(strategy['allowAutomaticDeposits'], 'strategy.allowAutomaticDeposits'),
+		allowAutomaticPoolCreation: strategy['allowAutomaticPoolCreation'] === undefined ? false : boolean(strategy['allowAutomaticPoolCreation'], 'strategy.allowAutomaticPoolCreation'),
 		allowAutomaticVaultMigrations: boolean(strategy['allowAutomaticVaultMigrations'], 'strategy.allowAutomaticVaultMigrations'),
 		allowAutomaticWithdrawals: boolean(strategy['allowAutomaticWithdrawals'], 'strategy.allowAutomaticWithdrawals'),
 		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
@@ -188,9 +224,15 @@ export function parseSettings(value: unknown): OperatorSettings {
 			}),
 		).values(),
 	]
+	const parsedDesiredPools = parseDesiredPools(root['desiredPools'] ?? [])
 	const privateKey = signerCandidate(root['privateKey']).privateKey
 	const settings: OperatorSettings = {
 		approvedUniverses: parsedApprovedUniverses,
+		childMarketConfigurations: (() => {
+			const values = root['childMarketConfigurations'] ?? []
+			if (!Array.isArray(values)) throw new Error('childMarketConfigurations must be an array')
+			return values.map(parseCentralizedMarketSettings)
+		})(),
 		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
 		connectivity: {
 			...parsedConnectivity,
@@ -201,6 +243,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 			weth: getAddress(string(deployment['weth'], 'deployment.weth')),
 			zoltar: getAddress(string(deployment['zoltar'], 'deployment.zoltar')),
 		},
+		desiredPools: parsedDesiredPools,
 		network: {
 			chainId: integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1),
 			explorerUrl: string(network['explorerUrl'], 'network.explorerUrl'),
@@ -230,6 +273,10 @@ export function parseSettings(value: unknown): OperatorSettings {
 		submission: validateSubmissionSettings(root['submission']),
 		version: 1,
 	}
+	if (settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
+	if (settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
+	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
+	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length === 0) throw new Error('Live execution requires at least one independent quorum RPC')
 	if (settings.submission.mode === 'public' && settings.submission.minimumRelaySuccesses > settings.connectivity.publicRpcUrls.length) {
@@ -244,11 +291,18 @@ export function parseSettings(value: unknown): OperatorSettings {
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	return {
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
+		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
 		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
 		connectivity: {
 			...settings.connectivity,
 		},
 		deployment: settings.deployment,
+		desiredPools: settings.desiredPools.map(pool => ({
+			initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+			questionId: pool.questionId.toString(),
+			statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
+			universeId: pool.universeId.toString(),
+		})),
 		network: settings.network,
 		paused: settings.paused,
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,

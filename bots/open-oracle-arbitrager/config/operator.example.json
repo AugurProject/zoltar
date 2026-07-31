@@ -1,5 +1,8 @@
 {
 	"centralizedMarkets": {
+		"assetAddress": "0x221657776846890989a759BA2973e427DfF5C9bB",
+		"assetChainId": 1,
+		"assetSymbol": "REP",
 		"depthBps": 500,
 		"maximumDexDeviationBps": 1000,
 		"maximumObservationAgeMilliseconds": 30000,
@@ -10,7 +13,19 @@
 		"orderBookLimit": 20,
 		"requestTimeoutMilliseconds": 5000,
 		"requiredForExecution": false,
-		"sources": []
+		"sources": [],
+		"venueConsensus": {
+			"allowSingleGroupFallback": false,
+			"dexProbeDepthEth": "1",
+			"dexSources": [],
+			"maximumGroupDeviationBps": 500,
+			"minimumDexAskDepthEth": "0.5",
+			"minimumDexBidDepthEth": "0.5",
+			"minimumDexSourceCount": 2,
+			"minimumSourceObservationCount": 2,
+			"minimumSourceObservationSpanMilliseconds": 10000,
+			"minimumTotalSourceCount": 3
+		}
 	},
 	"connectivity": {
 		"publicRpcUrls": ["https://ethereum-rpc.publicnode.com"],

@@ -44,6 +44,40 @@ const deploymentComponents = [
 
 export const securityPoolFactoryAbi = [
 	{
+		inputs: [
+			{ name: 'originUniverseId', type: 'uint248' },
+			{ name: 'questionId', type: 'uint256' },
+			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+			{ name: 'initialReportPriorityFeeWeiPerGas', type: 'uint256' },
+		],
+		name: 'getOriginId',
+		outputs: [{ name: 'originId', type: 'bytes32' }],
+		stateMutability: 'pure',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'originId', type: 'bytes32' },
+			{ name: 'universeId', type: 'uint248' },
+		],
+		name: 'getSecurityPool',
+		outputs: [{ name: 'securityPool', type: 'address' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'questionId', type: 'uint256' },
+			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+			{ name: 'initialReportPriorityFeeWeiPerGas', type: 'uint256' },
+		],
+		name: 'deployOriginSecurityPool',
+		outputs: [{ name: 'securityPool', type: 'address' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
 		inputs: [],
 		name: 'securityPoolDeploymentCount',
 		outputs: [{ name: 'count', type: 'uint256' }],

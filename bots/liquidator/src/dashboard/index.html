@@ -44,12 +44,12 @@
 					<table>
 						<thead>
 							<tr>
-								<th scope="col">Approved</th>
-								<th scope="col">Universe</th>
-								<th scope="col">Parent</th>
-								<th scope="col">Fork outcome</th>
-								<th scope="col">Pool state</th>
-								<th scope="col">Vault migration</th>
+								<th id="universe-approved-heading" scope="col">Approved</th>
+								<th id="universe-id-heading" scope="col">Universe</th>
+								<th id="universe-parent-heading" scope="col">Parent</th>
+								<th id="universe-outcome-heading" scope="col">Fork outcome</th>
+								<th id="universe-state-heading" scope="col">Pool state</th>
+								<th id="universe-migration-heading" scope="col">Vault migration</th>
 							</tr>
 						</thead>
 						<tbody id="universe-rows">
@@ -62,26 +62,31 @@
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Independent market reference</p>
-						<h2 id="centralized-markets-title">Centralized markets</h2>
+						<h2 id="centralized-markets-title">REP market consensus</h2>
 					</div>
 					<p id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</p>
 				</div>
 				<div id="centralized-market-summary" class="metric-grid">
-					<dl class="metric"><dt>Estimated REP / ETH</dt><dd id="centralized-market-price">—</dd></dl>
-					<dl class="metric"><dt>Bid depth</dt><dd id="centralized-market-bid-depth">—</dd></dl>
-					<dl class="metric"><dt>Ask depth</dt><dd id="centralized-market-ask-depth">—</dd></dl>
-					<dl class="metric"><dt>Fresh sources</dt><dd id="centralized-market-source-count">0</dd></dl>
+					<dl class="metric"><dt>CEX median REP / ETH</dt><dd id="centralized-market-price">—</dd></dl>
+					<dl class="metric"><dt>DEX consensus REP / ETH</dt><dd id="dex-market-price">—</dd></dl>
+					<dl class="metric"><dt>Guarded reference REP / ETH</dt><dd id="guarded-market-price">—</dd></dl>
+					<dl class="metric"><dt>DEX bid depth</dt><dd id="dex-market-bid-depth">—</dd></dl>
+					<dl class="metric"><dt>DEX ask depth</dt><dd id="dex-market-ask-depth">—</dd></dl>
+					<dl class="metric"><dt>CEX bid depth</dt><dd id="centralized-market-bid-depth">—</dd></dl>
+					<dl class="metric"><dt>CEX ask depth</dt><dd id="centralized-market-ask-depth">—</dd></dl>
+					<dl class="metric"><dt>Consensus sources</dt><dd id="centralized-market-source-count">0 CEX</dd></dl>
 				</div>
 				<div class="table-shell">
 					<table>
+						<caption>CEX observations</caption>
 						<thead>
 							<tr>
-								<th scope="col">Exchange</th>
-								<th scope="col">Market</th>
-								<th scope="col">REP / ETH</th>
-								<th scope="col">Bid depth</th>
-								<th scope="col">Ask depth</th>
-								<th scope="col">Observed</th>
+								<th id="market-exchange-heading" scope="col">Exchange</th>
+								<th id="market-pair-heading" scope="col">Market</th>
+								<th id="market-price-heading" scope="col">REP / ETH</th>
+								<th id="market-bid-heading" scope="col">Bid depth</th>
+								<th id="market-ask-heading" scope="col">Ask depth</th>
+								<th id="market-observed-heading" scope="col">Observed</th>
 							</tr>
 						</thead>
 						<tbody id="centralized-market-rows">
@@ -89,6 +94,13 @@
 						</tbody>
 					</table>
 				</div>
+				<form id="market-configuration-form">
+					<fieldset id="market-configuration-fields" disabled>
+						<label><span>Pool targets and per-universe market JSON</span><textarea id="market-configuration-json" rows="18" spellcheck="false" required></textarea></label>
+						<p class="muted">Configure root REP under <code>root</code>, exact child REP assets under <code>children</code>, and undeployed origin-pool parameters under <code>desiredPools</code>. Existing desired pools are selected; missing ones are created only when automatic pool creation is enabled.</p>
+						<div class="form-actions"><span id="market-configuration-save-status" class="muted" role="status" aria-live="polite"></span><button type="submit">Validate &amp; save markets</button></div>
+					</fieldset>
+				</form>
 			</section>
 			<section aria-labelledby="pools-title">
 				<div class="section-heading">
@@ -106,13 +118,13 @@
 					<table>
 						<thead>
 							<tr>
-								<th scope="col">Selected</th>
-								<th scope="col">Pool</th>
-								<th scope="col">Question</th>
-								<th scope="col">Oracle</th>
-								<th scope="col">Pool totals</th>
-								<th scope="col">Bot vault</th>
-								<th scope="col">Targets</th>
+								<th id="pool-selected-heading" scope="col">Selected</th>
+								<th id="pool-address-heading" scope="col">Pool</th>
+								<th id="pool-question-heading" scope="col">Question</th>
+								<th id="pool-oracle-heading" scope="col">Oracle</th>
+								<th id="pool-totals-heading" scope="col">Pool totals</th>
+								<th id="pool-vault-heading" scope="col">Bot vault</th>
+								<th id="pool-targets-heading" scope="col">Targets</th>
 							</tr>
 						</thead>
 						<tbody id="pool-rows">
@@ -155,6 +167,7 @@
 							</select>
 						</label>
 						<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
+						<label class="check"><input name="allowAutomaticPoolCreation" type="checkbox" />Create missing desired pools</label>
 						<label class="check"><input name="allowAutomaticVaultMigrations" type="checkbox" />Automatic approved-universe vault migrations</label>
 						<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
 						<div class="form-actions">

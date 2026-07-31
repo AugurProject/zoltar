@@ -74,9 +74,19 @@ type CentralizedMarket = {
 	reliable: boolean
 }
 
+type MarketConsensus = {
+	cex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
+	dex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
+	priceRepPerEth?: string
+	reasons: string[]
+	reliable: boolean
+	sourceCount: number
+}
+
 type Snapshot = {
 	activities: Activity[]
 	centralizedMarket?: CentralizedMarket
+	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
 	lastScanAt?: string
@@ -101,6 +111,9 @@ type Snapshot = {
 
 type Configuration = {
 	approvedUniverses: string[]
+	childMarketConfigurations: unknown[]
+	centralizedMarkets: unknown
+	desiredPools: unknown[]
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -118,6 +131,14 @@ const centralizedMarketPrice = element('centralized-market-price', HTMLElement)
 const centralizedMarketBidDepth = element('centralized-market-bid-depth', HTMLElement)
 const centralizedMarketAskDepth = element('centralized-market-ask-depth', HTMLElement)
 const centralizedMarketSourceCount = element('centralized-market-source-count', HTMLElement)
+const dexMarketPrice = element('dex-market-price', HTMLElement)
+const guardedMarketPrice = element('guarded-market-price', HTMLElement)
+const dexMarketBidDepth = element('dex-market-bid-depth', HTMLElement)
+const dexMarketAskDepth = element('dex-market-ask-depth', HTMLElement)
+const marketConfigurationForm = element('market-configuration-form', HTMLFormElement)
+const marketConfigurationFields = element('market-configuration-fields', HTMLFieldSetElement)
+const marketConfigurationJson = element('market-configuration-json', HTMLTextAreaElement)
+const marketConfigurationSaveStatus = element('market-configuration-save-status', HTMLSpanElement)
 const universeRows = element('universe-rows', HTMLTableSectionElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
@@ -203,12 +224,17 @@ function renderMetrics(snapshot: Snapshot) {
 
 function renderCentralizedMarket(snapshot: Snapshot) {
 	const market = snapshot.centralizedMarket
+	const consensus = snapshot.marketConsensus
+	updateText(dexMarketPrice, consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
+	updateText(guardedMarketPrice, consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
+	updateText(dexMarketBidDepth, consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
+	updateText(dexMarketAskDepth, consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		updateText(centralizedMarketStatus, 'No exchange sources configured')
+		updateText(centralizedMarketStatus, consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
 		updateText(centralizedMarketPrice, '—')
 		updateText(centralizedMarketBidDepth, '—')
 		updateText(centralizedMarketAskDepth, '—')
-		updateText(centralizedMarketSourceCount, '0')
+		updateText(centralizedMarketSourceCount, consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 		const row = document.createElement('tr')
 		const empty = cell('Add public exchange sources in the operator configuration.')
 		empty.colSpan = 6
@@ -217,17 +243,21 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 		centralizedMarketRows.replaceChildren(row)
 		return
 	}
-	updateText(centralizedMarketStatus, market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · '))
+	updateText(centralizedMarketStatus, consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
 	updateText(centralizedMarketPrice, market.priceRepPerEth)
 	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
 	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
-	updateText(centralizedMarketSourceCount, market.observations.length.toString())
+	updateText(centralizedMarketSourceCount, consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 	centralizedMarketRows.replaceChildren(
 		...market.observations.map(observation => {
 			const row = document.createElement('tr')
 			const cells = [cell(observation.exchangeId), cell(observation.repMarket), cell(observation.priceRepPerEth), cell(`${observation.bidDepthEth} ETH`), cell(`${observation.askDepthEth} ETH`), cell(new Date(observation.observedAt).toLocaleTimeString())]
 			const labels = ['Exchange', 'Market', 'REP / ETH', 'Bid depth', 'Ask depth', 'Observed']
-			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
+			const headings = ['market-exchange-heading', 'market-pair-heading', 'market-price-heading', 'market-bid-heading', 'market-ask-heading', 'market-observed-heading']
+			for (const [index, value] of cells.entries()) {
+				value.dataset['label'] = labels[index]
+				value.headers = headings[index] ?? ''
+			}
 			row.append(...cells)
 			return row
 		}),
@@ -331,7 +361,11 @@ function renderUniverses(snapshot: Snapshot) {
 				cell(migration),
 			]
 			const labels = ['Approved', 'Universe', 'Parent', 'Fork outcome', 'Pool state', 'Vault migration']
-			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
+			const headings = ['universe-approved-heading', 'universe-id-heading', 'universe-parent-heading', 'universe-outcome-heading', 'universe-state-heading', 'universe-migration-heading']
+			for (const [index, value] of cells.entries()) {
+				value.dataset['label'] = labels[index]
+				value.headers = headings[index] ?? ''
+			}
 			row.append(...cells)
 			return row
 		}),
@@ -414,7 +448,7 @@ function renderPools(snapshot: Snapshot) {
 			poolStatus.className = 'action-status'
 			const savedActionState = poolActionStates.get(pool.address.toLowerCase())
 			if (savedActionState === undefined) {
-				poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'CEX price guard' : pool.selected ? 'Eligible' : ''
+				poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'Market consensus guard' : pool.selected ? 'Eligible' : ''
 			} else {
 				actionStatus(poolStatus, savedActionState.message, savedActionState.failed)
 				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
@@ -464,13 +498,17 @@ function renderPools(snapshot: Snapshot) {
 				cell(toggle, poolStatus),
 				cell(addressDetails),
 				cell(stacked(`#${pool.questionId}`, `${pool.multiplierBps} bps collateral`)),
-				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from CEX`}`)),
+				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
 				cell(stacked(`${pool.totalRep} REP`, `${pool.totalAllowanceEth} ETH allowance · ${pool.activeVaultCount} vaults`)),
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.rep} REP · ${pool.botVault.allowanceEth} ETH assumed · ${pool.botVault.unpaidEthFees} ETH fees`)),
 				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
 			]
 			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
-			for (const [index, value] of cells.entries()) value.dataset['label'] = labels[index]
+			const headings = ['pool-selected-heading', 'pool-address-heading', 'pool-question-heading', 'pool-oracle-heading', 'pool-totals-heading', 'pool-vault-heading', 'pool-targets-heading']
+			for (const [index, value] of cells.entries()) {
+				value.dataset['label'] = labels[index]
+				value.headers = headings[index] ?? ''
+			}
 			row.append(...cells)
 			return row
 		}),
@@ -540,6 +578,8 @@ function populateConfiguration(configuration: Configuration) {
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
+	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
+	marketConfigurationFields.disabled = false
 	strategyFields.disabled = false
 	configurationStatus.classList.add('hidden')
 	configurationStatus.replaceChildren()
@@ -548,6 +588,22 @@ function populateConfiguration(configuration: Configuration) {
 		renderPools(currentSnapshot)
 	}
 }
+
+marketConfigurationForm.addEventListener('submit', async event => {
+	event.preventDefault()
+	marketConfigurationFields.disabled = true
+	actionStatus(marketConfigurationSaveStatus, 'Validating…')
+	try {
+		const value: unknown = JSON.parse(marketConfigurationJson.value)
+		const configuration = await put<Configuration>('/api/market-configuration', value)
+		populateConfiguration(configuration)
+		actionStatus(marketConfigurationSaveStatus, 'Saved; changes apply on the next scan')
+	} catch (error) {
+		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the JSON and retry.'), true)
+	} finally {
+		marketConfigurationFields.disabled = false
+	}
+})
 
 function setGlobalError(message?: string) {
 	if (message === undefined) {
@@ -589,7 +645,11 @@ strategyForm.addEventListener('submit', async event => {
 	const data = new FormData(strategyForm)
 	const next = { ...currentConfiguration.strategy }
 	for (const [name, value] of data.entries()) next[name] = String(value)
-	for (const name of ['allowAutomaticDeposits', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals']) {
+	for (const name of ['stalePriceFundingBufferBps', 'stagedOperationValidForSeconds', 'vaultTargetHealthBps', 'vaultTopUpHealthBps', 'vaultWithdrawHealthBps']) {
+		const value = next[name]
+		if (typeof value === 'string' && value !== '') next[name] = Number(value)
+	}
+	for (const name of ['allowAutomaticDeposits', 'allowAutomaticPoolCreation', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals']) {
 		const field = strategyForm.elements.namedItem(name)
 		next[name] = field instanceof HTMLInputElement && field.checked
 	}

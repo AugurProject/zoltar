@@ -10,11 +10,16 @@ afterEach(() => {
 describe('liquidator dashboard server', () => {
 	test('serves the dashboard and protects configuration mutations by origin', async () => {
 		let paused = false
+		let marketConfiguration: unknown
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
 			getState: () => ({ paused }),
 			hostname: '127.0.0.1',
 			setApprovedUniverses: value => value,
+			setMarketConfiguration: value => {
+				marketConfiguration = value
+				return value
+			},
 			setPaused: value => {
 				paused = Reflect.get(value as object, 'paused') === true
 				return { paused }
@@ -32,6 +37,9 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="centralized-market-summary" class="metric-grid"')
 		expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')
 		expect(pageSource).toContain('id="centralized-market-price"')
+		expect(pageSource).toContain('id="dex-market-price"')
+		expect(pageSource).toContain('id="guarded-market-price"')
+		expect(pageSource).toContain('id="market-configuration-json"')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
@@ -54,6 +62,13 @@ describe('liquidator dashboard server', () => {
 		})
 		expect(accepted.status).toBe(200)
 		expect(paused).toBe(true)
+		const marketMutation = await fetch(new URL('/api/market-configuration', server.url), {
+			body: JSON.stringify({ sources: [] }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		expect(marketMutation.status).toBe(200)
+		expect(marketConfiguration).toEqual({ sources: [] })
 	})
 
 	test('accepts loopback browser requests when bound to all interfaces', async () => {

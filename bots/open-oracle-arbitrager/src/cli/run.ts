@@ -100,7 +100,19 @@ import {
 } from '#state/operator-state'
 import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
-import { centralizedPriceAllowsExecution, centralizedPriceDeviationBps, observeCentralizedMarkets, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import {
+	clearOrphanedDexEvidenceForHeadReplacement,
+	discardDexMarketObservations,
+	estimateMarketConsensus,
+	marketConsensusAllowsExecution,
+	marketConsensusDeviationBps,
+	requireCanonicalBlock,
+	requireCanonicalDexEvidence,
+	type MarketConsensusEstimate,
+	type MarketConsensusObservation,
+} from '@zoltar/bot-shared/monitoring/market-consensus'
+import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from '#core/position-accounting'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type DurableTransactionIntent, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { quorumValue } from '#monitoring/read-quorum'
@@ -164,10 +176,12 @@ type ExecutionCandidate = {
 	projectedGasCostWeth: bigint
 	quote: ArbitrageQuote
 	report: OpenOracleStatePreimage
+	marketConsensus?: MarketConsensusEstimate | undefined
 }
 
 type EvaluatedOpportunity = {
 	candidate: ExecutionCandidate | undefined
+	dexObservations: readonly MarketConsensusObservation[]
 	opportunity: OpportunitySnapshot
 }
 
@@ -559,7 +573,7 @@ function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGa
 	}
 }
 
-async function evaluate(client: ReadClient, config: Configuration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, blockNumber?: bigint | undefined) {
+async function evaluate(client: ReadClient, config: Configuration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, marketBlock: { hash: `0x${string}`; number: bigint; observedAt: number }) {
 	const game = report.game
 	const gasCost = gasPrice * 1_200_000n
 	const lifecycleGasReserveWeth = projectedLifecycleGasReserveWeth({
@@ -570,25 +584,43 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 	})
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	const candidates: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; quote: ArbitrageQuote; venue: Venue }[] = []
-	const v3 = await bestSuccessful(
-		[
-			async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
-			async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
-		],
-		candidate => candidate.netProfitWeth,
-		error => console.error(`pool=${pool.address} quoteSkipped=${errorMessage(error)}`),
-	)
+	const observations: MarketConsensusObservation[] = []
+	const observeVenue = (venue: Venue, marketId: Address, sell: ArbitrageQuote | undefined, buy: ArbitrageQuote | undefined) => {
+		if (sell === undefined || buy === undefined || sell.grossProceedsWeth <= 0n || buy.hedgeCostWeth <= 0n) return
+		const sellPrice = (game.currentAmount2 * 10n ** 18n) / sell.grossProceedsWeth
+		const buyPrice = (repWithFees * 10n ** 18n) / buy.hedgeCostWeth
+		observations.push({
+			assetId: game.token2,
+			askDepthEth: buy.hedgeCostWeth,
+			bidDepthEth: sell.grossProceedsWeth,
+			blockHash: marketBlock.hash,
+			blockNumber: marketBlock.number,
+			chainId: config.network.chain.id,
+			kind: 'dex',
+			marketId,
+			observationId: `${config.network.chain.id.toString()}:${marketBlock.number.toString()}:${marketBlock.hash.toLowerCase()}`,
+			observedAt: marketBlock.observedAt,
+			priceRepPerEth: (sellPrice + buyPrice) / 2n,
+			sourceId: venue,
+		})
+	}
+	const v3Settled = await Promise.allSettled([
+		(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+		(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+	])
+	for (const result of v3Settled) if (result.status === 'rejected') console.error(`pool=${pool.address} quoteSkipped=${errorMessage(result.reason)}`)
+	const v3Sell = v3Settled[0]?.status === 'fulfilled' ? v3Settled[0].value : undefined
+	const v3Buy = v3Settled[1]?.status === 'fulfilled' ? v3Settled[1].value : undefined
+	const v3 = selectBestExecution([...(v3Sell === undefined ? [] : [v3Sell]), ...(v3Buy === undefined ? [] : [v3Buy])], candidate => candidate.netProfitWeth)
+	observeVenue('uniswap-v3', pool.address, v3Sell, v3Buy)
 	if (v3 !== undefined) candidates.push({ hedgeFee: pool.fee, hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })
 	if (pool.v2Pair !== undefined) {
 		try {
-			const reserves = await constantProductReserves(client, pool.v2Pair, pool.token, blockNumber)
-			const v2 = selectBestExecution(
-				[
-					safetyAdjustedQuote(evaluateSellRep(game, constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth), 0n), gasCost, lifecycleGasReserveWeth, config),
-					safetyAdjustedQuote(evaluateBuyRep(game, constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken), 0n), gasCost, lifecycleGasReserveWeth, config),
-				],
-				candidate => candidate.netProfitWeth,
-			)
+			const reserves = await constantProductReserves(client, pool.v2Pair, pool.token, marketBlock.number)
+			const v2Sell = safetyAdjustedQuote(evaluateSellRep(game, constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth), 0n), gasCost, lifecycleGasReserveWeth, config)
+			const v2Buy = safetyAdjustedQuote(evaluateBuyRep(game, constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken), 0n), gasCost, lifecycleGasReserveWeth, config)
+			const v2 = selectBestExecution([v2Sell, v2Buy], candidate => candidate.netProfitWeth)
+			observeVenue('uniswap-v2', pool.v2Pair, v2Sell, v2Buy)
 			if (v2 !== undefined) candidates.push({ hedgeFee: 3_000, hedgePool: pool.v2Pair, quote: v2, venue: 'uniswap-v2' })
 		} catch (error) {
 			console.error(`pool=${pool.v2Pair} quoteSkipped=${errorMessage(error)}`)
@@ -597,18 +629,19 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 	if (config.v4PoolManager !== undefined && config.v4Quoter !== undefined) {
 		const v4Quoter = config.v4Quoter
 		for (const plan of standardV4QuotePlans(pool.token, game.currentAmount2, repWithFees)) {
-			const v4 = await bestSuccessful(
-				[
-					async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, plan.sell, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
-					async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, plan.buy, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
-				],
-				candidate => candidate.netProfitWeth,
-				error => console.error(`poolManager=${config.v4PoolManager} fee=${plan.fee.toString()} quoteSkipped=${errorMessage(error)}`),
-			)
+			const v4Settled = await Promise.allSettled([
+				(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, plan.sell, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+				(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, plan.buy, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+			])
+			for (const result of v4Settled) if (result.status === 'rejected') console.error(`poolManager=${config.v4PoolManager} fee=${plan.fee.toString()} quoteSkipped=${errorMessage(result.reason)}`)
+			const v4Sell = v4Settled[0]?.status === 'fulfilled' ? v4Settled[0].value : undefined
+			const v4Buy = v4Settled[1]?.status === 'fulfilled' ? v4Settled[1].value : undefined
+			const v4 = selectBestExecution([...(v4Sell === undefined ? [] : [v4Sell]), ...(v4Buy === undefined ? [] : [v4Buy])], candidate => candidate.netProfitWeth)
+			observeVenue('uniswap-v4', config.v4PoolManager, v4Sell, v4Buy)
 			if (v4 !== undefined) candidates.push({ hedgeFee: plan.fee, hedgePool: config.v4PoolManager, quote: v4, venue: 'uniswap-v4' })
 		}
 	}
-	return selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
+	return { candidate: selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth), observations }
 }
 
 async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, hedgeVenue: Venue, hedgeFee: (typeof FEES)[number], blockNumber: bigint, account: Address) {
@@ -874,6 +907,8 @@ async function executeDispute(
 	tokenMetadata: { decimals: number; symbol: string },
 	positions: readonly PositionRecord[],
 	centralizedMarket: CentralizedMarketEstimate | undefined,
+	marketConsensus: MarketConsensusEstimate | undefined,
+	marketEvidenceStillCanonical: () => Promise<boolean>,
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	persistPosition: (position: PositionRecord) => Promise<void>,
@@ -932,8 +967,23 @@ async function executeDispute(
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
 	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
 	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountRep * 10n ** 18n) / referenceWeth
-	if (!centralizedPriceAllowsExecution(refreshedDexPriceRepPerEth, centralizedMarket, config.centralizedMarkets, game.token2)) {
-		throw new Error('Final executable DEX price is not confirmed by centralized markets')
+	const finalMarketPriceAllowsExecution = () =>
+		centralizedMarketConfigurationAllowsExecution(config.centralizedMarkets) &&
+		(marketConsensus === undefined
+			? !config.centralizedMarkets.requiredForExecution && centralizedPriceAllowsExecution(refreshedDexPriceRepPerEth, centralizedMarket, config.centralizedMarkets, game.token2)
+			: marketConsensusAllowsExecution(
+					refreshedDexPriceRepPerEth,
+					marketConsensus,
+					{
+						maximumDeviationBps: config.centralizedMarkets.maximumDexDeviationBps,
+						maximumObservationAgeMilliseconds: config.centralizedMarkets.maximumObservationAgeMilliseconds,
+						requiredForExecution: config.centralizedMarkets.requiredForExecution,
+					},
+					game.token2,
+					config.network.chain.id,
+				))
+	if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) {
+		throw new Error('Final executable DEX price is not confirmed by independent market consensus')
 	}
 	const newAmount2 = executionSnapshot.replacementAmount2
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
@@ -1056,8 +1106,12 @@ async function executeDispute(
 	if (config.submission.mode === 'public') {
 		await wallet.simulateContract(request)
 		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
-		await guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition))
-		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track)
+		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track, {
+			beforeSubmit: async () => {
+				if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
+			},
+			persistPending: () => guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition)),
+		})
 		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
 				...stagedPosition,
@@ -1194,6 +1248,7 @@ async function executeDispute(
 					if ((await currentBlockNumberWithQuorum(readClients, config, 'execution submission head')) !== quoteBlockNumber) throw new Error('Bundle quote expired before submission')
 					const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'execution submission', quoteBlockNumber)
 					if (canonicalHash.toLowerCase() !== executionSnapshot.blockHash.toLowerCase()) throw new Error('Bundle canonical parent changed before submission')
+					if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 				},
 				() =>
 					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
@@ -1207,6 +1262,9 @@ async function executeDispute(
 									targetBlockNumber,
 									transactions: serializedTransactions,
 								}),
+							async () => {
+								if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
+							},
 						),
 					),
 			)
@@ -2015,6 +2073,7 @@ async function inspectReport(
 	report: OpenOracleStatePreimage,
 	pools: readonly Pool[],
 	blockNumber: bigint,
+	blockHash: `0x${string}`,
 	blockTimestamp: bigint,
 	gasPrice: bigint,
 	balances: RawBalances | undefined,
@@ -2053,12 +2112,14 @@ async function inspectReport(
 		return
 	}
 	let best: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; pool: Pool; quote: ArbitrageQuote; venue: Venue } | undefined
+	const dexObservations: MarketConsensusObservation[] = []
 	for (const pool of pools) {
 		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
 		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
-		const evaluation = await evaluate(client, config, report, pool, gasPrice)
-		if (evaluation === undefined) continue
-		if (best === undefined || evaluation.quote.netProfitWeth > best.quote.netProfitWeth) best = { ...evaluation, pool }
+		const evaluation = await evaluate(client, config, report, pool, gasPrice, { hash: blockHash, number: blockNumber, observedAt: Number(blockTimestamp) * 1_000 })
+		dexObservations.push(...evaluation.observations)
+		if (evaluation.candidate === undefined) continue
+		if (best === undefined || evaluation.candidate.quote.netProfitWeth > best.quote.netProfitWeth) best = { ...evaluation.candidate, pool }
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
@@ -2066,7 +2127,8 @@ async function inspectReport(
 		return
 	}
 	const newAmount1 = calculateNextAmount1(game)
-	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, best.pool.token, newAmount1, best.pool.fee)
+	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, best.pool.token, newAmount1, best.pool.fee, blockNumber)
+	await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => (await client.getBlock({ blockNumber: canonicalBlockNumber })).hash)
 	const replacementTokenToSwap = deriveTokenToSwap(game, newAmount1, replacementAmount2)
 	if (replacementTokenToSwap.toLowerCase() !== best.quote.tokenToSwap.toLowerCase()) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=replacement-ratio-direction-mismatch`)
@@ -2118,7 +2180,7 @@ async function inspectReport(
 		submissionMode: config.submission.mode,
 	})
 	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, hedgeFee: best.hedgeFee, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
-	return { candidate, opportunity }
+	return { candidate, dexObservations, opportunity }
 }
 
 type ExecutionLockManager = {
@@ -2176,6 +2238,8 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		blockNumber: undefined,
 		blockTimestamp: undefined,
 		centralizedMarket: undefined,
+		marketConsensus: undefined,
+		marketObservations: [],
 		executionHistory,
 		endpointChecks: [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))],
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
@@ -2655,6 +2719,9 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					}
 					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
 					cursor ??= initialCursor(blockNumber, config.lookbackBlocks)
+					const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
+						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber),
+					)
 					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 					if (scanCursor === undefined) {
 						state.lastError = nextError
@@ -2676,9 +2743,61 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						applyLogs(reports, cachedLogs)
 						cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
 					}
+					if (replacedMarketHead) {
+						cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {})
+						const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
+						const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
+						if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+						cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
+						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
+						state.blockNumber = blockNumber.toString()
+						state.blockTimestamp = block.timestamp.toString()
+						state.lastPollAt = new Date().toISOString()
+						state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+						recordOperation(state, {
+							category: 'decision',
+							details: `block=${blockNumber.toString()}`,
+							level: 'warning',
+							message: 'Market evidence reset after canonical head replacement',
+							reason: 'DEX evidence from the replaced block was discarded; price-dependent evaluation resumes on the next poll',
+							reportId: undefined,
+						})
+						state.lastError = nextError
+						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+						return config.once
+					}
 					let completedOpportunityCount = 0
 					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep)
+						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
+							const [token0, token1, reserves] = await Promise.all([
+								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
+								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
+								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
+							])
+							const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
+							return {
+								blockHash,
+								blockNumber,
+								blockTimestamp: block.timestamp,
+								chainId: config.network.chain.id,
+								reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
+								reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
+								token0: getAddress(String(token0)),
+								token1: getAddress(String(token1)),
+							}
+						})
+						try {
+							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => (await client.getBlock({ blockNumber: canonicalBlockNumber })).hash)
+						} catch (error) {
+							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
+							state.marketConsensus = undefined
+							throw error
+						}
+						const marketObservedAt = Date.now()
+						state.marketObservations = [...(state.marketObservations ?? []), ...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations]
+							.filter(observation => observation.observedAt <= marketObservedAt && marketObservedAt - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds)
+							.slice(-2_000)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
 						state.tokenMarkets = await loadTokenMarkets(client, {
@@ -2699,6 +2818,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
 						const opportunities: OpportunitySnapshot[] = []
 						const candidates: ExecutionCandidate[] = []
+						const cycleDexObservations: MarketConsensusObservation[] = []
 						for (const report of reports.values()) {
 							if (report.settled) continue
 							try {
@@ -2712,6 +2832,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 									report.latest,
 									pools,
 									blockNumber,
+									blockHash,
 									block.timestamp,
 									gasPrice,
 									balances?.raw,
@@ -2723,6 +2844,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 									(message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }),
 								)
 								if (evaluated !== undefined) {
+									cycleDexObservations.push(...evaluated.dexObservations)
 									opportunities.push(evaluated.opportunity)
 									recordOperation(state, {
 										category: 'decision',
@@ -2737,15 +2859,46 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountRep * 10n ** 18n) / referenceWeth
 										const primaryRep = evaluated.candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
 										evaluated.opportunity.centralizedPriceDeviationBps = state.centralizedMarket === undefined ? undefined : centralizedPriceDeviationBps(dexPriceRepPerEth, state.centralizedMarket, evaluated.candidate.report.game.token2)?.toString()
-										const marketAllowed = centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets, evaluated.candidate.report.game.token2)
+										const venueConsensus = config.centralizedMarkets.venueConsensus
+										const consensusEstimate =
+											venueConsensus === undefined
+												? undefined
+												: estimateMarketConsensus(
+														[...(state.marketObservations ?? []), ...evaluated.dexObservations].filter(observation => observation.assetId.toLowerCase() === evaluated.candidate?.report.game.token2.toLowerCase() && observation.marketId?.toLowerCase() !== evaluated.candidate?.hedgePool.toLowerCase()),
+														marketConsensusSettings(config.centralizedMarkets),
+														evaluated.candidate.report.game.token2,
+														config.network.chain.id,
+														Date.now(),
+														evaluated.candidate.hedgeVenue,
+														evaluated.candidate.hedgePool,
+													)
+										const marketAllowed =
+											centralizedMarketConfigurationAllowsExecution(config.centralizedMarkets) &&
+											(consensusEstimate === undefined
+												? config.centralizedMarkets.requiredForExecution
+													? false
+													: centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets, evaluated.candidate.report.game.token2)
+												: marketConsensusAllowsExecution(
+														dexPriceRepPerEth,
+														consensusEstimate,
+														{
+															maximumDeviationBps: config.centralizedMarkets.maximumDexDeviationBps,
+															maximumObservationAgeMilliseconds: config.centralizedMarkets.maximumObservationAgeMilliseconds,
+															requiredForExecution: config.centralizedMarkets.requiredForExecution,
+														},
+														evaluated.candidate.report.game.token2,
+														config.network.chain.id,
+													))
+										if (consensusEstimate !== undefined) evaluated.opportunity.centralizedPriceDeviationBps = marketConsensusDeviationBps(dexPriceRepPerEth, consensusEstimate, evaluated.candidate.report.game.token2)?.toString()
+										evaluated.candidate.marketConsensus = consensusEstimate
 										if (!marketAllowed) {
 											evaluated.opportunity.decision = 'market-risk'
 											recordOperation(state, {
 												category: 'decision',
 												details: `dexRepPerEth=${decimalSignedEth(dexPriceRepPerEth)}`,
 												level: 'warning',
-												message: 'Centralized-market guard blocked report',
-												reason: primaryRep ? 'DEX price exceeded the configured CEX deviation or CEX depth was unreliable' : 'Required centralized-market confirmation is unavailable for this REP token',
+												message: 'Market consensus guard blocked report',
+												reason: primaryRep ? 'Executable price was not confirmed by independent CEX and leave-one-out DEX consensus' : 'Required market consensus is unavailable for this REP token',
 												reportId: evaluated.opportunity.reportId,
 											})
 											continue
@@ -2761,11 +2914,26 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 							} catch (error) {
 								const reportId = report.latest.helper.reportId.toString()
 								const message = errorMessage(error)
+								if (message === 'Canonical block changed during market observation') {
+									state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
+									state.marketConsensus = undefined
+									throw error
+								}
 								console.error(`report=${reportId} skipped=${message}`)
 								recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
 							}
 						}
 						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
+						state.marketObservations = [...(state.marketObservations ?? []), ...cycleDexObservations].filter(observation => observation.observedAt <= Date.now() && Date.now() - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds).slice(-2_000)
+						state.marketConsensus =
+							config.centralizedMarkets.venueConsensus === undefined
+								? undefined
+								: estimateMarketConsensus(
+										(state.marketObservations ?? []).filter(observation => observation.assetId.toLowerCase() === config.network.rep.toLowerCase()),
+										marketConsensusSettings(config.centralizedMarkets),
+										config.network.rep,
+										config.network.chain.id,
+									)
 						state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
 						state.balances = balances?.snapshot
 						state.blockNumber = blockNumber.toString()
@@ -2782,7 +2950,36 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 							try {
 								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 								if (metadata === undefined) throw new Error('Token metadata is unavailable')
-								const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, state.centralizedMarket, () => state.paused, trackTransaction, persistPosition)
+								const record = await executeDispute(
+									client,
+									readClients,
+									wallet,
+									config,
+									selected.report,
+									selected.quote,
+									selected.pool,
+									selected.hedgeVenue,
+									selected.hedgeFee,
+									metadata,
+									positions,
+									state.centralizedMarket,
+									selected.marketConsensus,
+									async () => {
+										try {
+											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber))
+											return true
+										} catch (error) {
+											void error
+											state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
+											state.marketConsensus = undefined
+											selected.marketConsensus = undefined
+											return false
+										}
+									},
+									() => state.paused,
+									trackTransaction,
+									persistPosition,
+								)
 								selected.opportunity.decision = 'submitted'
 								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
 								try {

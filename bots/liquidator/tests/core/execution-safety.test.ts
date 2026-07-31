@@ -1,9 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import { coordinatorAbi } from '../../src/contracts/abi.ts'
-import { requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
+import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
-import { assertExecutionActive, assertGasCostLimit, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, planVaultMaintenance, requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '../../src/execution/liquidation-executor.ts'
+import {
+	assertExecutionActive,
+	assertGasCostLimit,
+	assertMarketPriceStillAllowed,
+	assertRepLimits,
+	assertStaleLiquidationExposureBound,
+	conservativeStaleTopUp,
+	planVaultMaintenance,
+	requirePendingStagedOperation,
+	requireSuccessfulStagedOperation,
+	validateReceiptExpectation,
+} from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
@@ -81,6 +92,10 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 }
 
 describe('liquidator execution safety', () => {
+	test('rechecks market consensus immediately before price-dependent submission', async () => {
+		await expect(assertMarketPriceStillAllowed(async () => true)).resolves.toBeUndefined()
+		await expect(assertMarketPriceStillAllowed(async () => false)).rejects.toThrow('Market consensus expired')
+	})
 	test('rechecks an operator pause at transaction boundaries', () => {
 		expect(() => assertExecutionActive({ paused: false })).not.toThrow()
 		expect(() => assertExecutionActive({ paused: true })).toThrow('Operator paused before transaction submission')
@@ -94,6 +109,15 @@ describe('liquidator execution safety', () => {
 	test('pauses instead of continuing after restart recovers a reverted transaction', () => {
 		expect(() => requireRecoveredTransactionSuccess('reverted', `0x${'11'.repeat(32)}`)).toThrow('reverted')
 		expect(() => requireRecoveredTransactionSuccess('success', `0x${'11'.repeat(32)}`)).not.toThrow()
+	})
+
+	test('retains ambiguous price-dependent intents until a receipt or private finality proof exists', () => {
+		const publicIntent = { maxBlockNumber: 100n, mode: 'public' as const, requiresMarketEvidence: true }
+		const privateIntent = { ...publicIntent, mode: 'private' as const }
+		expect(ambiguousRecoveryAction(publicIntent, [1_000n, 1_000n])).toBe('retain')
+		expect(ambiguousRecoveryAction(privateIntent, [100n + PRIVATE_INTENT_FINALITY_BLOCKS - 1n, 1_000n])).toBe('retain')
+		expect(ambiguousRecoveryAction(privateIntent, [100n + PRIVATE_INTENT_FINALITY_BLOCKS, 1_000n])).toBe('expire-private')
+		expect(ambiguousRecoveryAction({ ...publicIntent, requiresMarketEvidence: false }, [100n])).toBe('resubmit')
 	})
 
 	test('enforces per-pool and aggregate REP exposure for maintenance deposits', () => {

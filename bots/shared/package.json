@@ -11,6 +11,8 @@
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
 		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
+		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
+		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts"
 	},

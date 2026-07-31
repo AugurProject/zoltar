@@ -2,10 +2,20 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertIntentSender, initialRuntimeState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, initialRuntimeState, loadDurableState, recoveredIntentCanBeResubmitted, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
 
 describe('liquidator durable state', () => {
+	test('never resubmits a recovered price-dependent intent without fresh evidence', () => {
+		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: true })).toBe(false)
+		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: false })).toBe(true)
+	})
+	test('clears all prior venue evidence when the configured source set changes', () => {
+		const evidence: { centralizedMarket: unknown; marketConsensus: unknown; marketObservations: unknown[] } = { centralizedMarket: 'old-cex', marketConsensus: 'old-consensus', marketObservations: ['old-observation'] }
+		clearMarketEvidenceForConfigurationChange(evidence)
+		expect(evidence).toEqual({ centralizedMarket: undefined, marketConsensus: undefined, marketObservations: [] })
+	})
+
 	test('persists a signed intent before submission for restart recovery', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
@@ -42,6 +52,7 @@ describe('liquidator durable state', () => {
 					target: getAddress('0x0000000000000000000000000000000000000030'),
 					type: 'pending-liquidation',
 				},
+				requiresMarketEvidence: true,
 				sender: account.address,
 				serializedTransaction,
 				submissionBlock: 100n,

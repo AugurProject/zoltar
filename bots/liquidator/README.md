@@ -48,8 +48,11 @@ zero, including deployed universes that do not have a security pool yet. The
 pool table is loaded automatically from
 `securityPoolDeploymentCount()` and `securityPoolDeploymentsRange()`. Selecting a
 pool enables candidate evaluation and execution only while its universe is also
-approved and its system state is operational. It does not deploy a new
-security-pool contract. The universe table shows parent and fork-outcome lineage,
+approved and its system state is operational. For an undeployed origin pool,
+add its universe, question, multiplier, and priority-fee tuple to `desiredPools`.
+The bot resolves the canonical factory address and selects it when present; when
+`allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before
+continuing liquidation. The universe table shows parent and fork-outcome lineage,
 operational and forked pool counts, pool selection, and whether a bot vault can
 migrate into that universe.
 
@@ -86,7 +89,7 @@ on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 The active-vault scan is capped by `runtime.maxVaultsPerPool`. A capped scan is
 marked in the dashboard and must not be treated as a complete opportunity view.
 
-## Centralized-market reference
+## Independent market consensus
 
 Both bots use the shared CCXT public market-data API to normalize order books
 from independently configured exchanges. Each `centralizedMarkets.sources`
@@ -94,27 +97,64 @@ entry identifies an exchange with its CCXT `exchangeId`, a unified `REP/QUOTE`
 market, and an `ETH/QUOTE` market when REP is not quoted directly in ETH. Public
 ticker and order-book reads do not require exchange credentials. A cross-quoted
 observation is fresh only when both its REP order book and ETH ticker are fresh.
+Exchange-provided timestamps are retained (using the older timestamp for a
+cross-quoted observation), so polling a cached response cannot extend freshness
+or satisfy the temporal-persistence rule. Required consensus does not admit a
+CEX observation without a native order-book timestamp and, for cross quotes, a
+native ETH-ticker timestamp.
 
 The bot converts each venue into REP per ETH, sums executable bid and ask depth
 inside `depthBps`, and uses the median of fresh venue prices. An estimate is
 reliable only when it has `minimumSourceCount` independent exchanges, minimum
 two-sided depth, and no more than `maximumVenueDispersionBps` disagreement.
-Configured sources and their liquidity are shown in the dashboard.
+Configured sources and their liquidity are shown in the dashboard. Operators can
+add or remove CCXT exchanges from the market-configuration editor without any
+exchange adapter being hard-coded by the bot.
 
-When `requiredForExecution` is true, use at least two sources. Liquidation and
-price-dependent vault maintenance stop when CEX evidence is stale, shallow,
-dispersed, unavailable, or differs from the coordinator REP price by more than
-`maximumDexDeviationBps`. Migration and transaction recovery continue because
-they do not rely on a REP market price. When `requiredForExecution` is false,
-healthy CEX evidence can still reject an outlying coordinator price, but
-unavailable or unreliable CEX data remains advisory.
+When `venueConsensus` is configured, the liquidator also reads each explicit
+constant-product REP/WETH pair in `dexSources` directly from the chain. It probes
+both trade directions at `dexProbeDepthEth`, rejects pairs whose executable
+spread is too wide, and grants one vote per distinct `sourceId`. Pair addresses
+are explicit so an untrusted discovery service cannot insert a venue.
 
-The CEX estimate is an independent manipulation guard; it never replaces the
+The CEX and DEX groups are aggregated separately. If both groups are internally
+reliable, they must agree within `maximumGroupDeviationBps`. If one group is
+dispersed while the other has the configured independent quorum and total source
+count, the coherent group can supply the guarded reference. Thus one manipulated
+CEX does not halt the bot when multiple sufficiently liquid DEX venues agree.
+If both coherent groups disagree, or neither has quorum, price-dependent actions
+stop in required mode. Configure at least three independent failure domains;
+multiple pools controlled by one venue must share a `sourceId` and receive only
+one vote. `minimumSourceObservationCount` and
+`minimumSourceObservationSpanMilliseconds` require agreement to persist across
+polls, preventing a one-block or one-request spike from immediately becoming a
+trusted reference. The span cannot exceed `maximumObservationAgeMilliseconds`,
+and leaving then returning to an earlier price regime restarts its history.
+
+When `requiredForExecution` is true, `venueConsensus` is mandatory and the
+configured CEX, DEX, total-source, and temporal quorum rules fail closed. The
+configured source lists must be large enough to satisfy those minimums before
+the bot starts. The
+current price regime itself must persist for the configured count and span; old
+observations cannot warm up a newly changed price. Liquidation and
+price-dependent vault maintenance recheck evidence age after preparation and
+immediately before persisting each signed intent, including after approvals or
+funding transactions.
+Migration and transaction recovery continue because they do not rely on a REP
+market price. When `requiredForExecution` is false, healthy independent evidence
+can still reject an outlying coordinator price, but unavailable or unreliable
+evidence remains advisory.
+
+Saving a new market configuration clears all accumulated CEX and DEX evidence;
+replacement sources must establish their own temporal history before execution
+can resume.
+
+The guarded estimate is an independent manipulation guard; it never replaces the
 coordinator price in protocol arithmetic and never authorizes a transaction by
-itself. It is bound to universe 0 REP. Child-universe REP is never compared with
-that unrelated market: required mode blocks price-dependent child-pool actions,
-while advisory mode leaves them unconfirmed. Price-independent fee redemption
-continues during either condition.
+itself. Evidence is keyed by exact chain and REP token. Configure root REP in
+`centralizedMarkets` and exact approved child-universe REP tokens in
+`childMarketConfigurations`; each child stays fail-closed until its own market
+history is reliable. Price-independent fee redemption continues without it.
 
 Example source entries (only use venues where these exact markets exist):
 
@@ -124,6 +164,38 @@ Example source entries (only use venues where these exact markets exist):
   { "exchangeId": "anotherexchange", "repMarket": "REP/ETH", "ethMarket": null }
 ]
 ```
+
+Set `assetAddress`, `assetChainId`, and `assetSymbol: "REP"` to the exact REP
+deployment before adding sources. Put root REP in `centralizedMarkets` and child
+REP configurations in `childMarketConfigurations`. The bot rejects another token
+base, chain, or address, and CEX exchange IDs cannot be reused as DEX
+failure-domain IDs.
+
+Example DEX source entries (addresses are intentionally placeholders):
+
+```json
+"venueConsensus": {
+	"allowSingleGroupFallback": false,
+  "dexProbeDepthEth": "1",
+  "dexSources": [
+    { "sourceId": "uniswap-v2", "pair": "0x0000000000000000000000000000000000000000", "feeBps": 30 },
+    { "sourceId": "sushiswap-v2", "pair": "0x0000000000000000000000000000000000000000", "feeBps": 30 }
+  ],
+  "maximumGroupDeviationBps": 500,
+  "minimumDexAskDepthEth": "0.5",
+  "minimumDexBidDepthEth": "0.5",
+  "minimumDexSourceCount": 2,
+	"minimumSourceObservationCount": 2,
+	"minimumSourceObservationSpanMilliseconds": 10000,
+  "minimumTotalSourceCount": 3
+}
+```
+
+Configured DEX reserve reads are pinned to the scanned canonical block. Polling
+the same block again cannot build price persistence; a changed canonical hash
+discards accumulated DEX history. Single-group fallback is
+opt-in; when enabled, only sources in the selected reliable group count toward
+the total-source quorum.
 
 ## Strategy controls
 

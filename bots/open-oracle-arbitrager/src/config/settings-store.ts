@@ -63,18 +63,23 @@ const operatorSettingsFilesystem: OperatorSettingsFilesystem = {
 	rm,
 }
 
-const defaultCentralizedMarkets = {
-	depthBps: 500,
-	maximumDexDeviationBps: 1_000,
-	maximumObservationAgeMilliseconds: 30_000,
-	maximumVenueDispersionBps: 500,
-	minimumAskDepthEth: '0',
-	minimumBidDepthEth: '0',
-	minimumSourceCount: 1,
-	orderBookLimit: 20,
-	requestTimeoutMilliseconds: 5_000,
-	requiredForExecution: false,
-	sources: [],
+function defaultCentralizedMarkets(assetAddress: `0x${string}`, assetChainId: number) {
+	return {
+		assetAddress,
+		assetChainId,
+		assetSymbol: 'REP',
+		depthBps: 500,
+		maximumDexDeviationBps: 1_000,
+		maximumObservationAgeMilliseconds: 30_000,
+		maximumVenueDispersionBps: 500,
+		minimumAskDepthEth: '0',
+		minimumBidDepthEth: '0',
+		minimumSourceCount: 1,
+		orderBookLimit: 20,
+		requestTimeoutMilliseconds: 5_000,
+		requiredForExecution: false,
+		sources: [],
+	}
 }
 
 type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeSlippageBps' | 'riskLimits'> & {
@@ -193,10 +198,14 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const privateKeyValue = record['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : record['privateKey']
 	const candidate = signerCandidate(privateKeyValue ?? null)
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
+	const deployment = validateDeploymentSettings(record['deployment'])
+	const chainId = record['network'] === 'mainnet' ? 1 : 11_155_111
+	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
+	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
 	return {
-		centralizedMarkets: parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets),
+		centralizedMarkets,
 		connectivity: validateConnectivitySettings(record['connectivity']),
-		deployment: validateDeploymentSettings(record['deployment']),
+		deployment,
 		network: record['network'],
 		paused: record['paused'],
 		privateKey: candidate.privateKey,

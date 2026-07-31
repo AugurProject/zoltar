@@ -1,12 +1,50 @@
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
+import { parseStrategy } from '../src/config/settings.ts'
 
 let paused = false
 let configurationRequests = 0
 const longUniverseId = '452312848583266388373324160190187140051835877600158453279131187530910662655'
 let approvedUniverses = ['101', longUniverseId]
 let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
+const centralizedMarkets = {
+	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+	assetChainId: 1,
+	assetSymbol: 'REP',
+	depthBps: 500,
+	maximumDexDeviationBps: 1000,
+	maximumObservationAgeMilliseconds: 30000,
+	maximumVenueDispersionBps: 500,
+	minimumAskDepthEth: '2',
+	minimumBidDepthEth: '2',
+	minimumSourceCount: 2,
+	orderBookLimit: 20,
+	requestTimeoutMilliseconds: 5000,
+	requiredForExecution: true,
+	sources: [
+		{ ethMarket: 'ETH/USD', exchangeId: 'kraken', repMarket: 'REP/USD' },
+		{ ethMarket: null, exchangeId: 'coinbase', repMarket: 'REP/ETH' },
+	],
+	venueConsensus: {
+		allowSingleGroupFallback: false,
+		dexProbeDepthEth: '1',
+		dexSources: [
+			{ feeBps: 30, pair: '0xdddddddddddddddddddddddddddddddddddddddd', sourceId: 'uniswap-v2' },
+			{ feeBps: 30, pair: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', sourceId: 'sushiswap-v2' },
+		],
+		maximumGroupDeviationBps: 500,
+		minimumDexAskDepthEth: '0.5',
+		minimumDexBidDepthEth: '0.5',
+		minimumDexSourceCount: 2,
+		minimumSourceObservationCount: 2,
+		minimumSourceObservationSpanMilliseconds: 10000,
+		minimumTotalSourceCount: 3,
+	},
+}
+const childMarketConfigurations: unknown[] = []
+const desiredPools = [{ initialReportPriorityFeeWeiPerGas: '1000000000', questionId: '42', statoblastSecurityMultiplierBps: '12500', universeId: '101' }]
 let strategy = {
 	allowAutomaticDeposits: true,
+	allowAutomaticPoolCreation: false,
 	allowAutomaticVaultMigrations: true,
 	allowAutomaticWithdrawals: true,
 	candidatePriority: 'largest-bonus',
@@ -110,7 +148,7 @@ const server = startDashboardServer(4183, {
 		await Bun.sleep(400)
 		configurationRequests += 1
 		if (configurationRequests === 1) throw new Error('Fixture configuration temporarily unavailable')
-		return { approvedUniverses, selectedPools, strategy }
+		return { approvedUniverses, centralizedMarkets, childMarketConfigurations, desiredPools, selectedPools, strategy }
 	},
 	getState: () => ({
 		activities,
@@ -127,6 +165,15 @@ const server = startDashboardServer(4183, {
 			priceRepPerEth: '10.365',
 			reasons: [],
 			reliable: true,
+		},
+		marketConsensus: {
+			assetId: '0x0000000000000000000000000000000000000abc',
+			cex: { askDepthEth: '6.3', bidDepthEth: '7.1', priceRepPerEth: '10.365', reasons: [], reliable: true, sourceCount: 2 },
+			dex: { askDepthEth: '4.8', bidDepthEth: '5.2', priceRepPerEth: '10.39', reasons: [], reliable: true, sourceCount: 2 },
+			priceRepPerEth: '10.3775',
+			reasons: [],
+			reliable: true,
+			sourceCount: 4,
 		},
 		execute: false,
 		lastScanAt: new Date().toISOString(),
@@ -177,6 +224,17 @@ const server = startDashboardServer(4183, {
 		approvedUniverses = value.map(String)
 		return { approvedUniverses, selectedPools, strategy }
 	},
+	setMarketConfiguration: value => {
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected market configuration object')
+		return {
+			approvedUniverses,
+			centralizedMarkets: Reflect.get(value, 'root'),
+			childMarketConfigurations: Reflect.get(value, 'children'),
+			desiredPools: Reflect.get(value, 'desiredPools'),
+			selectedPools,
+			strategy,
+		}
+	},
 	setSigner: value => ({
 		wallet: Reflect.get(value as object, 'privateKey') === '' ? undefined : '0x9999999999999999999999999999999999999999',
 	}),
@@ -184,6 +242,7 @@ const server = startDashboardServer(4183, {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 			throw new Error('Expected strategy object')
 		}
+		parseStrategy(value)
 		strategy = { ...strategy, ...value }
 		return { approvedUniverses, selectedPools, strategy }
 	},

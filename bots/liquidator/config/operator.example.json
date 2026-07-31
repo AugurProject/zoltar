@@ -1,7 +1,12 @@
 {
 	"version": 1,
 	"approvedUniverses": ["0"],
+	"childMarketConfigurations": [],
+	"desiredPools": [],
 	"centralizedMarkets": {
+		"assetAddress": "0x0000000000000000000000000000000000000000",
+		"assetChainId": 11155111,
+		"assetSymbol": "REP",
 		"depthBps": 500,
 		"maximumDexDeviationBps": 1000,
 		"maximumObservationAgeMilliseconds": 30000,
@@ -12,7 +17,19 @@
 		"orderBookLimit": 20,
 		"requestTimeoutMilliseconds": 5000,
 		"requiredForExecution": false,
-		"sources": []
+		"sources": [],
+		"venueConsensus": {
+			"allowSingleGroupFallback": false,
+			"dexProbeDepthEth": "1",
+			"dexSources": [],
+			"maximumGroupDeviationBps": 500,
+			"minimumDexAskDepthEth": "0.5",
+			"minimumDexBidDepthEth": "0.5",
+			"minimumDexSourceCount": 2,
+			"minimumSourceObservationCount": 2,
+			"minimumSourceObservationSpanMilliseconds": 10000,
+			"minimumTotalSourceCount": 3
+		}
 	},
 	"network": {
 		"name": "sepolia",
@@ -47,6 +64,7 @@
 	"selectedPools": [],
 	"strategy": {
 		"allowAutomaticDeposits": true,
+		"allowAutomaticPoolCreation": false,
 		"allowAutomaticVaultMigrations": true,
 		"allowAutomaticWithdrawals": true,
 		"candidatePriority": "largest-bonus",

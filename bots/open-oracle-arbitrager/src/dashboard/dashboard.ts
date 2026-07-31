@@ -459,20 +459,25 @@ function renderCentralizedMarket(snapshot: OperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('centralized-market-body')
 	body.replaceChildren()
 	const market = snapshot.centralizedMarket
+	const consensus = snapshot.marketConsensus
+	setText('dex-market-price', consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
+	setText('guarded-market-price', consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
+	setText('dex-market-bid-depth', consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
+	setText('dex-market-ask-depth', consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		setText('centralized-market-status', 'No exchange sources configured')
+		setText('centralized-market-status', consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
 		setText('centralized-market-price', '—')
 		setText('centralized-market-bid-depth', '—')
 		setText('centralized-market-ask-depth', '—')
-		setText('centralized-market-source-count', '0')
+		setText('centralized-market-source-count', consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 		element('centralized-market-empty').hidden = false
 		return
 	}
-	setText('centralized-market-status', market.reliable ? 'Reliable cross-venue estimate' : market.reasons.join(' · '))
+	setText('centralized-market-status', consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
 	setText('centralized-market-price', market.priceRepPerEth)
 	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
 	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
-	setText('centralized-market-source-count', market.observations.length.toString())
+	setText('centralized-market-source-count', consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 	for (const observation of market.observations) {
 		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()]))
 	}

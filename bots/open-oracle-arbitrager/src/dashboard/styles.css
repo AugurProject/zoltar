@@ -320,6 +320,10 @@ main {
 		border-top: 0;
 	}
 
+	#centralized-market-summary .metric:nth-child(n + 5) {
+		border-top: 1px solid var(--border);
+	}
+
 	#centralized-market-summary .metric:nth-child(3n) {
 		border-right: 1px solid var(--border);
 	}
@@ -572,6 +576,16 @@ table {
 	width: 100%;
 	border-collapse: collapse;
 	font-size: 0.78rem;
+}
+
+caption {
+	padding: 12px 14px;
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-align: left;
+	text-transform: uppercase;
 }
 
 th,

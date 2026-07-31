@@ -15,6 +15,9 @@ afterEach(async () => {
 function settings(privateKeyValue: Hex | undefined) {
 	return {
 		centralizedMarkets: {
+			assetAddress: '0x0000000000000000000000000000000000000005' as const,
+			assetChainId: 1,
+			assetSymbol: 'REP',
 			depthBps: 500n,
 			maximumDexDeviationBps: 1_000n,
 			maximumObservationAgeMilliseconds: 30_000,
