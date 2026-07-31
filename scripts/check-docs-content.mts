@@ -343,6 +343,9 @@ assert.ok(
 )
 
 const whitepaper = await Bun.file('docs/whitepapers/statoblast-whitepaper.html').text()
+const architectureSectionMatch = whitepaper.match(/<section class="paper-section" id="architecture">[\s\S]*?<\/section>/)
+assert.notEqual(architectureSectionMatch, null, 'Statoblast whitepaper must contain its Architecture section')
+const architectureSection = architectureSectionMatch?.[0] ?? ''
 const zoltarWhitepaper = await Bun.file('docs/whitepapers/zoltar-whitepaper.html').text()
 const openOracleIntegration = await Bun.file('docs/protocol-design/open-oracle-integration.html').text()
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
@@ -351,12 +354,42 @@ const escalationGameArchitecture = await Bun.file('docs/architecture-deployment/
 const invariantsHtml = await Bun.file('docs/safety-operations/invariants.html').text()
 const startHere = await Bun.file('docs/documentation.html').text()
 const sharedDocsCss = await Bun.file('docs/assets/css/shared-docs.css').text()
+const functionStyleRoundingPattern = /(?<!Math\.)\b(?:floor|ceil)\(/
+assert.match('floor(displayedValue)', functionStyleRoundingPattern, 'displayed function-style rounding fixture should be rejected')
+assert.doesNotMatch('Math.floor(executableValue)', functionStyleRoundingPattern, 'executable Math.floor calls should remain allowed')
+const visibleFormulaSourcePaths = [...new Bun.Glob('docs/**/*.html').scanSync('.'), ...new Bun.Glob('docs/**/*.md').scanSync('.'), 'docs/assets/js/protocolTerms.js', 'docs/charts/diagramSpecs.json', 'docs/charts/chartRuntime.ts']
+for (const path of visibleFormulaSourcePaths) {
+	const source = await Bun.file(path).text()
+	const visibleSource = path.endsWith('.html') ? source.replaceAll(/<script\b[\s\S]*?<\/script>/gi, '') : source
+	assert.doesNotMatch(visibleSource, functionStyleRoundingPattern, `${path} uses function-style rounding notation in displayed documentation`)
+}
 const uiCopyModuleGlob = new Bun.Glob('ui/ts/copy/*.ts')
 let uiCopy = ''
 for await (const path of uiCopyModuleGlob.scan('.')) {
 	uiCopy += await Bun.file(path).text()
 }
 assert.match(whitepaper, /After the migration window ends, each undercollateralized child pool may run its own <a href="\.\.\/protocol-design\/truth-auction\.html#lifecycle">truth auction<\/a>[\s\S]{0,160}as much repair ETH as demand supports/)
+assert.match(whitepaper, /A Statoblast lineage begins with one origin[\s\S]{0,80}<code>SecurityPool<\/code> and includes the descendant child pools/)
+assert.match(whitepaper, /One lineage, three architectural layers/)
+assert.match(whitepaper, /Every[\s\S]{0,40}contract box is a separate storage and authority boundary/)
+assert.doesNotMatch(whitepaper, /three state boundaries/)
+assert.match(whitepaper, /<code>Zoltar<\/code>[\s\S]{0,160}Owns universe identity, branch creation, and the migration ledger/)
+assert.match(whitepaper, /<code>ReputationToken<\/code>[\s\S]{0,160}Owns REP balances and theoretical supply within one universe/)
+assert.match(whitepaper, /Truth and identity[\s\S]{0,180}Arrows show direct call direction[\s\S]{0,300}ZoltarQuestionData[\s\S]{0,180}>←<[\s\S]{0,180}<code>Zoltar<\/code>/)
+assert.match(whitepaper, /<code>OpenOraclePriceCoordinator<\/code>[\s\S]{0,220}A vault or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool/)
+assert.match(whitepaper, /<code>OpenOracle<\/code>[\s\S]{0,180}Owns report games and reporter balances/)
+assert.match(whitepaper, /operator-reference\.md#fork-migration"><code>SecurityPoolMigrationProxy<\/code>[\s\S]{0,200}stable caller identity[\s\S]{0,100}calls Zoltar to lock, fork, and split REP[\s\S]{0,100}transfers materialized child REP directly to its receiver/)
+assert.doesNotMatch(whitepaper, /calls Zoltar to lock, fork, split, and sweep/)
+assert.doesNotMatch(architectureSection, /<code>[^<]*→[^<]*<\/code>/)
+assert.match(whitepaper, /<code>EscalationGame<\/code>[\s\S]{0,240}carry commitments, replay state[\s\S]{0,120}verifies caller-supplied carry proofs/)
+assert.match(whitepaper, /<code>ShareToken<\/code>[\s\S]{0,220}materializes unminted child claims during migration/)
+assert.doesNotMatch(architectureSection, /<code>ShareToken\.migrate<\/code>/)
+assert.match(whitepaper, /truth-auction\.html"><code>UniformPriceDualCapBatchAuction<\/code>/)
+assert.doesNotMatch(architectureSection, /<code>TruthAuction<\/code>/)
+assert.match(sharedDocsCss, /body\.paper-statoblast :is\(\.table-wrap, \.table-scroll, \.docs-auto-table-scroll\) > table\.docs-responsive-table,[\s\S]{0,180}min-width: 0/)
+assert.match(sharedDocsCss, /body\.paper-statoblast table\.docs-responsive-table :is\(th, td\),[\s\S]{0,160}white-space: normal/)
+assert.match(sharedDocsCss, /body\.paper-statoblast table\.invalid-table\.docs-responsive-table :is\(th, td\):first-child,[\s\S]{0,200}white-space: normal/)
+assert.match(whitepaper, /Attempt collateral repair[\s\S]{0,220}as much ETH as demand supplies[\s\S]{0,100}actual accepted ETH/)
 assert.doesNotMatch(whitepaper, /class="subtitle"[\s\S]{0,180}\bcensorship-resistant\b/)
 assert.match(whitepaper, /Each deposit adds to that outcome's cumulative balance[\s\S]{0,200}does not[\s\S]{0,80}outbid/)
 assert.match(whitepaper, /median outcome balance determines the scheduled end[\s\S]{0,140}strict balance leader resolves the question/)
@@ -423,7 +456,7 @@ assert.match(whitepaper, /own-fork direct claim[\s\S]{0,100}same winning reward 
 assert.match(whitepaper, /href="#migration">Forks and Migration<\/a>[\s\S]{0,220}only distinguishes[\s\S]{0,120}settlement entry points/)
 assert.match(whitepaper, /operator-reference\.md#escalation-resolution-and-deposits/)
 assert.doesNotMatch(whitepaper, /id="fig-statoblast-unresolved-migration"|Unresolved Escalation Continuation Trace/)
-assert.match(whitepaper, /forkHaircut = floor\(forkThreshold \/ forkBurnDivisor\); escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork/)
+assert.match(whitepaper, /forkHaircut = ⌊forkThreshold \/ forkBurnDivisor⌋; escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork/)
 assert.match(whitepaper, /Each\s+selected grandchild receives that same canonical snapshot and full remaining[\s\S]{0,80}backing once; winning proofs remain their own authorization/)
 assert.match(whitepaper, /external-fork example, source REP converts to child REP[\s\S]{0,80}one-for-one[\s\S]{0,520}<code>20 REP<\/code>/)
 assert.match(startHere, /statoblast-whitepaper\.html/)

@@ -98,7 +98,7 @@ window.protocolTermDefinitions = Object.freeze({
 	malformed: 'An answer encoding rejected by the question definition.',
 	manipulatedPrice: 'The reported price chosen by an attacker in the attack model.',
 	market: 'A tradable question with outcome shares, collateral, and a resolution path.',
-	MAX_AUCTION_VAULT_HAIRCUT_DIVISOR: 'The divisor used to reserve floor(migratedRep / divisor) REP from the truth-auction sale cap.',
+	MAX_AUCTION_VAULT_HAIRCUT_DIVISOR: 'The divisor used to reserve ⌊migratedRep / divisor⌋ REP from the truth-auction sale cap.',
 	MAX_OPERATION_VALID_FOR_SECONDS: 'The maximum time a staged operation may remain valid.',
 	MAX_PENDING_SETTLEMENT_OPERATIONS: 'The maximum number of staged operations replayed from one settlement callback.',
 	MAX_RETENTION_RATE: 'The maximum retention rate used in security-pool accounting.',

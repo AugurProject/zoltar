@@ -53,7 +53,14 @@ test('responsive docs compact equations and label unavoidable equation and table
 				</math>
 			</div>
 			<div class="table-wrap"><table><tr><td>Wide content</td></tr></table></div>
-			<table aria-label="Deployment mapping"><tr><td>Bare wide content</td></tr></table>
+			<table class="wide-table invalid-table" aria-label="Deployment mapping">
+				<thead><tr><th>Contract</th><th>Purpose</th></tr></thead>
+				<tbody><tr><td>SecurityPool</td><td>Bare wide content</td></tr></tbody>
+			</table>
+			<table data-complex-table>
+				<thead><tr><th colspan="2">Complex heading</th></tr></thead>
+				<tbody><tr><td>One</td><td>Two</td></tr></tbody>
+			</table>
 		`)
 		const equation = document.querySelector('.equation')
 		const math = document.querySelector('math')
@@ -100,6 +107,9 @@ test('responsive docs compact equations and label unavoidable equation and table
 
 		const bareTableContainer = document.querySelector('.docs-auto-table-scroll')
 		if (bareTableContainer === null) throw new Error('Bare table was not placed in a responsive container')
+		const responsiveTable = bareTableContainer.querySelector('table')
+		const complexTable = document.querySelector('[data-complex-table]')
+		if (responsiveTable === null || complexTable === null) throw new Error('Responsive table fixtures are incomplete')
 		setWidth(bareTableContainer, 'clientWidth', 320)
 		setWidth(bareTableContainer, 'scrollWidth', 640)
 		window.dispatchEvent(new Event('resize'))
@@ -135,8 +145,14 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(tableWrap.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
 		expect(bareTableContainer.getAttribute('role')).toBe('region')
 		expect(bareTableContainer.getAttribute('aria-label')).toBe('Deployment mapping')
-		expect(bareTableContainer.getAttribute('tabindex')).toBe('0')
-		expect(bareTableContainer.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
+		expect(responsiveTable.classList.contains('docs-responsive-table')).toBeTrue()
+		expect(responsiveTable.classList.contains('wide-table')).toBeTrue()
+		expect(responsiveTable.classList.contains('invalid-table')).toBeTrue()
+		expect(responsiveTable.querySelector('tbody td')?.getAttribute('data-docs-label')).toBe('Contract')
+		expect(responsiveTable.querySelector('tbody td:nth-child(2)')?.getAttribute('data-docs-label')).toBe('Purpose')
+		expect(bareTableContainer.hasAttribute('tabindex')).toBeFalse()
+		expect(bareTableContainer.querySelector('.docs-overflow-cue')).toBeNull()
+		expect(complexTable.classList.contains('docs-table-scroll-only')).toBeTrue()
 	} finally {
 		environment.cleanup()
 	}

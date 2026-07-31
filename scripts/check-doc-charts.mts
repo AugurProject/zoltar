@@ -11,6 +11,7 @@ const repositoryRoot = path.resolve(import.meta.dir, '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const diagramControlPath = path.join(repositoryRoot, 'docs/charts/diagramControl.ts')
+const sharedDocsCssPath = path.join(repositoryRoot, 'docs/assets/css/shared-docs.css')
 const generatedPath = path.join(repositoryRoot, 'docs/assets/js/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 40
@@ -204,7 +205,7 @@ const htmlEntries: string[] = []
 for await (const relativePath of new Bun.Glob('**/*.html').scan({ cwd: docsDirectory, onlyFiles: true })) {
 	htmlEntries.push(relativePath)
 }
-const [diagramControlSource, specsSource, runtimeSource] = await Promise.all([readFile(diagramControlPath, 'utf8'), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
+const [diagramControlSource, sharedDocsCssSource, specsSource, runtimeSource] = await Promise.all([readFile(diagramControlPath, 'utf8'), readFile(sharedDocsCssPath, 'utf8'), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
 if (nativeDispatchResult.issue !== undefined) {
@@ -326,11 +327,16 @@ if (
 	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)") ||
 	!runtimeSource.includes('fullSizeDiagramOverflows(overflowEnvelope)') ||
 	!runtimeSource.includes('updateDiagramControl(button, cue, isFit)') ||
+	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)") ||
 	!runtimeSource.includes("overflowEnvelope.classList.add('plot-figure-fit')") ||
+	!runtimeSource.includes('if (!needsControl) return') ||
 	runtimeSource.includes("matchMedia('(max-width: 640px)')") ||
 	!diagramControlSource.includes("'View full size'") ||
 	!diagramControlSource.includes("'Fit to width'") ||
 	!diagramControlSource.includes("button.removeAttribute('aria-pressed')") ||
+	!sharedDocsCssSource.includes('.plot-figure-diagram:not(.plot-figure-fit) > .plot-chart') ||
+	!sharedDocsCssSource.includes('.plot-figure-diagram:not(.plot-figure-fit) > .plot-chart > svg') ||
+	!sharedDocsCssSource.includes('width: auto !important') ||
 	!runtimeSource.includes("new CustomEvent('docs:charts-rendered')") ||
 	!runtimeSource.includes('restoreDocumentFragment')
 ) {

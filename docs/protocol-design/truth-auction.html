@@ -279,8 +279,8 @@
 				<p>
 					When demand never reaches a full clearing price, the auction switches
 					into the underfunded branch. Finalization computes
-					<code>underfundedThreshold = ceil(ethRaiseCap · 1e18 /
-					maxRepBeingSold)</code>, stores the lowest tick whose price reaches that
+					<code>underfundedThreshold = ⌈ethRaiseCap · 1e18 /
+					maxRepBeingSold⌉</code>, stores the lowest tick whose price reaches that
 					qualification threshold as <code>clearingTick</code>. Only bids at or above
 					the cap-implied qualification threshold are retained; lower ticks refund.
 					Qualifying bidders collectively purchase
@@ -303,13 +303,12 @@
 						<math
 							display="block"
 							aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold"
-							data-source="underfundedThreshold = ceil(ethRaiseCap * PRICE_PRECISION / maxRepBeingSold)"
+							data-source="underfundedThreshold = ⌈ethRaiseCap * PRICE_PRECISION / maxRepBeingSold⌉"
 						>
 							<mrow>
 								<mi>underfundedThreshold</mi>
 								<mo>=</mo>
-								<mi>ceil</mi>
-								<mo>(</mo>
+								<mo form="prefix" stretchy="true">⌈</mo>
 								<mfrac>
 									<mrow>
 										<mi>ethRaiseCap</mi>
@@ -318,7 +317,7 @@
 									</mrow>
 									<mi>maxRepBeingSold</mi>
 								</mfrac>
-								<mo>)</mo>
+								<mo form="postfix" stretchy="true">⌉</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
