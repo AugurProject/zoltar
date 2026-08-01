@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { SecurityVaultSection } from '../../../features/security-pools/components/SecurityVaultSection.js'
+import { SecurityVaultSection, SelectedVaultSummarySection } from '../../../features/security-pools/components/SecurityVaultSection.js'
 import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
 import type { AccountState } from '../../../types/app.js'
 import type { SecurityVaultDetails } from '../../../types/contracts.js'
@@ -137,9 +137,49 @@ describe('SecurityVaultSection', () => {
 		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
 		if (!(selectedVaultCard instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		const selectedVaultQueries = within(selectedVaultCard)
-		expect(selectedVaultQueries.getByText('REP Collateral')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Free REP')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
-		expect(selectedVaultQueries.getByText('Escrowed REP')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Escalation REP')).not.toBeNull()
+	})
+
+	test('keeps nonzero escalation REP visible in the embedded selected-vault action summary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				securityBondAllowance={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ escalationEscrowedRep: 3n * 10n ** 18n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const escalationMetric = within(document.body).getByText('Escalation REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded escalation REP metric')
+		expect(escalationMetric.textContent).toContain('3.00 REP')
+	})
+
+	test('keeps zero escalation REP explicit in the embedded selected-vault action summary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				securityBondAllowance={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ escalationEscrowedRep: 0n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const escalationMetric = within(document.body).getByText('Escalation REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded escalation REP metric')
+		expect(escalationMetric.textContent).toContain('0 REP')
 	})
 
 	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {
@@ -526,7 +566,7 @@ describe('SecurityVaultSection', () => {
 		expect(document.activeElement).toBe(maxButton)
 		fireEvent.click(maxButton)
 
-		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1' })
+		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.333333333333333333' })
 	})
 
 	test('allows setting the security bond allowance to zero', async () => {
@@ -588,6 +628,7 @@ describe('SecurityVaultSection', () => {
 						isPriceValid: false,
 						requestPriceEthCost: 1n,
 					},
+					securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
@@ -603,6 +644,29 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
+	test('blocks free REP withdrawal while escalation deposits remain unsettled', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 3n * 10n ** 18n,
+						repDepositShare: 20n * 10n ** 18n,
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Settle escalation deposits before withdrawing REP.')
+	})
+
 	test('requires fresh-report funding for vault actions at the exact oracle-price expiry boundary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={10n}>
@@ -613,6 +677,7 @@ describe('SecurityVaultSection', () => {
 							priceValidUntilTimestamp: 10n,
 							requestPriceEthCost: 1n * 10n ** 18n,
 						}),
+						securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
@@ -641,6 +706,7 @@ describe('SecurityVaultSection', () => {
 							requestPriceEthCost: 1n * 10n ** 18n,
 						}),
 						securityVaultDetails: createSecurityVaultDetails({
+							escalationEscrowedRep: 0n,
 							repDepositShare: 13n * 10n ** 18n,
 						}),
 						securityVaultForm: {

@@ -135,6 +135,10 @@ const discouragedDocsPatterns = [
 		name: 'passive migration-balance grant',
 		regex: /\bholder receives a\s+(?:migration balance|<em>migration balance<\/em>)\b/i,
 	},
+	{
+		name: 'stale escalation depositor payout',
+		regex: /\bpay their recorded depositors\b/i,
+	},
 ]
 
 const findDiscouragedDocsWording = (path: string, text: string) => {
@@ -315,6 +319,7 @@ const discouragedPatternFixtures = [
 	{ expected: 'wrong question lifecycle actor', text: '<p><code>forkQuestion</code> triggered a fork.</p>', path: 'docs/example.html' },
 	{ expected: 'exhaustive child-pool creation', text: 'Statoblast creates one child pool for each fork branch.' },
 	{ expected: 'passive migration-balance grant', text: '<p>After a fork, a holder receives a <em>migration balance</em>.</p>', path: 'docs/example.html' },
+	{ expected: 'stale escalation depositor payout', text: 'Winning inherited proofs pay their recorded depositors.' },
 ]
 
 for (const fixture of discouragedPatternFixtures) {
@@ -452,7 +457,7 @@ assert.match(whitepaper, /local withdrawal, own-fork direct\s+claims, optional p
 assert.match(whitepaper, /migrateVault[\s\S]{0,160}whether or\s+not unresolved external-fork escalation locks exist[\s\S]{0,100}cleanup remains a separate optional concern/)
 assert.match(whitepaper, /local game reaches a final outcome without non-decision[\s\S]{0,100}ordinary\s+no-fork lifecycle/)
 assert.match(whitepaper, /Settlement does not re-mint that ownership[\s\S]{0,100}ordinary winning payout as wallet REP[\s\S]{0,100}losing\s+settlement clears escrow without a payout/)
-assert.match(whitepaper, /own-fork direct claim[\s\S]{0,100}same winning reward math[\s\S]{0,100}pre-funded child REP[\s\S]{0,160}not a claim-time conversion[\s\S]{0,80}does not mint child-pool\s+ownership/)
+assert.match(whitepaper, /own-fork direct claim[\s\S]{0,100}same winning reward math[\s\S]{0,100}pre-funded child REP[\s\S]{0,600}not a claim-time conversion[\s\S]{0,80}does not mint child-pool\s+ownership/)
 assert.match(whitepaper, /href="#migration">Forks and Migration<\/a>[\s\S]{0,220}only distinguishes[\s\S]{0,120}settlement entry points/)
 assert.match(whitepaper, /operator-reference\.md#escalation-resolution-and-deposits/)
 assert.doesNotMatch(whitepaper, /id="fig-statoblast-unresolved-migration"|Unresolved Escalation Continuation Trace/)
@@ -461,6 +466,9 @@ assert.match(whitepaper, /Each\s+selected grandchild receives that same canonica
 assert.match(whitepaper, /external-fork example, source REP converts to child REP[\s\S]{0,80}one-for-one[\s\S]{0,520}<code>20 REP<\/code>/)
 assert.match(startHere, /statoblast-whitepaper\.html/)
 assert.match(startHere, /merkle-mountain-range\.html/)
+const merkleMountainRange = await Bun.file('docs/architecture-deployment/merkle-mountain-range.html').text()
+assert.doesNotMatch(merkleMountainRange, /Binds the proof to the beneficiary vault/)
+assert.match(merkleMountainRange, /Binds the proof to its original claim-bundle identity[\s\S]*liquidation can split payout ownership/)
 assert.match(escalationGameArchitecture, /Optional parent-vault cleanup stays constant-size because it clears three outcome totals without scanning deposit history/)
 assert.match(escalationGameArchitecture, /Child continuation claims use aggregate game backing rather than copied per-vault escrow/)
 assert.match(invariantsHtml, /<code>ESC-06<\/code>[\s\S]*?href="\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameEscrow\.sol"[\s\S]*?<code>exportVaultUnresolvedTotalsWithoutTransfer<\/code>[\s\S]*?<code>ESC-07<\/code>/)
@@ -480,7 +488,7 @@ assert.match(uiCopy, /only winning positions can be settled; inherited losers re
 assert.ok(!uiCopy.includes('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.'))
 assert.ok(!uiCopy.includes('migratable escalation deposits'))
 assert.match(whitepaper, /Each child receives one canonical unresolved-escalation[\s\S]{0,80}snapshot and aggregate backing; winners later settle by proof/)
-assert.match(whitepaper, /Child creation reproduces unresolved escalation state[\s\S]{0,100}winning proofs can be relayed[\s\S]{0,40}permissionlessly/)
+assert.match(whitepaper, /Child creation reproduces unresolved escalation state[\s\S]{0,500}winning proofs can be relayed permissionlessly/i)
 assert.match(diagramSpecs, /Escalation Carry/)
 assert.match(diagramSpecs, /snapshot \+ backing once/)
 assert.ok(!/eligible[\s\n]+escalation positions move into child pools/.test(whitepaper))

@@ -90,16 +90,14 @@ type EscrowAccountingSnapshot = {
 	totalEscrowedRep: bigint
 }
 
-const assertEscrowAccountingSnapshot = (snapshot: EscrowAccountingSnapshot, label: string, { tokenBacking = 'exact' }: { tokenBacking?: 'at-least' | 'exact' | 'none' } = {}) => {
+const assertEscrowAccountingSnapshot = (snapshot: EscrowAccountingSnapshot, label: string, { tokenBacking = 'exact', vaultBacking = 'exact' }: { tokenBacking?: 'at-least' | 'exact' | 'none'; vaultBacking?: 'at-most' | 'exact' } = {}) => {
 	strictEqualTypeSafe(snapshot.escrowedRepByVault.length, snapshot.poolVaultLocks.length, `${label}: pool and escalation-game vault pages should cover the same actors`)
 	for (const [index, escrowedRep] of snapshot.escrowedRepByVault.entries()) {
 		strictEqualTypeSafe(escrowedRep, ensureDefined(snapshot.poolVaultLocks[index], `${label}: pool vault lock ${index.toString()} is missing`), `${label}: pool and escalation-game vault locks should match for actor ${index.toString()}`)
 	}
-	strictEqualTypeSafe(
-		snapshot.escrowedRepByVault.reduce((sum, amount) => sum + amount, 0n),
-		snapshot.totalEscrowedRep,
-		`${label}: per-vault escalation escrow should sum to the game total`,
-	)
+	const totalVaultEscrow = snapshot.escrowedRepByVault.reduce((sum, amount) => sum + amount, 0n)
+	if (vaultBacking === 'exact') strictEqualTypeSafe(totalVaultEscrow, snapshot.totalEscrowedRep, `${label}: per-vault escalation escrow should sum to the game total`)
+	if (vaultBacking === 'at-most') assert.ok(totalVaultEscrow <= snapshot.totalEscrowedRep, `${label}: local per-vault escrow should not exceed aggregate continuation backing`)
 	if (tokenBacking === 'exact') strictEqualTypeSafe(snapshot.escalationGameTokenBalance, snapshot.totalEscrowedRep, `${label}: escalation-game token backing should equal recorded escrow`)
 	if (tokenBacking === 'at-least') assert.ok(snapshot.escalationGameTokenBalance >= snapshot.totalEscrowedRep, `${label}: prefunded escalation-game token balance should cover recorded escrow`)
 }
@@ -183,12 +181,13 @@ describe('Peripherals invariant harness', () => {
 
 	const assertSecurityPoolEscrowAccounting = async ({ actors, escalationGame, label, repToken, securityPool }: { actors: readonly WriteClient[]; escalationGame: Address; label: string; repToken: Address; securityPool: Address }) => {
 		if (!(await contractExists(client, escalationGame))) return
-		const [escrowedRepByVault, poolVaults, totalEscrowedRep, escalationGameTokenBalance, systemState] = await Promise.all([
+		const [escrowedRepByVault, poolVaults, totalEscrowedRep, escalationGameTokenBalance, systemState, forkContinuation] = await Promise.all([
 			Promise.all(actors.map(actor => getEscrowedRepByVault(client, escalationGame, actor.account.address))),
 			Promise.all(actors.map(actor => getSecurityVault(client, securityPool, actor.account.address))),
 			getTotalEscrowedRep(client, escalationGame),
 			getERC20Balance(client, repToken, escalationGame),
 			getSystemState(client, securityPool),
+			client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkContinuation', args: [] }),
 		])
 		let tokenBacking: 'at-least' | 'exact' | 'none' = 'exact'
 		if (systemState === SystemState.PoolForked) tokenBacking = 'none'
@@ -201,7 +200,7 @@ describe('Peripherals invariant harness', () => {
 				totalEscrowedRep,
 			},
 			label,
-			{ tokenBacking },
+			{ tokenBacking, vaultBacking: forkContinuation ? 'at-most' : 'exact' },
 		)
 	}
 
@@ -1469,7 +1468,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 0n, 'manual execution should consume the final active operation')
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'executing staged operations must not rewrite the append-only counter')
 		await assertQueueIndexCoherence('after manual overflow execution')
-		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /staged operation does not exist/i)
+		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /staged operation unavailable/i)
 	})
 
 	test('active vault pagination stays unique under deposit, allowance, and exit churn', async () => {

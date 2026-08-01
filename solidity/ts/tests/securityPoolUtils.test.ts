@@ -72,4 +72,21 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(await calculateRetentionRate(dipCollateral, allowance), MIN_RETENTION_RATE, '80% utilization should hit the min retention rate')
 		strictEqualTypeSafe(await calculateRetentionRate(aboveDipCollateral, allowance), MIN_RETENTION_RATE, 'above 80% utilization should stay capped at the min retention rate')
 	})
+
+	test('liquidation distance uses whichever vault-health boundary fails first', async () => {
+		const allowance = 100n * 10n ** 18n
+		const poolMultiplierBps = 20_000n
+		const minDistanceBps = 1_000n
+		const isBeyondDistance = async (freeRep: bigint, escalationRep: bigint, price: bigint) =>
+			await client.readContract({
+				abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
+				address: securityPoolUtilsAddress,
+				functionName: 'isLiquidationBeyondMinPriceDistance',
+				args: [freeRep, escalationRep, allowance, poolMultiplierBps, price, minDistanceBps],
+			})
+
+		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 11n) / 10n), false, 'associated-REP boundary should enforce the configured distance')
+		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 12n) / 10n), true, 'associated-REP boundary should allow a price beyond the configured distance')
+		strictEqualTypeSafe(await isBeyondDistance(100n * 10n ** 18n, 100n * 10n ** 18n, (PRICE_PRECISION * 3n) / 4n), true, 'free-REP migration boundary should bind before the associated-REP boundary')
+	})
 })

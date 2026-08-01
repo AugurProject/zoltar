@@ -11,6 +11,10 @@ uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 uint256 constant MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64;
 uint256 constant NULLIFIER_DEPTH = 64;
+uint256 constant MAX_CLAIM_BUNDLES_PER_VAULT = 8;
+uint256 constant MAX_CLAIM_OWNERS_PER_BUNDLE = 8;
+uint256 constant MAX_CLAIM_SOURCE_DEPTH = 8;
+uint256 constant CLAIM_SHARE_SCALE = 1e18;
 
 enum NonDecisionState {
 	None,
@@ -103,4 +107,14 @@ struct ForkedEscrowState {
 	uint256 sourcePrincipalClaimed;
 	uint256 childRep;
 	uint256 childRepClaimed;
+}
+
+// Escalation claims are deliberately not tokens. A bundle is keyed by the vault
+// that originated the deposits and can only be split by the security pool during
+// liquidation. Fixed-size owner slots keep every mutation gas-bounded.
+struct EscalationClaimBundle {
+	uint256 escrowedRep;
+	uint256 totalShares;
+	address[MAX_CLAIM_OWNERS_PER_BUNDLE] owners;
+	uint256[MAX_CLAIM_OWNERS_PER_BUNDLE] ownerShares;
 }

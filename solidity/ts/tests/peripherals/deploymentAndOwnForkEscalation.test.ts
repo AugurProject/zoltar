@@ -366,7 +366,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		assert.strictEqual(configuredPriorityFee, customPriorityFeeWeiPerGas)
 		assert.notStrictEqual(customAddresses.shareToken, securityPoolAddresses.shareToken, 'the priority fee must be part of the origin lineage identity')
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps, 0n), /initial report priority fee must be greater than zero/i)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps, 0n), /Initial priority fee zero/)
 	})
 
 	test('stateful factory sequences keep one canonical collateral ledger per child token namespace', async () => {
@@ -590,10 +590,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			return getQuestionId(deploymentQuestionData, outcomes)
 		}
 		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /Multiplier must exceed 10000 BPS/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /Multiplier must exceed 10001 BPS/)
 
 		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 10_000n), /Multiplier must exceed 10000 BPS/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 10_000n), /Multiplier must exceed 10001 BPS/)
+
+		const unrepresentableMigrationMultiplierQuestionId = await createBinaryQuestion(`unrepresentable migration multiplier ${await mockWindow.getTime()}`)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, unrepresentableMigrationMultiplierQuestionId, 10_001n), /Multiplier must exceed 10001 BPS/)
+
+		const minimumStrictMultiplierQuestionId = await createBinaryQuestion(`minimum strict migration multiplier ${await mockWindow.getTime()}`)
+		await deployOriginSecurityPool(client, genesisUniverse, minimumStrictMultiplierQuestionId, 10_002n)
 
 		const fractionalMultiplierQuestionId = await createBinaryQuestion(`fractional multiplier ${await mockWindow.getTime()}`)
 		const fractionalMultiplierBps = 15_000n

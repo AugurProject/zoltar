@@ -39,6 +39,10 @@ contract EscalationGameForkBoundarySecurityPool {
 }
 
 contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
+	function _getDepositDelegate() internal pure override returns (address) {
+		return address(0x0);
+	}
+
 	constructor(
 		ISecurityPool _securityPool,
 		EscalationGameProofVerifier _proofVerifier

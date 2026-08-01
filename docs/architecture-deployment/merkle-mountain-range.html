@@ -43,7 +43,13 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>Binds the proof to the beneficiary vault.</td>
+							<td>
+								Binds the proof to its original claim-bundle identity. A
+								<a href="../protocol-design/liquidation.html#bundled-liquidation"
+									>liquidation can split payout ownership</a
+								>
+								among current vault owners without changing the committed leaf.
+							</td>
 						</tr>
 						<tr>
 							<td><code>outcome</code></td>

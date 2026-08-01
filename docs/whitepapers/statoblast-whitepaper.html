@@ -260,7 +260,7 @@
 						<li> REP vault operators deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time. </li>
 						<li>Traders mint complete sets with ETH and hold transferable outcome shares; secondary-market execution is external to Statoblast.</li>
 						<li> REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends so the local escalation process can settle locally or force a non-decision. </li>
-						<li> Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation reproduces unresolved escalation state and aggregate backing once; winning proofs can be relayed permissionlessly and always pay their recorded depositors. </li>
+						<li> Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation reproduces unresolved escalation state and aggregate backing once. Winning proofs can be relayed permissionlessly: they authenticate the original deposit, but payout follows the bounded current claim owners in the exact registry that created the claim; only legacy sources without an ownership registry fall back to the original depositor. </li>
 						<li> Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral. </li>
 						<li> Liquidators move undercollateralized bond allowance away from unsafe vaults. </li>
 						<li> Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself. </li>
@@ -354,97 +354,58 @@
 						</p>
 					</div>
 						<p>
-							Statoblast uses the REP/ETH price to compare REP backing with
+						Statoblast uses the REP/ETH price to compare REP backing with
 							ETH-denominated obligations. Vault operators choose their security
-							bond allowance. A new allowance must leave the affected vault
-							non-liquidatable, while aggregate pool REP must independently
-							satisfy the same multiplier-adjusted inequality. Only vaults are
+							bond allowance. A new allowance must satisfy two conditions: total
+							associated REP clears the pool multiplier, and REP outside escalation
+							strictly clears the lower migration multiplier. The aggregate pool totals must
+							independently satisfy both conditions under the same helper. Only vaults are
 							liquidation targets. <code>BPS_DENOMINATOR = 10_000</code>
 							converts the stored Statoblast multiplier from basis points.
+							In the equations below, <code>valueScale = pricePrecision × BPS_DENOMINATOR</code> keeps both comparisons in exact integer units.
 						</p>
-						<div class="equation" id="eq-statoblast-bond-solvency">
-							<math
-								display="block"
-								aria-label="remaining REP backing times price precision times the basis-point denominator must be greater than or equal to security bond allowance times the Statoblast security multiplier in basis points times REP per ETH price"
-								data-source="remainingRepBacking * pricePrecision * BPS_DENOMINATOR >= securityBondAllowance * statoblastSecurityMultiplierBps * repPerEthPrice"
-							>
-								<mrow>
-									<mi>remainingRepBacking</mi>
-									<mo>&#x22C5;</mo>
-									<mi>pricePrecision</mi>
-									<mo>&#x22C5;</mo>
-									<mi>BPS_DENOMINATOR</mi>
-									<mo>&ge;</mo>
-									<mi>securityBondAllowance</mi>
-									<mo>&#x22C5;</mo>
-									<mi>statoblastSecurityMultiplierBps</mi>
-									<mo>&#x22C5;</mo>
-									<mi>repPerEthPrice</mi>
-								</mrow>
-							</math>
-							<p class="equation-caption">
-								<span class="equation-label">Backing Preservation</span>
-								REP withdrawals and escalation deposits preserve the same
-								multiplier-adjusted coverage required when allowance is admitted.
-							</p>
-						</div>
 						<div class="equation" id="eq-statoblast-allowance-backing">
 							<math
 								display="block"
-								aria-label="REP backing times price precision times the basis-point denominator must be greater than or equal to security bond allowance times the Statoblast security multiplier in basis points times REP per ETH price"
-								data-source="repBacking * pricePrecision * BPS_DENOMINATOR >= securityBondAllowance * statoblastSecurityMultiplierBps * repPerEthPrice"
+								aria-label="allowance admission requires non-strict associated REP coverage and strict free REP migration coverage"
+								data-source="associatedRep * pricePrecision * BPS_DENOMINATOR >= securityBondAllowance * poolSecurityMultiplierBps * repPerEthPrice; securityBondAllowance = 0 or freeRep * pricePrecision * BPS_DENOMINATOR > securityBondAllowance * migrationSecurityMultiplierBps * repPerEthPrice"
 							>
-								<mrow>
-									<mi>repBacking</mi>
-									<mo>&#x22C5;</mo>
-									<mi>pricePrecision</mi>
-									<mo>&#x22C5;</mo>
-									<mi>BPS_DENOMINATOR</mi>
-									<mo>&ge;</mo>
-									<mi>securityBondAllowance</mi>
-									<mo>&#x22C5;</mo>
-									<mi>statoblastSecurityMultiplierBps</mi>
-									<mo>&#x22C5;</mo>
-									<mi>repPerEthPrice</mi>
-								</mrow>
+								<mtable>
+									<mtr><mtd><mi>associatedRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi></mtd><mtd><mo>&ge;</mo></mtd><mtd><mi>allowance</mi><mo>&#x22C5;</mo><mi>poolMultiplier</mi><mo>&#x22C5;</mo><mi>price</mi></mtd></mtr>
+									<mtr><mtd><mi>migrationHealthy</mi></mtd><mtd><mo>=</mo></mtd><mtd><mo>(</mo><mi>allowance</mi><mo>=</mo><mn>0</mn><mo>)</mo><mo>&#x2228;</mo><mo>(</mo><mi>freeRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>&gt;</mo><mi>allowance</mi><mo>&#x22C5;</mo><mi>migrationMultiplier</mi><mo>&#x22C5;</mo><mi>price</mi><mo>)</mo></mtd></mtr>
+								</mtable>
 							</math>
 							<p class="equation-caption">
 								<span class="equation-label">Allowance Admission</span>
 								Setting an allowance cannot make the affected vault immediately
-								liquidatable, and aggregate pool backing must independently clear
-								the same inequality.
+								liquidatable under either health condition, and aggregate pool totals
+								must independently clear both inequalities.
 							</p>
 						</div>
 						<div class="equation" id="eq-statoblast-liquidation-condition">
 						<math
 							display="block"
-							aria-label="a vault is liquidable when security bond allowance times the Statoblast security multiplier in basis points times REP per ETH price is greater than REP backing times price precision times the basis-point denominator"
-							data-source="securityBondAllowance * statoblastSecurityMultiplierBps * repPerEthPrice > repBacking * pricePrecision * BPS_DENOMINATOR"
+							aria-label="a vault is liquidatable when ordinary associated REP coverage fails or strict free REP migration coverage fails"
+							data-source="ordinaryUnsafe = securityBondAllowance * poolSecurityMultiplierBps * repPerEthPrice > associatedRep * pricePrecision * BPS_DENOMINATOR; migrationUnsafe = securityBondAllowance > 0 and securityBondAllowance * migrationSecurityMultiplierBps * repPerEthPrice >= freeRep * pricePrecision * BPS_DENOMINATOR; liquidatable = ordinaryUnsafe or migrationUnsafe"
 						>
-							<mrow>
-								<mi>securityBondAllowance</mi>
-								<mo>&#x22C5;</mo>
-								<mi>statoblastSecurityMultiplierBps</mi>
-								<mo>&#x22C5;</mo>
-								<mi>repPerEthPrice</mi>
-								<mo>&gt;</mo>
-								<mi>repBacking</mi>
-								<mo>&#x22C5;</mo>
-								<mi>pricePrecision</mi>
-								<mo>&#x22C5;</mo>
-								<mi>BPS_DENOMINATOR</mi>
-							</mrow>
+							<mtable>
+								<mtr><mtd><mi>ordinaryUnsafe</mi></mtd><mtd><mo>=</mo></mtd><mtd><mi>allowance</mi><mo>&#x22C5;</mo><mi>poolMultiplier</mi><mo>&#x22C5;</mo><mi>price</mi><mo>&gt;</mo><mi>associatedRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi></mtd></mtr>
+								<mtr><mtd><mi>migrationUnsafe</mi></mtd><mtd><mo>=</mo></mtd><mtd><mo>(</mo><mi>allowance</mi><mo>&gt;</mo><mn>0</mn><mo>)</mo><mo>&#x2227;</mo><mo>(</mo><mi>allowance</mi><mo>&#x22C5;</mo><mi>migrationMultiplier</mi><mo>&#x22C5;</mo><mi>price</mi><mo>&ge;</mo><mi>freeRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>)</mo></mtd></mtr>
+								<mtr><mtd><mi>liquidatable</mi></mtd><mtd><mo>=</mo></mtd><mtd><mi>ordinaryUnsafe</mi><mo>&#x2228;</mo><mi>migrationUnsafe</mi></mtd></mtr>
+							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Condition</span>
-							The multiplier determines when unsafe allowance becomes liquidable.
+							Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate backing with payout ownership tracked through a bounded source-game chain, without per-vault child health credit; the <a href="../protocol-design/liquidation.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only free REP and is strict for positive allowances, so equality is unsafe; zero allowance is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.
 						</p>
 						</div>
 						<p>
-							Equality at allowance admission is permitted because liquidation uses
-							the strict inverse inequality. Later REP withdrawals and escalation
-							deposits cannot move either the vault or aggregate pool below that
-							multiplier-adjusted boundary while the allowance remains active.
+							Equality at ordinary pool-coverage admission is permitted because that
+							liquidation test uses the strict inverse inequality. Migration coverage is
+							strict: REP outside escalation must be worth more than allowance times the
+							migration multiplier. Later REP withdrawals and escalation deposits cannot
+							violate either vault condition or either aggregate condition while the
+							allowance remains active.
 							All operands are atomic integers: the contract compares the products
 							exactly, while a derived maximum allowance rounds the quotient down.
 							The pool-wide maximum uses that floored aggregate ceiling minus the
@@ -652,7 +613,7 @@
 						</p>
 					</div>
 					<h3>Solvency Operations and Liquidation</h3>
-					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation transfers unsafe allowance to a non-liquidatable caller vault and seizes unlocked target REP, so it redistributes backing rather than creating it.</p>
+					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves one proportional bundle of allowance, free REP, accrued fees, and every non-tradeable escalation claim to a caller vault that remains healthy. A partial move may leave the target unsafe because equal fractions preserve its ratio; the target must instead respect minimum executable-position floors. This prevents cherry-picking likely winners while acknowledging that liquidation redistributes backing rather than creating it.</p>
 
 					<p>Read how the liquidation works from <a href="../protocol-design/liquidation.html">Liquidation Design</a>.</p>
 				</section>
@@ -1478,7 +1439,7 @@
 										no-fork lifecycle.
 									</td>
 									<td>
-										Local deposit indexes for one beneficiary vault per call.
+										Local deposit indexes for one original claim bundle per call; payout is split among that bundle's current owners.
 									</td>
 								</tr>
 								<tr>
@@ -1489,7 +1450,7 @@
 									</td>
 									<td>
 										Winning parent deposit indexes; own-fork claims pay the
-										ordinary winning reward in child REP to the vault wallet. The
+										ordinary winning reward in child REP to the claim's current owners. The
 										escalation's own fork has already removed the winner haircut from
 										aggregate backing, so the claim does not burn it again.
 									</td>
@@ -1514,7 +1475,7 @@
 										deposits are claimable, while inherited losers require no call.
 									</td>
 									<td>
-										Carried-deposit proofs for one beneficiary vault per call.
+										Carried-deposit proofs for one original claim bundle per call; proof identity does not override later liquidation ownership.
 									</td>
 								</tr>
 							</tbody>
@@ -1526,8 +1487,8 @@
 						receives the ordinary winning payout as wallet REP, while a losing
 						settlement clears escrow without a payout. An own-fork direct claim
 						uses the same winning reward math and releases pre-funded child REP
-						from the selected child's aggregate backing to the vault owner's
-						wallet. It is not a claim-time conversion and does not mint child-pool
+						from the selected child's aggregate backing to every current claim
+						owner in proportion to claim shares, subject to the bounded integer-residual rule documented in the <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">escalation architecture</a>. It is not a claim-time conversion and does not mint child-pool
 						ownership. Own-fork direct claims must still be submitted before the
 						parent migration window closes.
 					</p>
@@ -1536,10 +1497,14 @@
 						<code>withdrawFromEscalationGame</code> and
 						<code>withdrawForkedEscalationDeposits</code> are liveness helpers
 						that any caller can submit so long as every proof or deposit index
-						in the batch belongs to the same beneficiary vault. By contrast,
+						in the batch belongs to the same original claim bundle. By contrast,
 						<code>claimForkedEscalationDeposits</code> and
 						the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require
-						<code>msg.sender</code> to be the affected vault.
+						<code>msg.sender</code> to equal the named vault. For a direct claim, that
+						named vault need only own a nonzero current share; its authorization
+						releases the deposit once, and settlement pays all current owners rather
+						than only the caller. Cleanup instead acts on the named vault's own parent
+						lock totals.
 					</p>
 					<p>
 						External Zoltar forks interrupt the escalation game. This is called
@@ -1581,6 +1546,28 @@
 						<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
 						and
 						<a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data availability</a>.
+					</p>
+					<h3>Migration-powered REP</h3>
+					<p>
+						Escalation principal, rewards, carried claims, and externally supplied escalation REP have zero parent-OI migration power. A losing participant would otherwise rationally route locked REP toward a false child merely to preserve valuable OI attached to it. Only REP remaining outside escalation determines a vault's migration weight.
+					</p>
+					<div class="equation" id="eq-statoblast-migration-powered-rep">
+						<math display="block" aria-label="vault migration powered REP equals total associated REP minus escalation game REP" data-source="vaultMigrationPoweredRep = vaultTotalAssociatedRep - vaultEscalationGameRep">
+							<mrow><mi>vaultMigrationPoweredRep</mi><mo>=</mo><mi>vaultTotalAssociatedRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameRep</mi></mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Migration-powered REP</span>Escalation claims are excluded.</p>
+					</div>
+					<div class="equation" id="eq-statoblast-migration-security">
+						<math display="block" aria-label="free REP value is strictly greater than security bond allowance value times migration security multiplier" data-source="freeRepValue > securityBondAllowanceValue * migrationSecurityMultiplier">
+							<mrow><mi>freeRepValue</mi><mo>&gt;</mo><mi>securityBondAllowanceValue</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplier</mi></mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Migration security</span>Free REP must strictly oversecure the vault's permitted underwriting obligation; actual OI routing is calculated separately.</p>
+					</div>
+					<p>
+						The implementation derives <code>migrationSecurityMultiplier = 1 + (poolSecurityMultiplier - 1) / 2</code>. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../protocol-design/liquidation.html#rule">liquidation design</a>. There is no allowance-independent fraction of associated REP that must remain free: available escalation capacity depends on the vault's current allowance, REP price, and integer rounding, and a zero-allowance vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.
+					</p>
+					<p>
+						A vault's migrated OI share is its free-REP share of all free REP at the fork. <code>migrateVault</code> sends the vault's complete unlocked position and that proportional OI share to one selected child, then clears the parent source. The vault cannot divide or reuse that migration weight across sibling universes. This single-use rule prevents duplicate OI while still letting the holder choose the branch in which the whole vault remains economically coherent.
 					</p>
 
 					<table>
@@ -1655,7 +1642,7 @@
 						</li>
 						<li>
 							After final resolution, anyone may relay winning inherited proofs; the
-							authenticated depositor is paid. Inherited losers need no proof calls,
+							authenticated deposit selects the claim, and its current owners are paid. Inherited losers need no proof calls,
 							while local losing deposits retain ordinary settlement.
 						</li>
 						<li>
@@ -1785,8 +1772,7 @@
 						It also receives the applicable aggregate backing once: complete game REP
 						for an unrelated fork, or post-haircut game REP when the escalation paid
 						for its own fork. A
-						winning carry proof authorizes its own claim and pays the authenticated
-						depositor. The child resumes when its pool becomes operational; it does not
+						winning carry proof authenticates the original deposit, while payout follows the bounded current owners in the <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">exact registry that created the claim</a>. Only a legacy source without an ownership registry falls back to the original depositor. The child resumes when its pool becomes operational; it does not
 						wait for vault migration or cleanup calls, but its aggregate funding gate
 						must pass.
 					</div>
@@ -2092,7 +2078,7 @@
 						<code>Invalid</code>, <code>Yes</code>, and <code>No</code>
 						balances, each unresolved deposit’s original outcome, stable parent
 						deposit index, and payout ordering. The authenticated winning proof is the
-						claim authorization; it pays the recorded depositor directly from aggregate
+						claim authorization; it pays the bounded current claim owners directly from aggregate
 						backing without a preceding vault migration.
 					</p>
 					<p>
@@ -2199,7 +2185,7 @@
 								an unresolved escalation. Later, migration into selected child branches deploys child pools
 								and initializes paused continuation games. Canonical snapshot state supplies each selected
 								child's proof baseline, aggregate REP supplies physical backing once, and
-								authenticated winning proofs pay their recorded depositors. Only a
+								authenticated winning proofs pay current owners at the exact source registry encoded by continuation-local claim identity. Only a
 								continuation pool without a fixed outcome may fork again; within that
 								boundary, a local non-decision or inherited threshold tie makes its game
 								eligible for the security-pool fork path.</span></div>
@@ -2215,11 +2201,11 @@
 					<figure class="diagram" id="fig-statoblast-carry-snapshot">
 						<div class="plot-chart" data-plot-chart="fig-statoblast-carry-snapshot" data-plot-width="920" data-plot-height="470" role="img" aria-label="Separate recursive continuation accounting lanes"><span class="plot-chart-fallback">Current balances, carry, and nullifiers form the canonical next
 								snapshot. Remaining aggregate REP funds child backing once. Winning proofs
-								authenticate their recorded depositors, while inherited losers retire without proofs.</span></div>
+								authenticate the original deposit while payout follows current owners; inherited losers retire without proofs.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Accounting</span>The next canonical
 							snapshot and aggregate backing move once per selected child. At final
-							resolution, a winning proof authenticates and pays its depositor; inherited
+							resolution, a winning proof authenticates the deposit while payout follows its current owners; inherited
 							losing principal retires without proof transactions.
 						</p>
 					</figure>
@@ -2235,7 +2221,12 @@
 						A carried proof's source principal authenticates the leaf and decrements
 						inherited unresolved principal. Normal winning-payout math then pays from the
 						aggregate child backing, so a reward may exceed the proof principal without
-						per-vault scaling. Direct parent claims reduce effective inherited principal
+						per-vault scaling. When current-owner shares are split with integer arithmetic,
+						an owner's source-principal allocation may floor to zero while its independently
+						larger child-REP reward remains positive. The child records and pays that
+						reward-only allocation: rejecting it would let a small fractional owner block the
+						permissionless direct-claim path and strand value. The share-exhausting owner
+						receives each remaining residual, preserving both totals. Direct parent claims reduce effective inherited principal
 						by outcome and remain blocked from a second payout in every descendant. Once
 						the final winner's proofs are consumed, inherited losers have retired, local
 						deposits are settled, and no local escrow remains, residual REP can be swept
@@ -2273,8 +2264,9 @@
 										aggregate backing once and resumes with the inherited carry.
 									</td>
 									<td>
-										Winning inherited proofs authorize themselves and pay their recorded
-										depositors; new deposits are tracked as local child state.
+										Winning inherited proofs authenticate the original deposit and pay
+										the claim's current owners; new deposits are tracked as local child
+										state.
 									</td>
 								</tr>
 								<tr>
@@ -2516,19 +2508,28 @@
 						The REP sale cap is deliberately not just “all remaining REP.” The
 						forker computes the auctionable pool REP baseline, subtracts a tiny
 						floor-rounded haircut tied to the REP that already migrated, and
-						gives the auction that maximum inventory. For an own fork,
-						<code>poolAuctionableRepAtFork</code> means only the vault REP
-						bucket, so the separate own-fork escalation REP bucket is not sold
-						in the truth auction. For an external fork, it means the parent
-						pool’s full auctionable REP at fork.
+						gives the auction that maximum inventory. The baseline combines the
+						pool REP bucket and unresolved escalation REP. Sold REP is allocated
+						between them proportionally with integer floors; the game applies its
+						allocation as the retention and curve rebase described in
+						<a href="../protocol-design/truth-auction.html#escalation-rep-haircut">Escalation REP Participates in Repair</a>.
 					</p>
 					<div class="equation" id="eq-statoblast-auction-rep-sale-cap">
 						<math
 							display="block"
-							aria-label="migrated REP haircut equals migrated REP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least the pool auctionable REP at fork, otherwise pool auctionable REP at fork minus migrated REP haircut"
-							data-source="migratedRepHaircut = migratedRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxRepBeingSold = migratedRepHaircut &gt;= poolAuctionableRepAtFork ? 0 : poolAuctionableRepAtFork - migratedRepHaircut"
+							aria-label="combined auctionable REP equals pool auctionable REP at fork plus unresolved escalation REP, migrated REP haircut equals migrated REP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least combined auctionable REP; combined auctionable REP minus one atomic unit when the haircut is zero and an escalation game exists; otherwise combined auctionable REP minus migrated REP haircut"
+							data-source="combinedAuctionableRep = poolAuctionableRepAtFork + unresolvedEscalationRep; migratedRepHaircut = migratedRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxRepBeingSold = migratedRepHaircut &gt;= combinedAuctionableRep ? 0 : migratedRepHaircut == 0 and escalationGameExists ? combinedAuctionableRep - 1 : combinedAuctionableRep - migratedRepHaircut"
 						>
 							<mtable>
+								<mtr>
+									<mtd><mi>combinedAuctionableRep</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd>
+										<mi>poolAuctionableRepAtFork</mi>
+										<mo>+</mo>
+										<mi>unresolvedEscalationRep</mi>
+									</mtd>
+								</mtr>
 								<mtr>
 									<mtd>
 										<mi>migratedRepHaircut</mi>
@@ -2559,13 +2560,26 @@
 												<mtd>
 													<mtext
 														>if migratedRepHaircut &gt;=
-														poolAuctionableRepAtFork</mtext
+														combinedAuctionableRep</mtext
 													>
 												</mtd>
 											</mtr>
 											<mtr>
 												<mtd>
-													<mi>poolAuctionableRepAtFork</mi>
+													<mi>combinedAuctionableRep</mi>
+													<mo>-</mo>
+													<mn>1</mn>
+												</mtd>
+												<mtd>
+													<mtext
+														>if migratedRepHaircut = 0 and an escalation game
+														exists</mtext
+													>
+												</mtd>
+											</mtr>
+											<mtr>
+												<mtd>
+													<mi>combinedAuctionableRep</mi>
 													<mo>-</mo>
 													<mi>migratedRepHaircut</mi>
 												</mtd>
@@ -2580,9 +2594,12 @@
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Auction REP Sale Cap</span>The truth
-							auction sells at most the auctionable REP baseline minus a small
-							migrated-REP haircut, with Solidity integer division applying the
-							floor rounding.
+							auction sells from the combined pool and unresolved-escalation REP
+							bucket after the floor-rounded migrated-REP haircut. When a zero
+							haircut would expose the entire combined bucket and an escalation
+							game exists, the cap reserves one atomic REP unit. This makes the
+							game's auction removal strictly smaller than its backing, preserving
+							nonzero aggregate game backing and a defined nonzero retention state.
 						</p>
 					</div>
 					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
@@ -2731,7 +2748,7 @@
 							<tr><td>Universe fork thresholds and haircuts</td><td><a href="./zoltar-whitepaper.html#economics">Zoltar fork economics</a></td></tr>
 							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Game</a></td></tr>
 							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="../protocol-design/truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
-							<tr><td>Liquidation constants and solvency limits</td><td><a href="../protocol-design/liquidation.html#punitive-liquidation">Liquidation penalty math</a></td></tr>
+							<tr><td>Liquidation constants and solvency limits</td><td><a href="../protocol-design/liquidation.html#punitive-liquidation">Proportional bundled liquidation</a></td></tr>
 							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="../protocol-design/open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
 							<tr><td>Carry-proof peak and nullifier bounds</td><td><a href="../architecture-deployment/merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td></tr>
 						</tbody>

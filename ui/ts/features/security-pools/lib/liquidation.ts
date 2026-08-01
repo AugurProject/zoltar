@@ -1,23 +1,31 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationRepToMove } from '@zoltar/shared/liquidation'
-import { getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, getBundledLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 const MIN_SECURITY_BOND_DEBT = 1n * 10n ** 18n
 const MIN_REP_DEPOSIT = 10n * 10n ** 18n
 
-function isVaultLiquidatable(lastPrice: bigint | undefined, securityBondAllowance: bigint | undefined, repDepositShare: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+function isVaultLiquidatable(lastPrice: bigint | undefined, securityBondAllowance: bigint | undefined, repDepositShare: bigint | undefined, escalationEscrowedRep: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (lastPrice === undefined || securityBondAllowance === undefined || repDepositShare === undefined || statoblastSecurityMultiplierBps === undefined) return false
-	return securityBondAllowance * lastPrice * statoblastSecurityMultiplierBps > repDepositShare * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
+	const escalationRep = escalationEscrowedRep ?? 0n
+	const valueScale = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
+	const poolHealthy = (repDepositShare + escalationRep) * valueScale >= securityBondAllowance * lastPrice * statoblastSecurityMultiplierBps
+	const migrationMultiplier = LIQUIDATION_BPS_DENOMINATOR + (statoblastSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
+	const migrationHealthy = securityBondAllowance === 0n || repDepositShare * valueScale > securityBondAllowance * lastPrice * migrationMultiplier
+	return !poolHealthy || !migrationHealthy
 }
 
-function improvesTargetHealth(debtToMove: bigint, repToMove: bigint, repPerEthPrice: bigint, statoblastSecurityMultiplierBps: bigint) {
-	return debtToMove * statoblastSecurityMultiplierBps * repPerEthPrice > repToMove * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
+function getRepToMoveForLiquidation(debtToMove: bigint, targetAllowance: bigint, targetRepDeposit: bigint) {
+	return getBundledLiquidationRepToMove(debtToMove, targetAllowance, targetRepDeposit)
 }
 
-function getRepToMoveForLiquidation(debtToMove: bigint, repPerEthPrice: bigint, targetAllowance: bigint, targetRepDeposit: bigint) {
-	const computedRepToMove = getLiquidationRepToMove(debtToMove, repPerEthPrice)
-	return debtToMove === targetAllowance && (computedRepToMove >= targetRepDeposit || (targetRepDeposit > computedRepToMove && targetRepDeposit - computedRepToMove < MIN_REP_DEPOSIT)) ? targetRepDeposit : computedRepToMove
+function getPromotedDebtToMove(requestedDebt: bigint, targetAllowance: bigint, targetRepDeposit: bigint) {
+	const debtToMove = requestedDebt < targetAllowance ? requestedDebt : targetAllowance
+	const debtRemaining = targetAllowance - debtToMove
+	if (debtRemaining > 0n && debtRemaining < MIN_SECURITY_BOND_DEBT) return targetAllowance
+	const repRemaining = targetRepDeposit - getRepToMoveForLiquidation(debtToMove, targetAllowance, targetRepDeposit)
+	if (debtToMove < targetAllowance && repRemaining < MIN_REP_DEPOSIT) return targetAllowance
+	return debtToMove
 }
 
 export function getLiquidationExecutionFailureDetail(errorMessage: string | undefined) {
@@ -49,37 +57,30 @@ export function getMaxLiquidationAmount({ repPerEthPrice, statoblastSecurityMult
 	const targetRepDeposit = targetVaultSummary.repDepositShare
 	const targetAllowance = targetVaultSummary.securityBondAllowance
 	if (targetAllowance === 0n) return 0n
-	if (!isVaultLiquidatable(repPerEthPrice, targetAllowance, targetRepDeposit, statoblastSecurityMultiplierBps)) return 0n
-	let maxDebtToMove = 0n
-	if (targetRepDeposit > MIN_REP_DEPOSIT) {
-		maxDebtToMove = ((targetRepDeposit - MIN_REP_DEPOSIT) * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR) / (repPerEthPrice * (LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
-	}
-	if (maxDebtToMove > targetAllowance) maxDebtToMove = targetAllowance
-	const remainingAllowance = targetAllowance - maxDebtToMove
-	if (remainingAllowance !== 0n && remainingAllowance <= MIN_SECURITY_BOND_DEBT) {
-		return targetAllowance > MIN_SECURITY_BOND_DEBT ? targetAllowance - MIN_SECURITY_BOND_DEBT : targetAllowance
-	}
-	return maxDebtToMove
+	if (!isVaultLiquidatable(repPerEthPrice, targetAllowance, targetRepDeposit, targetVaultSummary.escalationEscrowedRep, statoblastSecurityMultiplierBps)) return 0n
+	return targetAllowance
 }
 
 type LiquidationSimulation = {
 	callerAfter: {
-		collateralization: bigint | undefined
+		escalationEscrowedRep: bigint
 		repDepositShare: bigint
 		securityBondAllowance: bigint
 	}
 	callerBefore: {
+		escalationEscrowedRep: bigint
 		repDepositShare: bigint
 		securityBondAllowance: bigint
 	}
 	debtToMove: bigint
 	repToMove: bigint
 	targetAfter: {
-		collateralization: bigint | undefined
+		escalationEscrowedRep: bigint
 		repDepositShare: bigint
 		securityBondAllowance: bigint
 	}
 	targetBefore: {
+		escalationEscrowedRep: bigint
 		repDepositShare: bigint
 		securityBondAllowance: bigint
 	}
@@ -99,8 +100,10 @@ export function simulateLiquidation({
 	targetVaultSummary: SecurityPoolVaultSummary
 }): LiquidationSimulation {
 	const callerRepDeposit = callerVaultSummary?.repDepositShare ?? 0n
+	const callerEscalationRep = callerVaultSummary?.escalationEscrowedRep ?? 0n
 	const callerAllowance = callerVaultSummary?.securityBondAllowance ?? 0n
 	const targetRepDeposit = targetVaultSummary.repDepositShare
+	const targetEscalationRep = targetVaultSummary.escalationEscrowedRep
 	const targetAllowance = targetVaultSummary.securityBondAllowance
 	const maxDebtToMove =
 		getMaxLiquidationAmount({
@@ -108,31 +111,34 @@ export function simulateLiquidation({
 			statoblastSecurityMultiplierBps,
 			targetVaultSummary,
 		}) ?? targetAllowance
-	const debtToMove = liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove
-	const repToMove = getRepToMoveForLiquidation(debtToMove, repPerEthPrice, targetAllowance, targetRepDeposit)
+	const debtToMove = getPromotedDebtToMove(liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove, targetAllowance, targetRepDeposit)
+	const repToMove = getRepToMoveForLiquidation(debtToMove, targetAllowance, targetRepDeposit)
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
 	const targetAfterAllowance = targetAllowance - debtToMove
 	const callerAfterRepDeposit = callerRepDeposit + repToMove
 	const callerAfterAllowance = callerAllowance + debtToMove
+	const escalationRepToMove = targetAllowance === 0n ? 0n : (targetEscalationRep * debtToMove) / targetAllowance
 
 	return {
 		callerAfter: {
-			collateralization: getVaultCollateralizationPercent(callerAfterRepDeposit, callerAfterAllowance, repPerEthPrice),
+			escalationEscrowedRep: callerEscalationRep + escalationRepToMove,
 			repDepositShare: callerAfterRepDeposit,
 			securityBondAllowance: callerAfterAllowance,
 		},
 		callerBefore: {
+			escalationEscrowedRep: callerEscalationRep,
 			repDepositShare: callerRepDeposit,
 			securityBondAllowance: callerAllowance,
 		},
 		debtToMove,
 		repToMove,
 		targetAfter: {
-			collateralization: getVaultCollateralizationPercent(targetAfterRepDeposit, targetAfterAllowance, repPerEthPrice),
+			escalationEscrowedRep: targetEscalationRep - escalationRepToMove,
 			repDepositShare: targetAfterRepDeposit,
 			securityBondAllowance: targetAfterAllowance,
 		},
 		targetBefore: {
+			escalationEscrowedRep: targetEscalationRep,
 			repDepositShare: targetRepDeposit,
 			securityBondAllowance: targetAllowance,
 		},
@@ -158,13 +164,13 @@ export function getDeterministicLiquidationFailureReason({
 	if (liquidationAmount <= 0n) return 'Enter a liquidation amount greater than zero.'
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	if (targetVaultSummary.securityBondAllowance === 0n) return 'This vault has no active security bond allowance to liquidate.'
-	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare, statoblastSecurityMultiplierBps)) {
+	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare, targetVaultSummary.escalationEscrowedRep, statoblastSecurityMultiplierBps)) {
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
 	}
 	const targetMaxDebtToMove = maxDebtToMove === undefined || maxDebtToMove > targetVaultSummary.securityBondAllowance ? targetVaultSummary.securityBondAllowance : maxDebtToMove
-	const debtToMove = liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove
+	const debtToMove = getPromotedDebtToMove(liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare)
 	if (debtToMove <= 0n) return liquidationCopy.executableDebtUnavailable
-	const repToMove = repPerEthPrice === undefined ? undefined : getRepToMoveForLiquidation(debtToMove, repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare)
+	const repToMove = repPerEthPrice === undefined ? undefined : getRepToMoveForLiquidation(debtToMove, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare)
 	const targetAfterAllowance = targetVaultSummary.securityBondAllowance - debtToMove
 	const targetAfterRepDeposit = repToMove === undefined ? undefined : targetVaultSummary.repDepositShare - repToMove
 	const callerAfterRepDeposit = (callerVaultSummary?.repDepositShare ?? 0n) + (repToMove ?? 0n)
@@ -173,9 +179,6 @@ export function getDeterministicLiquidationFailureReason({
 	if (targetAfterAllowance !== 0n && targetAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'The target vault would fall below the minimum security bond allowance after liquidation.'
 	if (callerAfterRepDeposit < MIN_REP_DEPOSIT) return 'Your vault would remain below the minimum REP collateral after liquidation.'
 	if (callerAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'Your vault would remain below the minimum security bond allowance after liquidation.'
-	if (repToMove !== undefined && repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !improvesTargetHealth(debtToMove, repToMove, repPerEthPrice, statoblastSecurityMultiplierBps)) {
-		return 'This liquidation amount is too small to improve the target vault health after rounding.'
-	}
 	return undefined
 }
 
@@ -192,7 +195,7 @@ export function getLiquidationFailureReason({
 	statoblastSecurityMultiplierBps: bigint | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 }) {
-	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && targetVaultSummary !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare, statoblastSecurityMultiplierBps)) {
+	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && targetVaultSummary !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare, targetVaultSummary.escalationEscrowedRep, statoblastSecurityMultiplierBps)) {
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
 	}
 	const deterministicFailureReason = getDeterministicLiquidationFailureReason({
@@ -222,8 +225,9 @@ export function getLiquidationFailureReason({
 		statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.securityBondAllowance, simulation.callerAfter.repDepositShare, statoblastSecurityMultiplierBps)) {
-		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, statoblastSecurityMultiplierBps)) return 'Your vault would remain liquidatable after this liquidation.'
+	const callerEscalationAfter = (callerVaultSummary?.escalationEscrowedRep ?? 0n) + (targetVaultSummary.escalationEscrowedRep * simulation.debtToMove) / targetVaultSummary.securityBondAllowance
+	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.securityBondAllowance, simulation.callerAfter.repDepositShare, callerEscalationAfter, statoblastSecurityMultiplierBps)) {
+		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, callerVaultSummary?.escalationEscrowedRep, statoblastSecurityMultiplierBps)) return 'Your vault would remain liquidatable after this liquidation.'
 		return 'Your vault would become liquidatable after this liquidation.'
 	}
 	return undefined

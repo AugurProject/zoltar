@@ -28,6 +28,7 @@ import { computeForkContinuationParentDepositIndex, createCarryProof as createCa
 import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
 
 const ESCALATION_TIME_LENGTH = 4233600n
+const FRESH_FORK_RESPONSE_PERIOD = 3n * 24n * 60n * 60n
 const MAX_UINT256 = 2n ** 256n - 1n
 const NON_DECISION_STATE_NONE = 0n
 const NON_DECISION_STATE_LOCAL = 1n
@@ -58,6 +59,22 @@ const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
 		name: 'initializeForkCarrySnapshotWithResolutionBalances',
 		outputs: [],
 		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
+const getClaimOwnerAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'bundleId', type: 'address' },
+			{ name: 'ownerIndex', type: 'uint256' },
+		],
+		name: 'getClaimOwner',
+		outputs: [
+			{ name: 'ownerAddress', type: 'address' },
+			{ name: 'ownerShares', type: 'uint256' },
+			{ name: 'totalShares', type: 'uint256' },
+		],
+		stateMutability: 'view',
 		type: 'function',
 	},
 ]
@@ -179,6 +196,8 @@ describe('Escalation Game Test Suite', () => {
 		return value
 	}
 
+	const securityPoolByEscalationGame = new Map<Address, Address>()
+
 	const deployEscalationGameTestSecurityPool = async () => {
 		const deployment = await deployEscalationGameWithProofPool()
 		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
@@ -214,6 +233,7 @@ describe('Escalation Game Test Suite', () => {
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
 		const escalationGameAddress = requireContractAddress(escalationGameDeploymentReceipt.contractAddress, 'escalation game deployment address')
+		securityPoolByEscalationGame.set(escalationGameAddress, testSecurityPoolAddress)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -309,17 +329,20 @@ describe('Escalation Game Test Suite', () => {
 				}),
 		)
 
-	const resumeEscalationFromFork = async (escalationGameAddress: Address) =>
-		await writeContractAndWait(
+	const resumeEscalationFromFork = async (escalationGameAddress: Address) => {
+		const securityPoolAddress = securityPoolByEscalationGame.get(escalationGameAddress)
+		if (securityPoolAddress === undefined) throw new Error('Missing escalation game security pool')
+		return await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					address: escalationGameAddress,
-					functionName: 'resumeFromFork',
+					abi: escalationGameProofTestPoolArtifact.abi,
+					address: securityPoolAddress,
+					functionName: 'resumeEscalationGameFromFork',
 					args: [],
 				}),
 		)
+	}
 
 	const fundEscalationGame = async (escalationGameAddress: Address, amount: bigint) =>
 		await writeContractAndWait(client, async () =>
@@ -340,7 +363,8 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 		const elapsedAtTargetCost = await readTimeSinceStartFromAttritionCost(escalationGameAddress, targetAttritionCost)
-		await mockWindow.setTime(forkResumedAt + (elapsedAtTargetCost > 0n ? elapsedAtTargetCost : 1n))
+		const elapsedAfterResume = elapsedAtTargetCost > FRESH_FORK_RESPONSE_PERIOD ? elapsedAtTargetCost : FRESH_FORK_RESPONSE_PERIOD
+		await mockWindow.setTime(forkResumedAt + elapsedAfterResume + 1n)
 	}
 
 	const depositOnOutcomeViaProofTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
@@ -649,6 +673,26 @@ describe('Escalation Game Test Suite', () => {
 				}),
 		)
 
+	const moveEscalationClaimViaTestSecurityPool = async (testSecurityPoolAddress: Address, fromVault: Address, toVault: Address, numerator = 1n, denominator = 1n) =>
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: testSecurityPoolAddress,
+				functionName: 'moveEscalationClaim',
+				args: [fromVault, toVault, numerator, denominator],
+			}),
+		)
+
+	const applyTruthAuctionHaircutViaTestSecurityPool = async (testSecurityPoolAddress: Address, repToRemove: bigint) =>
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: testSecurityPoolAddress,
+				functionName: 'applyTruthAuctionHaircut',
+				args: [repToRemove],
+			}),
+		)
+
 	const withdrawDepositViaProofTestSecurityPool = async (
 		testSecurityPoolAddress: Address,
 		outcome: QuestionOutcome,
@@ -909,13 +953,13 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'start',
 				args: [reportBond, nonDecisionThreshold],
 			}),
-			/Only game owner/,
+			/execution reverted/,
 		)
 
 		const thresholdTooLow = await deployEscalationGameWithProofPool()
-		await assert.rejects(startEscalation(thresholdTooLow.escalationGameAddress, reportBond, reportBond), /Threshold too low/)
+		await assert.rejects(startEscalation(thresholdTooLow.escalationGameAddress, reportBond, reportBond), /Invalid game start/)
 		const zeroBond = await deployEscalationGameWithProofPool()
-		await assert.rejects(startEscalation(zeroBond.escalationGameAddress, 0n, reportBond), /Start bond zero/)
+		await assert.rejects(startEscalation(zeroBond.escalationGameAddress, 0n, reportBond), /Invalid game start/)
 		const subRepBond = await deployEscalationGameWithProofPool()
 		await startEscalation(subRepBond.escalationGameAddress, 1n, 2n)
 		assert.strictEqual(
@@ -931,11 +975,11 @@ describe('Escalation Game Test Suite', () => {
 
 		const alreadyStarted = await deployEscalationGameWithProofPool()
 		await startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold)
-		await assert.rejects(startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold), /Game started/)
+		await assert.rejects(startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold), /Invalid game start/)
 		await assert.rejects(resumeEscalationFromFork(alreadyStarted.escalationGameAddress), /No fork mode/)
 
 		const excessiveForkTime = await deployEscalationGameWithProofPool()
-		await assert.rejects(startEscalationFromFork(excessiveForkTime.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH + 1n), /Fork time too high/)
+		await assert.rejects(startEscalationFromFork(excessiveForkTime.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH + 1n), /execution reverted|Reverted without a reason/i)
 
 		const fork = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(fork.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
@@ -946,7 +990,7 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'resumeFromFork',
 				args: [],
 			}),
-			/Only owner or security pool/,
+			/Only pool/,
 		)
 		await resumeEscalationFromFork(fork.escalationGameAddress)
 		await assert.rejects(resumeEscalationFromFork(fork.escalationGameAddress), /Fork resumed/)
@@ -1006,14 +1050,14 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Yes, reportBond],
 			}),
-			/Outcome full/,
+			/Invalid deposit preview/,
 		)
 		await assert.rejects(record(full.testSecurityPoolAddress, reportBond, nonDecisionThreshold + reportBond), /Outcome full/)
 
 		const resolved = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(resolved.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await resumeEscalationFromFork(resolved.escalationGameAddress)
-		await mockWindow.advanceTime(1n)
+		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -1021,7 +1065,7 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Yes, reportBond],
 			}),
-			/Question resolved/,
+			/Invalid deposit preview/,
 		)
 		await assert.rejects(record(resolved.testSecurityPoolAddress, reportBond, reportBond), /Question resolved/)
 
@@ -1093,7 +1137,7 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await resumeEscalationFromFork(child.escalationGameAddress)
-		await mockWindow.advanceTime(1n)
+		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'real inherited snapshot should resolve to the fixed child outcome')
 		const childNullifierRootBefore = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
 
@@ -1132,11 +1176,10 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'recordForkedEscrowForOutcome',
 				args: [client.account.address, QuestionOutcome.Yes, 1n, 0n],
 			}),
-			/Only pool or forker/,
+			/execution reverted|Reverted without a reason/i,
 		)
 		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.None, 1n, 0n), /No outcome/)
 		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, zeroAddress, QuestionOutcome.Yes, 1n, 0n), /Depositor is zero/)
-		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 0n, 1n), /Escrow principal missing/)
 		await assert.rejects(
 			client.writeContract({
 				abi: escalationGameProofTestPoolArtifact.abi,
@@ -1203,7 +1246,7 @@ describe('Escalation Game Test Suite', () => {
 		const emptyFinal = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
-		await mockWindow.advanceTime(1n)
+		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.writeContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -1232,7 +1275,7 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalationFromFork(escrowed.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n)
 		await resumeEscalationFromFork(escrowed.escalationGameAddress)
-		await mockWindow.advanceTime(1n)
+		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.writeContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -1683,6 +1726,86 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, childLocalLeafHash), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
 	})
 
+	test('grandchild settlement preserves an ancestor truth-auction haircut on inherited carry', async () => {
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+
+		const parentInvalidPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentInvalidLeafCount = await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const parentYesLeafCount = await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentInvalidCarryTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const parentYesCarryTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentInvalidNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const parentYesNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
+			[parentInvalidPeaks, parentYesPeaks, zeroPeakArray()],
+			[parentInvalidLeafCount, parentYesLeafCount, 0n],
+			[parentInvalidCarryTotal, parentYesCarryTotal, 0n],
+			[parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()],
+		)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentYesCarryTotal, parentYesCarryTotal)
+		const childRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 4n)
+		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepBefore', args: [] }), childRepBefore)
+		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepRemaining', args: [] }), childRepBefore - childRepBefore / 4n)
+		const childSource = await client.call({ to: child.escalationGameAddress, data: '0xdb05d0b2' })
+		assert.strictEqual(addressString(BigInt(childSource.data ?? '0x')).toLowerCase(), parent.escalationGameAddress.toLowerCase())
+		const childRetention = await client.call({ to: child.escalationGameAddress, data: '0xee692417' })
+		const childRetentionData = childRetention.data ?? '0x'
+		assert.strictEqual(BigInt(`0x${childRetentionData.slice(2, 66)}`), childRepBefore)
+		assert.strictEqual(BigInt(`0x${childRetentionData.slice(66, 130)}`), childRepBefore - childRepBefore / 4n)
+		const parentSource = await client.call({ to: parent.escalationGameAddress, data: '0xdb05d0b2' })
+		assert.strictEqual(BigInt(parentSource.data ?? '0x'), 0n)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
+
+		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
+		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childInvalidLeafCount = await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Invalid)
+		const childYesLeafCount = await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childInvalidCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Invalid)
+		const childYesCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
+		assert.strictEqual(childYesCarryTotal, (parentYesCarryTotal * 3n) / 4n)
+		const childInvalidNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Invalid)
+		const childYesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+
+		const grandchild = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(
+			grandchild.testSecurityPoolAddress,
+			child.escalationGameAddress,
+			zeroHash(),
+			[childInvalidPeaks, childYesPeaks, zeroPeakArray()],
+			[childInvalidLeafCount, childYesLeafCount, 0n],
+			[childInvalidCarryTotal, childYesCarryTotal, 0n],
+			[childInvalidNullifierRoot, childYesNullifierRoot, zeroHash()],
+		)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, childYesCarryTotal, childYesCarryTotal)
+		assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), childYesCarryTotal)
+		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
+
+		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, {
+			depositor: client.account.address,
+			amount: 3n * reportBond,
+			parentDepositIndex: 0n,
+			cumulativeAmount: 3n * reportBond,
+			sourceNodeId: 2n,
+			leafIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			merkleMountainRangePeakIndex: 0n,
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		})
+		assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n)
+	})
+
 	test('direct-claim replay lookup gas does not grow with security-pool ancestry', async () => {
 		const shallowAncestor = await deploySecurityPoolAncestorNode(zeroAddress)
 		let deepestAncestor = shallowAncestor
@@ -1798,20 +1921,34 @@ describe('Escalation Game Test Suite', () => {
 	})
 
 	test('grandchild local settlement does not lock an inherited child-local carried deposit with the same deposit index', async () => {
+		const childLocalDepositor = addressString(TEST_ADDRESSES[1])
+		const childLocalLiquidator = addressString(TEST_ADDRESSES[2])
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotViaTestSecurityPool(
+		await initializeSnapshotFromSourceViaTestSecurityPool(
 			child.testSecurityPoolAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
 			[zeroPeakArray(), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
 			[0n, await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[0n, await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, childLocalDepositor, QuestionOutcome.Yes, reportBond)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: escalationGameProofTestPoolArtifact.abi,
+					address: child.testSecurityPoolAddress,
+					functionName: 'moveEscalationClaim',
+					args: [childLocalDepositor, childLocalLiquidator, 1n, 3n],
+				}),
+		)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -1820,11 +1957,11 @@ describe('Escalation Game Test Suite', () => {
 		const childYesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
 		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 1n)
 		const childLocalParentDepositIndex = computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)
-		const childLocalLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
+		const childLocalLeafHash = hashCarryLeaf(childLocalDepositor, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
 
 		const grandchild = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
+		await initializeSnapshotFromSourceViaTestSecurityPool(grandchild.testSecurityPoolAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
 		await depositOnOutcomeViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, childYesCarryTotal, childYesCarryTotal)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
@@ -1833,7 +1970,18 @@ describe('Escalation Game Test Suite', () => {
 
 		const nullifierTree = new SparseNullifierTree()
 		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(childLocalParentDepositIndex), 1n)
+		const childLocalBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
+		const childLocalLiquidatorBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), childLocalLiquidator)
 		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
+		const childLocalBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
+		const childLocalLiquidatorBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), childLocalLiquidator)
+		const originalOwnerPayout = childLocalBalanceAfter - childLocalBalanceBefore
+		const liquidatorPayout = childLocalLiquidatorBalanceAfter - childLocalLiquidatorBalanceBefore
+		const totalPayout = originalOwnerPayout + liquidatorPayout
+		const liquidatorShares = 10n ** 18n / 3n
+		const expectedOriginalOwnerPayout = (totalPayout * (10n ** 18n - liquidatorShares)) / 10n ** 18n
+		assert.strictEqual(originalOwnerPayout, expectedOriginalOwnerPayout, 'the non-final recursive claim owner should receive its floored proportional payout')
+		assert.strictEqual(liquidatorPayout, totalPayout - expectedOriginalOwnerPayout, 'the final liquidation-split owner should receive the exact atomic-unit payout remainder')
 		nullifierTree.consume(childLocalParentDepositIndex)
 
 		const inheritedParentProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [childLocalLeafHash], nullifierTree.getProof(0n), 1n)
@@ -2286,7 +2434,7 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Invalid, reportBond],
 			}),
-			/Non-decision done/,
+			/Invalid deposit preview/,
 			'an inherited threshold tie should close the deposit path without requiring a synthetic local deposit',
 		)
 		const snapshotReceipt = await client.getTransactionReceipt({ hash: snapshotHash })
@@ -2363,22 +2511,35 @@ describe('Escalation Game Test Suite', () => {
 	test('aggregate-funded fork carry pays winning proofs without vault migration and retires losing principal', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, addressString(TEST_ADDRESSES[1]), QuestionOutcome.No, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, addressString(TEST_ADDRESSES[2]), QuestionOutcome.Invalid, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, addressString(TEST_ADDRESSES[1]), QuestionOutcome.No, 2n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
+		const parentInvalidPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentNoPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.No)
+		const parentInvalidNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const parentYesNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentNoNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.No)
+		const parentInvalidTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const parentYesTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentNoTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.No)
 
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, parentNoPeaks], [0n, 1n, 1n], [0n, 2n * reportBond, reportBond], [0n, 2n * reportBond, reportBond], [zeroHash(), parentYesNullifierRoot, parentNoNullifierRoot])
+		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			[parentInvalidPeaks, parentYesPeaks, parentNoPeaks],
+			[1n, 1n, 1n],
+			[parentInvalidTotal, parentYesTotal, parentNoTotal],
+			[parentInvalidTotal, parentYesTotal, parentNoTotal],
+			[parentInvalidNullifierRoot, parentYesNullifierRoot, parentNoNullifierRoot],
+		)
 		await resumeEscalationFromFork(child.escalationGameAddress)
-		await mockWindow.advanceTime(1n)
+		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 
 		const winnerBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-		const winningProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
+		const winningProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n), 3n)
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, winningProof)
 
 		assert.ok((await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) > winnerBalanceBefore, 'the authenticated winner should be paid from aggregate child REP')
@@ -2386,16 +2547,16 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.No), 0n, 'the losing outcome should terminate without per-leaf proofs')
 
 		const residualRep = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
-		if (residualRep > 0n) {
-			await writeContractAndWait(client, async () =>
-				client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					address: child.escalationGameAddress,
-					functionName: 'sweepResidualRepToSecurityPool',
-					args: [],
-				}),
-			)
-		}
+		assert.ok(residualRep > 0n, 'three nonzero outcome buckets should leave terminal losing carry after the winner is paid')
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: child.escalationGameAddress,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+		)
+		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), 0n, 'terminal losing carry should become sweepable after every logical liability is zero')
 	})
 
 	test('losing carried proofs are unnecessary and cannot drain aggregate backing', async () => {
@@ -2460,20 +2621,84 @@ describe('Escalation Game Test Suite', () => {
 		assert.ok(walletBalanceAfter - walletBalanceBefore > proof.amount, 'forked winning proof should receive reward upside, not only escrow principal')
 	})
 
-	test('recordForkedEscrowForOutcome rejects child REP backing without source principal', async () => {
+	test('recordForkedEscrowForOutcome preserves child REP backing when an owner source-principal share rounds to zero', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await assert.rejects(
-			writeContractAndWait(client, async () =>
-				client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
-					address: child.testSecurityPoolAddress,
-					functionName: 'recordForkedEscrowForOutcome',
-					args: [client.account.address, QuestionOutcome.Yes, 0n, reportBond],
-				}),
-			),
-			/Escrow principal missing/,
+		await fundEscalationGame(child.escalationGameAddress, 1n)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 0n, 1n)
+		assert.strictEqual(await readEscrowedRepByVault(child.escalationGameAddress, client.account.address), 1n)
+		const balanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: child.testSecurityPoolAddress,
+				functionName: 'exportForkedEscrowByOutcome',
+				args: [client.account.address, client.account.address],
+			}),
 		)
+		assert.strictEqual((await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - balanceBefore, 1n)
+	})
+
+	test('claim registries preserve acquired bundles when the liquidator later creates a local bundle', async () => {
+		const originalOwner = addressString(TEST_ADDRESSES[1])
+		const liquidator = addressString(TEST_ADDRESSES[2])
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.Yes, reportBond)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, liquidator)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, liquidator, QuestionOutcome.No, 2n * reportBond)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), 3n * reportBond)
+	})
+
+	test('a vault cannot add future deposits to a claim bundle whose ownership was split by liquidation', async () => {
+		const originalOwner = addressString(TEST_ADDRESSES[1])
+		const liquidator = addressString(TEST_ADDRESSES[2])
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.Yes, reportBond)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, liquidator, 1n, 2n)
+
+		await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.No, 2n * reportBond), /Claim ownership split/)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, originalOwner), reportBond / 2n)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), reportBond / 2n)
+	})
+
+	test('liquidation rejects a nonzero debt fraction that cannot move one claim share', async () => {
+		const originalOwner = addressString(TEST_ADDRESSES[1])
+		const liquidator = addressString(TEST_ADDRESSES[2])
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.Yes, reportBond)
+
+		await assert.rejects(moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, liquidator, 1n, 100n * 10n ** 18n), /Fraction/)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, originalOwner), reportBond)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), 0n)
+	})
+
+	test('claim registries re-enumerate dormant owners across repeated liquidations', async () => {
+		const ownerA = addressString(TEST_ADDRESSES[1])
+		const ownerB = addressString(TEST_ADDRESSES[2])
+		const ownerC = addressString(TEST_ADDRESSES[3])
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, ownerA, QuestionOutcome.Yes, reportBond)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, ownerA, ownerB)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, ownerB, ownerA)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, ownerA, ownerC)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, ownerC), reportBond)
+		let currentOwnerShares = 0n
+		let totalShares = 0n
+		for (let ownerIndex = 0n; ownerIndex < 8n; ownerIndex++) {
+			const claimOwner = await client.readContract({
+				abi: getClaimOwnerAbi,
+				address: deployment.escalationGameAddress,
+				functionName: 'getClaimOwner',
+				args: [ownerA, ownerIndex],
+			})
+			if (requireAddress(claimOwner[0], 'claim owner') === ownerC) currentOwnerShares = requireBigInt(claimOwner[1], 'claim owner shares')
+			totalShares = requireBigInt(claimOwner[2], 'claim total shares')
+		}
+		assert.strictEqual(currentOwnerShares, totalShares)
 	})
 
 	test('residual sweep rejects while forked escrow remains unsettled', async () => {

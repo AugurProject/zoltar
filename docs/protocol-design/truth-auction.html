@@ -33,6 +33,37 @@
 
 			</header>
 
+			<section id="escalation-rep-haircut">
+				<h2>Escalation REP Participates in Repair</h2>
+				<p>
+					This special case begins after a parent pool forks with an unresolved escalation game. The child receives a paused continuation carrying the parent's effective balances and proof state. When the migration window closes, the pool's forker starts the truth auction, applies any escalation haircut while the continuation is still paused, and resumes the continuation only after its aggregate backing is complete. The <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">escalation architecture</a> owns the claim and continuation details; the lifecycle below explains the surrounding auction.
+				</p>
+				<p>
+					The auction sale cap includes child REP held by an unresolved escalation game as well as free pool REP. The forker first allocates the purchased REP between those buckets with integer flooring. A positive purchase can therefore allocate zero atomic REP to escalation, and the allocation remainder stays in the game rather than being reassigned. Once escalation REP is actually removed, every claim inside that game uses one common retention ratio. Principal and expected reward can both be reduced. Repairing open-interest collateral has priority because escalation rewards are an incentive layer over the market's solvency promise, not a senior claim on it.
+				</p>
+				<div class="equation" id="eq-escalation-auction-allocation">
+					<math display="block" aria-label="escalation REP sold equals the floor of purchased REP times escalation REP before the auction divided by combined auctionable REP before the auction" data-source="escalationRepSold = ⌊ repPurchased * escalationRepBefore / combinedRepBefore ⌋">
+						<mrow><mi>escalationRepSold</mi><mo>=</mo><mo>&#x230A;</mo><mfrac><mrow><mi>repPurchased</mi><mo>&#x22C5;</mo><mi>escalationRepBefore</mi></mrow><mi>combinedRepBefore</mi></mfrac><mo>&#x230B;</mo></mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Sale allocation</span>This floor is separate from incumbent pool-ownership retention. If it returns zero, the game receives no haircut call.</p>
+				</div>
+				<div class="equation" id="eq-escalation-auction-retention">
+					<math display="block" aria-label="post-auction effective outcome balance equals pre-auction outcome balance times escalation REP remaining divided by escalation REP before the auction" data-source="postAuctionEffectiveOutcomeBalance = ⌊ preAuctionOutcomeBalance * escalationRepRemainingAfterAuction / escalationRepBeforeAuction ⌋">
+						<mrow><mi>postAuctionEffectiveOutcomeBalance</mi><mo>=</mo><mo>&#x230A;</mo><mi>preAuctionOutcomeBalance</mi><mo>&#x22C5;</mo><mfrac><mi>escalationRepRemainingAfterAuction</mi><mi>escalationRepBeforeAuction</mi></mfrac><mo>&#x230B;</mo></mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Escalation retention</span>Balances and claims already present when the haircut occurs use one common auction ratio and round down in atomic REP units; any division remainder stays outside the credited claim rather than creating unbacked REP.</p>
+				</div>
+				<p>
+					The contract independently floors each outcome balance, aggregate escrow total, fork-carry backing total, and effective bundle view. Reducers must retain those event-derived aggregate values instead of summing separately floored bundle views. Deposits accepted only after the game resumes do not pay the historical loss: the game converts their new effective REP into raw claim units with ceiling division, then applies the stored retention ratio when displaying or settling the claim. This preserves the newly accepted amount, apart from unavoidable atomic-unit rounding.
+				</p>
+				<p>
+					Applying one common retention ratio removes an arbitrage: without it, a vault could lock REP immediately before a fork to shelter that REP from the repair loss. The game rebases its effective outcome balances and elapsed curve coordinate backward to the weakened binding capital, so the unchanged non-decision and Zoltar thresholds require additional REP again. On resume, the deadline is recomputed and clamped to at least a fresh three-day response period; later deposits can extend it.
+				</p>
+				<p>
+					The game is paused throughout the fork. When it resumes, the deadline is never earlier than one fresh three-day response period. This preserves the promise that participants have time to observe and answer the newly weakened state. If this game itself already funded and triggered the parent fork, the auction cannot undo that fork; only the child-universe claims receive the haircut.
+				</p>
+			</section>
+
 			<section id="lifecycle">
 			<h2>Operational Lifecycle</h2>
 			<p class="security-assumption-ref">

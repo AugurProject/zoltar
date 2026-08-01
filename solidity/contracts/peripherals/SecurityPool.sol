@@ -26,6 +26,8 @@ import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
+import { SecurityPoolLiquidationDelegate } from './SecurityPoolLiquidationDelegate.sol';
 
 interface ISecurityPoolDeploymentWorkerConfiguration {
 	function factory() external view returns (ISecurityPoolFactory);
@@ -33,8 +35,33 @@ interface ISecurityPoolDeploymentWorkerConfiguration {
 }
 
 // Security pool for one question, one universe, one denomination (ETH)
-contract SecurityPool is ISecurityPool {
+contract SecurityPool is SecurityPoolStorage {
 	using SafeERC20Ops for IERC20;
+	event PoolAccountingCheckpoint(
+		AccountingReason reason,
+		address indexed vault,
+		uint256 completeSetCollateralAmount,
+		uint256 totalSecurityBondAllowance,
+		uint256 feeEligibleSecurityBondAllowance,
+		uint256 totalFeesOwedToVaults,
+		uint256 unallocatedFeeReserve,
+		uint256 feeIndex,
+		uint256 feeIndexRemainder,
+		uint256 totalFeesOwedRemainder,
+		uint256 uncheckpointedFeeEligibleAllowance,
+		uint256 lastUpdatedFeeAccumulator,
+		uint256 currentRetentionRate
+	);
+	event VaultAccountingCheckpoint(
+		address indexed vault,
+		uint256 poolOwnershipAmount,
+		uint256 securityBondAllowance,
+		uint256 unpaidEthFees,
+		uint256 feeIndex,
+		uint256 vaultFeeRemainder,
+		uint256 resultingPoolOwnershipDenominator,
+		uint256 resultingFeeEligibleSecurityBondAllowance
+	);
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
@@ -47,49 +74,22 @@ contract SecurityPool is ISecurityPool {
 	OpenOraclePriceCoordinator public immutable priceOracleManagerAndOperatorQueuer;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
-	EscalationGame public escalationGame;
 	ZoltarQuestionData public immutable questionData;
 	address public immutable securityPoolForker;
 	address public immutable truthAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
 	SecurityPoolEventEmitter private immutable eventEmitter;
-
-	uint256 public totalSecurityBondAllowance;
-	uint256 public completeSetCollateralAmount; // protocol-accounted ETH backing complete sets; raw balance can also contain fees or unsolicited surplus
-	uint256 public poolOwnershipDenominator;
-	uint256 public statoblastSecurityMultiplierBps;
+	address private immutable liquidationDelegate;
+	// completeSetCollateralAmount is protocol-accounted ETH backing complete sets;
+	// the raw balance can also contain fees or unsolicited surplus.
 	// Remaining per-outcome economic claims. After a fork this includes both
 	// materialized child ERC-1155 balances and source entitlements that can still
 	// materialize in this branch.
-	uint256 public shareTokenSupply;
-
-	uint256 public totalFeesOwedToVaults;
-	uint256 public lastUpdatedFeeAccumulator;
-	uint256 public feeIndex;
-	uint256 private feeIndexRemainder;
 	// This carry is always below PRICE_PRECISION, so any residual value left here at the
 	// end of accrual is strictly sub-wei and cannot strand whole ETH.
-	uint256 private totalFeesOwedRemainder;
-	uint256 private unallocatedFeeReserve;
-	uint256 private feeEligibleSecurityBondAllowance;
-	uint256 private uncheckpointedFeeEligibleAllowance;
-	uint256 public currentRetentionRate;
-	bool public awaitingForkContinuation;
-
-	mapping(address => SecurityVault) public securityVaults;
-	mapping(address => uint256) private vaultFeeRemainders;
-	address[] private vaults;
-	mapping(address => uint256) private vaultIndexesPlusOne;
 	// Active-vault paging is newest-first so UI previews remain stable after removals
 	// and can intentionally surface the most recently touched active vaults.
-	uint256 private activeVaultCount;
-	address private latestActiveVault;
-	mapping(address => address) private olderActiveVaults;
-	mapping(address => address) private newerActiveVaults;
-	mapping(address => bool) private isActiveVault;
-
-	SystemState public systemState;
 
 	event PerformWithdrawRep(
 		address indexed vault,
@@ -126,6 +126,27 @@ contract SecurityPool is ISecurityPool {
 	event SystemStateSet(SystemState systemState);
 	event OwnershipDenominatorSet(uint256 poolOwnershipDenominator);
 	event ShareTokenSupplySet(uint256 shareTokenSupply);
+	event CompleteSetCreated(
+		address indexed creator,
+		uint256 ethAmount,
+		uint256 sharesMinted,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
+	event CompleteSetRedeemed(
+		address indexed redeemer,
+		uint256 shareAmount,
+		uint256 ethAmount,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
+	event SharesRedeemed(
+		address indexed redeemer,
+		uint256 shareAmount,
+		uint256 ethAmount,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
 
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
@@ -167,6 +188,7 @@ contract SecurityPool is ISecurityPool {
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
 		eventEmitter = worker.eventEmitter();
+		liquidationDelegate = address(new SecurityPoolLiquidationDelegate());
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		initialEscalationGameDeposit = _initialEscalationGameDeposit;
@@ -248,7 +270,9 @@ contract SecurityPool is ISecurityPool {
 	// fork routing but must stay operational after migration/truth-auction settlement.
 	function isEscalationResolved() public view returns (bool) {
 		if (address(escalationGame) == address(0x0)) return false;
-		return ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None;
+		return
+			ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
+			BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function burnEscalationWinnerHaircut(uint256 amount) external {
@@ -429,8 +453,20 @@ contract SecurityPool is ISecurityPool {
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
 		require(oldRep >= withdrawRepAmount, 'Withdraw REP');
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		_requireVaultBondCoverage(oldRep - withdrawRepAmount, securityVaults[vault].securityBondAllowance, repEthPrice);
-		_requirePoolBondCoverage(totalRepBalance - withdrawRepAmount, totalSecurityBondAllowance, repEthPrice);
+		uint256 vaultEscalationRep =
+			address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(vault);
+		_requireVaultBondCoverage(
+			oldRep - withdrawRepAmount,
+			vaultEscalationRep,
+			securityVaults[vault].securityBondAllowance,
+			repEthPrice
+		);
+		_requirePoolBondCoverage(
+			totalRepBalance - withdrawRepAmount,
+			_getTotalEscalationRep(),
+			totalSecurityBondAllowance,
+			repEthPrice
+		);
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
@@ -468,33 +504,43 @@ contract SecurityPool is ISecurityPool {
 		return repToken.balanceOf(address(this));
 	}
 
-	function _requireVaultBondCoverage(
-		uint256 vaultRepAmount,
-		uint256 securityBondAllowance,
-		uint256 repEthPrice
-	) private view {
-		require(_isAllowanceBackedByRep(vaultRepAmount, securityBondAllowance, repEthPrice), 'Vault bond');
+	function _getTotalEscalationRep() private view returns (uint256) {
+		return address(escalationGame) == address(0x0) ? 0 : escalationGame.totalEscrowedRep();
 	}
 
-	function _requirePoolBondCoverage(
-		uint256 totalRepBalanceValue,
-		uint256 totalSecurityBondAllowanceValue,
+	function _requireVaultBondCoverage(
+		uint256 freeRepAmount,
+		uint256 escalationRepAmount,
+		uint256 securityBondAllowance,
 		uint256 repEthPrice
 	) private view {
 		require(
-			_isAllowanceBackedByRep(totalRepBalanceValue, totalSecurityBondAllowanceValue, repEthPrice),
-			'Pool bond'
+			SecurityPoolUtils.isVaultHealthy(
+				freeRepAmount,
+				escalationRepAmount,
+				securityBondAllowance,
+				repEthPrice,
+				statoblastSecurityMultiplierBps
+			),
+			'Vault bond'
 		);
 	}
 
-	function _isAllowanceBackedByRep(
-		uint256 repAmount,
-		uint256 securityBondAllowance,
+	function _requirePoolBondCoverage(
+		uint256 totalFreeRep,
+		uint256 totalEscalationRep,
+		uint256 totalSecurityBondAllowanceValue,
 		uint256 repEthPrice
-	) private view returns (bool) {
-		return
-			repAmount * SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR >=
-			securityBondAllowance * statoblastSecurityMultiplierBps * repEthPrice;
+	) private view {
+		if (
+			!SecurityPoolUtils.isVaultHealthy(
+				totalFreeRep,
+				totalEscalationRep,
+				totalSecurityBondAllowanceValue,
+				repEthPrice,
+				statoblastSecurityMultiplierBps
+			)
+		) revert();
 	}
 
 	function _requireMinimumVaultRep(
@@ -557,9 +603,8 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// Liquidation moves debt to the caller vault and seizes unlocked REP from the
-	// target at a fixed bonus over market value, subject to the target and caller
-	// minimum debt floors plus the minimum unlocked REP floor on the target.
+	// Liquidation moves the same fraction of debt, free REP, fees, and escalation
+	// claims. A partial move that would strand forbidden dust becomes a full close.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,
@@ -574,47 +619,32 @@ contract SecurityPool is ISecurityPool {
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
 
-		uint256 vaultsRepDeposit;
-		if (snapshotDenominator == 0) {
-			vaultsRepDeposit = snapshotTargetOwnership / SecurityPoolUtils.PRICE_PRECISION;
-		} else {
-			vaultsRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		uint256 debtToMove;
+		uint256 repToMove;
+		address delegate = liquidationDelegate;
+		bytes4 selector = SecurityPoolLiquidationDelegate.performBundledLiquidation.selector;
+		assembly ('memory-safe') {
+			let pointer := mload(0x40)
+			mstore(pointer, selector)
+			mstore(add(pointer, 0x04), callerVault)
+			mstore(add(pointer, 0x24), targetVaultAddress)
+			mstore(add(pointer, 0x44), debtAmount)
+			mstore(add(pointer, 0x64), snapshotTargetOwnership)
+			mstore(add(pointer, 0x84), snapshotTargetAllowance)
+			mstore(add(pointer, 0xa4), snapshotTotalRep)
+			mstore(add(pointer, 0xc4), snapshotDenominator)
+			mstore(add(pointer, 0xe4), repEthPrice)
+			if iszero(delegatecall(gas(), delegate, pointer, 0x104, pointer, 0x40)) {
+				returndatacopy(pointer, 0, returndatasize())
+				revert(pointer, returndatasize())
+			}
+			debtToMove := mload(pointer)
+			repToMove := mload(add(pointer, 0x20))
 		}
 
-		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		require(!_isAllowanceBackedByRep(vaultsRepDeposit, snapshotTargetAllowance, repEthPrice), 'Target safe');
-
-		(uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) = SecurityPoolUtils
-			.calculateLiquidationTransfer(
-				snapshotTargetOwnership,
-				snapshotTargetAllowance,
-				snapshotTotalRep,
-				snapshotDenominator,
-				debtAmount,
-				repEthPrice,
-				securityVaults[targetVaultAddress].poolOwnership,
-				getTotalRepBalance(),
-				poolOwnershipDenominator
-			);
-		require(debtToMove > 0, 'No liq');
-		require(!_isAllowanceBackedByRep(repToMove, debtToMove, repEthPrice), 'No gain');
-		require(
-			_isAllowanceBackedByRep(
-				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove),
-				securityVaults[callerVault].securityBondAllowance + debtToMove,
-				repEthPrice
-			),
-			'Caller bad'
-		);
-
-		// Update target's allowance based on snapshot to prevent blocking via allowance changes
-		_clearFeeIndexRemainder();
-		securityVaults[targetVaultAddress].securityBondAllowance = snapshotTargetAllowance - debtToMove;
-		securityVaults[targetVaultAddress].poolOwnership -= ownershipToMove;
-		securityVaults[callerVault].securityBondAllowance += debtToMove;
-		securityVaults[callerVault].poolOwnership += ownershipToMove;
-
-		// target vault needs to be above thresholds after liquidation
+		// A proportional partial close may leave the target unsafe, but neither
+		// resulting vault may strand a position below the executable size floors.
 		_requireMinimumVaultRep(
 			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
 			securityVaults[targetVaultAddress].poolOwnership == 0 &&
@@ -657,11 +687,28 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[callerVault].securityBondAllowance = amount;
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		uint256 vaultEscalationRep =
+			address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(callerVault);
 		require(
-			_isAllowanceBackedByRep(poolOwnershipToRep(securityVaults[callerVault].poolOwnership), amount, repEthPrice),
+			SecurityPoolUtils.isVaultHealthy(
+				poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
+				vaultEscalationRep,
+				amount,
+				repEthPrice,
+				statoblastSecurityMultiplierBps
+			),
 			'Vault allow'
 		);
-		require(_isAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice), 'Pool allow');
+		require(
+			SecurityPoolUtils.isVaultHealthy(
+				getTotalRepBalance(),
+				_getTotalEscalationRep(),
+				totalSecurityBondAllowance,
+				repEthPrice,
+				statoblastSecurityMultiplierBps
+			),
+			'Pool allow'
+		);
 		_requireCapacityNotExceeded(feeEligibleSecurityBondAllowance, completeSetCollateralAmount);
 		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond min');
 		_syncActiveVault(callerVault);
@@ -722,7 +769,9 @@ contract SecurityPool is ISecurityPool {
 
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(
+			ISecurityPool(payable(address(this)))
+		);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		updateCollateralAmount();
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
@@ -738,7 +787,8 @@ contract SecurityPool is ISecurityPool {
 	function redeemRep(address vault) external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(
-			ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None,
+			ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
+				BinaryOutcomes.BinaryOutcome.None,
 			'Question open'
 		);
 		uint256 escrowedRep = address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(vault);
@@ -759,7 +809,9 @@ contract SecurityPool is ISecurityPool {
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
-		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(
+			ISecurityPool(payable(address(this)))
+		);
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
 		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome');
@@ -817,8 +869,15 @@ contract SecurityPool is ISecurityPool {
 			updatedPoolOwnership == 0
 				? 0
 				: (updatedPoolOwnership * postTransferRepBalance) / postTransferPoolOwnershipDenominator;
-		_requireVaultBondCoverage(remainingRep, securityVaults[msg.sender].securityBondAllowance, repEthPrice);
-		_requirePoolBondCoverage(postTransferRepBalance, totalSecurityBondAllowance, repEthPrice);
+		uint256 vaultEscalationRep = escalationGame.escrowedRepByVault(msg.sender) + depositedAmount;
+		uint256 totalEscalationRep = escalationGame.totalEscrowedRep() + depositedAmount;
+		_requireVaultBondCoverage(
+			remainingRep,
+			vaultEscalationRep,
+			securityVaults[msg.sender].securityBondAllowance,
+			repEthPrice
+		);
+		_requirePoolBondCoverage(postTransferRepBalance, totalEscalationRep, totalSecurityBondAllowance, repEthPrice);
 		_requireMinimumVaultRep(remainingRep, updatedPoolOwnership == 0, 'Vault REP below minimum');
 		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
 		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
@@ -844,7 +903,9 @@ contract SecurityPool is ISecurityPool {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome');
-		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(
+			ISecurityPool(payable(address(this)))
+		);
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (
 			forkTime > 0 &&

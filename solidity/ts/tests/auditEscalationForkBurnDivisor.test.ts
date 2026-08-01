@@ -129,10 +129,10 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 					],
 				}),
 			)
-			return escalationGame
+			return { escalationGame, securityPool }
 		}
 
-		const underfundedGame = await deployContinuation(exactMinimumBacking - 1n)
+		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking - 1n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -145,15 +145,15 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: underfundedGame,
-				functionName: 'resumeFromFork',
+				abi: proofTestPoolArtifact.abi,
+				address: underfundedPool,
+				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
 			/Fork carry underfunded/,
 		)
 
-		const exactlyFundedGame = await deployContinuation(exactMinimumBacking)
+		const { escalationGame: exactlyFundedGame, securityPool: exactlyFundedPool } = await deployContinuation(exactMinimumBacking)
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -166,9 +166,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: exactlyFundedGame,
-				functionName: 'resumeFromFork',
+				abi: proofTestPoolArtifact.abi,
+				address: exactlyFundedPool,
+				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
 		)
@@ -333,9 +333,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: escalationGame,
-				functionName: 'resumeFromFork',
+				abi: proofTestPoolArtifact.abi,
+				address: securityPool,
+				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
 			/Fork carry underfunded/,
@@ -361,9 +361,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: escalationGame,
-				functionName: 'resumeFromFork',
+				abi: proofTestPoolArtifact.abi,
+				address: securityPool,
+				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
 		)
@@ -373,7 +373,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			functionName: 'forkResumedAt',
 			args: [],
 		})
-		await mockWindow.setTime(forkResumedAt + 1n)
+		await mockWindow.setTime(forkResumedAt + 3n * 24n * 60n * 60n + 1n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,

@@ -5,12 +5,11 @@ import { AddressValue } from '../../../components/AddressValue.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { formatStatoblastSecurityMultiplier, getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
@@ -25,7 +24,6 @@ type SecurityPoolSummaryMetricsProps = {
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'mock' | 'v3' | 'v4' | undefined
 	repPerEthSourceUrl: string | undefined
-	showCollateralizationGauge?: boolean
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
 	showUniverse?: boolean
@@ -38,18 +36,13 @@ export function SecurityPoolSummaryMetrics({
 	currentTimestamp,
 	metricVariant = 'default',
 	pool,
-	repPerEthPrice,
 	repPerEthSource: _repPerEthSource,
 	repPerEthSourceUrl: _repPerEthSourceUrl,
-	showCollateralizationGauge = true,
 	showPoolAddress = false,
 	showTotalBacking = false,
 	showUniverse = false,
 	variant = 'embedded',
 }: SecurityPoolSummaryMetricsProps) {
-	const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
-	const targetCollateralizationPercent = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
-
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
@@ -70,7 +63,7 @@ export function SecurityPoolSummaryMetrics({
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>
 				{showTotalBacking ? (
-					<MetricField label={securityPoolCopy.totalRepCollateral}>
+					<MetricField label={securityPoolCopy.totalFreeRep}>
 						<CurrencyValue value={pool.totalRepDeposit} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
@@ -83,7 +76,6 @@ export function SecurityPoolSummaryMetrics({
 
 	return (
 		<div className={['security-pool-hero-metrics', className].filter(Boolean).join(' ')}>
-			{showCollateralizationGauge ? <CollateralizationCircle className='security-pool-hero-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} /> : undefined}
 			<div className='security-pool-hero-ribbon'>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.vaultCount}</span>
@@ -100,7 +92,7 @@ export function SecurityPoolSummaryMetrics({
 					</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalRepBacking}</span>
+					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalFreeRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
 						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalRepDeposit} suffix={commonCopy.rep} />
 					</strong>

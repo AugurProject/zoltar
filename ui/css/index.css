@@ -6472,7 +6472,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .security-pool-browse-vault-row-top-compact {
-	grid-template-columns: minmax(0, 1.45fr) minmax(9.9rem, 0.78fr) minmax(9.9rem, 0.78fr);
+	grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(8.5rem, 0.72fr));
 	align-items: start;
 }
 

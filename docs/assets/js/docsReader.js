@@ -30,7 +30,7 @@ const documentGroups = [
 			{
 				path: 'protocol-design/liquidation.html',
 				title: 'Liquidation design',
-				description: 'Punitive REP seizure, chunking limits, health calculations, and incentives.',
+				description: 'Proportional bundled liquidation, bounded claims, health calculations, and incentives.',
 			},
 		],
 	},

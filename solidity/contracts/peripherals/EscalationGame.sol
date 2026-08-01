@@ -37,7 +37,7 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 _forkCarryInitialBacking
 	) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
-		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Fork time too high');
+		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert();
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
@@ -47,23 +47,27 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function resumeFromFork() external {
-		require(owner == msg.sender || address(securityPool) == msg.sender, 'Only owner or security pool');
-		require(forkContinuation, 'No fork mode');
-		require(forkResumedAt == 0, 'Fork resumed');
-		require(isForkCarryFundingComplete(), 'Fork carry underfunded');
-		forkResumedAt = block.timestamp;
-		emit ForkContinuationResumed(block.timestamp);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
+	}
+
+	function applyTruthAuctionHaircut(uint256 repToRemove) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.applyTruthAuctionHaircut, (repToRemove)));
 	}
 
 	function previewDepositOnOutcome(
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 amount
 	) external view returns (uint256 acceptedAmount, uint256 resultingCumulativeAmount) {
-		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
-		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
-		require(amount >= startBond, 'Below start bond');
+		// Keep one reason for this read-only quote path so the size-constrained game
+		// can retain the state-changing paths' more specific failure reasons.
+		require(
+			nonDecisionState == NonDecisionState.None &&
+				outcome != BinaryOutcomes.BinaryOutcome.None &&
+				getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None &&
+				outcomeState[uint8(outcome)].balance < nonDecisionThreshold &&
+				amount >= startBond,
+			'Invalid deposit preview'
+		);
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
@@ -82,27 +86,58 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 expectedCumulativeAmount
 	) external returns (uint256 parentDepositIndex) {
 		require(msg.sender == address(securityPool), 'Only security pool');
-		(bool success, bytes memory returnData) = address(depositDelegate).delegatecall(
+		bytes memory returnData = _delegateDepositCall(
 			abi.encodeCall(
 				EscalationGameDepositDelegate.recordDeposit,
 				(depositor, outcome, amount, expectedCumulativeAmount)
 			)
 		);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(returnData, 0x20), mload(returnData))
-			}
-		}
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
 
 	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {
-		require(owner == msg.sender, 'Only game owner');
-		require(activationTime == 0, 'Game started');
-		require(_nonDecisionThreshold > _startBond, 'Threshold too low');
-		require(_startBond > 0, 'Start bond zero');
+		if (owner != msg.sender) revert();
+		require(activationTime == 0 && _nonDecisionThreshold > _startBond && _startBond > 0, 'Invalid game start');
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBond, _nonDecisionThreshold);
+	}
+
+	function _getDepositDelegate() internal view override returns (address) {
+		return address(depositDelegate);
+	}
+
+	fallback() external {
+		assembly ('memory-safe') {
+			switch shr(224, calldataload(0))
+			case 0xee692417 {
+				mstore(0, sload(truthAuctionRepBefore.slot))
+				mstore(0x20, sload(truthAuctionRepRemaining.slot))
+				return(0, 0x40)
+			}
+			case 0xdb05d0b2 {
+				// The address shares a slot with enum state. Mask those packed
+				// high bytes before returning canonical ABI-encoded address data.
+				let sourceGame := and(sload(forkCarrySourceGame.slot), sub(shl(160, 1), 1))
+				mstore(0, sourceGame)
+				return(0, 0x20)
+			}
+			case 0xfd5a5a86 {
+				let ownerIndex := calldataload(36)
+				if iszero(lt(ownerIndex, 8)) {
+					revert(0, 0)
+				}
+				mstore(0, calldataload(4))
+				mstore(0x20, payoutClaimBundles.slot)
+				let bundleSlot := keccak256(0, 0x40)
+				mstore(0, sload(add(add(bundleSlot, 2), ownerIndex)))
+				mstore(0x20, sload(add(add(bundleSlot, 10), ownerIndex)))
+				mstore(0x40, sload(add(bundleSlot, 1)))
+				return(0, 0x60)
+			}
+			default {
+				revert(0, 0)
+			}
+		}
 	}
 }

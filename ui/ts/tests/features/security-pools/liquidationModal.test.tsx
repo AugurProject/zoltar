@@ -853,7 +853,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = noGainRenderedComponent.cleanup
 
-		expect(within(document.body).getByText('This liquidation amount is too small to improve the target vault health after rounding.')).not.toBeNull()
+		expect(within(document.body).getByText('This liquidation amount rounds to no transferable bundled position.')).not.toBeNull()
 	})
 
 	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
@@ -1051,7 +1051,7 @@ describe('LiquidationModal', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(amountChanges).toEqual(['20'])
+		expect(amountChanges).toEqual(['50'])
 	})
 
 	test('fills the liquidation amount from the dust-safe liquidation Max value', async () => {
@@ -1084,7 +1084,7 @@ describe('LiquidationModal', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(amountChanges).toEqual(['0.4'])
+		expect(amountChanges).toEqual(['1.4'])
 	})
 
 	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
@@ -1228,14 +1228,14 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
 	})
 
-	test('disables liquidation when the entered chunk is too small to improve target health after rounding', async () => {
+	test('allows an atomic proportional liquidation without a bonus-improvement threshold', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1259,8 +1259,8 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
-		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This liquidation amount is too small to improve the target vault health after rounding.')).not.toBeNull()
+		expect(button.disabled).toBe(false)
+		expect(documentQueries.getByText(/moves one proportional slice/)).not.toBeNull()
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1475,10 +1475,10 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
 		expect(documentQueries.getByText('Your REP After')).not.toBeNull()
 		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
-		expect(documentQueries.getByText('REP Moved')).not.toBeNull()
+		expect(documentQueries.getByText('Free REP Moved')).not.toBeNull()
 	})
 
-	test('shows zero REP moved when no punitive liquidation amount is executable', async () => {
+	test('shows the full free REP bundle for a full proportional liquidation', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
 			accountAddress: callerVaultAddress,
@@ -1502,12 +1502,12 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
-		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
+		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
 	})
 
 	test('allows execution when the entered amount exceeds the executable cap because execution will clamp it', async () => {
@@ -1604,7 +1604,7 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						repDepositShare: 12_000n * 10n ** 18n,
+						repDepositShare: 30_000n * 10n ** 18n,
 						securityBondAllowance: 1_000n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
@@ -1631,9 +1631,8 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
@@ -1659,7 +1658,6 @@ describe('LiquidationModal', () => {
 
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText(/Uniswap V4 REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V4 Price/)).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -1672,75 +1670,34 @@ describe('LiquidationModal', () => {
 
 		documentQueries = within(document.body)
 		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V3 Price/)).not.toBeNull()
 	})
 
-	test('uses the shared collateralization success and danger classes in the modal', async () => {
-		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
-		const renderedComponent = await renderLiquidationModal({
-			accountAddress: callerVaultAddress,
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-				lastPrice: 3n * 10n ** 18n,
-			}),
-			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 24n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-				vaultAddress: callerVaultAddress,
-			}),
-			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const targetOpenOracleValue = documentQueries.getByText(/66\.67 %/).closest('.metric-field-value')
-		const callerOpenOracleValue = documentQueries.getByText(/400\.00 %/).closest('.metric-field-value')
-		const callerAfterLiquidationLabel = documentQueries.getByText(/^Your Collateralization After$/)
-		const callerAfterLiquidationValue = callerAfterLiquidationLabel.parentElement?.querySelector('.metric-field-value')
-
-		expect(targetOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-danger']))
-		expect(callerOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
-		expect(callerAfterLiquidationValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
-	})
-
-	test('renders exact-threshold collateralization as green in the modal', async () => {
+	test('keeps dual-coverage liquidation decisions aligned with neutral exact REP and allowance context', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
-			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const thresholdMetric = within(document.body).getByText('Target Collateralization at Oracle Price').parentElement
-		const thresholdValue = thresholdMetric?.querySelector('.metric-field-value')
-
-		expect(thresholdValue?.className).toContain('metric-value-success')
-	})
-
-	test('shows no active allowance for zero-allowance collateralization rows in the modal', async () => {
-		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-				lastPrice: 1n * 10n ** 18n,
+			selectedPool: createSelectedPool({
+				lastOraclePrice: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				escalationEscrowedRep: 4n * 10n ** 18n,
+				repDepositShare: 16n * 10n ** 18n,
+				securityBondAllowance: 10n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Unavailable')).toBeNull()
-		expect(documentQueries.getAllByText('No active allowance')).toHaveLength(2)
+		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('Target Bond Allowance')).not.toBeNull()
+		expect(documentQueries.getByText('Target Free REP')).not.toBeNull()
+		expect(documentQueries.getByText('Target Escalation REP')).not.toBeNull()
+		expect(documentQueries.queryByText(/Collateralization/)).toBeNull()
+		expect(documentQueries.queryByText('Below target')).toBeNull()
 	})
 
 	test('shows refreshing status while the modal is loading Open Oracle validity', async () => {

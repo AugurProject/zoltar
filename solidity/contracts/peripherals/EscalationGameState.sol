@@ -9,6 +9,8 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
+import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
+import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
@@ -64,6 +66,18 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		bool transferredRep
 	);
 	event ResidualRepSweptToSecurityPool(uint256 amount);
+	event EscalationClaimMoved(
+		address indexed fromVault,
+		address indexed toVault,
+		uint256 numerator,
+		uint256 denominator
+	);
+	event TruthAuctionHaircutApplied(
+		uint256 repBefore,
+		uint256 repRemoved,
+		uint256 repRemaining,
+		uint256 rebasedElapsed
+	);
 
 	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
 		securityPool = _securityPool;
@@ -83,10 +97,11 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	modifier onlySecurityPoolOrForker() {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only pool or forker'
-		);
+		// This guard is repeated across the size-constrained escalation runtime. A
+		// data-free revert keeps the deployed game below EIP-170's code-size limit.
+		if (msg.sender != address(securityPool) && msg.sender != address(securityPool.securityPoolForker())) {
+			revert();
+		}
 		_;
 	}
 
@@ -97,14 +112,51 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		return startIndex + count;
 	}
 
-	function _consumeEscrowedRepForVault(address depositor, uint256 amount) internal {
-		if (amount == 0) return;
-		uint256 escrowedRep = escrowedRepByVault[depositor];
-		require(escrowedRep >= amount, 'Escrowed REP low');
-		escrowedRepByVault[depositor] = escrowedRep - amount;
-		totalEscrowedRep -= amount;
-		emit VaultEscrowUpdated(depositor, escrowedRepByVault[depositor], totalEscrowedRep);
+	function escrowedRepByVault(address vault) public view returns (uint256 amount) {
+		return _claimEscrowedRepByVault(vault);
 	}
+
+	function moveEscalationClaim(address fromVault, address toVault, uint256 numerator, uint256 denominator) external {
+		_delegateDepositCall(
+			abi.encodeCall(
+				EscalationGameDepositDelegate.moveEscalationClaim,
+				(fromVault, toVault, numerator, denominator)
+			)
+		);
+	}
+
+	function _consumeEscrowedRepForBundle(address depositor, uint256 amount) internal {
+		if (amount == 0) return;
+		EscalationClaimBundle storage bundle = escalationClaimBundles[depositor];
+		uint256 shares = _repToClaimShares(amount);
+		require(bundle.escrowedRep >= shares, 'Escrowed REP low');
+		bundle.escrowedRep -= shares;
+		totalEscrowedRep -= amount;
+		emit VaultEscrowUpdated(depositor, escrowedRepByVault(depositor), totalEscrowedRep);
+	}
+
+	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amount) internal {
+		_delegateDepositCall(
+			abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amount))
+		);
+	}
+
+	function _creditClaimOwners(address bundleId, uint256 amount) internal {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amount)));
+	}
+
+	function _delegateDepositCall(bytes memory callData) internal returns (bytes memory returnData) {
+		address delegate = _getDepositDelegate();
+		(bool success, bytes memory result) = delegate.delegatecall(callData);
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(result, 0x20), mload(result))
+			}
+		}
+		return result;
+	}
+
+	function _getDepositDelegate() internal view virtual returns (address);
 
 	function _consumeUnresolvedRepForVault(address depositor, uint256 amount) internal {
 		if (amount == 0) return;
@@ -113,6 +165,15 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		require(totalLocalUnresolvedRep >= amount, 'Local unresolved REP low');
 		unresolvedRepByVault[depositor] = unresolvedRep - amount;
 		totalLocalUnresolvedRep -= amount;
+	}
+
+	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amount) internal {
+		_delegateDepositCall(
+			abi.encodeCall(
+				EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners,
+				(bundleId, outcomeIndex, amount)
+			)
+		);
 	}
 
 	function _safeTransferRep(address receiver, uint256 amount) internal {
