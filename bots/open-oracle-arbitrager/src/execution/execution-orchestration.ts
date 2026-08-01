@@ -213,8 +213,10 @@ export async function guardedTransactionSubmission<T>(isPaused: () => boolean, p
 	return submit()
 }
 
-export async function journaledSubmission<T>(persistPending: () => Promise<unknown>, submit: () => Promise<T>) {
+export async function journaledSubmission<T>(persistPending: () => Promise<unknown>, submit: () => Promise<T>, boundaryGuard?: (() => Promise<unknown> | unknown) | undefined) {
+	await boundaryGuard?.()
 	await persistPending()
+	await boundaryGuard?.()
 	return submit()
 }
 

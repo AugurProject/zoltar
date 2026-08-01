@@ -44,7 +44,8 @@ function element<T extends HTMLElement>(id: string) {
 }
 
 function setText(id: string, value: string) {
-	element(id).textContent = value
+	const target = element(id)
+	if (target.textContent !== value) target.textContent = value
 }
 
 function prettyJson(value: unknown) {
@@ -236,6 +237,8 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 			row([
 				opportunity.reportId,
 				decisionBadge(opportunity),
+				opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
+				amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
 				opportunityDecisionReason(opportunity),
 				opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
 				amount(opportunity.estimatedNetProfitEth, 'ETH'),
@@ -450,6 +453,35 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	element('token-markets-empty').hidden = snapshot.tokenMarkets.length !== 0
 	const poolCount = snapshot.tokenMarkets.reduce((total, token) => total + token.pools.length, 0)
 	setText('token-count', `${countLabel(snapshot.tokenMarkets.length, 'token')} · ${countLabel(poolCount, 'pool')}`)
+}
+
+function renderCentralizedMarket(snapshot: OperatorSnapshot) {
+	const body = element<HTMLTableSectionElement>('centralized-market-body')
+	body.replaceChildren()
+	const market = snapshot.centralizedMarket
+	const consensus = snapshot.marketConsensus
+	setText('dex-market-price', consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
+	setText('guarded-market-price', consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
+	setText('dex-market-bid-depth', consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
+	setText('dex-market-ask-depth', consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
+	if (market === undefined) {
+		setText('centralized-market-status', consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
+		setText('centralized-market-price', '—')
+		setText('centralized-market-bid-depth', '—')
+		setText('centralized-market-ask-depth', '—')
+		setText('centralized-market-source-count', consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
+		element('centralized-market-empty').hidden = false
+		return
+	}
+	setText('centralized-market-status', consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
+	setText('centralized-market-price', market.priceRepPerEth)
+	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
+	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
+	setText('centralized-market-source-count', consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
+	for (const observation of market.observations) {
+		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()]))
+	}
+	element('centralized-market-empty').hidden = market.observations.length !== 0
 }
 
 function renderDisputePaths(snapshot: OperatorSnapshot) {
@@ -782,6 +814,7 @@ function render(snapshot: OperatorSnapshot) {
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
 	renderPositions(snapshot.positions, snapshot.positionRecordCount)
 	renderTokenMarkets(snapshot)
+	renderCentralizedMarket(snapshot)
 	renderDisputePaths(snapshot)
 	renderMarketPriceChart(snapshot)
 	if (focusKey !== undefined) {

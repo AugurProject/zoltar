@@ -1,7 +1,7 @@
 import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '#ethereum'
 import type { Configuration } from '#config/configuration'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
-import { attemptConfirmationRecovery, guardedTransactionSubmission, isExecutionPausedError, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
+import { attemptConfirmationRecovery, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
 import type { TransactionActivity } from '#state/operator-state'
 import { decimalWeth } from '#state/operator-state'
 import { mergeSubmissionFailures, assertSubmissionWindowOpen, SubmissionFailure, submitSignedTransaction, type SignedTransaction, type SubmittedTransaction, type SubmissionTargetResult } from '#execution/transaction-submission'
@@ -64,6 +64,7 @@ export async function submitContractTransaction(
 	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string; token?: Address | undefined; tokenSymbol?: string | undefined },
 	isPaused: () => boolean,
 	track: TrackTransaction,
+	boundary?: { beforeSubmit: () => Promise<unknown> | unknown; persistPending: () => Promise<unknown> } | undefined,
 ): Promise<TrackedSubmission> {
 	const account = wallet.account
 	const signMessage = account?.signMessage
@@ -87,18 +88,21 @@ export async function submitContractTransaction(
 			async () => {
 				if (signed.lastValidBlockNumber !== undefined) assertSubmissionWindowOpen(signed.lastValidBlockNumber, await client.getBlockNumber())
 			},
-			() => {
-				track(trackedActivity(initial, 'submitting'))
-				return submitSignedTransaction({
-					address: account.address,
-					hash: signed.hash,
-					maxBlockNumber: signed.maxBlockNumber,
-					publicRpcUrls: config.connectivity.publicRpcUrls,
-					publicSubmit: sendRawTransactionToRpc,
-					serializedTransaction: signed.serializedTransaction,
-					settings: config.submission,
-					signMessage,
-				})
+			async () => {
+				const submit = () => {
+					track(trackedActivity(initial, 'submitting'))
+					return submitSignedTransaction({
+						address: account.address,
+						hash: signed.hash,
+						maxBlockNumber: signed.maxBlockNumber,
+						publicRpcUrls: config.connectivity.publicRpcUrls,
+						publicSubmit: sendRawTransactionToRpc,
+						serializedTransaction: signed.serializedTransaction,
+						settings: config.submission,
+						signMessage,
+					})
+				}
+				return boundary === undefined ? submit() : journaledSubmission(boundary.persistPending, submit, boundary.beforeSubmit)
 			},
 		)
 		const submission = { ...initial, ...result }

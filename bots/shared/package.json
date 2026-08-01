@@ -1,0 +1,36 @@
+{
+	"name": "@zoltar/bot-shared",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./config/signer": "./src/config/signer.ts",
+		"./ethereum": "./src/ethereum.ts",
+		"./execution/signer-operation-gate": "./src/execution/signer-operation-gate.ts",
+		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
+		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
+		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
+		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
+		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
+		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
+		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
+		"./monitoring/resilience": "./src/monitoring/resilience.ts"
+	},
+	"scripts": {
+		"check": "bun run typecheck && bun run test && bun run format:check",
+		"format": "bun x @biomejs/biome format --write package.json tsconfig.json src tests",
+		"format:check": "bun x @biomejs/biome format package.json tsconfig.json src tests",
+		"test": "bun test ./tests",
+		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@noble/hashes": "2.2.0",
+		"ccxt": "4.5.70",
+		"micro-eth-signer": "0.18.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.11",
+		"bun-types": "1.3.11",
+		"typescript": "5.8.2"
+	}
+}
