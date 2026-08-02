@@ -173,6 +173,27 @@ describe('rpc config', () => {
 		).toBe('https://fallback.example')
 	})
 
+	test('ignores failures while acquiring global localStorage', () => {
+		const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		try {
+			Object.defineProperty(globalThis, 'localStorage', {
+				configurable: true,
+				get: () => {
+					throw new DOMException('Storage unavailable', 'SecurityError')
+				},
+			})
+			expect(
+				resolveConfiguredRpcUrl({
+					fallbackRpcUrl: 'https://fallback.example',
+					location: { search: '' },
+				}),
+			).toBe('https://fallback.example')
+		} finally {
+			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+		}
+	})
+
 	test('falls back to the default shared RPC when no config source is set', () => {
 		expect(
 			resolveConfiguredRpcUrl({

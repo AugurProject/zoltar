@@ -28,6 +28,14 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const [deployModalOpen, setDeployModalOpen] = useState(false)
+	const questionNumTicks = questionDetails?.numTicks
+	useEffect(() => {
+		if (questionNumTicks === undefined) return
+		const selectedScalarTick = BigInt(scalarOutcomeTick)
+		const nextTick = clampScalarTickIndex(selectedScalarTick, questionNumTicks).toString()
+		if (nextTick === scalarOutcomeTick) return
+		setScalarOutcomeTick(nextTick)
+	}, [questionNumTicks, scalarOutcomeTick])
 	if (questionDetails === undefined)
 		return (
 			<WorkflowSubsection title={marketCopy.childUniverses}>
@@ -61,11 +69,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 		{ key: 'wallet', label: marketCopy.walletConnected, resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: marketCopy.childDeploymentWalletRequiredReason }) },
 		{ key: 'exists', label: marketCopy.childUniverseNotAlreadyDeployed, resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: marketCopy.childUniverseDeployedReason } : {}) },
 	]
-	useEffect(() => {
-		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()
-		if (nextTick === scalarOutcomeTick) return
-		setScalarOutcomeTick(nextTick)
-	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 	return (
 		<WorkflowSubsection badge={<span className='detail'>{marketCopy.scalarChildDeploymentHint}</span>} title={marketCopy.childUniverses}>
 			<ChildUniversesSection

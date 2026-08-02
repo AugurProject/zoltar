@@ -465,6 +465,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reportId,
 			reportTimestamp: game.reportTimestamp,
 			settlementTimestamp: game.settlementTimestamp,
+			timeType: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE),
 			token1: game.token1,
 			token2: game.token2,
 			token1Decimals: token1Metadata.decimals,
