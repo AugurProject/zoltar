@@ -10,6 +10,7 @@ import {
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
 	conservativeStaleTopUp,
+	requireFinalizedTransactionReceipt,
 	planVaultMaintenance,
 	requirePendingStagedOperation,
 	requireSuccessfulStagedOperation,
@@ -117,6 +118,15 @@ describe('liquidator execution safety', () => {
 	test('pauses instead of continuing after restart recovers a reverted transaction', () => {
 		expect(() => requireRecoveredTransactionSuccess('reverted', `0x${'11'.repeat(32)}`)).toThrow('reverted')
 		expect(() => requireRecoveredTransactionSuccess('success', `0x${'11'.repeat(32)}`)).not.toThrow()
+	})
+
+	test('stops a dependent transaction sequence while the first receipt awaits canonical finality', () => {
+		let dependentTransactionStarted = false
+		expect(() => {
+			requireFinalizedTransactionReceipt('Approve REP', `0x${'11'.repeat(32)}`, { observed: true, receipt: undefined })
+			dependentTransactionStarted = true
+		}).toThrow('awaiting canonical finality')
+		expect(dependentTransactionStarted).toBe(false)
 	})
 
 	test('retains ambiguous price-dependent intents until a receipt or private finality proof exists', () => {

@@ -24,6 +24,22 @@ type Call = {
 	value?: bigint | undefined
 }
 
+export class TransactionAwaitingCanonicalFinality extends Error {
+	readonly hash: Hex
+
+	constructor(label: string, hash: Hex) {
+		super(`${label} transaction ${hash} is awaiting canonical finality`)
+		this.name = 'TransactionAwaitingCanonicalFinality'
+		this.hash = hash
+	}
+}
+
+export function requireFinalizedTransactionReceipt(label: string, hash: Hex, result: Awaited<ReturnType<typeof finalizedReceiptWithQuorum>>) {
+	if (result.receipt !== undefined) return result.receipt
+	if (!result.observed) throw new Error(`${label} receipt disappeared before canonical finality`)
+	throw new TransactionAwaitingCanonicalFinality(label, hash)
+}
+
 function maximumFeePerGas(baseFeePerGas: bigint) {
 	return baseFeePerGas * 2n + 2n * 10n ** 9n
 }
@@ -135,11 +151,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		timeout: 180_000,
 	})
 	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash)
-	const receipt = receiptResult.receipt
-	if (receipt === undefined) {
-		if (!receiptResult.observed) throw new Error(`${call.label} receipt disappeared before canonical finality`)
-		return hash
-	}
+	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	if (receipt.status !== 'success') {
 		throw new Error(`${call.label} reverted in transaction ${receipt.transactionHash}`)
 	}

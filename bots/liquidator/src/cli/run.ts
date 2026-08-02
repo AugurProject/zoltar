@@ -7,7 +7,7 @@ import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
 import { clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
@@ -528,6 +528,11 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				await saveDurableState(settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 			} catch (error) {
+				if (error instanceof TransactionAwaitingCanonicalFinality) {
+					state.status = 'running'
+					await saveDurableState(settings.runtime.stateFile, state)
+					return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+				}
 				state.error = errorMessage(error)
 				state.status = 'error'
 				if (settings.runtime.execute) {
