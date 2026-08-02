@@ -65,6 +65,7 @@ describe('openOracle protocol client', () => {
 
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
 		const initial = createOpenOraclePreimage()
+		initial.game.flags = 0n
 		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 0n }),
@@ -98,6 +99,7 @@ describe('openOracle protocol client', () => {
 
 		expect(report.currentReporter).toBe(initialReporter)
 		expect(report.disputeOccurred).toBe(true)
+		expect(report.timeType).toBe(false)
 	})
 
 	test('loadOpenOracleReportDetails rejects invalid token decimals', async () => {

@@ -27,6 +27,14 @@ function OperationModalHarness() {
 	)
 }
 
+function BusyOperationModalHarness() {
+	return (
+		<OperationModal closeDisabled isOpen onClose={() => undefined} title='Busy action'>
+			<button type='button'>Available action</button>
+		</OperationModal>
+	)
+}
+
 function CompletingOperationModalHarness() {
 	const [isOpen, setIsOpen] = useState(true)
 	const [completionKey, setCompletionKey] = useState<string | undefined>()
@@ -822,6 +830,7 @@ describe('OperationModal', () => {
 	test('lets only the top stacked modal handle Escape', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
+		document.body.style.overflow = 'scroll'
 
 		await act(() => {
 			render(<StackedDismissibleOperationModalHarness />, container)
@@ -829,6 +838,7 @@ describe('OperationModal', () => {
 
 		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
 		expect(within(container).getByRole('dialog', { name: 'Second action' })).not.toBeNull()
+		expect(document.body.style.overflow).toBe('hidden')
 
 		await act(() => {
 			fireEvent.keyDown(document, { key: 'Escape' })
@@ -836,11 +846,13 @@ describe('OperationModal', () => {
 
 		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
 		expect(within(container).queryByRole('dialog', { name: 'Second action' })).toBeNull()
+		expect(document.body.style.overflow).toBe('hidden')
 
 		await act(() => {
 			fireEvent.keyDown(document, { key: 'Escape' })
 		})
 		expect(within(container).queryByRole('dialog', { name: 'First action' })).toBeNull()
+		expect(document.body.style.overflow).toBe('scroll')
 
 		render(null, container)
 		container.remove()
@@ -903,6 +915,26 @@ describe('OperationModal', () => {
 		expect(document.activeElement).toBe(closeButton)
 
 		render(null, container)
+		container.remove()
+	})
+
+	test('focuses an available control and locks page scrolling when the close button is disabled', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		document.body.style.overflow = 'scroll'
+
+		await act(() => {
+			render(<BusyOperationModalHarness />, container)
+		})
+
+		const availableAction = within(container).getByRole('button', { name: 'Available action' })
+		expect(document.activeElement).toBe(availableAction)
+		expect(document.body.style.overflow).toBe('hidden')
+
+		await act(() => {
+			render(null, container)
+		})
+		expect(document.body.style.overflow).toBe('scroll')
 		container.remove()
 	})
 

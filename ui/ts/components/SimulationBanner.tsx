@@ -8,6 +8,7 @@ import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
+import { getBrowserStorage } from '../lib/browserStorage.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
@@ -121,7 +122,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
-	const savedStateStorage = window.localStorage
+	const savedStateStorage = getBrowserStorage('localStorage')
 	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary(savedStateStorage)
 	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(initialSavedStateSummary.records)
 	const savedStateStorageWarning = useSignal<string | undefined>(initialSavedStateSummary.warning)

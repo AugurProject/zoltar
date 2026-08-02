@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import { EnumDropdown } from '../components/EnumDropdown.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -202,6 +203,25 @@ describe('EnumDropdown', () => {
 		const trigger = within(document.body).getByRole('button', { name: 'Select outcome side' })
 		await act(() => {
 			fireEvent.click(trigger)
+		})
+		expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
+	})
+
+	test('closes an open menu when it becomes disabled', async () => {
+		const options = [
+			{ label: 'Yes', value: 'yes' },
+			{ label: 'No', value: 'no' },
+		] as const
+		const renderedComponent = await renderIntoDocument(<EnumDropdown disabled={false} options={options} value={undefined} onChange={() => undefined} placeholder='Select outcome side' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Select outcome side' }))
+		})
+		expect(within(document.body).getAllByRole('option')).toHaveLength(2)
+
+		await act(() => {
+			render(<EnumDropdown disabled options={options} value={undefined} onChange={() => undefined} placeholder='Select outcome side' />, renderedComponent.container)
 		})
 		expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
 	})

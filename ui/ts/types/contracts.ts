@@ -241,6 +241,7 @@ export type OpenOracleReportSummary = {
 	reportId: bigint
 	reportTimestamp: bigint
 	settlementTimestamp: bigint
+	timeType: boolean
 	token1: Address
 	token2: Address
 	token1Decimals: number

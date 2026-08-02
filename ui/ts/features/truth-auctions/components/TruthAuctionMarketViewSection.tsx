@@ -82,17 +82,17 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										</div>
 										<div className='truth-auction-price-row-meta'>
 											<span>
-												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalEth} suffix={commonCopy.eth} />
+												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span className='truth-auction-ladder-row-cumulative'>
-												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeEth} suffix={commonCopy.eth} />
+												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span>{forkAuctionCopy.formatSubmissionsLabel(point.submissionCount.toString())}</span>
 										</div>
 									</div>
 								</button>
 							))}
-							{truthAuctionBookError === undefined && hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} onLoadMore={onLoadNextTickPage} loadMoreLabel={forkAuctionCopy.loadMorePriceLevels} /> : undefined}
+							{truthAuctionBookError === undefined && hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} loading={loadingTruthAuctionBook} onLoadMore={onLoadNextTickPage} loadMoreLabel={forkAuctionCopy.loadMorePriceLevels} /> : undefined}
 						</div>
 					</div>
 				</div>

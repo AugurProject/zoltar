@@ -51,7 +51,7 @@ import {
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
-import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount } from '../../../lib/pagination.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../../../lib/pagination.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { tryParseBigIntInput } from '../../../lib/integerInput.js'
@@ -187,6 +187,17 @@ function renderReportFields(
 ) {
 	return <MetricGrid variant='question'>{fields.map(field => renderReportField(field.label, field.value))}</MetricGrid>
 }
+
+function OpenOracleClockValue({ currentTimestamp, timeType, value, zeroText }: { currentTimestamp?: bigint; timeType: boolean; value: bigint; zeroText?: ComponentChildren }) {
+	if (timeType) return <TimestampValue timestamp={value} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} {...(zeroText === undefined ? {} : { zeroText })} />
+	if (value === 0n && zeroText !== undefined) return <span className='timestamp-value zero'>{zeroText}</span>
+	return <span className='timestamp-value'>{openOracleCopy.formatTimingValue(value.toString(), openOracleCopy.blocks)}</span>
+}
+
+function getOpenOracleClockLabel(timeType: boolean, timestampLabel: string, blockLabel: string) {
+	return timeType ? timestampLabel : blockLabel
+}
+
 function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport: (reportId: bigint) => void) {
 	const status = getOpenOracleReportStatus(report)
 	const statusTone = getOpenOracleReportStatusTone(status)
@@ -205,8 +216,8 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} /> },
 				{ label: openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), value: <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} /> },
 				{ label: openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), value: <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} /> },
-				{ label: openOracleCopy.reportTimestamp, value: <TimestampValue timestamp={report.reportTimestamp} /> },
-				{ label: openOracleCopy.settlementTimestamp, value: <TimestampValue timestamp={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
+				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.reportTimestamp, openOracleCopy.reportBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.reportTimestamp} /> },
+				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
 			]}
 		>
 			<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
@@ -466,8 +477,13 @@ export function renderSelectedReportActionSection({
 									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 									{
-										label: openOracleCopy.settlementTimestamp,
-										value: openOracleReportDetails.settlementTimestamp === 0n ? openOracleCopy.settlementTimestampOnConfirmation : <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />,
+										label: getOpenOracleClockLabel(openOracleReportDetails.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock),
+										value:
+											openOracleReportDetails.settlementTimestamp === 0n ? (
+												openOracleCopy.settlementTimestampOnConfirmation
+											) : (
+												<OpenOracleClockValue currentTimestamp={openOracleReportDetails.currentTime} timeType={openOracleReportDetails.timeType} value={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />
+											),
 									},
 								])}
 						<div className='actions'>
@@ -711,8 +727,8 @@ function renderReportDetailsCard(
 				<ReadOnlyDetailAccordion title={commonCopy.status}>
 					{renderReportFields([
 						{
-							label: openOracleCopy.reportTimestamp,
-							value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.reportTimestamp} />,
+							label: getOpenOracleClockLabel(openOracleReportDetails.timeType, openOracleCopy.reportTimestamp, openOracleCopy.reportBlock),
+							value: <OpenOracleClockValue currentTimestamp={openOracleReportDetails.currentTime} timeType={openOracleReportDetails.timeType} value={openOracleReportDetails.reportTimestamp} />,
 						},
 						{
 							label: openOracleCopy.disputeOccurred,
@@ -723,8 +739,8 @@ function renderReportDetailsCard(
 							value: openOracleReportDetails.isDistributed ? commonCopy.yes : commonCopy.no,
 						},
 						{
-							label: openOracleCopy.settlementTimestamp,
-							value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />,
+							label: getOpenOracleClockLabel(openOracleReportDetails.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock),
+							value: <OpenOracleClockValue currentTimestamp={openOracleReportDetails.currentTime} timeType={openOracleReportDetails.timeType} value={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />,
 						},
 						{
 							label: openOracleCopy.lastReportOpportunity,
@@ -975,6 +991,13 @@ export function OpenOracleSection({
 				},
 				load: async () => await loadBrowseReports(browsePageIndex, BROWSE_PAGE_SIZE),
 				onSuccess: page => {
+					const pageCount = getPaginationPageCount(page.reportCount, BROWSE_PAGE_SIZE)
+					const resolvedPageIndex = resolvePaginationPageIndex(browsePageIndex, pageCount)
+					if (resolvedPageIndex !== browsePageIndex) {
+						setBrowsePage(undefined)
+						setBrowsePageIndex(resolvedPageIndex)
+						return
+					}
 					setBrowsePage(page)
 					setBrowseLoadState({ requestKey: browseRequestKey, status: 'ready' })
 				},

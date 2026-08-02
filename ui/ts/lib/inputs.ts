@@ -31,7 +31,9 @@ export function parseBytes32Input(value: string, label: string): Hex {
 }
 
 export function parseReportIdInput(value: string) {
-	return parseBigIntInput(value, 'Report ID')
+	const reportId = parseBigIntInput(value, 'Report ID')
+	if (reportId < 0n) throw new Error('Report ID must be non-negative')
+	return reportId
 }
 
 export function parseOptionalBigIntInput(value: string) {

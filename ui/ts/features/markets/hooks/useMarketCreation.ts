@@ -9,6 +9,7 @@ import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
 import { runWriteAction } from '../../../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
+import { getBrowserStorage } from '../../../lib/browserStorage.js'
 import type { MarketFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '../../../types/contracts.js'
 import { useZoltarOperations } from '../../universes/hooks/useZoltarOperations.js'
@@ -53,13 +54,7 @@ function getQuestionDraftStorageKey(accountAddress: Address | undefined, activeU
 }
 
 function getQuestionDraftStorage() {
-	if (typeof window === 'undefined') return undefined
-	try {
-		return window.sessionStorage
-	} catch (error) {
-		if (!(error instanceof DOMException)) throw error
-		return undefined
-	}
+	return getBrowserStorage('sessionStorage')
 }
 
 function isMarketFormState(value: unknown): value is MarketFormState {
@@ -86,7 +81,7 @@ function readQuestionDraft(storageKey: string | undefined) {
 		const parsedValue: unknown = JSON.parse(storedValue)
 		return isMarketFormState(parsedValue) ? parsedValue : defaultState
 	} catch (error) {
-		if (!(error instanceof SyntaxError)) throw error
+		if (!(error instanceof SyntaxError) && !(error instanceof DOMException)) throw error
 		return defaultState
 	}
 }
