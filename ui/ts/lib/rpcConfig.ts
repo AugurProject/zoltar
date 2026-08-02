@@ -66,7 +66,8 @@ function readStoredRpcUrl(storage: StorageLike | undefined) {
 function getGlobalLocalStorage(globalWithRpcConfig: GlobalWithRpcConfig) {
 	try {
 		return globalWithRpcConfig.localStorage
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
 		return undefined
 	}
 }

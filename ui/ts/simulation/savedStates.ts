@@ -305,7 +305,8 @@ export function parseSavedSimulationStateEnvelope(serialized: string) {
 export function getSavedSimulationStateStorageSummary(storage?: Storage) {
 	try {
 		return toSavedSimulationStateStorageSummary(getSavedSimulationStateStorageSnapshot(storage))
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException) && !(error instanceof SavedSimulationStateError)) throw error
 		return {
 			records: [],
 			warning: 'Saved simulation state storage is unavailable.',

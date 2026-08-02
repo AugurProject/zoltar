@@ -4,7 +4,8 @@ export function getBrowserStorage(storageName: BrowserStorageName) {
 	if (typeof window === 'undefined') return undefined
 	try {
 		return window[storageName]
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
 		return undefined
 	}
 }
