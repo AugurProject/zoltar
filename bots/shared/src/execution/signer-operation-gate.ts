@@ -14,3 +14,5 @@ export function createSignerOperationGate() {
 		},
 	}
 }
+
+export type SignerOperationGate = ReturnType<typeof createSignerOperationGate>

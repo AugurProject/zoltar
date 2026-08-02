@@ -515,12 +515,25 @@ function positionTotals(positions: readonly PositionRecord[]) {
 	}
 }
 
+export type OperatorSnapshotFixedState = {
+	deployment?: DeploymentSettings | undefined
+	execute: boolean
+	executor: Address | undefined
+	expectedChainId: number
+	explorerUrl: string
+	network: NetworkName
+	openOracle: Address
+	queuedWallet: Address | null | undefined
+	savedWallet: Address | undefined
+	wallet: Address | undefined
+}
+
 export function operatorSnapshot(
 	state: OperatorState,
 	strategy: MutableStrategy,
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
-	fixed: { deployment?: DeploymentSettings | undefined; execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
+	fixed: OperatorSnapshotFixedState,
 	riskLimits: RiskLimits = {
 		lifecycleGasReserveWeth: 10n ** 16n,
 		maxConcurrentPositions: 1,

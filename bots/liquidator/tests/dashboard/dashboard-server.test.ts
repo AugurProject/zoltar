@@ -95,10 +95,24 @@ describe('liquidator dashboard server', () => {
 
 	test('accepts loopback browser requests when bound to all interfaces', async () => {
 		let paused = false
+		const password = 'correct horse battery staple'
+		expect(() =>
+			startDashboardServer(0, {
+				getConfiguration: () => ({}),
+				getState: () => ({}),
+				hostname: '0.0.0.0',
+				setApprovedUniverses: value => value,
+				setPaused: value => value,
+				setSelectedPools: value => value,
+				setSigner: value => value,
+				setStrategy: value => value,
+			}),
+		).toThrow('ZOLTAR_BOT_DASHBOARD_PASSWORD')
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({}),
 			getState: () => ({ paused }),
 			hostname: '0.0.0.0',
+			password,
 			setApprovedUniverses: value => value,
 			setPaused: value => {
 				paused = Reflect.get(value as object, 'paused') === true
@@ -110,11 +124,16 @@ describe('liquidator dashboard server', () => {
 		})
 		servers.push(server)
 		const origin = `http://127.0.0.1:${server.port}`
-		const page = await fetch(origin)
+		const unauthorized = await fetch(origin)
+		expect(unauthorized.status).toBe(401)
+		expect(unauthorized.headers.get('www-authenticate')).toContain('Basic')
+		const authorization = `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
+		const page = await fetch(origin, { headers: { authorization } })
 		expect(page.status).toBe(200)
 		const mutation = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: true }),
 			headers: {
+				authorization,
 				'content-type': 'application/json',
 				origin,
 			},

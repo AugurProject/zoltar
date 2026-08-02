@@ -82,6 +82,28 @@ export type OperatorSettings = {
 
 type JsonRecord = Record<string, unknown>
 
+type SettingsFileHandle = {
+	close: () => Promise<unknown>
+	sync: () => Promise<unknown>
+	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+}
+
+export type SettingsFilesystem = {
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<SettingsFileHandle>
+	readFile: (path: string, encoding: 'utf8') => Promise<string>
+	rename: (oldPath: string, newPath: string) => Promise<unknown>
+	rm: (path: string, options: { force: true }) => Promise<unknown>
+}
+
+const settingsFilesystem: SettingsFilesystem = {
+	mkdir,
+	open,
+	readFile,
+	rename,
+	rm,
+}
+
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 const UNIT = 10n ** 18n
 
@@ -279,9 +301,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length === 0) throw new Error('Live execution requires at least one independent quorum RPC')
-	if (settings.submission.mode === 'public' && settings.submission.minimumRelaySuccesses > settings.connectivity.publicRpcUrls.length) {
-		throw new Error('Public submission minimumRelaySuccesses cannot exceed the configured public RPC count')
-	}
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
 	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
@@ -345,21 +364,27 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR
 	return { path, revision: revision(contents), settings: parseSettings(JSON.parse(contents)) }
 }
 
-export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision: string) {
+export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision: string, filesystem: SettingsFilesystem = settingsFilesystem) {
 	const contents = `${JSON.stringify(serializedSettings(settings), undefined, 2)}\n`
-	await mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const current = await readFile(path, 'utf8')
+	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
+	const current = await filesystem.readFile(path, 'utf8')
 	if (revision(current) !== expectedRevision) throw new Error('Configuration changed on disk; reload before saving')
 	const temporaryPath = `${path}.${randomBytes(8).toString('hex')}.tmp`
-	const handle = await open(temporaryPath, 'wx', 0o600)
+	const handle = await filesystem.open(temporaryPath, 'wx', 0o600)
 	try {
 		await handle.writeFile(contents, { encoding: 'utf8' })
 		await handle.sync()
 		await handle.close()
-		await rename(temporaryPath, path)
+		await filesystem.rename(temporaryPath, path)
+		const directoryHandle = await filesystem.open(dirname(path), 'r')
+		try {
+			await directoryHandle.sync()
+		} finally {
+			await directoryHandle.close()
+		}
 	} catch (error) {
 		await handle.close().catch(() => undefined)
-		await rm(temporaryPath, { force: true })
+		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 	return revision(contents)

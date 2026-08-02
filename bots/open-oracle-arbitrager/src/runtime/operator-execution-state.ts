@@ -1,0 +1,48 @@
+import { applyStrategy, type Configuration } from '#config/configuration'
+import type { Address } from '#ethereum'
+import type { ExecutionLockManager } from '#execution/execution-locks'
+import { clearWalletDerivedState, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import type { ExclusiveProcessLock } from '#state/position-store'
+import type { PendingOperatorUpdates } from './operator-control-plane.ts'
+
+export function applyQueuedExecutionSettings(config: Configuration, state: OperatorState, pending: PendingOperatorUpdates) {
+	if (pending.strategy !== undefined) {
+		applyStrategy(config, pending.strategy)
+		pending.strategy = undefined
+	}
+	if (pending.submission !== undefined) {
+		config.submission = pending.submission
+		pending.submission = undefined
+	}
+	if (pending.tokenAddresses !== undefined) {
+		config.tokenAddresses = pending.tokenAddresses
+		state.tokenAddresses = pending.tokenAddresses
+		pending.tokenAddresses = undefined
+	}
+}
+
+export async function applyQueuedSigner<TWallet>(parameters: {
+	activeSignerLock: ExclusiveProcessLock | undefined
+	config: Configuration
+	createWallet: () => TWallet
+	fixedState: OperatorSnapshotFixedState
+	lockManager: ExecutionLockManager | undefined
+	pending: PendingOperatorUpdates
+	state: OperatorState
+	walletAddress: (wallet: TWallet) => Address | undefined
+}) {
+	const { config, fixedState, lockManager, pending, state } = parameters
+	if (!pending.signerUpdate) return { activeSignerLock: parameters.activeSignerLock, wallet: parameters.createWallet() }
+	const nextSignerLock = pending.privateKey === undefined ? undefined : (pending.signerLock ?? parameters.activeSignerLock)
+	if (config.execute && pending.privateKey !== undefined && nextSignerLock === undefined) throw new Error('Queued execution signer does not hold an exclusive process lock')
+	const previousSignerLock = parameters.activeSignerLock
+	pending.signerLock = undefined
+	config.privateKey = pending.privateKey
+	const wallet = parameters.createWallet()
+	fixedState.wallet = parameters.walletAddress(wallet)
+	fixedState.queuedWallet = undefined
+	clearWalletDerivedState(state)
+	pending.signerUpdate = false
+	if (previousSignerLock !== undefined && previousSignerLock !== nextSignerLock && lockManager !== undefined) await lockManager.release(previousSignerLock)
+	return { activeSignerLock: nextSignerLock, wallet }
+}

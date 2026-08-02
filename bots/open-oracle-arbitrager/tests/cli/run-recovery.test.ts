@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '#ethereum'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import {
+	createExecutionLockManager,
+	discoverPublicReplacementWithQuorum,
 	executionRecordForConfirmedPosition,
 	expireEntryWithQuorum,
 	finalizeLifecycleAfterFinalityWithQuorum,
@@ -11,6 +13,8 @@ import {
 	recoverPendingEntryWithQuorum,
 	recoverPendingLifecycleWithQuorum,
 	replacementCreditExecutionFromLogs,
+	persistSignerSettingsWithProvisionalLock,
+	processPositionLifecycle,
 } from '#cli/run'
 import { manuallyReconcilePosition, type PositionRecord } from '#state/position-store'
 
@@ -27,6 +31,55 @@ const recoveryConfiguration = {
 	quorumRpcUrls: ['https://secondary.example'],
 	submission: { mode: 'private' as const },
 }
+
+describe('execution lock lifecycle', () => {
+	test('keeps the historical lifecycle API available through the CLI facade', () => {
+		expect(typeof discoverPublicReplacementWithQuorum).toBe('function')
+		expect(typeof processPositionLifecycle).toBe('function')
+	})
+
+	test('reuses a signer lock whose first cleanup attempt fails', async () => {
+		const account = getAddress('0x0000000000000000000000000000000000000002')
+		let acquisitions = 0
+		let releases = 0
+		const lock = {
+			path: 'signer.lock',
+			release: async () => {
+				releases += 1
+				if (releases === 1) throw new Error('transient signer cleanup failure')
+			},
+		}
+		const manager = createExecutionLockManager(async () => {
+			acquisitions += 1
+			return lock
+		})
+		const provisional = await manager.acquireSigner(account)
+		let persisted = false
+		await expect(
+			persistSignerSettingsWithProvisionalLock(
+				async () => {
+					throw new Error('settings write failed')
+				},
+				provisional,
+				manager,
+			),
+		).rejects.toThrow('provisional lock could not be released')
+		expect(persisted).toBe(false)
+		const retained = await manager.acquireSigner(account)
+		expect(retained).toBe(provisional)
+		expect(acquisitions).toBe(1)
+		await persistSignerSettingsWithProvisionalLock(
+			async () => {
+				persisted = true
+			},
+			retained,
+			manager,
+		)
+		expect(persisted).toBe(true)
+		await manager.releaseAll()
+		expect(releases).toBe(2)
+	})
+})
 
 function missingReceiptClients(confirmedNonce?: bigint | undefined, headBlockNumbers: readonly bigint[] = [112n, 112n], finalityBlockHashes: readonly Hex[] = [`0x${'cc'.repeat(32)}`, `0x${'cc'.repeat(32)}`]) {
 	return ['primary', 'secondary'].map((_, index) => {

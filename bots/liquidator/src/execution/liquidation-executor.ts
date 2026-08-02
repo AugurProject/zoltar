@@ -1,4 +1,4 @@
-import { createPublicClient, decodeEventLog, encodeFunctionData, http, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, encodeFunctionData, http, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -7,6 +7,10 @@ import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, secu
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, requiredRepForAllowance, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
+import { validateReceiptExpectation } from '#execution/receipt-validation'
+import { finalizedReceiptWithQuorum } from '#execution/recovery'
+
+export { requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '#execution/receipt-validation'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 
@@ -125,11 +129,17 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		signMessage: account.signMessage,
 	})
 	const hash: Hex = signed.hash
-	const receipt = await wallet.waitForTransactionReceipt({
+	await wallet.waitForTransactionReceipt({
 		hash,
 		pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
 		timeout: 180_000,
 	})
+	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash)
+	const receipt = receiptResult.receipt
+	if (receipt === undefined) {
+		if (!receiptResult.observed) throw new Error(`${call.label} receipt disappeared before canonical finality`)
+		return hash
+	}
 	if (receipt.status !== 'success') {
 		throw new Error(`${call.label} reverted in transaction ${receipt.transactionHash}`)
 	}
@@ -306,46 +316,6 @@ async function depositRep(wallet: WriteClient, settings: OperatorSettings, state
 		},
 		'deposit',
 	)
-}
-
-export function requireSuccessfulStagedOperation(receipt: TransactionReceipt, coordinator: Address, operation: 0 | 1) {
-	for (const log of receipt.logs) {
-		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
-		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'ExecutedStagedOperation' || decoded.args.operation !== BigInt(operation)) continue
-			if (!decoded.args.success) {
-				throw new Error(`Staged operation failed: ${decoded.args.errorMessage}`)
-			}
-			return
-		} catch (error) {
-			if (error instanceof Error && error.message.startsWith('Staged operation failed:')) throw error
-		}
-	}
-	throw new Error('Coordinator receipt did not confirm the staged operation outcome')
-}
-
-export function requirePendingStagedOperation(receipt: TransactionReceipt, coordinator: Address, initiator: Address, target: Address, amount: bigint) {
-	for (const log of receipt.logs) {
-		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
-		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'StagedOperationQueued') continue
-			if (decoded.args.operation === 0n && decoded.args.initiatorVault.toLowerCase() === initiator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.amount === amount && decoded.args.isPendingSlot) return decoded.args.operationId
-		} catch (error) {
-			void error
-		}
-	}
-	throw new Error('Coordinator did not place the liquidation in a pending settlement slot')
-}
-
-export function validateReceiptExpectation(receipt: TransactionReceipt, expectation: PendingTransactionIntent['receiptExpectation']) {
-	if (expectation.type === 'transaction') return { queuedOperationId: undefined }
-	if (expectation.type === 'staged-success') {
-		requireSuccessfulStagedOperation(receipt, expectation.coordinator, expectation.operation)
-		return { queuedOperationId: undefined }
-	}
-	return { queuedOperationId: requirePendingStagedOperation(receipt, expectation.coordinator, expectation.initiator, expectation.target, expectation.amount) }
 }
 
 export function conservativeStaleTopUp(parameters: { callerAllowance: bigint; callerRep: bigint; debtToMove: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {

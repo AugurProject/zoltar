@@ -48,7 +48,7 @@
 	},
 	"submission": {
 		"mode": "public",
-		"minimumRelaySuccesses": 1,
+		"minimumBundleSimulations": 1,
 		"relayUrls": []
 	},
 	"runtime": {

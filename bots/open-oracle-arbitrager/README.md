@@ -222,16 +222,19 @@ docker run --rm \
 ```
 
 For the dashboard, set `runtime.once` to `false`, `runtime.ui` to `true`, and
-`runtime.uiHost` to `0.0.0.0`. Bind the published host port to loopback:
+`runtime.uiHost` to `0.0.0.0`. Set a password of at least 16 characters and bind
+the published host port to loopback:
 
 ```bash
 docker run --rm \
   --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state \
+  --env ZOLTAR_BOT_DASHBOARD_PASSWORD="$ZOLTAR_BOT_DASHBOARD_PASSWORD" \
   --publish 127.0.0.1:4173:4173 \
   zoltar-open-oracle-arbitrager
 ```
 
-Open `http://127.0.0.1:4173`. Do not publish the dashboard on a public interface:
+Open `http://127.0.0.1:4173` and authenticate as `operator` with that password.
+Do not publish the dashboard on a public interface:
 it controls signer and execution settings. Do not bake private keys, RPC
 credentials, or manifests containing private infrastructure into the image.
 Do not attach the bot to a Docker network shared with untrusted containers. Loopback
@@ -270,9 +273,10 @@ writing duplicate price samples.
 ### Data freshness and retention
 
 Startup lookback backfills OpenOracle events, but it does not backfill historical
-pool prices. The append-only price file can retain a sample from a block displaced
-by a reorg; the 12-block reconciliation applies only to report events. The dashboard
-loads and charts the latest 2,000 valid price records. Approved-coordinator report
+pool prices. The price file can retain a sample from a block displaced by a reorg;
+the 12-block reconciliation applies only to report events. The bot reads at most the
+latest 8 MiB, loads and charts the latest 2,000 valid price records, and atomically
+compacts the file to those records after it crosses 8 MiB. Approved-coordinator report
 paths are reconstructed in memory from the startup lookback plus events observed by
 the current process. Consequently a path can begin at a dispute when its submission
 predates the lookback, and a settlement-only report is not shown when no earlier
@@ -414,8 +418,10 @@ broadcast. Restarting the command is required to change between dry-run and
 execution.
 
 Private bundle delivery is the example default. Configure relay URLs and the
-successful simulation threshold under `submission`, either in the focused dashboard
-form or the complete JSON editor.
+successful simulation threshold under `submission.minimumBundleSimulations`, either
+in the focused dashboard form or the complete JSON editor. This threshold applies
+only to pre-submission bundle simulations. Transaction fan-out succeeds after one
+relay or public RPC accepts the canonical transaction hash.
 
 Execution supports **Private relays** and **Public mempool** delivery. Private mode
 requires at least one relay and supports up to eight. The configurable successful
@@ -656,7 +662,10 @@ The UI is local-only by default. A private key entered there is sent over HTTP t
 loopback endpoint, immediately cleared from the input, and never echoed by the API
 or written to logs or transaction history. In the documented Docker setup, the
 process listens on the container interface while Docker publishes it only on host
-loopback; keep that container network free of untrusted peers. The key is kept in memory unless
+loopback. Binding to `0.0.0.0` requires `ZOLTAR_BOT_DASHBOARD_PASSWORD`; authenticate
+as `operator` in the browser's HTTP Basic prompt. This protects access but does not
+encrypt traffic, so keep that container network free of untrusted peers or terminate
+TLS at an authenticated proxy. JSON API bodies are capped at 1 MiB. The key is kept in memory unless
 **Save this new key in plaintext for future restarts** is selected. That explicit
 choice stores the key in the owner-only operator settings file; protect the host,
 backups, and settings path as wallet credentials. **Forget saved key** atomically
@@ -664,9 +673,9 @@ removes only the restart credential while retaining the active in-memory signer.
 **Clear signer & saved key** removes both the active signer and any saved restart credential.
 The status names the active address and, when different, the address that a future
 restart will use. Setting a different memory-only key preserves an existing restart
-key until **Forget saved key** or **Clear signer & saved key** is used. Mutable API requests
-require same-origin JSON and the fixed loopback host authority. Do not reverse-proxy
-or expose the dashboard to a network without adding authentication and transport
+key until **Forget saved key** or **Clear signer & saved key** is used. Mutable API
+requests require authentication when network-bound, same-origin JSON, and the fixed
+loopback host authority. Do not expose the dashboard to a network without transport
 security.
 
 ## Persistent operator settings

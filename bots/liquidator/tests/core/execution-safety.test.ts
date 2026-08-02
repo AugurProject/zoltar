@@ -16,6 +16,7 @@ import {
 	validateReceiptExpectation,
 } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
+import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -92,6 +93,13 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 }
 
 describe('liquidator execution safety', () => {
+	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
+		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([
+			{ fromBlock: 5n, toBlock: 10_004n },
+			{ fromBlock: 10_005n, toBlock: 20_004n },
+			{ fromBlock: 20_005n, toBlock: 25_005n },
+		])
+	})
 	test('rechecks market consensus immediately before price-dependent submission', async () => {
 		await expect(assertMarketPriceStillAllowed(async () => true)).resolves.toBeUndefined()
 		await expect(assertMarketPriceStillAllowed(async () => false)).rejects.toThrow('Market consensus expired')

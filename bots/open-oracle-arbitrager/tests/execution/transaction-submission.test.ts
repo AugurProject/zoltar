@@ -32,13 +32,13 @@ function expectedBundleHash(transactions: readonly Hex[]) {
 describe('transaction submission settings', () => {
 	test('validates modes, normalizes relay URLs, and rejects unsafe endpoints', () => {
 		expect(validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.flashbots.net/'] })).toEqual({
-			minimumRelaySuccesses: 1,
+			minimumBundleSimulations: 1,
 			mode: 'private',
 			relayUrls: ['https://relay.flashbots.net/'],
 		})
-		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ minimumRelaySuccesses: 1, mode: 'public', relayUrls: [] })
-		expect(validateSubmissionSettings({ minimumRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example', 'https://two.example'] }).minimumRelaySuccesses).toBe(2)
-		expect(() => validateSubmissionSettings({ minimumRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example'] })).toThrow('successful relays')
+		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ minimumBundleSimulations: 1, mode: 'public', relayUrls: [] })
+		expect(validateSubmissionSettings({ minimumBundleSimulations: 2, mode: 'private', relayUrls: ['https://one.example', 'https://two.example'] }).minimumBundleSimulations).toBe(2)
+		expect(() => validateSubmissionSettings({ minimumBundleSimulations: 2, mode: 'private', relayUrls: ['https://one.example'] })).toThrow('Minimum bundle simulations')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: [] })).toThrow('at least one relay')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['http://relay.example'] })).toThrow('HTTPS')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://user:secret@relay.example'] })).toThrow('credentials')

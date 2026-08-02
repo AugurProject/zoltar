@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hex } from '#ethereum'
-import { CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, saveOperatorSettings, type OperatorSettingsFilesystem } from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type OperatorSettingsFilesystem } from '#config/settings-store'
 
 const temporaryDirectories: string[] = []
 const privateKey = `0x${'11'.repeat(32)}` as Hex
@@ -81,7 +81,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			twapSeconds: 2_400,
 		},
 		submission: {
-			minimumRelaySuccesses: 2,
+			minimumBundleSimulations: 1,
 			mode: 'private' as const,
 			relayUrls: ['https://relay.flashbots.net/', 'https://relay.example/'],
 		},
@@ -194,5 +194,17 @@ describe('operator settings persistence', () => {
 		expect(loadOperatorSettings(path)).rejects.toThrow('Unknown operator configuration field')
 		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), 'utf8')
 		expect(loadOperatorSettings(path)).rejects.toThrow('unsupported version')
+	})
+
+	test('rejects persistent runtime files that resolve to the same path', () => {
+		const value = settings(undefined)
+		expect(() =>
+			parseOperatorSettings(
+				serializeOperatorSettings({
+					...value,
+					runtime: { ...value.runtime, positionFile: '.state/shared.jsonl', priceHistoryFile: '.state/nested/../shared.jsonl' },
+				}),
+			),
+		).toThrow('must use distinct paths')
 	})
 })

@@ -1,4 +1,5 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
@@ -46,6 +47,14 @@ export type MarketPricePoint = {
 	token: Address
 	venue: string
 }
+
+type PriceHistoryLimits = {
+	maximumBytes?: number | undefined
+	maximumRecords?: number | undefined
+}
+
+const DEFAULT_PRICE_HISTORY_MAXIMUM_BYTES = 8 * 1024 * 1024
+const DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS = 2_000
 
 export async function availableTokenBalances(tokens: readonly Address[], readBalance: (token: Address) => Promise<bigint>) {
 	const entries = await Promise.all(
@@ -266,10 +275,71 @@ export function missingPricePoints(existing: readonly MarketPricePoint[], candid
 	return candidates.filter(point => !recorded.has(`${point.blockNumber}:${point.pool.toLowerCase()}`))
 }
 
-export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[]) {
+function priceHistoryLimits(options: PriceHistoryLimits | undefined) {
+	const maximumBytes = options?.maximumBytes ?? DEFAULT_PRICE_HISTORY_MAXIMUM_BYTES
+	const maximumRecords = options?.maximumRecords ?? DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS
+	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new Error('Price history maximumBytes must be a positive integer')
+	if (!Number.isSafeInteger(maximumRecords) || maximumRecords < 1) throw new Error('Price history maximumRecords must be a positive integer')
+	return { maximumBytes, maximumRecords }
+}
+
+async function readPriceHistoryTail(path: string, maximumBytes: number) {
+	const handle = await open(path, 'r')
+	try {
+		const file = await handle.stat()
+		const start = Math.max(0, file.size - maximumBytes)
+		const buffer = Buffer.alloc(file.size - start)
+		let offset = 0
+		while (offset < buffer.length) {
+			const read = await handle.read(buffer, offset, buffer.length - offset, start + offset)
+			if (read.bytesRead === 0) break
+			offset += read.bytesRead
+		}
+		const bytes = buffer.subarray(0, offset)
+		const firstNewline = bytes.indexOf(0x0a)
+		const complete = start === 0 ? bytes : firstNewline === -1 ? Buffer.alloc(0) : bytes.subarray(firstNewline + 1)
+		return complete.toString('utf8')
+	} finally {
+		await handle.close()
+	}
+}
+
+async function replacePriceHistory(path: string, points: readonly MarketPricePoint[]) {
+	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
+	try {
+		const handle = await open(temporaryPath, 'wx', 0o600)
+		try {
+			await handle.writeFile(`${points.map(point => JSON.stringify(point)).join('\n')}\n`, { encoding: 'utf8' })
+			await handle.sync()
+		} finally {
+			await handle.close()
+		}
+		await rename(temporaryPath, path)
+		const directoryHandle = await open(dirname(path), 'r')
+		try {
+			await directoryHandle.sync()
+		} finally {
+			await directoryHandle.close()
+		}
+	} catch (error) {
+		await rm(temporaryPath, { force: true })
+		throw error
+	}
+}
+
+export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], options?: PriceHistoryLimits) {
 	if (points.length === 0) return
-	await mkdir(dirname(path), { recursive: true })
-	await appendFile(path, `${points.map(point => JSON.stringify(point)).join('\n')}\n`, 'utf8')
+	const limits = priceHistoryLimits(options)
+	await mkdir(dirname(path), { mode: 0o700, recursive: true })
+	await appendFile(path, `${points.map(point => JSON.stringify(point)).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+	const handle = await open(path, 'r')
+	let size: number
+	try {
+		size = (await handle.stat()).size
+	} finally {
+		await handle.close()
+	}
+	if (size > limits.maximumBytes) await replacePriceHistory(path, await loadPriceHistory(path, limits.maximumRecords, limits))
 }
 
 function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
@@ -312,9 +382,10 @@ function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
 	}
 }
 
-export async function loadPriceHistory(path: string, maximum = 2_000) {
+export async function loadPriceHistory(path: string, maximum = DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS, options?: PriceHistoryLimits) {
+	if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Price history maximum must be a positive integer')
 	try {
-		const contents = await readFile(path, 'utf8')
+		const contents = await readPriceHistoryTail(path, priceHistoryLimits(options).maximumBytes)
 		const points: MarketPricePoint[] = []
 		for (const [index, line] of contents.split('\n').entries()) {
 			if (line.trim().length === 0) continue

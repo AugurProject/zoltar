@@ -73,7 +73,7 @@
 		"twapSeconds": 1800
 	},
 	"submission": {
-		"minimumRelaySuccesses": 1,
+		"minimumBundleSimulations": 1,
 		"mode": "private",
 		"relayUrls": ["https://relay.flashbots.net"]
 	},

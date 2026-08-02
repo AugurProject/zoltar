@@ -78,7 +78,7 @@ function settings(approvedUniverses = ['101']) {
 			walletRepReserve: '100',
 		},
 		submission: {
-			minimumRelaySuccesses: 1,
+			minimumBundleSimulations: 1,
 			mode: 'public',
 			relayUrls: [],
 		},

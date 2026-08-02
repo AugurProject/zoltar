@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '#ethereum'
@@ -132,6 +132,24 @@ test('loads valid price history around truncated and structurally invalid record
 	}
 	await writeFile(path, `${JSON.stringify(valid)}\n{"blockNumber":"124"\n${JSON.stringify({ ...valid, blockNumber: -1 })}\n${JSON.stringify(valid)}\n`, 'utf8')
 	expect(await loadPriceHistory(path)).toEqual([valid, valid])
+})
+
+test('compacts price history after it crosses the storage bound', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
+	temporaryDirectories.push(directory)
+	const path = join(directory, 'prices.jsonl')
+	const template = {
+		pool: '0x0000000000000000000000000000000000000002' as Address,
+		priceWeth: '0.0042',
+		sampledAt: '2026-07-25T00:00:00.000Z',
+		symbol: 'REPv2',
+		token: '0x0000000000000000000000000000000000000001' as Address,
+		venue: 'Uniswap V3 0.3%',
+	}
+	const points = Array.from({ length: 5 }, (_, index) => ({ ...template, blockNumber: index.toString() }))
+	await appendPriceHistory(path, points, { maximumBytes: 600, maximumRecords: 2 })
+	expect(await loadPriceHistory(path, 10)).toEqual(points.slice(-2))
+	expect((await readFile(path, 'utf8')).trim().split('\n')).toHaveLength(2)
 })
 
 test('records every priced venue at a new head and excludes pools without a usable spot price', () => {

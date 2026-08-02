@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '#ethereum'
 import { validateConnectivitySettings, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
@@ -158,14 +158,19 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const maxHedgeSlippageBps = nonnegativeBigInt(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps')
 	if (maxHedgeSlippageBps > 1_000n) throw new Error('Runtime maxHedgeSlippageBps must be from 0 to 1000')
 	if (runtime['once'] && runtime['ui']) throw new Error('Runtime once and ui cannot both be enabled')
+	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
+	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
+	const priceHistoryFile = filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile')
+	const persistentPaths = [historyFile, positionFile, priceHistoryFile].map(path => resolve(path))
+	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error('Runtime historyFile, positionFile, and priceHistoryFile must use distinct paths')
 	return {
 		execute: runtime['execute'],
-		historyFile: filePath(runtime['historyFile'], 'Runtime historyFile'),
+		historyFile,
 		lookbackBlocks: nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks'),
 		maxHedgeSlippageBps,
 		once: runtime['once'],
-		positionFile: filePath(runtime['positionFile'], 'Runtime positionFile'),
-		priceHistoryFile: filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile'),
+		positionFile,
+		priceHistoryFile,
 		riskLimits: {
 			lifecycleGasReserveWeth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
 			maxConcurrentPositions: integer(risk['maxConcurrentPositions'], 'Runtime maxConcurrentPositions', 1, 1_000),
@@ -199,19 +204,21 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const candidate = signerCandidate(privateKeyValue ?? null)
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const deployment = validateDeploymentSettings(record['deployment'])
+	const connectivity = validateConnectivitySettings(record['connectivity'])
+	const submission = validateSubmissionSettings(record['submission'])
 	const chainId = record['network'] === 'mainnet' ? 1 : 11_155_111
 	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
 	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
 	return {
 		centralizedMarkets,
-		connectivity: validateConnectivitySettings(record['connectivity']),
+		connectivity,
 		deployment,
 		network: record['network'],
 		paused: record['paused'],
 		privateKey: candidate.privateKey,
 		runtime: validateRuntimeSettings(record['runtime']),
 		strategy,
-		submission: validateSubmissionSettings(record['submission']),
+		submission,
 		tokenAddresses: record['tokenAddresses'].map(address => getAddress(String(address))),
 	}
 }

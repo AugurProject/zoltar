@@ -1,28 +1,29 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseTransaction, privateKeyToAccount, readContractAtBlock, type Account, type Chain, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
-import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type DesiredPoolSettings, type OperatorSettings } from '#config/settings'
+import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { stagedOperationOutcome } from '#core/staged-outcome'
-import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState, type PoolObservation } from '#state/operator-state'
-import { evaluateCandidate, liquidationExecutionAllowed, sortCandidates } from '#core/strategy'
-import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
+import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
+import { PRIVATE_INTENT_FINALITY_BLOCKS, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { acquireLiquidatorProcessLocks, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks } from '#core/process-locks'
+import { createSettingsUpdateQueue } from '#core/settings-update-queue'
+import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
-import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketObservationsForAsset, requireCanonicalBlock, requireCanonicalDexEvidence } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { securityPoolFactoryAbi } from '#contracts/abi'
+import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
+import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
+import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
 
 const constantProductPairAbi = [
 	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
@@ -34,247 +35,11 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
-function chainFor(settings: OperatorSettings) {
-	return defineChain({
-		id: settings.network.chainId,
-		name: settings.network.name,
-		nativeCurrency: {
-			decimals: 18,
-			name: 'Ether',
-			symbol: 'ETH',
-		},
-		rpcUrls: {
-			default: {
-				http: [settings.connectivity.readRpcUrl],
-			},
-		},
-	})
-}
-
-async function canonicalBlockHash(settings: OperatorSettings, blockNumber: bigint) {
-	const currentChain = chainFor(settings)
-	const observations = await Promise.all(
-		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const block = await createPublicClient({ chain: currentChain, transport: http(endpoint) }).getBlock({ blockNumber })
-			if (block.hash === undefined) throw new Error('Canonical block is missing its hash')
-			return { endpoint, value: block.hash }
-		}),
-	)
-	return quorumValue('market evidence canonical block', observations)
-}
-
-async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings) {
-	const currentChain = chainFor(settings)
-	const observations = await Promise.all(
-		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const client = createPublicClient({ chain: currentChain, transport: http(endpoint) })
-			const originId = await client.readContract({
-				abi: securityPoolFactoryAbi,
-				address: settings.deployment.securityPoolFactory,
-				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeWeiPerGas],
-				functionName: 'getOriginId',
-			})
-			return {
-				endpoint,
-				value: getAddress(
-					await client.readContract({
-						abi: securityPoolFactoryAbi,
-						address: settings.deployment.securityPoolFactory,
-						args: [originId, desired.universeId],
-						functionName: 'getSecurityPool',
-					}),
-				),
-			}
-		}),
-	)
-	const address = quorumValue('desired origin security pool', observations)
-	return { address, desired }
-}
-
-function selectedCandidate(pools: readonly PoolObservation[], settings: OperatorSettings) {
-	const candidates = pools.flatMap(pool => pool.candidates)
-	const candidate = sortCandidates(candidates, settings.strategy.candidatePriority)[0]
-	if (candidate === undefined) return undefined
-	const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
-	if (pool === undefined) throw new Error('Selected candidate pool disappeared from the scan')
-	return { candidate, pool }
-}
-
-function marketConfigurations(settings: OperatorSettings) {
-	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]
-}
-
-function marketConfigurationForPool(pool: PoolObservation, settings: OperatorSettings) {
-	return marketConfigurations(settings).find(configuration => configuration.assetAddress.toLowerCase() === pool.repToken.toLowerCase())
-}
-
-function marketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>) {
-	const configuration = marketConfigurationForPool(pool, settings)
-	if (configuration === undefined || !centralizedMarketConfigurationAllowsExecution(configuration)) return false
-	const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase())
-	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
-	if (configuration.venueConsensus === undefined) return configuration.requiredForExecution ? false : centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, configuration, pool.repToken)
-	return marketConsensusAllowsExecution(
-		pool.lastPrice,
-		marketConsensus,
-		{
-			maximumDeviationBps: configuration.maximumDexDeviationBps,
-			maximumObservationAgeMilliseconds: configuration.maximumObservationAgeMilliseconds,
-			requiredForExecution: configuration.requiredForExecution,
-		},
-		pool.repToken,
-		settings.network.chainId,
-	)
-}
-
-async function canonicalMarketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {
-	if (!marketPriceAllowsExecution(pool, settings, state)) return false
-	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
-	try {
-		await requireCanonicalDexEvidence(marketConsensus, readCanonicalHash)
-		return true
-	} catch (error) {
-		void error
-		state.marketObservations = discardDexMarketObservations(state.marketObservations)
-		state.marketConsensus = undefined
-		state.marketConsensusByAsset.clear()
-		return false
-	}
-}
-
-async function recoverPendingTransactions(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>) {
-	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-	for (const intent of [...state.pendingTransactions]) {
-		assertIntentSender(intent.sender, wallet.account.address)
-		if (parseTransaction(intent.serializedTransaction).chainId !== BigInt(settings.network.chainId)) {
-			throw new Error(`Pending transaction ${intent.hash} was signed for a different chain`)
-		}
-		const clients = endpoints.map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: http(endpoint) }), endpoint }))
-		const receiptResults = await Promise.all(
-			clients.map(async ({ client, endpoint }) => {
-				try {
-					const receipt = await client.getTransactionReceipt({ hash: intent.hash })
-					return {
-						endpoint,
-						receipt,
-						value: {
-							hash: receipt.transactionHash,
-							logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
-							status: receipt.status,
-						},
-					}
-				} catch (error) {
-					if (error instanceof Error && error.message.includes('could not be found')) return { endpoint, receipt: undefined, value: undefined }
-					throw error
-				}
-			}),
-		)
-		const receiptEvidence = quorumValue(
-			`receipt ${intent.hash}`,
-			receiptResults.map(({ endpoint, value }) => ({ endpoint, value })),
-		)
-		if (receiptEvidence !== undefined) {
-			const receipt = receiptResults.find(result => result.receipt !== undefined && result.receipt.transactionHash.toLowerCase() === receiptEvidence.hash.toLowerCase())?.receipt
-			if (receipt === undefined) throw new Error(`Quorum receipt ${intent.hash} was not available for semantic validation`)
-			const receiptOutcome = receipt.status === 'success' ? validateReceiptExpectation(receipt, intent.receiptExpectation) : { queuedOperationId: undefined }
-			if (receiptOutcome.queuedOperationId !== undefined && intent.receiptExpectation.type === 'pending-liquidation') {
-				state.pendingStagedOperations.push({
-					coordinator: intent.receiptExpectation.coordinator,
-					operationId: receiptOutcome.queuedOperationId,
-					queuedBlock: receipt.blockNumber,
-					target: intent.receiptExpectation.target,
-				})
-			}
-			resolveRecoveredIntentJournal(state, intent.hash, receiptEvidence.status)
-			recordActivity(state, {
-				hash: intent.hash,
-				kind: intent.kind,
-				message: receiptEvidence.status === 'success' ? `Recovered confirmation: ${intent.label}` : `Recovered revert: ${intent.label}`,
-				status: receiptEvidence.status === 'success' ? 'confirmed' : 'failed',
-			})
-			await saveDurableState(settings.runtime.stateFile, state)
-			requireRecoveredTransactionSuccess(receiptEvidence.status, intent.hash)
-			continue
-		}
-		const nonce = quorumValue(`pending signer nonce for ${intent.hash}`, await Promise.all(clients.map(async ({ client, endpoint }) => ({ endpoint, value: await client.getTransactionCount({ address: intent.sender, blockTag: 'pending' }) }))))
-		if (nonce > intent.nonce) {
-			throw new Error(`Transaction ${intent.hash} has no receipt but signer nonce ${intent.nonce.toString()} was consumed; manual reconciliation is required`)
-		}
-		const blocks = await Promise.all(clients.map(async ({ client }) => await client.getBlockNumber()))
-		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
-		if (recoveryAction === 'expire-private') {
-			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS)
-			state.pendingTransactions = state.pendingTransactions.filter(value => value.hash.toLowerCase() !== intent.hash.toLowerCase())
-			recordActivity(state, { hash: intent.hash, kind: intent.kind, message: `Private price-dependent intent expired after canonical finality without inclusion: ${intent.label}`, status: 'failed' })
-			await saveDurableState(settings.runtime.stateFile, state)
-			continue
-		}
-		if (recoveryAction === 'retain') {
-			const recovery = intent.mode === 'public' ? 'manual reconciliation or a later receipt is required' : `private validity and ${PRIVATE_INTENT_FINALITY_BLOCKS.toString()} canonical confirmation blocks must pass`
-			throw new Error(`Price-dependent transaction ${intent.hash} remains ambiguous; ${recovery}`)
-		}
-		if (!recoveredIntentCanBeResubmitted(intent)) throw new Error(`Price-dependent transaction ${intent.hash} cannot be resubmitted without fresh market evidence`)
-		if (wallet.account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
-		await submitSignedTransaction({
-			address: intent.sender,
-			hash: intent.hash,
-			maxBlockNumber: intent.maxBlockNumber,
-			publicRpcUrls: settings.connectivity.publicRpcUrls,
-			publicSubmit: sendRawTransactionToRpc,
-			serializedTransaction: intent.serializedTransaction,
-			settings: settings.submission,
-			signMessage: wallet.account.signMessage,
-		})
-		return true
-	}
-	return false
-}
-
-async function reconcilePendingStagedOperations(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>) {
-	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-	const clients = endpoints.map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: http(endpoint) }), endpoint }))
-	for (const pending of [...state.pendingStagedOperations]) {
-		const heads = await Promise.all(clients.map(async ({ client }) => await client.getBlockNumber()))
-		const toBlock = heads.reduce((minimum, head) => (head < minimum ? head : minimum))
-		const observations = await Promise.all(
-			clients.map(async ({ client, endpoint }) => {
-				const logs = await client.getLogs({ address: pending.coordinator, fromBlock: pending.queuedBlock, toBlock })
-				return {
-					endpoint,
-					value: logs.flatMap(log => {
-						const outcome = stagedOperationOutcome(log, pending.operationId)
-						return outcome === undefined ? [] : [{ ...outcome, blockHash: log.blockHash, blockNumber: log.blockNumber, transactionHash: log.transactionHash }]
-					}),
-				}
-			}),
-		)
-		const outcomes = quorumValue(`staged operation ${pending.operationId.toString()}`, observations)
-		if (outcomes.length === 0) continue
-		const outcome = outcomes[0]
-		if (outcome === undefined || outcomes.length !== 1 || outcome.operation !== 0n || outcome.operationId !== pending.operationId || typeof outcome.success !== 'boolean' || typeof outcome.errorMessage !== 'string') {
-			throw new Error(`Coordinator returned an invalid outcome for staged operation ${pending.operationId.toString()}`)
-		}
-		state.pendingStagedOperations = state.pendingStagedOperations.filter(operation => operation.coordinator.toLowerCase() !== pending.coordinator.toLowerCase() || operation.operationId !== pending.operationId)
-		recordActivity(state, {
-			details: `coordinator=${pending.coordinator} operation=${pending.operationId.toString()} target=${pending.target}`,
-			kind: 'liquidation',
-			message: outcome.success ? 'Staged liquidation settled successfully' : `Staged liquidation failed: ${outcome.errorMessage}`,
-			status: outcome.success ? 'confirmed' : 'failed',
-		})
-		await saveDurableState(settings.runtime.stateFile, state)
-		if (!outcome.success) throw new Error(`Staged liquidation ${pending.operationId.toString()} failed: ${outcome.errorMessage}`)
-	}
-}
-
-async function main() {
-	if (process.argv.length > 2) {
-		throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
-	}
-	let loaded = await loadSettings()
+async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks) {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
-	let settingsQueue = Promise.resolve()
+	const queueSettingsUpdate = createSettingsUpdateQueue()
 	const chain = chainFor(settings)
 	let client = createPublicClient({
 		chain,
@@ -295,14 +60,11 @@ async function main() {
 	state.pendingStagedOperations = durable.pendingStagedOperations
 	state.pendingTransactions = durable.pendingTransactions
 	const persistSettings = async (update: (current: OperatorSettings) => OperatorSettings) => {
-		let result: Promise<void> = Promise.resolve()
-		settingsQueue = settingsQueue.then(async () => {
+		await queueSettingsUpdate(async () => {
 			const next = update(settings)
 			settingsRevision = await saveSettings(loaded.path, next, settingsRevision)
 			settings = next
 		})
-		result = settingsQueue
-		await result
 	}
 	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
@@ -320,6 +82,7 @@ async function main() {
 				getConfiguration: () => serializedSettings(settings, true),
 				getState: () => operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)),
 				hostname: settings.runtime.uiHost,
+				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 				reconcileTransaction: value =>
 					configurationMutationGate.run(async () => {
 						if (!state.paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -515,23 +278,34 @@ async function main() {
 							throw new Error('Signer request requires privateKey and rememberSigner')
 						}
 						const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
-						await commitSignerMutation(
-							candidate,
-							rememberSigner,
-							async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
-							signer => {
-								activePrivateKey = signer.privateKey
-								wallet =
-									activePrivateKey === undefined
-										? undefined
-										: createWalletClient({
-												account: privateKeyToAccount(activePrivateKey),
-												chain,
-												transport: http(settings.connectivity.readRpcUrl),
-											})
-								state.wallet = wallet?.account.address
-							},
-						)
+						const nextSignerLock = await processLocks.acquireSigner(candidate.address)
+						try {
+							await commitSignerMutation(
+								candidate,
+								rememberSigner,
+								async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
+								signer => {
+									activePrivateKey = signer.privateKey
+									wallet =
+										activePrivateKey === undefined
+											? undefined
+											: createWalletClient({
+													account: privateKeyToAccount(activePrivateKey),
+													chain,
+													transport: http(settings.connectivity.readRpcUrl),
+												})
+									state.wallet = wallet?.account.address
+								},
+							)
+						} catch (error) {
+							try {
+								await processLocks.discardSigner(candidate.address, nextSignerLock)
+							} catch (cleanupError) {
+								throw new AggregateError([error, cleanupError], 'Signer update failed and its provisional lock could not be released')
+							}
+							throw error
+						}
+						await processLocks.commitSigner(candidate.address, nextSignerLock)
 						recordActivity(state, {
 							kind: 'configuration',
 							message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
@@ -555,16 +329,21 @@ async function main() {
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
-	const actualChainId = await client.getChainId()
-	if (actualChainId !== settings.network.chainId) {
-		throw new Error(`Read RPC chain ${actualChainId.toString()} does not match configured chain ${settings.network.chainId.toString()}`)
-	}
-	await checkConnectivity(settings.connectivity, settings.network.chainId)
-	for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
-		const chainId = await readRpcChainId(rpcUrl)
-		if (chainId !== settings.network.chainId) {
-			throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+	try {
+		const actualChainId = await client.getChainId()
+		if (actualChainId !== settings.network.chainId) {
+			throw new Error(`Read RPC chain ${actualChainId.toString()} does not match configured chain ${settings.network.chainId.toString()}`)
 		}
+		await checkConnectivity(settings.connectivity, settings.network.chainId)
+		for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
+			const chainId = await readRpcChainId(rpcUrl)
+			if (chainId !== settings.network.chainId) {
+				throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+			}
+		}
+	} catch (error) {
+		dashboard?.stop()
+		throw error
 	}
 	recordActivity(state, {
 		details: `chain=${settings.network.chainId.toString()} factory=${settings.deployment.securityPoolFactory}`,
@@ -772,11 +551,37 @@ async function main() {
 		() => new Promise(resolve => setTimeout(resolve, settings.runtime.pollMilliseconds)),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
-	)
-	dashboard?.stop()
+	).finally(() => dashboard?.stop())
 }
 
-main().catch(error => {
-	console.error(errorMessage(error))
-	process.exitCode = 1
-})
+async function main() {
+	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
+	const loaded = await loadSettings()
+	let locks: LiquidatorProcessLocks
+	try {
+		locks = await acquireLiquidatorProcessLocks({
+			chainId: loaded.settings.network.chainId,
+			execute: loaded.settings.runtime.execute,
+			privateKey: loaded.settings.privateKey,
+			stateFile: loaded.settings.runtime.stateFile,
+		})
+	} catch (error) {
+		if (error instanceof LiquidatorProcessLockAcquisitionError) {
+			await error.releaseProcessLocks()
+			throw error.acquisitionCause
+		}
+		throw error
+	}
+	try {
+		await runOperator(loaded, locks)
+	} finally {
+		await locks.release()
+	}
+}
+
+if (import.meta.main) {
+	main().catch(error => {
+		console.error(errorMessage(error))
+		process.exitCode = 1
+	})
+}
