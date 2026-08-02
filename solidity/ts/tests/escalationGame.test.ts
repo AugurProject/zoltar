@@ -2731,7 +2731,11 @@ describe('Escalation Game Test Suite', () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, source.escalationGameAddress, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'initial payout bundle count'), 8n, 'initialization should import only one bounded batch')
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'initial payout bundle count'), 0n, 'initialization should freeze metadata without adding variable import work')
+
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'first payout bundle count'), 8n, 'the first permissionless progress call should import only one bounded batch')
+		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] }), 0n, 'the continuation must remain paused while another checkpoint batch remains')
 
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'final payout bundle count'), 9n, 'the next bounded call should complete the consolidated checkpoint')

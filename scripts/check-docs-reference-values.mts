@@ -137,7 +137,7 @@ function assertBoundedClaimRegistryDocs(): void {
 	assert.match(escalationGameTypes, /MAX_CLAIM_OWNERS_PER_BUNDLE = 8;/)
 	assert.match(escalationGameTypes, /MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;/)
 	assert.match(html, /at most 64 bundle identities per vault/)
-	assert.match(html, /permissionless batches of at most eight bundles/)
+	assert.match(html, /permissionless pool calls copy at most eight bundles each/)
 	assert.match(html, /Liquidation then scans only the current game's fixed registries/)
 	assert.match(html, /an acquired claim is not overwritten when its owner later creates a local claim/)
 	assert.match(html, /an owner whose shares went to zero is re-enumerated if a later liquidation returns shares/)
@@ -378,10 +378,11 @@ function assertEventStreamSemantics(): void {
 		'Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei`',
 		'Redemption `ethAmount` fields are the net wei paid',
 		'`ethUsed + ethRefund = originalEthAmount`',
-		'preserve an immutable copy of only the current proof/carry roots, counts, peaks, and leaves under `escalationSnapshotId`',
-		'liquidation processes the current game and at most seven immediate-source ancestors, applying `EscalationClaimMoved` to all eight registries without altering the immutable proof snapshot',
-		'select that historical carry version by `snapshotId`',
-		'clone the frozen peaks and leaves into the child',
+		'preserve the proof/carry roots, counts, peaks, and leaves under `escalationSnapshotId`',
+		'Payout ownership uses a separate consolidated checkpoint',
+		'clone the frozen source registry in batches of at most eight bundle keys',
+		'do not accept `ForkContinuationResumed` until `endIndex == sourceBundleCount`',
+		'liquidation and settlement read only that child and never walk fork ancestry',
 		'`InheritedThresholdTie(sourceGame indexed)`',
 		'accept it only after a `ForkCarryCheckpoint` from the same child emitter',
 		"require its indexed `sourceGame` to equal that checkpoint's source",
@@ -548,7 +549,9 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.match(priceCoordinator, /currentTargetOwnership != stagedOperation\.snapshotTargetOwnership[\s\S]*currentTargetAllowance != stagedOperation\.snapshotTargetAllowance/)
 	assert.match(normalizedInvariants, /protected ownership or allowance changed after staging, in either direction/)
 	assert.match(normalizedInvariants, /OpenOraclePriceCoordinator\.sol"\s*><code>executeStagedOperation<\/code>/)
-	assert.match(normalizedInvariants, /rescue deposit therefore invalidates the old quote/)
+	assert.match(normalizedInvariants, /Target-assigned rescue collateral therefore invalidates the old quote/)
+	assert.match(normalizedInvariants, /unsolicited pool-wide REP transfer cannot purchase a one-unit liquidation veto/)
+	assert.match(normalizedInvariants, /sufficiently large pool donation may still restore live health/)
 
 	for (const documentedClaim of [
 		'data-source="f = debtMoved / targetAllowance"',
@@ -747,7 +750,7 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(
 		whitepaperStatoblast.replaceAll(/\s+/g, ' '),
-		/Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate backing with payout ownership tracked through a bounded source-game chain, without per-vault child health credit; the <a href="\.\.\/protocol-design\/liquidation\.html">liquidation design<\/a> gives the full accounting rationale\./,
+		/Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate backing with payout ownership copied into the current game's consolidated checkpoint, without per-vault child health credit; the <a href="\.\.\/protocol-design\/liquidation\.html">liquidation design<\/a> gives the full accounting rationale\./,
 	)
 	assert.match(liquidationHtml, /data-source="allowance = 0 or value\(freeRep\) > allowance \* migrationSecurityMultiplier"/)
 	assert.match(securityPoolUtils, /if \(securityBondAllowance == 0\) return true/)
@@ -867,7 +870,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(startTruthAuctionRow, /ForkContinuationResumed/)
 	assert.match(finalizeTruthAuctionRow, /TruthAuctionHaircutApplied[\s\S]*ForkContinuationResumed/)
 	assert.doesNotMatch(whitepaperStatoblast, /pays the authenticated\s+depositor/)
-	assert.match(whitepaperStatoblast, /winning carry proof authenticates the original deposit[\s\S]*bounded current owners[\s\S]*exact registry that created the claim/)
+	assert.match(whitepaperStatoblast, /winning carry proof authenticates the original deposit[\s\S]*bounded current owners[\s\S]*current consolidated checkpoint/)
 	assert.doesNotMatch(docsReader, /Punitive REP seizure/)
 	assert.doesNotMatch(whitepaperStatoblast, /Liquidation penalty math/)
 	assert.match(drainAllRepRow, /Owning `SecurityPool` only[\s\S]*A zero balance returns zero without a transfer or event[\s\S]*no event at zero balance/)

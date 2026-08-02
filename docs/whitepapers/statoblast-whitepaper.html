@@ -396,7 +396,7 @@
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Condition</span>
-							Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate backing with payout ownership tracked through a bounded source-game chain, without per-vault child health credit; the <a href="../protocol-design/liquidation.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only free REP and is strict for positive allowances, so equality is unsafe; zero allowance is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.
+							Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate backing with payout ownership copied into the current game's consolidated checkpoint, without per-vault child health credit; the <a href="../protocol-design/liquidation.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only free REP and is strict for positive allowances, so equality is unsafe; zero allowance is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.
 						</p>
 						</div>
 						<p>
@@ -1772,9 +1772,7 @@
 						It also receives the applicable aggregate backing once: complete game REP
 						for an unrelated fork, or post-haircut game REP when the escalation paid
 						for its own fork. A
-						winning carry proof authenticates the original deposit, while payout follows the bounded current owners in the <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">exact registry that created the claim</a>. Only a legacy source without an ownership registry falls back to the original depositor. The child resumes when its pool becomes operational; it does not
-						wait for vault migration or cleanup calls, but its aggregate funding gate
-						must pass.
+						winning carry proof authenticates the original deposit, while payout follows the bounded current owners in the <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">current consolidated checkpoint</a>. The child can resume after its pool becomes operational and permissionless bounded calls finish copying that checkpoint; it does not wait for vault migration or cleanup calls, but both checkpoint completeness and aggregate funding must pass.
 					</div>
 					<p>
 						During vault migration, the forker also ensures the child pool is
@@ -2089,8 +2087,7 @@
 						<code>SecurityPool.depositToEscalationGame</code> rejects new live
 						child deposits through the
 						<code>awaitingForkContinuation</code> guard.
-						Operational activation clears that guard without waiting for parent-vault
-						transactions. Before the remaining clock can start,
+						Operational activation permits anyone to advance the frozen payout-owner checkpoint in batches of at most eight keys without waiting for parent-vault transactions. The wait guard clears only after the copy completes. Deferring that work keeps child deployment, vault migration, and auction finalization below predictable gas ceilings even when many claims exist. Before the remaining clock can start,
 						<code>resumeFromFork</code> verifies aggregate REP funding. An unrelated
 						fork must cover effective unresolved principal one-to-one. When the
 						escalation's own fork already paid the winner haircut through Zoltar, its
@@ -2126,9 +2123,7 @@
 						</li>
 						<li>
 							After the migration window and any required truth auction, the
-							child pool becomes operational, clears the wait marker, and
-							resumes the paused continuation game only after its aggregate REP
-							funding check passes.
+							child pool becomes operational. Permissionless bounded calls copy the payout-owner checkpoint, then clear the wait marker and resume the paused continuation game only after its aggregate REP funding check passes.
 						</li>
 					</ol>
 					<p>
@@ -2218,7 +2213,7 @@
 						the proof commitment even if separate parent cleanup occurs.
 					</p>
 					<p>
-						Payout ownership does not form another ancestry chain. Each continuation copies its source game's already-consolidated owner checkpoint in permissionless batches of at most eight bundle keys and remains paused until the copy is complete. Liquidation and payout then inspect only the current game, with at most 64 keys per vault and eight owners per claim. This separates proof history, which can grow offchain, from mandatory onchain liquidation work, which must stay bounded regardless of recursive-fork depth. It also removes a strategic fork-depth attack: creating another fork can never consume a final ancestry slot and disable liquidation. A cumulative normalized binary mantissa and exponent record all auction haircuts, so a carried proof applies one ratio between its creating game and the current game instead of walking every intermediate fork. Renormalization prevents the checkpoint itself from underflowing after many forks; only an economically sub-atomic payout may floor to zero.
+						Payout ownership does not form another ancestry chain. Child initialization freezes only the source and retention metadata; permissionless follow-up calls copy the source game's already-consolidated owner checkpoint in batches of at most eight bundle keys, and the continuation remains paused until the copy is complete. Import is separate because recursive child deployment and migration are already expensive, and attaching attacker-influenced portfolio work to them would recreate a block-gas liveness boundary. Liquidation and payout then inspect only the current game, with at most 64 keys per vault and eight owners per claim. This separates proof history, which can grow offchain, from mandatory onchain liquidation work, which must stay bounded regardless of recursive-fork depth. It also removes a strategic fork-depth attack: creating another fork can never consume a final ancestry slot and disable liquidation. A cumulative normalized binary mantissa and exponent record all auction haircuts, so a carried proof applies one ratio between its creating game and the current game instead of walking every intermediate fork. Renormalization prevents the checkpoint itself from underflowing after many forks; only an economically sub-atomic payout may floor to zero.
 					</p>
 					<p>
 						A carried proof's source principal authenticates the leaf and decrements

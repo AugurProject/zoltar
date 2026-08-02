@@ -614,6 +614,13 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 snapshotTotalRep,
 		uint256 snapshotDenominator
 	) external isOperational onlyValidOracle {
+		// The coordinator still commits these queue-time values for its distance
+		// check. Pool execution intentionally uses the live rate so an unsolicited
+		// ERC-20 transfer cannot cancel liquidation.
+		assembly ('memory-safe') {
+			pop(snapshotTotalRep)
+			pop(snapshotDenominator)
+		}
 		require(!isEscalationResolved(), 'Resolved');
 		_trackVault(callerVault);
 		updateVaultFees(targetVaultAddress);
@@ -632,10 +639,8 @@ contract SecurityPool is SecurityPoolStorage {
 			mstore(add(pointer, 0x44), debtAmount)
 			mstore(add(pointer, 0x64), snapshotTargetOwnership)
 			mstore(add(pointer, 0x84), snapshotTargetAllowance)
-			mstore(add(pointer, 0xa4), snapshotTotalRep)
-			mstore(add(pointer, 0xc4), snapshotDenominator)
-			mstore(add(pointer, 0xe4), repEthPrice)
-			if iszero(delegatecall(gas(), delegate, pointer, 0x104, pointer, 0x40)) {
+			mstore(add(pointer, 0xa4), repEthPrice)
+			if iszero(delegatecall(gas(), delegate, pointer, 0xc4, pointer, 0x40)) {
 				returndatacopy(pointer, 0, returndatasize())
 				revert(pointer, returndatasize())
 			}

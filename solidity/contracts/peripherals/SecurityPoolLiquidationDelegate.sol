@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { IERC20 } from '../IERC20.sol';
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
@@ -25,8 +24,6 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		uint256 debtAmount,
 		uint256 snapshotTargetOwnership,
 		uint256 snapshotTargetAllowance,
-		uint256 snapshotTotalRep,
-		uint256 snapshotDenominator,
 		uint256 repEthPrice
 	) external returns (uint256 debtToMove, uint256 repToMove) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
@@ -34,15 +31,6 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		require(
 			securityVaults[targetVault].securityBondAllowance == snapshotTargetAllowance,
 			'Target allowance changed'
-		);
-		require(
-			_samePoolRepRate(
-				pool.getTotalRepBalance(),
-				pool.poolOwnershipDenominator(),
-				snapshotTotalRep,
-				snapshotDenominator
-			),
-			'Pool REP rate changed'
 		);
 		uint256 targetFreeRep = pool.poolOwnershipToRep(snapshotTargetOwnership);
 		uint256 targetEscalationRep =
@@ -62,7 +50,7 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			securityVaults[targetVault].poolOwnership,
 			snapshotTargetAllowance,
 			debtAmount,
-			IERC20(address(pool.repToken())).balanceOf(address(this)),
+			pool.getTotalRepBalance(),
 			poolOwnershipDenominator
 		);
 		require(debtToMove > 0, 'No liq');
@@ -106,30 +94,6 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			),
 			'Caller bad'
 		);
-	}
-
-	function _samePoolRepRate(
-		uint256 currentRep,
-		uint256 currentDenominator,
-		uint256 snapshotRep,
-		uint256 snapshotDenominator
-	) private pure returns (bool sameRate) {
-		if (currentDenominator == 0 || snapshotDenominator == 0) {
-			return currentDenominator == snapshotDenominator && currentRep == snapshotRep;
-		}
-		uint256 currentLow;
-		uint256 currentHigh;
-		uint256 snapshotLow;
-		uint256 snapshotHigh;
-		assembly ('memory-safe') {
-			let currentMm := mulmod(currentRep, snapshotDenominator, not(0))
-			currentLow := mul(currentRep, snapshotDenominator)
-			currentHigh := sub(sub(currentMm, currentLow), lt(currentMm, currentLow))
-			let snapshotMm := mulmod(snapshotRep, currentDenominator, not(0))
-			snapshotLow := mul(snapshotRep, currentDenominator)
-			snapshotHigh := sub(sub(snapshotMm, snapshotLow), lt(snapshotMm, snapshotLow))
-		}
-		return currentLow == snapshotLow && currentHigh == snapshotHigh;
 	}
 
 	function _moveEscalationClaim(

@@ -53,6 +53,13 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		return payoutClaimBundleKeys.length;
 	}
 
+	function forkPayoutClaimCheckpointComplete() external view returns (bool) {
+		address sourceGame = forkCarrySourceGame;
+		return
+			sourceGame == address(0x0) ||
+			forkCarryPayoutClaimImportCursor == IEscalationClaimCheckpointSource(sourceGame).payoutClaimBundleCount();
+	}
+
 	function payoutClaimBundleKeyAt(uint256 index) external view returns (address) {
 		return payoutClaimBundleKeys[index];
 	}
@@ -125,7 +132,6 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		require(exponentSuccess && exponentData.length == 32, 'Claim retention exponent');
 		cumulativeClaimRetention = abi.decode(retentionData, (uint256));
 		cumulativeClaimRetentionExponent = abi.decode(exponentData, (uint256));
-		_importForkPayoutClaims(sourceGame, MAX_PAYOUT_CLAIM_IMPORT_BATCH);
 	}
 
 	function _getPayoutClaimOwner(

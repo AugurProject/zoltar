@@ -1137,7 +1137,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'a stale liquidation must not move REP')
 		})
 
-		test('queued liquidation rejects a changed pool REP rate while target ownership is unchanged', async () => {
+		test('an unsolicited one-unit REP donation cannot cancel a queued liquidation', async () => {
 			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
@@ -1175,11 +1175,12 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, minimumAllowance, 'a changed pool rate must invalidate the quoted debt transfer')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetOwnershipBefore, 'the direct REP donation must not change target ownership')
-			strictEqualTypeSafe(targetClaimAfter, targetClaimAfterDonation, 'the invalidated quote must leave the target claim unchanged after the donation')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'the liquidator should not receive allowance from an invalidated quote')
-			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimAfterDonation, 'the liquidator should not receive more ownership after the pool rate changes')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'an unsolicited pool donation must not cancel the quoted debt transfer')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'a full close should move the unchanged target ownership')
+			strictEqualTypeSafe(targetClaimAfter, 0n, 'the full close should move the target claim at the live pool rate')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should assume the quoted allowance')
+			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimAfterDonation + targetClaimAfterDonation, 'the liquidator should receive the target ownership, including its proportional share of pool surplus')
+			assert.ok(targetOwnershipBefore > 0n, 'the regression setup must queue a nonzero target ownership')
 		})
 
 		test('a smaller liquidation that would leave forbidden target debt dust promotes to full close', async () => {
