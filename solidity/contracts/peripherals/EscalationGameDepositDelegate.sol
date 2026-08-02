@@ -7,7 +7,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import {
 	Deposit,
 	EscalationClaimBundle,
@@ -15,7 +15,6 @@ import {
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	MAX_CLAIM_BUNDLES_PER_VAULT,
 	MAX_CLAIM_OWNERS_PER_BUNDLE,
-	MAX_CLAIM_SOURCE_DEPTH,
 	Node,
 	NonDecisionState,
 	OutcomeState
@@ -40,6 +39,7 @@ interface IExternalEscalationClaimBundleSource {
 		address bundleId,
 		uint256 ownerIndex
 	) external view returns (address ownerAddress, uint256 ownerShares, uint256 totalShares);
+	function payoutClaimBundleCount() external view returns (uint256);
 }
 
 contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGameEvents {
@@ -88,7 +88,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		selectedOutcomeState.balance = expectedCumulativeRepAmount;
 		_increaseEscrowedRepForBundle(depositor, repAmount);
 		_registerClaimBundle(claimBundlesByOwner, depositor, depositor);
-		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, depositor);
+		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, _payoutClaimKey(address(this), depositor));
 		unresolvedRepByVault[depositor] += repAmount;
 		totalLocalUnresolvedRep += repAmount;
 		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += repAmount;
@@ -156,7 +156,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.childRep += childRepAmount;
 		_increaseEscrowedRepForBundle(depositor, effectiveChildRep);
 		_registerClaimBundle(claimBundlesByOwner, depositor, depositor);
-		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, depositor);
+		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, _payoutClaimKey(address(this), depositor));
 		emit ForkedEscrowRecorded(
 			depositor,
 			outcome,
@@ -225,77 +225,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.currentLeafCount = leafCount + 1;
 	}
 
-	function moveEscalationClaim(address fromVault, address toVault, uint256 numerator, uint256 denominator) external {
-		_validateClaimMover();
-		require(fromVault != address(0x0) && toVault != address(0x0) && fromVault != toVault, 'Vault');
-		require(numerator > 0 && numerator <= denominator, 'Fraction');
-		_movePayoutClaimOwnership(fromVault, toVault, numerator, denominator);
-		address[MAX_CLAIM_BUNDLES_PER_VAULT] storage bundleIds = claimBundlesByOwner[fromVault];
-		for (uint256 bundleIndex = 0; bundleIndex < MAX_CLAIM_BUNDLES_PER_VAULT; bundleIndex++) {
-			address bundleId = bundleIds[bundleIndex];
-			if (bundleId == address(0x0)) continue;
-			EscalationClaimBundle storage bundle = escalationClaimBundles[bundleId];
-			uint256 fromOwnerIndex = _getBundleOwnerIndex(bundle, fromVault);
-			uint256 fromShares = bundle.ownerShares[fromOwnerIndex];
-			if (fromShares == 0) continue;
-			uint256 sharesToMove = numerator == denominator ? fromShares : (fromShares * numerator) / denominator;
-			require(sharesToMove > 0, 'Fraction');
-			uint256 toOwnerIndex = _getOrAddBundleOwner(bundleId, bundle, toVault);
-			bundle.ownerShares[fromOwnerIndex] = fromShares - sharesToMove;
-			bundle.ownerShares[toOwnerIndex] += sharesToMove;
-			if (bundle.ownerShares[fromOwnerIndex] == 0) bundleIds[bundleIndex] = address(0x0);
-		}
-		_moveClaimAccounting(fromVault, toVault, numerator, denominator);
-		emit EscalationClaimMoved(fromVault, toVault, numerator, denominator);
-	}
-
-	function _validateClaimMover() private view {
-		ISecurityPool sourcePool = ISecurityPool(payable(IEscalationGameDepositContext(address(this)).securityPool()));
-		if (msg.sender == address(sourcePool)) return;
-		ISecurityPool callerPool = ISecurityPool(payable(msg.sender));
-		require(address(callerPool.securityPoolFactory()) == address(sourcePool.securityPoolFactory()), 'Factory');
-		bytes32 originId = callerPool.securityPoolFactory().getSecurityPoolOriginId(callerPool);
-		require(
-			originId != bytes32(0) &&
-				originId == sourcePool.securityPoolFactory().getSecurityPoolOriginId(sourcePool) &&
-				address(callerPool.securityPoolFactory().getSecurityPool(originId, callerPool.universeId())) ==
-					msg.sender,
-			'Claim source'
-		);
-	}
-
-	function _moveClaimAccounting(address fromVault, address toVault, uint256 numerator, uint256 denominator) private {
-		uint256 unresolvedToMove = _fraction(unresolvedRepByVault[fromVault], numerator, denominator);
-		unresolvedRepByVault[fromVault] -= unresolvedToMove;
-		unresolvedRepByVault[toVault] += unresolvedToMove;
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			uint256 localToMove = _fraction(
-				localUnresolvedPrincipalByVaultAndOutcome[fromVault][outcomeIndex],
-				numerator,
-				denominator
-			);
-			localUnresolvedPrincipalByVaultAndOutcome[fromVault][outcomeIndex] -= localToMove;
-			localUnresolvedPrincipalByVaultAndOutcome[toVault][outcomeIndex] += localToMove;
-
-			ForkedEscrowState storage fromForked = forkedEscrowByVaultAndOutcome[fromVault][outcomeIndex];
-			ForkedEscrowState storage toForked = forkedEscrowByVaultAndOutcome[toVault][outcomeIndex];
-			uint256 sourceToMove = _fraction(
-				fromForked.sourcePrincipal - fromForked.sourcePrincipalClaimed,
-				numerator,
-				denominator
-			);
-			uint256 childToMove = _fraction(fromForked.childRep - fromForked.childRepClaimed, numerator, denominator);
-			fromForked.sourcePrincipal -= sourceToMove;
-			fromForked.childRep -= childToMove;
-			toForked.sourcePrincipal += sourceToMove;
-			toForked.childRep += childToMove;
-		}
-	}
-
-	function _fraction(uint256 amount, uint256 numerator, uint256 denominator) private pure returns (uint256) {
-		return numerator == denominator ? amount : (amount * numerator) / denominator;
-	}
-
 	function applyTruthAuctionHaircut(uint256 repToRemove) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		address poolAddress = game.securityPool();
@@ -307,6 +236,16 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 repRemaining = repBefore - repToRemove;
 		truthAuctionRepBefore = repBefore;
 		truthAuctionRepRemaining = repRemaining;
+		uint256 ratioShift = Math.log2(repBefore) - Math.log2(repRemaining);
+		uint256 scaledRemaining = repRemaining << ratioShift;
+		if (scaledRemaining > repBefore) {
+			scaledRemaining >>= 1;
+			ratioShift -= 1;
+		}
+		uint256 nextRetention = Math.mulDiv(cumulativeClaimRetention, scaledRemaining, repBefore);
+		uint256 normalizationShift = 255 - Math.log2(nextRetention);
+		cumulativeClaimRetention = nextRetention << normalizationShift;
+		cumulativeClaimRetentionExponent += ratioShift + normalizationShift;
 		totalEscrowedRep = (totalEscrowedRep * repRemaining) / repBefore;
 		forkCarryEscrowedRep = (forkCarryEscrowedRep * repRemaining) / repBefore;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
@@ -322,6 +261,12 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(msg.sender == game.securityPool(), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(forkResumedAt == 0, 'Fork resumed');
+		if (forkCarrySourceGame != address(0x0)) {
+			if (
+				forkCarryPayoutClaimImportCursor !=
+				IExternalEscalationClaimBundleSource(forkCarrySourceGame).payoutClaimBundleCount()
+			) return;
+		}
 		require(game.isForkCarryFundingComplete(), 'Fork carry underfunded');
 		if (forkCarryEscrowedRep == 0 && forkCarrySnapshotRequiresForkedEscrow) {
 			for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
@@ -410,7 +355,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	function creditClaimOwners(address bundleId, uint256 amount) external {
 		if (amount == 0) return;
-		EscalationClaimBundle storage bundle = payoutClaimBundles[bundleId];
+		EscalationClaimBundle storage bundle = payoutClaimBundles[_payoutClaimKey(address(this), bundleId)];
 		uint256 remaining = amount;
 		uint256 remainingShares = bundle.totalShares;
 		for (uint256 ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
@@ -440,70 +385,29 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		totalEscrowedRep -= backingConsumed;
 		if (amount == 0) return;
 		address encodedSourceGame = address(uint160(parentDepositIndex >> 96));
-		if (encodedSourceGame != address(0x0)) sourceGame = encodedSourceGame;
-		else sourceGame = _resolveRootClaimSource(sourceGame);
-		// Pre-bundling carry snapshots (and proof harnesses that model them) have no
-		// source-game owner registry. Their depositor remains the sole claim owner.
-		(bool hasOwnerRegistry, bytes memory firstOwnerData) = sourceGame.staticcall(
-			abi.encodeCall(IExternalEscalationClaimBundleSource.getClaimOwner, (bundleId, 0))
-		);
-		if (!hasOwnerRegistry || firstOwnerData.length != 96) {
+		sourceGame = encodedSourceGame == address(0x0) ? forkCarryRootClaimSourceGame : encodedSourceGame;
+		address payoutKey = _payoutClaimKey(sourceGame, bundleId);
+		EscalationClaimBundle storage bundle = payoutClaimBundles[payoutKey];
+		// Pre-bundling carry snapshots and proof harness fixtures have no imported
+		// owner registry. Their depositor remains the sole claim owner.
+		if (bundle.totalShares == 0) {
 			IERC20(IEscalationGameDepositContext(address(this)).repToken()).safeTransfer(bundleId, amount);
 			return;
 		}
 		uint256 remaining = amount;
-		uint256 totalShares;
-		uint256 remainingShares;
+		uint256 totalShares = bundle.totalShares;
+		uint256 remainingShares = totalShares;
 		IERC20 token = IERC20(IEscalationGameDepositContext(address(this)).repToken());
 		for (uint256 ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			(address ownerAddress, uint256 shares, uint256 bundleTotalShares) = ownerIndex == 0
-				? abi.decode(firstOwnerData, (address, uint256, uint256))
-				: IExternalEscalationClaimBundleSource(sourceGame).getClaimOwner(bundleId, ownerIndex);
-			if (totalShares == 0) {
-				totalShares = bundleTotalShares;
-				remainingShares = bundleTotalShares;
-			}
+			address ownerAddress = bundle.owners[ownerIndex];
+			uint256 shares = bundle.ownerShares[ownerIndex];
 			if (ownerAddress == address(0x0) || shares == 0) continue;
 			uint256 ownerAmount = shares == remainingShares ? remaining : (amount * shares) / totalShares;
 			remaining -= ownerAmount;
 			remainingShares -= shares;
 			if (ownerAmount > 0) token.safeTransfer(ownerAddress, ownerAmount);
 		}
-		require(totalShares > 0 && remaining == 0, 'Claim payout remainder');
-	}
-
-	function _resolveRootClaimSource(address sourceGame) private view returns (address) {
-		for (uint256 depth = 0; depth < MAX_CLAIM_SOURCE_DEPTH; depth++) {
-			(bool hasSource, bytes memory sourceData) = sourceGame.staticcall(hex'db05d0b2');
-			if (!hasSource || sourceData.length != 32) return sourceGame;
-			address nextSourceGame = abi.decode(sourceData, (address));
-			if (nextSourceGame == address(0x0) || nextSourceGame == sourceGame) return sourceGame;
-			sourceGame = nextSourceGame;
-		}
-		revert('Claim depth');
-	}
-
-	function _movePayoutClaimOwnership(
-		address fromVault,
-		address toVault,
-		uint256 numerator,
-		uint256 denominator
-	) private {
-		address[MAX_CLAIM_BUNDLES_PER_VAULT] storage bundleIds = payoutClaimBundlesByOwner[fromVault];
-		for (uint256 bundleIndex = 0; bundleIndex < MAX_CLAIM_BUNDLES_PER_VAULT; bundleIndex++) {
-			address bundleId = bundleIds[bundleIndex];
-			if (bundleId == address(0x0)) continue;
-			EscalationClaimBundle storage bundle = payoutClaimBundles[bundleId];
-			uint256 fromOwnerIndex = _getBundleOwnerIndex(bundle, fromVault);
-			uint256 fromShares = bundle.ownerShares[fromOwnerIndex];
-			if (fromShares == 0) continue;
-			uint256 sharesToMove = numerator == denominator ? fromShares : (fromShares * numerator) / denominator;
-			require(sharesToMove > 0, 'Fraction');
-			uint256 toOwnerIndex = _getOrAddPayoutBundleOwner(bundleId, bundle, toVault);
-			bundle.ownerShares[fromOwnerIndex] = fromShares - sharesToMove;
-			bundle.ownerShares[toOwnerIndex] += sharesToMove;
-			if (bundle.ownerShares[fromOwnerIndex] == 0) bundleIds[bundleIndex] = address(0x0);
-		}
+		require(remaining == 0, 'Claim payout remainder');
 	}
 
 	function _requireClaimBundleUnsplit(address bundleId) private view {
@@ -515,35 +419,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			return;
 		}
 		revert('Claim ownership split');
-	}
-
-	function _getBundleOwnerIndex(
-		EscalationClaimBundle storage bundle,
-		address ownerAddress
-	) private view returns (uint256) {
-		for (uint256 ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			if (bundle.owners[ownerIndex] == ownerAddress) return ownerIndex;
-		}
-		revert('Claim owner missing');
-	}
-
-	function _getOrAddBundleOwner(
-		address bundleId,
-		EscalationClaimBundle storage bundle,
-		address ownerAddress
-	) private returns (uint256 ownerIndex) {
-		for (ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			if (bundle.owners[ownerIndex] != ownerAddress) continue;
-			_registerClaimBundle(claimBundlesByOwner, ownerAddress, bundleId);
-			return ownerIndex;
-		}
-		for (ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			if (bundle.owners[ownerIndex] != address(0x0) && bundle.ownerShares[ownerIndex] != 0) continue;
-			bundle.owners[ownerIndex] = ownerAddress;
-			_registerClaimBundle(claimBundlesByOwner, ownerAddress, bundleId);
-			return ownerIndex;
-		}
-		revert('Claim owners full');
 	}
 
 	function _registerClaimBundle(
@@ -562,24 +437,5 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 		if (emptyIndex == MAX_CLAIM_BUNDLES_PER_VAULT) revert();
 		bundleIds[emptyIndex] = bundleId;
-	}
-
-	function _getOrAddPayoutBundleOwner(
-		address bundleId,
-		EscalationClaimBundle storage bundle,
-		address ownerAddress
-	) private returns (uint256 ownerIndex) {
-		for (ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			if (bundle.owners[ownerIndex] != ownerAddress) continue;
-			_registerClaimBundle(payoutClaimBundlesByOwner, ownerAddress, bundleId);
-			return ownerIndex;
-		}
-		for (ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			if (bundle.owners[ownerIndex] != address(0x0) && bundle.ownerShares[ownerIndex] != 0) continue;
-			bundle.owners[ownerIndex] = ownerAddress;
-			_registerClaimBundle(payoutClaimBundlesByOwner, ownerAddress, bundleId);
-			return ownerIndex;
-		}
-		revert('Claim owners full');
 	}
 }

@@ -48,6 +48,15 @@ interface IEscalationGameEvents {
 		uint256[3] unresolvedTotals,
 		uint256[3] resolutionBalances
 	);
+	/// @notice A bounded slice of the frozen payout-owner checkpoint copied from a fork source.
+	/// `startIndex` is inclusive and `endIndex` is exclusive. The game remains paused until
+	/// `endIndex == sourceBundleCount`.
+	event PayoutClaimCheckpointImported(
+		address indexed sourceGame,
+		uint256 startIndex,
+		uint256 endIndex,
+		uint256 sourceBundleCount
+	);
 	/// @notice Resulting commitment state after one local or inherited deposit is consumed. `parentDepositIndex`
 	/// and `sourceNodeId` are stable source identities; REP values use token base units. The reason distinguishes
 	/// claims, losing settlement, export, direct parent claim, and forked-escrow claim.

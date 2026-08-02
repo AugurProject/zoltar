@@ -2218,6 +2218,9 @@
 						the proof commitment even if separate parent cleanup occurs.
 					</p>
 					<p>
+						Payout ownership does not form another ancestry chain. Each continuation copies its source game's already-consolidated owner checkpoint in permissionless batches of at most eight bundle keys and remains paused until the copy is complete. Liquidation and payout then inspect only the current game, with at most 64 keys per vault and eight owners per claim. This separates proof history, which can grow offchain, from mandatory onchain liquidation work, which must stay bounded regardless of recursive-fork depth. It also removes a strategic fork-depth attack: creating another fork can never consume a final ancestry slot and disable liquidation. A cumulative normalized binary mantissa and exponent record all auction haircuts, so a carried proof applies one ratio between its creating game and the current game instead of walking every intermediate fork. Renormalization prevents the checkpoint itself from underflowing after many forks; only an economically sub-atomic payout may floor to zero.
+					</p>
+					<p>
 						A carried proof's source principal authenticates the leaf and decrements
 						inherited unresolved principal. Normal winning-payout math then pays from the
 						aggregate child backing, so a reward may exceed the proof principal without

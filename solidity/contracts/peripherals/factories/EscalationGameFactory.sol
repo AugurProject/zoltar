@@ -5,16 +5,20 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
+import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 
 contract EscalationGameFactory {
 	uint256 private constant CREATION_CODE_CHUNK_SIZE = 24_000;
 
 	EscalationGameProofVerifier public immutable proofVerifier;
+	EscalationGameClaimDelegate public immutable claimDelegate;
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
 
-	constructor() {
+	constructor(EscalationGameClaimDelegate _claimDelegate) {
+		require(address(_claimDelegate).code.length > 0, 'Claim delegate');
+		claimDelegate = _claimDelegate;
 		proofVerifier = new EscalationGameProofVerifier();
 		bytes memory creationCode = type(EscalationGame).creationCode;
 		uint256 firstPartLength =
@@ -105,7 +109,7 @@ contract EscalationGameFactory {
 		// word, while two fixed parts keep each carrier below EIP-170.
 		bytes memory initCode = abi.encodePacked(
 			creationCode,
-			abi.encode(securityPool, securityPool.repToken(), proofVerifier)
+			abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate)
 		);
 		address deployed;
 		assembly {

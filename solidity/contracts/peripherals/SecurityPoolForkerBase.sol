@@ -56,9 +56,6 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 			child.systemState() != SystemState.Operational ||
 			childEscalationGame.forkResumedAt() != 0
 		) return;
-		if (child.awaitingForkContinuation()) {
-			child.setAwaitingForkContinuation(false);
-		}
 		child.resumeForkedEscalationGame();
 	}
 

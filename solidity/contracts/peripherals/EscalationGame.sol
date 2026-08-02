@@ -9,6 +9,7 @@ import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
@@ -16,8 +17,9 @@ contract EscalationGame is EscalationGameSettlement {
 	constructor(
 		ISecurityPool _securityPool,
 		ReputationToken _repToken,
-		EscalationGameProofVerifier _proofVerifier
-	) EscalationGameState(_securityPool, _repToken, _proofVerifier) {
+		EscalationGameProofVerifier _proofVerifier,
+		EscalationGameClaimDelegate _claimDelegate
+	) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
 		depositDelegate = new EscalationGameDepositDelegate();
 	}
 
@@ -47,6 +49,18 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function resumeFromFork() external {
+		if (forkCarrySourceGame != address(0x0)) {
+			(bool countSuccess, bytes memory countData) = forkCarrySourceGame.staticcall(
+				abi.encodeWithSignature('payoutClaimBundleCount()')
+			);
+			if (
+				countSuccess &&
+				countData.length == 32 &&
+				forkCarryPayoutClaimImportCursor < abi.decode(countData, (uint256))
+			) {
+				_delegateClaimCall(abi.encodeCall(EscalationGameClaimDelegate.importForkPayoutClaims, (8)));
+			}
+		}
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
 	}
 
@@ -108,36 +122,17 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	fallback() external {
+		address claimDelegateAddress = address(claimDelegate);
 		assembly ('memory-safe') {
-			switch shr(224, calldataload(0))
-			case 0xee692417 {
-				mstore(0, sload(truthAuctionRepBefore.slot))
-				mstore(0x20, sload(truthAuctionRepRemaining.slot))
-				return(0, 0x40)
+			// Every selector not implemented by the inherited game belongs to the
+			// shared claim module. Its normal dispatcher also rejects unknown calls.
+			calldatacopy(0, 0, calldatasize())
+			if iszero(delegatecall(gas(), claimDelegateAddress, 0, calldatasize(), 0, 0)) {
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
 			}
-			case 0xdb05d0b2 {
-				// The address shares a slot with enum state. Mask those packed
-				// high bytes before returning canonical ABI-encoded address data.
-				let sourceGame := and(sload(forkCarrySourceGame.slot), sub(shl(160, 1), 1))
-				mstore(0, sourceGame)
-				return(0, 0x20)
-			}
-			case 0xfd5a5a86 {
-				let ownerIndex := calldataload(36)
-				if iszero(lt(ownerIndex, 8)) {
-					revert(0, 0)
-				}
-				mstore(0, calldataload(4))
-				mstore(0x20, payoutClaimBundles.slot)
-				let bundleSlot := keccak256(0, 0x40)
-				mstore(0, sload(add(add(bundleSlot, 2), ownerIndex)))
-				mstore(0x20, sload(add(add(bundleSlot, 10), ownerIndex)))
-				mstore(0x40, sload(add(bundleSlot, 1)))
-				return(0, 0x60)
-			}
-			default {
-				revert(0, 0)
-			}
+			returndatacopy(0, 0, returndatasize())
+			return(0, returndatasize())
 		}
 	}
 }

@@ -986,9 +986,16 @@ contract SecurityPool is SecurityPoolStorage {
 		);
 	}
 
-	function resumeForkedEscalationGame() external onlyForker {
-		require(address(escalationGame) != address(0x0), 'Game missing');
-		escalationGame.resumeFromFork();
+	function resumeForkedEscalationGame() external {
+		address delegate = liquidationDelegate;
+		bytes4 selector = SecurityPoolLiquidationDelegate.resumeForkedEscalationGame.selector;
+		assembly ('memory-safe') {
+			mstore(0, selector)
+			if iszero(delegatecall(gas(), delegate, 0, 4, 0, 0)) {
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
+			}
+		}
 	}
 
 	function setAwaitingForkContinuation(bool shouldAwait) external onlyForker {

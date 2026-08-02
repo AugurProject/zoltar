@@ -23,12 +23,12 @@ describe('Escalation claim source traversal', () => {
 		return receipt.contractAddress
 	}
 
-	const deploySourceNode = async (sourceGame: `0x${string}`) =>
+	const deploySourceNode = async (rootSource: `0x${string}`, retention: bigint, retentionExponent: bigint) =>
 		await deploy(
 			encodeDeployData({
 				abi: sourceNodeArtifact.abi,
 				bytecode: `0x${sourceNodeArtifact.evm.bytecode.object}`,
-				args: [sourceGame],
+				args: [rootSource, retention, retentionExponent],
 			}),
 		)
 
@@ -38,37 +38,27 @@ describe('Escalation claim source traversal', () => {
 		await setupTestAccounts(mockWindow)
 	})
 
-	test('accepts eight registries and rejects a ninth without an unbounded loop', async () => {
+	test('applies a ninth recursive retention checkpoint without ancestry traversal', async () => {
 		const harness = await deploy(
 			encodeDeployData({
 				abi: sourcesHarnessArtifact.abi,
 				bytecode: `0x${sourcesHarnessArtifact.evm.bytecode.object}`,
 			}),
 		)
-		const games: `0x${string}`[] = []
-		let sourceGame = zeroAddress
-		for (let gameIndex = 0; gameIndex < 9; gameIndex++) {
-			sourceGame = await deploySourceNode(sourceGame)
-			games.push(sourceGame)
-		}
-
-		const [collectedGames, gameCount] = await client.readContract({
+		const normalizedMantissa = 1n << 255n
+		const rootSource = await deploySourceNode(zeroAddress, normalizedMantissa, 0n)
+		await client.writeContract({
 			abi: sourcesHarnessArtifact.abi,
 			address: harness,
-			functionName: 'collect',
-			args: [games[7]],
+			functionName: 'configure',
+			args: [rootSource, normalizedMantissa, 9n],
 		})
-		assert.strictEqual(gameCount, 8n, 'the production traversal helper should accept exactly eight registries')
-		assert.deepStrictEqual(collectedGames, games.slice(0, 8).reverse(), 'the complete supported chain should be returned from the current game through its ancestors')
-
-		await assert.rejects(
-			client.readContract({
-				abi: sourcesHarnessArtifact.abi,
-				address: harness,
-				functionName: 'collect',
-				args: [games[8]],
-			}),
-			/Claim depth/,
-		)
+		const retained = await client.readContract({
+			abi: sourcesHarnessArtifact.abi,
+			address: harness,
+			functionName: 'applyRootRetention',
+			args: [10n ** 18n],
+		})
+		assert.strictEqual(retained, (10n ** 18n) >> 9n, 'nine half-retention lineage checkpoints should resolve through one direct index ratio')
 	})
 })

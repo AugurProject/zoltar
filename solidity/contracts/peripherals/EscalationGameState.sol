@@ -10,6 +10,7 @@ import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
@@ -19,6 +20,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
+	EscalationGameClaimDelegate internal immutable claimDelegate;
 	address internal immutable owner;
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 
@@ -79,10 +81,16 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		uint256 rebasedElapsed
 	);
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
+	constructor(
+		ISecurityPool _securityPool,
+		ReputationToken _repToken,
+		EscalationGameProofVerifier _proofVerifier,
+		EscalationGameClaimDelegate _claimDelegate
+	) {
 		securityPool = _securityPool;
 		repToken = _repToken;
 		proofVerifier = _proofVerifier;
+		claimDelegate = _claimDelegate;
 		owner = msg.sender;
 		EMPTY_NULLIFIER_ROOT = _readEmptyNullifierRoot(_proofVerifier);
 	}
@@ -117,9 +125,9 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function moveEscalationClaim(address fromVault, address toVault, uint256 numerator, uint256 denominator) external {
-		_delegateDepositCall(
+		_delegateClaimCall(
 			abi.encodeCall(
-				EscalationGameDepositDelegate.moveEscalationClaim,
+				EscalationGameClaimDelegate.moveEscalationClaim,
 				(fromVault, toVault, numerator, denominator)
 			)
 		);
@@ -148,6 +156,16 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	function _delegateDepositCall(bytes memory callData) internal returns (bytes memory returnData) {
 		address delegate = _getDepositDelegate();
 		(bool success, bytes memory result) = delegate.delegatecall(callData);
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(result, 0x20), mload(result))
+			}
+		}
+		return result;
+	}
+
+	function _delegateClaimCall(bytes memory callData) internal returns (bytes memory returnData) {
+		(bool success, bytes memory result) = address(claimDelegate).delegatecall(callData);
 		if (!success) {
 			assembly ('memory-safe') {
 				revert(add(result, 0x20), mload(result))

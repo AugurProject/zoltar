@@ -1,30 +1,28 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { EscalationClaimSources } from '../../peripherals/SecurityPoolLiquidationDelegate.sol';
-import { MAX_CLAIM_SOURCE_DEPTH } from '../../peripherals/EscalationGameTypes.sol';
+import { EscalationGameClaimDelegate } from '../../peripherals/EscalationGameClaimDelegate.sol';
 
 contract EscalationClaimSourceNode {
-	address private immutable sourceGame;
+	address public immutable rootClaimSourceGame;
+	uint256 public immutable cumulativeClaimRetention;
+	uint256 public immutable cumulativeClaimRetentionExponent;
 
-	constructor(address _sourceGame) {
-		sourceGame = _sourceGame;
-	}
-
-	fallback() external {
-		if (msg.sig != bytes4(0xdb05d0b2)) revert('Unknown selector');
-		address source = sourceGame;
-		assembly ('memory-safe') {
-			mstore(0x00, source)
-			return(0x00, 0x20)
-		}
+	constructor(address rootSource, uint256 retention, uint256 retentionExponent) {
+		rootClaimSourceGame = rootSource == address(0x0) ? address(this) : rootSource;
+		cumulativeClaimRetention = retention;
+		cumulativeClaimRetentionExponent = retentionExponent;
 	}
 }
 
-contract EscalationClaimSourcesHarness {
-	function collect(
-		address initialGame
-	) external view returns (address[MAX_CLAIM_SOURCE_DEPTH] memory games, uint256 gameCount) {
-		return EscalationClaimSources.collect(initialGame);
+contract EscalationClaimSourcesHarness is EscalationGameClaimDelegate {
+	function configure(address rootSource, uint256 currentRetention, uint256 currentExponent) external {
+		forkCarryRootClaimSourceGame = rootSource;
+		cumulativeClaimRetention = currentRetention;
+		cumulativeClaimRetentionExponent = currentExponent;
+	}
+
+	function applyRootRetention(uint256 amount) external view returns (uint256) {
+		return this.applyInheritedClaimRetention(amount, 0);
 	}
 }

@@ -2,29 +2,23 @@
 pragma solidity 0.8.35;
 
 import { IERC20 } from '../IERC20.sol';
-import { MAX_CLAIM_SOURCE_DEPTH } from './EscalationGameTypes.sol';
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-
-library EscalationClaimSources {
-	function collect(
-		address initialGame
-	) internal view returns (address[MAX_CLAIM_SOURCE_DEPTH] memory games, uint256 gameCount) {
-		address currentGame = initialGame;
-		for (uint256 depth = 0; depth < MAX_CLAIM_SOURCE_DEPTH; depth++) {
-			games[gameCount++] = currentGame;
-			(bool hasSource, bytes memory sourceData) = currentGame.staticcall(hex'db05d0b2');
-			if (!hasSource || sourceData.length != 32) return (games, gameCount);
-			address nextGame = abi.decode(sourceData, (address));
-			if (nextGame == address(0x0) || nextGame == currentGame) return (games, gameCount);
-			currentGame = nextGame;
-			if (depth + 1 == MAX_CLAIM_SOURCE_DEPTH) revert('Claim depth');
-		}
-	}
-}
+import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 
 contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
+	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
+
+	function resumeForkedEscalationGame() external {
+		// This is permissionless for liveness, but each game call imports no more
+		// than its fixed checkpoint batch. The fork itself must already be final.
+		if (!awaitingForkContinuation || systemState != SystemState.Operational) revert();
+		escalationGame.resumeFromFork();
+		if (escalationGame.forkResumedAt() == 0) return;
+		awaitingForkContinuation = false;
+		emit AwaitingForkContinuationSet(false);
+	}
+
 	function performBundledLiquidation(
 		address callerVault,
 		address targetVault,
@@ -35,13 +29,24 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		uint256 snapshotDenominator,
 		uint256 repEthPrice
 	) external returns (uint256 debtToMove, uint256 repToMove) {
-		uint256 targetFreeRep =
-			snapshotDenominator == 0
-				? snapshotTargetOwnership / SecurityPoolUtils.PRICE_PRECISION
-				: (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(securityVaults[targetVault].poolOwnership == snapshotTargetOwnership, 'Target ownership changed');
+		require(
+			securityVaults[targetVault].securityBondAllowance == snapshotTargetAllowance,
+			'Target allowance changed'
+		);
+		require(
+			_samePoolRepRate(
+				pool.getTotalRepBalance(),
+				pool.poolOwnershipDenominator(),
+				snapshotTotalRep,
+				snapshotDenominator
+			),
+			'Pool REP rate changed'
+		);
+		uint256 targetFreeRep = pool.poolOwnershipToRep(snapshotTargetOwnership);
 		uint256 targetEscalationRep =
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(targetVault);
-		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(
 			!SecurityPoolUtils.isVaultHealthy(
 				targetFreeRep,
@@ -73,17 +78,15 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		securityVaults[targetVault].unpaidEthFees = targetFees - feesToMove;
 		securityVaults[callerVault].unpaidEthFees += feesToMove;
 		if (address(escalationGame) != address(0x0)) {
-			(address[MAX_CLAIM_SOURCE_DEPTH] memory claimGames, uint256 claimGameCount) = EscalationClaimSources
-				.collect(address(escalationGame));
-			for (uint256 gameIndex = 0; gameIndex < claimGameCount; gameIndex++) {
-				_moveEscalationClaim(
-					claimGames[gameIndex],
-					targetVault,
-					callerVault,
-					debtToMove,
-					snapshotTargetAllowance
-				);
-			}
+			// The current game carries a consolidated payout-owner checkpoint for
+			// the complete fork lineage, so liquidation never walks fork ancestry.
+			_moveEscalationClaim(
+				address(escalationGame),
+				targetVault,
+				callerVault,
+				debtToMove,
+				snapshotTargetAllowance
+			);
 		}
 		uint256 callerEscalationRep;
 		if (address(escalationGame) != address(0x0)) {
@@ -103,6 +106,30 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			),
 			'Caller bad'
 		);
+	}
+
+	function _samePoolRepRate(
+		uint256 currentRep,
+		uint256 currentDenominator,
+		uint256 snapshotRep,
+		uint256 snapshotDenominator
+	) private pure returns (bool sameRate) {
+		if (currentDenominator == 0 || snapshotDenominator == 0) {
+			return currentDenominator == snapshotDenominator && currentRep == snapshotRep;
+		}
+		uint256 currentLow;
+		uint256 currentHigh;
+		uint256 snapshotLow;
+		uint256 snapshotHigh;
+		assembly ('memory-safe') {
+			let currentMm := mulmod(currentRep, snapshotDenominator, not(0))
+			currentLow := mul(currentRep, snapshotDenominator)
+			currentHigh := sub(sub(currentMm, currentLow), lt(currentMm, currentLow))
+			let snapshotMm := mulmod(snapshotRep, currentDenominator, not(0))
+			snapshotLow := mul(snapshotRep, currentDenominator)
+			snapshotHigh := sub(sub(snapshotMm, snapshotLow), lt(snapshotMm, snapshotLow))
+		}
+		return currentLow == snapshotLow && currentHigh == snapshotHigh;
 	}
 
 	function _moveEscalationClaim(

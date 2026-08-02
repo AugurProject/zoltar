@@ -21,8 +21,8 @@
 				<p>
 					The main boundary starts with one shared storage layout. The inherited
 					game stack owns most counters, escrow, carry state, and settlement
-					effects. Size-sensitive mutation paths run through a layout-compatible
-					<code>EscalationGameDepositDelegate</code> using <code>delegatecall</code>,
+					effects. Size-sensitive mutation paths run through layout-compatible
+					<code>EscalationGameDepositDelegate</code> and <code>EscalationGameClaimDelegate</code> modules using <code>delegatecall</code>,
 					so those writes still land in the game. The external
 					<code>EscalationGameProofVerifier</code> owns storage-free proof and
 					logarithm helpers. That separation keeps verification math reusable and
@@ -43,14 +43,14 @@
 					The first question in this stack is always ownership: which file is
 					allowed to mutate which part of the game. The state-owning modules form
 					one inheritance ladder over <code>EscalationGameStorage</code>. The
-					deposit delegate uses the same layout and may mutate it only while the
+					deposit and claim delegates use the same layout and may mutate it only while the
 					game invokes it with <code>delegatecall</code>. The proof verifier stays
 					outside both mutation paths because it should never write live game
 					state.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split">
-					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
+					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, deposit and claim delegates, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. Deposit and claim delegates use the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit and claim delegates mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
 					<math display="block" aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal">
@@ -80,7 +80,7 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameStorage.sol</code></td>
-							<td>The storage layout shared by the inherited game stack and deposit delegate.</td>
+							<td>The storage layout shared by the inherited game stack and both mutation delegates.</td>
 							<td>Keeping the layout in one base contract makes delegate writes target the same slots as direct game writes.</td>
 						</tr>
 						<tr>
@@ -115,8 +115,13 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameDepositDelegate.sol</code></td>
-							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>moveEscalationClaim</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; <code>consumeEscrowedRepForOwner</code> and <code>consumeUnresolvedRepForClaimOwners</code>; <code>creditClaimOwners</code> and <code>creditExternalClaimOwners</code>; node and carry-leaf creation; and their events.</td>
+							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; escrow consumption and payout crediting; node and carry-leaf creation; and their events.</td>
 							<td>Moving these cohesive mutation paths behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership, caller authority, or the recognized game address that emits logs.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameClaimDelegate.sol</code></td>
+							<td>Consolidated payout-owner checkpoint reads and bounded import, plus liquidation-only claim movement.</td>
+							<td>One shared claim implementation keeps every game's runtime deployable while making recursive-fork work independent of ancestry depth. Delegatecall preserves the game as the state and event address.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameProofVerifier.sol</code></td>
@@ -246,20 +251,15 @@
 					</tbody>
 				</table>
 				<p id="claim-ownership">
-					Claims are deliberately fixed-size accounting bundles rather than ERC-20 or ERC-1155 tokens. Each escalation-game claim registry may store at most eight bundles per vault, and each bundle may have at most eight liquidation owners. Because liquidation visits the current registry plus at most seven source registries, its maximum-depth path covers at most 64 logical bundle identities. Each game scans separate fixed arrays of up to eight payout bundles and eight escrow/accounting bundles, so the maximum-depth path performs at most 128 internal registry-slot scans before the bounded owner searches. These per-registry limits give every ownership split and liquidation mutation a known gas ceiling. Bundle registration is bounded and idempotent: an acquired claim is not overwritten when its owner later creates a local claim, and an owner whose shares went to zero is re-enumerated if a later liquidation returns shares. Without those rules, a claim could become invisible to the next liquidation while its liabilities continued moving, recreating the cherry-picking attack through stale accounting. Preventing voluntary transfers keeps a participant from selling likely losing exposure while retaining the vault's fees or continuation and child-REP entitlements. Liquidation remains possible because it moves the same fraction of all those rights and obligations together. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand the stored owner or bundle sets.
+					Claims are deliberately fixed-size accounting bundles rather than ERC-20 or ERC-1155 tokens. A continuation maintains one consolidated lineage checkpoint with at most 64 bundle identities per vault, while each bundle has at most eight liquidation owners. Fork initialization copies that checkpoint in permissionless batches of at most eight bundles; the game remains paused until the checkpoint is complete. Liquidation then scans only the current game's fixed registries, regardless of recursive-fork depth. The 64-bundle portfolio bound gives atomic liquidation a known gas ceiling without turning fork ancestry into a protocol-liveness limit. Bundle registration is bounded and idempotent: an acquired claim is not overwritten when its owner later creates a local claim, and an owner whose shares went to zero is re-enumerated if a later liquidation returns shares. Without those rules, a claim could become invisible to the next liquidation while its liabilities continued moving, recreating the cherry-picking attack through stale accounting. Preventing voluntary transfers keeps a participant from selling likely losing exposure while retaining the vault's fees or continuation and child-REP entitlements. Liquidation remains possible because it moves the same fraction of all those rights and obligations together. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand the stored owner or bundle sets.
 				</p>
 				<p>
-					Continuation-local stable deposit indexes encode the source game, so a later descendant proof reads the exact registry that created that claim instead of accidentally using an unrelated ancestor bundle with the same depositor. Legacy unencoded root indexes resolve through the bounded immediate-source chain. Liquidation processes the current game plus at most seven ancestors, for eight registries total, and moves the same fraction in each registry; if an eighth source link would require a ninth registry, it reverts with <code>Claim depth</code> instead of silently leaving a claim behind. Payout is proportional in integer arithmetic: every non-final owner receives a floor, and the owner that exhausts the remaining stored shares receives the final atomic-unit residual. This makes the complete payout deterministic and prevents dust from becoming permanently locked.
+					Owner-slot liveness is asymmetric by design: a partial transfer to a new owner cannot consume the last free slot, while a full close replaces the source owner in place. Fragmenting a claim can spread its risk, but it cannot buy a veto over a later full liquidation by forcing allocation of a ninth owner.
 				</p>
-				<table>
-					<thead><tr><th>Fallback selector</th><th>Compatibility read</th><th>Bounds and canonical use</th></tr></thead>
-					<tbody>
-						<tr><td><code>0xee692417</code></td><td><code>getTruthAuctionRetention()</code> returns <code>(repBefore, repRemaining)</code> for the game.</td><td>No arguments. Recursive carried-proof settlement uses the pair to compound only the auction haircuts that occurred after the proof entered the continuation lineage.</td></tr>
-						<tr><td><code>0xdb05d0b2</code></td><td><code>getClaimSourceGame()</code> returns the immediate source game, or zero when no ancestor is recorded.</td><td>No arguments. The zero root sentinel lets bounded consumers distinguish a completed chain from a ninth required registry, which reverts instead of creating a partially processed claim.</td></tr>
-						<tr><td><code>0xfd5a5a86</code></td><td><code>getClaimOwner(bundleId, ownerIndex)</code> returns owner address, owner shares, and total shares.</td><td><code>ownerIndex</code> must be below eight or the read reverts. Direct and carried settlement use it to split one payout among bounded current owners.</td></tr>
-					</tbody>
-				</table>
-				<p>These are non-standard fallback compatibility reads and none appears in the compiled game ABI. Unknown selectors revert. Integrations must supply the documented ABI fragment or raw selector and exact return shape themselves. The generated artifacts currently expose a helper-interface ABI for <code>getClaimOwner</code>; <code>getTruthAuctionRetention</code> and <code>getClaimSourceGame</code> remain raw-selector only.</p>
+				<p>
+					Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use a direct root-source checkpoint. Every continuation copies the already-consolidated payout-owner keys, so payout and liquidation perform direct lookups rather than walking ancestors. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth therefore adds neither storage traversal nor a growing liquidation loop. This matters strategically because an attacker must not be able to manufacture enough unrelated forks to disable liquidation or recover a haircut that older ancestry traversal no longer reaches. Payout is proportional in integer arithmetic: every non-final owner receives a floor, and the owner that exhausts the remaining stored shares receives the final atomic-unit residual. This makes the complete payout deterministic and prevents dust from becoming permanently locked.
+				</p>
+				<p>The game's fallback delegates only to the shared claim module. It exposes bounded owner/checkpoint reads and bounded checkpoint import without retaining ancestry-era compatibility selectors. Auction retention is available through the game's ordinary public storage getters. Keeping one claim dispatcher makes the ABI boundary explicit and avoids preserving obsolete traversal concepts in deployed bytecode.</p>
 				<p>
 					The highest-risk paths already have regression coverage. Scenario tests
 					exercise consumed local carry leaves, constant-size unresolved-vault
@@ -318,7 +318,7 @@
 					<a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
 				</p>
 				<p>
-					The proof verifier and deposit delegate splits also exist because
+					The proof verifier, deposit delegate, and claim delegate splits also exist because
 					bytecode headroom is tight. Keeping proof math and the cohesive deposit
 					mutation path outside the deployed game bytecode keeps the contract
 					under the current bytecode budgets and leaves only limited headroom for
@@ -336,19 +336,19 @@
 						<tbody>
 							<tr>
 								<td>Creation bytecode</td>
-								<td><code>42,359</code> bytes</td>
+								<td><code>39,775</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Deployed bytecode</td>
-								<td><code>24,223</code> bytes</td>
+								<td><code>24,459</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Project deployed-bytecode budget headroom</td>
-								<td><code>353</code> bytes below <code>24,576</code></td>
+								<td><code>117</code> bytes below <code>24,576</code></td>
 							</tr>
 							<tr>
 								<td>EIP-170 headroom</td>
-								<td><code>353</code> bytes below <code>24,576</code></td>
+								<td><code>117</code> bytes below <code>24,576</code></td>
 							</tr>
 						</tbody>
 					</table>

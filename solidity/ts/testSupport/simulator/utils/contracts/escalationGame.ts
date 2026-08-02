@@ -4,6 +4,7 @@ import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 import { getRepTokenAddress } from './zoltar'
+import { getInfraContractAddresses } from './deployPeripherals'
 import { requireAddress, requireArray, requireBigInt } from '../utilities'
 
 function requireContractAddress(value: `0x${string}` | null | undefined, context: string): `0x${string}` {
@@ -141,7 +142,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 		data: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress],
+			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })

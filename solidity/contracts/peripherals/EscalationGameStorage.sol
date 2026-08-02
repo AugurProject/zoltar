@@ -7,7 +7,6 @@ import {
 	ForkedEscrowState,
 	MAX_CLAIM_BUNDLES_PER_VAULT,
 	MAX_CLAIM_OWNERS_PER_BUNDLE,
-	MAX_CLAIM_SOURCE_DEPTH,
 	Node,
 	NonDecisionState,
 	OutcomeState
@@ -39,6 +38,12 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryInitialBacking;
 	uint256 internal forkCarryEscrowedRep;
 	address internal forkCarrySourceGame;
+	address internal forkCarryRootClaimSourceGame;
+	// A normalized binary floating-point checkpoint. The effective retention is
+	// `mantissa * 2^-exponent`; keeping the mantissa's high bit set prevents an
+	// arbitrary number of fork haircuts from underflowing the lineage index.
+	uint256 public cumulativeClaimRetention = uint256(1) << 255;
+	uint256 public cumulativeClaimRetentionExponent;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
 	uint256 internal forkCarryBackingExportedBeforeResume;
@@ -48,6 +53,8 @@ abstract contract EscalationGameStorage {
 	// exports so liquidation ownership follows the claim through descendants.
 	mapping(address => EscalationClaimBundle) internal payoutClaimBundles;
 	mapping(address => address[MAX_CLAIM_BUNDLES_PER_VAULT]) internal payoutClaimBundlesByOwner;
+	address[] internal payoutClaimBundleKeys;
+	uint256 public forkCarryPayoutClaimImportCursor;
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amount) {
 		address[MAX_CLAIM_BUNDLES_PER_VAULT] storage bundleIds = claimBundlesByOwner[vault];
@@ -71,11 +78,13 @@ abstract contract EscalationGameStorage {
 			bundle.owners[0] = bundleId;
 			bundle.ownerShares[0] = CLAIM_SHARE_SCALE;
 		}
-		EscalationClaimBundle storage payoutBundle = payoutClaimBundles[bundleId];
+		address payoutKey = _payoutClaimKey(address(this), bundleId);
+		EscalationClaimBundle storage payoutBundle = payoutClaimBundles[payoutKey];
 		if (payoutBundle.totalShares == 0) {
 			payoutBundle.totalShares = CLAIM_SHARE_SCALE;
 			payoutBundle.owners[0] = bundleId;
 			payoutBundle.ownerShares[0] = CLAIM_SHARE_SCALE;
+			payoutClaimBundleKeys.push(payoutKey);
 		}
 		bundle.escrowedRep += _repToClaimShares(amount);
 		totalEscrowedRep += amount;
@@ -90,49 +99,15 @@ abstract contract EscalationGameStorage {
 		uint256 amount,
 		uint256 parentDepositIndex
 	) internal view returns (uint256 retainedAmount) {
-		retainedAmount = amount;
-		address sourceGame = forkCarrySourceGame;
-		address encodedSourceGame = address(uint160(parentDepositIndex >> 96));
-		// All calls are fixed-size getters and the ancestry loop shares the
-		// protocol's eight-generation claim-source bound.
-		assembly ('memory-safe') {
-			for {
-				let depth := 0
-			} and(lt(depth, MAX_CLAIM_SOURCE_DEPTH), sourceGame) {
-				depth := add(depth, 1)
-			} {
-				if and(encodedSourceGame, eq(sourceGame, encodedSourceGame)) {
-					sourceGame := 0
-					break
-				}
-				mstore(0, shl(224, 0xee692417))
-				let retentionSuccess := staticcall(gas(), sourceGame, 0, 4, 0, 0x40)
-				if and(retentionSuccess, eq(returndatasize(), 0x40)) {
-					let repBefore := mload(0)
-					if repBefore {
-						let repRemaining := mload(0x20)
-						if gt(repRemaining, repBefore) {
-							retainedAmount := not(0)
-							sourceGame := 0
-							break
-						}
-						retainedAmount := div(mul(retainedAmount, repRemaining), repBefore)
-					}
-				}
-				mstore(0, shl(224, 0xdb05d0b2))
-				let sourceSuccess := staticcall(gas(), sourceGame, 0, 4, 0, 0x20)
-				if iszero(and(sourceSuccess, eq(returndatasize(), 0x20))) {
-					sourceGame := 0
-					break
-				}
-				let nextSourceGame := mload(0)
-				if iszero(nextSourceGame) {
-					sourceGame := 0
-					break
-				}
-				sourceGame := nextSourceGame
-			}
-		}
+		(bool success, bytes memory retentionData) = address(this).staticcall(
+			abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amount, parentDepositIndex)
+		);
+		if (!success || retentionData.length != 32) revert();
+		return abi.decode(retentionData, (uint256));
+	}
+
+	function _payoutClaimKey(address sourceGame, address bundleId) internal pure returns (address) {
+		return address(uint160(uint256(keccak256(abi.encode(sourceGame, bundleId)))));
 	}
 
 	function _repToClaimShares(uint256 amount) internal view returns (uint256 shares) {

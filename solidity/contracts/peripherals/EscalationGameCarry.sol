@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Constants } from '../Constants.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	CarriedDepositProof,
@@ -16,6 +17,7 @@ import {
 	OutcomeState,
 	OutcomeStateView
 } from './EscalationGameTypes.sol';
+
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
@@ -201,11 +203,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
-		// Keep the immediate source. Liquidation follows this chain with a fixed
-		// depth bound, while continuation-local proofs identify their exact owner
-		// registry through the stable parent-deposit index.
-		forkCarrySourceGame = sourceGame;
-
 		bytes32[3] memory normalizedNullifierRoots;
 		bytes32[3] memory carryRoots;
 		uint256 totalCarry;
@@ -258,6 +255,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotCarryTotals,
 			snapshotResolutionBalances
 		);
+		forkCarrySourceGame = sourceGame;
+		if (sourceGame != address(0x0)) {
+			_delegateClaimCall(
+				abi.encodeCall(EscalationGameClaimDelegate.initializeForkPayoutClaimCheckpoint, (sourceGame))
+			);
+		}
 		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) {
 			emit InheritedThresholdTie(sourceGame);
 		}

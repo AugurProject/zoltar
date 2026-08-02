@@ -133,16 +133,16 @@ function assertMigrationSecurityAllowanceDocs(): void {
 }
 
 function assertBoundedClaimRegistryDocs(): void {
-	assert.match(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT = 8;/)
+	assert.match(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT = 64;/)
 	assert.match(escalationGameTypes, /MAX_CLAIM_OWNERS_PER_BUNDLE = 8;/)
-	assert.match(escalationGameTypes, /MAX_CLAIM_SOURCE_DEPTH = 8;/)
-	assert.match(html, /Each escalation-game claim registry may store at most eight bundles per vault/)
-	assert.match(html, /maximum-depth path covers at most 64 logical bundle identities/)
-	assert.match(html, /maximum-depth path performs at most 128 internal registry-slot scans/)
-	assert.match(escalationGameDepositDelegate, /function moveEscalationClaim[\s\S]{0,800}bundleIndex < MAX_CLAIM_BUNDLES_PER_VAULT/)
-	assert.match(escalationGameDepositDelegate, /function _movePayoutClaimOwnership[\s\S]{0,800}bundleIndex < MAX_CLAIM_BUNDLES_PER_VAULT/)
+	assert.match(escalationGameTypes, /MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;/)
+	assert.match(html, /at most 64 bundle identities per vault/)
+	assert.match(html, /permissionless batches of at most eight bundles/)
+	assert.match(html, /Liquidation then scans only the current game's fixed registries/)
 	assert.match(html, /an acquired claim is not overwritten when its owner later creates a local claim/)
 	assert.match(html, /an owner whose shares went to zero is re-enumerated if a later liquidation returns shares/)
+	assert.match(html, /a partial transfer to a new owner cannot consume the last free slot/)
+	assert.match(html, /a full close replaces the source owner in place/)
 	assert.match(liquidationHtml, /canonical <a href="\.\.\/architecture-deployment\/escalation-game-architecture\.html#claim-ownership">registry, bundle, owner, and internal scan limits<\/a>/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
 	assert.match(whitepaperStatoblast, /source-principal allocation may floor to zero while its independently[\s\S]*larger child-REP reward remains positive/)
@@ -545,10 +545,10 @@ function assertLiquidationFullCloseDocs(): void {
 	const normalizedLiquidation = liquidationHtml.replaceAll(/\s+/g, ' ')
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
 	assert.match(priceCoordinator, /function executeStagedOperation\(/)
-	assert.match(priceCoordinator, /currentTargetOwnership < stagedOperation\.snapshotTargetOwnership[\s\S]*currentTargetAllowance != stagedOperation\.snapshotTargetAllowance/)
-	assert.match(normalizedInvariants, /protected ownership decreased or whose allowance changed after staging\. An ownership increase remains executable/)
+	assert.match(priceCoordinator, /currentTargetOwnership != stagedOperation\.snapshotTargetOwnership[\s\S]*currentTargetAllowance != stagedOperation\.snapshotTargetAllowance/)
+	assert.match(normalizedInvariants, /protected ownership or allowance changed after staging, in either direction/)
 	assert.match(normalizedInvariants, /OpenOraclePriceCoordinator\.sol"\s*><code>executeStagedOperation<\/code>/)
-	assert.doesNotMatch(normalizedInvariants, /protected ownership or allowance changed after staging/)
+	assert.match(normalizedInvariants, /rescue deposit therefore invalidates the old quote/)
 
 	for (const documentedClaim of [
 		'data-source="f = debtMoved / targetAllowance"',
@@ -665,7 +665,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /### Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
-	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*`claimForkedEscalationDeposits` and `migrateVaultWithUnresolvedEscalation`[\s\S]*`performBundledLiquidation`/)
+	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*proportional bundled liquidation/)
 	assert.match(operatorReference, /Migration, liquidation, and storage modules[\s\S]*\[`SecurityPoolLiquidationDelegate\.sol`\][\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)

@@ -9,7 +9,14 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { peripherals_EscalationGame_EscalationGame, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier, ReputationToken_ReputationToken, test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact, Zoltar_Zoltar } from '../types/contractArtifact'
+import {
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	ReputationToken_ReputationToken,
+	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
+	Zoltar_Zoltar,
+} from '../types/contractArtifact'
 import { hashCarryLeaf, SparseNullifierTree } from './carryProofHelpers'
 
 const ESCALATION_TIME_LENGTH = 4_233_600n
@@ -41,6 +48,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
+	let claimDelegate: Address
 	const repTokenAddress = addressString(GENESIS_REPUTATION_TOKEN)
 	const zeroHash = `0x${'0'.repeat(64)}` as Hex
 	const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
@@ -59,6 +67,12 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
+		claimDelegate = await deployContract(
+			encodeDeployData({
+				abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+				bytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
+			}),
+		)
 	})
 
 	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
@@ -83,7 +97,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				encodeDeployData({
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-					args: [securityPool, repTokenAddress, proofVerifier],
+					args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
 				}),
 			)
 			await writeContractAndWait(client, () =>
@@ -249,7 +263,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repTokenAddress, proofVerifier],
+				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () =>

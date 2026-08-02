@@ -572,9 +572,9 @@ contract OpenOraclePriceCoordinator {
 		}
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture the target vault state at queue time. Liquidation may still execute if
-		// the target deposits more REP after staging, but allowance changes or ownership
-		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
+		// Capture the complete target collateral bundle at queue time. Any later target
+		// ownership or allowance mutation invalidates the quote so a
+		// rescue deposit can never become part of the liquidator's purchase. Non-liquidation operations keep
 		// the snapshot for history and execution-event context, but price validity no
 		// longer meters operations by snapshot or live external-value exposure.
 		// Liquidation should value the vault's full collateral claim. That means using the
@@ -647,7 +647,7 @@ contract OpenOraclePriceCoordinator {
 				stagedOperation.targetVault
 			);
 			if (
-				currentTargetOwnership < stagedOperation.snapshotTargetOwnership ||
+				currentTargetOwnership != stagedOperation.snapshotTargetOwnership ||
 				currentTargetAllowance != stagedOperation.snapshotTargetAllowance
 			) {
 				_consumeAndEmitExecutedStagedOperation(

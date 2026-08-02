@@ -78,6 +78,15 @@ const getClaimOwnerAbi: Abi = [
 		type: 'function',
 	},
 ]
+const payoutClaimCheckpointAbi: Abi = [
+	{
+		inputs: [],
+		name: 'payoutClaimBundleCount',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+]
 const initializeForkCarrySnapshotFromSourceAbi: Abi = [
 	{
 		inputs: [
@@ -228,7 +237,7 @@ describe('Escalation Game Test Suite', () => {
 			data: encodeDeployData({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress],
+				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -920,7 +929,7 @@ describe('Escalation Game Test Suite', () => {
 					data: encodeDeployData({
 						abi: peripherals_EscalationGame_EscalationGame.abi,
 						bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-						args: [testSecurityPoolAddress, getRepTokenAddress(0n), zeroAddress],
+						args: [testSecurityPoolAddress, getRepTokenAddress(0n), zeroAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 					}),
 				}),
 			/Proof verifier has no code/,
@@ -936,7 +945,7 @@ describe('Escalation Game Test Suite', () => {
 					data: encodeDeployData({
 						abi: peripherals_EscalationGame_EscalationGame.abi,
 						bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-						args: [testSecurityPoolAddress, getRepTokenAddress(0n), incompatibleVerifierAddress],
+						args: [testSecurityPoolAddress, getRepTokenAddress(0n), incompatibleVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 					}),
 				}),
 			/Proof verifier invalid/,
@@ -1757,14 +1766,8 @@ describe('Escalation Game Test Suite', () => {
 		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 4n)
 		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepBefore', args: [] }), childRepBefore)
 		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepRemaining', args: [] }), childRepBefore - childRepBefore / 4n)
-		const childSource = await client.call({ to: child.escalationGameAddress, data: '0xdb05d0b2' })
-		assert.strictEqual(addressString(BigInt(childSource.data ?? '0x')).toLowerCase(), parent.escalationGameAddress.toLowerCase())
-		const childRetention = await client.call({ to: child.escalationGameAddress, data: '0xee692417' })
-		const childRetentionData = childRetention.data ?? '0x'
-		assert.strictEqual(BigInt(`0x${childRetentionData.slice(2, 66)}`), childRepBefore)
-		assert.strictEqual(BigInt(`0x${childRetentionData.slice(66, 130)}`), childRepBefore - childRepBefore / 4n)
-		const parentSource = await client.call({ to: parent.escalationGameAddress, data: '0xdb05d0b2' })
-		assert.strictEqual(BigInt(parentSource.data ?? '0x'), 0n)
+		const childRootSource = await client.call({ to: child.escalationGameAddress, data: '0xc028bc2a' })
+		assert.strictEqual(addressString(BigInt(childRootSource.data ?? '0x')).toLowerCase(), parent.escalationGameAddress.toLowerCase())
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
@@ -2699,6 +2702,40 @@ describe('Escalation Game Test Suite', () => {
 			totalShares = requireBigInt(claimOwner[2], 'claim total shares')
 		}
 		assert.strictEqual(currentOwnerShares, totalShares)
+	})
+
+	test('claim owner capacity preserves an in-place full-close path', async () => {
+		const originalOwner = addressString(TEST_ADDRESSES[1])
+		const ownerAddress = (ownerIndex: number) => addressString(0x0000000000020000000000000000000000000000n + BigInt(ownerIndex))
+		const deployment = await deployEscalationGameWithProofPool()
+		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.Yes, reportBond)
+		for (let ownerIndex = 2; ownerIndex <= 7; ownerIndex++) {
+			await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, ownerAddress(ownerIndex), 1n, 20n)
+		}
+		const finalSlotOwner = ownerAddress(8)
+		await assert.rejects(moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, finalSlotOwner, 1n, 20n), /Full close required/)
+		const fullCloseOwner = ownerAddress(9)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, fullCloseOwner)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, originalOwner), 0n)
+		assert.ok((await readEscrowedRepByVault(deployment.escalationGameAddress, fullCloseOwner)) > 0n)
+	})
+
+	test('fork continuation imports a consolidated owner checkpoint in bounded batches', async () => {
+		const source = await deployEscalationGameWithProofPool()
+		await startEscalation(source.escalationGameAddress, reportBond, nonDecisionThreshold)
+		for (let ownerIndex = 1; ownerIndex <= 9; ownerIndex++) {
+			await recordForkedEscrowForOutcomeViaTestSecurityPool(source.testSecurityPoolAddress, addressString(0x0000000000030000000000000000000000000000n + BigInt(ownerIndex)), QuestionOutcome.Yes, reportBond, reportBond)
+		}
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, source.escalationGameAddress, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'initial payout bundle count'), 8n, 'initialization should import only one bounded batch')
+
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'final payout bundle count'), 9n, 'the next bounded call should complete the consolidated checkpoint')
+		assert.ok((await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'the continuation should resume only after every owner bundle is present')
 	})
 
 	test('residual sweep rejects while forked escrow remains unsettled', async () => {

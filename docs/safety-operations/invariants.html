@@ -1142,9 +1142,9 @@
 								allowance, fees, and escalation claims. Every category moves by the
 								same debt fraction. The resulting liquidator must meet coverage rules;
 								the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution must reject a target
-								whose protected ownership decreased or whose allowance changed after staging. An ownership increase remains executable so a post-queue REP top-up cannot block liquidation.
+								whose protected ownership or allowance changed after staging, in either direction, and must reject a changed pool REP-per-ownership rate. The pool then re-evaluates health against live balances. Rescue collateral therefore invalidates the old quote instead of becoming collateral for a keeper who priced a smaller bundle.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If the target reduces its ownership after a liquidation is staged, execution rejects the stale snapshot instead of transferring the originally quoted amount.</p>
+							<p class="invariant-example"><strong>Example:</strong> If the target adds REP after a liquidation is staged, execution rejects the stale snapshot. A keeper may quote the new state, but cannot seize the rescue deposit while assuming only the old liabilities.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>

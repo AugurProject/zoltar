@@ -11,10 +11,10 @@ uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 uint256 constant MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64;
 uint256 constant NULLIFIER_DEPTH = 64;
-uint256 constant MAX_CLAIM_BUNDLES_PER_VAULT = 8;
+uint256 constant MAX_CLAIM_BUNDLES_PER_VAULT = 64;
 uint256 constant MAX_CLAIM_OWNERS_PER_BUNDLE = 8;
-uint256 constant MAX_CLAIM_SOURCE_DEPTH = 8;
 uint256 constant CLAIM_SHARE_SCALE = 1e18;
+uint256 constant MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;
 
 enum NonDecisionState {
 	None,
