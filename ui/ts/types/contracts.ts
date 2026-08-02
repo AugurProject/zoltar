@@ -341,8 +341,11 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 
 export type SecurityPoolVaultSummary = {
 	escalationEscrowedRep: bigint
+	poolOwnership?: bigint
+	poolOwnershipDenominator?: bigint
 	repDepositShare: bigint
 	securityBondAllowance: bigint
+	totalRepBalance?: bigint
 	unpaidEthFees: bigint
 	vaultAddress: Address
 }

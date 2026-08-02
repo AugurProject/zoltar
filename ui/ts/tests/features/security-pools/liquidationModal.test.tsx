@@ -7,6 +7,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { LiquidationModal } from '../../../features/security-pools/components/LiquidationModal.js'
+import { simulateLiquidation } from '../../../features/security-pools/lib/liquidation.js'
 import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
@@ -1235,7 +1236,7 @@ describe('LiquidationModal', () => {
 		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
 	})
 
-	test('allows an atomic proportional liquidation without a bonus-improvement threshold', async () => {
+	test('allows an atomic bonus-priced liquidation', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1260,7 +1261,32 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/moves one proportional slice/)).not.toBeNull()
+		expect(documentQueries.getByText(/partial liquidation quotes free REP at the 5% bonus/)).not.toBeNull()
+	})
+
+	test('previews the exact post-ownership-conversion REP amount after a pool donation', () => {
+		const totalRepBalance = 200n * ETH + 1n
+		const poolOwnershipDenominator = 200n * ETH * ETH
+		const targetVaultSummary = createTargetVaultSummary({
+			poolOwnership: 100n * ETH * ETH,
+			poolOwnershipDenominator,
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: 100n * ETH,
+			totalRepBalance,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
+			liquidationAmount: 1n * ETH,
+			repPerEthPrice: 1n * ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+		const quotedRep = (105n * ETH) / 100n
+		const ownershipMoved = (quotedRep * poolOwnershipDenominator) / totalRepBalance
+		const exactRepMoved = (ownershipMoved * totalRepBalance) / poolOwnershipDenominator
+
+		expect(exactRepMoved).toBe(quotedRep - 1n)
+		expect(simulation.repToMove).toBe(exactRepMoved)
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1478,7 +1504,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Free REP Moved')).not.toBeNull()
 	})
 
-	test('shows the full free REP bundle for a full proportional liquidation', async () => {
+	test('shows all free REP for a full liquidation', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
 			accountAddress: callerVaultAddress,

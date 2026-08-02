@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/safety-operations/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '3cbea0a6054a37b589b5f6c6299e84236432197961067bfa982248ccc553eba4'
+const expectedProductionSoliditySourceFingerprint = 'd0d0b868036c71f505a34dbf7dfae27964801a29d9a3fbd2e2c367326cac18e8'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -873,11 +873,11 @@ const contractReferences: ContractReference[] = [
 				call: '`performLiquidation(...)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves one bounded proportional bundle of allowance, live free REP, unpaid fees, and every non-tradeable escalation claim from the unsafe target to the caller vault. A slice that would strand REP or allowance below a minimum floor is promoted to a full bundle close. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
+					"Moves allowance to the caller. A partial liquidation quotes live free REP at the fixed 5% bonus before pool-ownership flooring; a full or dust-promoted close transfers all remaining target ownership. It moves the matching fraction of every non-tradeable escalation claim, while the target retains all accrued unpaid fees. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
 					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; target ownership and allowance exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
-				signals: 'Fee-accrual checkpoints as needed; one `EscalationClaimMoved` from the consolidated current-game registry when a game exists; then `VaultLiquidated`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
+				signals: 'Fee-accrual checkpoints as needed; one `EscalationClaimMoved` from the consolidated current-game registry when a game exists; then `VaultLiquidated` with the final post-conversion `repAmountMoved`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`performSetSecurityBondsAllowance(callerVault, amount)`',
@@ -1232,7 +1232,8 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`resumeFromFork()`',
 				caller: 'Owning `SecurityPool` only',
-				effect: 'Advances one bounded ownership-checkpoint batch. Once complete and funded, records the resume timestamp. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
+				effect:
+					'Advances one bounded ownership-checkpoint batch. Once complete and funded, records the resume timestamp. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
 					'Fork-continuation mode; not previously resumed. Each call imports at most eight payout-bundle keys. Final resume additionally requires the complete source checkpoint and aggregate REP funding. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',

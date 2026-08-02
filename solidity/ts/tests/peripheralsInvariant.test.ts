@@ -3,7 +3,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait, WriteClient } from '../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
@@ -53,6 +53,7 @@ import {
 	depositToEscalationGame,
 	getActiveVaultCount,
 	getActiveVaults,
+	getAwaitingForkContinuation,
 	getCompleteSetCollateralAmount,
 	getPoolOwnershipDenominator,
 	getSecurityVault,
@@ -1048,6 +1049,17 @@ describe('Peripherals invariant harness', () => {
 		}
 
 		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.Operational, 'settled child should reactivate after randomized migration ordering')
+		for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, yesAddresses.securityPool)); progressCall++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesAddresses.securityPool,
+					functionName: 'resumeForkedEscalationGame',
+					args: [],
+				}),
+			)
+		}
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesAddresses.securityPool), false, 'bounded continuation progress should complete before reactivated child operations')
 		const supplyBeforeReactivatedMint = await getShareTokenSupply(client, yesAddresses.securityPool)
 		if (path === 'external') {
 			await createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)

@@ -1,7 +1,9 @@
 export const LIQUIDATION_PRICE_PRECISION = 10n ** 18n
 export const LIQUIDATION_BPS_DENOMINATOR = 10_000n
+export const LIQUIDATION_REP_BONUS_BPS = 500n
 
-export function getBundledLiquidationRepToMove(debtToMove: bigint, targetAllowance: bigint, targetFreeRep: bigint) {
-	if (targetAllowance === 0n) return 0n
-	return debtToMove === targetAllowance ? targetFreeRep : (targetFreeRep * debtToMove) / targetAllowance
+export function getLiquidationRepToMove(debtToMove: bigint, repPerEthPrice: bigint) {
+	const numerator = debtToMove * repPerEthPrice * (LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)
+	const denominator = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
+	return (numerator + denominator - 1n) / denominator
 }

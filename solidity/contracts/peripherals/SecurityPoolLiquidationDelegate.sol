@@ -50,6 +50,7 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			securityVaults[targetVault].poolOwnership,
 			snapshotTargetAllowance,
 			debtAmount,
+			repEthPrice,
 			pool.getTotalRepBalance(),
 			poolOwnershipDenominator
 		);
@@ -60,11 +61,6 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		securityVaults[targetVault].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
-		uint256 targetFees = securityVaults[targetVault].unpaidEthFees;
-		uint256 feesToMove =
-			debtToMove == snapshotTargetAllowance ? targetFees : (targetFees * debtToMove) / snapshotTargetAllowance;
-		securityVaults[targetVault].unpaidEthFees = targetFees - feesToMove;
-		securityVaults[callerVault].unpaidEthFees += feesToMove;
 		if (address(escalationGame) != address(0x0)) {
 			// The current game carries a consolidated payout-owner checkpoint for
 			// the complete fork lineage, so liquidation never walks fork ancestry.

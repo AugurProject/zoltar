@@ -555,10 +555,12 @@ function assertLiquidationFullCloseDocs(): void {
 
 	for (const documentedClaim of [
 		'data-source="f = debtMoved / targetAllowance"',
+		'data-source="bonusRepQuote = ⌈debtMoved * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉"',
 		'data-source="value(freeRep + escalationRep) >= allowance * poolSecurityMultiplier"',
 		'data-source="allowance = 0 or value(freeRep) > allowance * migrationSecurityMultiplier"',
 		'Liquidation is the only ownership-change path, and settlement is the only payout path.',
-		'A fixed proportional bundle makes the liquidator price the whole position',
+		'For a partial liquidation, the protocol quotes free REP worth 105% of the moved debt at the settled price before ownership-unit flooring',
+		'A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary.',
 	]) {
 		assert.ok(normalizedLiquidation.includes(documentedClaim), `Missing bundled-liquidation documentation claim: ${documentedClaim}`)
 	}
@@ -568,7 +570,12 @@ function assertLiquidationFullCloseDocs(): void {
 
 	assert.match(whitepaperStatoblast, /href="\.\.\/protocol-design\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
-	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*same fraction of liabilities, free REP, fees, and non-tradeable escalation claims/, 'canonical liquidation diagram must show that every bundle component moves at the same fraction')
+	assert.match(
+		diagramSpecs,
+		/"fig-liquidation-punitive-flow"[\s\S]*partial liquidation[\s\S]*5% bonus-priced free REP[\s\S]*full close moves all remaining target ownership[\s\S]*accrued fees remain with the target/i,
+		'canonical liquidation diagram must distinguish the partial REP bonus, full-close ownership transfer, and target fee isolation',
+	)
+	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 	assert.match(whitepaperStatoblast, /truth-auction\.html#clearing/)
 }
@@ -668,7 +675,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /### Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
-	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*proportional bundled liquidation/)
+	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*bonus-priced REP liquidation[\s\S]*fee isolation/)
 	assert.match(operatorReference, /Migration, liquidation, and storage modules[\s\S]*\[`SecurityPoolLiquidationDelegate\.sol`\][\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)

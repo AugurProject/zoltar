@@ -2,6 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { deployChild, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -56,6 +57,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		depositToEscalationGame,
 		getPoolOwnershipDenominator,
 		getRepToken,
+		getAwaitingForkContinuation,
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
@@ -923,6 +925,17 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesChildPool)
 		if ((await getSystemState(client, yesChildPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, yesChildPool)
+		for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, yesChildPool)); progressCall++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesChildPool,
+					functionName: 'resumeForkedEscalationGame',
+					args: [],
+				}),
+			)
+		}
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesChildPool), false, 'bounded continuation progress should complete before reading the child escalation deadline')
 		const childEscalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getEscalationGameEndDate',

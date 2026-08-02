@@ -1139,8 +1139,9 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								A liquidation transfers rather than creates aggregate ownership,
-								allowance, fees, and escalation claims. Every category moves by the
-								same debt fraction. The resulting liquidator must meet coverage rules;
+								allowance, and escalation claims. A partial liquidation quotes free REP at the fixed 5%
+								bonus price; a full or dust-promoted close transfers all remaining target free-REP ownership. Escalation claims move by the debt fraction, and accrued
+								fees remain with the target vault. The resulting liquidator must meet coverage rules;
 								the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution must reject a target
 								whose protected ownership or allowance changed after staging, in either direction. The pool then re-evaluates health against live balances and the live REP-per-ownership rate. Target-assigned rescue collateral therefore invalidates the old quote instead of becoming collateral for a keeper who priced a smaller bundle, while an unsolicited pool-wide REP transfer cannot purchase a one-unit liquidation veto. A sufficiently large pool donation may still restore live health.
 							</div>

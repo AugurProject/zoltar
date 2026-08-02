@@ -8,6 +8,7 @@ library SecurityPoolUtils {
 	// fees
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant BPS_DENOMINATOR = 10_000;
+	uint256 constant LIQUIDATION_REP_BONUS_BPS = 500;
 
 	uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly (10% fees)
 	uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly (50% fees)
@@ -61,6 +62,7 @@ library SecurityPoolUtils {
 		uint256 targetOwnership,
 		uint256 targetAllowance,
 		uint256 requestedDebt,
+		uint256 repEthPrice,
 		uint256 currentTotalRep,
 		uint256 currentDenominator
 	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
@@ -68,8 +70,22 @@ library SecurityPoolUtils {
 		debtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
 		uint256 debtRemaining = targetAllowance - debtToMove;
 		if (debtRemaining > 0 && debtRemaining < MIN_SECURITY_BOND_DEBT) debtToMove = targetAllowance;
-		ownershipToMove =
-			debtToMove == targetAllowance ? targetOwnership : (targetOwnership * debtToMove) / targetAllowance;
+		if (debtToMove == targetAllowance) {
+			ownershipToMove = targetOwnership;
+		} else {
+			uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
+			uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
+			repToMove = repNumerator / repDenominator;
+			if (repToMove * repDenominator < repNumerator) repToMove += 1;
+			ownershipToMove =
+				currentDenominator == 0 || currentTotalRep == 0
+					? repToMove * PRICE_PRECISION
+					: (repToMove * currentDenominator) / currentTotalRep;
+			if (ownershipToMove >= targetOwnership) {
+				debtToMove = targetAllowance;
+				ownershipToMove = targetOwnership;
+			}
+		}
 		uint256 remainingOwnership = targetOwnership - ownershipToMove;
 		uint256 remainingRep =
 			currentDenominator == 0

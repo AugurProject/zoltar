@@ -1,5 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
+import { getLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalance, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -105,6 +106,7 @@ describe('Peripherals: fork migration', () => {
 		depositToEscalationGame,
 		getCompleteSetCollateralAmount,
 		getCurrentRetentionRate,
+		getAwaitingForkContinuation,
 		getPoolOwnershipDenominator,
 		getRepToken,
 		getShareTokenSupply,
@@ -828,8 +830,6 @@ describe('Peripherals: fork migration', () => {
 		})
 
 		test('liquidation transfers REP from the target to the liquidator', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 75n * 10n ** 18n
 			strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -842,13 +842,34 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 			const openInterestAmount = 50n * 10n ** 18n
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-			await mockWindow.advanceTime(100000n)
+			await mockWindow.advanceTime(30n * DAY)
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+			const targetFeesBeforeLiquidation = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).unpaidEthFees
+			assert.ok(targetFeesBeforeLiquidation > 0n, 'test setup should accrue fees to the target before liquidation')
 
 			strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, statoblastSecurityMultiplierBps), false, 'Should not be able to liquidate yet')
 			// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationAmount = 20n * 10n ** 18n
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
+			await writeContractAndWait(liquidatorClient, () =>
+				liquidatorClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: addressString(GENESIS_REPUTATION_TOKEN),
+					functionName: 'transfer',
+					args: [securityPoolAddresses.securityPool, 1n],
+				}),
+			)
+			const targetVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const totalRepBeforeLiquidation = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
+			const denominatorBeforeLiquidation = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+			const quotedRepMove = getLiquidationRepToMove(liquidationAmount, forcedPrice)
+			const expectedOwnershipMove = (quotedRepMove * denominatorBeforeLiquidation) / totalRepBeforeLiquidation
+			const expectedRepMove = (expectedOwnershipMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedTargetClaimAfter = ((targetVaultBeforeLiquidation.repDepositShare - expectedOwnershipMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedLiquidatorClaimAfter = ((liquidatorVaultBeforeLiquidation.repDepositShare + expectedOwnershipMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			strictEqualTypeSafe(expectedRepMove, quotedRepMove - 1n, 'one atomic pool donation should expose the post-ownership-conversion rounding step')
 
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -861,11 +882,13 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const originalClaim = await getVaultRepClaim(client.account.address)
 			const liquidatorClaim = await getVaultRepClaim(liquidatorClient.account.address)
-			const expectedRepMove = (repDeposit * liquidationAmount) / securityPoolAllowance
 			strictEqualTypeSafe(originalVault.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'original vault should keep only the non-liquidated security bonds')
-			approximatelyEqual(originalClaim, repDeposit - expectedRepMove, 1n, 'liquidation should seize REP from the target claim')
+			strictEqualTypeSafe(originalVault.repDepositShare, targetVaultBeforeLiquidation.repDepositShare - expectedOwnershipMove, 'liquidation should move the share-rounded target ownership')
+			strictEqualTypeSafe(originalClaim, expectedTargetClaimAfter, 'the target claim should use its exact remaining ownership at the live pool rate')
+			assert.ok(originalVault.unpaidEthFees >= targetFeesBeforeLiquidation, 'the target should retain every fee accrued before liquidation')
 			strictEqualTypeSafe(liquidatorVault.securityBondAllowance, liquidationAmount, "liquidator doesn't have the liquidated security pool allowance")
-			approximatelyEqual(liquidatorClaim, repDeposit * 10n + expectedRepMove, 1n, 'liquidator should receive the seized REP bonus')
+			strictEqualTypeSafe(liquidatorClaim, expectedLiquidatorClaimAfter, 'the liquidator claim should use its exact resulting ownership at the live pool rate')
+			strictEqualTypeSafe(liquidatorVault.unpaidEthFees, 0n, 'the liquidator must not receive the targets accrued fees')
 		})
 
 		test('liquidation rejects attempts to liquidate the caller vault itself', async () => {
@@ -1002,7 +1025,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(liquidatorVaultAfterSecondLiquidation.securityBondAllowance, liquidatorVaultAfterFirstLiquidation.securityBondAllowance, 'a second same-price liquidation should not move more debt after debt is cleared')
 		})
 
-		test('full proportional liquidation moves an allowance above the minimum without bonus-sized debt dust', async () => {
+		test('full liquidation moves an allowance above the minimum without bonus-sized debt dust', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 14n * 10n ** 17n
@@ -1212,7 +1235,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(liquidatorVaultAfter.repDepositShare > liquidatorVaultBefore.repDepositShare, 'liquidator should receive the target REP bundle')
 		})
 
-		test('tiny liquidation remains proportional without a separate bonus-gain condition', async () => {
+		test('tiny liquidation preserves the bonus without a separate gain condition', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const roundingSensitivePrice = (PRICE_PRECISION * 45n) / 100n
@@ -1252,7 +1275,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(liquidatorVaultAfter.repDepositShare > liquidatorVaultBefore.repDepositShare, 'caller should receive the corresponding ownership fraction')
 		})
 
-		test('partial and full liquidation move free REP and non-tradeable escalation claims proportionally', async () => {
+		test('partial and full liquidation pay bonus-priced free REP and move escalation claims proportionally', async () => {
 			const securityPoolAllowance = 200n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
@@ -1294,6 +1317,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok((await getVaultRepClaim(client.account.address)) < repDeposit - lockedDeposit, 'partial liquidation should move the matching fraction of free REP')
 			strictEqualTypeSafe(liquidatorVaultAfterPartial.repInEscalationGame, expectedLiquidatorEscalationRep, 'partial liquidation should move the share-rounded non-tradeable claim fraction')
 
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 3n)
 			const liquidationHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance - partialDebt)
 			const liquidationExecution = await getExecutedStagedOperation(liquidationHash)
 			strictEqualTypeSafe(liquidationExecution.args.success, true, `remaining bundled liquidation should execute: ${liquidationExecution.args.errorMessage}`)
@@ -1442,6 +1466,17 @@ describe('Peripherals: fork migration', () => {
 					if ((await getSystemState(liquidatorClient, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 						await finalizeTruthAuction(liquidatorClient, yesPool.securityPool)
 					}
+					for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(liquidatorClient, yesPool.securityPool)); progressCall++) {
+						await writeContractAndWait(liquidatorClient, () =>
+							liquidatorClient.writeContract({
+								abi: peripherals_SecurityPool_SecurityPool.abi,
+								address: yesPool.securityPool,
+								functionName: 'resumeForkedEscalationGame',
+								args: [],
+							}),
+						)
+					}
+					strictEqualTypeSafe(await getAwaitingForkContinuation(liquidatorClient, yesPool.securityPool), false, 'bounded continuation progress should complete before child-local deposits')
 					await manipulatePriceOracle(client, mockWindow, yesPool.priceOracleManagerAndOperatorQueuer)
 					await depositToEscalationGame(client, yesPool.securityPool, QuestionOutcome.No, lockedDeposit)
 					const rootOwnerBefore = await client.readContract({
@@ -2369,7 +2404,7 @@ describe('Peripherals: fork migration', () => {
 			const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const additionalInvalidCompleteSetAmount = ensureDefined(currentShares[0], 'currentShares[0] is undefined')
 			if (additionalInvalidCompleteSetAmount > 0n) {
-				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount), /Resolved/)
+				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount), /Resolved|Fork await/)
 			}
 
 			const balancePriorInvalidRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
@@ -3630,6 +3665,17 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the zero-collateral child should auto-finalize without entering a live auction')
+			for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, yesSecurityPool.securityPool)); progressCall++) {
+				await writeContractAndWait(client, () =>
+					client.writeContract({
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						address: yesSecurityPool.securityPool,
+						functionName: 'resumeForkedEscalationGame',
+						args: [],
+					}),
+				)
+			}
+			strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'bounded continuation progress should complete before child settlement')
 			const escalationEndDate = await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				address: yesEscalationGame,

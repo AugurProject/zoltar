@@ -211,12 +211,15 @@ async function loadSecurityPoolVaultSummaries(
 			return [
 				{
 					escalationEscrowedRep: currentEscrowedRep,
+					poolOwnership,
+					poolOwnershipDenominator,
 					repDepositShare: getRepDepositShareFromPoolOwnership({
 						poolOwnership,
 						poolOwnershipDenominator,
 						totalRepBalance,
 					}),
 					securityBondAllowance,
+					totalRepBalance,
 					unpaidEthFees,
 					vaultAddress,
 				},

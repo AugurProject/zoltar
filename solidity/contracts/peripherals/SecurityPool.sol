@@ -603,8 +603,8 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// Liquidation moves the same fraction of debt, free REP, fees, and escalation
-	// claims. A partial move that would strand forbidden dust becomes a full close.
+	// Liquidation moves debt plus proportional escalation claims and awards 5% bonus-priced
+	// free REP. Earned vault fees stay with the target. Forbidden dust triggers a full close.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,

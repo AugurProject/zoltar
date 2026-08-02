@@ -48,7 +48,8 @@ export const debtAssumed = 'Debt Assumed'
 export const resultingCallerRep = 'Your REP After'
 export const resultingCallerBond = 'Your Bond Allowance After'
 export const resultingCallerEscalationRep = 'Your Escalation REP After'
-export const liquidationStateRisk = 'The action moves one proportional slice of the target’s liabilities, free REP, accrued fees, and every non-tradeable escalation claim. A claim remains locked in its game and pays its current vault owners proportionally only if it wins.'
+export const liquidationStateRisk =
+	'The action assumes the target’s liabilities and moves the matching fraction of every non-tradeable escalation claim. A partial liquidation quotes free REP at the 5% bonus before pool-share rounding; a full or dust-promoted close receives all remaining target free REP. Accrued fees remain claimable only by the target vault. A claim stays locked in its game and pays its current vault owners proportionally only if it wins.'
 export const queuedLiquidationRisk =
 	'When the oracle price is not usable, the action is queued and can expire before execution. A later change to the target’s REP ownership or allowance invalidates it. Pool-wide REP changes are evaluated at execution, so unsolicited token transfers cannot cancel an otherwise valid liquidation.'
 export const bufferedQueueCost = 'Buffered Queue Cost'

@@ -1,5 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
+import type { Address } from '@zoltar/shared/ethereum'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
 import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 
@@ -107,6 +109,20 @@ describe('Peripherals: escalation migration', () => {
 		questionData = fixture.questionData
 		questionId = fixture.questionId
 	})
+
+	async function completeForkContinuation(securityPool: Address) {
+		for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, securityPool)); progressCall++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: securityPool,
+					functionName: 'resumeForkedEscalationGame',
+					args: [],
+				}),
+			)
+		}
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, securityPool), false, 'bounded continuation progress should complete')
+	}
 
 	test('unfunded vault escalation deposit exposes REP too low and rolls back game deployment and pool state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
@@ -643,6 +659,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -1048,6 +1065,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should become operational once migration completes')
+		await completeForkContinuation(yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not wait for another vault to migrate')
 
 		const forkElapsedAtStartAfterResume = await client.readContract({
@@ -1123,6 +1141,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -1200,6 +1219,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -1300,6 +1320,7 @@ describe('Peripherals: escalation migration', () => {
 		for (const childPool of [yesPool.securityPool, noPool.securityPool]) {
 			await startTruthAuction(client, childPool)
 			if ((await getSystemState(client, childPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, childPool)
+			await completeForkContinuation(childPool)
 		}
 		const [yesEndDate, noEndDate] = await Promise.all(
 			[yesGame, noGame].map(
@@ -1558,6 +1579,7 @@ describe('Peripherals: escalation migration', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		}
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'continuation child should become operational before its own fork')
+		await completeForkContinuation(yesSecurityPool.securityPool)
 
 		const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 		const childForkThreshold = await getZoltarForkThreshold(client, yesUniverse)

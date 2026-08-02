@@ -613,7 +613,7 @@
 						</p>
 					</div>
 					<h3>Solvency Operations and Liquidation</h3>
-					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves one proportional bundle of allowance, free REP, accrued fees, and every non-tradeable escalation claim to a caller vault that remains healthy. A partial move may leave the target unsafe because equal fractions preserve its ratio; the target must instead respect minimum executable-position floors. This prevents cherry-picking likely winners while acknowledging that liquidation redistributes backing rather than creating it.</p>
+					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves allowance and the matching fraction of every non-tradeable escalation claim to a caller vault that remains healthy. A partial liquidation quotes free REP at a fixed 5% bonus before ownership-unit flooring; a full or dust-promoted close transfers all remaining target ownership. Accrued fees remain exclusively claimable by the target vault. A partial move may leave the target unsafe, but both resulting vaults must respect minimum executable-position floors.</p>
 
 					<p>Read how the liquidation works from <a href="../protocol-design/liquidation.html">Liquidation Design</a>.</p>
 				</section>
@@ -2746,7 +2746,7 @@
 							<tr><td>Universe fork thresholds and haircuts</td><td><a href="./zoltar-whitepaper.html#economics">Zoltar fork economics</a></td></tr>
 							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Game</a></td></tr>
 							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="../protocol-design/truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
-							<tr><td>Liquidation constants and solvency limits</td><td><a href="../protocol-design/liquidation.html#punitive-liquidation">Proportional bundled liquidation</a></td></tr>
+							<tr><td>Liquidation constants and solvency limits</td><td><a href="../protocol-design/liquidation.html#punitive-liquidation">Bonus-priced liquidation</a></td></tr>
 							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="../protocol-design/open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
 							<tr><td>Carry-proof peak and nullifier bounds</td><td><a href="../architecture-deployment/merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td></tr>
 						</tbody>

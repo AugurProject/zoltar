@@ -993,8 +993,8 @@
 		"width": 920
 	},
 	"fig-liquidation-punitive-flow": {
-		"ariaDescription": "The same fraction of liabilities, free REP, fees, and non-tradeable escalation claims moves from the unsafe target vault to the liquidator vault.",
-		"ariaLabel": "A proportional bundled position moves from the target vault to the liquidator vault.",
+		"ariaDescription": "A partial liquidation moves debt and proportional non-tradeable escalation claims from the unsafe target vault with 5% bonus-priced free REP; a full close moves all remaining target ownership, while accrued fees remain with the target.",
+		"ariaLabel": "Partial liquidation quotes a 5% REP bonus, full liquidation moves all target ownership, and accrued fees remain with the target vault.",
 		"height": 200,
 		"nodes": [
 			{
@@ -1071,7 +1071,7 @@
 				},
 				"children": [
 					{
-						"text": "liabilities plus all claim types"
+						"text": "retains all accrued fees"
 					}
 				],
 				"tag": "text"
@@ -1093,7 +1093,7 @@
 				},
 				"children": [
 					{
-						"text": "same fraction of every component"
+						"text": "partial: debt + claims + 5% REP quote"
 					}
 				],
 				"tag": "text"
