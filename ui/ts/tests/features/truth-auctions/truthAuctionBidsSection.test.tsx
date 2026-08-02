@@ -90,6 +90,14 @@ describe('TruthAuctionBidsSection', () => {
 		expect(loadMoreCalls).toBe(1)
 	})
 
+	test('disables auction bid pagination while the next page is loading', async () => {
+		const rendered = await renderIntoDocument(<TruthAuctionBidsSection aggregatedAuctionBidCountForLoadedTicks={0n} hasMoreAggregatedAuctionBids={true} loadedTickCount={1} loadingAggregatedAuctionBids={true} onLoadNextAuctionBidPage={() => undefined} renderPriceValue={renderPriceValue} rows={[]} />)
+		cleanupRendered = rendered.cleanup
+
+		const loadMoreButton = within(document.body).getByRole('button', { name: 'Show more truth auction bids' }) as HTMLButtonElement
+		expect(loadMoreButton.disabled).toBe(true)
+	})
+
 	test('shows bid-book errors with retry instead of an empty-auction message', async () => {
 		let retryCalls = 0
 		const rendered = await renderIntoDocument(
@@ -204,6 +212,16 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		fireEvent.change(checkbox, { target: { checked: true } })
 		expect(selectionChanges).toEqual([{ bidKey: '11:1', checked: true }])
 		expect(within(document.body).getByRole('button', { name: 'Show more of my bids' })).not.toBeNull()
+	})
+
+	test('disables viewer bid pagination while the next page is loading', async () => {
+		const rendered = await renderIntoDocument(
+			<ViewerTruthAuctionBidsSection accountAddress={walletAddress} hasMoreViewerBids={true} loadingTruthAuctionBook={true} onLoadNextViewerBidPage={() => undefined} onSettlementBidSelectionChange={() => undefined} renderPriceValue={renderPriceValue} rows={[]} showSettlementActionColumn={false} />,
+		)
+		cleanupRendered = rendered.cleanup
+
+		const loadMoreButton = within(document.body).getByRole('button', { name: 'Show more of my bids' }) as HTMLButtonElement
+		expect(loadMoreButton.disabled).toBe(true)
 	})
 
 	test('shows bid-book recovery instead of a false empty My Bids state', async () => {

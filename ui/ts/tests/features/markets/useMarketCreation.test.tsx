@@ -522,10 +522,10 @@ describe('useMarketCreation', () => {
 		window.sessionStorage.setItem(`zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`, '{invalid')
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
-		const Harness = function MarketCreationHarness() {
+		const Harness = function MarketCreationHarness({ activeUniverseId = 7n }: { activeUniverseId?: bigint }) {
 			hookState = useMarketCreation({
 				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 7n,
+				activeUniverseId,
 				activeZoltarView: 'create',
 				autoLoadInitialData: false,
 				deploymentStatuses: [],
@@ -539,7 +539,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage')
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		const renderedComponent = await renderIntoDocument(<Harness activeUniverseId={7n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(requireHookState(hookState).marketForm.title).toBe('')
 		await act(async () => {
@@ -550,7 +550,7 @@ describe('useMarketCreation', () => {
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
 		hookState = undefined
-		const remountedComponent = await renderIntoDocument(h(Harness, {}))
+		const remountedComponent = await renderIntoDocument(<Harness activeUniverseId={7n} />)
 		cleanupRenderedComponent = remountedComponent.cleanup
 		expect(requireHookState(hookState).marketForm.title).toBe('')
 
@@ -565,6 +565,29 @@ describe('useMarketCreation', () => {
 				requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Usable without storage' }))
 			})
 			expect(requireHookState(hookState).marketForm.title).toBe('Usable without storage')
+		} finally {
+			if (originalSessionStorageDescriptor !== undefined) Object.defineProperty(window, 'sessionStorage', originalSessionStorageDescriptor)
+		}
+
+		const unavailableStorage: Storage = {
+			length: 0,
+			clear: () => undefined,
+			getItem: () => {
+				throw new DOMException('Storage unavailable', 'SecurityError')
+			},
+			key: () => null,
+			removeItem: () => undefined,
+			setItem: () => undefined,
+		}
+		try {
+			Object.defineProperty(window, 'sessionStorage', {
+				configurable: true,
+				get: () => unavailableStorage,
+			})
+			await act(async () => {
+				render(<Harness activeUniverseId={8n} />, remountedComponent.container)
+			})
+			expect(requireHookState(hookState).marketForm.title).toBe('')
 		} finally {
 			if (originalSessionStorageDescriptor !== undefined) Object.defineProperty(window, 'sessionStorage', originalSessionStorageDescriptor)
 		}

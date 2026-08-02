@@ -66,7 +66,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
-			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' aria-busy={closeDisabled || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
+			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={closeDisabled || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{title}</h3>

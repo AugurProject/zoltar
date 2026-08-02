@@ -47,6 +47,10 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 	}, [open])
 
 	useEffect(() => {
+		if (disabled) setOpen(false)
+	}, [disabled])
+
+	useEffect(() => {
 		const handleDocumentMouseDown = (event: MouseEvent) => {
 			if (rootRef.current === null) return
 			if (event.target instanceof Node && rootRef.current.contains(event.target)) return
@@ -97,7 +101,7 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 				<span className='enum-dropdown-label'>{triggerLabel}</span>
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
-			{open ? (
+			{open && !disabled ? (
 				<div className='enum-dropdown-menu' role='listbox' aria-label={commonCopy.dropdownOptions}>
 					{options.map(option => (
 						<button
@@ -121,6 +125,7 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 								}
 							}}
 							onClick={() => {
+								if (disabled) return
 								onChange(option.value)
 								closeAndFocusTrigger()
 							}}

@@ -1,4 +1,5 @@
 import { getErrorMessage } from '../lib/errors.js'
+import { getBrowserStorage } from '../lib/browserStorage.js'
 import { isSimulationScenario, type SimulationScenario } from './scenarios.js'
 
 const SAVED_SIMULATION_STATES_STORAGE_KEY = 'zoltar.simulation.savedStates'
@@ -105,8 +106,9 @@ function isTaggedBigIntValue(value: unknown): value is Record<typeof BIGINT_VALU
 
 function getStorage(storage?: Storage) {
 	if (storage !== undefined) return storage
-	if (typeof window === 'undefined' || window.localStorage === undefined) throw new Error('Local storage is unavailable')
-	return window.localStorage
+	const browserStorage = getBrowserStorage('localStorage')
+	if (browserStorage === undefined) throw new SavedSimulationStateError('Local storage is unavailable')
+	return browserStorage
 }
 
 function stringifySimulationValue(value: unknown) {
@@ -301,7 +303,15 @@ export function parseSavedSimulationStateEnvelope(serialized: string) {
 }
 
 export function getSavedSimulationStateStorageSummary(storage?: Storage) {
-	return toSavedSimulationStateStorageSummary(getSavedSimulationStateStorageSnapshot(storage))
+	try {
+		return toSavedSimulationStateStorageSummary(getSavedSimulationStateStorageSnapshot(storage))
+	} catch (error) {
+		if (!(error instanceof DOMException) && !(error instanceof SavedSimulationStateError)) throw error
+		return {
+			records: [],
+			warning: 'Saved simulation state storage is unavailable.',
+		}
+	}
 }
 
 export function removeCorruptedSavedSimulationStates(storage?: Storage) {
