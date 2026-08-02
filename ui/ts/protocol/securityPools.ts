@@ -1,6 +1,7 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -31,6 +32,16 @@ const QUESTION_OUTCOME_ABI = [
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
+
+function requireBigIntArray(value: unknown, context: string): bigint[] {
+	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
+	return value
+}
+
+function requireLiquidationClaimPortfolio(value: unknown): [bigint[], bigint[], bigint[]] {
+	if (!Array.isArray(value) || value.length !== 3) throw new Error('Unexpected liquidation claim portfolio response')
+	return [requireBigIntArray(value[0], 'liquidation claim bundle REP'), requireBigIntArray(value[1], 'liquidation claim owner shares'), requireBigIntArray(value[2], 'liquidation claim total shares')]
+}
 
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
@@ -117,7 +128,7 @@ async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, s
 	})
 }
 
-async function loadEscrowedRepByVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[]) {
+async function loadEscalationVaultData(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[]) {
 	if (vaultAddresses.length === 0) return []
 	const escalationGameAddress = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -125,17 +136,39 @@ async function loadEscrowedRepByVaults(client: Pick<ReadClient, 'readContract'>,
 		address: securityPoolAddress,
 		args: [],
 	})
-	if (sameAddress(escalationGameAddress, zeroAddress)) return vaultAddresses.map(() => 0n)
+	if (sameAddress(escalationGameAddress, zeroAddress)) {
+		return vaultAddresses.map(() => ({ escalationEscrowedRep: 0n, liquidationClaimBundles: [], liquidationClaimRep: 0n }))
+	}
 	return await Promise.all(
-		vaultAddresses.map(
-			async vaultAddress =>
-				await client.readContract({
+		vaultAddresses.map(async vaultAddress => {
+			const [escalationEscrowedRep, portfolio] = await Promise.all([
+				client.readContract({
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					functionName: 'escrowedRepByVault',
 					address: escalationGameAddress,
 					args: [vaultAddress],
 				}),
-		),
+				client.readContract({
+					abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+					functionName: 'getLiquidationClaimPortfolio',
+					address: escalationGameAddress,
+					args: [vaultAddress],
+				}),
+			])
+			const [bundleRep, ownerShares, totalShares] = requireLiquidationClaimPortfolio(portfolio)
+			const liquidationClaimBundles = bundleRep.flatMap((currentBundleRep, index) => {
+				const currentOwnerShares = ownerShares[index]
+				const currentTotalShares = totalShares[index]
+				if (currentOwnerShares === undefined || currentTotalShares === undefined) throw new Error('Unexpected liquidation claim portfolio response')
+				if (currentTotalShares === 0n) return []
+				return [{ bundleRep: currentBundleRep, ownerShares: currentOwnerShares, totalShares: currentTotalShares }]
+			})
+			return {
+				escalationEscrowedRep,
+				liquidationClaimBundles,
+				liquidationClaimRep: liquidationClaimBundles.reduce((total, bundle) => total + (bundle.bundleRep * bundle.ownerShares) / bundle.totalShares, 0n),
+			}
+		}),
 	)
 }
 
@@ -182,7 +215,7 @@ async function loadSecurityPoolVaultSummaries(
 		address: securityPoolAddress,
 		args: [vaultAddress],
 	}))
-	const [vaultData, totalRepBalance, poolOwnershipDenominator, escrowedRepByVault] = await Promise.all([
+	const [vaultData, totalRepBalance, poolOwnershipDenominator, escalationVaultData] = await Promise.all([
 		readRequiredMulticall(client, securityVaultSummaryContracts).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -196,7 +229,7 @@ async function loadSecurityPoolVaultSummaries(
 			address: securityPoolAddress,
 			args: [],
 		}),
-		loadEscrowedRepByVaults(client, securityPoolAddress, summaryVaultAddresses),
+		loadEscalationVaultData(client, securityPoolAddress, summaryVaultAddresses),
 	])
 	return {
 		hasLoadedVaults: true,
@@ -204,13 +237,15 @@ async function loadSecurityPoolVaultSummaries(
 		vaults: summaryVaultAddresses.flatMap((vaultAddress, index) => {
 			const currentVaultData = vaultData[index]
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
-			const currentEscrowedRep = escrowedRepByVault[index]
-			if (currentEscrowedRep === undefined) throw new Error('Unexpected escrowed REP response')
-			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
+			const currentEscalationData = escalationVaultData[index]
+			if (currentEscalationData === undefined) throw new Error('Unexpected escalation vault response')
+			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.escalationEscrowedRep === 0n && currentEscalationData.liquidationClaimRep === 0n) return []
 			const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
 			return [
 				{
-					escalationEscrowedRep: currentEscrowedRep,
+					escalationEscrowedRep: currentEscalationData.escalationEscrowedRep,
+					liquidationClaimBundles: currentEscalationData.liquidationClaimBundles,
+					liquidationClaimRep: currentEscalationData.liquidationClaimRep,
 					poolOwnership,
 					poolOwnershipDenominator,
 					repDepositShare: getRepDepositShareFromPoolOwnership({
@@ -505,7 +540,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalSecurityBondAllowance', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
-		loadEscrowedRepByVaults(client, securityPoolAddress, [vaultAddress]).then(values => values[0] ?? 0n),
+		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.escalationEscrowedRep ?? 0n),
 	])
 
 	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData

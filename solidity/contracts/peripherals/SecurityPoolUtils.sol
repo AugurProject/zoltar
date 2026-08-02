@@ -61,31 +61,24 @@ library SecurityPoolUtils {
 	function calculateBundledLiquidationTransfer(
 		uint256 targetOwnership,
 		uint256 targetAllowance,
+		uint256 claimRepToMove,
 		uint256 requestedDebt,
 		uint256 repEthPrice,
 		uint256 currentTotalRep,
 		uint256 currentDenominator
 	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
-		if (targetAllowance == 0 || targetOwnership == 0) return (0, 0, 0);
+		if (targetAllowance == 0) return (0, 0, 0);
 		debtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
 		uint256 debtRemaining = targetAllowance - debtToMove;
 		if (debtRemaining > 0 && debtRemaining < MIN_SECURITY_BOND_DEBT) debtToMove = targetAllowance;
-		if (debtToMove == targetAllowance) {
-			ownershipToMove = targetOwnership;
-		} else {
-			uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
-			uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
-			repToMove = repNumerator / repDenominator;
-			if (repToMove * repDenominator < repNumerator) repToMove += 1;
-			ownershipToMove =
-				currentDenominator == 0 || currentTotalRep == 0
-					? repToMove * PRICE_PRECISION
-					: (repToMove * currentDenominator) / currentTotalRep;
-			if (ownershipToMove >= targetOwnership) {
-				debtToMove = targetAllowance;
-				ownershipToMove = targetOwnership;
-			}
-		}
+		ownershipToMove = _getLiquidationOwnershipAward(
+			targetOwnership,
+			claimRepToMove,
+			debtToMove,
+			repEthPrice,
+			currentTotalRep,
+			currentDenominator
+		);
 		uint256 remainingOwnership = targetOwnership - ownershipToMove;
 		uint256 remainingRep =
 			currentDenominator == 0
@@ -93,12 +86,46 @@ library SecurityPoolUtils {
 				: (remainingOwnership * currentTotalRep) / currentDenominator;
 		if (debtToMove < targetAllowance && remainingRep < MIN_REP_DEPOSIT) {
 			debtToMove = targetAllowance;
-			ownershipToMove = targetOwnership;
+			ownershipToMove = _getLiquidationOwnershipAward(
+				targetOwnership,
+				claimRepToMove,
+				debtToMove,
+				repEthPrice,
+				currentTotalRep,
+				currentDenominator
+			);
+			remainingOwnership = targetOwnership - ownershipToMove;
+			remainingRep =
+				currentDenominator == 0
+					? remainingOwnership / PRICE_PRECISION
+					: (remainingOwnership * currentTotalRep) / currentDenominator;
 		}
+		if (debtToMove == targetAllowance && remainingRep < MIN_REP_DEPOSIT) ownershipToMove = targetOwnership;
 		repToMove =
 			currentDenominator == 0
 				? ownershipToMove / PRICE_PRECISION
 				: (ownershipToMove * currentTotalRep) / currentDenominator;
+	}
+
+	function _getLiquidationOwnershipAward(
+		uint256 targetOwnership,
+		uint256 claimRepToMove,
+		uint256 debtToMove,
+		uint256 repEthPrice,
+		uint256 currentTotalRep,
+		uint256 currentDenominator
+	) private pure returns (uint256 ownershipToMove) {
+		uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
+		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
+		uint256 grossRepAward = repNumerator / repDenominator;
+		if (grossRepAward * repDenominator < repNumerator) grossRepAward += 1;
+		if (claimRepToMove >= grossRepAward) return 0;
+		uint256 freeRepAward = grossRepAward - claimRepToMove;
+		ownershipToMove =
+			currentDenominator == 0 || currentTotalRep == 0
+				? freeRepAward * PRICE_PRECISION
+				: (freeRepAward * currentDenominator) / currentTotalRep;
+		if (ownershipToMove > targetOwnership) ownershipToMove = targetOwnership;
 	}
 
 	function isVaultHealthy(

@@ -150,12 +150,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	) internal view returns (uint256 amountToWithdraw, uint256 burnAmount) {
 		depositAmount = _applyInheritedSourceRetention(depositAmount, parentDepositIndex);
 		cumulativeAmount = _applyInheritedSourceRetention(cumulativeAmount, parentDepositIndex);
-		return
-			_computeWinningWithdrawal(
-				outcomeIndex,
-				_applyTruthAuctionRetention(depositAmount),
-				_applyTruthAuctionRetention(cumulativeAmount)
-			);
+		return _computeWinningWithdrawal(outcomeIndex, depositAmount, cumulativeAmount);
 	}
 
 	function _getOutcomeBalances()

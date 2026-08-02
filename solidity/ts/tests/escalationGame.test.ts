@@ -87,6 +87,19 @@ const payoutClaimCheckpointAbi: Abi = [
 		type: 'function',
 	},
 ]
+const previewLiquidationClaimRepAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'vault', type: 'address' },
+			{ name: 'numerator', type: 'uint256' },
+			{ name: 'denominator', type: 'uint256' },
+		],
+		name: 'previewLiquidationClaimRep',
+		outputs: [{ name: 'amount', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+]
 const initializeForkCarrySnapshotFromSourceAbi: Abi = [
 	{
 		inputs: [
@@ -1809,6 +1822,87 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n)
 	})
 
+	test('recursive carry consumption allocates aggregate retention rounding by cumulative leaf position', async () => {
+		const firstAmount = reportBond + 1n
+		const secondAmount = reportBond + 3n
+		const aggregateAmount = firstAmount + secondAmount
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, firstAmount)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, secondAmount)
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
+			[zeroPeakArray(), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
+			[0n, await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
+			[0n, aggregateAmount, 0n],
+			[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
+		)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, aggregateAmount, aggregateAmount)
+		const childRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 4n)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
+
+		const childCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
+		assert.strictEqual(childCarryTotal, (aggregateAmount * 3n) / 4n)
+		assert.strictEqual((firstAmount * 3n) / 4n + (secondAmount * 3n) / 4n + 1n, childCarryTotal, 'the fixture must expose an aggregate-versus-leaf floor difference')
+		const childPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childLeafCount = await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, firstAmount, 0n, firstAmount, 1n)
+		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, secondAmount, 1n, aggregateAmount, 2n)
+
+		const settleInOrder = async (leafOrder: readonly [0 | 1, 0 | 1]) => {
+			const grandchild = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+			await initializeSnapshotFromSourceViaTestSecurityPool(grandchild.testSecurityPoolAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childPeaks, zeroPeakArray()], [0n, childLeafCount, 0n], [0n, childCarryTotal, 0n], [zeroHash(), childNullifierRoot, zeroHash()])
+			await recordForkedEscrowForOutcomeViaTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, childCarryTotal, childCarryTotal)
+			await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
+			const nullifierTree = new SparseNullifierTree()
+			for (const leafIndex of leafOrder) {
+				const isFirst = leafIndex === 0
+				const proof = await createCarryProof(parent.escalationGameAddress, BigInt(leafIndex), BigInt(leafIndex), 1n, [isFirst ? secondLeafHash : firstLeafHash], nullifierTree.getProof(BigInt(leafIndex)), BigInt(leafIndex + 1))
+				await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+				nullifierTree.consume(BigInt(leafIndex))
+			}
+			assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n, 'every settlement order must consume the aggregate retained checkpoint exactly')
+		}
+
+		await settleInOrder([0, 1])
+		await settleInOrder([1, 0])
+	})
+
+	test('direct child settlement applies its truth-auction haircut once and consumes the inherited source basis', async () => {
+		const inheritedPrincipal = 100n * reportBond
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, inheritedPrincipal)
+
+		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentYesLeafCount = await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentYesCarryTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentYesNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, parent.escalationGameAddress, zeroHash(), [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentYesLeafCount, 0n], [0n, parentYesCarryTotal, 0n], [zeroHash(), parentYesNullifierRoot, zeroHash()])
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, inheritedPrincipal, inheritedPrincipal)
+		const childRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 4n)
+		await advanceForkContinuationPastStart(child.escalationGameAddress)
+
+		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
+		const walletBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const walletBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+
+		assert.strictEqual(walletBalanceAfter - walletBalanceBefore, (inheritedPrincipal * 3n) / 4n, 'the direct child payout should apply the current truth-auction haircut exactly once')
+		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), 0n, 'the retained payout should consume all inherited principal stored in source units')
+	})
+
 	test('direct-claim replay lookup gas does not grow with security-pool ancestry', async () => {
 		const shallowAncestor = await deploySecurityPoolAncestorNode(zeroAddress)
 		let deepestAncestor = shallowAncestor
@@ -1942,6 +2036,7 @@ describe('Escalation Game Test Suite', () => {
 			[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, childLocalDepositor, QuestionOutcome.Yes, reportBond)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -1952,7 +2047,6 @@ describe('Escalation Game Test Suite', () => {
 					args: [childLocalDepositor, childLocalLiquidator, 1n, 3n],
 				}),
 		)
-		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
 		const childYesLeafCount = await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -2666,16 +2760,29 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), reportBond / 2n)
 	})
 
-	test('liquidation rejects a nonzero debt fraction that cannot move one claim share', async () => {
+	test('liquidation skips a zero-share bundle while moving the rest of the portfolio', async () => {
 		const originalOwner = addressString(TEST_ADDRESSES[1])
+		const secondOwner = addressString(TEST_ADDRESSES[3])
+		const largeShareOwner = addressString(TEST_ADDRESSES[4])
 		const liquidator = addressString(TEST_ADDRESSES[2])
 		const deployment = await deployEscalationGameWithProofPool()
 		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThreshold)
 		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, secondOwner, QuestionOutcome.No, 2n * reportBond)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, secondOwner, largeShareOwner, 10n ** 18n - 1n, 10n ** 18n)
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, secondOwner, originalOwner)
 
-		await assert.rejects(moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, liquidator, 1n, 100n * 10n ** 18n), /Fraction/)
-		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, originalOwner), reportBond)
-		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), 0n)
+		const preview = await client.readContract({
+			abi: previewLiquidationClaimRepAbi,
+			address: deployment.escalationGameAddress,
+			functionName: 'previewLiquidationClaimRep',
+			args: [originalOwner, 1n, 2n],
+		})
+		assert.strictEqual(requireBigInt(preview, 'liquidation claim preview'), reportBond / 2n)
+
+		await moveEscalationClaimViaTestSecurityPool(deployment.testSecurityPoolAddress, originalOwner, liquidator, 1n, 2n)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, originalOwner), reportBond / 2n + 2n)
+		assert.strictEqual(await readEscrowedRepByVault(deployment.escalationGameAddress, liquidator), reportBond / 2n)
 	})
 
 	test('claim registries re-enumerate dormant owners across repeated liquidations', async () => {
@@ -2724,6 +2831,7 @@ describe('Escalation Game Test Suite', () => {
 	test('fork continuation imports a consolidated owner checkpoint in bounded batches', async () => {
 		const source = await deployEscalationGameWithProofPool()
 		await startEscalation(source.escalationGameAddress, reportBond, nonDecisionThreshold)
+		const firstCheckpointOwner = addressString(0x0000000000030000000000000000000000000001n)
 		for (let ownerIndex = 1; ownerIndex <= 9; ownerIndex++) {
 			await recordForkedEscrowForOutcomeViaTestSecurityPool(source.testSecurityPoolAddress, addressString(0x0000000000030000000000000000000000000000n + BigInt(ownerIndex)), QuestionOutcome.Yes, reportBond, reportBond)
 		}
@@ -2736,10 +2844,52 @@ describe('Escalation Game Test Suite', () => {
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'first payout bundle count'), 8n, 'the first permissionless progress call should import only one bounded batch')
 		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] }), 0n, 'the continuation must remain paused while another checkpoint batch remains')
+		await assert.rejects(moveEscalationClaimViaTestSecurityPool(child.testSecurityPoolAddress, firstCheckpointOwner, client.account.address), /Claim checkpoint pending/, 'partial checkpoint imports must not expose an incomplete liquidation portfolio')
 
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'final payout bundle count'), 9n, 'the next bounded call should complete the consolidated checkpoint')
 		assert.ok((await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'the continuation should resume only after every owner bundle is present')
+		await moveEscalationClaimViaTestSecurityPool(child.testSecurityPoolAddress, firstCheckpointOwner, client.account.address)
+	})
+
+	test('payout claim checkpoints enforce the global eight-batch continuation limit', async () => {
+		const source = await deployEscalationGameWithProofPool()
+		await startEscalation(source.escalationGameAddress, reportBond, nonDecisionThreshold)
+		for (let ownerIndex = 1; ownerIndex <= 64; ownerIndex++) {
+			await recordForkedEscrowForOutcomeViaTestSecurityPool(source.testSecurityPoolAddress, addressString(0x0000000000040000000000000000000000000000n + BigInt(ownerIndex)), QuestionOutcome.Yes, reportBond, reportBond)
+		}
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(source.testSecurityPoolAddress, addressString(0x0000000000040000000000000000000000000041n), QuestionOutcome.Yes, reportBond, reportBond), /Claim checkpoint full/)
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, source.escalationGameAddress, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		for (let batchIndex = 0; batchIndex < 8; batchIndex++) await resumeEscalationFromFork(child.escalationGameAddress)
+
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'maximum payout bundle count'), 64n)
+		assert.ok((await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'the maximum checkpoint should resume in exactly eight bounded batches')
+	})
+
+	test('maximum payout claim checkpoints absorb direct child escrow without exceeding the cap', async () => {
+		const source = await deployEscalationGameWithProofPool()
+		await startEscalation(source.escalationGameAddress, reportBond, nonDecisionThreshold)
+		for (let ownerIndex = 1; ownerIndex <= 64; ownerIndex++) {
+			await recordForkedEscrowForOutcomeViaTestSecurityPool(source.testSecurityPoolAddress, addressString(0x0000000000050000000000000000000000000000n + BigInt(ownerIndex)), QuestionOutcome.Yes, reportBond, reportBond)
+		}
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, source.escalationGameAddress, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond, reportBond)
+
+		assert.strictEqual(
+			requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'pre-import payout bundle count'),
+			0n,
+			'direct child escrow covered by the source checkpoint must not allocate a duplicate payout key',
+		)
+		for (let batchIndex = 0; batchIndex < 8; batchIndex++) await resumeEscalationFromFork(child.escalationGameAddress)
+
+		assert.strictEqual(requireBigInt(await client.readContract({ abi: payoutClaimCheckpointAbi, address: child.escalationGameAddress, functionName: 'payoutClaimBundleCount', args: [] }), 'maximum payout bundle count after direct escrow'), 64n)
+		assert.ok((await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'the maximum checkpoint should still resume after direct child escrow materialization')
 	})
 
 	test('residual sweep rejects while forked escrow remains unsettled', async () => {

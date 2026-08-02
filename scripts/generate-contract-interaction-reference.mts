@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/safety-operations/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'd0d0b868036c71f505a34dbf7dfae27964801a29d9a3fbd2e2c367326cac18e8'
+const expectedProductionSoliditySourceFingerprint = 'cefe8bd0f5da2ff9d7ca34d1a6999e95bf4249feaa6675b9edba4c7b2720f27d'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -488,6 +488,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 }
 
 const readDeclarationExclusionsBySource: Record<string, string[]> = {
+	'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol': ['securityPool'],
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/peripherals/SecurityPool.sol': ['eventEmitter', 'factory'],
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': ['forkPayoutClaimCheckpointComplete'],
@@ -873,7 +874,7 @@ const contractReferences: ContractReference[] = [
 				call: '`performLiquidation(...)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves allowance to the caller. A partial liquidation quotes live free REP at the fixed 5% bonus before pool-ownership flooring; a full or dust-promoted close transfers all remaining target ownership. It moves the matching fraction of every non-tradeable escalation claim, while the target retains all accrued unpaid fees. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
+					"Moves allowance and the matching fraction of every non-tradeable escalation claim to the caller. The claim's current effective REP amount is credited against the fixed 5%-bonus gross award before pool-ownership flooring, and only the uncovered award moves as free REP. All accrued unpaid fees remain with the target; free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
 					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; target ownership and allowance exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
@@ -926,7 +927,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				declarations: [{ name: 'resumeForkedEscalationGame' }],
 				effect:
-					"Imports at most eight frozen payout-bundle keys into the child's consolidated checkpoint. If keys remain, the game stays paused and another permissionless call may continue. Once the checkpoint and REP funding are complete, clears the pool wait flag, records the resume timestamp, and starts its remaining escalation clock.",
+					"Imports at most eight of the globally capped 64 frozen payout-bundle keys into the child's consolidated checkpoint. If keys remain, the game stays paused and another permissionless call may continue. Once the checkpoint and REP funding are complete, clears the pool wait flag, records the resume timestamp, and starts its remaining escalation clock.",
 				preconditions: 'Pool is operational, awaiting a configured fork continuation, and the game has not resumed.',
 				signals: 'One `PayoutClaimCheckpointImported` per attempted batch; on completion, `ForkContinuationResumed` and `AwaitingForkContinuationSet(false)`',
 			},
@@ -1112,7 +1113,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` when an unresolved continuation becomes ready',
+				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `PayoutClaimCheckpointImported`; it emits `ForkContinuationResumed` only when that bounded import completes the unresolved continuation',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -1120,7 +1121,8 @@ const contractReferences: ContractReference[] = [
 				effect: 'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` when the unresolved continuation becomes ready',
+				signals:
+					'`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `PayoutClaimCheckpointImported` for the first bounded continuation batch; `ForkContinuationResumed` only when that import completes the unresolved continuation',
 			},
 			{
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
@@ -1163,12 +1165,23 @@ const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'cef9b87f1c588462fbbd77c13eb055e78ed30a0efc0c4ac4cfcdf15722fbbe89',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: '21f8b0329bfee1b84efe8c8cf175c0e4b6c218e3889063bddcee44f2a9fb1d3e',
+		readAbiFingerprint: 'f0e9174ac6691e29284e968d00e87ed42b46499aadfce4c3127b412e13c0d809',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, `totalEscrowedRep`, `truthAuctionRepBefore`, `truthAuctionRepRemaining`, `cumulativeClaimRetention`, `cumulativeClaimRetentionExponent`, and `forkCarryPayoutClaimImportCursor`. The claim delegate fallback supplies bounded payout-checkpoint and owner reads. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, `totalEscrowedRep`, `truthAuctionRepBefore`, `truthAuctionRepRemaining`, `cumulativeClaimRetention`, `cumulativeClaimRetentionExponent`, and `forkCarryPayoutClaimImportCursor`. The claim delegate fallback exposes `payoutClaimBundleCount`, `payoutClaimBundleKeyAt`, `forkPayoutClaimCheckpointComplete`, `rootClaimSourceGame`, `applyInheritedClaimRetention`, `applyInheritedSourceStorageBasis`, `getClaimOwner`, `getPayoutClaimOwner`, `liquidationClaimRepByVault`, `previewLiquidationClaimRep`, and `getLiquidationClaimPortfolio`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `escrowedRepByVault` is locally attributed current-game escrow used for health; `liquidationClaimRepByVault` is the complete local-plus-inherited payout portfolio in current effective REP units. The liquidation preview applies the exact per-bundle share floors used by execution, and the bounded portfolio view lets clients reproduce that math. `getPayoutClaimOwner` returns owner shares, total shares, and the bundle REP after the current game retention, while the checkpoint and root-source reads describe bounded lineage import. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'escrowedRepByVault', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
+			{ name: 'payoutClaimBundleCount', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'payoutClaimBundleKeyAt', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'forkPayoutClaimCheckpointComplete', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'rootClaimSourceGame', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'applyInheritedClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'applyInheritedSourceStorageBasis', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'getClaimOwner', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'getPayoutClaimOwner', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'liquidationClaimRepByVault', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'previewLiquidationClaimRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
+			{ name: 'getLiquidationClaimPortfolio', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'computeIterativeAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'computeTimeSinceStartFromAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'totalCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
@@ -1253,7 +1266,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'moveEscalationClaim', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' }],
 				effect:
 					'Moves the same bounded fraction of every non-tradeable escalation bundle and its unresolved or fork-escrow rights to the liquidator vault; underlying REP remains in the game. A full close replaces the source owner in place or merges with an existing destination, guaranteeing a liquidation exit even when owner slots are fragmented.',
-				preconditions: 'Distinct nonzero vaults and a positive fraction no greater than one; at most 64 bundle keys per vault and eight owners per bundle. A partial transfer to a new owner must leave the final slot free and every live bundle must move at least one share.',
+				preconditions: 'Distinct nonzero vaults and a positive fraction no greater than one; at most 64 bundle keys globally and per vault, and eight owners per bundle. A partial transfer to a new owner must leave the final slot free. Individual bundles whose share result floors to zero remain unchanged.',
 				signals: '`EscalationClaimMoved`',
 			},
 			{

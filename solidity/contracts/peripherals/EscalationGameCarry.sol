@@ -333,7 +333,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);
-		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amount);
+		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amount, proof.cumulativeAmount);
 	}
 
 	function _consumeLocalDeposit(
@@ -490,7 +490,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amount);
 	}
 
-	function _consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) private {
+	function _consumeCarriedDeposit(
+		uint8 outcomeIndex,
+		uint256 parentDepositIndex,
+		uint256 amount,
+		uint256 cumulativeAmount
+	) private {
 		require(!_isCarriedDepositConsumed(outcomeIndex, parentDepositIndex), 'Deposit settled');
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		uint256 sourceRetainedAmount = _applyInheritedSourceRetention(amount, parentDepositIndex);
@@ -500,13 +505,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			'Carried REP low'
 		);
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;
+		uint256 sourceBasisAmount = _applyInheritedSourceStorageBasis(amount, cumulativeAmount, parentDepositIndex);
 		uint256 inheritedAmountToConsume =
-			sourceRetainedAmount > state.inheritedUnresolvedTotal
-				? state.inheritedUnresolvedTotal
-				: sourceRetainedAmount;
+			sourceBasisAmount > state.inheritedUnresolvedTotal ? state.inheritedUnresolvedTotal : sourceBasisAmount;
 		state.inheritedUnresolvedTotal -= inheritedAmountToConsume;
-		if (sourceRetainedAmount > inheritedAmountToConsume) {
-			state.localUnresolvedTotal -= sourceRetainedAmount - inheritedAmountToConsume;
+		if (sourceBasisAmount > inheritedAmountToConsume) {
+			state.localUnresolvedTotal -= sourceBasisAmount - inheritedAmountToConsume;
 		}
 	}
 

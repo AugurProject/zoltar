@@ -9,10 +9,6 @@ import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
 import { EscalationForkSnapshot, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
 
-interface IEscalationClaimCheckpointProgress {
-	function forkPayoutClaimCheckpointComplete() external view returns (bool);
-}
-
 abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
 	Zoltar public immutable zoltar;
 
@@ -60,8 +56,6 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 			child.systemState() != SystemState.Operational ||
 			childEscalationGame.forkResumedAt() != 0
 		) return;
-		if (!IEscalationClaimCheckpointProgress(address(childEscalationGame)).forkPayoutClaimCheckpointComplete())
-			return;
 		child.resumeForkedEscalationGame();
 	}
 

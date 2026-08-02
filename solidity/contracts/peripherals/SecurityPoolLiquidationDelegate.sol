@@ -46,14 +46,39 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			'Target safe'
 		);
 		uint256 ownershipToMove;
+		uint256 candidateDebtToMove = debtAmount > snapshotTargetAllowance ? snapshotTargetAllowance : debtAmount;
+		uint256 debtRemaining = snapshotTargetAllowance - candidateDebtToMove;
+		if (debtRemaining > 0 && debtRemaining < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT) {
+			candidateDebtToMove = snapshotTargetAllowance;
+		}
+		uint256 claimRepToMove =
+			address(escalationGame) == address(0x0)
+				? 0
+				: _previewLiquidationClaimRep(targetVault, candidateDebtToMove, snapshotTargetAllowance);
 		(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
 			securityVaults[targetVault].poolOwnership,
 			snapshotTargetAllowance,
-			debtAmount,
+			claimRepToMove,
+			candidateDebtToMove,
 			repEthPrice,
 			pool.getTotalRepBalance(),
 			poolOwnershipDenominator
 		);
+		if (debtToMove != candidateDebtToMove) {
+			claimRepToMove =
+				address(escalationGame) == address(0x0)
+					? 0
+					: _previewLiquidationClaimRep(targetVault, debtToMove, snapshotTargetAllowance);
+			(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
+				securityVaults[targetVault].poolOwnership,
+				snapshotTargetAllowance,
+				claimRepToMove,
+				debtToMove,
+				repEthPrice,
+				pool.getTotalRepBalance(),
+				poolOwnershipDenominator
+			);
+		}
 		require(debtToMove > 0, 'No liq');
 
 		feeIndexRemainder = 0;
@@ -90,6 +115,23 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			),
 			'Caller bad'
 		);
+	}
+
+	function _previewLiquidationClaimRep(
+		address vault,
+		uint256 numerator,
+		uint256 denominator
+	) private view returns (uint256 amount) {
+		(bool success, bytes memory result) = address(escalationGame).staticcall(
+			abi.encodeWithSignature(
+				'previewLiquidationClaimRep(address,uint256,uint256)',
+				vault,
+				numerator,
+				denominator
+			)
+		);
+		require(success && result.length == 32, 'Claim balance failed');
+		return abi.decode(result, (uint256));
 	}
 
 	function _moveEscalationClaim(

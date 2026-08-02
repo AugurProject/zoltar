@@ -7,6 +7,7 @@ import {
 	ForkedEscrowState,
 	MAX_CLAIM_BUNDLES_PER_VAULT,
 	MAX_CLAIM_OWNERS_PER_BUNDLE,
+	MAX_PAYOUT_CLAIM_BUNDLES,
 	Node,
 	NonDecisionState,
 	OutcomeState
@@ -71,22 +72,27 @@ abstract contract EscalationGameStorage {
 		}
 	}
 
-	function _increaseEscrowedRepForBundle(address bundleId, uint256 amount) internal {
+	function _increaseEscrowedRepForBundle(address bundleId, uint256 amount, bool recordPayoutClaim) internal {
 		EscalationClaimBundle storage bundle = escalationClaimBundles[bundleId];
 		if (bundle.totalShares == 0) {
 			bundle.totalShares = CLAIM_SHARE_SCALE;
 			bundle.owners[0] = bundleId;
 			bundle.ownerShares[0] = CLAIM_SHARE_SCALE;
 		}
-		address payoutKey = _payoutClaimKey(address(this), bundleId);
-		EscalationClaimBundle storage payoutBundle = payoutClaimBundles[payoutKey];
-		if (payoutBundle.totalShares == 0) {
-			payoutBundle.totalShares = CLAIM_SHARE_SCALE;
-			payoutBundle.owners[0] = bundleId;
-			payoutBundle.ownerShares[0] = CLAIM_SHARE_SCALE;
-			payoutClaimBundleKeys.push(payoutKey);
+		uint256 claimShares = _repToClaimShares(amount);
+		bundle.escrowedRep += claimShares;
+		if (recordPayoutClaim) {
+			address payoutKey = _payoutClaimKey(address(this), bundleId);
+			EscalationClaimBundle storage payoutBundle = payoutClaimBundles[payoutKey];
+			if (payoutBundle.totalShares == 0) {
+				require(payoutClaimBundleKeys.length < MAX_PAYOUT_CLAIM_BUNDLES, 'Claim checkpoint full');
+				payoutBundle.totalShares = CLAIM_SHARE_SCALE;
+				payoutBundle.owners[0] = bundleId;
+				payoutBundle.ownerShares[0] = CLAIM_SHARE_SCALE;
+				payoutClaimBundleKeys.push(payoutKey);
+			}
+			payoutBundle.escrowedRep += claimShares;
 		}
-		bundle.escrowedRep += _repToClaimShares(amount);
 		totalEscrowedRep += amount;
 	}
 
@@ -101,6 +107,23 @@ abstract contract EscalationGameStorage {
 	) internal view returns (uint256 retainedAmount) {
 		(bool success, bytes memory retentionData) = address(this).staticcall(
 			abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amount, parentDepositIndex)
+		);
+		if (!success || retentionData.length != 32) revert();
+		return abi.decode(retentionData, (uint256));
+	}
+
+	function _applyInheritedSourceStorageBasis(
+		uint256 amount,
+		uint256 cumulativeAmount,
+		uint256 parentDepositIndex
+	) internal view returns (uint256) {
+		(bool success, bytes memory retentionData) = address(this).staticcall(
+			abi.encodeWithSignature(
+				'applyInheritedSourceStorageBasis(uint256,uint256,uint256)',
+				amount,
+				cumulativeAmount,
+				parentDepositIndex
+			)
 		);
 		if (!success || retentionData.length != 32) revert();
 		return abi.decode(retentionData, (uint256));

@@ -5,6 +5,20 @@ import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 const MIN_SECURITY_BOND_DEBT = 1n * 10n ** 18n
 const MIN_REP_DEPOSIT = 10n * 10n ** 18n
 
+function getLiquidationClaimRepToMove(debtToMove: bigint, targetVaultSummary: SecurityPoolVaultSummary) {
+	const targetAllowance = targetVaultSummary.securityBondAllowance
+	if (targetAllowance === 0n) return 0n
+	const claimBundles = targetVaultSummary.liquidationClaimBundles
+	if (claimBundles === undefined) {
+		const liquidationClaimRep = targetVaultSummary.liquidationClaimRep ?? targetVaultSummary.escalationEscrowedRep
+		return debtToMove === targetAllowance ? liquidationClaimRep : (liquidationClaimRep * debtToMove) / targetAllowance
+	}
+	return claimBundles.reduce((total, bundle) => {
+		const sharesToMove = debtToMove === targetAllowance ? bundle.ownerShares : (bundle.ownerShares * debtToMove) / targetAllowance
+		return total + (bundle.bundleRep * sharesToMove) / bundle.totalShares
+	}, 0n)
+}
+
 function isVaultLiquidatable(lastPrice: bigint | undefined, securityBondAllowance: bigint | undefined, repDepositShare: bigint | undefined, escalationEscrowedRep: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (lastPrice === undefined || securityBondAllowance === undefined || repDepositShare === undefined || statoblastSecurityMultiplierBps === undefined) return false
 	const escalationRep = escalationEscrowedRep ?? 0n
@@ -16,7 +30,8 @@ function isVaultLiquidatable(lastPrice: bigint | undefined, securityBondAllowanc
 }
 
 function getPartialLiquidationTransfer(debtToMove: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
-	const quotedRep = getLiquidationRepToMove(debtToMove, repPerEthPrice)
+	const claimRepToMove = getLiquidationClaimRepToMove(debtToMove, targetVaultSummary)
+	const quotedRep = getLiquidationRepToMove(debtToMove, repPerEthPrice, claimRepToMove)
 	const { poolOwnership, poolOwnershipDenominator, totalRepBalance } = targetVaultSummary
 	if (poolOwnership === undefined || poolOwnershipDenominator === undefined || totalRepBalance === undefined) {
 		if (quotedRep >= targetVaultSummary.repDepositShare) return { remainingRep: 0n, repToMove: targetVaultSummary.repDepositShare }
@@ -32,7 +47,8 @@ function getPartialLiquidationTransfer(debtToMove: bigint, targetVaultSummary: S
 }
 
 function getRepToMoveForLiquidation(debtToMove: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
-	return debtToMove === targetVaultSummary.securityBondAllowance ? targetVaultSummary.repDepositShare : getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice).repToMove
+	const transfer = getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice)
+	return debtToMove === targetVaultSummary.securityBondAllowance && transfer.remainingRep < MIN_REP_DEPOSIT ? targetVaultSummary.repDepositShare : transfer.repToMove
 }
 
 function getPromotedDebtToMove(requestedDebt: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
@@ -88,6 +104,7 @@ type LiquidationSimulation = {
 		repDepositShare: bigint
 		securityBondAllowance: bigint
 	}
+	claimRepToMove: bigint
 	debtToMove: bigint
 	repToMove: bigint
 	targetAfter: {
@@ -128,6 +145,7 @@ export function simulateLiquidation({
 			targetVaultSummary,
 		}) ?? targetAllowance
 	const debtToMove = getPromotedDebtToMove(liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove, targetVaultSummary, repPerEthPrice)
+	const claimRepToMove = getLiquidationClaimRepToMove(debtToMove, targetVaultSummary)
 	const repToMove = getRepToMoveForLiquidation(debtToMove, targetVaultSummary, repPerEthPrice)
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
 	const targetAfterAllowance = targetAllowance - debtToMove
@@ -146,6 +164,7 @@ export function simulateLiquidation({
 			repDepositShare: callerRepDeposit,
 			securityBondAllowance: callerAllowance,
 		},
+		claimRepToMove,
 		debtToMove,
 		repToMove,
 		targetAfter: {

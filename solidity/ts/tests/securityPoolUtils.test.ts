@@ -36,6 +36,14 @@ describe('SecurityPoolUtils', () => {
 			args: [completeSetCollateralAmount, securityBondAllowance],
 		})
 
+	const calculateBundledLiquidationTransfer = async (claimRepToMove: bigint) =>
+		await client.readContract({
+			abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
+			address: securityPoolUtilsAddress,
+			functionName: 'calculateBundledLiquidationTransfer',
+			args: [500n * PRICE_PRECISION, 100n * PRICE_PRECISION, claimRepToMove, 50n * PRICE_PRECISION, PRICE_PRECISION, 1000n * PRICE_PRECISION, 1000n * PRICE_PRECISION],
+		})
+
 	beforeEach(async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -88,5 +96,17 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 11n) / 10n), false, 'associated-REP boundary should enforce the configured distance')
 		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 12n) / 10n), true, 'associated-REP boundary should allow a price beyond the configured distance')
 		strictEqualTypeSafe(await isBeyondDistance(100n * 10n ** 18n, 100n * 10n ** 18n, (PRICE_PRECISION * 3n) / 4n), true, 'free-REP migration boundary should bind before the associated-REP boundary')
+	})
+
+	test('liquidation compensation is invariant across losing, mixed, and winning claim portfolios', async () => {
+		const losingPortfolio = await calculateBundledLiquidationTransfer(0n)
+		const mixedPortfolio = await calculateBundledLiquidationTransfer(20n * PRICE_PRECISION)
+		const winningPortfolio = await calculateBundledLiquidationTransfer(100n * PRICE_PRECISION)
+
+		strictEqualTypeSafe(losingPortfolio[1], (105n * PRICE_PRECISION) / 2n, 'a portfolio with no claim value should receive the complete 5%-bonus free-REP award')
+		strictEqualTypeSafe(mixedPortfolio[1], (65n * PRICE_PRECISION) / 2n, 'a mixed portfolio should deduct its 20-REP proportional claim from the gross award')
+		strictEqualTypeSafe(winningPortfolio[1], 0n, 'a claim slice above the gross award should receive no additional free REP')
+		strictEqualTypeSafe(mixedPortfolio[1] + 20n * PRICE_PRECISION, losingPortfolio[1], 'mixed claim and free-REP compensation should equal the claim-free gross award')
+		strictEqualTypeSafe(winningPortfolio[1] + (100n * PRICE_PRECISION > losingPortfolio[1] ? losingPortfolio[1] : 100n * PRICE_PRECISION), losingPortfolio[1], 'winning-claim compensation should be capped at the same gross award')
 	})
 })

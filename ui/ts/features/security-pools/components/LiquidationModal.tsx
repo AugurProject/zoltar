@@ -435,13 +435,13 @@ export function LiquidationModal({
 						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
 					]}
 					primary={[
-						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationAmountValue} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationSimulation?.debtToMove} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.repMoved, value: <CurrencyValue value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.claimRepMoved, value: <CurrencyValue value={liquidationSimulation?.claimRepToMove} suffix={commonCopy.rep} /> },
 						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequired, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequired} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[
 						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.repDepositShare} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.resultingCallerEscalationRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.escalationEscrowedRep} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.securityBondAllowance} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={

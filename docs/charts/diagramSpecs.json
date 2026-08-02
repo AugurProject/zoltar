@@ -300,8 +300,8 @@
 		"width": 920
 	},
 	"fig-escalation-game-module-split": {
-		"ariaDescription": "A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.",
-		"ariaLabel": "EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier",
+		"ariaDescription": "A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. Deposit and claim delegates use the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.",
+		"ariaLabel": "EscalationGame module split between inherited state modules, the deposit and claim delegates, and the external proof verifier",
 		"height": 360,
 		"nodes": [
 			{
@@ -546,11 +546,11 @@
 					"x": "810",
 					"y": "291",
 					"text-anchor": "middle",
-					"class": "svg-label"
+					"class": "svg-small"
 				},
 				"children": [
 					{
-						"text": "DepositDelegate"
+						"text": "DepositDelegate + ClaimDelegate"
 					}
 				],
 				"tag": "text"
@@ -993,8 +993,8 @@
 		"width": 920
 	},
 	"fig-liquidation-punitive-flow": {
-		"ariaDescription": "A partial liquidation moves debt and proportional non-tradeable escalation claims from the unsafe target vault with 5% bonus-priced free REP; a full close moves all remaining target ownership, while accrued fees remain with the target.",
-		"ariaLabel": "Partial liquidation quotes a 5% REP bonus, full liquidation moves all target ownership, and accrued fees remain with the target vault.",
+		"ariaDescription": "Liquidation moves debt and proportional non-tradeable escalation claims from the unsafe target vault, credits current claim REP against the 5%-bonus gross award, and leaves fees and non-dust surplus with the target.",
+		"ariaLabel": "Liquidation credits moved claims against the gross REP award while target fees and non-dust surplus remain behind.",
 		"height": 200,
 		"nodes": [
 			{
@@ -1071,7 +1071,7 @@
 				},
 				"children": [
 					{
-						"text": "retains all accrued fees"
+						"text": "retains fees and non-dust surplus"
 					}
 				],
 				"tag": "text"
@@ -1093,7 +1093,7 @@
 				},
 				"children": [
 					{
-						"text": "partial: debt + claims + 5% REP quote"
+						"text": "debt + claims + uncovered REP award"
 					}
 				],
 				"tag": "text"

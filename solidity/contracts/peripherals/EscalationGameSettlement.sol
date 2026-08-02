@@ -197,6 +197,14 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			deposit.cumulativeAmount
 		);
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmount);
+		if (!transferredRep) {
+			_delegateDepositCall(
+				abi.encodeCall(
+					EscalationGameDepositDelegate.consumePayoutClaimBacking,
+					(depositor, originalDepositAmount)
+				)
+			);
+		}
 		if (transferredRep) _burnWinningHaircut(burnAmount, false);
 		emit ClaimDeposit(
 			depositor,

@@ -136,14 +136,14 @@ function assertBoundedClaimRegistryDocs(): void {
 	assert.match(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT = 64;/)
 	assert.match(escalationGameTypes, /MAX_CLAIM_OWNERS_PER_BUNDLE = 8;/)
 	assert.match(escalationGameTypes, /MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;/)
-	assert.match(html, /at most 64 bundle identities per vault/)
+	assert.match(html, /at most 64 bundle identities globally and per vault/)
 	assert.match(html, /permissionless pool calls copy at most eight bundles each/)
 	assert.match(html, /Liquidation then scans only the current game's fixed registries/)
 	assert.match(html, /an acquired claim is not overwritten when its owner later creates a local claim/)
 	assert.match(html, /an owner whose shares went to zero is re-enumerated if a later liquidation returns shares/)
 	assert.match(html, /a partial transfer to a new owner cannot consume the last free slot/)
 	assert.match(html, /a full close replaces the source owner in place/)
-	assert.match(liquidationHtml, /canonical <a href="\.\.\/architecture-deployment\/escalation-game-architecture\.html#claim-ownership">registry, bundle, owner, and internal scan limits<\/a>/)
+	assert.match(liquidationHtml, /canonical <a href="\.\.\/architecture-deployment\/escalation-game-architecture\.html#claim-ownership">64-bundle global and per-vault checkpoint cap, eight-owner cap, eight-bundle import batch, and internal scan limits<\/a>/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
 	assert.match(whitepaperStatoblast, /source-principal allocation may floor to zero while its independently[\s\S]*larger child-REP reward remains positive/)
 }
@@ -559,7 +559,7 @@ function assertLiquidationFullCloseDocs(): void {
 		'data-source="value(freeRep + escalationRep) >= allowance * poolSecurityMultiplier"',
 		'data-source="allowance = 0 or value(freeRep) > allowance * migrationSecurityMultiplier"',
 		'Liquidation is the only ownership-change path, and settlement is the only payout path.',
-		'For a partial liquidation, the protocol quotes free REP worth 105% of the moved debt at the settled price before ownership-unit flooring',
+		'The 105% quote caps the free-REP supplementation target, not the mandatory claim transfer.',
 		'A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary.',
 	]) {
 		assert.ok(normalizedLiquidation.includes(documentedClaim), `Missing bundled-liquidation documentation claim: ${documentedClaim}`)
@@ -570,12 +570,11 @@ function assertLiquidationFullCloseDocs(): void {
 
 	assert.match(whitepaperStatoblast, /href="\.\.\/protocol-design\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
-	assert.match(
-		diagramSpecs,
-		/"fig-liquidation-punitive-flow"[\s\S]*partial liquidation[\s\S]*5% bonus-priced free REP[\s\S]*full close moves all remaining target ownership[\s\S]*accrued fees remain with the target/i,
-		'canonical liquidation diagram must distinguish the partial REP bonus, full-close ownership transfer, and target fee isolation',
-	)
-	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
+	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*credits current claim REP against the 5%-bonus gross award[\s\S]*leaves fees and non-dust surplus with the target/i, 'canonical liquidation diagram must show claim credit, fee isolation, and the surplus dust exception')
+	assert.match(liquidationHtml, /Accrued ETH fees are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept\./)
+	assert.match(eventStream, /Escalation continuation \| `ForkCarryCheckpoint`, `PayoutClaimCheckpointImported`, `ForkContinuationResumed`/)
+	assert.match(eventStream, /`EscalationGame\.PayoutClaimCheckpointImported` \| `sourceGame indexed`, `startIndex`, `endIndex`, `sourceBundleCount`/)
+	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, claimRepToMove, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 	assert.match(whitepaperStatoblast, /truth-auction\.html#clearing/)
 }
@@ -675,7 +674,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /### Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
-	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*bonus-priced REP liquidation[\s\S]*fee isolation/)
+	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*claim-credit REP liquidation[\s\S]*fee isolation/)
 	assert.match(operatorReference, /Migration, liquidation, and storage modules[\s\S]*\[`SecurityPoolLiquidationDelegate\.sol`\][\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)

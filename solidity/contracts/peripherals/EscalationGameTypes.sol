@@ -15,6 +15,7 @@ uint256 constant MAX_CLAIM_BUNDLES_PER_VAULT = 64;
 uint256 constant MAX_CLAIM_OWNERS_PER_BUNDLE = 8;
 uint256 constant CLAIM_SHARE_SCALE = 1e18;
 uint256 constant MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;
+uint256 constant MAX_PAYOUT_CLAIM_BUNDLES = 64;
 
 enum NonDecisionState {
 	None,

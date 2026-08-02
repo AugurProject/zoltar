@@ -1261,7 +1261,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/partial liquidation quotes free REP at the 5% bonus/)).not.toBeNull()
+		expect(documentQueries.getByText(/claim is credited at its current REP amount against the 5%-bonus gross award/)).not.toBeNull()
+		expect(documentQueries.getByText(/Free-REP surplus also stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept/)).not.toBeNull()
 	})
 
 	test('previews the exact post-ownership-conversion REP amount after a pool donation', () => {
@@ -1287,6 +1288,52 @@ describe('LiquidationModal', () => {
 
 		expect(exactRepMoved).toBe(quotedRep - 1n)
 		expect(simulation.repToMove).toBe(exactRepMoved)
+	})
+
+	test('credits the exact per-bundle claim shares moved by liquidation', () => {
+		const targetVaultSummary = createTargetVaultSummary({
+			liquidationClaimBundles: [
+				{ bundleRep: 11n, ownerShares: 3n, totalShares: 7n },
+				{ bundleRep: 13n, ownerShares: 5n, totalShares: 9n },
+			],
+			liquidationClaimRep: 11n,
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: 100n * ETH,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
+			liquidationAmount: 50n * ETH,
+			repPerEthPrice: ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+
+		expect(simulation.repToMove).toBe((105n * ETH) / 2n - 3n)
+	})
+
+	test('renders the exact per-bundle claim REP moved', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				liquidationClaimBundles: [
+					{ bundleRep: 11n * ETH, ownerShares: 3n, totalShares: 7n },
+					{ bundleRep: 13n * ETH, ownerShares: 5n, totalShares: 9n },
+				],
+				liquidationClaimRep: (11n * ETH * 3n) / 7n + (13n * ETH * 5n) / 9n,
+				repDepositShare: 100n * ETH,
+				securityBondAllowance: 100n * ETH,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const claimMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Escalation Claim REP Moved')
+		if (!(claimMovedLabel instanceof HTMLElement)) throw new Error('Expected Escalation Claim REP Moved label')
+		const claimMovedValue = claimMovedLabel.nextElementSibling
+		if (!(claimMovedValue instanceof HTMLElement)) throw new Error('Expected Escalation Claim REP Moved value')
+		expect(claimMovedValue.textContent).toBe('≈ 4.46 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1499,7 +1546,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Your Vault')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
-		expect(documentQueries.getByText('Your REP After')).not.toBeNull()
+		expect(documentQueries.getByText('Your Free REP After')).not.toBeNull()
 		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
 		expect(documentQueries.getByText('Free REP Moved')).not.toBeNull()
 	})
@@ -1591,6 +1638,9 @@ describe('LiquidationModal', () => {
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum security bond allowance after liquidation.')).toBe(false)
+		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
+		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
+		expect(debtAssumedLabel.nextElementSibling?.textContent).toBe('≈ 100.00 ETH')
 	})
 
 	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the executable cap', async () => {
@@ -1662,6 +1712,11 @@ describe('LiquidationModal', () => {
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
+		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
+		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
+		const debtAssumedValue = debtAssumedLabel.nextElementSibling
+		if (!(debtAssumedValue instanceof HTMLElement)) throw new Error('Expected Debt Assumed value')
+		expect(debtAssumedValue.textContent).toBe('≈ 2 500.00 ETH')
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
@@ -1670,6 +1725,7 @@ describe('LiquidationModal', () => {
 		const repMovedValueAfter = repMovedLabel.nextElementSibling
 		if (!(repMovedValueAfter instanceof HTMLElement)) throw new Error('Expected Rep Moved value after input')
 		expect(repMovedValueAfter.textContent).toBe(clampedPreviewText)
+		expect(debtAssumedValue.textContent).toBe('≈ 2 500.00 ETH')
 
 		render(null, container)
 		container.remove()

@@ -271,6 +271,7 @@ describe('securityPools protocol client', () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2')] as const
+		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
 		const loadedVaultAddresses: Address[] = []
 		let securityVaultSummaryBatchCount = 0
 		const client = createMockLoaderClient({
@@ -314,7 +315,19 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'getActiveVaultCount') return 2n
 				if (request.functionName === 'getActiveVaults') return previewVaultAddresses
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
-				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
+				if (request.functionName === 'getLiquidationClaimPortfolio') {
+					const bundleRep = Array<bigint>(64).fill(0n)
+					const ownerShares = Array<bigint>(64).fill(0n)
+					const totalShares = Array<bigint>(64).fill(0n)
+					if (request.args?.[0] === previewVaultAddresses[0]) {
+						bundleRep[0] = 11n
+						ownerShares[0] = 3n
+						totalShares[0] = 7n
+					}
+					return [bundleRep, ownerShares, totalShares]
+				}
 				if (request.functionName === 'getTotalRepBalance') return 100n
 				if (request.functionName === 'poolOwnershipDenominator') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -329,6 +342,8 @@ describe('securityPools protocol client', () => {
 		expect(securityVaultSummaryBatchCount).toBe(1)
 		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
+		expect(pool.vaults[0]?.liquidationClaimRep).toBe(4n)
+		expect(pool.vaults[0]?.liquidationClaimBundles).toEqual([{ bundleRep: 11n, ownerShares: 3n, totalShares: 7n }])
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {

@@ -86,7 +86,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		);
 		_requireClaimBundleUnsplit(depositor);
 		selectedOutcomeState.balance = expectedCumulativeRepAmount;
-		_increaseEscrowedRepForBundle(depositor, repAmount);
+		_increaseEscrowedRepForBundle(depositor, repAmount, true);
 		_registerClaimBundle(claimBundlesByOwner, depositor, depositor);
 		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, _payoutClaimKey(address(this), depositor));
 		unresolvedRepByVault[depositor] += repAmount;
@@ -154,9 +154,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.sourcePrincipal += sourcePrincipal;
 		uint256 effectiveChildRep = _applyTruthAuctionRetention(childRepAmount);
 		state.childRep += childRepAmount;
-		_increaseEscrowedRepForBundle(depositor, effectiveChildRep);
+		// A continuation source checkpoint already owns the durable payout claim.
+		// Recording another child-local payout key would consume additional global
+		// and per-vault capacity before the bounded checkpoint import completes.
+		bool recordPayoutClaim = forkCarrySourceGame == address(0x0);
+		_increaseEscrowedRepForBundle(depositor, effectiveChildRep, recordPayoutClaim);
 		_registerClaimBundle(claimBundlesByOwner, depositor, depositor);
-		_registerClaimBundle(payoutClaimBundlesByOwner, depositor, _payoutClaimKey(address(this), depositor));
+		if (recordPayoutClaim) {
+			_registerClaimBundle(payoutClaimBundlesByOwner, depositor, _payoutClaimKey(address(this), depositor));
+		}
 		emit ForkedEscrowRecorded(
 			depositor,
 			outcome,
@@ -370,6 +376,14 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(remaining == 0, 'Claim payout remainder');
 	}
 
+	function consumePayoutClaimBacking(address bundleId, uint256 amount) external {
+		if (amount == 0) return;
+		EscalationClaimBundle storage payoutBundle = payoutClaimBundles[_payoutClaimKey(address(this), bundleId)];
+		uint256 shares = _repToClaimShares(amount);
+		require(payoutBundle.escrowedRep >= shares, 'Payout claim low');
+		payoutBundle.escrowedRep -= shares;
+	}
+
 	function creditExternalClaimOwners(
 		address sourceGame,
 		address bundleId,
@@ -388,6 +402,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		sourceGame = encodedSourceGame == address(0x0) ? forkCarryRootClaimSourceGame : encodedSourceGame;
 		address payoutKey = _payoutClaimKey(sourceGame, bundleId);
 		EscalationClaimBundle storage bundle = payoutClaimBundles[payoutKey];
+		uint256 rawBackingConsumed = _repToClaimShares(backingConsumed);
+		if (rawBackingConsumed > bundle.escrowedRep) rawBackingConsumed = bundle.escrowedRep;
+		bundle.escrowedRep -= rawBackingConsumed;
 		// Pre-bundling carry snapshots and proof harness fixtures have no imported
 		// owner registry. Their depositor remains the sole claim owner.
 		if (bundle.totalShares == 0) {
