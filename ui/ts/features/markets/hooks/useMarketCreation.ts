@@ -91,12 +91,16 @@ function readQuestionDraft(storageKey: string | undefined) {
 }
 
 function writeQuestionDraft(storageKey: string | undefined, form: MarketFormState) {
-	if (storageKey === undefined) return
+	if (storageKey === undefined) return false
 	try {
-		getQuestionDraftStorage()?.setItem(storageKey, JSON.stringify(form))
+		const storage = getQuestionDraftStorage()
+		if (storage === undefined) return false
+		storage.setItem(storageKey, JSON.stringify(form))
+		return true
 	} catch (error) {
 		if (!(error instanceof DOMException)) throw error
 		// Draft persistence is progressive enhancement; the form remains usable without storage.
+		return false
 	}
 }
 
@@ -140,10 +144,13 @@ export function useMarketCreation(
 	useEffect(() => {
 		if (marketFormState.value.storageKey === questionDraftStorageKey) return
 		const previousStorageKey = marketFormState.value.storageKey
-		const nextForm = getMarketFormForCurrentOwner()
-		writeQuestionDraft(questionDraftStorageKey, nextForm)
+		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey)
+		const nextForm = storedOwnerDraft ?? getMarketFormForCurrentOwner()
+		const persistedOwnerDraft = storedOwnerDraft !== undefined || writeQuestionDraft(questionDraftStorageKey, nextForm)
 		marketFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
-		if (accountAddress !== undefined && previousStorageKey === anonymousQuestionDraftStorageKey) clearQuestionDraft(anonymousQuestionDraftStorageKey)
+		if (accountAddress !== undefined && previousStorageKey === anonymousQuestionDraftStorageKey && storedOwnerDraft === undefined && persistedOwnerDraft) {
+			clearQuestionDraft(anonymousQuestionDraftStorageKey)
+		}
 	}, [accountAddress, activeUniverseId, questionDraftStorageKey])
 	const setMarketForm = (updater: (current: MarketFormState) => MarketFormState) => {
 		const nextForm = updater(getMarketForm())

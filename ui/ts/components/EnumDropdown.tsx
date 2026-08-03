@@ -126,10 +126,6 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 							role='option'
 							aria-selected={option.value === value}
 							onKeyDown={event => {
-								if (event.key === 'Tab') {
-									setTimeout(() => setOpen(false), 0)
-									return
-								}
 								if (event.key === 'Escape') {
 									closeAndFocusTrigger()
 									return

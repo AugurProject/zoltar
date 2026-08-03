@@ -357,6 +357,113 @@ describe('useMarketCreation', () => {
 		expect(requireHookState(hookState).marketForm.title).toBe('Anonymous draft')
 	})
 
+	test('keeps the anonymous draft when the connected account already has a draft', async () => {
+		mock.module('../../../features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: mock(() => ({
+				loadZoltarQuestions: async () => undefined,
+				setZoltarForkQuestionId: () => undefined,
+			})),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
+			hookState = useMarketCreation({
+				accountAddress,
+				activeUniverseId: 7n,
+				activeZoltarView: 'create',
+				autoLoadInitialData: false,
+				deploymentStatuses: [],
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			})
+			return <div />
+		}
+
+		const anonymousKey = 'zoltar.questionDraft:anonymous:7'
+		const ownerKey = `zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`
+		const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
+		})
+		window.sessionStorage.setItem(ownerKey, JSON.stringify({ ...requireHookState(hookState).marketForm, title: 'Existing owner draft' }))
+
+		await act(async () => {
+			render(<Harness accountAddress={WALLET_ADDRESS} />, renderedComponent.container)
+		})
+		await waitFor(() => {
+			expect(requireHookState(hookState).marketForm.title).toBe('Existing owner draft')
+		})
+		expect(window.sessionStorage.getItem(ownerKey)).toContain('Existing owner draft')
+		expect(window.sessionStorage.getItem(anonymousKey)).toContain('Anonymous draft')
+	})
+
+	test('keeps the anonymous draft when copying it to connected storage fails', async () => {
+		mock.module('../../../features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: mock(() => ({
+				loadZoltarQuestions: async () => undefined,
+				setZoltarForkQuestionId: () => undefined,
+			})),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
+			hookState = useMarketCreation({
+				accountAddress,
+				activeUniverseId: 7n,
+				activeZoltarView: 'create',
+				autoLoadInitialData: false,
+				deploymentStatuses: [],
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			})
+			return <div />
+		}
+
+		const anonymousKey = 'zoltar.questionDraft:anonymous:7'
+		const ownerKey = `zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`
+		const storedValues = new Map<string, string>()
+		const storageWithFailedOwnerWrites: Storage = {
+			get length() {
+				return storedValues.size
+			},
+			clear: () => storedValues.clear(),
+			getItem: key => storedValues.get(key) ?? null,
+			key: index => Array.from(storedValues.keys())[index] ?? null,
+			removeItem: key => storedValues.delete(key),
+			setItem: (key, value) => {
+				if (key === ownerKey) throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+				storedValues.set(key, value)
+			},
+		}
+		const originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage')
+		try {
+			Object.defineProperty(window, 'sessionStorage', {
+				configurable: true,
+				get: () => storageWithFailedOwnerWrites,
+			})
+			const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await act(async () => {
+				requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
+				render(<Harness accountAddress={WALLET_ADDRESS} />, renderedComponent.container)
+			})
+			await waitFor(() => {
+				expect(requireHookState(hookState).marketForm.title).toBe('Anonymous draft')
+			})
+			expect(storageWithFailedOwnerWrites.getItem(ownerKey)).toBeNull()
+			expect(storageWithFailedOwnerWrites.getItem(anonymousKey)).toContain('Anonymous draft')
+		} finally {
+			if (originalSessionStorageDescriptor !== undefined) Object.defineProperty(window, 'sessionStorage', originalSessionStorageDescriptor)
+		}
+	})
+
 	test('keeps complete question drafts scoped by account and universe and clears a successful draft', async () => {
 		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string } }) => ({
 			createQuestionHash: '0xabc' as Hash,
