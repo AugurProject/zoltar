@@ -891,7 +891,28 @@ clearSignerButton.addEventListener('click', async () => {
 	}
 })
 
-async function refresh() {
+let refreshInFlight: Promise<void> | undefined
+let refreshQueued = false
+
+function refresh() {
+	if (refreshInFlight !== undefined) {
+		refreshQueued = true
+		return refreshInFlight
+	}
+	refreshInFlight = (async () => {
+		refreshQueued = false
+		await performRefresh()
+		while (refreshQueued) {
+			refreshQueued = false
+			await performRefresh()
+		}
+	})().finally(() => {
+		refreshInFlight = undefined
+	})
+	return refreshInFlight
+}
+
+async function performRefresh() {
 	try {
 		render(await api<Snapshot>('/api/state'))
 	} catch (error) {

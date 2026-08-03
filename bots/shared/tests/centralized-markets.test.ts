@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import {
 	aggregateCentralizedMarketObservations,
 	centralizedMarketConfigurationAllowsExecution,
@@ -69,6 +69,27 @@ function observation(exchangeId: string, priceRepPerEth: bigint, timestamp = 10_
 }
 
 describe('centralized market observations', () => {
+	test('validates exchange timestamps against the time after requests complete', async () => {
+		let clockReads = 0
+		const now = spyOn(Date, 'now').mockImplementation(() => (clockReads++ === 0 ? 10_000 : 10_001))
+		const factory: CentralizedExchangeFactory = () => ({
+			fetchOrderBook: async () => ({
+				asks: [[10.1, 1_000]],
+				bids: [[9.9, 1_000]],
+				timestamp: 10_001,
+			}),
+			fetchTicker: async () => ({ ask: 2_010, bid: 1_990, last: 2_000, timestamp: 10_001 }),
+			loadMarkets: async () => ({}),
+		})
+		try {
+			const estimate = await observeCentralizedMarkets(settings, REP_ASSET, 1, factory)
+			expect(estimate?.reliable).toBe(true)
+			expect(estimate?.observations).toHaveLength(2)
+		} finally {
+			now.mockRestore()
+		}
+	})
+
 	test('uses a cross-venue median and executable depth to validate a DEX price', () => {
 		const estimate = aggregateCentralizedMarketObservations([observation('alpha', 200n * 10n ** 18n), observation('beta', 202n * 10n ** 18n)], settings, REP_ASSET, 10_000)
 		if (estimate === undefined) throw new Error('Expected a centralized market estimate')

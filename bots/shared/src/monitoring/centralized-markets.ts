@@ -550,12 +550,13 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	}
 }
 
-export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now = Date.now()): Promise<CentralizedMarketEstimate | undefined> {
+export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now?: number): Promise<CentralizedMarketEstimate | undefined> {
 	if (settings.sources.length === 0) return undefined
 	if (settings.assetAddress.toLowerCase() !== assetId.toLowerCase() || settings.assetChainId !== chainId) throw new Error('Centralized market configuration does not match the exact REP asset and chain')
-	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, assetId, chainId, factory, now)))
+	const observedAt = now ?? Date.now()
+	const settled = await Promise.allSettled(settings.sources.map(source => observeSource(source, settings, assetId, chainId, factory, observedAt)))
 	const observations = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
-	const estimate = aggregateCentralizedMarketObservations(observations, settings, assetId, now)
+	const estimate = aggregateCentralizedMarketObservations(observations, settings, assetId, now ?? Date.now())
 	if (estimate === undefined) return undefined
 	const errors = settled.flatMap((result, index) => {
 		if (result.status === 'fulfilled') return []

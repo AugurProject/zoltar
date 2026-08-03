@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { prepareDeploymentTokenTransition, replacePrimaryRepToken } from '#config/deployment-settings'
+import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings } from '#config/deployment-settings'
 import type { Address } from '#ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
@@ -21,4 +21,30 @@ test('keeps the live scan catalog unchanged while preparing restart deployment s
 
 	expect(transition.active).toEqual([activeRep, explicitToken])
 	expect(transition.restart).toEqual([restartRep, explicitToken])
+})
+
+test('rejects insecure or credential-bearing quorum RPC URLs', () => {
+	const base = {
+		coordinatorAddresses: [],
+		deploymentManifest: undefined,
+		executor: undefined,
+		openOracle: address('1'),
+		quorumRpcUrls: ['https://quorum.example'],
+		rep: address('2'),
+		uniswapFactory: address('3'),
+		uniswapQuoter: address('4'),
+		uniswapRouter: undefined,
+		uniswapV2Router: undefined,
+		uniswapV4PoolManager: undefined,
+		uniswapV4Quoter: undefined,
+		weth: address('5'),
+	}
+	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['http://quorum.example'] })).toThrow('HTTPS or loopback HTTP')
+	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['https://user:secret@quorum.example'] })).toThrow('embedded credentials')
+})
+
+test('rejects a focused REP update that leaves centralized-market identity stale', () => {
+	const currentAsset = address('1')
+	expect(() => assertFocusedDeploymentCompatible(address('2'), { assetAddress: currentAsset })).toThrow('centralized market configuration')
+	expect(() => assertFocusedDeploymentCompatible(currentAsset, { assetAddress: currentAsset })).not.toThrow()
 })

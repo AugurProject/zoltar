@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '#ethereum'
@@ -15,6 +15,7 @@ import {
 	missingPricePoints,
 	payoutDistributionHash,
 	poolSpotPriceWeth,
+	PRICE_HISTORY_TAIL_MAXIMUM_BYTES,
 	pricePoints,
 	tokenCatalogForScan,
 	type TokenMarketSnapshot,
@@ -115,6 +116,48 @@ test('persists per-pool price history across restarts', async () => {
 	const points = pricePoints(markets, 123n, '2026-07-25T00:00:00.000Z')
 	await appendPriceHistory(path, points)
 	expect(await loadPriceHistory(path)).toEqual(points)
+})
+
+test('bounds the on-disk price history while appending new samples', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
+	temporaryDirectories.push(directory)
+	const path = join(directory, 'prices.jsonl')
+	const base = {
+		blockNumber: '1',
+		pool: '0x0000000000000000000000000000000000000002' as Address,
+		priceWeth: '0.0042',
+		sampledAt: '2026-07-25T00:00:00.000Z',
+		symbol: 'REPv2',
+		token: '0x0000000000000000000000000000000000000001' as Address,
+		venue: 'Uniswap V3 0.3%',
+	}
+	await appendPriceHistory(path, [base], 2)
+	await appendPriceHistory(path, [{ ...base, blockNumber: '2' }], 2)
+	await appendPriceHistory(path, [{ ...base, blockNumber: '3' }], 2)
+	expect((await loadPriceHistory(path, 10)).map(point => point.blockNumber)).toEqual(['2', '3'])
+})
+
+test('does not scan past a bounded tail for an oversized unterminated record', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
+	temporaryDirectories.push(directory)
+	const path = join(directory, 'prices.jsonl')
+	const valid = {
+		blockNumber: '1',
+		pool: '0x0000000000000000000000000000000000000002' as Address,
+		priceWeth: '0.0042',
+		sampledAt: '2026-07-25T00:00:00.000Z',
+		symbol: 'REPv2',
+		token: '0x0000000000000000000000000000000000000001' as Address,
+		venue: 'Uniswap V3 0.3%',
+	}
+	const handle = await open(path, 'w')
+	try {
+		await handle.writeFile(`${JSON.stringify(valid)}\n`)
+		await handle.truncate(PRICE_HISTORY_TAIL_MAXIMUM_BYTES * 2)
+	} finally {
+		await handle.close()
+	}
+	expect(await loadPriceHistory(path, 1)).toEqual([])
 })
 
 test('loads valid price history around truncated and structurally invalid records', async () => {

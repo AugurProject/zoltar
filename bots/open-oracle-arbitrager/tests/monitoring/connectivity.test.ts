@@ -9,6 +9,7 @@ import {
 	updateConnectivityEndpointChecks,
 	updateSubmissionEndpointChecks,
 	validateConnectivitySettings,
+	validateConnectivitySettingsForQuorum,
 	validateIndependentReadRpcUrls,
 	validateReadRpcUrls,
 	withConnectivityChecks,
@@ -42,8 +43,13 @@ function rpc(handler: (method: string, params: readonly unknown[]) => unknown | 
 
 describe('operator connectivity', () => {
 	test('rejects a quorum that only varies paths on the same RPC origin', () => {
+		expect(() => validateIndependentReadRpcUrls('https://rpc.example', ['https://rpc.example'])).toThrow('independent origins')
 		expect(() => validateIndependentReadRpcUrls('https://rpc.example/read', ['https://rpc.example/quorum'])).toThrow('independent origins')
 		expect(validateIndependentReadRpcUrls('https://one.example', ['https://two.example'])).toEqual(['https://two.example/'])
+	})
+
+	test('rejects live connectivity updates that duplicate the deployment quorum origin', () => {
+		expect(() => validateConnectivitySettingsForQuorum({ publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://quorum.example/read' }, ['https://quorum.example/independent'])).toThrow('independent origins')
 	})
 
 	test('redacts RPC path and query credentials from endpoint labels', () => {

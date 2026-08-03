@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hex } from '#ethereum'
-import { CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, saveOperatorSettings, type OperatorSettingsFilesystem } from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type OperatorSettingsFilesystem } from '#config/settings-store'
 
 const temporaryDirectories: string[] = []
 const privateKey = `0x${'11'.repeat(32)}` as Hex
@@ -90,6 +90,17 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
+	test('rejects a public submission threshold above the configured RPC count', () => {
+		const stored = serializeOperatorSettings(settings(undefined))
+		expect(() =>
+			parseOperatorSettings({
+				...stored,
+				connectivity: { ...stored.connectivity, publicRpcUrls: ['https://submit-one.example/'] },
+				submission: { minimumRelaySuccesses: 2, mode: 'public', relayUrls: [] },
+			}),
+		).toThrow('cannot exceed the configured public RPC count')
+	})
+
 	test('syncs settings contents and the parent directory before returning success', async () => {
 		const events: string[] = []
 		let opened = 0

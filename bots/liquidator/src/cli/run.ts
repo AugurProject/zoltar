@@ -13,11 +13,12 @@ import { stagedOperationOutcome } from '#core/staged-outcome'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, validateReceiptExpectation } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState, type PoolObservation } from '#state/operator-state'
-import { evaluateCandidate, liquidationExecutionAllowed, sortCandidates } from '#core/strategy'
+import { evaluateCandidate, liquidationExecutionAllowed, selectAllowedCandidate } from '#core/strategy'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
+import { acquireLiquidatorExecutionLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle } from '#core/process-lock'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
@@ -91,9 +92,12 @@ async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoo
 	return { address, desired }
 }
 
-function selectedCandidate(pools: readonly PoolObservation[], settings: OperatorSettings) {
+function selectedCandidate(pools: readonly PoolObservation[], settings: OperatorSettings, allowed: (pool: PoolObservation) => boolean) {
 	const candidates = pools.flatMap(pool => pool.candidates)
-	const candidate = sortCandidates(candidates, settings.strategy.candidatePriority)[0]
+	const candidate = selectAllowedCandidate(candidates, settings.strategy.candidatePriority, candidate => {
+		const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
+		return pool !== undefined && allowed(pool)
+	})
 	if (candidate === undefined) return undefined
 	const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
 	if (pool === undefined) throw new Error('Selected candidate pool disappeared from the scan')
@@ -274,6 +278,15 @@ async function main() {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
+	let executionAccount: Account | undefined
+	if (settings.runtime.execute) {
+		if (activePrivateKey === undefined) throw new Error('Live execution requires a configured signer')
+		executionAccount = privateKeyToAccount(activePrivateKey)
+	}
+	using shutdown = createLiquidatorShutdownController()
+	const acquiredExecutionLocks = await acquireLiquidatorExecutionLocksForShutdown(settings.runtime.stateFile, settings.network.chainId, executionAccount?.address, shutdown)
+	if (acquiredExecutionLocks === undefined) return
+	await using executionLocks = acquiredExecutionLocks
 	let settingsQueue = Promise.resolve()
 	const chain = chainFor(settings)
 	let client = createPublicClient({
@@ -515,23 +528,26 @@ async function main() {
 							throw new Error('Signer request requires privateKey and rememberSigner')
 						}
 						const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
-						await commitSignerMutation(
-							candidate,
-							rememberSigner,
-							async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
-							signer => {
-								activePrivateKey = signer.privateKey
-								wallet =
-									activePrivateKey === undefined
-										? undefined
-										: createWalletClient({
-												account: privateKeyToAccount(activePrivateKey),
-												chain,
-												transport: http(settings.connectivity.readRpcUrl),
-											})
-								state.wallet = wallet?.account.address
-							},
-						)
+						const commit = () =>
+							commitSignerMutation(
+								candidate,
+								rememberSigner,
+								async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
+								signer => {
+									activePrivateKey = signer.privateKey
+									wallet =
+										activePrivateKey === undefined
+											? undefined
+											: createWalletClient({
+													account: privateKeyToAccount(activePrivateKey),
+													chain,
+													transport: http(settings.connectivity.readRpcUrl),
+												})
+									state.wallet = wallet?.account.address
+								},
+							)
+						if (settings.runtime.execute && candidate.address !== undefined && executionLocks !== undefined) await executionLocks.withSignerReservation(candidate.address, commit)
+						else await commit()
 						recordActivity(state, {
 							kind: 'configuration',
 							message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
@@ -552,6 +568,7 @@ async function main() {
 					}),
 			})
 		: undefined
+	await using dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -575,6 +592,7 @@ async function main() {
 	let lastDryRunKey: string | undefined
 	await pollUntilStopped(
 		async () => {
+			if (shutdown.isRequested()) return true
 			if (configurationMutationGate.isActive()) return false
 			state.scanning = true
 			state.error = undefined
@@ -716,29 +734,15 @@ async function main() {
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
 					}
-					const selected = selectedCandidate(state.pools, settings)
+					const selected = selectedCandidate(state.pools, settings, pool => settings.selectedPools.some(selectedPool => selectedPool.toLowerCase() === pool.address.toLowerCase()) && liquidationExecutionAllowed(pool.lastPrice, marketPriceAllowsExecution(pool, settings, state)))
 					if (selected !== undefined) {
-						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						const centralizedPriceAllowed = marketPriceAllowsExecution(selected.pool, settings, state)
-						if (!liquidationExecutionAllowed(selected.pool.lastPrice, centralizedPriceAllowed)) {
-							recordActivity(state, {
-								details: `pool=${selected.pool.address}`,
-								kind: 'scan',
-								message: selected.pool.lastPrice === 0n ? 'Candidate skipped because its pool has no coordinator REP price' : 'Candidate skipped because its REP price disagrees with the independent market reference',
-								status: 'info',
-							})
-							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						}
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))
 					}
 				} else if (!state.paused) {
-					const selected = selectedCandidate(state.pools, settings)
+					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
 					if (selected !== undefined) {
-						if (!marketPriceAllowsExecution(selected.pool, settings, state)) {
-							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						}
 						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)
@@ -769,11 +773,10 @@ async function main() {
 				state.scanning = false
 			}
 		},
-		() => new Promise(resolve => setTimeout(resolve, settings.runtime.pollMilliseconds)),
+		() => shutdown.wait(settings.runtime.pollMilliseconds),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
 	)
-	dashboard?.stop()
 }
 
 main().catch(error => {
