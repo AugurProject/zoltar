@@ -6,7 +6,7 @@ import { MetricField } from '../../../components/MetricField.js'
 import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../../types.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
-import { useId } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
@@ -17,6 +17,10 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 	const selectedTickValue = clampScalarTickIndex(getSafeSelectedTickValue(selectedTick), details.numTicks)
 	const resolvedSelectedTick = selectedTickValue.toString()
 	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
+	const [exactTickInputValue, setExactTickInputValue] = useState(resolvedSelectedTick)
+	useEffect(() => {
+		setExactTickInputValue(resolvedSelectedTick)
+	}, [resolvedSelectedTick])
 
 	return (
 		<div className='market-scalar-deploy workflow-subsection'>
@@ -42,7 +46,21 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 							</div>
 						</div>
 					) : (
-						<FormInput aria-labelledby={sliderLabelId} className='scalar-exact-tick-input' disabled={disabled || isInvalid} inputMode='numeric' value={resolvedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
+						<FormInput
+							aria-labelledby={sliderLabelId}
+							className='scalar-exact-tick-input'
+							disabled={disabled || isInvalid}
+							inputMode='numeric'
+							value={exactTickInputValue}
+							onBlur={() => setExactTickInputValue(resolvedSelectedTick)}
+							onInput={event => {
+								const nextInputValue = event.currentTarget.value
+								setExactTickInputValue(nextInputValue)
+								const parsedTick = tryParseBigIntInput(nextInputValue)
+								if (parsedTick === undefined) return
+								onSelectedTickChange(clampScalarTickIndex(parsedTick, details.numTicks).toString())
+							}}
+						/>
 					)}
 					<span className='scalar-or-divider'>{marketCopy.or}</span>
 					<label className='scalar-invalid-toggle'>

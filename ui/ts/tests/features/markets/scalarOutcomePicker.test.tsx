@@ -30,6 +30,26 @@ function ScalarOutcomePickerHarness() {
 	)
 }
 
+const UNSAFE_TICK_COUNT = BigInt(Number.MAX_SAFE_INTEGER) + 10n
+
+function ExactScalarOutcomePickerHarness() {
+	const [selectedTick, setSelectedTick] = useState(UNSAFE_TICK_COUNT.toString())
+	const selectedTickValue = BigInt(selectedTick)
+
+	return (
+		<ScalarOutcomePicker
+			details={{ maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
+			isInvalid={false}
+			label='Select exact scalar target'
+			onInvalidChange={() => undefined}
+			onSelectedTickChange={setSelectedTick}
+			selectedOutcomeLabel={`Tick ${selectedTickValue.toString()}`}
+			selectedTick={selectedTick}
+			selectedTickLabel={selectedTick}
+		/>
+	)
+}
+
 describe('ScalarOutcomePicker', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -79,31 +99,23 @@ describe('ScalarOutcomePicker', () => {
 	})
 
 	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {
-		const unsafeTickCount = BigInt(Number.MAX_SAFE_INTEGER) + 10n
-		let selectedTick = unsafeTickCount.toString()
-		const renderedComponent = await renderIntoDocument(
-			<ScalarOutcomePicker
-				details={{ maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: unsafeTickCount }}
-				isInvalid={false}
-				label='Select exact scalar target'
-				onInvalidChange={() => undefined}
-				onSelectedTickChange={value => {
-					selectedTick = value
-				}}
-				selectedOutcomeLabel='Exact outcome'
-				selectedTick={selectedTick}
-				selectedTickLabel={selectedTick}
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<ExactScalarOutcomePickerHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
 		expect(within(document.body).queryByRole('slider')).toBeNull()
-		expect(exactInput.value).toBe(unsafeTickCount.toString())
+		expect(exactInput.value).toBe(UNSAFE_TICK_COUNT.toString())
 
 		await act(() => {
-			fireEvent.input(exactInput, { target: { value: (unsafeTickCount - 1n).toString() } })
+			fireEvent.input(exactInput, { target: { value: '-' } })
 		})
-		expect(selectedTick).toBe((unsafeTickCount - 1n).toString())
+		expect(exactInput.value).toBe('-')
+		expect(within(document.body).getByText(`Tick ${UNSAFE_TICK_COUNT.toString()}`)).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(exactInput, { target: { value: (UNSAFE_TICK_COUNT - 1n).toString() } })
+		})
+		expect(exactInput.value).toBe((UNSAFE_TICK_COUNT - 1n).toString())
+		expect(within(document.body).getByText(`Tick ${(UNSAFE_TICK_COUNT - 1n).toString()}`)).not.toBeNull()
 	})
 })
