@@ -12,7 +12,7 @@ import {
 } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
-import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
@@ -2061,7 +2061,8 @@ describe('Peripherals: truth auction', () => {
 
 			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
 
-			const quotedRepMove = getLiquidationRepToMove(actualDebtMoved, forcedPrice)
+			const settledLiquidationPrice = await getLastPrice(client, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
+			const quotedRepMove = getLiquidationRepToMove(actualDebtMoved, settledLiquidationPrice)
 			const expectedOwnershipMove = (quotedRepMove * denominatorBeforeLiquidation) / totalRepBeforeLiquidation
 			const expectedRepMove = (expectedOwnershipMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
 			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')

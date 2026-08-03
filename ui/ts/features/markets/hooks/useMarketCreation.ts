@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createMarket as createMarketTransaction } from '../../../protocol/index.js'
 import { createWalletWriteClient } from '../../../lib/clients.js'
@@ -49,8 +50,8 @@ type KeyedValue<T> = {
 }
 
 function getQuestionDraftStorageKey(accountAddress: Address | undefined, activeUniverseId: bigint) {
-	if (accountAddress === undefined) return undefined
-	return `${QUESTION_DRAFT_STORAGE_PREFIX}:${accountAddress.toLowerCase()}:${activeUniverseId.toString()}`
+	const ownerKey = accountAddress === undefined ? 'anonymous' : accountAddress.toLowerCase()
+	return `${QUESTION_DRAFT_STORAGE_PREFIX}:${ownerKey}:${activeUniverseId.toString()}`
 }
 
 function getQuestionDraftStorage() {
@@ -72,27 +73,34 @@ function isMarketFormState(value: unknown): value is MarketFormState {
 	return true
 }
 
-function readQuestionDraft(storageKey: string | undefined) {
-	const defaultState = getDefaultMarketFormState()
-	if (storageKey === undefined) return defaultState
+function readStoredQuestionDraft(storageKey: string | undefined) {
+	if (storageKey === undefined) return undefined
 	try {
 		const storedValue = getQuestionDraftStorage()?.getItem(storageKey)
-		if (storedValue === null || storedValue === undefined) return defaultState
+		if (storedValue === null || storedValue === undefined) return undefined
 		const parsedValue: unknown = JSON.parse(storedValue)
-		return isMarketFormState(parsedValue) ? parsedValue : defaultState
+		return isMarketFormState(parsedValue) ? parsedValue : undefined
 	} catch (error) {
 		if (!(error instanceof SyntaxError) && !(error instanceof DOMException)) throw error
-		return defaultState
+		return undefined
 	}
 }
 
+function readQuestionDraft(storageKey: string | undefined) {
+	return readStoredQuestionDraft(storageKey) ?? getDefaultMarketFormState()
+}
+
 function writeQuestionDraft(storageKey: string | undefined, form: MarketFormState) {
-	if (storageKey === undefined) return
+	if (storageKey === undefined) return false
 	try {
-		getQuestionDraftStorage()?.setItem(storageKey, JSON.stringify(form))
+		const storage = getQuestionDraftStorage()
+		if (storage === undefined) return false
+		storage.setItem(storageKey, JSON.stringify(form))
+		return true
 	} catch (error) {
 		if (!(error instanceof DOMException)) throw error
 		// Draft persistence is progressive enhancement; the form remains usable without storage.
+		return false
 	}
 }
 
@@ -117,16 +125,33 @@ export function useMarketCreation(
 ) {
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, activeUniverseId)
+	const anonymousQuestionDraftStorageKey = getQuestionDraftStorageKey(undefined, activeUniverseId)
 	const marketFormState = useSignal<{ form: MarketFormState; storageKey: string | undefined }>({ form: readQuestionDraft(questionDraftStorageKey), storageKey: questionDraftStorageKey })
 	const marketCreating = useSignal<KeyedValue<boolean> | undefined>(undefined)
 	const marketSubmissionInProgress = useSignal(false)
 	const marketResult = useSignal<KeyedValue<MarketCreationResult> | undefined>(undefined)
 	const marketError = useSignal<KeyedValue<string | undefined> | undefined>(undefined)
 	const marketFeedback = useSignal<KeyedValue<ActionFeedback<'createMarket'>> | undefined>(undefined)
-	const getMarketForm = () => {
+	const getMarketFormForCurrentOwner = () => {
 		const keyedForm = marketFormState.value
-		return keyedForm.storageKey === questionDraftStorageKey ? keyedForm.form : readQuestionDraft(questionDraftStorageKey)
+		if (keyedForm.storageKey === questionDraftStorageKey) return keyedForm.form
+		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey)
+		if (storedOwnerDraft !== undefined) return storedOwnerDraft
+		if (accountAddress !== undefined && keyedForm.storageKey === anonymousQuestionDraftStorageKey) return keyedForm.form
+		return getDefaultMarketFormState()
 	}
+	const getMarketForm = () => getMarketFormForCurrentOwner()
+	useEffect(() => {
+		if (marketFormState.value.storageKey === questionDraftStorageKey) return
+		const previousStorageKey = marketFormState.value.storageKey
+		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey)
+		const nextForm = storedOwnerDraft ?? getMarketFormForCurrentOwner()
+		const persistedOwnerDraft = storedOwnerDraft !== undefined || writeQuestionDraft(questionDraftStorageKey, nextForm)
+		marketFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
+		if (accountAddress !== undefined && previousStorageKey === anonymousQuestionDraftStorageKey && storedOwnerDraft === undefined && persistedOwnerDraft) {
+			clearQuestionDraft(anonymousQuestionDraftStorageKey)
+		}
+	}, [accountAddress, activeUniverseId, questionDraftStorageKey])
 	const setMarketForm = (updater: (current: MarketFormState) => MarketFormState) => {
 		const nextForm = updater(getMarketForm())
 		writeQuestionDraft(questionDraftStorageKey, nextForm)

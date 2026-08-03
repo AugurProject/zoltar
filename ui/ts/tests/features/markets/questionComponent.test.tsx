@@ -92,6 +92,25 @@ describe('Question component', () => {
 		expect(document.body.querySelector('.question-summary-heading')).toBeNull()
 	})
 
+	test('formats scalar display ranges from fixed-point contract values', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<Question
+				question={createQuestion({
+					answerUnit: 'USD',
+					displayValueMax: 10n * 10n ** 18n,
+					displayValueMin: 1n * 10n ** 18n,
+					marketType: 'scalar',
+					numTicks: 9n,
+					outcomeLabels: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent).toContain('1 to 10 USD')
+		expect(document.body.textContent).not.toContain('1000000000000000000 to 10000000000000000000')
+	})
+
 	test('renders preview timestamps as separate timeline rows with relative sublabels', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={240n}>

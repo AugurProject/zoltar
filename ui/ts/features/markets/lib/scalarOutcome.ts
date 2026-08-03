@@ -20,6 +20,9 @@ const SCALAR_PART_BIT_LENGTH = 120n
 const SCALAR_TOTAL_BITS = 256n
 const SCALAR_PART_MASK = (1n << SCALAR_PART_BIT_LENGTH) - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
+const SCALAR_SIGNED_MIN = -(1n << 255n)
+const SCALAR_SIGNED_MAX = (1n << 255n) - 1n
+export const MAX_PRECISE_SCALAR_TICK_COUNT = BigInt(Number.MAX_SAFE_INTEGER)
 
 type ScalarOutcomeIndexDescriptor =
 	| {
@@ -40,7 +43,7 @@ function combineUint256FromTwoWithInvalid(invalid: boolean, firstPart: bigint, s
 	return (highestBit << (SCALAR_TOTAL_BITS - 1n)) | (normalizedFirstPart << SCALAR_PART_BIT_LENGTH) | normalizedSecondPart
 }
 
-function formatSignedDecimal(value: bigint) {
+export function formatScalarDisplayValue(value: bigint) {
 	const isNegative = value < 0n
 	const absoluteValue = isNegative ? -value : value
 	const integerPart = absoluteValue / SCALAR_DECIMAL_BASE
@@ -85,6 +88,8 @@ export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }:
 	const displayValueMax = parseDecimalInput(scalarMax, 'Scalar max', Number(SCALAR_DECIMALS))
 	const increment = parseDecimalInput(scalarIncrement, 'Scalar increment', Number(SCALAR_DECIMALS))
 
+	if (displayValueMin < SCALAR_SIGNED_MIN || displayValueMin > SCALAR_SIGNED_MAX) throw new Error('Scalar min is outside the supported range')
+	if (displayValueMax < SCALAR_SIGNED_MIN || displayValueMax > SCALAR_SIGNED_MAX) throw new Error('Scalar max is outside the supported range')
 	if (increment <= 0n) throw new Error('Scalar increment must be greater than 0')
 	if (displayValueMax <= displayValueMin) throw new Error('Scalar max must be greater than scalar min')
 
@@ -93,6 +98,8 @@ export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }:
 
 	const numTicks = range / increment
 	if (numTicks <= 1n) throw new Error('Scalar inputs must produce more than 1 tick')
+	if (numTicks > SCALAR_PART_MASK) throw new Error('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
+	if (numTicks > MAX_PRECISE_SCALAR_TICK_COUNT) throw new Error('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
 
 	return {
 		displayValueMax,
@@ -110,7 +117,7 @@ export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIn
 	validateTickIndex(question, tickIndex)
 	const scalarRange = question.displayValueMax - question.displayValueMin
 	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
-	const formattedValue = formatSignedDecimal(scalarValue)
+	const formattedValue = formatScalarDisplayValue(scalarValue)
 	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
 }
 

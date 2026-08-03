@@ -30,6 +30,26 @@ function ScalarOutcomePickerHarness() {
 	)
 }
 
+const UNSAFE_TICK_COUNT = BigInt(Number.MAX_SAFE_INTEGER) + 10n
+
+function ExactScalarOutcomePickerHarness() {
+	const [selectedTick, setSelectedTick] = useState(UNSAFE_TICK_COUNT.toString())
+	const selectedTickValue = BigInt(selectedTick)
+
+	return (
+		<ScalarOutcomePicker
+			details={{ maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
+			isInvalid={false}
+			label='Select exact scalar target'
+			onInvalidChange={() => undefined}
+			onSelectedTickChange={setSelectedTick}
+			selectedOutcomeLabel={`Tick ${selectedTickValue.toString()}`}
+			selectedTick={selectedTick}
+			selectedTickLabel={selectedTick}
+		/>
+	)
+}
+
 describe('ScalarOutcomePicker', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -76,5 +96,26 @@ describe('ScalarOutcomePicker', () => {
 		expect(invalidToggle.checked).toBe(true)
 		expect(slider.disabled).toBe(true)
 		expect(documentQueries.getAllByText('Invalid').length).toBeGreaterThan(0)
+	})
+
+	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {
+		const renderedComponent = await renderIntoDocument(<ExactScalarOutcomePickerHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
+		expect(within(document.body).queryByRole('slider')).toBeNull()
+		expect(exactInput.value).toBe(UNSAFE_TICK_COUNT.toString())
+
+		await act(() => {
+			fireEvent.input(exactInput, { target: { value: '-' } })
+		})
+		expect(exactInput.value).toBe('-')
+		expect(within(document.body).getByText(`Tick ${UNSAFE_TICK_COUNT.toString()}`)).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(exactInput, { target: { value: (UNSAFE_TICK_COUNT - 1n).toString() } })
+		})
+		expect(exactInput.value).toBe((UNSAFE_TICK_COUNT - 1n).toString())
+		expect(within(document.body).getByText(`Tick ${(UNSAFE_TICK_COUNT - 1n).toString()}`)).not.toBeNull()
 	})
 })

@@ -506,6 +506,20 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
+				selectedShareOutcome: 'yes',
+				shareBalances,
+				targetOutcomeIndexesInput: '0, 1, 1',
+				tradingForkUniverse: binaryForkUniverse,
+			}),
+		).toBe('Select each target child universe only once.')
+
+		expect(
+			getTradingMigrateSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: true,
+				isOnActiveAppChain: true,
+				loadingTradingForkUniverse: false,
+				loadingTradingDetails: false,
 				selectedShareOutcome: 'invalid',
 				shareBalances: {
 					invalid: 0n,

@@ -29,12 +29,14 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	const [pendingParentEscalationClaimSelection, setPendingParentEscalationClaimSelection] = useState<PendingParentEscalationClaimSelection | undefined>(undefined)
 	const [optimisticClaimedParentEscalationRep, setOptimisticClaimedParentEscalationRep] = useState(0n)
 	const previousVaultMigrationContextKeyRef = useRef<string | undefined>(undefined)
+	const vaultMigrationActionStartedRef = useRef(false)
 
 	useEffect(() => {
 		const nextContextKey = securityPoolAddress === undefined || accountAddress === undefined ? undefined : `${accountAddress.toLowerCase()}:${securityPoolAddress.toLowerCase()}`
 		if (previousVaultMigrationContextKeyRef.current === nextContextKey) return
 		previousVaultMigrationContextKeyRef.current = nextContextKey
 		setIsVaultMigrationPending(false)
+		vaultMigrationActionStartedRef.current = false
 		setHasCompletedVaultMigration(false)
 		setPendingParentEscalationClaimSelection(undefined)
 		setOptimisticClaimedParentEscalationRep(0n)
@@ -91,10 +93,14 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 
 	useEffect(() => {
 		if (!isVaultMigrationPending) return
-		if (forkAuctionActiveAction === 'migrateVault') return
-		if (forkAuctionError === undefined || securityPoolAddress === undefined) return
+		if (forkAuctionActiveAction === 'migrateVault' || forkAuctionActiveAction === 'migrateUnresolvedEscalation') {
+			vaultMigrationActionStartedRef.current = true
+			return
+		}
+		if (!vaultMigrationActionStartedRef.current) return
+		vaultMigrationActionStartedRef.current = false
 		setIsVaultMigrationPending(false)
-	}, [forkAuctionActiveAction, forkAuctionError, isVaultMigrationPending, securityPoolAddress])
+	}, [forkAuctionActiveAction, isVaultMigrationPending])
 
 	useEffect(() => {
 		if (forkAuctionActiveAction === 'claimParentEscalationDeposits' || forkAuctionActiveAction === 'migrateUnresolvedEscalation' || forkAuctionError === undefined) {
@@ -119,6 +125,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 			setPendingStartTruthAuctionSecurityPoolAddress(startTruthAuctionSecurityPoolAddress)
 		},
 		beginVaultMigrationProgress: () => {
+			vaultMigrationActionStartedRef.current = false
 			setIsVaultMigrationPending(true)
 		},
 		hasCompletedVaultMigration,
