@@ -38,7 +38,7 @@ test('documentation shell provides native Diátaxis navigation without an iframe
 	try {
 		expect(document.querySelector('iframe')).toBeNull()
 		expect(document.querySelector('.docs-topbar')).not.toBeNull()
-		expect(document.querySelectorAll('.docs-topnav a')).toHaveLength(4)
+		expect(document.querySelector('.docs-topnav')).toBeNull()
 		expect(document.querySelector('.docs-navigation-list a[aria-current="page"]')?.textContent).toBe('Explore a seeded market and security pool')
 		expect(document.querySelector('.docs-type-badge')?.textContent).toBe('Tutorials')
 		expect(document.querySelector('.docs-outline-list a')?.getAttribute('href')).toBe('#before-you-start')

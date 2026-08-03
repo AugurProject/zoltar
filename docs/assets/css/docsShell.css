@@ -52,7 +52,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 	z-index: 100;
 	top: 0;
 	display: grid;
-	grid-template-columns: var(--docs-shell-left-width) minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
 	min-height: var(--docs-shell-header-height);
 	padding: 0 1.5rem;
@@ -83,13 +83,6 @@ body.docs-shell-page:has(.docs-search[open]) {
 	place-items: center;
 }
 
-.docs-topnav {
-	display: flex;
-	gap: 0.2rem;
-	justify-content: center;
-}
-
-.docs-topnav a,
 .docs-icon-button,
 .docs-search-button {
 	min-height: 2.55rem;
@@ -103,14 +96,6 @@ body.docs-shell-page:has(.docs-search[open]) {
 	text-decoration: none;
 }
 
-.docs-topnav a {
-	display: inline-flex;
-	align-items: center;
-	padding: 0 0.75rem;
-}
-
-.docs-topnav a:hover,
-.docs-topnav a[aria-current="page"],
 .docs-icon-button:hover,
 .docs-search-button:hover {
 	background: var(--docs-shell-accent-soft);
@@ -478,12 +463,11 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 @media (max-width: 820px) {
 	.docs-topbar {
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) auto;
 		padding: 0 0.75rem;
 	}
 
 	.docs-brand span:last-child,
-	.docs-topnav,
 	.docs-search-button span,
 	.docs-search-button kbd {
 		display: none;

@@ -44,17 +44,6 @@
 	brand.href = docsUrl('documentation.html')
 	brand.append(element('span', 'docs-brand-mark', 'S'), element('span', '', 'Statoblast docs'))
 
-	const topnav = element('nav', 'docs-topnav')
-	topnav.setAttribute('aria-label', 'Documentation types')
-	for (const section of data.sections) {
-		const firstPage = sectionPages(section.id)[0]
-		if (firstPage === undefined) continue
-		const link = element('a', '', section.title)
-		link.href = docsUrl(firstPage.path)
-		if (section.id === currentPage?.section) link.setAttribute('aria-current', 'page')
-		topnav.append(link)
-	}
-
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')
 	menuButton.type = 'button'
@@ -65,7 +54,7 @@
 	searchButton.setAttribute('aria-label', 'Search documentation')
 	searchButton.append(element('span', '', 'Search'), element('span', 'docs-search-icon', '⌕'), element('kbd', '', 'Ctrl/⌘ K'))
 	actions.append(menuButton, searchButton)
-	topbar.append(brand, topnav, actions)
+	topbar.append(brand, actions)
 
 	const left = element('aside', 'docs-left')
 	left.setAttribute('aria-label', 'Documentation navigation')
@@ -173,7 +162,7 @@
 		const mobile = isMobileNavigation()
 		const open = mobile && document.body.dataset.docsNavigationOpen === 'true'
 		left.inert = mobile && !open
-		for (const node of [brand, topnav, searchButton, main, right]) node.inert = open
+		for (const node of [brand, searchButton, main, right]) node.inert = open
 		backdrop.inert = !open
 		if (!mobile && document.body.dataset.docsNavigationOpen === 'true') {
 			document.body.dataset.docsNavigationOpen = 'false'
