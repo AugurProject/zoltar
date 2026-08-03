@@ -3,7 +3,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Address } from '@zoltar/bot-shared/ethereum'
 import { acquireLiquidatorExecutionLocks, acquireLiquidatorExecutionLocksForShutdown, liquidatorDashboardLifecycle } from '../../src/core/process-lock.ts'
 
 const temporaryDirectories: string[] = []
@@ -17,7 +16,7 @@ afterEach(async () => {
 test('prevents duplicate state-file and signer execution processes', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
 	temporaryDirectories.push(directory)
-	const signer = '0x0000000000000000000000000000000000000001' as Address
+	const signer = '0x0000000000000000000000000000000000000001'
 	const first = await acquireLiquidatorExecutionLocks(join(directory, 'state.json'), 1, signer)
 	releases.push(first.release)
 	await expect(acquireLiquidatorExecutionLocks(join(directory, 'state.json'), 1, signer)).rejects.toThrow('already locked')
@@ -32,7 +31,7 @@ test('prevents a state-only process from overlapping a live process', async () =
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
 	temporaryDirectories.push(directory)
 	const stateFile = join(directory, 'state.json')
-	const signer = '0x0000000000000000000000000000000000000001' as Address
+	const signer = '0x0000000000000000000000000000000000000001'
 	const live = await acquireLiquidatorExecutionLocks(stateFile, 1, signer)
 	releases.push(live.release)
 	await expect(acquireLiquidatorExecutionLocks(stateFile, 1, undefined)).rejects.toThrow('already locked')
@@ -45,8 +44,8 @@ test('prevents a state-only process from overlapping a live process', async () =
 test('reserves live signer replacements and releases failed reservations', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
 	temporaryDirectories.push(directory)
-	const originalSigner = '0x0000000000000000000000000000000000000001' as Address
-	const replacementSigner = '0x0000000000000000000000000000000000000002' as Address
+	const originalSigner = '0x0000000000000000000000000000000000000001'
+	const replacementSigner = '0x0000000000000000000000000000000000000002'
 	{
 		await using locks = await acquireLiquidatorExecutionLocks(join(directory, 'state.json'), 1, originalSigner)
 		await expect(
@@ -67,7 +66,7 @@ test('releases state and signer locks after graceful SIGTERM shutdown', async ()
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
 	temporaryDirectories.push(directory)
 	const stateFile = join(directory, 'state.json')
-	const signer = '0x0000000000000000000000000000000000000003' as Address
+	const signer = '0x0000000000000000000000000000000000000003'
 	const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../../src/core/process-lock.ts')).href
 	const script = `
 		import { acquireLiquidatorExecutionLocks, createLiquidatorShutdownController, liquidatorDashboardLifecycle } from ${JSON.stringify(moduleUrl)}
@@ -118,7 +117,7 @@ test('cleans up when SIGTERM arrives before asynchronous lock acquisition return
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
 	temporaryDirectories.push(directory)
 	const stateFile = join(directory, 'state.json')
-	const signer = '0x0000000000000000000000000000000000000004' as Address
+	const signer = '0x0000000000000000000000000000000000000004'
 	const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../../src/core/process-lock.ts')).href
 	const script = `
 		import { acquireLiquidatorExecutionLocks, acquireLiquidatorExecutionLocksForShutdown, createLiquidatorShutdownController } from ${JSON.stringify(moduleUrl)}
