@@ -99,7 +99,7 @@ function isTopModalBackdrop(backdropElement: HTMLElement | null | undefined) {
 }
 
 function getFocusableElements(dialogElement: HTMLElement | null) {
-	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? [])
+	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []).filter(element => element.closest('[hidden], [inert]') === null)
 }
 
 export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>({ dialogRef, initialFocusRef, isOpen, onClose }: ModalFocusIsolationOptions<TInitialFocusElement>) {

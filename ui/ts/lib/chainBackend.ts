@@ -2,6 +2,7 @@ import { createPublicClient, createWalletClient, custom, http, publicActions, ty
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'
+import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
@@ -177,7 +178,7 @@ export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUr
 				if (currentAccount === undefined) throw new Error('Wallet account is no longer connected. Reconnect your wallet and try again.')
 				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw new Error('Wallet account changed. Review the action with the connected account and try again.')
 				const currentChainId = await readProviderChainId(ethereum)
-				if (currentChainId !== profile.chainIdHex) throw new Error(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
+				if (!sameChainId(currentChainId, profile.chainIdHex)) throw new Error(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
 			})
 		},
 		disconnectWallet: async () => {

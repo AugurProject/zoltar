@@ -265,9 +265,10 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim fees' })
+		const claimFeesReason = documentQueries.getByText('No fees are available to claim.')
 
 		expectTransactionButtonDisabled(document.body, 'Claim fees', 'No fees are available to claim.')
-		expect(claimFeesButton.getAttribute('aria-describedby')).toBeNull()
+		expect(claimFeesButton.getAttribute('aria-describedby')).toBe(claimFeesReason.id)
 		fireEvent.click(claimFeesButton)
 		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
 	})
@@ -415,7 +416,8 @@ describe('SecurityVaultSection', () => {
 			expectTransactionButtonDisabled(document.body, actionLabel)
 		}
 		expect(getTransactionButtonState(document.body, 'Review Special Action')).toEqual({ disabled: true, reason: 'Complete its separate prerequisite.' })
-		expect(documentQueries.getByRole('button', { name: 'Review Special Action' }).getAttribute('aria-describedby')).toBeNull()
+		const specialActionReason = documentQueries.getByText('Complete its separate prerequisite.')
+		expect(documentQueries.getByRole('button', { name: 'Review Special Action' }).getAttribute('aria-describedby')).toBe(specialActionReason.id)
 	})
 
 	test('preserves wallet recovery for lifecycle-enabled redemption after the pool ends', async () => {

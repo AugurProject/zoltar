@@ -60,6 +60,7 @@ void describe('active environment', () => {
 
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
 		expect(isSupportedAppChain('0x1')).toBe(true)
+		expect(isSupportedAppChain('0x01')).toBe(true)
 
 		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({

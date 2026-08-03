@@ -41,7 +41,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	}, [accountAddress, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress)) {
 			return
 		}
 		setHasCompletedVaultMigration(true)
@@ -49,7 +49,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	}, [forkAuctionResult?.action, forkAuctionResult?.hash, forkAuctionResult?.securityPoolAddress, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress)) {
 			return
 		}
 		setHasCompletedVaultMigration(true)
@@ -61,7 +61,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	}, [connectedWalletEscrowedRep, forkAuctionResult, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'claimParentEscalationDeposits' || forkAuctionResult.securityPoolAddress !== securityPoolAddress || pendingParentEscalationClaimSelection === undefined) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'claimParentEscalationDeposits' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress) || pendingParentEscalationClaimSelection === undefined) {
 			return
 		}
 		const claimSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingParentEscalationClaimSelection.outcome)

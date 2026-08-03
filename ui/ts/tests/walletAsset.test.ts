@@ -137,6 +137,15 @@ describe('wallet_watchAsset requests', () => {
 		expect(disconnected.request).not.toHaveBeenCalled()
 	})
 
+	test('accepts an active wallet account with equivalent address casing', async () => {
+		const { dependencies, request } = createRequestDependencies({
+			activeAccount: '0x00000000000000000000000000000000000000B2',
+		})
+
+		expect(await requestWalletWatchAsset(GENESIS_REP_ADDRESS, dependencies)).toEqual({ status: 'accepted' })
+		expect(request).toHaveBeenCalledTimes(1)
+	})
+
 	test('rechecks request scope after a deferred metadata read', async () => {
 		const metadata = createDeferred<WalletAssetMetadata>()
 		let isCurrent = true
