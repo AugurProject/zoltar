@@ -80,7 +80,7 @@ test('production build emits the deployable artifact set', async () => {
 test('production index html references the bundled app and does not use the dev import map', async () => {
 	const html = await fs.readFile(productionIndexPath, 'utf8')
 
-	expect(html).toContain("<script async type = 'module' src = './assets/app.js'></script>")
+	expect(html).toMatch(/<script\s+async\s+type=["']module["']\s+src=["']\.\/assets\/app\.js["']\s*>\s*<\/script>/)
 	expect(html).not.toContain('importmap')
 	expect(html).not.toContain('./js/')
 	expect(html).not.toContain('./vendor/')

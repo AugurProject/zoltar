@@ -2285,6 +2285,11 @@ button.wallet-asset-action-pending:disabled {
 	flex: 1;
 }
 
+.scalar-exact-tick-input {
+	min-width: 0;
+	flex: 1;
+}
+
 .scalar-or-divider {
 	flex-shrink: 0;
 	color: var(--muted);

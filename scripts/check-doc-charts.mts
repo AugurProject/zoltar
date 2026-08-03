@@ -471,7 +471,7 @@ for (let firstRouteIndex = 0; firstRouteIndex < layoutRoutes.length; firstRouteI
 	}
 }
 const contractInteractionHtml = await readFile(path.join(docsDirectory, 'architecture-deployment/contract-interactions.html'), 'utf8')
-const documentedEdges = [...contractInteractionHtml.matchAll(/<tr data-edge-id="([^"]+)" data-source="([^"]+)" data-receiver="([^"]+)" data-phase="([^"]+)">/g)].map(match => ({
+const documentedEdges = [...contractInteractionHtml.matchAll(/<tr\s+data-edge-id="([^"]+)"\s+data-source="([^"]+)"\s+data-receiver="([^"]+)"\s+data-phase="([^"]+)"\s*>/g)].map(match => ({
 	id: match[1],
 	phase: match[4],
 	receiver: match[3],

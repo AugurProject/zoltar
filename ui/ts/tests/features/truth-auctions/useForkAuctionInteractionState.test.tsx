@@ -75,4 +75,42 @@ describe('useForkAuctionInteractionState', () => {
 		expect(hookState.hasCompletedVaultMigration).toBe(true)
 		expect(hookState.isVaultMigrationPending).toBe(false)
 	})
+
+	test('clears pending vault migration state when a started write ends without a result or error', async () => {
+		let hookState: InteractionState | undefined
+		let setHarnessProps: ((update: (current: InteractionProps) => InteractionProps) => void) | undefined
+		const initialProps: InteractionProps = {
+			accountAddress: '0x0000000000000000000000000000000000000001',
+			connectedWalletEscrowedRep: undefined,
+			forkAuctionActiveAction: undefined,
+			forkAuctionError: undefined,
+			forkAuctionResult: undefined,
+			hasStartedTruthAuction: false,
+			reportingDetails: undefined,
+			securityPoolAddress: poolAddress,
+			startTruthAuctionSecurityPoolAddress: undefined,
+		}
+
+		function Harness() {
+			const [props, setProps] = useState<InteractionProps>(initialProps)
+			setHarnessProps = update => setProps(update)
+			hookState = useForkAuctionInteractionState(props)
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		if (hookState === undefined || setHarnessProps === undefined) throw new Error('Interaction harness did not render')
+
+		await act(() => {
+			hookState?.beginVaultMigrationProgress()
+			setHarnessProps?.(current => ({ ...current, forkAuctionActiveAction: 'migrateVault' }))
+		})
+		expect(hookState.isVaultMigrationPending).toBe(true)
+
+		await act(() => {
+			setHarnessProps?.(current => ({ ...current, forkAuctionActiveAction: undefined }))
+		})
+		expect(hookState.isVaultMigrationPending).toBe(false)
+	})
 })

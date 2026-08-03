@@ -276,6 +276,7 @@ export function getTradingMigrateSharesGuardMessage({
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
 	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
+	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'

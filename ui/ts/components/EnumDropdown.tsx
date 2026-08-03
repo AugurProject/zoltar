@@ -56,15 +56,30 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 			if (event.target instanceof Node && rootRef.current.contains(event.target)) return
 			setOpen(false)
 		}
+		const handleDocumentFocusIn = (event: FocusEvent) => {
+			if (rootRef.current === null) return
+			if (event.target instanceof Node && rootRef.current.contains(event.target)) return
+			setOpen(false)
+		}
+		const handleDocumentFocusOut = (event: FocusEvent) => {
+			if (rootRef.current === null) return
+			if (!(event.target instanceof Node) || !rootRef.current.contains(event.target)) return
+			if (event.relatedTarget instanceof Node && rootRef.current.contains(event.relatedTarget)) return
+			setOpen(false)
+		}
 
 		const handleDocumentKeyDown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') setOpen(false)
 		}
 
 		document.addEventListener('mousedown', handleDocumentMouseDown)
+		document.addEventListener('focusin', handleDocumentFocusIn)
+		document.addEventListener('focusout', handleDocumentFocusOut)
 		document.addEventListener('keydown', handleDocumentKeyDown)
 		return () => {
 			document.removeEventListener('mousedown', handleDocumentMouseDown)
+			document.removeEventListener('focusin', handleDocumentFocusIn)
+			document.removeEventListener('focusout', handleDocumentFocusOut)
 			document.removeEventListener('keydown', handleDocumentKeyDown)
 		}
 	}, [])
