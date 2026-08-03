@@ -9,7 +9,6 @@ import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { EntityCard } from '../../../components/EntityCard.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { LookupFieldRow } from '../../../components/LookupFieldRow.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
@@ -28,7 +27,6 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { balanceShortage } from '../../../lib/inputs.js'
-import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/marketForm.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -68,9 +66,6 @@ type QueuedVaultOperationView = {
 	operationId: bigint
 }
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
-	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
-	const collateralizationTarget = selectedPoolStatoblastSecurityMultiplierBps === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolStatoblastSecurityMultiplierBps)
-
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 
 	const embeddedContent = (
@@ -78,7 +73,6 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			<div className='security-pool-browse-vault-row'>
 				<div className='security-pool-browse-vault-row-top security-pool-browse-vault-row-top-compact'>
 					<div className='security-pool-browse-vault-row-title'>
-						<CollateralizationCircle className='security-pool-browse-vault-row-collateralization' collateralizationPercent={collateralizationPercent} size='small' targetCollateralizationPercent={collateralizationTarget} />
 						<div className='security-pool-browse-vault-row-id'>
 							<strong>
 								<AddressValue address={securityVaultDetails.vaultAddress} />
@@ -92,9 +86,15 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>{commonCopy.repCollateral}</span>
+						<span>{commonCopy.freeRep}</span>
 						<strong>
 							<CurrencyValue value={securityVaultDetails.repDepositShare} suffix={commonCopy.rep} />
+						</strong>
+					</div>
+					<div className='security-pool-browse-vault-row-kpi'>
+						<span>{commonCopy.escalationRep}</span>
+						<strong>
+							<CurrencyValue value={securityVaultDetails.escalationEscrowedRep} suffix={commonCopy.rep} />
 						</strong>
 					</div>
 				</div>
@@ -341,6 +341,7 @@ export function SecurityVaultSection({
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
 	const withdrawableRepAmount = getSecurityVaultWithdrawableRepAmount({
+		escalationEscrowedRep: currentSelectedVaultDetails?.escalationEscrowedRep,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		securityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
@@ -348,9 +349,14 @@ export function SecurityVaultSection({
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})
-	const queuedWithdrawRepLimit = hasValidOraclePrice ? withdrawableRepAmount : currentSelectedVaultDetails?.repDepositShare
+	const queuedWithdrawRepLimit = (() => {
+		if (currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n) return 0n
+		if (hasValidOraclePrice) return withdrawableRepAmount
+		return currentSelectedVaultDetails?.repDepositShare
+	})()
 	const maxSecurityBondAllowanceAmount = getSecurityVaultMaxBondAllowanceAmount({
 		currentSecurityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
+		escalationEscrowedRep: currentSelectedVaultDetails?.escalationEscrowedRep,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
@@ -410,6 +416,7 @@ export function SecurityVaultSection({
 	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
 		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
+		escalationEscrowedRep: currentSelectedVaultDetails?.escalationEscrowedRep,
 		requiredEthCost: withdrawRepFunding?.ethCost,
 		stagedOperationTimeoutMinutes,
 		withdrawAmount,

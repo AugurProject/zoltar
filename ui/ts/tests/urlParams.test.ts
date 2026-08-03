@@ -24,6 +24,7 @@ void describe('url params', () => {
 	void test('reads a universe query param', () => {
 		expect(readUniverseQueryParam('?universe=12')).toBe(12n)
 		expect(readUniverseQueryParam('?universe=invalid')).toBe(undefined)
+		expect(readUniverseQueryParam('?universe=-1')).toBe(undefined)
 		expect(readUniverseQueryParam('')).toBe(undefined)
 	})
 

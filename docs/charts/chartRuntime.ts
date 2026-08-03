@@ -5,13 +5,10 @@ import {
 	calculateCollateralRepairModel,
 	calculateEscalationDepositModel,
 	calculateForkThresholdSeries,
-	calculateLiquidationHealth,
 	calculateOracleSecurityModel,
 	calculateResolutionModel,
 	contractInteractionEdges,
-	describeLiquidationHealth,
 	normalizedEscalationCost,
-	parseLiquidationMultiplierBps,
 	quantitativeChartAxisLabels,
 	quantitativeChartIds,
 } from './chartModels'
@@ -556,53 +553,6 @@ function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
 		x: { domain: [0, 100], grid: true, label: axes.x },
 		y: { domain: [0, 55], grid: true, label: axes.y },
 	}) as SVGSVGElement
-}
-
-function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['fig-liquidation-health-curve']
-	const container = mount.closest('.interactive-example')
-	const unlockedRepInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="rep"]')?.value ?? '1000'
-	const allowanceInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="debt"]')?.value ?? '75'
-	const multiplierInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="multiplier"]')?.value ?? '2'
-	const currentPriceInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="price"]')?.value ?? '10'
-	const unlockedRepUnits = BigInt(unlockedRepInput)
-	const allowanceUnits = BigInt(allowanceInput)
-	const multiplierBps = parseLiquidationMultiplierBps(multiplierInput) ?? 20_000n
-	const currentPriceUnits = BigInt(currentPriceInput)
-	const unlockedRep = Number(unlockedRepUnits)
-	const allowance = Number(allowanceUnits)
-	const multiplier = Number(multiplierBps) / 10_000
-	const currentPrice = Number(currentPriceUnits)
-	const maximumPrice = Math.max(20, currentPrice)
-	const curve = Array.from({ length: 81 }, (_, index) => {
-		const price = (maximumPrice * index) / 80
-		return { price, requiredRep: allowance * multiplier * price }
-	})
-	const model = calculateLiquidationHealth(unlockedRepUnits, allowanceUnits, multiplierBps, currentPriceUnits)
-	const { currentRequiredRep, state, thresholdPrice } = model
-	const chart = plot({
-		ariaDescription: describeLiquidationHealth(spec.ariaDescription, unlockedRepUnits, model),
-		ariaLabel: spec.ariaLabel,
-		height: spec.height,
-		marginBottom: 48,
-		marginLeft: 92,
-		marginRight: 28,
-		marginTop: 24,
-		marks: [
-			areaY(curve, { fill: 'var(--red-soft, #f2d9d6)', x: 'price', y: 'requiredRep' }),
-			lineY(curve, { stroke: 'var(--red, #99453f)', strokeWidth: 3, x: 'price', y: 'requiredRep' }),
-			ruleY([unlockedRep], { stroke: 'var(--green, #1d735d)', strokeDasharray: '7,4', strokeWidth: 3 }),
-			...(Number.isFinite(thresholdPrice) && thresholdPrice <= maximumPrice ? [ruleX([thresholdPrice], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '4,4', strokeWidth: 2 })] : []),
-			dot([{ price: currentPrice, requiredRep: currentRequiredRep }], { fill: state === 'safe' ? 'var(--green, #1d735d)' : 'var(--red, #99453f)', r: 7, stroke: 'var(--paper, #fff)', strokeWidth: 2, x: 'price', y: 'requiredRep' }),
-			text([{ label: `${unlockedRep.toFixed(0)} REP available`, price: maximumPrice * 0.72, requiredRep: unlockedRep }], { dy: -9, fill: 'var(--green, #1d735d)', fontWeight: 650, text: 'label', x: 'price', y: 'requiredRep' }),
-		],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, maximumPrice], grid: true, label: axes.x },
-		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: axes.y, labelAnchor: 'center' },
-	}) as SVGSVGElement
-	chart.dataset['chartState'] = state
-	return chart
 }
 
 function contractInteractionChart(spec: ChartSpec): SVGSVGElement {
@@ -1329,9 +1279,6 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'fig-statoblast-retention-utilization') {
 		return retentionUtilizationChart(spec)
 	}
-	if (chartId === 'fig-liquidation-health-curve') {
-		return liquidationHealthChart(spec, mount)
-	}
 	if (chartId === 'fig-contract-interaction-map') {
 		return contractInteractionChart(spec)
 	}
@@ -1509,11 +1456,10 @@ window.setTimeout(restoreDocumentFragment, 600)
 window.addEventListener('load', restoreDocumentFragment)
 window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
-for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-curve', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
-	const inputSelector = chartId === 'fig-liquidation-health-curve' ? '[data-liquidation-input]' : '[data-example-input]'
-	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>(inputSelector) ?? [])) {
+	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)

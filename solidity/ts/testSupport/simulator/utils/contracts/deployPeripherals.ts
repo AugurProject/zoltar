@@ -10,6 +10,7 @@ import { contractExists } from '../utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_Multicall3_Multicall3,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
@@ -150,10 +151,11 @@ const getShareTokenFactoryByteCode = (zoltar: Address): Hex =>
 		args: [zoltar],
 	})
 
-const getEscalationGameFactoryByteCode = (): Hex =>
+const getEscalationGameFactoryByteCode = (claimDelegate: Address): Hex =>
 	encodeDeployData({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+		args: [claimDelegate],
 	})
 
 const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
@@ -184,6 +186,7 @@ const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHe
 })
 
 export const { getInfraContractAddresses } = createInfraContractAddressHelper({
+	escalationGameClaimDelegateBytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 	getEscalationGameFactoryByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
@@ -211,7 +214,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 		encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool, repToken, proofVerifier],
+			args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken, initialReportPriorityFeeWeiPerGas) =>
@@ -319,6 +322,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'shareTokenFactory', address: infraContracts.shareTokenFactory },
 		{ id: 'priceOracleManagerAndOperatorQueuerFactory', address: infraContracts.priceOracleManagerAndOperatorQueuerFactory },
 		{ id: 'securityPoolForker', address: infraContracts.securityPoolForker },
+		{ id: 'escalationGameClaimDelegate', address: infraContracts.escalationGameClaimDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
 		{ id: 'securityPoolFactory', address: infraContracts.securityPoolFactory },
 	] as const
@@ -342,6 +346,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
 		priceOracleManagerAndOperatorQueuerFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
 		securityPoolForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForker'),
+		escalationGameClaimDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameClaimDelegate'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
@@ -379,7 +384,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['shareTokenFactory']) await deployBytecode('shareTokenFactory', getShareTokenFactoryByteCode(getZoltarAddress()))
 	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode('priceOracleManagerAndOperatorQueuerFactory', getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
 	if (!existence['securityPoolForker']) await deployBytecode('securityPoolForker', getSecurityPoolForkerByteCode(contractAddresses.zoltar))
-	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode())
+	if (!existence['escalationGameClaimDelegate']) await deployBytecode('escalationGameClaimDelegate', `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`)
+	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate))
 	if (!existence['securityPoolFactory'])
 		await deployBytecode(
 			'securityPoolFactory',

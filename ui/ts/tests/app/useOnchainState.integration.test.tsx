@@ -229,6 +229,7 @@ describe('useOnchainState (integration)', () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a1')
 		const { backend, subscriptionState } = createBackend({
 			accountAddress: account,
+			getChainId: async () => '0x01',
 			readClient: createReadClient({ ethBalance: 123n, blockNumber: 100n, blockTimestamp: 200n }),
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
@@ -254,7 +255,7 @@ describe('useOnchainState (integration)', () => {
 
 		expect(requireHookState(hookState).accountState).toMatchObject({
 			address: account,
-			chainId: MAINNET_NETWORK_PROFILE.chainIdHex,
+			chainId: '0x01',
 			ethBalance: 123n,
 			wethBalance: 555n,
 		})
@@ -1654,6 +1655,51 @@ describe('useOnchainState (integration)', () => {
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
 		expect(clearIntervalMock).toHaveBeenCalledTimes(1)
+		resetEnvironment()
+	})
+
+	test('coalesces overlapping chain clock polls until the active request finishes', async () => {
+		const deferredBlock = createDeferred<{ number: bigint; timestamp: bigint }>()
+		const initialTimestamp = BigInt(Math.floor(Date.now() / 1000))
+		let useDeferredBlock = false
+		let getBlockCalls = 0
+		const readClient = {
+			...createReadClient(),
+			getBlock: async () => {
+				getBlockCalls += 1
+				if (useDeferredBlock) return await deferredBlock.promise
+				return { number: 100n, timestamp: initialTimestamp }
+			},
+		} as ReadClient
+		const { backend, subscriptionState } = createBackend({ readClient })
+		const dependencies = createOnchainStateDependencies({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurStatoblastDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 0n),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).currentTimestamp).toBe(initialTimestamp))
+		await waitFor(() => expect(subscriptionState.stateHandler).toBeDefined())
+		const callsBeforePolling = getBlockCalls
+		useDeferredBlock = true
+		await act(() => {
+			subscriptionState.stateHandler?.()
+			subscriptionState.stateHandler?.()
+		})
+
+		expect(getBlockCalls).toBe(callsBeforePolling + 1)
+		deferredBlock.resolve({ number: 300n, timestamp: initialTimestamp + 1n })
+		await waitFor(() => expect(requireHookState(hookState).currentTimestamp).toBe(initialTimestamp + 1n))
 		resetEnvironment()
 	})
 

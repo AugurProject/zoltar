@@ -135,6 +135,7 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits} variant='embedded'>
 			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
 			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
+			<p className='detail'>{forkAuctionCopy.escalationAuctionHaircutDetail}</p>
 			{settleableSides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}

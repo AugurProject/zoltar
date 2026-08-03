@@ -7,10 +7,10 @@ import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/
 
 export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier: string) {
 	const input = statoblastSecurityMultiplier.trim()
-	if (input === '') return 'Enter a Statoblast security multiplier greater than 1x.'
+	if (input === '') return 'Enter a Statoblast security multiplier of at least 1.0002x.'
 	const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(input)
 	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier in x with at most 4 decimal places.'
-	if (statoblastSecurityMultiplierBps <= 10_000n) return 'Statoblast security multiplier must be greater than 1x.'
+	if (statoblastSecurityMultiplierBps <= 10_001n) return 'Statoblast security multiplier must be at least 1.0002x.'
 	return undefined
 }
 

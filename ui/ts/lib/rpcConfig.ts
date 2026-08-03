@@ -63,6 +63,15 @@ function readStoredRpcUrl(storage: StorageLike | undefined) {
 	}
 }
 
+function getGlobalLocalStorage(globalWithRpcConfig: GlobalWithRpcConfig) {
+	try {
+		return globalWithRpcConfig.localStorage
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
+		return undefined
+	}
+}
+
 function parseIpv4Byte(value: string) {
 	if (!/^\d{1,3}$/.test(value)) return undefined
 	const byte = Number(value)
@@ -127,7 +136,7 @@ export function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, l
 	const urlConfig = resolveConfiguredRpcOverride('url', readLocationParams(location ?? globalWithRpcConfig.location).get(RPC_URL_SEARCH_PARAM), fallbackRpcUrl)
 	if (urlConfig !== undefined) return urlConfig
 
-	const storedConfig = resolveConfiguredRpcOverride('localStorage', readStoredRpcUrl(storage ?? globalWithRpcConfig.localStorage), fallbackRpcUrl)
+	const storedConfig = resolveConfiguredRpcOverride('localStorage', readStoredRpcUrl(storage ?? getGlobalLocalStorage(globalWithRpcConfig)), fallbackRpcUrl)
 	if (storedConfig !== undefined) return storedConfig
 
 	const globalConfig = resolveConfiguredRpcOverride('global', globalWithRpcConfig.__ZOLTAR_RPC_URL__, fallbackRpcUrl)

@@ -14,7 +14,6 @@ import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { Question, getQuestionTitle } from '../../markets/components/Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
@@ -24,23 +23,11 @@ import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCou
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { formatStatoblastSecurityMultiplier, getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
-export function SecurityPoolsOverviewSection({
-	accountState,
-	environmentRefreshKey,
-	hasLoadedSecurityPoolPage,
-	loadingSecurityPoolPage,
-	onCreateSecurityPool,
-	onLoadSecurityPoolPage,
-	onSelectSecurityPool,
-	repPerEthPrice,
-	securityPoolBrowseCount,
-	securityPoolPage,
-	securityPoolOverviewError,
-}: SecurityPoolsOverviewSectionProps) {
+export function SecurityPoolsOverviewSection({ accountState, environmentRefreshKey, hasLoadedSecurityPoolPage, loadingSecurityPoolPage, onCreateSecurityPool, onLoadSecurityPoolPage, onSelectSecurityPool, securityPoolBrowseCount, securityPoolPage, securityPoolOverviewError }: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
@@ -204,8 +191,6 @@ export function SecurityPoolsOverviewSection({
 					<div className='comparison-record-list'>
 						{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 							const displayState = poolState.lifecycleState
-							const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
-							const targetCollateralizationPercent = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
 							const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
 								hasForkActivity: hasKnownForkActivity,
 								questionOutcome: pool.questionOutcome,
@@ -234,10 +219,6 @@ export function SecurityPoolsOverviewSection({
 										)
 									}
 									metrics={[
-										{
-											label: securityPoolCopy.poolCollateralization,
-											value: <CollateralizationCircle className='comparison-record-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={securityPoolCopy.poolCollateralization} />,
-										},
 										{ label: securityPoolCopy.vaults, value: pool.vaultCount.toString() },
 										{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
 										{

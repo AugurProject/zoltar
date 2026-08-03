@@ -1,7 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
+import { getLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
-import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalance, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
@@ -99,6 +99,7 @@ describe('Peripherals: fork migration', () => {
 		depositToEscalationGame,
 		getCompleteSetCollateralAmount,
 		getCurrentRetentionRate,
+		getAwaitingForkContinuation,
 		getPoolOwnershipDenominator,
 		getRepToken,
 		getShareTokenSupply,
@@ -189,6 +190,21 @@ describe('Peripherals: fork migration', () => {
 		}
 		throw new Error('missing ExecutedStagedOperation log')
 	}
+
+	const getTotalBadDebt = async (securityPool: `0x${string}`) =>
+		await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'totalBadDebt',
+		})
+
+	const getVaultBadDebt = async (securityPool: `0x${string}`, vault: `0x${string}`) =>
+		await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'vaultBadDebt',
+			args: [vault],
+		})
 
 	const assertVaultMigrationPreservesParentFees = async (vaultClient: PeripheralsForkMigrationFixture['client'], migrate: () => Promise<void>) => {
 		const beforeMigrationSnapshot = await mockWindow.anvilSnapshot()
@@ -789,7 +805,7 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('liquidation and collateral accounting', () => {
-		test('liquidation with no REP above the minimum exposes No liq and preserves both vaults', async () => {
+		test('a partial liquidation preserves the free-REP reserve and a max request invokes the backstop', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -810,24 +826,24 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit)
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
 
-			const readNoLiquidationState = async () => ({
-				liquidatorVault: await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address),
-				targetVault: await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address),
-				totalAllowance: await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool),
-				totalRep: await getTotalRepBalance(client, securityPoolAddresses.securityPool),
-			})
-			const stateBefore = await readNoLiquidationState()
 			const executionHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetClient.account.address, 1n * 10n ** 18n)
 			const executionLog = await getExecutedStagedOperation(executionHash)
 
-			assert.strictEqual(executionLog.args.success, false, 'minimum-REP target must not produce a liquidation transfer')
-			assert.strictEqual(executionLog.args.errorMessage, 'No liq', 'zero-sized liquidation must expose its exact dynamic reason')
-			assert.deepStrictEqual(await readNoLiquidationState(), stateBefore, 'No liq failure must preserve both vaults and aggregate allowance and REP accounting')
+			assert.strictEqual(executionLog.args.success, false, 'a partial liquidation must not consume the minimum free-REP reserve')
+			strictEqualTypeSafe(executionLog.args.errorMessage, 'No liq', 'the unfunded partial request should report that no safe transfer exists')
+
+			const backstopHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetClient.account.address, targetAllowance)
+			const backstopLog = await getExecutedStagedOperation(backstopHash)
+			assert.strictEqual(backstopLog.args.success, true, `max liquidation backstop failed with ${backstopLog.args.errorMessage}`)
+			const targetAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			strictEqualTypeSafe(targetAfter.securityBondAllowance, 0n, 'the explicit backstop should clear the target allowance')
+			assert.ok(liquidatorAfter.securityBondAllowance > 0n, 'the liquidator should receive the safely funded debt slice')
+			assert.ok(liquidatorAfter.securityBondAllowance < targetAllowance, 'the liquidator must not receive debt whose award is unfunded')
+			strictEqualTypeSafe(await getVaultBadDebt(securityPoolAddresses.securityPool, targetClient.account.address), targetAllowance - liquidatorAfter.securityBondAllowance, 'the backstop should record the unfunded residual')
 		})
 
 		test('liquidation transfers REP from the target to the liquidator', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 75n * 10n ** 18n
 			strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -840,13 +856,34 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 			const openInterestAmount = 50n * 10n ** 18n
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-			await mockWindow.advanceTime(100000n)
+			await mockWindow.advanceTime(30n * DAY)
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+			const targetFeesBeforeLiquidation = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).unpaidEthFees
+			assert.ok(targetFeesBeforeLiquidation > 0n, 'test setup should accrue fees to the target before liquidation')
 
 			strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, statoblastSecurityMultiplierBps), false, 'Should not be able to liquidate yet')
 			// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationAmount = 20n * 10n ** 18n
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
+			await writeContractAndWait(liquidatorClient, () =>
+				liquidatorClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: addressString(GENESIS_REPUTATION_TOKEN),
+					functionName: 'transfer',
+					args: [securityPoolAddresses.securityPool, 1n],
+				}),
+			)
+			const targetVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const totalRepBeforeLiquidation = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
+			const denominatorBeforeLiquidation = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+			const quotedRepMove = getLiquidationRepToMove(liquidationAmount, forcedPrice)
+			const expectedOwnershipMove = (quotedRepMove * denominatorBeforeLiquidation + totalRepBeforeLiquidation - 1n) / totalRepBeforeLiquidation
+			const expectedRepMove = (expectedOwnershipMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedTargetClaimAfter = ((targetVaultBeforeLiquidation.repDepositShare - expectedOwnershipMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedLiquidatorClaimAfter = ((liquidatorVaultBeforeLiquidation.repDepositShare + expectedOwnershipMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			strictEqualTypeSafe(expectedRepMove, quotedRepMove, 'ceiling ownership conversion should preserve the complete quoted award after a pool donation')
 
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -859,11 +896,13 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const originalClaim = await getVaultRepClaim(client.account.address)
 			const liquidatorClaim = await getVaultRepClaim(liquidatorClient.account.address)
-			const expectedRepMove = getExpectedLiquidationRepMove(liquidationAmount, forcedPrice)
 			strictEqualTypeSafe(originalVault.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'original vault should keep only the non-liquidated security bonds')
-			approximatelyEqual(originalClaim, repDeposit - expectedRepMove, 1n, 'liquidation should seize REP from the target claim')
+			strictEqualTypeSafe(originalVault.repDepositShare, targetVaultBeforeLiquidation.repDepositShare - expectedOwnershipMove, 'liquidation should move the share-rounded target ownership')
+			strictEqualTypeSafe(originalClaim, expectedTargetClaimAfter, 'the target claim should use its exact remaining ownership at the live pool rate')
+			assert.ok(originalVault.unpaidEthFees >= targetFeesBeforeLiquidation, 'the target should retain every fee accrued before liquidation')
 			strictEqualTypeSafe(liquidatorVault.securityBondAllowance, liquidationAmount, "liquidator doesn't have the liquidated security pool allowance")
-			approximatelyEqual(liquidatorClaim, repDeposit * 10n + expectedRepMove, 1n, 'liquidator should receive the seized REP bonus')
+			strictEqualTypeSafe(liquidatorClaim, expectedLiquidatorClaimAfter, 'the liquidator claim should use its exact resulting ownership at the live pool rate')
+			strictEqualTypeSafe(liquidatorVault.unpaidEthFees, 0n, 'the liquidator must not receive the targets accrued fees')
 		})
 
 		test('liquidation rejects attempts to liquidate the caller vault itself', async () => {
@@ -889,7 +928,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore, 'same-vault liquidation should not move target REP')
 		})
 
-		test('liquidation should use snapshot to prevent blocking via additional rep deposit', async () => {
+		test('liquidation quote is invalidated by an additional REP deposit', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 75n * 10n ** 18n
@@ -925,12 +964,13 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const liquidatorBeforeOwnership = liquidatorVaultBefore.repDepositShare
 
-			// Attacker (the target vault owner) deposits additional REP while liquidation is pending
+			// The target owner rescues the vault while liquidation is pending.
 			const extraRepAmount = repDeposit * 5n
 			await depositRep(client, securityPoolAddresses.securityPool, extraRepAmount)
 
 			// Capture state after deposit but before liquidation
 			const vaultAfterDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const targetClaimAfterDeposit = await getVaultRepClaim(client.account.address)
 			const afterDepositOwnership = vaultAfterDeposit.repDepositShare
 			const denominatorAfter = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 			const totalRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -942,21 +982,17 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'target security bond allowance should decrease by the liquidated amount')
-
-			const targetOwnershipChange = afterDepositOwnership - targetVaultAfter.repDepositShare
-			const liquidatorOwnershipChange = liquidatorVaultAfter.repDepositShare - liquidatorBeforeOwnership
-			const expectedRepMove = getExpectedLiquidationRepMove(liquidationAmount, forcedPrice)
-
-			assert.ok(targetOwnershipChange > 0n, 'liquidation should reduce the targets ownership even after an extra deposit')
-			assert.ok(liquidatorOwnershipChange > 0n, 'liquidation should increase the liquidators ownership')
-			approximatelyEqual((await getVaultRepClaim(liquidatorClient.account.address)) - repDeposit * 10n, expectedRepMove, 2n, 'liquidation should still be sized from the queued snapshot rather than the later deposit')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, securityPoolAllowance, 'the stale liquidation must not move target allowance')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, afterDepositOwnership, 'the target must retain the ownership created by its rescue deposit')
+			strictEqualTypeSafe(liquidatorVaultAfter.repDepositShare, liquidatorBeforeOwnership, 'the stale liquidation must not move ownership to the liquidator')
+			strictEqualTypeSafe(await getVaultRepClaim(client.account.address), targetClaimAfterDeposit, 'the target must retain its complete live REP claim')
+			strictEqualTypeSafe(await getVaultRepClaim(liquidatorClient.account.address), repDeposit * 10n, 'the liquidator must not receive REP from a stale quote')
 			approximatelyEqual(snapshotExpectedRepDeposit, repDeposit, 1n, 'the snapshot claim should still match the original REP deposit before the attack deposit')
 			approximatelyEqual(totalRepAfter, repDeposit * 16n, 1n, 'the pool REP balance should include the additional attack deposit')
 			approximatelyEqual(denominatorAfter, PRICE_PRECISION * repDeposit * 16n, 1n, 'ownership denominator should reflect the additional attack deposit')
 		})
 
-		test('a max liquidation can clear the full target debt and seize REP', async () => {
+		test('a max liquidation clears target debt while leaving free REP above the gross award', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			for (let withdrawalIndex = 0n; withdrawalIndex < 3n; withdrawalIndex++) {
@@ -985,11 +1021,11 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVaultAfterFirstLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const targetClaimAfterFirstLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimAfterFirstLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
-			const expectedRepMove = getExpectedLiquidationRepMove(liquidationAmount, PRICE_PRECISION * 10n)
+			const expectedRepMove = getLiquidationRepToMove(liquidationAmount, PRICE_PRECISION * 10n)
 			strictEqualTypeSafe(targetVaultAfterFirstLiquidation.securityBondAllowance, 0n, 'max liquidation should clear the full target debt when enough REP is available')
 			assert.ok(targetVaultAfterFirstLiquidation.repDepositShare < targetVaultBefore.repDepositShare, 'max liquidation should reduce the target ownership')
 			strictEqualTypeSafe(liquidatorVaultAfterFirstLiquidation.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + liquidationAmount, 'the liquidator should absorb the full requested debt when the target has enough REP to pay the penalty')
-			approximatelyEqual(targetClaimAfterFirstLiquidation, targetRepBeforeLiquidation - expectedRepMove, 1n, 'max liquidation should leave the target with the post-penalty REP remainder')
+			approximatelyEqual(targetClaimAfterFirstLiquidation, targetRepBeforeLiquidation - expectedRepMove, 1n, 'max liquidation should leave target REP above the capped gross award')
 			approximatelyEqual(liquidatorClaimAfterFirstLiquidation, repDeposit * 2n + expectedRepMove, 1n, 'max liquidation should pay the liquidator the seized REP')
 
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 10n)
@@ -1003,7 +1039,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(liquidatorVaultAfterSecondLiquidation.securityBondAllowance, liquidatorVaultAfterFirstLiquidation.securityBondAllowance, 'a second same-price liquidation should not move more debt after debt is cleared')
 		})
 
-		test('liquidation leaves state unchanged when the only safe dust-avoiding chunk would strand caller debt dust', async () => {
+		test('a max liquidation writes off a funded slice below the minimum assignable debt', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 14n * 10n ** 17n
@@ -1024,12 +1060,12 @@ describe('Peripherals: fork migration', () => {
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
-			assert.strictEqual(executionLog.args.success, false, 'caller debt dust must fail the staged liquidation')
-			assert.strictEqual(executionLog.args.errorMessage, 'Caller debt', 'caller debt dust must expose its exact dynamic reason')
+			assert.strictEqual(executionLog.args.success, true, `full proportional liquidation failed with ${executionLog.args.errorMessage}`)
 			strictEqualTypeSafe(targetVaultBefore.securityBondAllowance, securityPoolAllowance, 'setup should leave the target at the configured allowance')
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'liquidation should fail when the only dust-safe target chunk would leave the caller below the minimum debt floor')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'failed liquidation should not move target REP')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, 0n, 'failed liquidation should not move debt to the liquidator')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'full liquidation should clear target allowance')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'an unassignable funded slice should not move target REP')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, 0n, 'a fresh liquidator must not receive forbidden debt dust')
+			strictEqualTypeSafe(await getVaultBadDebt(securityPoolAddresses.securityPool, client.account.address), securityPoolAllowance, 'the explicit backstop should record the complete unassignable allowance')
 		})
 
 		test('liquidation can fully close a vault that only holds the minimum REP deposit', async () => {
@@ -1064,10 +1100,11 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetVaultBefore.securityBondAllowance, minimumAllowance, 'setup should leave the target at the minimum allowance')
 			strictEqualTypeSafe(targetClaimBefore, minimumRepDeposit, 'setup should leave the target at the minimum REP deposit')
 			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'full-close liquidation should clear the minimum-size target debt')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'full-close liquidation should seize the targets remaining minimum REP')
-			strictEqualTypeSafe(targetClaimAfter, 0n, 'full-close liquidation should leave no vault REP behind on the closed target')
+			const expectedAward = getLiquidationRepToMove(minimumAllowance, liquidationPrice)
+			assert.ok(targetVaultAfter.repDepositShare > 0n, 'exact-award liquidation should leave target REP beyond the 105% award')
+			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore - expectedAward, 'the target should retain REP beyond the exact 105% award')
 			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should absorb the full target allowance')
-			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit, 'the liquidator should receive the targets full remaining REP when the vault is forced closed')
+			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, expectedAward, 'the liquidator should receive the complete 105% award and no excess target REP')
 		})
 
 		test('liquidation can fully close a minimum-size vault when the computed REP penalty exceeds the remaining REP', async () => {
@@ -1098,13 +1135,14 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
 			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'full-close liquidation should still clear the target debt when the computed REP penalty exceeds the vault balance')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'full-close liquidation should not strand ownership when the computed REP penalty exceeds the vault balance')
-			strictEqualTypeSafe(targetClaimAfter, 0n, 'full-close liquidation should leave the target with no remaining vault REP when the computed REP penalty exceeds the vault balance')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should still absorb the full target allowance when the computed REP penalty exceeds the vault balance')
-			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit, 'the liquidator should receive the full target REP when the computed REP penalty exceeds the vault balance')
+			assert.ok(targetVaultAfter.repDepositShare > 0n, 'a fully unfunded award must not seize target REP')
+			strictEqualTypeSafe(targetClaimAfter, minimumRepDeposit, 'the bad-debt backstop should leave target REP untouched')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'the liquidator must not assume debt without a valid minimum-sized funded slice')
+			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'the liquidator should not receive REP when no debt moves')
+			strictEqualTypeSafe(await getVaultBadDebt(securityPoolAddresses.securityPool, targetClient.account.address), minimumAllowance, 'the explicit backstop should record the fully unfunded debt')
 		})
 
-		test('queued liquidation can still fully close a minimum-size vault after the target tops up REP', async () => {
+		test('queued liquidation becomes stale when the target adds even one unit of REP', async () => {
 			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
@@ -1133,24 +1171,20 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'queued full-close liquidation should still clear the target debt after a later REP top-up')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'queued full-close liquidation should consume the targets current ownership when leaving dust would otherwise revert')
-			strictEqualTypeSafe(targetClaimAfter, 0n, 'queued full-close liquidation should leave no vault REP behind after the target tops up REP')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should still absorb the full queued allowance after the target tops up REP')
-			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit + extraRepAmount, 'the liquidator should receive the targets full current REP when the queued liquidation must force-close the vault')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, minimumAllowance, 'a target ownership mutation should invalidate the queued debt transfer')
+			strictEqualTypeSafe(targetClaimAfter, minimumRepDeposit + extraRepAmount, 'the rescue deposit must remain with the target vault')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a stale liquidation must not move allowance')
+			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'a stale liquidation must not move REP')
 		})
 
-		test('queued minimum-vault liquidation is consumed when a later REP top-up removes the liquidation gain', async () => {
+		test('an unsolicited one-unit REP donation cannot cancel a queued liquidation', async () => {
 			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const minimumAllowance = 1n * 10n ** 18n
 			const allowanceCreationPrice = 5n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
-			// A zero-basefee request has a one-wei minimum WETH side, so ceiling the
-			// proposed 6.1 REP/ETH price produces a settled price of 7 REP/ETH.
-			// Top up past that rounded liquidation boundary.
-			const extraRepAmount = 5n * 10n ** 18n
+			const extraRepAmount = 1n
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
@@ -1160,13 +1194,20 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
 			await mockWindow.advanceTime(100000n)
 
-			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const targetClaimBefore = await getVaultRepClaim(targetClient.account.address)
-			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
+			const targetOwnershipBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)).repDepositShare
 
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumAllowance, liquidationPrice)
-			await depositRep(targetClient, securityPoolAddresses.securityPool, extraRepAmount)
+			await writeContractAndWait(targetClient, () =>
+				targetClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: addressString(GENESIS_REPUTATION_TOKEN),
+					functionName: 'transfer',
+					args: [securityPoolAddresses.securityPool, extraRepAmount],
+				}),
+			)
+			const targetClaimAfterDonation = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimAfterDonation = await getVaultRepClaim(liquidatorClient.account.address)
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
@@ -1174,14 +1215,15 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a later REP top-up that removes the liquidation gain should leave the target allowance unchanged')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare + extraRepAmount * PRICE_PRECISION, 'a consumed queued liquidation should leave the target with the added ownership only')
-			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore + extraRepAmount, 'a consumed queued liquidation should leave the extra REP on the target vault')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a consumed queued liquidation should not move debt to the liquidator')
-			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'a consumed queued liquidation should not move REP to the liquidator')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'an unsolicited pool donation must not cancel the quoted debt transfer')
+			assert.ok(targetVaultAfter.repDepositShare > 0n, 'exact-award liquidation should preserve target ownership beyond the award')
+			strictEqualTypeSafe(targetClaimAfter, targetClaimAfterDonation - getLiquidationRepToMove(minimumAllowance, liquidationPrice), 'the donation must not change the exact 105% award')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should assume the quoted allowance')
+			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimAfterDonation + getLiquidationRepToMove(minimumAllowance, liquidationPrice), 'the liquidator should receive the complete award without taking the target surplus')
+			assert.ok(targetOwnershipBefore > 0n, 'the regression setup must queue a nonzero target ownership')
 		})
 
-		test('liquidation leaves state unchanged when a smaller chunk would leave forbidden target debt dust', async () => {
+		test('a smaller liquidation is capped so it leaves valid target debt instead of promoting an unfunded close', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = 14n * 10n ** 17n
@@ -1192,8 +1234,8 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 			await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidatorClient.account.address, 1n * 10n ** 18n)
 
-			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetRepBefore = await getVaultRepClaim(client.account.address)
 			const dustRevertingAmount = 8n * 10n ** 17n
 			const dustRoundingPrice = PRICE_PRECISION * 400n
 
@@ -1203,16 +1245,18 @@ describe('Peripherals: fork migration', () => {
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetRepAfter = await getVaultRepClaim(client.account.address)
 
-			assert.strictEqual(executionLog.args.success, false, 'target debt dust must fail the staged liquidation')
-			assert.strictEqual(executionLog.args.errorMessage, 'Target debt', 'target debt dust must expose its exact dynamic reason')
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a dust-reverting liquidation should leave the target allowance unchanged')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'a dust-reverting liquidation should leave the target REP claim unchanged')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a dust-reverting liquidation should not move debt to the liquidator')
-			strictEqualTypeSafe(liquidatorVaultAfter.repDepositShare, liquidatorVaultBefore.repDepositShare, 'a dust-reverting liquidation should not move REP to the liquidator')
+			assert.strictEqual(executionLog.args.success, true, `dust-promoted liquidation failed with ${executionLog.args.errorMessage}`)
+			const cappedDebtMove = securityPoolAllowance - 1n * 10n ** 18n
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 1n * 10n ** 18n, 'the capped partial liquidation should preserve the minimum valid target debt')
+			assert.ok(targetVaultAfter.repDepositShare > 0n, 'the partial liquidation should leave free REP beyond the gross award')
+			strictEqualTypeSafe(targetRepAfter, targetRepBefore - getLiquidationRepToMove(cappedDebtMove, dustRoundingPrice), 'the capped partial liquidation should move only its complete 105% award')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + cappedDebtMove, 'the liquidator should receive only the capped debt amount')
+			assert.ok(liquidatorVaultAfter.repDepositShare > liquidatorVaultBefore.repDepositShare, 'liquidator should receive the target REP bundle')
 		})
 
-		test('liquidation leaves state unchanged when a tiny chunk would not improve target health after rounding', async () => {
+		test('tiny liquidation preserves the bonus without a separate gain condition', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const roundingSensitivePrice = (PRICE_PRECISION * 45n) / 100n
@@ -1245,15 +1289,14 @@ describe('Peripherals: fork migration', () => {
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
-			assert.strictEqual(executionLog.args.success, false, 'a liquidation whose rounded REP transfer erases the bonus must fail')
-			assert.strictEqual(executionLog.args.errorMessage, 'No gain', 'rounded non-improving liquidation must expose its exact dynamic reason')
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a non-improving rounded liquidation should not change target debt')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'a non-improving rounded liquidation should not change target REP')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a non-improving rounded liquidation should not change caller debt')
-			strictEqualTypeSafe(liquidatorVaultAfter.repDepositShare, liquidatorVaultBefore.repDepositShare, 'a non-improving rounded liquidation should not change caller REP')
+			assert.strictEqual(executionLog.args.success, true, `tiny proportional liquidation failed with ${executionLog.args.errorMessage}`)
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance - tinyLiquidationAmount, 'tiny liquidation should move the requested debt')
+			assert.ok(targetVaultAfter.repDepositShare < targetVaultBefore.repDepositShare, 'tiny liquidation should move the corresponding ownership fraction')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + tinyLiquidationAmount, 'caller should receive the requested debt')
+			assert.ok(liquidatorVaultAfter.repDepositShare > liquidatorVaultBefore.repDepositShare, 'caller should receive the corresponding ownership fraction')
 		})
 
-		test('liquidation can seize unlocked REP without touching escalation-locked REP', async () => {
+		test('liquidation leaves escalation claims with their original depositor', async () => {
 			const securityPoolAllowance = 200n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
@@ -1277,22 +1320,152 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetClaimAfterLock, repDeposit - lockedDeposit, 'locking REP should move the committed principal out of the vault claim')
 			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), false, 'the escalation deposit should stop at multiplier-adjusted backing')
 
-			const liquidationPrice = (PRICE_PRECISION * 5n) / 4n
+			const liquidationPrice = (PRICE_PRECISION * 3n) / 2n
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
 			strictEqualTypeSafe(canLiquidate(liquidationPrice, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), true, 'an adverse price move should make the boundary-backed vault liquidatable')
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+			const partialDebt = securityPoolAllowance / 3n
+			const partialLiquidationHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, partialDebt)
+			const partialLiquidationExecution = await getExecutedStagedOperation(partialLiquidationHash)
+			strictEqualTypeSafe(partialLiquidationExecution.args.success, true, `partial bundled liquidation should execute: ${partialLiquidationExecution.args.errorMessage}`)
+
+			const targetVaultAfterPartial = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const liquidatorVaultAfterPartial = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			strictEqualTypeSafe(targetVaultAfterPartial.repInEscalationGame, lockedDeposit, 'partial liquidation must leave the escalation claim with the target')
+			strictEqualTypeSafe(targetVaultAfterPartial.securityBondAllowance, securityPoolAllowance - partialDebt, 'partial liquidation should leave the matching debt remainder')
+			const partialFreeRepAward = getLiquidationRepToMove(partialDebt, liquidationPrice)
+			approximatelyEqual(await getVaultRepClaim(client.account.address), repDeposit - lockedDeposit - partialFreeRepAward, 2n, 'the partial award should come entirely from target free REP')
+			approximatelyEqual(await getVaultRepClaim(liquidatorClient.account.address), repDeposit * 2n + partialFreeRepAward, 2n, 'the liquidator should receive the full bonus-priced free REP')
+			strictEqualTypeSafe(liquidatorVaultAfterPartial.repInEscalationGame, 0n, 'partial liquidation must not give the liquidator escalation REP')
+
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 3n)
+			const liquidationHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance - partialDebt)
+			const liquidationExecution = await getExecutedStagedOperation(liquidationHash)
+			strictEqualTypeSafe(liquidationExecution.args.success, true, `remaining bundled liquidation should execute: ${liquidationExecution.args.errorMessage}`)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const targetClaimAfterLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimAfterLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
+			const recordedBadDebt = await getVaultBadDebt(securityPoolAddresses.securityPool, client.account.address)
 
-			const expectedRepMove = getExpectedLiquidationRepMove(securityPoolAllowance, liquidationPrice)
-			strictEqualTypeSafe(targetVaultAfterLiquidation.repInEscalationGame, lockedDeposit, 'liquidation should leave the targets escalation commitment untouched')
+			strictEqualTypeSafe(targetVaultAfterLiquidation.repInEscalationGame, lockedDeposit, 'full liquidation must leave the target escalation claim intact')
 			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, 0n, 'liquidation should clear the unlocked-vault debt when enough unlocked REP is available')
-			approximatelyEqual(targetClaimAfterLiquidation, repDeposit - lockedDeposit - expectedRepMove, 1n, 'liquidation should seize only unlocked vault REP')
-			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, securityPoolAllowance, 'the liquidator should absorb the executed debt amount')
-			approximatelyEqual(liquidatorClaimAfterLiquidation, repDeposit * 2n + expectedRepMove, 1n, 'the liquidator should receive the unlocked REP seized from the target')
+			assert.ok(targetClaimAfterLiquidation <= 3n, 'the max funded award should consume free REP up to conversion dust')
+			assert.ok(recordedBadDebt > 0n, 'the unfunded residual should use the explicit bad-debt backstop')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance + recordedBadDebt, securityPoolAllowance, 'moved debt plus recorded bad debt should reconcile the original allowance')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), liquidatorVaultAfterLiquidation.securityBondAllowance, 'active allowance should exclude recorded bad debt')
+			approximatelyEqual(liquidatorClaimAfterLiquidation, repDeposit * 3n - lockedDeposit, 3n, 'the liquidator should receive only the complete funded awards from free REP')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.repInEscalationGame, 0n, 'the liquidator must never receive the non-tradeable escalation claim')
+
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, 2n * forkThreshold)
+			await triggerOwnGameFork(liquidatorClient, securityPoolAddresses.securityPool)
+			await migrateRepToZoltar(liquidatorClient, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesChildRepToken = getRepTokenAddress(yesUniverse)
+			const originalWalletRepBefore = await getERC20Balance(client, yesChildRepToken, client.account.address)
+			const liquidatorWalletRepBefore = await getERC20Balance(liquidatorClient, yesChildRepToken, liquidatorClient.account.address)
+
+			await assert.rejects(claimForkedEscalationDeposits(liquidatorClient, securityPoolAddresses.securityPool, liquidatorClient.account.address, QuestionOutcome.Yes, [0n]))
+			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+			assert.ok((await getERC20Balance(client, yesChildRepToken, client.account.address)) > originalWalletRepBefore, 'own-fork settlement should pay the committed depositor')
+			strictEqualTypeSafe(await getERC20Balance(liquidatorClient, yesChildRepToken, liquidatorClient.account.address), liquidatorWalletRepBefore, 'own-fork settlement must not pay the liquidator')
+		})
+
+		test('minimum multiplier liquidation pays the full free-REP bonus and writes off unfunded residual debt', async () => {
+			const minimumMultiplierBps = 10_002n
+			const minimumMultiplierQuestion = {
+				...questionData,
+				title: 'minimum multiplier liquidation reserve',
+			}
+			const minimumMultiplierQuestionId = getQuestionId(minimumMultiplierQuestion, outcomes)
+			await createQuestion(client, minimumMultiplierQuestion, outcomes)
+			await deployOriginSecurityPool(client, genesisUniverse, minimumMultiplierQuestionId, minimumMultiplierBps)
+			const minimumMultiplierPool = getSecurityPoolAddresses(addressString(0n), genesisUniverse, minimumMultiplierQuestionId, minimumMultiplierBps)
+
+			const otherHolderClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			for (const vaultClient of [client, otherHolderClient, liquidatorClient]) {
+				await approveToken(vaultClient, addressString(GENESIS_REPUTATION_TOKEN), minimumMultiplierPool.securityPool)
+				await depositRep(vaultClient, minimumMultiplierPool.securityPool, repDeposit)
+			}
+
+			const targetAllowance = 900n * 10n ** 18n
+			const setupPrice = PRICE_PRECISION / 10n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, minimumMultiplierPool.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, setupPrice)
+			await mockWindow.setTime(minimumMultiplierQuestion.endTime + 10_000n)
+			await manipulatePriceOracle(client, mockWindow, minimumMultiplierPool.priceOracleManagerAndOperatorQueuer, setupPrice)
+			const escrowedRep = 900n * 10n ** 18n
+			await depositToEscalationGame(client, minimumMultiplierPool.securityPool, QuestionOutcome.Yes, escrowedRep)
+
+			const targetBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, client.account.address)
+			const liquidatorBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, liquidatorClient.account.address)
+			const otherHolderBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, otherHolderClient.account.address)
+			const targetFreeRepBefore = await poolOwnershipToRep(client, minimumMultiplierPool.securityPool, targetBefore.repDepositShare)
+			const liquidatorFreeRepBefore = await poolOwnershipToRep(client, minimumMultiplierPool.securityPool, liquidatorBefore.repDepositShare)
+			const otherHolderFreeRepBefore = await poolOwnershipToRep(client, minimumMultiplierPool.securityPool, otherHolderBefore.repDepositShare)
+			strictEqualTypeSafe(targetBefore.repInEscalationGame, escrowedRep, 'setup should bind the escalation claim to the target')
+			strictEqualTypeSafe(targetFreeRepBefore, repDeposit - escrowedRep, 'setup should leave only the liquidation reserve as target free REP')
+
+			const liquidationPrice = 2n * PRICE_PRECISION
+			const awardDenominator = liquidationPrice * 10_500n
+			const maxFundedDebt = (targetFreeRepBefore * PRICE_PRECISION * 10_000n) / awardDenominator
+			const expectedAwardNumerator = maxFundedDebt * liquidationPrice * 10_500n
+			const expectedAwardDenominator = PRICE_PRECISION * 10_000n
+			const expectedFullAward = (expectedAwardNumerator + expectedAwardDenominator - 1n) / expectedAwardDenominator
+			await mockWindow.advanceTime(5n * 60n + 1n)
+			await queueLiquidationAtForcedPrice(liquidatorClient, minimumMultiplierPool.priceOracleManagerAndOperatorQueuer, client.account.address, targetAllowance, liquidationPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, minimumMultiplierPool.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const targetAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, client.account.address)
+			const liquidatorAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, liquidatorClient.account.address)
+			const otherHolderAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, otherHolderClient.account.address)
+			const liquidatorFreeRepAfter = await poolOwnershipToRep(client, minimumMultiplierPool.securityPool, liquidatorAfter.repDepositShare)
+			const otherHolderFreeRepAfter = await poolOwnershipToRep(client, minimumMultiplierPool.securityPool, otherHolderAfter.repDepositShare)
+			const expectedBadDebt = targetAllowance - maxFundedDebt
+
+			strictEqualTypeSafe(targetAfter.securityBondAllowance, 0n, 'the explicit backstop should clear residual target debt')
+			strictEqualTypeSafe(targetAfter.repInEscalationGame, escrowedRep, 'bad-debt handling must not move the target escalation claim')
+			strictEqualTypeSafe(liquidatorAfter.securityBondAllowance, maxFundedDebt, 'the liquidator should assume only debt whose complete award is funded')
+			strictEqualTypeSafe(liquidatorFreeRepAfter - liquidatorFreeRepBefore, expectedFullAward, 'the liquidator should receive the complete 105% free-REP award')
+			assert.ok(liquidatorFreeRepAfter * PRICE_PRECISION * 10_000n > liquidatorAfter.securityBondAllowance * liquidationPrice * 10_500n, 'the liquidator should remain above the strengthened free-REP health reserve')
+			strictEqualTypeSafe(otherHolderFreeRepAfter, otherHolderFreeRepBefore, 'liquidation and bad-debt recording must not dilute another holder')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, minimumMultiplierPool.securityPool), maxFundedDebt, 'unfunded residual debt should leave active allowance accounting through the explicit backstop')
+			strictEqualTypeSafe(await getVaultBadDebt(minimumMultiplierPool.securityPool, client.account.address), expectedBadDebt, 'the target should expose its recorded residual bad debt')
+			strictEqualTypeSafe(await getTotalBadDebt(minimumMultiplierPool.securityPool), expectedBadDebt, 'the pool should expose cumulative bad debt for monitoring')
+		})
+
+		test('liquidation does not change own-fork claim authorization or payout', async () => {
+			const securityPoolAllowance = 200n * 10n ** 18n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+
+			await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			const lockedDeposit = 600n * 10n ** 18n
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, (PRICE_PRECISION * 3n) / 2n)
+			const partialLiquidationHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance / 3n)
+			const partialLiquidationExecution = await getExecutedStagedOperation(partialLiquidationHash)
+			strictEqualTypeSafe(partialLiquidationExecution.args.success, true, `partial liquidation should execute: ${partialLiquidationExecution.args.errorMessage}`)
+
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, 2n * forkThreshold)
+			await triggerOwnGameFork(liquidatorClient, securityPoolAddresses.securityPool)
+			await migrateRepToZoltar(liquidatorClient, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			const yesChildRepToken = getRepTokenAddress(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
+			const originalBalanceBefore = await getERC20Balance(client, yesChildRepToken, client.account.address)
+			const liquidatorBalanceBefore = await getERC20Balance(liquidatorClient, yesChildRepToken, liquidatorClient.account.address)
+
+			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+			assert.ok((await getERC20Balance(client, yesChildRepToken, client.account.address)) > originalBalanceBefore, 'the committed depositor should receive the complete direct claim')
+			strictEqualTypeSafe(await getERC20Balance(liquidatorClient, yesChildRepToken, liquidatorClient.account.address), liquidatorBalanceBefore, 'the liquidator must not receive any direct-claim payout')
 		})
 
 		test('locking REP in escalation preserves total collateral claims and only reduces the lockers withdrawable balance', async () => {
@@ -1349,6 +1522,68 @@ describe('Peripherals: fork migration', () => {
 				strictEqualTypeSafe(depositorShares[1], expectedShares, 'the depositor should receive yes shares')
 				strictEqualTypeSafe(depositorShares[2], expectedShares, 'the depositor should receive no shares')
 			})
+
+			if (label === 'one wei')
+				test('child liquidation leaves carried and local escalation claims with the target', async () => {
+					const securityPoolAllowance = 200n * 10n ** 18n
+					await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+					const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+					await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+					await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+
+					await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
+					await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+					const lockedDeposit = 600n * 10n ** 18n
+					await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
+					await depositToEscalationGame(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.No, lockedDeposit)
+					await depositRep(client, securityPoolAddresses.securityPool, repDeposit)
+					await triggerExternalForkForSecurityPool(undefined, 'carried liquidation-owner payout')
+					await migrateRepToZoltar(liquidatorClient, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+					await createChildUniverse(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+					const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+					const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+					const reporterRep = 10n * 10n ** 18n
+					await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+					await addRepToMigrationBalance(client, genesisUniverse, reporterRep)
+					await splitMigrationRep(client, genesisUniverse, reporterRep, [QuestionOutcome.Yes])
+					await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+					await migrateVault(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+					await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+					await startTruthAuction(liquidatorClient, yesPool.securityPool)
+					if ((await getSystemState(liquidatorClient, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
+						await finalizeTruthAuction(liquidatorClient, yesPool.securityPool)
+					}
+					for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(liquidatorClient, yesPool.securityPool)); progressCall++) {
+						await writeContractAndWait(liquidatorClient, () =>
+							liquidatorClient.writeContract({
+								abi: peripherals_SecurityPool_SecurityPool.abi,
+								address: yesPool.securityPool,
+								functionName: 'resumeForkedEscalationGame',
+								args: [],
+							}),
+						)
+					}
+					strictEqualTypeSafe(await getAwaitingForkContinuation(liquidatorClient, yesPool.securityPool), false, 'bounded continuation progress should complete before child-local deposits')
+					await manipulatePriceOracle(client, mockWindow, yesPool.priceOracleManagerAndOperatorQueuer)
+					await depositToEscalationGame(client, yesPool.securityPool, QuestionOutcome.No, lockedDeposit)
+					const targetChildVaultBefore = await getSecurityVault(client, yesPool.securityPool, client.account.address)
+					const liquidatorChildVaultBefore = await getSecurityVault(client, yesPool.securityPool, liquidatorClient.account.address)
+					const childLocalDeposit = targetChildVaultBefore.repInEscalationGame
+					assert.ok(childLocalDeposit > 0n, 'the resumed child should record its new local claim separately')
+					assert.ok(targetChildVaultBefore.securityBondAllowance > 0n, 'the migrated target should retain allowance for liquidation')
+					const targetFreeRepBefore = await getVaultRepClaim(client.account.address)
+					const liquidatorFreeRepBefore = await getVaultRepClaim(liquidatorClient.account.address)
+					await manipulatePriceOracle(client, mockWindow, yesPool.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 4n)
+					await requestPriceIfNeededAndStageOperation(liquidatorClient, yesPool.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetChildVaultBefore.securityBondAllowance)
+					const targetChildVaultAfter = await getSecurityVault(client, yesPool.securityPool, client.account.address)
+					const liquidatorChildVaultAfter = await getSecurityVault(client, yesPool.securityPool, liquidatorClient.account.address)
+					strictEqualTypeSafe(targetChildVaultAfter.repInEscalationGame, childLocalDeposit, 'liquidation must not move the target claim')
+					strictEqualTypeSafe(liquidatorChildVaultAfter.repInEscalationGame, liquidatorChildVaultBefore.repInEscalationGame, 'the liquidator must not receive escalation REP')
+					const grossLiquidationAward = getLiquidationRepToMove(targetChildVaultBefore.securityBondAllowance, PRICE_PRECISION * 4n)
+					const freeRepAward = grossLiquidationAward < targetFreeRepBefore ? grossLiquidationAward : targetFreeRepBefore
+					approximatelyEqual(await getVaultRepClaim(client.account.address), targetFreeRepBefore - freeRepAward, 2n, 'the liquidation award should come only from target free REP')
+					approximatelyEqual(await getVaultRepClaim(liquidatorClient.account.address), liquidatorFreeRepBefore + freeRepAward, 2n, 'the liquidator should receive only the available free-REP award')
+				})
 		}
 
 		test('forced ETH during migration remains surplus while accounted collateral moves to the child', async () => {
@@ -2225,7 +2460,7 @@ describe('Peripherals: fork migration', () => {
 			const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const additionalInvalidCompleteSetAmount = ensureDefined(currentShares[0], 'currentShares[0] is undefined')
 			if (additionalInvalidCompleteSetAmount > 0n) {
-				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount), /Resolved/)
+				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount), /Resolved|Fork await/)
 			}
 
 			const balancePriorInvalidRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
@@ -3486,6 +3721,17 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the zero-collateral child should auto-finalize without entering a live auction')
+			for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, yesSecurityPool.securityPool)); progressCall++) {
+				await writeContractAndWait(client, () =>
+					client.writeContract({
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						address: yesSecurityPool.securityPool,
+						functionName: 'resumeForkedEscalationGame',
+						args: [],
+					}),
+				)
+			}
+			strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'bounded continuation progress should complete before child settlement')
 			const escalationEndDate = await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				address: yesEscalationGame,
@@ -3508,7 +3754,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.addStateOverrides({
 				[yesEscalationGame]: {
 					stateDiff: {
-						[formatStorageSlot(439n)]: BigInt(QuestionOutcome.No),
+						[formatStorageSlot(444n)]: BigInt(QuestionOutcome.No),
 					},
 				},
 			})
@@ -3851,7 +4097,7 @@ describe('Peripherals: fork migration', () => {
 			const claimDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(claimDeadline + 1n)
 
-			await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Claim window closed/)
+			await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /execution reverted|Reverted without a reason/i)
 		})
 
 		test('claimForkedEscalationDeposits allows the exact own-fork migration deadline', async () => {

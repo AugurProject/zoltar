@@ -125,6 +125,7 @@ export type CoordinatorOperationReplay = {
 	validForSeconds: bigint
 	snapshotTargetOwnership: bigint
 	snapshotTargetAllowance: bigint
+	snapshotTargetEscalationRep: bigint
 	snapshotTotalRep: bigint
 	snapshotDenominator: bigint
 	isPendingSlot: boolean
@@ -267,6 +268,16 @@ type EscalationCarrySnapshotReplay = {
 	leafCounts: BigIntTriple
 }
 
+export type EscalationClaimBundleReplay = {
+	claimRepShares: bigint
+	depositor: Address
+}
+
+export type EscalationHaircutReplay = {
+	repBefore: bigint
+	repRemaining: bigint
+}
+
 export type ReplayState = {
 	identities: Set<string>
 	questions: Map<bigint, QuestionReplay>
@@ -301,6 +312,8 @@ export type ReplayState = {
 	escalationLifecycles: Map<Address, EscalationLifecycleReplay>
 	escalationConsumptions: Map<Address, Map<string, EscalationConsumptionReplay>>
 	escalationClaims: Map<Address, Map<string, EscalationClaimReplay>>
+	escalationClaimBundles: Map<Address, Map<Address, EscalationClaimBundleReplay>>
+	escalationHaircuts: Map<Address, EscalationHaircutReplay>
 	escalationVaultEscrowedRep: Map<Address, Map<Address, bigint>>
 	escalationLocalUnresolvedByVault: Map<Address, Map<Address, BigIntTriple>>
 	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
@@ -352,6 +365,8 @@ export function createReplayState(): ReplayState {
 		escalationLifecycles: new Map(),
 		escalationConsumptions: new Map(),
 		escalationClaims: new Map(),
+		escalationClaimBundles: new Map(),
+		escalationHaircuts: new Map(),
 		escalationVaultEscrowedRep: new Map(),
 		escalationLocalUnresolvedByVault: new Map(),
 		escalationForkedEscrow: new Map(),
@@ -942,6 +957,19 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
+	if (log.eventName === 'TruthAuctionHaircutApplied') {
+		const repBefore = requireBigInt(log.args, 'repBefore')
+		const repRemaining = requireBigInt(log.args, 'repRemaining')
+		if (repBefore <= 0n || repRemaining <= 0n || repRemaining >= repBefore) throw new Error('truth-auction haircut ratio is invalid')
+		state.escalationHaircuts.set(log.emitter, { repBefore, repRemaining })
+		const totalEscrowedRep = state.escalationTotalEscrowedRep.get(log.emitter)
+		if (totalEscrowedRep !== undefined) state.escalationTotalEscrowedRep.set(log.emitter, (totalEscrowedRep * repRemaining) / repBefore)
+		const outcomeBalances = state.escalationResolutionBalances.get(log.emitter)
+		if (outcomeBalances !== undefined) {
+			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) outcomeBalances[outcomeIndex] = (outcomeBalances[outcomeIndex] * repRemaining) / repBefore
+		}
+		return
+	}
 	if (log.eventName === 'GameStarted') {
 		state.escalationLifecycles.set(log.emitter, {
 			activationTime: requireBigInt(log.args, 'activationTime'),
@@ -1067,6 +1095,21 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		resolutionBalances[outcomeIndex] = deposit.cumulativeRepAmount
 		state.escalationResolutionBalances.set(log.emitter, resolutionBalances)
 		appendCarryLeaf(state, log.emitter, deposit)
+		const bundles = getOrCreateNestedMap(state.escalationClaimBundles, log.emitter)
+		let bundle = bundles.get(deposit.depositor)
+		if (bundle === undefined) {
+			bundle = {
+				claimRepShares: 0n,
+				depositor: deposit.depositor,
+			}
+			bundles.set(deposit.depositor, bundle)
+		}
+		const haircut = state.escalationHaircuts.get(log.emitter)
+		if (haircut === undefined) bundle.claimRepShares += deposit.repAmount
+		else {
+			const numerator = deposit.repAmount * haircut.repBefore
+			bundle.claimRepShares += (numerator + haircut.repRemaining - 1n) / haircut.repRemaining
+		}
 		return
 	}
 	if (log.eventName === 'DepositOnOutcome') {
@@ -1259,7 +1302,19 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered', 'PendingOperationRecoveryConsumed', 'StagedOperationQueued', 'ExecutedStagedOperation', 'CoordinatorStateCheckpoint'])
+	const coordinatorEventNames = new Set([
+		'SecurityPoolSet',
+		'RepEthPriceSet',
+		'PriceRequested',
+		'PriceReported',
+		'PriceReportRejected',
+		'PendingReportRecovered',
+		'PendingOperationRecoveryConsumed',
+		'StagedOperationQueued',
+		'StagedOperationEscalationRepSnapshotted',
+		'ExecutedStagedOperation',
+		'CoordinatorStateCheckpoint',
+	])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1364,10 +1419,20 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetOwnership: requireBigInt(log.args, 'snapshotTargetOwnership'),
 			snapshotTargetAllowance: requireBigInt(log.args, 'snapshotTargetAllowance'),
+			snapshotTargetEscalationRep: 0n,
 			snapshotTotalRep: requireBigInt(log.args, 'snapshotTotalRep'),
 			snapshotDenominator: requireBigInt(log.args, 'snapshotDenominator'),
 			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
 			status: 'Queued',
+		})
+		return
+	}
+	if (log.eventName === 'StagedOperationEscalationRepSnapshotted') {
+		const queued = operations.get(operationId)
+		if (queued === undefined) throw new Error('coordinator escalation REP snapshot was not queued')
+		operations.set(operationId, {
+			...queued,
+			snapshotTargetEscalationRep: requireBigInt(log.args, 'snapshotTargetEscalationRep'),
 		})
 		return
 	}

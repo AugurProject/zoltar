@@ -236,6 +236,12 @@ function createDeferred<T>() {
 	}
 }
 
+async function flushAsyncWork() {
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 0))
+	})
+}
+
 function createEmptyBrowsePage(pageIndex = 0): OpenOracleReportSummaryPage {
 	return {
 		nextReportId: 1n,
@@ -243,6 +249,13 @@ function createEmptyBrowsePage(pageIndex = 0): OpenOracleReportSummaryPage {
 		pageSize: 10,
 		reportCount: 0n,
 		reports: [],
+	}
+}
+
+function createCountedBrowsePage(pageIndex: number, reportCount: bigint): OpenOracleReportSummaryPage {
+	return {
+		...createEmptyBrowsePage(pageIndex),
+		reportCount,
 	}
 }
 
@@ -356,6 +369,88 @@ function renderSettleActionSection({
 }
 
 void describe('OpenOracleSection', () => {
+	void test('renders block-based report clocks as blocks instead of timestamps', async () => {
+		const domEnvironment = installDomEnvironment()
+		const rendered = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentBlockNumber: 300n,
+						currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+						reportTimestamp: 123n,
+						settlementTimestamp: 234n,
+						timeType: false,
+					}),
+					openOracleReportLookupState: 'ready',
+				})}
+			/>,
+		)
+
+		try {
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByText('Report Block')).not.toBeNull()
+			expect(documentQueries.getByText('Settlement Block')).not.toBeNull()
+			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
+			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('renders block-based browse summary clocks as blocks instead of timestamps', async () => {
+		const domEnvironment = installDomEnvironment()
+		const reporter = getAddress('0x3000000000000000000000000000000000000000')
+		const rendered = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					loadBrowseReports: async pageIndex => ({
+						nextReportId: 2n,
+						pageIndex,
+						pageSize: 10,
+						reportCount: 1n,
+						reports: [
+							{
+								currentAmount1: 10n ** 18n,
+								currentAmount2: 2n * 10n ** 18n,
+								currentReporter: reporter,
+								disputeOccurred: false,
+								exactToken1Report: 10n ** 18n,
+								isDistributed: true,
+								price: 2n * 10n ** 30n,
+								reportId: 1n,
+								reportTimestamp: 123n,
+								settlementTimestamp: 234n,
+								timeType: false,
+								token1: getAddress('0x2000000000000000000000000000000000000000'),
+								token1Decimals: 18,
+								token1Symbol: 'REPv2',
+								token2: getAddress('0x4000000000000000000000000000000000000000'),
+								token2Decimals: 18,
+								token2Symbol: 'WETH',
+							},
+						],
+					}),
+				})}
+			/>,
+		)
+
+		try {
+			await flushAsyncWork()
+			const documentQueries = within(document.body)
+			const searchInput = documentQueries.getByRole('textbox', { name: 'Search this page' }) as HTMLInputElement
+			expect(searchInput.placeholder).toBe('Filter this page by report ID, token symbol, or token address')
+			expect(documentQueries.getByText('Report Block')).not.toBeNull()
+			expect(documentQueries.getByText('Settlement Block')).not.toBeNull()
+			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
+			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	void test('waits for the active environment before loading browse reports', async () => {
 		const domEnvironment = installDomEnvironment()
 		let browseLoadAttempts = 0
@@ -377,6 +472,45 @@ void describe('OpenOracleSection', () => {
 		} finally {
 			await rendered.cleanup()
 			restoreActiveEnvironment()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('clamps the browse page after an environment reports a smaller result set', async () => {
+		const domEnvironment = installDomEnvironment()
+		const requestedPages: number[] = []
+		let environmentRefreshKey = 0
+		const loadBrowseReports = (pageIndex: number) => {
+			requestedPages.push(pageIndex)
+			return Promise.resolve(createCountedBrowsePage(pageIndex, environmentRefreshKey === 0 ? 21n : 1n))
+		}
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey, loadBrowseReports })} />)
+
+		try {
+			await flushAsyncWork()
+			const documentQueries = within(document.body)
+			await act(() => {
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
+			})
+			await flushAsyncWork()
+			expect(documentQueries.getByText('Page 2 of 3')).not.toBeNull()
+			await act(() => {
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
+			})
+			await flushAsyncWork()
+			expect(documentQueries.getByText('Page 3 of 3')).not.toBeNull()
+
+			environmentRefreshKey = 1
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey, loadBrowseReports })} />, rendered.container)
+			})
+			await flushAsyncWork()
+			await flushAsyncWork()
+
+			expect(requestedPages.at(-1)).toBe(0)
+			expect(documentQueries.getByText('Page 1 of 1')).not.toBeNull()
+		} finally {
+			await rendered.cleanup()
 			domEnvironment.cleanup()
 		}
 	})

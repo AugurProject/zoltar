@@ -7,3 +7,8 @@ export function getLiquidationRepToMove(debtToMove: bigint, repPerEthPrice: bigi
 	const denominator = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
 	return (numerator + denominator - 1n) / denominator
 }
+
+export function getMaxFundedLiquidationDebt(freeRepAvailable: bigint, repPerEthPrice: bigint) {
+	if (freeRepAvailable <= 0n || repPerEthPrice <= 0n) return 0n
+	return (freeRepAvailable * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR) / (repPerEthPrice * (LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
+}

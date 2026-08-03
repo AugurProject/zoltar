@@ -18,6 +18,22 @@ type ModalFocusIsolationOptions<TInitialFocusElement extends HTMLElement> = {
 }
 
 const hiddenSiblingStates = new WeakMap<HTMLElement, HiddenSiblingState>()
+let modalScrollLockCount = 0
+let bodyOverflowBeforeModal: string | undefined
+
+function lockPageScroll() {
+	if (modalScrollLockCount === 0) {
+		bodyOverflowBeforeModal = document.body.style.overflow
+		document.body.style.overflow = 'hidden'
+	}
+	modalScrollLockCount += 1
+	return () => {
+		modalScrollLockCount = Math.max(0, modalScrollLockCount - 1)
+		if (modalScrollLockCount !== 0) return
+		document.body.style.overflow = bodyOverflowBeforeModal ?? ''
+		bodyOverflowBeforeModal = undefined
+	}
+}
 
 function hideModalSibling(element: HTMLElement) {
 	const state = hiddenSiblingStates.get(element)
@@ -83,7 +99,7 @@ function isTopModalBackdrop(backdropElement: HTMLElement | null | undefined) {
 }
 
 function getFocusableElements(dialogElement: HTMLElement | null) {
-	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? [])
+	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []).filter(element => element.closest('[hidden], [inert]') === null)
 }
 
 export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>({ dialogRef, initialFocusRef, isOpen, onClose }: ModalFocusIsolationOptions<TInitialFocusElement>) {
@@ -95,6 +111,7 @@ export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>
 
 	useEffect(() => {
 		if (!isOpen) return
+		const unlockPageScroll = lockPageScroll()
 		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
 		const backdropElement = dialogRef.current?.parentElement
 		const hiddenSiblings: HTMLElement[] = []
@@ -104,7 +121,12 @@ export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>
 				hiddenSiblings.push(sibling)
 			}
 		}
-		if (isTopModalBackdrop(backdropElement)) initialFocusRef.current?.focus()
+		if (isTopModalBackdrop(backdropElement)) {
+			const focusableElements = getFocusableElements(dialogRef.current)
+			const requestedInitialFocus = initialFocusRef.current
+			const focusTarget = requestedInitialFocus !== null && focusableElements.includes(requestedInitialFocus) ? requestedInitialFocus : (focusableElements[0] ?? dialogRef.current)
+			focusTarget?.focus()
+		}
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (!isTopModalBackdrop(backdropElement)) return
 			if (event.key === 'Escape') {
@@ -139,6 +161,7 @@ export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>
 		document.addEventListener('keydown', handleKeyDown)
 		return () => {
 			document.removeEventListener('keydown', handleKeyDown)
+			unlockPageScroll()
 			for (const sibling of hiddenSiblings) {
 				restoreModalSibling(sibling)
 			}

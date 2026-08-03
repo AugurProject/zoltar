@@ -200,6 +200,40 @@ describe('runWriteAction', () => {
 		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
 	})
 
+	test('accepts an equivalent zero-padded active chain ID', async () => {
+		let activeChainId: string | undefined
+		let transactionRequested = false
+		let writeExecuted = false
+		let errorMessage: string | undefined
+		installWalletBackend({ chainId: '0x01' })
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async (_walletAddress, activeWallet) => {
+				activeChainId = activeWallet.chainId
+				writeExecuted = true
+				return { hash: transactionHash }
+			},
+			'Failed to report on outcome',
+		)
+
+		expect(transactionRequested).toBe(true)
+		expect(writeExecuted).toBe(true)
+		expect(activeChainId).toBe('0x01')
+		expect(errorMessage).toBeUndefined()
+	})
+
 	test('uses simulation transaction copy through the shared write action config', async () => {
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress, profile: createFakeSimulationProfile() }))

@@ -61,6 +61,7 @@ struct StagedOperation {
 	uint256 validForSeconds;
 	uint256 snapshotTargetOwnership;
 	uint256 snapshotTargetAllowance;
+	uint256 snapshotTargetEscalationRep;
 	uint256 snapshotTotalRep;
 	uint256 snapshotDenominator;
 }
@@ -72,7 +73,7 @@ contract OpenOraclePriceCoordinator {
 	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';
 	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
 	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'withdraw amount has no effect';
-	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation too close to threshold';
+	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation distance too low';
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
@@ -138,6 +139,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 snapshotDenominator,
 		bool isPendingSlot
 	);
+	event StagedOperationEscalationRepSnapshotted(uint256 indexed operationId, uint256 snapshotTargetEscalationRep);
 	event ExecutedStagedOperation(
 		uint256 indexed operationId,
 		OperationType operation,
@@ -201,8 +203,8 @@ contract OpenOraclePriceCoordinator {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
-		require(_gasUnitsForOneDispute > 0, 'Dispute gas units must be greater than zero');
-		require(_initialReportPriorityFeeWeiPerGas > 0, 'Initial report priority fee must be greater than zero');
+		require(_gasUnitsForOneDispute > 0, 'Dispute gas units zero');
+		require(_initialReportPriorityFeeWeiPerGas > 0, 'Initial priority fee zero');
 		require(
 			_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION,
 			'Target price error cannot exceed one hundred percent'
@@ -215,7 +217,7 @@ contract OpenOraclePriceCoordinator {
 			uint256(_protocolFee) + uint256(_feePercentage) < _targetPriceErrorForDispute,
 			'Oracle fees must be below the target price error'
 		);
-		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
+		require(_escalationHaltMultiplierBps > 0, 'Escalation multiplier zero');
 		require(
 			_openOracleSecurityMultiplierBps <=
 				type(uint256).max / (OPEN_ORACLE_PERCENTAGE_PRECISION + _targetPriceErrorForDispute),
@@ -270,14 +272,14 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
-		require(address(securityPool) == address(0x0), 'Security pool has already been set on the oracle coordinator');
+		require(address(securityPool) == address(0x0), 'Security pool already set');
 		securityPool = _securityPool;
 		emit SecurityPoolSet(securityPool);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {
-		require(msg.sender == address(securityPool), 'Only the security pool can seed the REP/ETH price');
+		require(msg.sender == address(securityPool), 'Only security pool');
 		lastPrice = _lastPrice;
 		emit RepEthPriceSet(lastPrice);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
@@ -293,7 +295,7 @@ contract OpenOraclePriceCoordinator {
 
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
 		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
-		require(callbackGasLimit <= type(uint32).max, 'Settlement callback gas limit exceeds uint32 maximum');
+		require(callbackGasLimit <= type(uint32).max, 'Callback gas exceeds uint32');
 		return uint32(callbackGasLimit);
 	}
 
@@ -324,8 +326,8 @@ contract OpenOraclePriceCoordinator {
 
 	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialWeth) public payable {
 		uint256 ethCost = getRequestPriceEthCost();
-		require(msg.value >= ethCost, 'ETH bounty is too small to request a fresh oracle price');
-		require(!isPriceValid(), 'A fresh oracle price is already available');
+		require(msg.value >= ethCost, 'Oracle bounty too small');
+		require(!isPriceValid(), 'Oracle price already fresh');
 		_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
 
 		uint256 excess = msg.value - ethCost;
@@ -341,8 +343,8 @@ contract OpenOraclePriceCoordinator {
 		uint256 proposedRepPerEthPrice,
 		uint256 requestedInitialWeth
 	) private {
-		require(pendingReportId == 0, 'Oracle price request is already pending');
-		require(proposedRepPerEthPrice > 0, 'Initial oracle REP per ETH price must be non-zero');
+		require(pendingReportId == 0, 'Oracle request already pending');
+		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		uint256 minimumWethReport = minimumToken1Report();
 		uint256 initialWethReport = requestedInitialWeth > minimumWethReport ? requestedInitialWeth : minimumWethReport;
 		uint256 amount2 = Math.mulDiv(initialWethReport, proposedRepPerEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
@@ -357,8 +359,8 @@ contract OpenOraclePriceCoordinator {
 		);
 		if (openInterestEscalationHalt > escalationHalt) escalationHalt = openInterestEscalationHalt;
 		uint256 settlerReward = ethCost;
-		require(initialWethReport <= type(uint128).max, 'Oracle initial WETH report amount exceeds uint128 maximum');
-		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
+		require(initialWethReport <= type(uint128).max, 'WETH report exceeds uint128');
+		require(amount2 <= type(uint128).max, 'REP report exceeds uint128');
 		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
 		pendingReportMaxSettlementBaseFee =
@@ -550,7 +552,7 @@ contract OpenOraclePriceCoordinator {
 			'Staged operation timeout exceeds the maximum allowed'
 		);
 		if (operation != OperationType.Liquidation) {
-			require(targetVault == msg.sender, 'Self-targeted staged operation target must match the initiator vault');
+			require(targetVault == msg.sender, 'Self operation target mismatch');
 		} else {
 			require(targetVault != msg.sender, 'Caller bad');
 		}
@@ -570,9 +572,9 @@ contract OpenOraclePriceCoordinator {
 		}
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture the target vault state at queue time. Liquidation may still execute if
-		// the target deposits more REP after staging, but allowance changes or ownership
-		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
+		// Capture the complete target collateral bundle at queue time. Any later target
+		// ownership or allowance mutation invalidates the quote so a
+		// rescue deposit can never become part of the liquidator's purchase. Non-liquidation operations keep
 		// the snapshot for history and execution-event context, but price validity no
 		// longer meters operations by snapshot or live external-value exposure.
 		// Liquidation should value the vault's full collateral claim. That means using the
@@ -582,6 +584,10 @@ contract OpenOraclePriceCoordinator {
 		);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
+		uint256 snapshotTargetEscalationRep =
+			operation == OperationType.Liquidation && address(securityPool.escalationGame()) != address(0x0)
+				? securityPool.escalationGame().escrowedRepByVault(targetVault)
+				: 0;
 		stagedOperations[operationId] = StagedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
@@ -591,6 +597,7 @@ contract OpenOraclePriceCoordinator {
 			validForSeconds: validForSeconds,
 			snapshotTargetOwnership: snapshotTargetOwnership,
 			snapshotTargetAllowance: snapshotTargetAllowance,
+			snapshotTargetEscalationRep: snapshotTargetEscalationRep,
 			snapshotTotalRep: snapshotTotalRep,
 			snapshotDenominator: snapshotDenominator
 		});
@@ -624,11 +631,8 @@ contract OpenOraclePriceCoordinator {
 
 	function executeStagedOperation(uint256 operationId) public {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
-		require(
-			stagedOperation.initiatorVault != address(0),
-			'Staged operation does not exist or was already consumed'
-		);
-		require(isPriceValid(), 'A valid oracle price is required before executing staged operations');
+		require(stagedOperation.initiatorVault != address(0), 'Staged operation unavailable');
+		require(isPriceValid(), 'Valid oracle price required');
 		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
 			_consumeAndEmitExecutedStagedOperation(
 				operationId,
@@ -643,7 +647,7 @@ contract OpenOraclePriceCoordinator {
 				stagedOperation.targetVault
 			);
 			if (
-				currentTargetOwnership < stagedOperation.snapshotTargetOwnership ||
+				currentTargetOwnership != stagedOperation.snapshotTargetOwnership ||
 				currentTargetAllowance != stagedOperation.snapshotTargetAllowance
 			) {
 				_consumeAndEmitExecutedStagedOperation(
@@ -782,6 +786,7 @@ contract OpenOraclePriceCoordinator {
 			stagedOperation.snapshotDenominator,
 			isPendingSlot
 		);
+		emit StagedOperationEscalationRepSnapshotted(operationId, stagedOperation.snapshotTargetEscalationRep);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationQueued, pendingReportId, operationId);
 	}
 
@@ -834,20 +839,15 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _isLiquidationBeyondMinPriceDistance(StagedOperation memory stagedOperation) private view returns (bool) {
-		if (minLiquidationPriceDistanceBps == 0) return true;
-		uint256 snapshotTargetAllowance = stagedOperation.snapshotTargetAllowance;
-		if (snapshotTargetAllowance == 0) return false;
-		uint256 currentPrice = lastPrice;
-		if (currentPrice == 0) return false;
-		uint256 vaultRep = _getSnapshotVaultRep(stagedOperation);
-		uint256 statoblastSecurityMultiplierBps = securityPool.statoblastSecurityMultiplierBps();
-		uint256 thresholdPrice =
-			(vaultRep * PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR) /
-				(snapshotTargetAllowance * statoblastSecurityMultiplierBps);
-		if (currentPrice <= thresholdPrice) return false;
 		return
-			((currentPrice - thresholdPrice) * SecurityPoolUtils.BPS_DENOMINATOR) / currentPrice >=
-			minLiquidationPriceDistanceBps;
+			SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(
+				_getSnapshotVaultRep(stagedOperation),
+				stagedOperation.snapshotTargetEscalationRep,
+				stagedOperation.snapshotTargetAllowance,
+				securityPool.statoblastSecurityMultiplierBps(),
+				lastPrice,
+				minLiquidationPriceDistanceBps
+			);
 	}
 
 	function _consumeStagedOperation(uint256 operationId) private {

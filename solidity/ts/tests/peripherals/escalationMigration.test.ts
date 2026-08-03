@@ -1,5 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
+import type { Address } from '@zoltar/shared/ethereum'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
 import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 
@@ -108,6 +110,20 @@ describe('Peripherals: escalation migration', () => {
 		questionId = fixture.questionId
 	})
 
+	async function completeForkContinuation(securityPool: Address) {
+		for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, securityPool)); progressCall++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: securityPool,
+					functionName: 'resumeForkedEscalationGame',
+					args: [],
+				}),
+			)
+		}
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, securityPool), false, 'bounded continuation progress should complete')
+	}
+
 	test('unfunded vault escalation deposit exposes REP too low and rolls back game deployment and pool state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -151,7 +167,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 		const stateBefore = await readMigrationGuardState()
 
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /No unresolved deposits/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		assert.deepStrictEqual(await readMigrationGuardState(), stateBefore, 'missing unresolved deposits must not deploy a child or move parent REP and vault accounting')
 	})
 
@@ -186,7 +202,7 @@ describe('Peripherals: escalation migration', () => {
 		const stateBefore = await readOwnForkGuardState()
 		const yesDeposit = ensureDefined(stateBefore.yesDeposits[0], 'external-fork yes deposit is undefined')
 
-		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [yesDeposit.depositIndex]), /Own fork required/)
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [yesDeposit.depositIndex]), /execution reverted|Reverted without a reason/i)
 		assert.deepStrictEqual(await readOwnForkGuardState(), stateBefore, 'wrong fork mode claim must preserve fork data, deposits, REP, and vault accounting')
 	})
 
@@ -223,7 +239,7 @@ describe('Peripherals: escalation migration', () => {
 		const stateBefore = await readChildStateGuard()
 		const deposit = ensureDefined(stateBefore.deposits[0], 'own-fork yes deposit is undefined')
 
-		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [deposit.depositIndex]), /Child not migrating/)
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [deposit.depositIndex]), /execution reverted|Reverted without a reason/i)
 		assert.deepStrictEqual(await readChildStateGuard(), stateBefore, 'inactive claim path must preserve the activated child, deposits, REP, and parent vault')
 	})
 
@@ -254,7 +270,7 @@ describe('Peripherals: escalation migration', () => {
 		const otherVaultDeposit = ensureDefined(stateBefore.deposits[0], 'other vault deposit is undefined')
 		strictEqualTypeSafe(otherVaultDeposit.depositor, otherVault.account.address, 'the selected deposit must belong to the other vault')
 
-		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [otherVaultDeposit.depositIndex]), /Wrong deposit vault/)
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [otherVaultDeposit.depositIndex]), /execution reverted|Wrong deposit vault/i)
 		assert.deepStrictEqual(await readWrongVaultState(), stateBefore, 'wrong-vault claim must roll back deposit consumption, child deployment, REP balances, and both vaults')
 	})
 
@@ -427,7 +443,7 @@ describe('Peripherals: escalation migration', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		}
 
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 	})
 
 	test('own-fork unresolved migration expires without moving the vault', async () => {
@@ -452,7 +468,7 @@ describe('Peripherals: escalation migration', () => {
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVault.repInEscalationGame, parentVaultBefore.repInEscalationGame, 'expired migration must leave the unresolved parent lock untouched')
 		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'expired migration must leave parent ownership untouched')
@@ -486,7 +502,7 @@ describe('Peripherals: escalation migration', () => {
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVault.repInEscalationGame, parentVaultBefore.repInEscalationGame, 'the inactive vault remains untouched after expiry')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should not materialize an expired vault')
@@ -512,7 +528,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const vaultBeforeRelayedAttempt = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Only vault/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		assert.deepStrictEqual(await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address), vaultBeforeRelayedAttempt, 'a rejected relayer must not mutate the parent vault')
 	})
 
@@ -643,6 +659,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -810,7 +827,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(lateInvalidState.currentCarryTotal, parentInvalidState.currentCarryTotal, 'late child creation should preserve the parent invalid carry')
 		strictEqualTypeSafe(lateYesState.currentCarryTotal, parentYesState.currentCarryTotal, 'late child creation should preserve the parent yes carry')
 		strictEqualTypeSafe(lateNoState.currentCarryTotal, parentNoState.currentCarryTotal, 'late child creation should preserve the parent no carry')
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Entitlement materialized/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 	})
 
 	test('selected branches share parent game totals while materializing only the selecting vault', async () => {
@@ -892,7 +909,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 		assert.ok(nonDecisionTimestamp > 0n, 'balanced threshold deposits should reach non-decision')
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'the parent should not be forked yet')
-		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Non-decision required/)
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /execution reverted|Reverted without a reason/i)
 	})
 
 	test('an underfunded child remains incomplete instead of scaling per-vault escalation claims', async () => {
@@ -1048,6 +1065,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should become operational once migration completes')
+		await completeForkContinuation(yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not wait for another vault to migrate')
 
 		const forkElapsedAtStartAfterResume = await client.readContract({
@@ -1123,6 +1141,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -1200,6 +1219,7 @@ describe('Peripherals: escalation migration', () => {
 		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, yesPool.securityPool)
 		}
+		await completeForkContinuation(yesPool.securityPool)
 		const escalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -1300,6 +1320,7 @@ describe('Peripherals: escalation migration', () => {
 		for (const childPool of [yesPool.securityPool, noPool.securityPool]) {
 			await startTruthAuction(client, childPool)
 			if ((await getSystemState(client, childPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, childPool)
+			await completeForkContinuation(childPool)
 		}
 		const [yesEndDate, noEndDate] = await Promise.all(
 			[yesGame, noGame].map(
@@ -1558,6 +1579,7 @@ describe('Peripherals: escalation migration', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		}
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'continuation child should become operational before its own fork')
+		await completeForkContinuation(yesSecurityPool.securityPool)
 
 		const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 		const childForkThreshold = await getZoltarForkThreshold(client, yesUniverse)

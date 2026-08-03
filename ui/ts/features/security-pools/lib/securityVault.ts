@@ -14,6 +14,10 @@ export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
+function getMigrationSecurityMultiplierBps(poolSecurityMultiplierBps: bigint) {
+	return BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2n
+}
+
 export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
 	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
 	if (trimmedSelectedVaultAddress !== '') return trimmedSelectedVaultAddress
@@ -55,6 +59,13 @@ function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, r
 	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
 }
 
+function getStrictAllowanceBackedRepMinimum(securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (securityBondAllowance === undefined || securityBondAllowance <= 0n) return 0n
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
+	if (multiplierBps === undefined || multiplierBps <= 0n) return undefined
+	return (securityBondAllowance * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
+}
+
 function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (repAmount === undefined || repAmount <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
@@ -62,7 +73,14 @@ function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice
 	return (repAmount * PRICE_PRECISION * BPS_DENOMINATOR) / (repPerEthPrice * statoblastSecurityMultiplierBps)
 }
 
+function getStrictlyBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (repAmount === undefined || repAmount <= 0n || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps <= 0n) return 0n
+	const numerator = repAmount * PRICE_PRECISION * BPS_DENOMINATOR
+	return numerator === 0n ? 0n : (numerator - 1n) / (repPerEthPrice * multiplierBps)
+}
+
 export function getSecurityVaultWithdrawableRepAmount({
+	escalationEscrowedRep = 0n,
 	repDepositShare,
 	repPerEthPrice,
 	securityBondAllowance,
@@ -71,6 +89,7 @@ export function getSecurityVaultWithdrawableRepAmount({
 	totalSecurityBondAllowance,
 }: {
 	repDepositShare: bigint | undefined
+	escalationEscrowedRep?: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	securityBondAllowance: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
@@ -78,10 +97,17 @@ export function getSecurityVaultWithdrawableRepAmount({
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
 	if (repDepositShare === undefined) return undefined
+	if (escalationEscrowedRep > 0n) return 0n
 	const requiredVaultRep = getAllowanceBackedRepFloor(securityBondAllowance, repPerEthPrice, statoblastSecurityMultiplierBps)
 	if (requiredVaultRep === undefined) return undefined
-	const maxLocalWithdrawal = repDepositShare > requiredVaultRep ? repDepositShare - requiredVaultRep : 0n
+	const associatedRep = repDepositShare + escalationEscrowedRep
+	const ordinaryHeadroom = associatedRep > requiredVaultRep ? associatedRep - requiredVaultRep : 0n
+	const migrationRequiredRep = getStrictAllowanceBackedRepMinimum(securityBondAllowance, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+	if (migrationRequiredRep === undefined) return undefined
+	const migrationHeadroom = repDepositShare > migrationRequiredRep ? repDepositShare - migrationRequiredRep : 0n
+	const maxLocalWithdrawal = repDepositShare < ordinaryHeadroom ? repDepositShare : ordinaryHeadroom
 	let maxWithdrawableRep = maxLocalWithdrawal
+	if (migrationHeadroom < maxWithdrawableRep) maxWithdrawableRep = migrationHeadroom
 	if (totalRepDeposit !== undefined && totalRepDeposit > 0n) {
 		const requiredPoolRep = getAllowanceBackedRepFloor(totalSecurityBondAllowance, repPerEthPrice, statoblastSecurityMultiplierBps)
 		if (requiredPoolRep === undefined) return undefined
@@ -93,6 +119,7 @@ export function getSecurityVaultWithdrawableRepAmount({
 
 export function getSecurityVaultMaxBondAllowanceAmount({
 	currentSecurityBondAllowance,
+	escalationEscrowedRep = 0n,
 	repDepositShare,
 	repPerEthPrice,
 	statoblastSecurityMultiplierBps,
@@ -100,14 +127,17 @@ export function getSecurityVaultMaxBondAllowanceAmount({
 	totalSecurityBondAllowance,
 }: {
 	currentSecurityBondAllowance?: bigint | undefined
+	escalationEscrowedRep?: bigint | undefined
 	repDepositShare: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	totalRepDeposit?: bigint | undefined
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
-	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice, statoblastSecurityMultiplierBps)
+	const localAllowanceCeiling = getBackedAllowanceCeiling((repDepositShare ?? 0n) + escalationEscrowedRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+	const migrationAllowanceCeiling = getStrictlyBackedAllowanceCeiling(repDepositShare, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
 	let maxBondAllowanceAmount = localAllowanceCeiling
+	if (migrationAllowanceCeiling < maxBondAllowanceAmount) maxBondAllowanceAmount = migrationAllowanceCeiling
 	if (totalRepDeposit !== undefined && totalSecurityBondAllowance !== undefined) {
 		const currentAllowance = currentSecurityBondAllowance ?? 0n
 		const otherVaultAllowance = totalSecurityBondAllowance > currentAllowance ? totalSecurityBondAllowance - currentAllowance : 0n

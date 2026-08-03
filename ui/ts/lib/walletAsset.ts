@@ -3,6 +3,8 @@ import { ABIS } from '../abis.js'
 import { getActiveBackend } from './activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'
 import { hasErrorCode } from './errors.js'
+import { sameAddress } from './address.js'
+import { sameChainId } from './chainId.js'
 
 export type WalletAssetWatchResult = { status: 'accepted' } | { status: 'declined' } | { status: 'dismissed' } | { status: 'failed' } | { status: 'stale' } | { status: 'unavailable' } | { status: 'unsupported' } | { status: 'wrong-network' }
 
@@ -31,15 +33,6 @@ type WalletAssetRequestDependencies = {
 	isCurrent: () => boolean
 	readTokenMetadata: (address: Address) => Promise<WalletAssetMetadata>
 	request: (request: WalletAssetRequest) => Promise<unknown>
-}
-
-function isMatchingChainId(activeChainId: string, expectedChainId: string) {
-	try {
-		return BigInt(activeChainId) === BigInt(expectedChainId)
-	} catch (error) {
-		if (error instanceof SyntaxError) return false
-		throw error
-	}
 }
 
 function normalizeTokenMetadata(metadata: WalletAssetMetadata) {
@@ -73,7 +66,7 @@ export async function requestWalletWatchAsset(address: Address, dependencies: Wa
 	} catch (error) {
 		return normalizeWalletAssetFailure(error)
 	}
-	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
+	if (!sameChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
 
 	let normalizedAddress: Address
 	try {
@@ -108,7 +101,7 @@ export async function requestWalletWatchAsset(address: Address, dependencies: Wa
 	} catch (error) {
 		return normalizeWalletAssetFailure(error)
 	}
-	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
+	if (!sameChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
 	if (!dependencies.isCurrent()) return { status: 'stale' }
 	let activeAccount: Address | undefined
 	try {
@@ -116,13 +109,13 @@ export async function requestWalletWatchAsset(address: Address, dependencies: Wa
 	} catch (error) {
 		return normalizeWalletAssetFailure(error)
 	}
-	if (activeAccount !== dependencies.expectedAccount || !dependencies.isCurrent()) return { status: 'stale' }
+	if (!sameAddress(activeAccount, dependencies.expectedAccount) || !dependencies.isCurrent()) return { status: 'stale' }
 	try {
 		activeChainId = await dependencies.getActiveChainId()
 	} catch (error) {
 		return normalizeWalletAssetFailure(error)
 	}
-	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
+	if (!sameChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
 	if (!dependencies.isCurrent()) return { status: 'stale' }
 
 	let result: unknown

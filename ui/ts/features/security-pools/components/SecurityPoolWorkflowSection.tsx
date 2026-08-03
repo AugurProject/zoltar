@@ -6,7 +6,6 @@ import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { Badge } from '../../../components/Badge.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
 import { ForkAuctionSection } from '../../truth-auctions/components/ForkAuctionSection.js'
@@ -39,7 +38,6 @@ import { tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { assertNever } from '../../../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
 import { getWrongNetworkMessage } from '../../../lib/network.js'
-import { getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -457,9 +455,6 @@ export function SecurityPoolWorkflowSection({
 		return undefined
 	})()
 	let selectedPoolSummaryContent: ComponentChildren
-	const selectedPoolCollateralizationPercent = selectedPoolSummaryPool === undefined ? undefined : getPoolCollateralizationPercent(selectedPoolSummaryPool.totalRepDeposit, selectedPoolSummaryPool.totalSecurityBondAllowance, repPerEthPrice)
-	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolSummaryPool.statoblastSecurityMultiplierBps)
-
 	if (selectedPoolSummaryPool === undefined) {
 		selectedPoolSummaryContent = undefined
 	} else if (view === 'vaults' || view === 'trading') {
@@ -469,7 +464,6 @@ export function SecurityPoolWorkflowSection({
 					<div className='selected-pool-hero-story'>
 						<div className='selected-pool-hero-story-title-row'>
 							<div className='security-pool-card-title-row'>
-								<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={selectedPoolCollateralizationPercent} size='small' targetCollateralizationPercent={selectedPoolCollateralizationTarget} />
 								<span className='security-pool-card-title-copy'>{marketDetails === undefined ? '' : getQuestionTitle(marketDetails)}</span>
 							</div>
 						</div>
@@ -487,7 +481,6 @@ export function SecurityPoolWorkflowSection({
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 						showTotalBacking
-						showCollateralizationGauge={false}
 						variant='hero'
 					>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (

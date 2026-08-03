@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCarry } from './EscalationGameCarry.sol';
+import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameEscrow is EscalationGameCarry {
@@ -20,21 +21,11 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		uint256 sourcePrincipal,
 		uint256 childRepAmount
 	) external onlySecurityPoolOrForker {
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(depositor != address(0x0), 'Depositor is zero');
-		if (sourcePrincipal == 0 && childRepAmount == 0) return;
-		require(sourcePrincipal > 0, 'Escrow principal missing');
-		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
-		OutcomeState storage outcomeStateForEscrow = outcomeState[uint8(outcome)];
-		uint256 outcomeBalance = outcomeStateForEscrow.balance;
-		emit ForkedEscrowRecorded(
-			depositor,
-			outcome,
-			state.sourcePrincipal,
-			state.childRep,
-			escrowedRepByVault[depositor],
-			totalEscrowedRep,
-			outcomeBalance
+		_delegateDepositCall(
+			abi.encodeCall(
+				EscalationGameDepositDelegate.recordForkedEscrowForOutcome,
+				(depositor, outcome, sourcePrincipal, childRepAmount)
+			)
 		);
 	}
 
@@ -48,7 +39,12 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
-		return (state.sourcePrincipal, state.sourcePrincipalClaimed, state.childRep, state.childRepClaimed);
+		return (
+			state.sourcePrincipal,
+			state.sourcePrincipalClaimed,
+			_applyTruthAuctionRetention(state.childRep),
+			_applyTruthAuctionRetention(state.childRepClaimed)
+		);
 	}
 
 	function exportVaultUnresolvedTotals(
@@ -93,19 +89,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		}
 	}
 
-	function _recordForkedEscrow(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 sourcePrincipal,
-		uint256 childRepAmount
-	) private returns (ForkedEscrowState storage state) {
-		state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
-		state.sourcePrincipal += sourcePrincipal;
-		state.childRep += childRepAmount;
-		escrowedRepByVault[depositor] += childRepAmount;
-		totalEscrowedRep += childRepAmount;
-	}
-
 	function _exportVaultUnresolvedTotals(
 		address vault,
 		address repReceiver,
@@ -124,7 +107,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		emit VaultUnresolvedTotalsExported(vault, repReceiver, principalByOutcome, principalToTransfer, transferRep);
 		if (principalToTransfer == 0) return principalByOutcome;
 		_consumeUnresolvedRepForVault(vault, principalToTransfer);
-		_consumeEscrowedRepForVault(vault, principalToTransfer);
+		_consumeEscrowedRepForOwner(vault, principalToTransfer);
 		if (transferRep) _safeTransferRep(repReceiver, principalToTransfer);
 	}
 
@@ -141,7 +124,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			uint256 sourcePrincipal = state.sourcePrincipal;
 			uint256 childRep = state.childRep;
 			uint256 remainingSourcePrincipal = sourcePrincipal - state.sourcePrincipalClaimed;
-			uint256 remainingChildRep = childRep - state.childRepClaimed;
+			uint256 remainingChildRep = _applyTruthAuctionRetention(childRep - state.childRepClaimed);
 			if (remainingSourcePrincipal == 0 && remainingChildRep == 0) continue;
 			sourcePrincipalByOutcome[outcomeIndex] = remainingSourcePrincipal;
 			childRepByOutcome[outcomeIndex] = remainingChildRep;
@@ -161,10 +144,14 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			);
 		}
 		if (totalChildRepToTransfer == 0) return (sourcePrincipalByOutcome, childRepByOutcome);
-		_consumeEscrowedRepForVault(vault, totalChildRepToTransfer);
+		_consumeEscrowedRepForOwner(vault, totalChildRepToTransfer);
 		if (transferRep) {
 			if (winnerHaircutPaidByFork && forkResumedAt == 0) {
-				forkCarryBackingExportedBeforeResume += totalChildRepToTransfer;
+				unchecked {
+					forkCarryBackingExportedBeforeResume += totalChildRepToTransfer;
+					forkCarryEscrowedRep -= totalChildRepToTransfer;
+					totalEscrowedRep -= totalChildRepToTransfer;
+				}
 			}
 			_safeTransferRep(repReceiver, totalChildRepToTransfer);
 		}
