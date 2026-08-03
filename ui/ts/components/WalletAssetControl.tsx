@@ -7,6 +7,7 @@ import { normalizeWalletAssetFailure, watchActiveWalletAsset, type WalletAssetWa
 import { AddressValue } from './AddressValue.js'
 import { LoadingText } from './LoadingText.js'
 import { getWrongNetworkMessage } from '../lib/network.js'
+import { sameAddress } from '../lib/address.js'
 
 type WalletAssetControlProps = {
 	accountAddress: Address | undefined
@@ -29,7 +30,7 @@ function getErrorMessage(result: WalletAssetWatchResult) {
 
 export function WalletAssetControl({ accountAddress, address, isSupportedChain, onWatchAsset = watchActiveWalletAsset, tokenLabel }: WalletAssetControlProps) {
 	const currentScope = useRef({ accountAddress, address, generation: 0, isSupportedChain })
-	if (currentScope.current.accountAddress !== accountAddress || currentScope.current.address !== address || currentScope.current.isSupportedChain !== isSupportedChain) currentScope.current = { accountAddress, address, generation: currentScope.current.generation + 1, isSupportedChain }
+	if (!sameAddress(currentScope.current.accountAddress, accountAddress) || !sameAddress(currentScope.current.address, address) || currentScope.current.isSupportedChain !== isSupportedChain) currentScope.current = { accountAddress, address, generation: currentScope.current.generation + 1, isSupportedChain }
 	const scopeGeneration = currentScope.current.generation
 	const [storedState, setState] = useState<WalletAssetControlState>({ scopeGeneration, status: 'idle' })
 	const state: WalletAssetControlStatus = storedState.scopeGeneration === scopeGeneration ? storedState : { status: 'idle' }

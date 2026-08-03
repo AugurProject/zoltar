@@ -60,7 +60,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 	)
 
 	return (
-		<div {...(noticeRef === undefined ? {} : { ref: noticeRef })} className={noticeClassName} role='status' aria-live='polite'>
+		<div {...(noticeRef === undefined ? {} : { ref: noticeRef })} className={noticeClassName} role={transaction.tone === 'error' ? 'alert' : 'status'} aria-live={transaction.tone === 'error' ? 'assertive' : 'polite'}>
 			{!dismissible ? undefined : (
 				<button className='quiet global-transaction-close' type='button' aria-label={transactionCopy.closeStatus} onClick={onDismiss}>
 					<span aria-hidden='true'>×</span>
