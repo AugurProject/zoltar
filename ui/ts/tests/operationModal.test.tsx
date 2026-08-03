@@ -35,6 +35,26 @@ function BusyOperationModalHarness() {
 	)
 }
 
+function DisclosureOperationModalHarness() {
+	return (
+		<OperationModal isOpen onClose={() => undefined} title='Review transaction'>
+			<div hidden>
+				<button type='button'>Hidden action</button>
+			</div>
+			<div inert>
+				<button type='button'>Inert action</button>
+			</div>
+			<a href='#skipped-action' tabIndex={-1}>
+				Skipped action
+			</a>
+			<details>
+				<summary>Technical details</summary>
+				<p>Call data</p>
+			</details>
+		</OperationModal>
+	)
+}
+
 function CompletingOperationModalHarness() {
 	const [isOpen, setIsOpen] = useState(true)
 	const [completionKey, setCompletionKey] = useState<string | undefined>()
@@ -465,7 +485,7 @@ describe('OperationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
-		expect(within(dialog).getByRole('status').textContent).toContain('The share migration transaction failed.')
+		expect(within(dialog).getByRole('alert').textContent).toContain('The share migration transaction failed.')
 	})
 
 	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
@@ -505,7 +525,7 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Fail new transaction' }))
 		})
-		expect(within(dialog).getByRole('status').textContent).toContain('The new transaction failed.')
+		expect(within(dialog).getByRole('alert').textContent).toContain('The new transaction failed.')
 
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
@@ -916,6 +936,24 @@ describe('OperationModal', () => {
 
 		render(null, container)
 		container.remove()
+	})
+
+	test('includes disclosure summaries in the modal Tab order', async () => {
+		const renderedComponent = await renderIntoDocument(<DisclosureOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const dialog = within(document.body).getByRole('dialog', { name: 'Review transaction' })
+		const closeButton = within(dialog).getByRole('button', { name: 'Close' })
+		const summary = within(dialog).getByText('Technical details', { selector: 'summary' })
+
+		expect(document.activeElement).toBe(closeButton)
+		await act(() => {
+			fireEvent.keyDown(closeButton, { key: 'Tab' })
+		})
+		expect(document.activeElement).toBe(summary)
+		await act(() => {
+			fireEvent.keyDown(summary, { key: 'Tab' })
+		})
+		expect(document.activeElement).toBe(closeButton)
 	})
 
 	test('focuses an available control and locks page scrolling when the close button is disabled', async () => {
