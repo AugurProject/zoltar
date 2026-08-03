@@ -109,6 +109,14 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
+function getTransactionReviewValue(label: string) {
+	const labelElement = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === label)
+	if (!(labelElement instanceof HTMLElement)) throw new Error(`Expected ${label} label`)
+	const valueElement = labelElement.nextElementSibling
+	if (!(valueElement instanceof HTMLElement)) throw new Error(`Expected ${label} value`)
+	return valueElement.textContent
+}
+
 function createEndedPoolState() {
 	return evaluateSecurityPoolState({
 		lifecycleState: 'ended',
@@ -1262,7 +1270,7 @@ describe('LiquidationModal', () => {
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
 		expect(documentQueries.getByText(/claim is credited at its current REP amount against the 5%-bonus gross award/)).not.toBeNull()
-		expect(documentQueries.getByText(/Free-REP surplus also stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept/)).not.toBeNull()
+		expect(documentQueries.getByText(/Free-REP surplus stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept/)).not.toBeNull()
 	})
 
 	test('previews the exact post-ownership-conversion REP amount after a pool donation', () => {
@@ -1325,15 +1333,34 @@ describe('LiquidationModal', () => {
 				liquidationClaimRep: (11n * ETH * 3n) / 7n + (13n * ETH * 5n) / 9n,
 				repDepositShare: 100n * ETH,
 				securityBondAllowance: 100n * ETH,
+				unpaidEthFees: 7n * ETH,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const claimMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Escalation Claim REP Moved')
-		if (!(claimMovedLabel instanceof HTMLElement)) throw new Error('Expected Escalation Claim REP Moved label')
-		const claimMovedValue = claimMovedLabel.nextElementSibling
-		if (!(claimMovedValue instanceof HTMLElement)) throw new Error('Expected Escalation Claim REP Moved value')
-		expect(claimMovedValue.textContent).toBe('≈ 4.46 REP')
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
+		expect(getTransactionReviewValue('Escalation Claim REP Moved')).toBe('≈ 4.46 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 48.04 REP')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
+	})
+
+	test('shows zero free REP when moved claims exceed the gross award', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				liquidationClaimBundles: [{ bundleRep: 300n * ETH, ownerShares: 100n, totalShares: 100n }],
+				repDepositShare: 100n * ETH,
+				securityBondAllowance: 100n * ETH,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 105.00 REP')
+		expect(getTransactionReviewValue('Escalation Claim REP Moved')).toBe('≈ 150.00 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 0.00 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1571,6 +1598,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 2n * 10n ** 18n,
 				securityBondAllowance: 2n * 10n ** 18n,
+				unpaidEthFees: 25n * 10n ** 16n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1581,6 +1609,8 @@ describe('LiquidationModal', () => {
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
 		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 21.00 REP')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 0.25 ETH')
 	})
 
 	test('allows execution when the entered amount exceeds the executable cap because execution will clamp it', async () => {

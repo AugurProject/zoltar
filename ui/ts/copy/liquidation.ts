@@ -36,6 +36,8 @@ export const selectedPoolReloadRequired = 'Selected pool details are still loadi
 export const liquidationPoolReloadRequired = 'Selected pool details are still loading.'
 export const repMoved = 'Free REP Moved'
 export const claimRepMoved = 'Escalation Claim REP Moved'
+export const grossRepAward = 'Gross REP Award (Includes 5%)'
+export const targetAccruedFeesRetained = 'Target Accrued Fees Retained'
 export const securityPool = 'Security Pool'
 export const distinctTargetVaultRequired = 'Select a target vault that is different from your vault.'
 export const targetVaultRequired = 'Select a target vault first.'
@@ -49,7 +51,7 @@ export const debtAssumed = 'Debt Assumed'
 export const resultingCallerRep = 'Your Free REP After'
 export const resultingCallerBond = 'Your Bond Allowance After'
 export const liquidationStateRisk =
-	'The action assumes the target’s liabilities and moves the matching fraction of every non-tradeable escalation claim. That claim is credited at its current REP amount against the 5%-bonus gross award, and only the uncovered award moves as free REP. Accrued fees stay with the target vault. Free-REP surplus also stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept. A claim stays locked in its game and pays its current vault owners proportionally only if it wins.'
+	'The action assumes the target’s liabilities and moves the matching fraction of every non-tradeable escalation claim. That claim is credited at its current REP amount against the 5%-bonus gross award, and only the uncovered award moves as free REP. Free-REP surplus stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept. A claim stays locked in its game and pays its current vault owners proportionally only if it wins.'
 export const queuedLiquidationRisk =
 	'When the oracle price is not usable, the action is queued and can expire before execution. A later change to the target’s REP ownership or allowance invalidates it. Pool-wide REP changes are evaluated at execution, so unsolicited token transfers cannot cancel an otherwise valid liquidation.'
 export const bufferedQueueCost = 'Buffered Queue Cost'

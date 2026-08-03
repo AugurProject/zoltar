@@ -3711,14 +3711,6 @@ strong.metric-value-danger {
 	overflow-wrap: anywhere;
 }
 
-.transaction-review .currency-value-wrap,
-.transaction-review .currency-value,
-.transaction-review button.currency-value.copyable {
-	max-width: none;
-	overflow: visible;
-	white-space: nowrap;
-}
-
 .transaction-review-details {
 	display: grid;
 	gap: 0.45rem;

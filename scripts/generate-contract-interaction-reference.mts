@@ -877,7 +877,7 @@ const contractReferences: ContractReference[] = [
 					"Moves allowance and the matching fraction of every non-tradeable escalation claim to the caller. The claim's current effective REP amount is credited against the fixed 5%-bonus gross award before pool-ownership flooring, and only the uncovered award moves as free REP. All accrued unpaid fees remain with the target; free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; target ownership and allowance exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; when the game is a continuation, its complete inherited payout-ownership checkpoint must already be imported. Otherwise the game-level claim move fails with `Claim checkpoint pending`, the pool surfaces `Claim move failed`, and the coordinator records a failed staged operation. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
 				signals: 'Fee-accrual checkpoints as needed; one `EscalationClaimMoved` from the consolidated current-game registry when a game exists; then `VaultLiquidated` with the final post-conversion `repAmountMoved`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
 			},
 			{
@@ -1266,7 +1266,8 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'moveEscalationClaim', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' }],
 				effect:
 					'Moves the same bounded fraction of every non-tradeable escalation bundle and its unresolved or fork-escrow rights to the liquidator vault; underlying REP remains in the game. A full close replaces the source owner in place or merges with an existing destination, guaranteeing a liquidation exit even when owner slots are fragmented.',
-				preconditions: 'Distinct nonzero vaults and a positive fraction no greater than one; at most 64 bundle keys globally and per vault, and eight owners per bundle. A partial transfer to a new owner must leave the final slot free. Individual bundles whose share result floors to zero remain unchanged.',
+				preconditions:
+					'Distinct nonzero vaults and a positive fraction no greater than one; a continuation must have imported its complete inherited payout-ownership checkpoint or the call reverts with `Claim checkpoint pending`; at most 64 bundle keys globally and per vault, and eight owners per bundle. A partial transfer to a new owner must leave the final slot free. Individual bundles whose share result floors to zero remain unchanged.',
 				signals: '`EscalationClaimMoved`',
 			},
 			{
@@ -1305,7 +1306,8 @@ const contractReferences: ContractReference[] = [
 				call: '`claimDepositForWinningWithoutTransfer(depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinningWithoutTransfer', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
-				effect: 'Consumes a selected local deposit and its vault escrow and returns the computed winner amount to the trusted caller, but deliberately neither transfers REP nor burns the computed haircut.',
+				effect:
+					"Consumes a selected local deposit and its vault escrow, preserves that depositor bundle's key and ownership metadata, and decrements raw payout backing by the inverse-retention claim shares corresponding to the deposit's original principal. With no local auction checkpoint the decrement equals that principal; after a local haircut it is `⌈originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining⌉`. Other unconsumed deposits in the same bundle remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
 				preconditions: 'Valid in-range supplied outcome and unsettled local deposit with sufficient escrow. Unlike the transferring form, it has no explicit non-`None` guard; neither form checks final resolution or that the outcome won.',
 				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or haircut burn',
 			},
@@ -1353,7 +1355,8 @@ const contractReferences: ContractReference[] = [
 				call: '`recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipal, childRepAmount)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'recordForkedEscrowForOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol' }],
-				effect: 'Accumulates source principal and child REP escrow for the vault and outcome. When both amounts are zero, returns without changing state or emitting an event.',
+				effect:
+					'Accumulates source principal and child REP escrow for the vault and outcome. A root game registers or increases a child-local payout bundle; a continuation with a nonzero carry source suppresses that duplicate key because the durable payout identity arrives through checkpoint import. When both amounts are zero, returns without changing state or emitting an event.',
 				preconditions: 'Outcome is not `None`; depositor is nonzero. Source principal and child REP may independently be zero; when both are zero, the call is a no-op.',
 				signals: '`ForkedEscrowRecorded` for a nonzero record; no event when both amounts are zero',
 			},

@@ -436,8 +436,10 @@ export function LiquidationModal({
 					]}
 					primary={[
 						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationSimulation?.debtToMove} suffix={commonCopy.eth} /> },
-						{ label: liquidationCopy.repMoved, value: <CurrencyValue value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.claimRepMoved, value: <CurrencyValue value={liquidationSimulation?.claimRepToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.grossRepAward, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAward} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.claimRepMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.claimRepToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
 						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequired, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequired} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[

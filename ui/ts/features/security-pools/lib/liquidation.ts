@@ -106,7 +106,9 @@ type LiquidationSimulation = {
 	}
 	claimRepToMove: bigint
 	debtToMove: bigint
+	grossRepAward: bigint
 	repToMove: bigint
+	targetAccruedFeesRetained: bigint
 	targetAfter: {
 		escalationEscrowedRep: bigint
 		repDepositShare: bigint
@@ -146,6 +148,7 @@ export function simulateLiquidation({
 		}) ?? targetAllowance
 	const debtToMove = getPromotedDebtToMove(liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove, targetVaultSummary, repPerEthPrice)
 	const claimRepToMove = getLiquidationClaimRepToMove(debtToMove, targetVaultSummary)
+	const grossRepAward = getLiquidationRepToMove(debtToMove, repPerEthPrice)
 	const repToMove = getRepToMoveForLiquidation(debtToMove, targetVaultSummary, repPerEthPrice)
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
 	const targetAfterAllowance = targetAllowance - debtToMove
@@ -166,7 +169,9 @@ export function simulateLiquidation({
 		},
 		claimRepToMove,
 		debtToMove,
+		grossRepAward,
 		repToMove,
+		targetAccruedFeesRetained: targetVaultSummary.unpaidEthFees,
 		targetAfter: {
 			escalationEscrowedRep: targetEscalationRep - escalationRepToMove,
 			repDepositShare: targetAfterRepDeposit,
