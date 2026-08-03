@@ -8,6 +8,7 @@ import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import { getMarketTypeLabel } from '../lib/marketType.js'
+import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
 import type { MarketDetails } from '../../../types/contracts.js'
 
 type QuestionProps = {
@@ -51,7 +52,8 @@ function getDisplayedOutcomes(question: MarketDetails) {
 }
 
 function getDisplayRange(question: MarketDetails) {
-	return question.answerUnit === '' ? `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()}` : `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()} ${question.answerUnit}`
+	const displayRange = `${formatScalarDisplayValue(question.displayValueMin)} to ${formatScalarDisplayValue(question.displayValueMax)}`
+	return question.answerUnit === '' ? displayRange : `${displayRange} ${question.answerUnit}`
 }
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {

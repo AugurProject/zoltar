@@ -49,7 +49,7 @@ function DisclosureOperationModalHarness() {
 			</a>
 			<details>
 				<summary>Technical details</summary>
-				<p>Call data</p>
+				<button type='button'>Copy hidden call data</button>
 			</details>
 		</OperationModal>
 	)
@@ -938,7 +938,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('includes disclosure summaries in the modal Tab order', async () => {
+	test('includes disclosure summaries but excludes closed disclosure content from the modal Tab order', async () => {
 		const renderedComponent = await renderIntoDocument(<DisclosureOperationModalHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const dialog = within(document.body).getByRole('dialog', { name: 'Review transaction' })
@@ -953,7 +953,7 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.keyDown(summary, { key: 'Tab' })
 		})
-		expect(document.activeElement).toBe(closeButton)
+		expect(document.activeElement?.getAttribute('aria-label')).toBe('Close')
 	})
 
 	test('focuses an available control and locks page scrolling when the close button is disabled', async () => {

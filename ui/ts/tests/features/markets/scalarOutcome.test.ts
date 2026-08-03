@@ -73,6 +73,19 @@ void describe('scalar outcome helpers', () => {
 		expect(() => parseScalarFormInputs({ scalarMin: '1', scalarMax: '10', scalarIncrement: '0.4' })).toThrow('Scalar min, max, and increment do not produce a whole number of ticks')
 	})
 
+	void test('rejects scalar endpoints outside the signed 256-bit contract range', () => {
+		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (1n << 256n).toString(), scalarIncrement: '1' })).toThrow('Scalar max is outside the supported range')
+		expect(() => parseScalarFormInputs({ scalarMin: `-${(1n << 256n).toString()}`, scalarMax: '0', scalarIncrement: '1' })).toThrow('Scalar min is outside the supported range')
+	})
+
+	void test('rejects tick counts outside the unsigned 120-bit contract range', () => {
+		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (1n << 120n).toString(), scalarIncrement: '1' })).toThrow('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
+	})
+
+	void test('rejects UI-created tick counts that a native range input cannot represent exactly', () => {
+		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (BigInt(Number.MAX_SAFE_INTEGER) + 1n).toString(), scalarIncrement: '1' })).toThrow('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
+	})
+
 	for (const fixture of SCALAR_PARITY_LABEL_FIXTURES) {
 		void test(`formats scalar parity fixture: ${fixture.name}`, () => {
 			const question = getScalarParityQuestion(fixture.questionName)

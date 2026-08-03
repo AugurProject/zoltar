@@ -106,7 +106,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 	}
 	const startTime = form.startTime.trim()
 	const endTime = form.endTime.trim()
-	let parsedStartTime: bigint | undefined
+	let parsedStartTime = 0n
 	let parsedEndTime: bigint | undefined
 	if (startTime !== '')
 		try {
@@ -128,9 +128,9 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			invalidMessages.push(message)
 		}
 	}
-	if (parsedEndTime !== undefined && parsedStartTime !== undefined && parsedEndTime <= parsedStartTime) {
+	if (parsedEndTime !== undefined && parsedEndTime <= parsedStartTime) {
 		const message = 'End time must be after start time'
-		setFieldError(fieldErrors, 'startTime', message)
+		if (startTime !== '') setFieldError(fieldErrors, 'startTime', message)
 		setFieldError(fieldErrors, 'endTime', message)
 		invalidMessages.push(message)
 	}

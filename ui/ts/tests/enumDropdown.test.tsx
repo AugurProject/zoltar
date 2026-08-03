@@ -124,6 +124,46 @@ describe('EnumDropdown', () => {
 		expect(changedValue).toBe('no')
 	})
 
+	test('closes when keyboard focus leaves the open dropdown', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<EnumDropdown
+				options={[
+					{ label: 'Yes', value: 'yes' },
+					{ label: 'No', value: 'no' },
+				]}
+				value={undefined}
+				onChange={() => undefined}
+				placeholder='Select outcome side'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const trigger = within(document.body).getByRole('button', { name: 'Select outcome side' })
+
+		await act(() => {
+			fireEvent.click(trigger)
+		})
+		const option = within(document.body).getAllByRole('option')[0]
+		const outsideButton = createMouseDownOutside()
+		if (option === undefined) throw new Error('Expected an open dropdown option')
+
+		await act(() => {
+			outsideButton.focus()
+		})
+		expect(document.body.querySelector('.enum-dropdown-menu')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(trigger)
+		})
+		const lastOption = within(document.body).getAllByRole('option').at(-1)
+		if (lastOption === undefined) throw new Error('Expected a final open dropdown option')
+		await act(async () => {
+			lastOption.focus()
+			fireEvent.keyDown(lastOption, { key: 'Tab' })
+			await new Promise(resolve => setTimeout(resolve, 0))
+		})
+		expect(document.body.querySelector('.enum-dropdown-menu')).toBeNull()
+	})
+
 	test('includes the selected value in the trigger accessible name when labeled', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<EnumDropdown

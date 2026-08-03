@@ -243,6 +243,43 @@ void describe('market creation helpers', () => {
 		expect(validation.notice).toContain('Fix invalid fields: End time is invalid')
 	})
 
+	test('rejects pre-epoch timestamps before uint256 encoding', () => {
+		const validation = validateMarketForm({
+			answerUnit: '',
+			categoricalOutcomes: ['Yes', 'No'],
+			description: 'test binary description',
+			endTime: '1969-12-31T23:59:59.000Z',
+			marketType: 'binary',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'pre-epoch market',
+			startTime: '1969-12-31T23:59:58.000Z',
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.startTime).toBe('Start time must not be before the Unix epoch')
+		expect(validation.fieldErrors.endTime).toBe('End time must not be before the Unix epoch')
+	})
+
+	test('validates a blank start time using the zero value used for submission', () => {
+		const validation = validateMarketForm({
+			answerUnit: '',
+			categoricalOutcomes: ['Yes', 'No'],
+			description: 'test binary description',
+			endTime: '1970-01-01T00:00:00.000Z',
+			marketType: 'binary',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'zero end-time market',
+			startTime: '',
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.endTime).toBe('End time must be after start time')
+	})
+
 	test('validates start/end times during question creation', () => {
 		const form: MarketFormState = {
 			answerUnit: '',

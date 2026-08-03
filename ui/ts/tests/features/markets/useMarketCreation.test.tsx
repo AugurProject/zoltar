@@ -307,6 +307,56 @@ describe('useMarketCreation', () => {
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
+	test('preserves an anonymous question draft when a wallet connects', async () => {
+		mock.module('../../../features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: mock(() => ({
+				loadZoltarQuestions: async () => undefined,
+				setZoltarForkQuestionId: () => undefined,
+			})),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
+			hookState = useMarketCreation(
+				{
+					accountAddress,
+					activeUniverseId: 7n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{
+					createMarket: async () => {
+						throw new Error('Question creation is not expected in this test')
+					},
+				},
+			)
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
+			render(<Harness accountAddress={WALLET_ADDRESS} />, renderedComponent.container)
+		})
+		await waitFor(() => {
+			expect(requireHookState(hookState).marketForm.title).toBe('Anonymous draft')
+		})
+
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
+		hookState = undefined
+		const remountedComponent = await renderIntoDocument(<Harness accountAddress={WALLET_ADDRESS} />)
+		cleanupRenderedComponent = remountedComponent.cleanup
+		expect(requireHookState(hookState).marketForm.title).toBe('Anonymous draft')
+	})
+
 	test('keeps complete question drafts scoped by account and universe and clears a successful draft', async () => {
 		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string } }) => ({
 			createQuestionHash: '0xabc' as Hash,

@@ -77,4 +77,33 @@ describe('ScalarOutcomePicker', () => {
 		expect(slider.disabled).toBe(true)
 		expect(documentQueries.getAllByText('Invalid').length).toBeGreaterThan(0)
 	})
+
+	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {
+		const unsafeTickCount = BigInt(Number.MAX_SAFE_INTEGER) + 10n
+		let selectedTick = unsafeTickCount.toString()
+		const renderedComponent = await renderIntoDocument(
+			<ScalarOutcomePicker
+				details={{ maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: unsafeTickCount }}
+				isInvalid={false}
+				label='Select exact scalar target'
+				onInvalidChange={() => undefined}
+				onSelectedTickChange={value => {
+					selectedTick = value
+				}}
+				selectedOutcomeLabel='Exact outcome'
+				selectedTick={selectedTick}
+				selectedTickLabel={selectedTick}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
+		expect(within(document.body).queryByRole('slider')).toBeNull()
+		expect(exactInput.value).toBe(unsafeTickCount.toString())
+
+		await act(() => {
+			fireEvent.input(exactInput, { target: { value: (unsafeTickCount - 1n).toString() } })
+		})
+		expect(selectedTick).toBe((unsafeTickCount - 1n).toString())
+	})
 })
