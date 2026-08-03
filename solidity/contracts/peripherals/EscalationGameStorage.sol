@@ -3,11 +3,7 @@ pragma solidity 0.8.35;
 
 import {
 	EscalationClaimBundle,
-	CLAIM_SHARE_SCALE,
 	ForkedEscrowState,
-	MAX_CLAIM_BUNDLES_PER_VAULT,
-	MAX_CLAIM_OWNERS_PER_BUNDLE,
-	MAX_PAYOUT_CLAIM_BUNDLES,
 	Node,
 	NonDecisionState,
 	OutcomeState
@@ -27,7 +23,6 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	mapping(uint256 => Node) public nodes;
 	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
-	mapping(address => address[MAX_CLAIM_BUNDLES_PER_VAULT]) internal claimBundlesByOwner;
 	uint256 public totalEscrowedRep;
 	mapping(address => uint256) internal unresolvedRepByVault;
 	uint256 internal totalLocalUnresolvedRep;
@@ -50,49 +45,14 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryBackingExportedBeforeResume;
 	uint256 public truthAuctionRepBefore;
 	uint256 public truthAuctionRepRemaining;
-	// Escrow shares are consumed as REP leaves this game; payout shares survive
-	// exports so liquidation ownership follows the claim through descendants.
-	mapping(address => EscalationClaimBundle) internal payoutClaimBundles;
-	mapping(address => address[MAX_CLAIM_BUNDLES_PER_VAULT]) internal payoutClaimBundlesByOwner;
-	address[] internal payoutClaimBundleKeys;
-	uint256 public forkCarryPayoutClaimImportCursor;
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amount) {
-		address[MAX_CLAIM_BUNDLES_PER_VAULT] storage bundleIds = claimBundlesByOwner[vault];
-		for (uint256 bundleIndex = 0; bundleIndex < MAX_CLAIM_BUNDLES_PER_VAULT; bundleIndex++) {
-			address bundleId = bundleIds[bundleIndex];
-			if (bundleId == address(0x0)) continue;
-			EscalationClaimBundle storage bundle = escalationClaimBundles[bundleId];
-			for (uint256 ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-				if (bundle.owners[ownerIndex] != vault || bundle.totalShares == 0) continue;
-				uint256 bundleRep = _applyTruthAuctionRetention(bundle.escrowedRep);
-				amount += (bundleRep * bundle.ownerShares[ownerIndex]) / bundle.totalShares;
-				break;
-			}
-		}
+		return _applyTruthAuctionRetention(escalationClaimBundles[vault].escrowedRep);
 	}
 
-	function _increaseEscrowedRepForBundle(address bundleId, uint256 amount, bool recordPayoutClaim) internal {
-		EscalationClaimBundle storage bundle = escalationClaimBundles[bundleId];
-		if (bundle.totalShares == 0) {
-			bundle.totalShares = CLAIM_SHARE_SCALE;
-			bundle.owners[0] = bundleId;
-			bundle.ownerShares[0] = CLAIM_SHARE_SCALE;
-		}
+	function _increaseEscrowedRepForBundle(address bundleId, uint256 amount, bool) internal {
 		uint256 claimShares = _repToClaimShares(amount);
-		bundle.escrowedRep += claimShares;
-		if (recordPayoutClaim) {
-			address payoutKey = _payoutClaimKey(address(this), bundleId);
-			EscalationClaimBundle storage payoutBundle = payoutClaimBundles[payoutKey];
-			if (payoutBundle.totalShares == 0) {
-				require(payoutClaimBundleKeys.length < MAX_PAYOUT_CLAIM_BUNDLES, 'Claim checkpoint full');
-				payoutBundle.totalShares = CLAIM_SHARE_SCALE;
-				payoutBundle.owners[0] = bundleId;
-				payoutBundle.ownerShares[0] = CLAIM_SHARE_SCALE;
-				payoutClaimBundleKeys.push(payoutKey);
-			}
-			payoutBundle.escrowedRep += claimShares;
-		}
+		escalationClaimBundles[bundleId].escrowedRep += claimShares;
 		totalEscrowedRep += amount;
 	}
 
@@ -127,10 +87,6 @@ abstract contract EscalationGameStorage {
 		);
 		if (!success || retentionData.length != 32) revert();
 		return abi.decode(retentionData, (uint256));
-	}
-
-	function _payoutClaimKey(address sourceGame, address bundleId) internal pure returns (address) {
-		return address(uint160(uint256(keccak256(abi.encode(sourceGame, bundleId)))));
 	}
 
 	function _repToClaimShares(uint256 amount) internal view returns (uint256 shares) {

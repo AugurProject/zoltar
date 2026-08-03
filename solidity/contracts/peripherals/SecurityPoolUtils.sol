@@ -61,7 +61,6 @@ library SecurityPoolUtils {
 	function calculateBundledLiquidationTransfer(
 		uint256 targetOwnership,
 		uint256 targetAllowance,
-		uint256 claimRepToMove,
 		uint256 requestedDebt,
 		uint256 repEthPrice,
 		uint256 currentTotalRep,
@@ -73,7 +72,6 @@ library SecurityPoolUtils {
 		if (debtRemaining > 0 && debtRemaining < MIN_SECURITY_BOND_DEBT) debtToMove = targetAllowance;
 		ownershipToMove = _getLiquidationOwnershipAward(
 			targetOwnership,
-			claimRepToMove,
 			debtToMove,
 			repEthPrice,
 			currentTotalRep,
@@ -88,7 +86,6 @@ library SecurityPoolUtils {
 			debtToMove = targetAllowance;
 			ownershipToMove = _getLiquidationOwnershipAward(
 				targetOwnership,
-				claimRepToMove,
 				debtToMove,
 				repEthPrice,
 				currentTotalRep,
@@ -109,7 +106,6 @@ library SecurityPoolUtils {
 
 	function _getLiquidationOwnershipAward(
 		uint256 targetOwnership,
-		uint256 claimRepToMove,
 		uint256 debtToMove,
 		uint256 repEthPrice,
 		uint256 currentTotalRep,
@@ -119,12 +115,10 @@ library SecurityPoolUtils {
 		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
 		uint256 grossRepAward = repNumerator / repDenominator;
 		if (grossRepAward * repDenominator < repNumerator) grossRepAward += 1;
-		if (claimRepToMove >= grossRepAward) return 0;
-		uint256 freeRepAward = grossRepAward - claimRepToMove;
 		ownershipToMove =
 			currentDenominator == 0 || currentTotalRep == 0
-				? freeRepAward * PRICE_PRECISION
-				: (freeRepAward * currentDenominator) / currentTotalRep;
+				? grossRepAward * PRICE_PRECISION
+				: (grossRepAward * currentDenominator) / currentTotalRep;
 		if (ownershipToMove > targetOwnership) ownershipToMove = targetOwnership;
 	}
 

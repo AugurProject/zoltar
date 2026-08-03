@@ -68,12 +68,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		bool transferredRep
 	);
 	event ResidualRepSweptToSecurityPool(uint256 amount);
-	event EscalationClaimMoved(
-		address indexed fromVault,
-		address indexed toVault,
-		uint256 numerator,
-		uint256 denominator
-	);
 	event TruthAuctionHaircutApplied(
 		uint256 repBefore,
 		uint256 repRemoved,
@@ -122,15 +116,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function escrowedRepByVault(address vault) public view returns (uint256 amount) {
 		return _claimEscrowedRepByVault(vault);
-	}
-
-	function moveEscalationClaim(address fromVault, address toVault, uint256 numerator, uint256 denominator) external {
-		_delegateClaimCall(
-			abi.encodeCall(
-				EscalationGameClaimDelegate.moveEscalationClaim,
-				(fromVault, toVault, numerator, denominator)
-			)
-		);
 	}
 
 	function _consumeEscrowedRepForBundle(address depositor, uint256 amount) internal {

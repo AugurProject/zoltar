@@ -78,7 +78,7 @@ assertOpenOracleVendorAndEventDocs()
 assertLiquidationFullCloseDocs()
 assertTruthAuctionCombinedRepCapDocs()
 assertMigrationSecurityAllowanceDocs()
-assertBoundedClaimRegistryDocs()
+assertLazyClaimCommitmentDocs()
 assertEscalationGameBytecodeDocs()
 assertLifecycleReferences()
 assertContractInteractionDistinctions()
@@ -134,20 +134,26 @@ function assertMigrationSecurityAllowanceDocs(): void {
 	}
 }
 
-function assertBoundedClaimRegistryDocs(): void {
-	assert.match(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT = 64;/)
-	assert.match(escalationGameTypes, /MAX_CLAIM_OWNERS_PER_BUNDLE = 8;/)
-	assert.match(escalationGameTypes, /MAX_PAYOUT_CLAIM_IMPORT_BATCH = 8;/)
-	assert.match(html, /at most 64 bundle identities globally and per vault/)
-	assert.match(html, /permissionless pool calls copy at most eight bundles each/)
-	assert.match(html, /Liquidation then scans only the current game's fixed registries/)
-	assert.match(html, /an acquired claim is not overwritten when its owner later creates a local claim/)
-	assert.match(html, /an owner whose shares went to zero is re-enumerated if a later liquidation returns shares/)
-	assert.match(html, /a partial transfer to a new owner cannot consume the last free slot/)
-	assert.match(html, /a full close replaces the source owner in place/)
-	assert.match(liquidationHtml, /canonical <a href="\.\.\/architecture-deployment\/escalation-game-architecture\.html#claim-ownership">64-bundle global and per-vault checkpoint cap, eight-owner cap, eight-bundle import batch, and internal scan limits<\/a>/)
+function assertLazyClaimCommitmentDocs(): void {
+	assert.doesNotMatch(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT|MAX_CLAIM_OWNERS_PER_BUNDLE|MAX_PAYOUT_CLAIM_IMPORT_BATCH/)
+	assert.match(html, /fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2\^64 - 1<\/code> leaves; it is not a 64-reporter or 64-portfolio cap/)
+	assert.match(html, /Claims are non-transferable commitments[\s\S]*never copies per-claim or per-owner state from its parent/)
+	assert.match(html, /Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once/)
+	assert.match(liquidationHtml, /Only free REP moves with the debt\. Accrued fees and escalation claims stay with the target vault/)
+	assert.doesNotMatch(liquidationHtml, /claim move|portfolio cap|owner slot/i)
+	assert.doesNotMatch(escalationGameClaimDelegate, /moveEscalationClaim|payoutClaimBundle|getClaimOwner|liquidationClaimRep/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
-	assert.match(whitepaperStatoblast, /source-principal allocation may floor to zero while its independently[\s\S]*larger child-REP reward remains positive/)
+	assert.match(whitepaperStatoblast, /Cumulative-prefix retention computes[\s\S]*retained\(cumulativeAmount\) - retained\(cumulativeAmount - amount\)[\s\S]*floored prefix differences telescope to the aggregate checkpoint in every[\s\S]*proof order, preventing phantom unresolved principal/)
+	assert.match(
+		escalationGameClaimDelegate,
+		/retainedCumulativeAmount = IEscalationClaimCheckpointSource\(sourceGame\)\.applyInheritedClaimRetention\([\s\S]*cumulativeAmount,[\s\S]*retainedPreviousAmount = IEscalationClaimCheckpointSource\(sourceGame\)\.applyInheritedClaimRetention\([\s\S]*cumulativeAmount - amount,[\s\S]*return retainedCumulativeAmount - retainedPreviousAmount/,
+	)
+	for (const staleOwnershipPhrase of ['current liquidation owners', 'liquidation moved half the claim', 'current-owner shares', 'payout ownership copied', '64-key global cap', 'eight batches']) {
+		for (const document of [invariantsHtml, whitepaperStatoblast, operatorReference, diagramSpecs]) assert.ok(!document.includes(staleOwnershipPhrase), `obsolete claim ownership/import text remains: ${staleOwnershipPhrase}`)
+	}
+	assert.doesNotMatch(operatorReference, /leaves owner import to permissionless/)
+	assert.match(invariantsHtml, /Bob may relay Alice's valid winning proof[\s\S]*payout still goes entirely to Alice as the committed depositor/)
+	assert.match(diagramSpecs, /to committed depositor/)
 }
 
 function assertEscalationGameBytecodeDocs(): void {
@@ -173,7 +179,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 		['Statoblast whitepaper', normalizedStatoblast],
 		['Operator reference', normalizedOperatorReference],
 	] as const) {
-		for (const documentedClaim of ['aggregate backing', 'winning proof', 'current owner', 'inherited losers', 'optional parent']) {
+		for (const documentedClaim of ['aggregate backing', 'winning proof', 'committed depositor', 'inherited losers', 'optional parent']) {
 			assert.ok(contents.toLowerCase().includes(documentedClaim), `${documentName} must explain aggregate winner-only continuation semantics: ${documentedClaim}`)
 		}
 	}
@@ -186,7 +192,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 		assert.ok(!normalizedStatoblast.includes(forbiddenClaim), `Statoblast whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
-	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
+	assert.match(normalizedOperatorReference, /Child creation installs the canonical carry commitment, retention checkpoint, and aggregate backing without waiting for vault transactions or copying claims and owners/)
 	assert.match(normalizedStatoblast, /resumeFromFork<\/code> verifies aggregate REP funding/)
 	assert.match(normalizedOperatorReference, /resumeFromFork` remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims/)
 	assert.match(normalizedInvariants, /continuation cannot resume until its game balance covers/)
@@ -381,10 +387,10 @@ function assertEventStreamSemantics(): void {
 		'Redemption `ethAmount` fields are the net wei paid',
 		'`ethUsed + ethRefund = originalEthAmount`',
 		'preserve the proof/carry roots, counts, peaks, and leaves under `escalationSnapshotId`',
-		'Payout ownership uses a separate consolidated checkpoint',
-		'clone the frozen source registry in batches of at most eight bundle keys',
-		'do not accept `ForkContinuationResumed` until `endIndex == sourceBundleCount`',
-		'liquidation and settlement read only that child and never walk fork ancestry',
+		'`ForkCarryCheckpoint` installs that immutable proof state, aggregate backing, and retention checkpoint in the child',
+		'It copies no leaves, bundles, or owners',
+		'A winning inherited settlement supplies its carry proof',
+		'pays once',
 		'`InheritedThresholdTie(sourceGame indexed)`',
 		'accept it only after a `ForkCarryCheckpoint` from the same child emitter',
 		"require its indexed `sourceGame` to equal that checkpoint's source",
@@ -556,12 +562,11 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.match(normalizedInvariants, /sufficiently large pool donation may still restore live health/)
 
 	for (const documentedClaim of [
-		'data-source="f = debtMoved / targetAllowance"',
 		'data-source="bonusRepQuote = ⌈debtMoved * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉"',
 		'data-source="value(freeRep + escalationRep) >= allowance * poolSecurityMultiplier"',
 		'data-source="allowance = 0 or value(freeRep) > allowance * migrationSecurityMultiplier"',
-		'Liquidation is the only ownership-change path, and settlement is the only payout path.',
-		'The 105% quote caps the free-REP supplementation target, not the mandatory claim transfer.',
+		'A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them.',
+		'The 105% quote is paid from free REP',
 		'A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary.',
 	]) {
 		assert.ok(normalizedLiquidation.includes(documentedClaim), `Missing bundled-liquidation documentation claim: ${documentedClaim}`)
@@ -572,11 +577,11 @@ function assertLiquidationFullCloseDocs(): void {
 
 	assert.match(whitepaperStatoblast, /href="\.\.\/protocol-design\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
-	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*credits current claim REP against the 5%-bonus gross award[\s\S]*leaves fees and non-dust surplus with the target/i, 'canonical liquidation diagram must show claim credit, fee isolation, and the surplus dust exception')
-	assert.match(liquidationHtml, /Accrued ETH fees are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept\./)
-	assert.match(eventStream, /Escalation continuation \| `ForkCarryCheckpoint`, `PayoutClaimCheckpointImported`, `ForkContinuationResumed`/)
-	assert.match(eventStream, /`EscalationGame\.PayoutClaimCheckpointImported` \| `sourceGame indexed`, `startIndex`, `endIndex`, `sourceBundleCount`/)
-	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, claimRepToMove, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
+	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*5%-bonus free-REP award[\s\S]*escalation claims, fees, and non-dust surplus remain with the target/i, 'canonical liquidation diagram must show the free-REP-only award, claim and fee isolation, and the surplus dust exception')
+	assert.match(liquidationHtml, /Accrued ETH fees and escalation claims are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept\./)
+	assert.match(eventStream, /Escalation continuation \| `ForkCarryCheckpoint`, `ForkContinuationResumed`, `InheritedThresholdTie`, `CarryDepositConsumed`/)
+	assert.doesNotMatch(eventStream, /PayoutClaimCheckpointImported|EscalationClaimMoved/)
+	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 	assert.match(whitepaperStatoblast, /truth-auction\.html#clearing/)
 }
@@ -619,7 +624,6 @@ function assertContractInteractionDistinctions(): void {
 	const migrateVaultWithUnresolvedEscalationRow = getContractInteractionRow('migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)')
 	const claimForkedEscalationDepositsRow = getContractInteractionRow('claimForkedEscalationDeposits(...)')
 	const performLiquidationRow = getContractInteractionRow('performLiquidation(...)')
-	const moveEscalationClaimRow = getContractInteractionRow('moveEscalationClaim(fromVault, toVault, numerator, denominator)')
 	const claimDepositWithoutTransferRow = getContractInteractionRow('claimDepositForWinningWithoutTransfer(depositIndex, outcome)')
 	const recordForkedEscrowRow = getContractInteractionRow('recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipal, childRepAmount)')
 	const startTruthAuctionRow = getContractInteractionRow('startTruthAuction(securityPool)')
@@ -679,7 +683,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /### Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
-	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*bounded checkpoint import[\s\S]*claim-credit REP liquidation[\s\S]*fee isolation/)
+	assert.match(operatorReference, /EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*no ownership or import surface[\s\S]*free-REP-only liquidation[\s\S]*fee and claim isolation/)
 	assert.match(operatorReference, /Migration, liquidation, and storage modules[\s\S]*\[`SecurityPoolLiquidationDelegate\.sol`\][\s\S]*\[`EscalationGameForker\.sol`\]\(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)
@@ -761,7 +765,7 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(
 		whitepaperStatoblast.replaceAll(/\s+/g, ' '),
-		/Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate backing with payout ownership copied into the current game's consolidated checkpoint, without per-vault child health credit; the <a href="\.\.\/protocol-design\/liquidation\.html">liquidation design<\/a> gives the full accounting rationale\./,
+		/Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="\.\.\/protocol-design\/liquidation\.html">liquidation design<\/a> gives the full accounting rationale\./,
 	)
 	assert.match(liquidationHtml, /data-source="allowance = 0 or value\(freeRep\) > allowance \* migrationSecurityMultiplier"/)
 	assert.match(securityPoolUtils, /if \(securityBondAllowance == 0\) return true/)
@@ -796,8 +800,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function depositToEscalationGame\([^}]+require\(!hasInheritedForkOutcome, 'Resolved'\);/)
 	assert.match(migrateSharesRow, /an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
-	assert.match(claimForkedEscalationDepositsRow, /nonzero current claim share for the authorizing `vault`[\s\S]*settlement distributes each deposit among every current owner/)
-	assert.match(whitepaperStatoblast.replaceAll(/\s+/g, ' '), /named vault need only own a nonzero current share[\s\S]*settlement pays all current owners rather than only the caller/)
+	assert.match(claimForkedEscalationDepositsRow, /every deposit to commit `vault` as its immutable depositor/)
+	assert.match(whitepaperStatoblast.replaceAll(/\s+/g, ' '), /named vault must be the deposit's committed depositor[\s\S]*settlement pays that same depositor/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)
@@ -850,10 +854,7 @@ function assertContractInteractionDistinctions(): void {
 		securityPoolForkerVaultMigrationBase,
 		/childEscalationGame = child\.escalationGame\(\);[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_initializeChildForkedEscalationGameIfNeeded\([\s\S]*childEscalationGame[\s\S]*_ensureChildEscalationBacking\(parent, outcomeIndex, child, childEscalationGame\)/,
 	)
-	assert.match(
-		escalationGameForker,
-		/\(ISecurityPool child, EscalationGame childEscalationGame\) = _getOrDeployChildPool\([\s\S]*_recordAndExportCurrentClaimOwners\([\s\S]*ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE[\s\S]*getClaimOwner\(bundleId, ownerIndex\)[\s\S]*childGame\.recordForkedEscrowForOutcome\(ownerAddress[\s\S]*childGame\.exportForkedEscrowByOutcome\(ownerAddress, ownerAddress\)/,
-	)
+	assert.match(escalationGameForker, /function _claimWinningDepositsFromGame\([\s\S]*if \(depositor != vault\) revert\(\);[\s\S]*childEscalationGame\.recordForkedEscrowForOutcome\(\s*depositor[\s\S]*childEscalationGame\.exportForkedEscrowByOutcome\(depositor, depositor\)/)
 	assert.match(securityPoolForker, /\(child, childEscalationGame\) = _migrateVaultAndReturnChild\(securityPool, childOutcomeIndex\);[\s\S]*\(securityPool, vault, childOutcomeIndex, child, childEscalationGame\)/)
 	assert.match(escalationGameForker, /ISecurityPool child = migratedChild;[\s\S]*EscalationGame childEscalationGame = migratedChildEscalationGame;[\s\S]*if \(address\(child\) == address\(0x0\)\)[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\)/)
 	assert.equal((securityPoolForkerVaultMigrationBase.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'child setup must capture the child game exactly once')
@@ -877,27 +878,22 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /initializeChildForkedEscalationGameIfNeeded\(parent, child, childEscalationGame\)[\s\S]*When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use/)
 	assert.match(startTruthAuctionRow, /game reported during immediate completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
 	assert.match(finalizeTruthAuctionRow, /game reported at completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
-	assert.match(performLiquidationRow, /EscalationClaimMoved/)
-	assert.match(performLiquidationRow, /complete inherited payout-ownership checkpoint[\s\S]*game-level claim move fails with `Claim checkpoint pending`[\s\S]*pool surfaces `Claim move failed`[\s\S]*coordinator records a failed staged operation/)
-	assert.match(moveEscalationClaimRow, /complete inherited payout-ownership checkpoint[\s\S]*Claim checkpoint pending/)
-	assert.match(escalationGameClaimDelegate, /function moveEscalationClaim\([\s\S]*forkCarryPayoutClaimImportCursor ==[\s\S]*payoutClaimBundleCount\(\)[\s\S]*'Claim checkpoint pending'/)
-	assert.match(securityPoolLiquidationDelegate, /function _moveEscalationClaim\([\s\S]*game\.call\([\s\S]*moveEscalationClaim\(address,address,uint256,uint256\)[\s\S]*require\(claimMoved, 'Claim move failed'\)/)
-	assert.match(claimDepositWithoutTransferRow, /inverse-retention claim shares[\s\S]*no local auction checkpoint[\s\S]*⌈originalPrincipal × truthAuctionRepBefore \/ truthAuctionRepRemaining⌉[\s\S]*Other unconsumed deposits in the same bundle remain backed/)
-	assert.match(escalationGameSettlement, /if \(!transferredRep\) \{[\s\S]*EscalationGameDepositDelegate\.consumePayoutClaimBacking[\s\S]*depositor, originalDepositAmount/)
-	assert.match(escalationGameDepositDelegate, /function consumePayoutClaimBacking\([\s\S]*uint256 shares = _repToClaimShares\(amount\)[\s\S]*payoutBundle\.escrowedRep -= shares/)
+	assert.match(performLiquidationRow, /fixed 5%-bonus award, paid entirely as free REP[\s\S]*Escalation claims and accrued unpaid fees remain with the target/)
+	assert.doesNotMatch(performLiquidationRow, /EscalationClaimMoved|Claim checkpoint pending|Claim move failed/)
+	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
+	assert.doesNotMatch(securityPoolLiquidationDelegate, /_moveEscalationClaim|previewLiquidationClaimRep|moveEscalationClaim/)
+	assert.match(claimDepositWithoutTransferRow, /inverse-retention shares[\s\S]*no local auction checkpoint[\s\S]*⌈originalPrincipal × truthAuctionRepBefore \/ truthAuctionRepRemaining⌉[\s\S]*Other unconsumed deposits by the same depositor remain backed/)
+	assert.match(escalationGameSettlement, /_claimDepositForWinning\(depositIndex, outcome, false\)/)
+	assert.match(escalationGameState, /uint256 shares = _repToClaimShares\(amount\);[\s\S]*bundle\.escrowedRep -= shares/)
 	assert.match(html, /raw claim shares corresponding to that deposit's effective original principal[\s\S]*truthAuctionRepBefore \/ truthAuctionRepRemaining/)
-	assert.match(recordForkedEscrowRow, /root game registers or increases a child-local payout bundle[\s\S]*continuation with a nonzero carry source suppresses that duplicate key/)
-	assert.match(escalationGameDepositDelegate, /bool recordPayoutClaim = forkCarrySourceGame == address\(0x0\);[\s\S]*_increaseEscrowedRepForBundle\(depositor, effectiveChildRep, recordPayoutClaim\)[\s\S]*if \(recordPayoutClaim\)/)
-	assert.match(
-		eventStream,
-		/one bounded claim bundle per stable bundle identity[\s\S]*ClaimDeposit` with `transferredRep = false`[\s\S]*truthAuctionRepBefore == 0[\s\S]*⌈originalDepositAmount × truthAuctionRepBefore \/ truthAuctionRepRemaining⌉[\s\S]*Other unconsumed deposits represented by the same bundle remain backed/,
-	)
-	assert.match(eventStream, /continuation with a nonzero carry source[\s\S]*without allocating another child-local payout key[\s\S]*durable payout identity arrives through checkpoint import/)
-	assert.match(auctionDesign, /resumes the continuation only after both its payout-ownership checkpoint and aggregate backing are complete/)
+	assert.match(recordForkedEscrowRow, /depositor remains the immutable payout owner[\s\S]*inherited claims remain in the carry commitment and are not copied/)
+	assert.match(escalationGameDepositDelegate, /recordForkedEscrowForOutcome\([\s\S]*_increaseEscrowedRepForBundle\(depositor, effectiveChildRep, false\)/)
+	assert.match(eventStream, /leaf's depositor is the immutable claim owner[\s\S]*ClaimDeposit` with `transferredRep = false`[\s\S]*truthAuctionRepBefore == 0[\s\S]*ceiling of `originalDepositAmount × truthAuctionRepBefore \/ truthAuctionRepRemaining`[\s\S]*Other unconsumed deposits by the same depositor remain backed/)
+	assert.match(eventStream, /ForkCarryCheckpoint` installs that immutable proof state[\s\S]*copies no leaves, bundles, or owners/)
+	assert.match(auctionDesign, /call <code>resumeForkedEscalationGame<\/code> immediately[\s\S]*already-installed commitment and aggregate funding checks are bounded/)
 	assert.match(startTruthAuctionRow, /ForkContinuationResumed/)
 	assert.match(finalizeTruthAuctionRow, /TruthAuctionHaircutApplied[\s\S]*ForkContinuationResumed/)
-	assert.doesNotMatch(whitepaperStatoblast, /pays the authenticated\s+depositor/)
-	assert.match(whitepaperStatoblast, /winning carry proof authenticates the original deposit[\s\S]*bounded current owners[\s\S]*current consolidated checkpoint/)
+	assert.match(whitepaperStatoblast, /Winning proofs can be relayed permissionlessly and pay the original depositor committed in each leaf/)
 	assert.doesNotMatch(docsReader, /Punitive REP seizure/)
 	assert.doesNotMatch(whitepaperStatoblast, /Liquidation penalty math/)
 	assert.match(drainAllRepRow, /Owning `SecurityPool` only[\s\S]*A zero balance returns zero without a transfer or event[\s\S]*no event at zero balance/)

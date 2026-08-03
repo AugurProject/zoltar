@@ -44,11 +44,9 @@
 						<tr>
 							<td><code>depositor</code></td>
 							<td>
-								Binds the proof to its original claim-bundle identity. A
-								<a href="../protocol-design/liquidation.html#bundled-liquidation"
-									>liquidation can split payout ownership</a
-								>
-								among current vault owners without changing the committed leaf.
+								Binds the proof and payout to the original depositor. This ownership
+								is immutable: liquidation moves only free REP and cannot acquire or
+								split the committed escalation claim.
 							</td>
 						</tr>
 						<tr>

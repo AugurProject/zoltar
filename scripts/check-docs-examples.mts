@@ -882,8 +882,8 @@ async function checkInvariantCatalogStates(): Promise<void> {
 
 		search.value = 'replay'
 		search.dispatchEvent(new window.Event('input', { bubbles: true }))
-		assert.deepEqual(visibleIds(), ['esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
-		assert.equal(count.textContent, '4 of 94 invariants', 'filtered invariant count must remain explicit')
+		assert.deepEqual(visibleIds(), ['vault-04', 'esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
+		assert.equal(count.textContent, '5 of 94 invariants', 'filtered invariant count must remain explicit')
 		expand.click()
 		assert(
 			entries.filter(entry => !entry.hidden).every(entry => entry.open),

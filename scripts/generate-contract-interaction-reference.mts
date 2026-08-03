@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/safety-operations/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'cefe8bd0f5da2ff9d7ca34d1a6999e95bf4249feaa6675b9edba4c7b2720f27d'
+const expectedProductionSoliditySourceFingerprint = '354644616554aa8fe921bdd9ac36f2f818ef842505060e548afad4107cff92e1'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -73,7 +73,6 @@ const eventSourceByName: Record<string, string> = {
 	DepositRep: 'solidity/contracts/peripherals/SecurityPool.sol',
 	DepositToEscalationGame: 'solidity/contracts/peripherals/SecurityPool.sol',
 	EscalationGameSet: 'solidity/contracts/peripherals/SecurityPool.sol',
-	EscalationClaimMoved: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	EscalationMigrationEntitlementInitialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	EscalationMigrationEntitlementMaterialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	EscalationRepDrainedAtFork: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -95,7 +94,6 @@ const eventSourceByName: Record<string, string> = {
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	OwnershipDenominatorSet: 'solidity/contracts/peripherals/SecurityPool.sol',
-	PayoutClaimCheckpointImported: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	PendingEthRefundWithdrawn: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
@@ -328,7 +326,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '75ad37e99e84e387bf070bd328ea9155b74124bdb820f940d155c032f7780297'
+const referencedEventAbiFingerprint = '8dbfd34f8cc65c286e4f9614f7baa462e9334ba3955c95f8979240d64e2bed94'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -361,9 +359,6 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		resumeFromFork: ['external()'],
 		start: ['external(uint256,uint256)'],
 		startFromFork: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome,bool,uint256)'],
-	},
-	'solidity/contracts/peripherals/EscalationGameState.sol': {
-		moveEscalationClaim: ['external(address,address,uint256,uint256)'],
 	},
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': {
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
@@ -474,7 +469,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': '7fd8be73b61c6624fb644d2b5818fa414e582e9ed4eea54eceee533f4a022d47',
 	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'b3755415ee7ff2d0457653e9c9e6a6cca56435ed3b76008ab5446c315f837452',
 	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '60c97762c2d882dcb82dd15fa4059f1fc440c9829df809a7932429121a03d83f',
-	'solidity/contracts/peripherals/EscalationGameState.sol': '0242edd53c561a8a6112df5429b2d144b3fb7d2bb518c42dcc4cbaf9874b1413',
+	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'd6e92001bdc028def593ed95c37a8c23bab0a9006d0a5c9164f9a9f92b84ad49',
 	'solidity/contracts/peripherals/SecurityPool.sol': '96815522311e78330f2e18b8d800f5fb80b919a1676f7fee8cd98fc71bf0fae8',
@@ -491,7 +486,7 @@ const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol': ['securityPool'],
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/peripherals/SecurityPool.sol': ['eventEmitter', 'factory'],
-	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': ['forkPayoutClaimCheckpointComplete'],
+	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': [],
 }
 
 assertDeclarationCheckerRegression()
@@ -821,8 +816,8 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`withdrawFromEscalationGame(outcome, depositIndexes)`',
-				caller: 'Anyone; a nonempty list must select deposits belonging to one original claim bundle',
-				effect: 'A nonempty list settles local deposits and routes winning REP to the claim bundle current owners. The deposit identifies the claim; liquidation may have changed its payout owners. An empty list returns after the outer lifecycle checks without settlement, state change, or event.',
+				caller: 'Anyone; a nonempty list must select deposits belonging to one original depositor',
+				effect: 'A nonempty list settles local deposits and pays winning REP to the immutable depositor recorded by each deposit. Liquidation cannot change that payout address. An empty list returns after the outer lifecycle checks without settlement, state change, or event.',
 				declarations: [{ name: 'withdrawFromEscalationGame' }],
 				preconditions:
 					'Game configured; operational pool; valid final outcome. If an external fork interrupted the game, parent withdrawal stays locked: winners settle in the child by carried proof, inherited losers require no transaction, and parent-lock cleanup is optional. A nonempty list additionally requires valid local indexes and one common depositor.',
@@ -830,9 +825,9 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`withdrawForkedEscalationDeposits(outcome, proofs)`',
-				caller: 'Anyone; a nonempty list must name one original claim bundle across all proofs',
+				caller: 'Anyone; a nonempty list must name one original depositor across all proofs',
 				effect:
-					"A nonempty list verifies and consumes carried proofs, then pays winning child REP through the child's consolidated bounded owner checkpoint. Stable continuation identities retain the creating game, and the cumulative retention-index ratio applies every intervening auction haircut in constant ancestry work. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.",
+					'A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game, and the cumulative retention-index ratio applies every intervening auction haircut in constant ancestry work. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.',
 				declarations: [{ name: 'withdrawForkedEscalationDeposits' }],
 				preconditions: 'Game configured; operational child pool; valid final outcome. A nonempty list additionally requires an initialized and fully resumed continuation game, valid unconsumed winning proofs, and one common depositor.',
 				signals: 'Per processed proof, escalation-game `CarryDepositConsumed` and `ClaimDeposit`. No event for an empty list',
@@ -874,11 +869,11 @@ const contractReferences: ContractReference[] = [
 				call: '`performLiquidation(...)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves allowance and the matching fraction of every non-tradeable escalation claim to the caller. The claim's current effective REP amount is credited against the fixed 5%-bonus gross award before pool-ownership flooring, and only the uncovered award moves as free REP. All accrued unpaid fees remain with the target; free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
+					"Moves allowance and the fixed 5%-bonus award, paid entirely as free REP, to the caller. Escalation claims and accrued unpaid fees remain with the target; free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; when the game is a continuation, its complete inherited payout-ownership checkpoint must already be imported. Otherwise the game-level claim move fails with `Claim checkpoint pending`, the pool surfaces `Claim move failed`, and the coordinator records a failed staged operation. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
-				signals: 'Fee-accrual checkpoints as needed; one `EscalationClaimMoved` from the consolidated current-game registry when a game exists; then `VaultLiquidated` with the final post-conversion `repAmountMoved`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
+				signals: 'Fee-accrual checkpoints as needed; then `VaultLiquidated` with the final post-conversion `repAmountMoved`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`performSetSecurityBondsAllowance(callerVault, amount)`',
@@ -926,10 +921,9 @@ const contractReferences: ContractReference[] = [
 				call: '`resumeForkedEscalationGame()`',
 				caller: 'Anyone',
 				declarations: [{ name: 'resumeForkedEscalationGame' }],
-				effect:
-					"Imports at most eight of the globally capped 64 frozen payout-bundle keys into the child's consolidated checkpoint. If keys remain, the game stays paused and another permissionless call may continue. Once the checkpoint and REP funding are complete, clears the pool wait flag, records the resume timestamp, and starts its remaining escalation clock.",
+				effect: "Checks the already-installed immutable carry commitment and aggregate REP funding, clears the pool wait flag, records the resume timestamp, and starts the continuation's remaining escalation clock in one bounded call.",
 				preconditions: 'Pool is operational, awaiting a configured fork continuation, and the game has not resumed.',
-				signals: 'One `PayoutClaimCheckpointImported` per attempted batch; on completion, `ForkContinuationResumed` and `AwaitingForkContinuationSet(false)`',
+				signals: '`ForkContinuationResumed` and `AwaitingForkContinuationSet(false)`',
 			},
 			{
 				call: '`setAwaitingForkContinuation(shouldAwait)`',
@@ -1103,7 +1097,7 @@ const contractReferences: ContractReference[] = [
 					"First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.",
 				declarations: [{ name: 'claimForkedEscalationDeposits' }],
 				preconditions:
-					'Caller equals `vault`; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies `canTriggerOwnFork()` by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, unclaimed deposit identities, and a nonzero current claim share for the authorizing `vault`; settlement distributes each deposit among every current owner.',
+					'Caller equals `vault`; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies `canTriggerOwnFork()` by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, unclaimed deposit identities, and every deposit to commit `vault` as its immutable depositor.',
 				signals:
 					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `OwnershipDenominatorSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},
@@ -1113,7 +1107,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `PayoutClaimCheckpointImported`; it emits `ForkContinuationResumed` only when that bounded import completes the unresolved continuation',
+				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -1121,8 +1115,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals:
-					'`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `PayoutClaimCheckpointImported` for the first bounded continuation batch; `ForkContinuationResumed` only when that import completes the unresolved continuation',
+				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
@@ -1162,26 +1155,18 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'cef9b87f1c588462fbbd77c13eb055e78ed30a0efc0c4ac4cfcdf15722fbbe89',
+		compiledAbiFingerprint: '73b1ed18a59fe8900998e31f2f52a1eb1b5c1ff93e97bd06d1ad0805ffa62d79',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'f0e9174ac6691e29284e968d00e87ed42b46499aadfce4c3127b412e13c0d809',
+		readAbiFingerprint: 'fbdb90f1e6bac72c809a951d243274a1974eea60084bdc245d3f31e070b79155',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, `totalEscrowedRep`, `truthAuctionRepBefore`, `truthAuctionRepRemaining`, `cumulativeClaimRetention`, `cumulativeClaimRetentionExponent`, and `forkCarryPayoutClaimImportCursor`. The claim delegate fallback exposes `payoutClaimBundleCount`, `payoutClaimBundleKeyAt`, `forkPayoutClaimCheckpointComplete`, `rootClaimSourceGame`, `applyInheritedClaimRetention`, `applyInheritedSourceStorageBasis`, `getClaimOwner`, `getPayoutClaimOwner`, `liquidationClaimRepByVault`, `previewLiquidationClaimRep`, and `getLiquidationClaimPortfolio`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `escrowedRepByVault` is locally attributed current-game escrow used for health; `liquidationClaimRepByVault` is the complete local-plus-inherited payout portfolio in current effective REP units. The liquidation preview applies the exact per-bundle share floors used by execution, and the bounded portfolio view lets clients reproduce that math. `getPayoutClaimOwner` returns owner shares, total shares, and the bundle REP after the current game retention, while the checkpoint and root-source reads describe bounded lineage import. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, `totalEscrowedRep`, `truthAuctionRepBefore`, `truthAuctionRepRemaining`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `escrowedRepByVault` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'escrowedRepByVault', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
-			{ name: 'payoutClaimBundleCount', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'payoutClaimBundleKeyAt', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'forkPayoutClaimCheckpointComplete', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'rootClaimSourceGame', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'applyInheritedClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'applyInheritedSourceStorageBasis', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'getClaimOwner', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'getPayoutClaimOwner', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'liquidationClaimRepByVault', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'previewLiquidationClaimRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'getLiquidationClaimPortfolio', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'computeIterativeAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'computeTimeSinceStartFromAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'totalCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
@@ -1221,7 +1206,6 @@ const contractReferences: ContractReference[] = [
 			{ name: 'truthAuctionRepRemaining', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'cumulativeClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'cumulativeClaimRetentionExponent', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'forkCarryPayoutClaimImportCursor', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'fixedQuestionOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/EscalationGame.sol',
@@ -1246,11 +1230,11 @@ const contractReferences: ContractReference[] = [
 				call: '`resumeFromFork()`',
 				caller: 'Owning `SecurityPool` only',
 				effect:
-					'Advances one bounded ownership-checkpoint batch. Once complete and funded, records the resume timestamp. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
+					'Records the resume timestamp once the immutable carry commitment is installed and funded. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
-					'Fork-continuation mode; not previously resumed. Each call imports at most eight payout-bundle keys. Final resume additionally requires the complete source checkpoint and aggregate REP funding. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
-				signals: '`PayoutClaimCheckpointImported`; on final completion, `ForkContinuationResumed`',
+					'Fork-continuation mode; not previously resumed; immutable carry snapshot installed; aggregate REP funding complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
+				signals: '`ForkContinuationResumed`',
 			},
 			{
 				call: '`applyTruthAuctionHaircut(repToRemove)`',
@@ -1259,16 +1243,6 @@ const contractReferences: ContractReference[] = [
 				effect: 'Transfers the sold child REP to the pool, applies one retention ratio to escrow and outcome balances, and rebases elapsed curve time. The fork remains final and the game remains paused until the pool resumes it.',
 				preconditions: "Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.",
 				signals: '`TruthAuctionHaircutApplied` and REP `Transfer`',
-			},
-			{
-				call: '`moveEscalationClaim(fromVault, toVault, numerator, denominator)`',
-				caller: 'Contract enforcement: the owning `SecurityPool`, or any factory-canonical pool with the same nonzero origin id. The supported caller path uses that authority only during bundled liquidation.',
-				declarations: [{ name: 'moveEscalationClaim', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' }],
-				effect:
-					'Moves the same bounded fraction of every non-tradeable escalation bundle and its unresolved or fork-escrow rights to the liquidator vault; underlying REP remains in the game. A full close replaces the source owner in place or merges with an existing destination, guaranteeing a liquidation exit even when owner slots are fragmented.',
-				preconditions:
-					'Distinct nonzero vaults and a positive fraction no greater than one; a continuation must have imported its complete inherited payout-ownership checkpoint or the call reverts with `Claim checkpoint pending`; at most 64 bundle keys globally and per vault, and eight owners per bundle. A partial transfer to a new owner must leave the final slot free. Individual bundles whose share result floors to zero remain unchanged.',
-				signals: '`EscalationClaimMoved`',
 			},
 			{
 				call: '`recordDepositFromSecurityPool(...)`',
@@ -1282,7 +1256,7 @@ const contractReferences: ContractReference[] = [
 				call: '`withdrawDeposit(uint256 depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'withdrawDeposit', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
-				effect: "Consumes one local deposit after resolution. A winner pays the claim's current bounded vault owners after its haircut; a loser only retires its escrow accounting.",
+				effect: "Consumes one local deposit after resolution. A winner pays the deposit's immutable depositor after its haircut; a loser only retires its escrow accounting.",
 				preconditions: 'Explicit non-decision state is `None`; non-`None` supplied outcome; game final; game and pool final outcomes match; valid unsettled local deposit index.',
 				signals: '`CarryDepositConsumed` and `VaultEscrowUpdated`; for a winner, `ClaimDeposit`, positive REP payout `Transfer`, and haircut burn signals when nonzero',
 			},
@@ -1298,7 +1272,7 @@ const contractReferences: ContractReference[] = [
 				call: '`claimDepositForWinning(depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinning', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
-				effect: "Consumes a selected local deposit as a winner, consumes its vault escrow, burns the computed haircut when nonzero, and transfers the remaining positive REP payout to the claim's current bounded vault owners.",
+				effect: "Consumes a selected local deposit as a winner, consumes its vault escrow, burns the computed haircut when nonzero, and transfers the remaining positive REP payout to the deposit's immutable depositor.",
 				preconditions: 'Non-`None` supplied outcome and valid unsettled local deposit with sufficient escrow. This entrypoint itself does not check final resolution or that the supplied outcome won; its trusted caller selects that path.',
 				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and haircut burn signals only when their amounts are positive',
 			},
@@ -1307,7 +1281,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinningWithoutTransfer', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				effect:
-					"Consumes a selected local deposit and its vault escrow, preserves that depositor bundle's key and ownership metadata, and decrements raw payout backing by the inverse-retention claim shares corresponding to the deposit's original principal. With no local auction checkpoint the decrement equals that principal; after a local haircut it is `⌈originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining⌉`. Other unconsumed deposits in the same bundle remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
+					"Consumes a selected local deposit and its vault escrow. The depositor's raw escrow backing decreases by the inverse-retention shares corresponding to the deposit's original principal: the principal itself with no local auction checkpoint, or `⌈originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining⌉` after a local haircut. Other unconsumed deposits by the same depositor remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
 				preconditions: 'Valid in-range supplied outcome and unsettled local deposit with sufficient escrow. Unlike the transferring form, it has no explicit non-`None` guard; neither form checks final resolution or that the outcome won.',
 				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or haircut burn',
 			},
@@ -1356,7 +1330,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'recordForkedEscrowForOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol' }],
 				effect:
-					'Accumulates source principal and child REP escrow for the vault and outcome. A root game registers or increases a child-local payout bundle; a continuation with a nonzero carry source suppresses that duplicate key because the durable payout identity arrives through checkpoint import. When both amounts are zero, returns without changing state or emitting an event.',
+					'Accumulates source principal and child REP escrow for the depositor and outcome. The depositor remains the immutable payout owner; inherited claims remain in the carry commitment and are not copied into child-local ownership state. When both amounts are zero, returns without changing state or emitting an event.',
 				preconditions: 'Outcome is not `None`; depositor is nonzero. Source principal and child REP may independently be zero; when both are zero, the call is a no-op.',
 				signals: '`ForkedEscrowRecorded` for a nonzero record; no event when both amounts are zero',
 			},

@@ -342,8 +342,6 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 
 export type SecurityPoolVaultSummary = {
 	escalationEscrowedRep: bigint
-	liquidationClaimBundles?: readonly LiquidationClaimBundle[]
-	liquidationClaimRep?: bigint
 	poolOwnership?: bigint
 	poolOwnershipDenominator?: bigint
 	repDepositShare: bigint
@@ -351,12 +349,6 @@ export type SecurityPoolVaultSummary = {
 	totalRepBalance?: bigint
 	unpaidEthFees: bigint
 	vaultAddress: Address
-}
-
-type LiquidationClaimBundle = {
-	bundleRep: bigint
-	ownerShares: bigint
-	totalShares: bigint
 }
 
 type OwnForkRepBuckets = {

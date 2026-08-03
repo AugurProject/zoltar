@@ -1,9 +1,8 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import {
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
@@ -2020,20 +2019,6 @@ describe('Peripherals: truth auction', () => {
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepBeforeLiquidation = await poolOwnershipToRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repDepositShare)
-			const childEscalationGame = await client.readContract({
-				address: yesSecurityPool.securityPool,
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'escalationGame',
-			})
-			const targetLiquidationClaimRep =
-				childEscalationGame === zeroAddress
-					? 0n
-					: await client.readContract({
-							address: childEscalationGame,
-							abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-							functionName: 'liquidationClaimRepByVault',
-							args: [client.account.address],
-						})
 			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalRepBalance', args: [] })
 			const denominatorBeforeLiquidation = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
 			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION * 10_000n) / (targetVaultBeforeLiquidation.securityBondAllowance * statoblastSecurityMultiplierBps)
@@ -2076,8 +2061,7 @@ describe('Peripherals: truth auction', () => {
 
 			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
 
-			const escalationRepToMove = (targetLiquidationClaimRep * actualDebtMoved) / targetVaultBeforeLiquidation.securityBondAllowance
-			const quotedRepMove = getLiquidationRepToMove(actualDebtMoved, forcedPrice, escalationRepToMove)
+			const quotedRepMove = getLiquidationRepToMove(actualDebtMoved, forcedPrice)
 			const expectedOwnershipMove = (quotedRepMove * denominatorBeforeLiquidation) / totalRepBeforeLiquidation
 			const expectedRepMove = (expectedOwnershipMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
 			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')

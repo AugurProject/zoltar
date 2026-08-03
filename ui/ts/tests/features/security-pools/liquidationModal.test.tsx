@@ -1269,7 +1269,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/claim is credited at its current REP amount against the 5%-bonus gross award/)).not.toBeNull()
+		expect(documentQueries.getByText(/Escalation claims and accrued fees stay with the target vault/)).not.toBeNull()
 		expect(documentQueries.getByText(/Free-REP surplus stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept/)).not.toBeNull()
 	})
 
@@ -1298,13 +1298,9 @@ describe('LiquidationModal', () => {
 		expect(simulation.repToMove).toBe(exactRepMoved)
 	})
 
-	test('credits the exact per-bundle claim shares moved by liquidation', () => {
+	test('leaves escalation REP with the target during liquidation', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			liquidationClaimBundles: [
-				{ bundleRep: 11n, ownerShares: 3n, totalShares: 7n },
-				{ bundleRep: 13n, ownerShares: 5n, totalShares: 9n },
-			],
-			liquidationClaimRep: 11n,
+			escalationEscrowedRep: 11n * ETH,
 			repDepositShare: 100n * ETH,
 			securityBondAllowance: 100n * ETH,
 		})
@@ -1316,21 +1312,19 @@ describe('LiquidationModal', () => {
 			targetVaultSummary,
 		})
 
-		expect(simulation.repToMove).toBe((105n * ETH) / 2n - 3n)
+		expect(simulation.repToMove).toBe((105n * ETH) / 2n)
+		expect(simulation.targetAfter.escalationEscrowedRep).toBe(11n * ETH)
+		expect(simulation.callerAfter.escalationEscrowedRep).toBe(0n)
 	})
 
-	test('renders the exact per-bundle claim REP moved', async () => {
+	test('renders the full free-REP award and retained fees', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
 			liquidationAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				liquidationClaimBundles: [
-					{ bundleRep: 11n * ETH, ownerShares: 3n, totalShares: 7n },
-					{ bundleRep: 13n * ETH, ownerShares: 5n, totalShares: 9n },
-				],
-				liquidationClaimRep: (11n * ETH * 3n) / 7n + (13n * ETH * 5n) / 9n,
+				escalationEscrowedRep: 11n * ETH,
 				repDepositShare: 100n * ETH,
 				securityBondAllowance: 100n * ETH,
 				unpaidEthFees: 7n * ETH,
@@ -1339,28 +1333,26 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
-		expect(getTransactionReviewValue('Escalation Claim REP Moved')).toBe('≈ 4.46 REP')
-		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 48.04 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 52.50 REP')
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
 	})
 
-	test('shows zero free REP when moved claims exceed the gross award', async () => {
+	test('does not credit target escalation REP against the free-REP award', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ETH }),
 			liquidationAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				liquidationClaimBundles: [{ bundleRep: 300n * ETH, ownerShares: 100n, totalShares: 100n }],
-				repDepositShare: 100n * ETH,
+				escalationEscrowedRep: 300n * ETH,
+				repDepositShare: 300n * ETH,
 				securityBondAllowance: 100n * ETH,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 105.00 REP')
-		expect(getTransactionReviewValue('Escalation Claim REP Moved')).toBe('≈ 150.00 REP')
-		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 0.00 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 105.00 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1486,6 +1478,33 @@ describe('LiquidationModal', () => {
 
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByText('Your vault would remain liquidatable after this liquidation.')).not.toBeNull()
+	})
+
+	test('does not use target escalation REP to make the caller appear healthy', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 0n,
+				repDepositShare: 23n * ETH,
+				securityBondAllowance: 0n,
+				vaultAddress: defaultCallerVaultAddress,
+			}),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 100n * ETH,
+				repDepositShare: 100n * ETH,
+				securityBondAllowance: 100n * ETH,
+				vaultAddress: defaultTargetVaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
+
+		expect(executeButton.disabled).toBe(true)
+		expect(documentQueries.getByText('Your vault would become liquidatable after this liquidation.')).not.toBeNull()
 	})
 
 	test('renders the target vault with the shared address value component', async () => {

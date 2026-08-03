@@ -1,7 +1,6 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -32,16 +31,6 @@ const QUESTION_OUTCOME_ABI = [
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
-
-function requireBigIntArray(value: unknown, context: string): bigint[] {
-	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
-	return value
-}
-
-function requireLiquidationClaimPortfolio(value: unknown): [bigint[], bigint[], bigint[]] {
-	if (!Array.isArray(value) || value.length !== 3) throw new Error('Unexpected liquidation claim portfolio response')
-	return [requireBigIntArray(value[0], 'liquidation claim bundle REP'), requireBigIntArray(value[1], 'liquidation claim owner shares'), requireBigIntArray(value[2], 'liquidation claim total shares')]
-}
 
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
@@ -137,38 +126,17 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'readContract'>,
 		args: [],
 	})
 	if (sameAddress(escalationGameAddress, zeroAddress)) {
-		return vaultAddresses.map(() => ({ escalationEscrowedRep: 0n, liquidationClaimBundles: [], liquidationClaimRep: 0n }))
+		return vaultAddresses.map(() => ({ escalationEscrowedRep: 0n }))
 	}
 	return await Promise.all(
-		vaultAddresses.map(async vaultAddress => {
-			const [escalationEscrowedRep, portfolio] = await Promise.all([
-				client.readContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					functionName: 'escrowedRepByVault',
-					address: escalationGameAddress,
-					args: [vaultAddress],
-				}),
-				client.readContract({
-					abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-					functionName: 'getLiquidationClaimPortfolio',
-					address: escalationGameAddress,
-					args: [vaultAddress],
-				}),
-			])
-			const [bundleRep, ownerShares, totalShares] = requireLiquidationClaimPortfolio(portfolio)
-			const liquidationClaimBundles = bundleRep.flatMap((currentBundleRep, index) => {
-				const currentOwnerShares = ownerShares[index]
-				const currentTotalShares = totalShares[index]
-				if (currentOwnerShares === undefined || currentTotalShares === undefined) throw new Error('Unexpected liquidation claim portfolio response')
-				if (currentTotalShares === 0n) return []
-				return [{ bundleRep: currentBundleRep, ownerShares: currentOwnerShares, totalShares: currentTotalShares }]
-			})
-			return {
-				escalationEscrowedRep,
-				liquidationClaimBundles,
-				liquidationClaimRep: liquidationClaimBundles.reduce((total, bundle) => total + (bundle.bundleRep * bundle.ownerShares) / bundle.totalShares, 0n),
-			}
-		}),
+		vaultAddresses.map(async vaultAddress => ({
+			escalationEscrowedRep: await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'escrowedRepByVault',
+				address: escalationGameAddress,
+				args: [vaultAddress],
+			}),
+		})),
 	)
 }
 
@@ -239,13 +207,11 @@ async function loadSecurityPoolVaultSummaries(
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
 			const currentEscalationData = escalationVaultData[index]
 			if (currentEscalationData === undefined) throw new Error('Unexpected escalation vault response')
-			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.escalationEscrowedRep === 0n && currentEscalationData.liquidationClaimRep === 0n) return []
+			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.escalationEscrowedRep === 0n) return []
 			const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
 			return [
 				{
 					escalationEscrowedRep: currentEscalationData.escalationEscrowedRep,
-					liquidationClaimBundles: currentEscalationData.liquidationClaimBundles,
-					liquidationClaimRep: currentEscalationData.liquidationClaimRep,
 					poolOwnership,
 					poolOwnershipDenominator,
 					repDepositShare: getRepDepositShareFromPoolOwnership({

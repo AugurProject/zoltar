@@ -1138,8 +1138,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A liquidation transfers rather than creates aggregate ownership,
-								allowance, and escalation claims. Escalation claims move by the debt fraction and their current effective REP amount is credited against the fixed 5%-bonus gross award. Only the uncovered award moves as free REP; accrued fees always remain with the target vault, while free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. The resulting liquidator must meet coverage rules;
+								A liquidation transfers rather than creates aggregate ownership and allowance. It pays the fixed 5%-bonus award entirely from free REP. Escalation claims and accrued fees always remain with the target vault, while free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. The resulting liquidator must meet coverage rules;
 								the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution must reject a target
 								whose protected ownership or allowance changed after staging, in either direction. The pool then re-evaluates health against live balances and the live REP-per-ownership rate. Target-assigned rescue collateral therefore invalidates the old quote instead of becoming collateral for a keeper who priced a smaller bundle, while an unsolicited pool-wide REP transfer cannot purchase a one-unit liquidation veto. A sufficiently large pool donation may still restore live health.
 							</div>
@@ -1163,12 +1162,12 @@
 						<summary><code>VAULT-04</code><span class="invariant-title">Escalation claims are non-tradeable and migration-neutral</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">An escalation claim has no voluntary transfer path and no parent-OI migration power. Liquidation may move a bounded proportional share to another vault, and final settlement divides payout among the bounded current owners in proportion to their claim shares. Auction retention reduces every owner of the same bundle proportionally.</div>
-							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's allowance moves half of each escalation claim, but locking that claim cannot increase the OI routed to any child.</p>
+							<div class="invariant-property">An escalation claim is permanently bound to the depositor committed in its carry leaf and has no transfer path or parent-OI migration power. Liquidation cannot read, move, or acquire it. Final settlement pays the committed depositor after proof verification and replay protection.</div>
+							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's allowance leaves every escalation claim unchanged, and locking that claim cannot increase the OI routed to any child.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
-								<div><dt>Primary evidence</dt><dd><a href="../../solidity/contracts/peripherals/EscalationGameState.sol"><code>moveEscalationClaim</code></a>, <a href="../protocol-design/liquidation.html">bundled liquidation design</a></dd></div>
+								<div><dt>Primary evidence</dt><dd><a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a>, <a href="../protocol-design/liquidation.html">liquidation design</a></dd></div>
 							</dl>
 						</div>
 					</details>
@@ -1702,11 +1701,11 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								A carried claim must authenticate an unconsumed proof for the final
-								winning outcome. The proof fixes the original claim identity, while the
-								normal winning payout follows its current liquidation owners, even when another
-								account relays the transaction.
+								winning outcome. The proof fixes the original claim identity and its
+								committed depositor, who receives the normal winning payout even when another
+								account relays the transaction. Liquidation cannot change that recipient.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Bob may relay Alice's valid winning proof; if liquidation moved half the claim to Carol, Alice and Carol receive their current shares. A losing proof cannot consume backing, and reward math may make a winning payout greater than its principal.</p>
+							<p class="invariant-example"><strong>Example:</strong> Bob may relay Alice's valid winning proof, but the payout still goes entirely to Alice as the committed depositor. A losing proof cannot consume backing, and reward math may make a winning payout greater than its principal.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>

@@ -270,8 +270,7 @@ type EscalationCarrySnapshotReplay = {
 
 export type EscalationClaimBundleReplay = {
 	claimRepShares: bigint
-	totalShares: bigint
-	ownerShares: Map<Address, bigint>
+	depositor: Address
 }
 
 export type EscalationHaircutReplay = {
@@ -971,24 +970,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		}
 		return
 	}
-	if (log.eventName === 'EscalationClaimMoved') {
-		const fromVault = requireAddress(log.args, 'fromVault')
-		const toVault = requireAddress(log.args, 'toVault')
-		const numerator = requireBigInt(log.args, 'numerator')
-		const denominator = requireBigInt(log.args, 'denominator')
-		if (numerator <= 0n || denominator <= 0n || numerator > denominator) throw new Error('escalation claim move fraction is invalid')
-		for (const bundle of state.escalationClaimBundles.get(log.emitter)?.values() ?? []) {
-			const fromShares = bundle.ownerShares.get(fromVault) ?? 0n
-			if (fromShares === 0n) continue
-			const sharesToMove = numerator === denominator ? fromShares : (fromShares * numerator) / denominator
-			if (sharesToMove === 0n) continue
-			const remainingShares = fromShares - sharesToMove
-			if (remainingShares === 0n) bundle.ownerShares.delete(fromVault)
-			else bundle.ownerShares.set(fromVault, remainingShares)
-			bundle.ownerShares.set(toVault, (bundle.ownerShares.get(toVault) ?? 0n) + sharesToMove)
-		}
-		return
-	}
 	if (log.eventName === 'GameStarted') {
 		state.escalationLifecycles.set(log.emitter, {
 			activationTime: requireBigInt(log.args, 'activationTime'),
@@ -1119,8 +1100,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		if (bundle === undefined) {
 			bundle = {
 				claimRepShares: 0n,
-				totalShares: 10n ** 18n,
-				ownerShares: new Map([[deposit.depositor, 10n ** 18n]]),
+				depositor: deposit.depositor,
 			}
 			bundles.set(deposit.depositor, bundle)
 		}

@@ -993,8 +993,8 @@
 		"width": 920
 	},
 	"fig-liquidation-punitive-flow": {
-		"ariaDescription": "Liquidation moves debt and proportional non-tradeable escalation claims from the unsafe target vault, credits current claim REP against the 5%-bonus gross award, and leaves fees and non-dust surplus with the target.",
-		"ariaLabel": "Liquidation credits moved claims against the gross REP award while target fees and non-dust surplus remain behind.",
+		"ariaDescription": "Liquidation moves debt and a 5%-bonus free-REP award from the unsafe target vault while escalation claims, fees, and non-dust surplus remain with the target.",
+		"ariaLabel": "Liquidation moves debt and a free-REP award while target claims, fees, and non-dust surplus remain behind.",
 		"height": 200,
 		"nodes": [
 			{
@@ -1029,7 +1029,7 @@
 					"x": "40",
 					"y": "50",
 					"width": "220",
-					"height": "90",
+					"height": "110",
 					"rx": "10"
 				},
 				"tag": "rect"
@@ -1071,7 +1071,21 @@
 				},
 				"children": [
 					{
-						"text": "retains fees and non-dust surplus"
+						"text": "retains claims and fees"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "150",
+					"y": "148",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "keeps non-dust surplus"
 					}
 				],
 				"tag": "text"
@@ -1093,7 +1107,7 @@
 				},
 				"children": [
 					{
-						"text": "debt + claims + uncovered REP award"
+						"text": "debt + 5%-bonus free-REP award"
 					}
 				],
 				"tag": "text"
@@ -1146,7 +1160,7 @@
 				},
 				"children": [
 					{
-						"text": "owns contingent claims"
+						"text": "receives free REP award"
 					}
 				],
 				"tag": "text"
@@ -6344,7 +6358,7 @@
 		"width": 940
 	},
 	"fig-statoblast-recursive-continuation": {
-		"ariaDescription": "A caller invokes Zoltar to fork a universe while one of its security pools has\n\t\t\t\t\t\t\t\tan unresolved escalation. Later, migration into selected child branches deploys child pools\n\t\t\t\t\t\t\t\tand initializes paused continuation games. Canonical snapshot state supplies each selected\n\t\t\t\t\t\t\t\tchild's proof baseline, aggregate REP supplies physical backing once, and\n\t\t\t\t\t\t\t\tauthenticated winning proofs pay current owners in the exact registry that created the claim. Only a\n\t\t\t\t\t\t\t\tcontinuation pool without a fixed outcome may fork again; within that\n\t\t\t\t\t\t\t\tboundary, a local non-decision or inherited threshold tie makes its game\n\t\t\t\t\t\t\t\teligible for the security-pool fork path.",
+		"ariaDescription": "A caller invokes Zoltar to fork a universe while one of its security pools has\n\t\t\t\t\t\t\t\tan unresolved escalation. Later, migration into selected child branches deploys child pools\n\t\t\t\t\t\t\t\tand initializes paused continuation games. Canonical snapshot state supplies each selected\n\t\t\t\t\t\t\t\tchild's proof baseline, aggregate REP supplies physical backing once, and\n\t\t\t\t\t\t\t\tauthenticated winning proofs pay the immutable depositor committed in each leaf. Only a\n\t\t\t\t\t\t\t\tcontinuation pool without a fixed outcome may fork again; within that\n\t\t\t\t\t\t\t\tboundary, a local non-decision or inherited threshold tie makes its game\n\t\t\t\t\t\t\t\teligible for the security-pool fork path.",
 		"ariaLabel": "Recursive fork-continuation flow",
 		"height": 520,
 		"nodes": [
@@ -6736,7 +6750,7 @@
 		"width": 980
 	},
 	"fig-statoblast-carry-snapshot": {
-		"ariaDescription": "Current balances, carry, and nullifiers form the canonical next\n\t\t\t\t\t\t\t\tsnapshot. Remaining aggregate REP funds child backing once. Winning proofs\n\t\t\t\t\t\t\t\tauthenticate original deposits while payout follows current owners; inherited losers retire without proofs.",
+		"ariaDescription": "Current balances, carry, and nullifiers form the canonical next\n\t\t\t\t\t\t\t\tsnapshot. Remaining aggregate REP funds child backing once. Winning proofs\n\t\t\t\t\t\t\t\tauthenticate original deposits and pay their committed depositors; inherited losers retire without proofs.",
 		"ariaLabel": "Separate recursive continuation accounting lanes",
 		"height": 470,
 		"nodes": [
@@ -7078,7 +7092,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tto current claim owners\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tto committed depositor\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"

@@ -115,12 +115,12 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameDepositDelegate.sol</code></td>
-							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, and <code>consumePayoutClaimBacking</code>; <code>creditClaimOwners</code> and <code>creditExternalClaimOwners</code>; node and carry-leaf creation; and their events.</td>
+							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; <code>consumeEscrowedRepForOwner</code> and <code>consumeUnresolvedRepForClaimOwners</code>; <code>creditClaimOwners</code> and <code>creditExternalClaimOwners</code>; node and carry-leaf creation; and their events.</td>
 							<td>Moving these cohesive mutation paths behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership, caller authority, or the recognized game address that emits logs.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameClaimDelegate.sol</code></td>
-							<td>Consolidated payout-owner checkpoint reads and bounded import, plus liquidation-only claim movement.</td>
+							<td>Source-to-current retention checkpoint initialization and inherited retention calculations.</td>
 							<td>One shared claim implementation keeps every game's runtime deployable while making recursive-fork work independent of ancestry depth. Delegatecall preserves the game as the state and event address.</td>
 						</tr>
 						<tr>
@@ -176,9 +176,9 @@
 					aggregate backing for the escalation's own fork. It does not allocate
 					that backing among vaults. After the child resolves, only proofs for
 					winning deposits may settle. Any caller may relay a proof through the
-					pool, while the bounded current owners of the non-tradeable claim split
-					the winning payout from the aggregate game balance. Ownership can change
-					only through a proportional liquidation bundle. Inherited losing
+					pool, while the committed depositor of the non-tradeable claim receives
+					the winning payout from the aggregate game balance. The committed
+					depositor remains the immutable payout owner. Inherited losing
 					principal becomes terminal without a per-leaf transaction; local losing
 					deposits still follow the ordinary local settlement rules.
 				</p>
@@ -210,7 +210,7 @@
 					<tbody>
 						<tr>
 							<td>Escrow totals</td>
-							<td><code>totalEscrowedRep</code> equals effective active REP locks after any auction retention. <code>escrowedRepByVault(vault)</code> sums only locally attributed claim bundles in that game. A continuation's inherited carry remains aggregate backing: its live ownership stays in the registry that created each claim, moves during liquidation, and determines payout, but receives no per-vault child health credit.</td>
+							<td><code>totalEscrowedRep</code> equals effective active REP locks after any auction retention. <code>escrowedRepByVault(vault)</code> returns only locally attributed escrow in that game. A continuation's inherited carry remains aggregate backing committed by its MMR; the leaf depositor remains the immutable payout owner, but receives no per-vault child health credit.</td>
 						</tr>
 						<tr>
 							<td>Local unresolved totals</td>
@@ -234,7 +234,7 @@
 						</tr>
 						<tr>
 							<td>Winning carried proof</td>
-							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the claim's current vault owners from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
+							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the committed depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
@@ -251,15 +251,18 @@
 					</tbody>
 				</table>
 				<p id="claim-ownership">
-					Claims are deliberately fixed-size accounting bundles rather than ERC-20 or ERC-1155 tokens. A continuation maintains one consolidated lineage checkpoint with at most 64 bundle identities globally and per vault, while each bundle has at most eight liquidation owners. Fork initialization freezes the source and retention metadata but deliberately imports no owners. Later permissionless pool calls copy at most eight bundles each, so even a full checkpoint resumes after eight calls; the auction-finalization call itself advances the first batch whenever the child is operational. The game remains paused until the checkpoint is complete, and claim movement rejects during partial import so liquidation cannot transfer debt against only a prefix. Separating import from child deployment and vault migration keeps checkpoint work out of those already-expensive transactions, while the global cap prevents Sybil-created source portfolios from imposing unbounded work on every descendant. Liquidation then scans only the current game's fixed registries, regardless of recursive-fork depth. The shared 64-bundle bound gives checkpoint continuation and atomic liquidation known ceilings. Bundle registration is bounded and idempotent: an acquired claim is not overwritten when its owner later creates a local claim, and an owner whose shares went to zero is re-enumerated if a later liquidation returns shares. Direct own-fork wallet materialization consumes the raw claim shares corresponding to that deposit's effective original principal while retaining the key and ownership metadata. With no local auction checkpoint, the raw decrement equals the original principal. After a local haircut, it is the ceiling of <code>originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining</code>, the inverse-retention conversion used when the backing was registered. The bundle reaches zero backing only after all deposits represented by it have been consumed, so descendants retain any still-live balance without crediting already paid principal again. Without those rules, a claim could become invisible to the next liquidation or retain value after payout while its liabilities continued moving. Preventing voluntary transfers keeps a participant from selling likely losing exposure while retaining the associated debt. Liquidation therefore moves the debt fraction of every live claim, credits that current claim amount against the gross 5%-bonus award, always leaves accrued fees with the target, and leaves free-REP surplus except for a remainder below the minimum-deposit floor. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand the stored owner or bundle sets.
+					Claims are non-transferable commitments rather than tokens or mutable ownership bundles. Each carry leaf commits the original depositor, outcome, amount, stable parent index, cumulative amount, and source node. A child stores only the immutable MMR peaks and leaf count, nullifier root, aggregate carry totals, and normalized retention checkpoint. It never copies per-claim or per-owner state from its parent. The fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2^64 - 1</code> leaves; it is not a 64-reporter or 64-portfolio cap. Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once. Liquidation does not inspect or move claims and therefore cannot omit, select, or acquire them. It transfers only the 5%-bonus free-REP award, while accrued fees and all escalation claims remain with the target. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand stored owner sets or impose descendant-copy work.
 				</p>
 				<p>
-					Owner-slot liveness is asymmetric by design: a partial transfer to a new owner cannot consume the last free slot, while a full close replaces the source owner in place. Fragmenting a claim can spread its risk, but it cannot buy a veto over a later full liquidation by forcing allocation of a ninth owner.
+					Claim ownership is immutable. There are no owner slots, portfolio registries, global participant caps, or ownership transitions to exhaust.
 				</p>
 				<p>
-					Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use a direct root-source checkpoint. Every continuation copies the already-consolidated payout-owner keys, so payout and liquidation perform direct lookups rather than walking ancestors. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Carry consumption allocates source-basis rounding by cumulative leaf prefixes—retained current prefix minus retained previous prefix—so every proof order telescopes to the aggregate checkpoint total without phantom residual principal. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth therefore adds neither storage traversal nor a growing liquidation loop. This matters strategically because an attacker must not be able to manufacture enough unrelated forks to disable liquidation or recover a haircut that older ancestry traversal no longer reaches. Payout is proportional in integer arithmetic: every non-final owner receives a floor, and the owner that exhausts the remaining stored shares receives the final atomic-unit residual. This makes the complete payout deterministic and prevents dust from becoming permanently locked.
+					Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use the root-source checkpoint. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Carry consumption allocates source-basis rounding by cumulative leaf prefixes—retained current prefix minus retained previous prefix—so every proof order telescopes to the aggregate checkpoint total without phantom residual principal. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth adds neither storage traversal nor a liquidation loop.
 				</p>
-				<p>The game's fallback delegates only to the shared claim module. It exposes bounded owner/checkpoint reads and bounded checkpoint import without retaining ancestry-era compatibility selectors. Auction retention is available through the game's ordinary public storage getters. Keeping one claim dispatcher makes the ABI boundary explicit and avoids preserving obsolete traversal concepts in deployed bytecode.</p>
+				<p>
+					Local deposit consumption removes the raw claim shares corresponding to that deposit's effective original principal. With no local auction checkpoint this is the original principal; after a local haircut it is the ceiling of <code>originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining</code>. This inverse-retention conversion removes the exact storage-basis backing while leaving every other unconsumed deposit intact.
+				</p>
+				<p>The game's fallback delegates retention-checkpoint calculations to the shared claim module. There are no owner, portfolio, or import selectors. Auction retention is also available through the game's ordinary public storage getters.</p>
 				<p>
 					The highest-risk paths already have regression coverage. Scenario tests
 					exercise consumed local carry leaves, constant-size unresolved-vault
@@ -336,19 +339,19 @@
 						<tbody>
 							<tr>
 								<td>Creation bytecode</td>
-								<td><code>39,981</code> bytes</td>
+								<td><code>36,188</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Deployed bytecode</td>
-								<td><code>24,529</code> bytes</td>
+								<td><code>23,924</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Project deployed-bytecode budget headroom</td>
-								<td><code>47</code> bytes below <code>24,576</code></td>
+								<td><code>652</code> bytes below <code>24,576</code></td>
 							</tr>
 							<tr>
 								<td>EIP-170 headroom</td>
-								<td><code>47</code> bytes below <code>24,576</code></td>
+								<td><code>652</code> bytes below <code>24,576</code></td>
 							</tr>
 						</tbody>
 					</table>

@@ -9,25 +9,9 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
-import { MAX_CLAIM_OWNERS_PER_BUNDLE } from './EscalationGameTypes.sol';
 import { EscalationMigrationEntitlement, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
-interface IEscalationClaimReader {
-	function getClaimOwner(
-		address bundleId,
-		uint256 ownerIndex
-	) external view returns (address ownerAddress, uint256 ownerShares, uint256 totalShares);
-}
-
 contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
-	struct ClaimSplitState {
-		uint256 remainingSourcePrincipal;
-		uint256 remainingChildRep;
-		uint256 remainingShares;
-		uint256 totalShares;
-		bool claimingVaultOwnsClaim;
-	}
-
 	event EscalationMigrationEntitlementInitialized(
 		ISecurityPool indexed parent,
 		address indexed vault,
@@ -117,17 +101,14 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 				depositIndex,
 				outcomeIndex
 			);
-			if (
-				!_recordAndExportCurrentClaimOwners(
-					escalationGame,
-					childEscalationGame,
-					depositor,
-					vault,
-					outcomeIndex,
-					sourcePrincipal,
-					amountToWithdraw
-				)
-			) revert();
+			if (depositor != vault) revert();
+			childEscalationGame.recordForkedEscrowForOutcome(
+				depositor,
+				outcomeIndex,
+				sourcePrincipal,
+				amountToWithdraw
+			);
+			childEscalationGame.exportForkedEscrowByOutcome(depositor, depositor);
 			uint256 stableParentDepositIndex = depositIndex;
 			if (escalationGame.forkContinuation()) {
 				if (depositIndex >= (uint256(1) << 88)) revert();
@@ -145,42 +126,6 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			totalRepMigrated += amountToWithdraw;
 			totalSourcePrincipal += sourcePrincipal;
 		}
-	}
-
-	function _recordAndExportCurrentClaimOwners(
-		EscalationGame sourceGame,
-		EscalationGame childGame,
-		address bundleId,
-		address claimingVault,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 sourcePrincipal,
-		uint256 childRep
-	) private returns (bool) {
-		ClaimSplitState memory state = ClaimSplitState(sourcePrincipal, childRep, 0, 0, false);
-		for (uint256 ownerIndex = 0; ownerIndex < MAX_CLAIM_OWNERS_PER_BUNDLE; ownerIndex++) {
-			(address ownerAddress, uint256 shares, uint256 bundleTotalShares) = IEscalationClaimReader(
-				address(sourceGame)
-			).getClaimOwner(bundleId, ownerIndex);
-			if (state.totalShares == 0) {
-				state.totalShares = bundleTotalShares;
-				state.remainingShares = bundleTotalShares;
-			}
-			if (ownerAddress == address(0x0) || shares == 0) continue;
-			if (ownerAddress == claimingVault) state.claimingVaultOwnsClaim = true;
-			uint256 ownerSourcePrincipal =
-				shares == state.remainingShares
-					? state.remainingSourcePrincipal
-					: (sourcePrincipal * shares) / state.totalShares;
-			uint256 ownerChildRep =
-				shares == state.remainingShares ? state.remainingChildRep : (childRep * shares) / state.totalShares;
-			state.remainingSourcePrincipal -= ownerSourcePrincipal;
-			state.remainingChildRep -= ownerChildRep;
-			state.remainingShares -= shares;
-			childGame.recordForkedEscrowForOutcome(ownerAddress, outcome, ownerSourcePrincipal, ownerChildRep);
-			childGame.exportForkedEscrowByOutcome(ownerAddress, ownerAddress);
-		}
-		if (state.totalShares == 0 || state.remainingSourcePrincipal != 0 || state.remainingChildRep != 0) revert();
-		return state.claimingVaultOwnsClaim;
 	}
 
 	function migrateVaultWithUnresolvedEscalation(

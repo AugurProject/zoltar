@@ -11,24 +11,24 @@
 			<header>
 				<h1>Liquidation Design</h1>
 				<p>
-					Liquidation transfers security-bond allowance from an unsafe vault to a healthy vault. The protocol computes a gross REP award with a fixed 5% bonus, credits the matching fraction of every non-tradeable escalation claim against it, and transfers only the uncovered award as free REP. Accrued vault fees never transfer. Free-REP surplus remains with the target unless a nonzero remainder would fall below the minimum deposit, in which case that dust remainder is swept.
+					Liquidation transfers security-bond allowance from an unsafe vault to a healthy vault. The protocol computes a REP award with a fixed 5% bonus and transfers that award entirely as free REP. Non-tradeable escalation claims and accrued vault fees never transfer. Free-REP surplus remains with the target unless a nonzero remainder would fall below the minimum deposit, in which case that dust remainder is swept.
 				</p>
 			</header>
 
 			<section id="position-model">
 				<h2>Position Model and Actors</h2>
 				<p>
-					The <dfn>target vault</dfn> is the unsafe position being reduced, and the <dfn>liquidator vault</dfn> is the healthy position accepting its liabilities. Each vault can hold an ETH-denominated security-bond allowance, free REP represented by pool ownership, and non-tradeable escalation claims. Locally attributed escrow records REP deposited by that vault in the current game and counts toward current-game health. The consolidated payout checkpoint is broader: it records every local or inherited claim bundle that can eventually pay the vault, but inherited continuation backing does not receive per-vault health credit.
+					The <dfn>target vault</dfn> is the unsafe position being reduced, and the <dfn>liquidator vault</dfn> is the healthy position accepting its liabilities. Each vault can hold an ETH-denominated security-bond allowance, free REP represented by pool ownership, accrued fees, and non-tradeable escalation claims. Locally attributed escrow records REP deposited by that vault in the current game and counts toward current-game health. Inherited continuation backing remains aggregate until a committed deposit proof is settled and does not receive per-vault child health credit.
 				</p>
 				<p>
-					Execution first quotes the debt slice, floors the shares moved from each payout bundle, and values exactly those moved shares in current REP units. That claim value is credited against the bonus-priced gross award; free REP supplies only the uncovered remainder. The resulting target and liquidator positions must then satisfy their applicable minimum-balance rules, and the liquidator must remain healthy.
+					Execution quotes the debt slice and its fixed 5%-bonus REP award. Only free REP moves with the debt. Accrued fees and escalation claims stay with the target vault, and the liquidator must remain healthy after assuming the debt and receiving the free-REP award.
 				</p>
 			</section>
 
 			<section id="rule">
 				<h2>Two Health Conditions</h2>
 				<p>
-					Ordinary underwriting counts free REP and locally attributed escrow in the current game because both remain pool-associated security capital. Inherited continuation backing stays aggregate, while each continuation copies current payout ownership into one consolidated checkpoint. Liquidation therefore moves claims from the current game only, and those claims control eventual payout without receiving per-vault child health credit. Migration safety counts only free REP because every locked escalation claim can lose and therefore cannot credibly choose a child universe for parent open interest.
+					Ordinary underwriting counts free REP and locally attributed escrow in the current game because both remain pool-associated security capital. Inherited continuation backing stays aggregate and is settled from committed deposit proofs. Liquidation never moves a claim. Migration safety counts only free REP because every locked escalation claim can lose and therefore cannot credibly choose a child universe for parent open interest.
 				</p>
 				<p>
 					These tests apply to each affected vault. Aggregate pool backing is checked separately, so a well-backed pool cannot conceal an individually unsafe vault and one weak vault does not misstate the pool-wide reserve.
@@ -51,70 +51,61 @@
 			<section id="punitive-liquidation">
 				<span id="bundled-liquidation"></span>
 				<h2>Bonus-Priced Liquidation</h2>
-				<p>For a target allowance <code>A</code> and moved allowance <code>D</code>, escalation claim ownership moves by <code>f = D / A</code>. The claim's current effective REP amount is credited at face value against the fixed 5%-bonus gross award. Only a positive remainder is paid as free REP; earned ETH fees are outside the liquidated position.</p>
-				<div class="equation" id="eq-liquidation-bundle">
-					<math display="block" aria-label="the economic liquidation fraction equals moved debt divided by target allowance" data-source="f = debtMoved / targetAllowance">
-						<mrow><mi>f</mi><mo>=</mo><mfrac><mi>debtMoved</mi><mi>targetAllowance</mi></mfrac></mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Claim fraction</span>Every non-tradeable escalation claim uses the debt fraction.</p>
-				</div>
+				<p>For moved allowance <code>D</code>, the liquidator receives the fixed 5%-bonus award entirely as free REP. Escalation claims and earned ETH fees are outside the liquidated position.</p>
 				<div class="equation" id="eq-liquidation-rep-bonus">
-					<math display="block" aria-label="the gross liquidation REP award equals debt moved times the settled REP per ETH price times the basis point denominator plus the liquidation bonus, divided by price precision times the basis point denominator, rounded up; moved claim REP is credited before any uncovered free REP is transferred" data-source="bonusRepQuote = ⌈debtMoved * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉">
+					<math display="block" aria-label="the liquidation REP award equals debt moved times the settled REP per ETH price times the basis point denominator plus the liquidation bonus, divided by price precision times the basis point denominator, rounded up" data-source="bonusRepQuote = ⌈debtMoved * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉">
 						<mrow><mi>bonusRepQuote</mi><mo>=</mo><mo>&#x2308;</mo><mfrac><mrow><mi>debtMoved</mi><mo>&#x22C5;</mo><mi>repEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>LIQUIDATION_REP_BONUS_BPS</mi><mo>)</mo></mrow><mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow></mfrac><mo>&#x2309;</mo></mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Gross liquidation award</span>Debt and output use atomic token units; <code>repEthPrice</code> is scaled by <code>PRICE_PRECISION = 10¹⁸</code>, and the 500 BPS bonus is applied over <code>BPS_DENOMINATOR = 10,000</code>. The free-REP quote is <code>max(0, bonusRepQuote - movedClaimRep)</code>.</p>
+					<p class="equation-caption"><span class="equation-label">Liquidation award</span>Debt and output use atomic token units; <code>repEthPrice</code> is scaled by <code>PRICE_PRECISION = 10¹⁸</code>, and the 500 BPS bonus is applied over <code>BPS_DENOMINATOR = 10,000</code>.</p>
 				</div>
 				<p>
-					After claim credit, integer execution converts the remaining free-REP quote to ownership with a floor and converts it back to the reported REP amount with another floor. The <code>repAmountMoved</code> field in <code>VaultLiquidated</code> reports this final post-conversion amount. Full and dust-promoted closes use the same capped award, transferring all free REP only when the target remainder would otherwise violate the minimum-deposit floor.
+					Integer execution converts the free-REP quote to ownership with a floor and converts it back to the reported REP amount with another floor. The <code>repAmountMoved</code> field in <code>VaultLiquidated</code> reports this final post-conversion amount. Full and dust-promoted closes use the same award, transferring all free REP only when the target remainder would otherwise violate the minimum-deposit floor.
 				</p>
 				<figure class="diagram" id="fig-liquidation-punitive-flow">
-					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="860" data-plot-height="220" role="img" aria-label="Liquidation moves debt and proportional escalation claims, credits those claims against the 5% bonus-priced gross award, and leaves target fees and non-dust surplus behind"><span class="plot-chart-fallback">Liquidation assumes debt and takes proportional escalation claims. Their current REP amount reduces the free-REP award. Accrued fees and non-dust surplus stay with the target vault.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Liquidation transfer</span>Claims follow debt; fees stay with their earner.</p>
+					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="860" data-plot-height="220" role="img" aria-label="Liquidation moves debt and a 5% bonus-priced free-REP award while target escalation claims, fees, and non-dust surplus remain"><span class="plot-chart-fallback">Liquidation assumes debt and takes a 5%-bonus free-REP award. Escalation claims, accrued fees, and non-dust surplus stay with the target vault.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Liquidation transfer</span>Debt and free REP move; claims and fees stay with their owner.</p>
 				</figure>
 				<ul>
 					<li>Debt is capped by the requested and available allowance; debt-dust or REP-dust rules can promote the slice to a full close.</li>
-					<li>The gross award is quoted with an atomic-unit ceiling; the exact current REP represented by the shares actually moved from each bundle is summed and deducted before free REP is converted to pool ownership with a floor and then back to the reported amount.</li>
-					<li>Each escalation bundle independently floors the owner shares moved by <code>f</code>.</li>
-					<li>Residual integer dust normally stays with the target. A bundle whose share calculation floors to zero is left unchanged while other bundles and the debt slice move; it contributes zero claim credit. A full close transfers each remaining stored balance exactly. Exhausted bounded claim-owner capacity still reverts instead of silently omitting a claim.</li>
+					<li>The award is quoted with an atomic-unit ceiling, converted to pool ownership with a floor, and converted back to the reported free-REP amount.</li>
 					<li>The target retains all accrued unpaid fees, including fees checkpointed immediately before liquidation.</li>
-					<li>The same fraction of every escalation claim changes vault ownership, while the underlying REP stays locked in the game.</li>
-					<li>If a transferred claim wins, the game divides payout among its bounded current vault owners in proportion to their claim shares; non-final owners receive floored integer amounts and the final share-exhausting owner receives the atomic-unit remainder. If it loses, that part of the bundle pays nothing.</li>
-					<li>A full liquidation uses <code>f = 1</code> and transfers every escalation claim, but leaves free REP above the uncovered gross award and all accrued fees with the target unless the free-REP remainder would be nonzero below <code>MIN_REP_DEPOSIT</code>; only that dust case sweeps the remainder.</li>
+					<li>Every escalation claim remains owned by its committed depositor and pays only that vault if it wins.</li>
+					<li>A full liquidation moves all allowance and the free-REP award, but leaves escalation claims, accrued fees, and free REP above the award with the target unless the free-REP remainder would be nonzero below <code>MIN_REP_DEPOSIT</code>; only that dust case sweeps the remainder.</li>
 				</ul>
 				<p>
-					There is no user transfer or approval function for escalation claims. Liquidation is the only ownership-change path, and settlement is the only payout path. This prevents a secondary market from separating likely winners from liabilities while still allowing an unsafe vault to be resolved.
+					There is no transfer or approval function for escalation claims. The claim remains bound to the depositor committed in the carry leaf, and settlement is its only payout path.
 				</p>
 				<p>
-					A vault also cannot add another deposit to the same game after liquidation has split or fully moved its claim bundle. Deposits from one vault share one fixed bundle identity, so aggregating fresh principal after a split would give the old liquidator shares in capital it never acquired. Rejecting the deposit preserves the bargain made at liquidation: transferred shares cover only claims that already existed. The vault may participate again in a later game with a fresh bundle, and every existing owner can still claim this game's final payout.
+					Because claim ownership cannot change, a vault can continue reporting in the same game without owner-slot or per-vault bundle limits. Each carry leaf independently commits its depositor, outcome, amount, stable index, cumulative amount, and source node.
 				</p>
 				<p>
-					Claim credit follows the registry's exact integer result, bundle by bundle. A sub-share remainder stays with the target and is not credited to the liquidator; this lets a tiny fragmented claim coexist with liquidation of the target's economically meaningful claims without overstating the transferred compensation.
+					Liquidation does not inspect or value this claim commitment. Its gas cost is independent of the target's reporter count, portfolio size, and fork depth.
 				</p>
 			</section>
 
 			<section id="incentives">
 				<span id="game-theory"></span>
-				<h2>Why Cherry-picking Is Forbidden</h2>
+				<h2>Why Claims Stay Put</h2>
 				<p>
-					If liquidators could take only free REP, rational actors would leave likely losing claims and debt behind. The original vault would become a toxic remainder and liquidation would amplify adverse selection instead of transferring risk. Moving the debt fraction of every escalation claim prevents that cherry-picking, while fee isolation preserves compensation already earned by the target.
+					A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them. Its compensation is the deterministic 105% free-REP award for assuming debt; the target retains both the upside and downside of every report it originated.
 				</p>
 				<p>
-					Escalation claim movement is path-independent apart from integer floors. On every execution, the moved claim's current REP amount reduces the price-based gross award before free-REP ownership conversion. A liquidator must remain healthy after accepting the debt and collateral.
+					This separation also keeps settlement identity simple: the committed depositor remains the payout address at every fork depth. A liquidator must remain healthy after accepting the debt and free REP.
 				</p>
 				<p>
 					A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or the full remainder. Requiring instant target health would make many partial liquidations impossible and would force every keeper to finance a full close.
 				</p>
 				<p>
-					The 105% quote caps the free-REP supplementation target, not the mandatory claim transfer. The complete proportional claim portfolio still moves and can exceed that quote; when it does, the liquidator receives no additional free REP. When claims do not cover the quote, the uncovered 5% margin compensates execution risk, gas, and capital. Accrued ETH fees are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept.
+					The 105% quote is paid from free REP and compensates execution risk, gas, and capital. Accrued ETH fees and escalation claims are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept.
 				</p>
 			</section>
 
 			<section id="bounded-execution">
 				<h2>Bounded Execution</h2>
 				<p>
-					Liquidation reads one consolidated current-game checkpoint and fixed-size bundle and owner registries. Claim movement rejects while a continuation checkpoint is incomplete, so debt cannot move against only an imported prefix. The canonical <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">64-bundle global and per-vault checkpoint cap, eight-owner cap, eight-bundle import batch, and internal scan limits</a> avoid unbounded Solidity loops and make worst-case gas knowable. A maximum checkpoint therefore needs exactly eight continuation calls. Reaching a cap rejects another bundle rather than creating unbounded descendant work.
+					Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.
 				</p>
-				<p>Those limits apply to ownership changes and liquidation. Separate settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas; they cannot create more bundles or owners.</p>
+				<p>Settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas. They consume committed leaves with replay protection and do not create owner registries.</p>
 			</section>
 
 			<section id="queue-semantics">

@@ -556,14 +556,11 @@ describe('event-only replay', () => {
 		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.amount !== 4n) throw new Error('second coordinator operation counter collided')
 	})
 
-	test('escalation claim replay preserves bounded fractional ownership and truth-auction retention', () => {
+	test('escalation claim replay preserves immutable depositors and truth-auction retention', () => {
 		const game: Address = '0x1111111111111111111111111111111111111111'
 		const firstVault: Address = '0x2222222222222222222222222222222222222222'
 		const secondVault: Address = '0x3333333333333333333333333333333333333333'
-		const liquidatorOne: Address = '0x4444444444444444444444444444444444444444'
-		const liquidatorTwo: Address = '0x5555555555555555555555555555555555555555'
 		const postResumeVault: Address = '0x6666666666666666666666666666666666666666'
-		const shareScale = 10n ** 18n
 		const logs = [
 			createReplayLog({
 				emitter: game,
@@ -601,30 +598,6 @@ describe('event-only replay', () => {
 				logIndex: 5,
 				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, repAmount: 1n, parentDepositIndex: 0n, cumulativeRepAmount: 1n },
 			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'EscalationClaimMoved',
-				logIndex: 6,
-				args: { fromVault: firstVault, toVault: liquidatorOne, numerator: 1n, denominator: 3n },
-			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'EscalationClaimMoved',
-				logIndex: 7,
-				args: { fromVault: firstVault, toVault: liquidatorTwo, numerator: 1n, denominator: shareScale + 1n },
-			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'EscalationClaimMoved',
-				logIndex: 8,
-				args: { fromVault: firstVault, toVault: liquidatorTwo, numerator: 1n, denominator: 2n },
-			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'EscalationClaimMoved',
-				logIndex: 9,
-				args: { fromVault: firstVault, toVault: liquidatorOne, numerator: 1n, denominator: 1n },
-			}),
 		]
 
 		const replayed = replayZoltarEvents(logs)
@@ -633,49 +606,14 @@ describe('event-only replay', () => {
 		const secondBundle = bundles?.get(secondVault)
 		const postResumeBundle = bundles?.get(postResumeVault)
 		if (firstBundle === undefined || secondBundle === undefined || postResumeBundle === undefined) throw new Error('claim bundles missing')
-		expect(firstBundle.ownerShares.get(firstVault)).toBeUndefined()
-		expect(firstBundle.ownerShares.get(liquidatorOne)).toBe(666_666_666_666_666_667n)
-		expect(firstBundle.ownerShares.get(liquidatorTwo)).toBe(333_333_333_333_333_333n)
-		expect(secondBundle.ownerShares.get(secondVault)).toBe(shareScale)
+		expect(firstBundle.depositor).toBe(firstVault)
+		expect(secondBundle.depositor).toBe(secondVault)
 		expect((firstBundle.claimRepShares * 90n) / 150n).toBe(60n)
 		expect((secondBundle.claimRepShares * 90n) / 150n).toBe(30n)
 		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(90n)
 		expect(replayed.escalationResolutionBalances.get(game)).toEqual([1n, 60n, 30n])
 		expect(postResumeBundle.claimRepShares).toBe(2n)
 		expect((postResumeBundle.claimRepShares * 90n) / 150n).toBe(1n)
-	})
-
-	test('post-snapshot root claim movement leaves descendant proof state immutable', () => {
-		const rootGame: Address = '0x1111111111111111111111111111111111111111'
-		const childGame: Address = '0x2222222222222222222222222222222222222222'
-		const originalVault: Address = '0x3333333333333333333333333333333333333333'
-		const currentOwner: Address = '0x4444444444444444444444444444444444444444'
-		const zeroHash = `0x${'0'.repeat(64)}` as Hex
-		const leaf = hashCarryLeaf(originalVault, 1n, 10n, 0n, 10n, 1n)
-		const replayed = replayZoltarEvents([
-			createReplayLog({ emitter: rootGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
-			createReplayLog({ emitter: rootGame, eventName: 'LocalDepositAppended', logIndex: 1, args: { nodeId: 1n, outcome: 1n, depositor: originalVault, repAmount: 10n, parentDepositIndex: 0n, cumulativeRepAmount: 10n } }),
-			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 0n } }),
-			createReplayLog({
-				emitter: childGame,
-				eventName: 'ForkCarryCheckpoint',
-				logIndex: 3,
-				args: {
-					sourceGame: rootGame,
-					snapshotId: zeroHash,
-					carryRoots: [zeroHash, leaf, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
-					leafCounts: [0n, 1n, 0n],
-					unresolvedTotals: [0n, 10n, 0n],
-					resolutionBalances: [0n, 10n, 0n],
-				},
-			}),
-			createReplayLog({ emitter: rootGame, eventName: 'EscalationClaimMoved', logIndex: 4, args: { fromVault: originalVault, toVault: currentOwner, numerator: 1n, denominator: 1n } }),
-		])
-
-		expect(replayed.escalationCarryRoots.get(childGame)).toEqual([zeroHash, leaf, zeroHash])
-		expect(replayed.escalationClaimBundles.get(rootGame)?.get(originalVault)?.ownerShares.get(originalVault)).toBeUndefined()
-		expect(replayed.escalationClaimBundles.get(rootGame)?.get(originalVault)?.ownerShares.get(currentOwner)).toBe(10n ** 18n)
 	})
 
 	test('local carry consumption updates peaks before a recursive fork checkpoint', () => {

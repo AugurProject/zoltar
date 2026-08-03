@@ -88,10 +88,6 @@ contract EscalationGameProofTestSecurityPool {
 		return escalationGame.recordDepositFromSecurityPool(depositor, outcome, amount, expectedCumulativeAmount);
 	}
 
-	function moveEscalationClaim(address fromVault, address toVault, uint256 numerator, uint256 denominator) external {
-		escalationGame.moveEscalationClaim(fromVault, toVault, numerator, denominator);
-	}
-
 	function applyTruthAuctionHaircut(uint256 repToRemove) external {
 		escalationGame.applyTruthAuctionHaircut(repToRemove);
 	}

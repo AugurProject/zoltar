@@ -257,9 +257,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		);
 		forkCarrySourceGame = sourceGame;
 		if (sourceGame != address(0x0)) {
-			_delegateClaimCall(
-				abi.encodeCall(EscalationGameClaimDelegate.initializeForkPayoutClaimCheckpoint, (sourceGame))
-			);
+			_delegateClaimCall(abi.encodeCall(EscalationGameClaimDelegate.initializeForkClaimCheckpoint, (sourceGame)));
 		}
 		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) {
 			emit InheritedThresholdTie(sourceGame);
@@ -500,8 +498,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		uint256 sourceRetainedAmount = _applyInheritedSourceRetention(amount, parentDepositIndex);
 		require(
-			_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal >=
-				_applyTruthAuctionRetention(sourceRetainedAmount),
+			_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal >= sourceRetainedAmount,
 			'Carried REP low'
 		);
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;

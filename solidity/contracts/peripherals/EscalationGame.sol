@@ -49,18 +49,6 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function resumeFromFork() external {
-		if (forkCarrySourceGame != address(0x0)) {
-			(bool countSuccess, bytes memory countData) = forkCarrySourceGame.staticcall(
-				abi.encodeWithSignature('payoutClaimBundleCount()')
-			);
-			if (
-				countSuccess &&
-				countData.length == 32 &&
-				forkCarryPayoutClaimImportCursor < abi.decode(countData, (uint256))
-			) {
-				_delegateClaimCall(abi.encodeCall(EscalationGameClaimDelegate.importForkPayoutClaims, (8)));
-			}
-		}
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
 	}
 

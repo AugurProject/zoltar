@@ -9,8 +9,8 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 
 	function resumeForkedEscalationGame() external {
-		// This is permissionless for liveness, but each game call imports no more
-		// than its fixed checkpoint batch. The fork itself must already be final.
+		// This is permissionless for liveness. The immutable carry commitment was
+		// installed during child initialization, so resumption does no unbounded work.
 		if (!awaitingForkContinuation || systemState != SystemState.Operational) revert();
 		escalationGame.resumeFromFork();
 		if (escalationGame.forkResumedAt() == 0) return;
@@ -51,28 +51,18 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		if (debtRemaining > 0 && debtRemaining < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT) {
 			candidateDebtToMove = snapshotTargetAllowance;
 		}
-		uint256 claimRepToMove =
-			address(escalationGame) == address(0x0)
-				? 0
-				: _previewLiquidationClaimRep(targetVault, candidateDebtToMove, snapshotTargetAllowance);
 		(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
 			securityVaults[targetVault].poolOwnership,
 			snapshotTargetAllowance,
-			claimRepToMove,
 			candidateDebtToMove,
 			repEthPrice,
 			pool.getTotalRepBalance(),
 			poolOwnershipDenominator
 		);
 		if (debtToMove != candidateDebtToMove) {
-			claimRepToMove =
-				address(escalationGame) == address(0x0)
-					? 0
-					: _previewLiquidationClaimRep(targetVault, debtToMove, snapshotTargetAllowance);
 			(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
 				securityVaults[targetVault].poolOwnership,
 				snapshotTargetAllowance,
-				claimRepToMove,
 				debtToMove,
 				repEthPrice,
 				pool.getTotalRepBalance(),
@@ -86,17 +76,6 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		securityVaults[targetVault].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
-		if (address(escalationGame) != address(0x0)) {
-			// The current game carries a consolidated payout-owner checkpoint for
-			// the complete fork lineage, so liquidation never walks fork ancestry.
-			_moveEscalationClaim(
-				address(escalationGame),
-				targetVault,
-				callerVault,
-				debtToMove,
-				snapshotTargetAllowance
-			);
-		}
 		uint256 callerEscalationRep;
 		if (address(escalationGame) != address(0x0)) {
 			try escalationGame.escrowedRepByVault(callerVault) returns (uint256 claimRep) {
@@ -115,41 +94,5 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			),
 			'Caller bad'
 		);
-	}
-
-	function _previewLiquidationClaimRep(
-		address vault,
-		uint256 numerator,
-		uint256 denominator
-	) private view returns (uint256 amount) {
-		(bool success, bytes memory result) = address(escalationGame).staticcall(
-			abi.encodeWithSignature(
-				'previewLiquidationClaimRep(address,uint256,uint256)',
-				vault,
-				numerator,
-				denominator
-			)
-		);
-		require(success && result.length == 32, 'Claim balance failed');
-		return abi.decode(result, (uint256));
-	}
-
-	function _moveEscalationClaim(
-		address game,
-		address fromVault,
-		address toVault,
-		uint256 numerator,
-		uint256 denominator
-	) private {
-		(bool claimMoved, ) = game.call(
-			abi.encodeWithSignature(
-				'moveEscalationClaim(address,address,uint256,uint256)',
-				fromVault,
-				toVault,
-				numerator,
-				denominator
-			)
-		);
-		require(claimMoved, 'Claim move failed');
 	}
 }

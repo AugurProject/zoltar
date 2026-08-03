@@ -21,6 +21,12 @@ test('security-pool count summaries own their complete prose', () => {
 	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault address above to inspect any specific vault.')
 })
 
+test('reporting risk copy keeps escalation claims with their committed depositor', () => {
+	expect(reportingCopy.escalationClaimNonTradeableDetail).toContain('remain with their committed depositor through liquidation')
+	expect(reportingCopy.escalationClaimNonTradeableDetail).toContain('truth auction can proportionally reduce both principal and reward')
+	expect(reportingCopy.escalationClaimNonTradeableDetail).not.toContain('can move')
+})
+
 test('market and Open Oracle values own their complete spacing and units', () => {
 	expect(marketCopy.selectedForkQuestionSummary).toBe('Selected fork question')
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.secondsAbbreviation)).toBe('12 s')
