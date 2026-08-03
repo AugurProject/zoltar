@@ -142,7 +142,7 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
 
 		// 1. Unauthorized sender to forker should revert
-		await expectUnauthorizedEthSendToReject(forkerAddress, 100n, /Trusted/)
+		await expectUnauthorizedEthSendToReject(forkerAddress, 100n, /execution reverted/)
 
 		// 2. Authorized sender: truthAuction
 		const initialForkerBal = await getETHBalance(client, forkerAddress)

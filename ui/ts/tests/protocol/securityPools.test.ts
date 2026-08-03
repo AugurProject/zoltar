@@ -271,6 +271,7 @@ describe('securityPools protocol client', () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2')] as const
+		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
 		const loadedVaultAddresses: Address[] = []
 		let securityVaultSummaryBatchCount = 0
 		const client = createMockLoaderClient({
@@ -314,7 +315,8 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'getActiveVaultCount') return 2n
 				if (request.functionName === 'getActiveVaults') return previewVaultAddresses
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
-				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
 				if (request.functionName === 'getTotalRepBalance') return 100n
 				if (request.functionName === 'poolOwnershipDenominator') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -329,6 +331,7 @@ describe('securityPools protocol client', () => {
 		expect(securityVaultSummaryBatchCount).toBe(1)
 		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
+		expect(pool.vaults.map(vault => vault.escalationEscrowedRep)).toEqual([5n, 6n])
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {

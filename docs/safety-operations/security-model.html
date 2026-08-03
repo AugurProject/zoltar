@@ -780,7 +780,9 @@
 						<p>
 							The selected parameter relationships keep the fork threshold and
 							haircut economically meaningful, the initial escalation deposit
-							affordable, the liquidation multiplier above one plus the bonus, the
+							affordable, the pool multiplier and effective free-REP multiplier
+							large enough for their distinct coverage roles, the effective free-REP
+							multiplier at least the 10,500-BPS liquidation-award reserve, the
 							oracle target error profitable to correct after fees and gas, dispute
 							and settlement windows usable, and callback and transition gas
 							executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is
@@ -944,6 +946,10 @@
 						<strong>EG05.</strong>
 						The immutable protocol has no administrator who can pause, upgrade, roll
 						back, or rescue an unsafe deployment after launch.
+					</li>
+					<li id="excluded-guarantee-eg06">
+						<strong>EG06.</strong>
+						Escalation principal and expected rewards are not senior to open-interest repair. A child truth auction may proportionally reduce them, and a losing escalation claim pays its committed depositor nothing.
 					</li>
 				</ul>
 			</section>

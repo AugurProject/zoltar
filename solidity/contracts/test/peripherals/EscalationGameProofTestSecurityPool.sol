@@ -46,6 +46,10 @@ contract EscalationGameProofTestSecurityPool {
 		escalationGame = game;
 	}
 
+	function resumeEscalationGameFromFork() external {
+		escalationGame.resumeFromFork();
+	}
+
 	function repToken() external view returns (ReputationToken) {
 		return zoltar.getRepToken(universeId);
 	}
@@ -82,6 +86,10 @@ contract EscalationGameProofTestSecurityPool {
 		uint256 expectedCumulativeAmount
 	) external returns (uint256 parentDepositIndex) {
 		return escalationGame.recordDepositFromSecurityPool(depositor, outcome, amount, expectedCumulativeAmount);
+	}
+
+	function applyTruthAuctionHaircut(uint256 repToRemove) external {
+		escalationGame.applyTruthAuctionHaircut(repToRemove);
 	}
 
 	function initializeForkCarrySnapshot(

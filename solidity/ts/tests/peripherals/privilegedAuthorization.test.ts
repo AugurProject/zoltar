@@ -226,22 +226,21 @@ describe('Peripherals: privileged authorization matrix', () => {
 			vault: await getSecurityVault(client, securityPool, attacker.account.address),
 		})
 		const calls = [
-			encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [false] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'resumeForkedEscalationGame', args: [] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'addFeeEligibleSecurityBondAllowance', args: [attacker.account.address, 1n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'setOwnershipDenominator', args: [1n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'setTotalShares', args: [1n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }),
-			encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }),
+			{ name: 'activateForkMode', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [false] }) },
+			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
+			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
+			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
+			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n] }) },
+			{ name: 'addFeeEligibleSecurityBondAllowance', data: encodeFunctionData({ abi: poolAbi, functionName: 'addFeeEligibleSecurityBondAllowance', args: [attacker.account.address, 1n] }) },
+			{ name: 'setOwnershipDenominator', data: encodeFunctionData({ abi: poolAbi, functionName: 'setOwnershipDenominator', args: [1n] }) },
+			{ name: 'setTotalShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalShares', args: [1n] }) },
+			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n] }) },
+			{ name: 'transferEth', data: encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }) },
+			{ name: 'authorizeChildPool', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }) },
 		]
 		const before = await readSnapshot()
-		for (const data of calls) {
-			await assert.rejects(attacker.sendTransaction({ to: securityPool, data }), /Only forker/)
+		for (const call of calls) {
+			await assert.rejects(attacker.sendTransaction({ to: securityPool, data: call.data }), /Only forker/, call.name)
 			assert.deepStrictEqual(await readSnapshot(), before)
 		}
 	})

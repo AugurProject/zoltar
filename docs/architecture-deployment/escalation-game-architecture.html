@@ -21,8 +21,8 @@
 				<p>
 					The main boundary starts with one shared storage layout. The inherited
 					game stack owns most counters, escrow, carry state, and settlement
-					effects. Deposit intake runs through a layout-compatible
-					<code>EscalationGameDepositDelegate</code> using <code>delegatecall</code>,
+					effects. Size-sensitive mutation paths run through layout-compatible
+					<code>EscalationGameDepositDelegate</code> and <code>EscalationGameClaimDelegate</code> modules using <code>delegatecall</code>,
 					so those writes still land in the game. The external
 					<code>EscalationGameProofVerifier</code> owns storage-free proof and
 					logarithm helpers. That separation keeps verification math reusable and
@@ -43,14 +43,14 @@
 					The first question in this stack is always ownership: which file is
 					allowed to mutate which part of the game. The state-owning modules form
 					one inheritance ladder over <code>EscalationGameStorage</code>. The
-					deposit delegate uses the same layout and may mutate it only while the
+					deposit and claim delegates use the same layout and may mutate it only while the
 					game invokes it with <code>delegatecall</code>. The proof verifier stays
 					outside both mutation paths because it should never write live game
 					state.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split">
-					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
+					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, deposit and claim delegates, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. Deposit and claim delegates use the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit and claim delegates mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
 					<math display="block" aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal">
@@ -80,7 +80,7 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameStorage.sol</code></td>
-							<td>The storage layout shared by the inherited game stack and deposit delegate.</td>
+							<td>The storage layout shared by the inherited game stack and both mutation delegates.</td>
 							<td>Keeping the layout in one base contract makes delegate writes target the same slots as direct game writes.</td>
 						</tr>
 						<tr>
@@ -110,13 +110,18 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGame.sol</code></td>
-							<td>Start and resume entrypoints plus the access-controlled local-deposit entrypoint used by <code>SecurityPool</code>.</td>
-							<td>The top-level contract validates the caller and delegates deposit mutation while preserving the public surface.</td>
+							<td>Factory-owner-only start and fork-continuation initialization entrypoints, pool-only resume and local-deposit wrappers, and the forker-only auction-haircut wrapper.</td>
+							<td>The top-level contract and inherited wrappers validate callers and delegate size-sensitive mutation while preserving the public surface and game-address events.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameDepositDelegate.sol</code></td>
-							<td>Deposit validation, escrow and unresolved accounting, node and carry-leaf creation, and deposit events.</td>
-							<td>Moving this cohesive mutation path behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership.</td>
+							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; <code>consumeEscrowedRepForOwner</code> and <code>consumeUnresolvedRepForClaimOwners</code>; <code>creditClaimOwners</code> and <code>creditExternalClaimOwners</code>; node and carry-leaf creation; and their events.</td>
+							<td>Moving these cohesive mutation paths behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership, caller authority, or the recognized game address that emits logs.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameClaimDelegate.sol</code></td>
+							<td>Source-to-current retention checkpoint initialization and inherited retention calculations.</td>
+							<td>One shared claim implementation keeps every game's runtime deployable while making recursive-fork work independent of ancestry depth. Delegatecall preserves the game as the state and event address.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameProofVerifier.sol</code></td>
@@ -171,17 +176,22 @@
 					aggregate backing for the escalation's own fork. It does not allocate
 					that backing among vaults. After the child resolves, only proofs for
 					winning deposits may settle. Any caller may relay a proof through the
-					pool, while the authenticated depositor always receives the normal
-					winning payout from the aggregate game balance. Inherited losing
+					pool, while the committed depositor of the non-tradeable claim receives
+					the winning payout from the aggregate game balance. The committed
+					depositor remains the immutable payout owner. Inherited losing
 					principal becomes terminal without a per-leaf transaction; local losing
 					deposits still follow the ordinary local settlement rules.
 				</p>
 				<p>
 					The stable parent deposit identifier has two domains. In ordinary
 					games it stays equal to the local <code>depositIndex</code>. In
-					fork-continuation games it becomes
-					<code>uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))</code>,
-					so a child-local deposit and a grandchild-local deposit can never reuse
+					fork-continuation games it packs the creating game, outcome, and local
+					index as <code>(uint256(uint160(address(this))) &lt;&lt; 96) |
+					(uint256(outcomeIndex) &lt;&lt; 88) | depositIndex</code>. The address occupies
+					160 bits, the outcome occupies eight bits, and the local index occupies
+					88 bits. This reversible layout lets settlement recover the exact claim
+					registry without a lookup table, so a child-local deposit and a
+					grandchild-local deposit can never reuse
 					the same carry/nullifier key just because both were appended at local
 					index zero. That same identifier is stored in carry leaves, emitted by
 					<code>LocalDepositAppended</code>,
@@ -200,7 +210,7 @@
 					<tbody>
 						<tr>
 							<td>Escrow totals</td>
-							<td><code>totalEscrowedRep</code> equals the sum of active REP locks, and <code>escrowedRepByVault[vault]</code> is that vault's local component.</td>
+							<td><code>totalEscrowedRep</code> equals effective active REP locks after any auction retention. <code>escrowedRepByVault(vault)</code> returns only locally attributed escrow in that game. A continuation's inherited carry remains aggregate backing committed by its MMR; the leaf depositor remains the immutable payout owner, but receives no per-vault child health credit.</td>
 						</tr>
 						<tr>
 							<td>Local unresolved totals</td>
@@ -224,7 +234,7 @@
 						</tr>
 						<tr>
 							<td>Winning carried proof</td>
-							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the authenticated depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
+							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the committed depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
@@ -240,6 +250,19 @@
 						</tr>
 					</tbody>
 				</table>
+				<p id="claim-ownership">
+					Claims are non-transferable commitments rather than tokens or mutable ownership bundles. Each carry leaf commits the original depositor, outcome, amount, stable parent index, cumulative amount, and source node. A child stores only the immutable MMR peaks and leaf count, nullifier root, aggregate carry totals, and normalized retention checkpoint. It never copies per-claim or per-owner state from its parent. The fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2^64 - 1</code> leaves; it is not a 64-reporter or 64-portfolio cap. Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once. Liquidation does not inspect or move claims and therefore cannot omit, select, or acquire them. It transfers only the 5%-bonus free-REP award, while accrued fees and all escalation claims remain with the target. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand stored owner sets or impose descendant-copy work.
+				</p>
+				<p>
+					Claim ownership is immutable. There are no owner slots, portfolio registries, global participant caps, or ownership transitions to exhaust.
+				</p>
+				<p>
+					Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use the root-source checkpoint. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Carry consumption allocates source-basis rounding by cumulative leaf prefixes—retained current prefix minus retained previous prefix—so every proof order telescopes to the aggregate checkpoint total without phantom residual principal. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth adds neither storage traversal nor a liquidation loop.
+				</p>
+				<p>
+					Local deposit consumption removes the raw claim shares corresponding to that deposit's effective original principal. With no local auction checkpoint this is the original principal; after a local haircut it is the ceiling of <code>originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining</code>. This inverse-retention conversion removes the exact storage-basis backing while leaving every other unconsumed deposit intact.
+				</p>
+				<p>The game's fallback delegates retention-checkpoint calculations to the shared claim module. There are no owner, portfolio, or import selectors. Auction retention is also available through the game's ordinary public storage getters.</p>
 				<p>
 					The highest-risk paths already have regression coverage. Scenario tests
 					exercise consumed local carry leaves, constant-size unresolved-vault
@@ -298,7 +321,7 @@
 					<a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
 				</p>
 				<p>
-					The proof verifier and deposit delegate splits also exist because
+					The proof verifier, deposit delegate, and claim delegate splits also exist because
 					bytecode headroom is tight. Keeping proof math and the cohesive deposit
 					mutation path outside the deployed game bytecode keeps the contract
 					under the current bytecode budgets and leaves only limited headroom for
@@ -316,23 +339,32 @@
 						<tbody>
 							<tr>
 								<td>Creation bytecode</td>
-								<td><code>32,138</code> bytes</td>
+								<td><code>36,188</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Deployed bytecode</td>
-								<td><code>24,142</code> bytes</td>
+								<td><code>23,924</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Project deployed-bytecode budget headroom</td>
-								<td><code>434</code> bytes below <code>24,576</code></td>
+								<td><code>652</code> bytes below <code>24,576</code></td>
 							</tr>
 							<tr>
 								<td>EIP-170 headroom</td>
-								<td><code>434</code> bytes below <code>24,576</code></td>
+								<td><code>652</code> bytes below <code>24,576</code></td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
+				<p>
+					The factory keeps this creation bytecode in two fixed code-storage
+					carriers and reconstructs it with two <code>EXTCODECOPY</code> operations.
+					Each carrier stays below EIP-170, and deploying bytecode as code is much
+					cheaper than initializing one storage slot for every 32-byte word. This
+					choice keeps deterministic factory deployment below the block gas limit;
+					the two-part shape is fixed, so game creation does not introduce a
+					user-sized loop.
+				</p>
 				<p>
 					Any Solidity change can also move deterministic deployment addresses,
 					because address derivation uses init code. After contract changes,

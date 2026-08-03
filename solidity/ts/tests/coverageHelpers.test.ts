@@ -22,6 +22,7 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer,
@@ -1529,10 +1530,17 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('traces factory deployment paths through transaction-backed calls', async () => {
 		const reputationTokenAddress = await deployReputationToken()
+		const claimDelegateAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+				bytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
+			}),
+		)
 		const escalationGameFactoryAddress = await deployContract(
 			encodeDeployData({
 				abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+				args: [claimDelegateAddress],
 			}),
 		)
 		await assert.rejects(

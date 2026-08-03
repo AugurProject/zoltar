@@ -57,6 +57,17 @@ describe('security vault guards', () => {
 	test('blocks withdraw, allowance, and claim actions until their deterministic prerequisites are met', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
+				escalationEscrowedRep: 1n,
+				requiredEthCost: undefined,
+				stagedOperationTimeoutMinutes: 5n,
+				withdrawAmount: 1n,
+				withdrawableRepAmount: 1n,
+				walletEthBalance: 1n,
+			}),
+		).toBe('Settle escalation deposits before withdrawing REP.')
+
+		expect(
+			getVaultWithdrawGuardMessage({
 				requiredEthCost: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n,
