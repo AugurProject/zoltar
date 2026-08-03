@@ -11,18 +11,45 @@
 			<header>
 				<p><a href="../documentation.html">Documentation index</a></p>
 				<h1>Contract Interaction Map</h1>
-				<p>This map connects the primary deployed Zoltar registry and Statoblast market contracts. It emphasizes contract-to-contract calls and asset movement, not every public user entrypoint. Factory-only deployment workers, delegate modules, event emitters, and compatibility contracts are summarized separately so the runtime path stays legible.</p>
-				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../safety-operations/contract-interaction-reference.md">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../whitepapers/statoblast-whitepaper.html">the Statoblast whitepaper</a> for lifecycle context, and <a href="../safety-operations/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
+				<p>
+					This map connects the primary deployed Zoltar registry and Statoblast
+					market contracts. It emphasizes contract-to-contract calls and asset
+					movement, not every public user entrypoint. Factory-only deployment
+					workers, delegate modules, event emitters, and compatibility contracts
+					are summarized separately so the runtime path stays legible.
+				</p>
+				<p class="security-assumption-ref">
+					<strong>Related reading:</strong>
+					<a href="../safety-operations/contract-interaction-reference.md">the generated transaction reference</a>
+					for exact caller and prerequisite rules,
+					<a href="../whitepapers/statoblast-whitepaper.html">the Statoblast whitepaper</a>
+					for lifecycle context, and
+					<a href="../safety-operations/invariants.html">the invariant catalog</a>
+					for cross-contract safety properties.
+				</p>
 			</header>
 
 			<section id="overview">
 				<h2>Primary Interaction Flow</h2>
-				<p>Arrows point from the contract initiating an interaction to the contract receiving it. The map repeats a contract when it participates in more than one phase, separating construction-time wiring, recurring runtime calls, and fork repair into three readable panels. Users and keepers enter through several of these contracts, but are omitted so the plot can focus on contract-to-contract boundaries.</p>
+				<p>
+					Arrows point from the contract initiating an interaction to the contract
+					receiving it. The map repeats a contract when it participates in more
+					than one phase, separating construction-time wiring, recurring runtime
+					calls, and fork repair into three readable panels. Users and keepers
+					enter through several of these contracts, but are omitted so the plot
+					can focus on contract-to-contract boundaries.
+				</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
-					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="880" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases">
-						<span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span>
-					</div>
-					<p class="diagram-caption"><span class="figure-label">Contract Interaction Map</span>Each panel is a distinct protocol phase; repeated contracts preserve local reading order and prevent unrelated lifecycle edges from crossing. Blue nodes are registries or oracle infrastructure, green nodes hold market state and claims, red marks local resolution, and gold marks deployment or fork coordination. Short edge labels state the action; the table below supplies its exact contract-level meaning.</p>
+					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="880" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span></div>
+					<p class="diagram-caption">
+						<span class="figure-label">Contract Interaction Map</span>Each panel
+						is a distinct protocol phase; repeated contracts preserve local
+						reading order and prevent unrelated lifecycle edges from crossing.
+						Blue nodes are registries or oracle infrastructure, green nodes hold
+						market state and claims, red marks local resolution, and gold marks
+						deployment or fork coordination. Short edge labels state the action;
+						the table below supplies its exact contract-level meaning.
+					</p>
 				</figure>
 			</section>
 
@@ -163,70 +190,77 @@
 				<ol>
 					<li>
 						<strong>Deploy a market:</strong>
-						<code>ZoltarQuestionData</code> and <code>Zoltar</code> provide the question and universe context; <code>SecurityPoolFactory</code>
+						<code>ZoltarQuestionData</code> and <code>Zoltar</code> provide the
+						question and universe context; <code>SecurityPoolFactory</code>
 						creates the pool, share token, and price coordinator.
 					</li>
 					<li>
 						<strong>Trade and resolve locally:</strong>
-						<code>SecurityPool</code> exchanges ETH collateral for complete sets through <code>ShareToken</code>, then escrows reporting REP in <code>EscalationGame</code>.
+						<code>SecurityPool</code> exchanges ETH collateral for complete sets
+						through <code>ShareToken</code>, then escrows reporting REP in
+						<code>EscalationGame</code>.
 					</li>
 					<li>
 						<strong>Reprice and liquidate:</strong>
-						<code>OpenOraclePriceCoordinator</code> obtains a report from <code>OpenOracle</code>, then calls a restricted execution method on <code>SecurityPool</code>.
+						<code>OpenOraclePriceCoordinator</code> obtains a report from
+						<code>OpenOracle</code>, then calls a restricted execution method on
+						<code>SecurityPool</code>.
 					</li>
 					<li>
 						<strong>Continue after a fork:</strong>
-						<code>SecurityPoolForker</code> migrates REP through <code>Zoltar</code>, asks <code>SecurityPoolFactory</code> for child pools, transfers the inherited state, and uses <code>UniformPriceDualCapBatchAuction</code> when backing must be repaired.
+						<code>SecurityPoolForker</code> migrates REP through
+						<code>Zoltar</code>, asks <code>SecurityPoolFactory</code> for child
+						pools, transfers the inherited state, and uses
+						<code>UniformPriceDualCapBatchAuction</code> when backing must be
+						repaired.
 					</li>
 				</ol>
 			</section>
 
 			<section id="supporting-contracts">
 				<h2>Supporting Contracts Not Expanded in the Plot</h2>
-				<p>The diagram groups construction helpers and delegate modules behind the deployed component whose behavior they implement:</p>
+				<p>
+					The diagram groups construction helpers and delegate modules behind the
+					deployed component whose behavior they implement:
+				</p>
 				<ul>
-					<li><code>ShareTokenFactory</code>, <code>EscalationGameFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, and <code>SecurityPoolDeployer</code> construct the displayed runtime contracts.</li>
-					<li><code>EscalationGameDepositDelegate</code> and the <code>SecurityPoolForker*</code> delegate modules execute against their owning contract's storage; they are implementation boundaries, not independent user-facing protocol hubs.</li>
 					<li>
-						<code>SecurityPoolMigrationProxy</code> isolates a pool's Zoltar migration balance, while <code>SecurityPoolEventEmitter</code>
+						<code>ShareTokenFactory</code>,
+						<code>EscalationGameFactory</code>,
+						<code>PriceOracleManagerAndOperatorQueuerFactory</code>,
+						<code>UniformPriceDualCapBatchAuctionFactory</code>, and
+						<code>SecurityPoolDeployer</code> construct the displayed runtime
+						contracts.
+					</li>
+					<li>
+						<code>EscalationGameDepositDelegate</code> and the
+						<code>SecurityPoolForker*</code> delegate modules execute against
+						their owning contract's storage; they are implementation boundaries,
+						not independent user-facing protocol hubs.
+					</li>
+					<li>
+						<code>SecurityPoolMigrationProxy</code> isolates a pool's Zoltar
+						migration balance, while <code>SecurityPoolEventEmitter</code>
 						preserves pool-address event attribution under delegated fork work.
 					</li>
-					<li><code>WETH9</code>, <code>Multicall3</code>, and the imported <code>OpenOracle</code> implementation are compatibility or external boundaries; only OpenOracle's protocol-facing relationship is shown.</li>
+					<li>
+						<code>WETH9</code>, <code>Multicall3</code>, and the imported
+						<code>OpenOracle</code> implementation are compatibility or external
+						boundaries; only OpenOracle's protocol-facing relationship is shown.
+					</li>
 				</ul>
 			</section>
 
 			<section id="sources">
 				<h2>Source Contracts</h2>
 				<ul>
-					<li>
-						<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.sol</code></a>
-						and
-						<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.sol</code></a>
-						and
-						<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>ShareToken.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/peripherals/EscalationGame.sol"><code>EscalationGame.sol</code></a>
-						and
-						<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a>
-						and
-						<a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"><code>OpenOracle.sol</code></a>
-					</li>
-					<li>
-						<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>
-					</li>
+					<li><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.sol</code></a></li>
+					<li><a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.sol</code></a> and <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.sol</code></a> and <a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>ShareToken.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/EscalationGame.sol"><code>EscalationGame.sol</code></a> and <a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a> and <a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"><code>OpenOracle.sol</code></a></li>
+					<li><a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a></li>
 				</ul>
 			</section>
 		</main>

@@ -10,18 +10,46 @@
 		<main>
 			<header>
 				<h1>EscalationGame Architecture</h1>
-				<p><code>EscalationGame</code> is split so storage ownership, settlement accounting, and proof math do not blur together inside one contract body. The point of the split is not stylistic. Contributors need to know which module is allowed to mutate live game state, which module is only reconstructing proof-derived values, and which invariants a refactor must preserve.</p>
-				<p>The main boundary starts with one shared storage layout. The inherited game stack owns most counters, escrow, carry state, and settlement effects. Deposit intake runs through a layout-compatible <code>EscalationGameDepositDelegate</code> using <code>delegatecall</code>, so those writes still land in the game. The external <code>EscalationGameProofVerifier</code> owns storage-free proof and logarithm helpers. That separation keeps verification math reusable and testable without giving it authority to consume deposits, advance nullifiers, or move accounting totals.</p>
-				<p>Refactors usually hit four pressure points: storage ownership, accounting invariants, interface drift, and bytecode headroom. Those are the places where the contract split has to stay explicit or the architecture stops buying clarity.</p>
+				<p>
+					<code>EscalationGame</code> is split so storage ownership, settlement
+					accounting, and proof math do not blur together inside one contract
+					body. The point of the split is not stylistic. Contributors need to
+					know which module is allowed to mutate live game state, which module is
+					only reconstructing proof-derived values, and which invariants a
+					refactor must preserve.
+				</p>
+				<p>
+					The main boundary starts with one shared storage layout. The inherited
+					game stack owns most counters, escrow, carry state, and settlement
+					effects. Deposit intake runs through a layout-compatible
+					<code>EscalationGameDepositDelegate</code> using <code>delegatecall</code>,
+					so those writes still land in the game. The external
+					<code>EscalationGameProofVerifier</code> owns storage-free proof and
+					logarithm helpers. That separation keeps verification math reusable and
+					testable without giving it authority to consume deposits, advance
+					nullifiers, or move accounting totals.
+				</p>
+				<p>
+					Refactors usually hit four pressure points: storage ownership,
+					accounting invariants, interface drift, and bytecode headroom. Those
+					are the places where the contract split has to stay explicit or the
+					architecture stops buying clarity.
+				</p>
 			</header>
 
 			<section id="module-split">
 				<h2>Module Split</h2>
-				<p>The first question in this stack is always ownership: which file is allowed to mutate which part of the game. The state-owning modules form one inheritance ladder over <code>EscalationGameStorage</code>. The deposit delegate uses the same layout and may mutate it only while the game invokes it with <code>delegatecall</code>. The proof verifier stays outside both mutation paths because it should never write live game state.</p>
+				<p>
+					The first question in this stack is always ownership: which file is
+					allowed to mutate which part of the game. The state-owning modules form
+					one inheritance ladder over <code>EscalationGameStorage</code>. The
+					deposit delegate uses the same layout and may mutate it only while the
+					game invokes it with <code>delegatecall</code>. The proof verifier stays
+					outside both mutation paths because it should never write live game
+					state.
+				</p>
 				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split">
-					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier">
-						<span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span>
-					</div>
+					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
@@ -88,10 +116,7 @@
 						<tr>
 							<td><code>EscalationGameDepositDelegate.sol</code></td>
 							<td>Deposit validation, escrow and unresolved accounting, node and carry-leaf creation, and deposit events.</td>
-							<td>
-								Moving this cohesive mutation path behind
-								<code>delegatecall</code> reduces deployed game bytecode without changing storage ownership.
-							</td>
+							<td>Moving this cohesive mutation path behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameProofVerifier.sol</code></td>
@@ -100,16 +125,71 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>This order matters. New modules should join the inheritance ladder only when they truly need the full state surface. If a helper can compute a value without touching storage, it belongs in the proof verifier, a free function, or a test helper instead of widening the mutable stack.</p>
-				<p>For the carry-proof data structure itself, including leaf fields, peak bagging, the 64-peak bound, and nullifier replay protection, see <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
+				<p>
+					This order matters. New modules should join the inheritance ladder only
+					when they truly need the full state surface. If a helper can compute a
+					value without touching storage, it belongs in the proof verifier, a
+					free function, or a test helper instead of widening the mutable stack.
+				</p>
+				<p>
+					For the carry-proof data structure itself, including leaf fields, peak bagging, the
+					64-peak bound, and nullifier replay protection, see
+					<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.
+				</p>
 			</section>
 
 			<section id="accounting-invariants">
 				<h2>Accounting Invariants</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../safety-operations/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../safety-operations/security-model.html#assumption-a21">A21 genesis REP behavior</a>, <a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../safety-operations/security-model.html#assumption-a20">A20 proof-data availability</a>, and <a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
-				<p>Safe refactors keep the local REP and unresolved-deposit counters in sync. Before aggregate export, every active vault lock appears in both its vault-local counter and the corresponding global total. Aggregate export is optional cleanup: it clears those counters and the parent vault's escrow, while the individual deposit rows remain only as canonical proof material and no longer represent parent logical authorization or physical escrow.</p>
-				<p>Child initialization copies the authenticated carry totals and funds the child game once at the applicable aggregate rate: one child REP per effective source REP for an unrelated fork, or the already-haircut aggregate backing for the escalation's own fork. It does not allocate that backing among vaults. After the child resolves, only proofs for winning deposits may settle. Any caller may relay a proof through the pool, while the authenticated depositor always receives the normal winning payout from the aggregate game balance. Inherited losing principal becomes terminal without a per-leaf transaction; local losing deposits still follow the ordinary local settlement rules.</p>
-				<p>The stable parent deposit identifier has two domains. In ordinary games it stays equal to the local <code>depositIndex</code>. In fork-continuation games it becomes <code>uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))</code>, so a child-local deposit and a grandchild-local deposit can never reuse the same carry/nullifier key just because both were appended at local index zero. That same identifier is stored in carry leaves, emitted by <code>LocalDepositAppended</code>, <code>CarryDepositConsumed</code>, and <code>ClaimDeposit</code>, returned by <code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through <code>consumedParentDepositIndexes</code>.</p>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+					<a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+					<a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>,
+					<a href="../safety-operations/security-model.html#assumption-a04">A04 early alarm capital</a>,
+					<a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>,
+					<a href="../safety-operations/security-model.html#assumption-a21"
+						>A21 genesis REP behavior</a
+					>,
+					<a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>,
+					<a href="../safety-operations/security-model.html#assumption-a20">A20 proof-data availability</a>,
+					and
+					<a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.
+				</p>
+				<p>
+					Safe refactors keep the local REP and unresolved-deposit counters in
+					sync. Before aggregate export, every active vault lock appears in both
+					its vault-local counter and the corresponding global total. Aggregate
+					export is optional cleanup: it clears those counters and the parent
+					vault's escrow, while the
+					individual deposit rows remain only as canonical proof material and no
+					longer represent parent logical authorization or physical escrow.
+				</p>
+				<p>
+					Child initialization copies the authenticated carry totals and funds the
+					child game once at the applicable aggregate rate: one child REP per
+					effective source REP for an unrelated fork, or the already-haircut
+					aggregate backing for the escalation's own fork. It does not allocate
+					that backing among vaults. After the child resolves, only proofs for
+					winning deposits may settle. Any caller may relay a proof through the
+					pool, while the authenticated depositor always receives the normal
+					winning payout from the aggregate game balance. Inherited losing
+					principal becomes terminal without a per-leaf transaction; local losing
+					deposits still follow the ordinary local settlement rules.
+				</p>
+				<p>
+					The stable parent deposit identifier has two domains. In ordinary
+					games it stays equal to the local <code>depositIndex</code>. In
+					fork-continuation games it becomes
+					<code>uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))</code>,
+					so a child-local deposit and a grandchild-local deposit can never reuse
+					the same carry/nullifier key just because both were appended at local
+					index zero. That same identifier is stored in carry leaves, emitted by
+					<code>LocalDepositAppended</code>,
+					<code>CarryDepositConsumed</code>, and
+					<code>ClaimDeposit</code>, returned by
+					<code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through
+					<code>consumedParentDepositIndexes</code>.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -128,17 +208,11 @@
 						</tr>
 						<tr>
 							<td>Outcome carry</td>
-							<td>
-								For each outcome,
-								<code>currentCarryTotal == effectiveInheritedUnresolvedTotal + localUnresolvedTotal</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.
-							</td>
+							<td>For each outcome, <code>currentCarryTotal == effectiveInheritedUnresolvedTotal + localUnresolvedTotal</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.</td>
 						</tr>
 						<tr>
 							<td>Active local deposit</td>
-							<td>
-								Before aggregate export,
-								<code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active parent locks.
-							</td>
+							<td>Before aggregate export, <code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active parent locks.</td>
 						</tr>
 						<tr>
 							<td>Local deposit consumption</td>
@@ -154,14 +228,7 @@
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
-							<td>
-								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one.
-								<code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical
-								<a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration derivation</a>
-								and
-								<a href="../safety-operations/invariants.html#fork-08"><code>FORK-08</code></a>
-								for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
-							</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="../safety-operations/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.</td>
 						</tr>
 						<tr>
 							<td>Inherited losing outcome</td>
@@ -169,20 +236,28 @@
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>
-								The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the
-								<a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration specification</a>
-								owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.
-							</td>
+							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>
-				<p>The highest-risk paths already have regression coverage. Scenario tests exercise consumed local carry leaves, constant-size unresolved-vault export, and lazy child materialization, while <code>escalationGameInterfaceRegression.test.ts</code> snapshots the inherited storage layout so refactors do not silently move live slots.</p>
+				<p>
+					The highest-risk paths already have regression coverage. Scenario tests
+					exercise consumed local carry leaves, constant-size unresolved-vault
+					export, and lazy child materialization, while
+					<code>escalationGameInterfaceRegression.test.ts</code> snapshots the
+					inherited storage layout so refactors do not silently move live slots.
+				</p>
 			</section>
 
 			<section id="interface-drift">
 				<h2>Interface Drift</h2>
-				<p>Public-surface changes need an explicit review trail because a split architecture makes accidental ABI drift easy to miss. The ABI snapshot and bytecode snapshot are there to prove that a surface change was intentional rather than an unnoticed side effect of refactoring one of the modules.</p>
+				<p>
+					Public-surface changes need an explicit review trail because a split
+					architecture makes accidental ABI drift easy to miss. The ABI snapshot
+					and bytecode snapshot are there to prove that a surface change was
+					intentional rather than an unnoticed side effect of refactoring one of
+					the modules.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -195,31 +270,41 @@
 					<tbody>
 						<tr>
 							<td>ABI snapshot</td>
-							<td>
-								<code>solidity/ts/tests/fixtures/escalationGameAbi.snapshot</code>
-							</td>
+							<td><code>solidity/ts/tests/fixtures/escalationGameAbi.snapshot</code></td>
 							<td><code>bun run update:escalation-game-abi-snapshot</code></td>
 							<td>Detects intentional or accidental changes to public functions, events, errors, and tuple shapes.</td>
 						</tr>
 						<tr>
 							<td>Runtime bytecode snapshot</td>
-							<td>
-								<code>solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json</code>
-							</td>
-							<td>
-								<code>bun run update:escalation-game-bytecode-snapshot</code>
-							</td>
+							<td><code>solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json</code></td>
+							<td><code>bun run update:escalation-game-bytecode-snapshot</code></td>
 							<td>Shows whether executable behavior changed after metadata is stripped from the runtime hash.</td>
 						</tr>
 					</tbody>
 				</table>
-				<p>Review the snapshot diff together with the Solidity diff. If the change was not deliberate, fix the contract rather than normalizing the drift by updating the fixture.</p>
+				<p>
+					Review the snapshot diff together with the Solidity diff. If the
+					change was not deliberate, fix the contract rather than normalizing the
+					drift by updating the fixture.
+				</p>
 			</section>
 
 			<section id="deployment-bytecode">
 				<h2>Deployment and Bytecode</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, and <a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.</p>
-				<p>The proof verifier and deposit delegate splits also exist because bytecode headroom is tight. Keeping proof math and the cohesive deposit mutation path outside the deployed game bytecode keeps the contract under the current bytecode budgets and leaves only limited headroom for small execution changes without collapsing the public game contract into an unreviewable blob.</p>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>,
+					<a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, and
+					<a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.
+				</p>
+				<p>
+					The proof verifier and deposit delegate splits also exist because
+					bytecode headroom is tight. Keeping proof math and the cohesive deposit
+					mutation path outside the deployed game bytecode keeps the contract
+					under the current bytecode budgets and leaves only limited headroom for
+					small execution changes without collapsing the public game contract
+					into an unreviewable blob.
+				</p>
 				<div class="table-scroll" role="region" aria-label="Escalation game bytecode measurements" tabindex="0">
 					<table>
 						<thead>
@@ -248,13 +333,31 @@
 						</tbody>
 					</table>
 				</div>
-				<p>Any Solidity change can also move deterministic deployment addresses, because address derivation uses init code. After contract changes, regenerate and review every network deployment manifest with the normal artifact workflow. Follow the <a href="../safety-operations/operator-reference.md#launch-release-checklist">Operator Reference launch release checklist</a> when those addresses intentionally change.</p>
-				<p>For gas-sensitive work, measure instead of assuming. Scenario tests are the first line of defense, and <code>bun run gas-costs</code> is the follow-up when deployment or settlement costs are part of the change.</p>
+				<p>
+					Any Solidity change can also move deterministic deployment addresses,
+					because address derivation uses init code. After contract changes,
+					regenerate and review every network deployment manifest with the normal
+					artifact workflow. Follow the
+					<a href="../safety-operations/operator-reference.md#launch-release-checklist"
+						>Operator Reference launch release checklist</a
+					>
+					when those addresses intentionally change.
+				</p>
+				<p>
+					For gas-sensitive work, measure instead of assuming. Scenario tests are
+					the first line of defense, and <code>bun run gas-costs</code> is the
+					follow-up when deployment or settlement costs are part of the change.
+				</p>
 			</section>
 
 			<section id="future-extraction">
 				<h2>Future Extraction Criteria</h2>
-				<p>A module should be extracted only when the ownership boundary becomes clearer after the split. File count by itself is not a reason. The question is whether the new boundary would reduce review risk by making state mutation, proof math, or settlement authority easier to see.</p>
+				<p>
+					A module should be extracted only when the ownership boundary becomes
+					clearer after the split. File count by itself is not a reason. The
+					question is whether the new boundary would reduce review risk by making
+					state mutation, proof math, or settlement authority easier to see.
+				</p>
 				<table>
 					<thead>
 						<tr>
