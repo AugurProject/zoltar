@@ -347,17 +347,17 @@ assert.ok(
 	'definition pileup fixture should be detected',
 )
 
-const whitepaper = await Bun.file('docs/whitepapers/statoblast-whitepaper.html').text()
-const architectureSectionMatch = whitepaper.match(/<section class="paper-section" id="architecture">[\s\S]*?<\/section>/)
+const whitepaper = (await Bun.file('docs/whitepapers/statoblast-whitepaper.html').text()).replaceAll(/\s+/g, ' ')
+const architectureSectionMatch = whitepaper.match(/<section\s+class="paper-section"\s+id="architecture"\s*>[\s\S]*?<\/section>/)
 assert.notEqual(architectureSectionMatch, null, 'Statoblast whitepaper must contain its Architecture section')
 const architectureSection = architectureSectionMatch?.[0] ?? ''
-const zoltarWhitepaper = await Bun.file('docs/whitepapers/zoltar-whitepaper.html').text()
-const openOracleIntegration = await Bun.file('docs/protocol-design/open-oracle-integration.html').text()
+const zoltarWhitepaper = (await Bun.file('docs/whitepapers/zoltar-whitepaper.html').text()).replaceAll(/\s+/g, ' ')
+const openOracleIntegration = (await Bun.file('docs/protocol-design/open-oracle-integration.html').text()).replaceAll(/\s+/g, ' ')
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
 const operatorReference = await Bun.file('docs/safety-operations/operator-reference.md').text()
 const escalationGameArchitecture = await Bun.file('docs/architecture-deployment/escalation-game-architecture.html').text()
-const invariantsHtml = await Bun.file('docs/safety-operations/invariants.html').text()
-const startHere = await Bun.file('docs/documentation.html').text()
+const invariantsHtml = (await Bun.file('docs/safety-operations/invariants.html').text()).replaceAll(/\s+/g, ' ')
+const startHere = (await Bun.file('docs/documentation.html').text()).replaceAll(/\s+/g, ' ')
 const sharedDocsCss = await Bun.file('docs/assets/css/shared-docs.css').text()
 const functionStyleRoundingPattern = /(?<!Math\.)\b(?:floor|ceil)\(/
 assert.match('floor(displayedValue)', functionStyleRoundingPattern, 'displayed function-style rounding fixture should be rejected')
@@ -380,7 +380,7 @@ assert.match(whitepaper, /Every[\s\S]{0,40}contract box is a separate storage an
 assert.doesNotMatch(whitepaper, /three state boundaries/)
 assert.match(whitepaper, /<code>Zoltar<\/code>[\s\S]{0,160}Owns universe identity, branch creation, and the migration ledger/)
 assert.match(whitepaper, /<code>ReputationToken<\/code>[\s\S]{0,160}Owns REP balances and theoretical supply within one universe/)
-assert.match(whitepaper, /Truth and identity[\s\S]{0,180}Arrows show direct call direction[\s\S]{0,300}ZoltarQuestionData[\s\S]{0,180}>←<[\s\S]{0,180}<code>Zoltar<\/code>/)
+assert.match(whitepaper, /Truth and identity[\s\S]{0,180}Arrows show direct call direction[\s\S]{0,300}ZoltarQuestionData[\s\S]{0,180}>\s*←\s*<[\s\S]{0,180}<code>Zoltar<\/code>/)
 assert.match(whitepaper, /<code>OpenOraclePriceCoordinator<\/code>[\s\S]{0,220}A vault or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool/)
 assert.match(whitepaper, /<code>OpenOracle<\/code>[\s\S]{0,180}Owns report games and reporter balances/)
 assert.match(whitepaper, /operator-reference\.md#fork-migration"><code>SecurityPoolMigrationProxy<\/code>[\s\S]{0,200}stable caller identity[\s\S]{0,100}calls Zoltar to lock, fork, and split REP[\s\S]{0,100}transfers materialized child REP directly to its receiver/)
