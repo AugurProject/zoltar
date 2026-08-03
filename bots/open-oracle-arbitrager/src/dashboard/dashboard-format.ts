@@ -3,6 +3,29 @@ import type { MarketPricePoint } from '#monitoring/market-monitor'
 
 const DECIMAL_SCALE = 18
 
+export function singleFlight<T>(operation: () => Promise<T>) {
+	let inFlight: Promise<T> | undefined
+	let rerunRequested = false
+	return () => {
+		if (inFlight !== undefined) {
+			rerunRequested = true
+			return inFlight
+		}
+		inFlight = (async () => {
+			rerunRequested = false
+			let result = await operation()
+			while (rerunRequested) {
+				rerunRequested = false
+				result = await operation()
+			}
+			return result
+		})().finally(() => {
+			inFlight = undefined
+		})
+		return inFlight
+	}
+}
+
 function parseSignedDecimal(value: string) {
 	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid decimal amount: ${value}`)
 	const negative = value.startsWith('-')

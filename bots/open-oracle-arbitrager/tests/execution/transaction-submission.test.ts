@@ -311,6 +311,21 @@ describe('signed transaction delivery', () => {
 		])
 	})
 
+	test('enforces the configured successful relay threshold during bundle submission', async () => {
+		const accepted = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash([serializedTransaction]) } }))
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'submission rejected' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedBundle({
+				address,
+				minimumSuccessfulRelays: 2,
+				relayUrls: [accepted, rejected],
+				signMessage: () => Promise.resolve(signature),
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('required 2 accepting relays')
+	})
+
 	test.each(['', 'bundle', '0x1234'])('rejects malformed relay bundle hash %p', async bundleHash => {
 		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash } }))
 		await expect(

@@ -63,7 +63,7 @@ export function validateReadRpcUrls(values: readonly string[]) {
 
 export function validateIndependentReadRpcUrls(primary: string, values: readonly string[]) {
 	const normalizedPrimary = endpointUrl(primary.trim())
-	const normalized = validateReadRpcUrls(values).filter(value => value !== normalizedPrimary)
+	const normalized = validateReadRpcUrls(values)
 	const origins = [new URL(normalizedPrimary).origin, ...normalized.map(value => new URL(value).origin)]
 	if (new Set(origins).size !== origins.length) throw new Error('Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider')
 	return normalized

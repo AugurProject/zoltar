@@ -304,8 +304,20 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 	return { failedTargets, successful }
 }
 
-export async function submitSignedBundle(parameters: { address: Address; relayUrls: readonly string[]; signMessage: (message: string | Uint8Array) => Promise<Hex>; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }): Promise<SubmittedBundle> {
+export async function submitSignedBundle(parameters: {
+	address: Address
+	minimumSuccessfulRelays?: number | undefined
+	relayUrls: readonly string[]
+	signMessage: (message: string | Uint8Array) => Promise<Hex>
+	targetBlockNumber: bigint
+	timeoutMilliseconds?: number | undefined
+	transactions: readonly Hex[]
+}): Promise<SubmittedBundle> {
 	if (parameters.transactions.length === 0) throw new Error('Bundle must contain at least one transaction')
+	const minimumSuccessfulRelays = parameters.minimumSuccessfulRelays ?? 1
+	if (!Number.isSafeInteger(minimumSuccessfulRelays) || minimumSuccessfulRelays < 1 || minimumSuccessfulRelays > parameters.relayUrls.length) {
+		throw new Error('Bundle submission relay threshold must be between 1 and the configured relay count')
+	}
 	const expectedBundleHash = bundleIdentity(parameters.transactions).bundleHash
 	const body = JSON.stringify({
 		id: 1,
@@ -341,7 +353,12 @@ export async function submitSignedBundle(parameters: { address: Address; relayUr
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: rejectionMessage(result.reason), target })
 	}
-	if (acceptedTargets.length === 0) throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	if (acceptedTargets.length < minimumSuccessfulRelays) {
+		if (acceptedTargets.length === 0 && minimumSuccessfulRelays === 1) {
+			throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+		}
+		throw new SubmissionFailure(`Bundle submission required ${minimumSuccessfulRelays.toString()} accepting relays but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	}
 	return { acceptedTargets, failedTargets }
 }
 

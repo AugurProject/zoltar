@@ -1,4 +1,5 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
@@ -13,6 +14,8 @@ export type TokenConfiguration = {
 }
 
 export const MAX_OBSERVED_MONITORING_TOKENS = 64
+export const PRICE_HISTORY_TAIL_MAXIMUM_BYTES = 8 * 1_024 * 1_024
+const PRICE_HISTORY_RECORD_MAXIMUM_BYTES = 4 * 1_024
 
 export type MarketPoolSnapshot = {
 	address: Address
@@ -266,10 +269,18 @@ export function missingPricePoints(existing: readonly MarketPricePoint[], candid
 	return candidates.filter(point => !recorded.has(`${point.blockNumber}:${point.pool.toLowerCase()}`))
 }
 
-export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[]) {
+export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], maximum = 2_000) {
 	if (points.length === 0) return
+	if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Price history maximum must be a positive integer')
 	await mkdir(dirname(path), { recursive: true })
-	await appendFile(path, `${points.map(point => JSON.stringify(point)).join('\n')}\n`, 'utf8')
+	const retained = [...(await loadPriceHistory(path, maximum)), ...points].slice(-maximum)
+	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
+	try {
+		await writeFile(temporaryPath, `${retained.map(point => JSON.stringify(point)).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+		await rename(temporaryPath, path)
+	} finally {
+		await rm(temporaryPath, { force: true })
+	}
 }
 
 function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
@@ -313,11 +324,38 @@ function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
 }
 
 export async function loadPriceHistory(path: string, maximum = 2_000) {
+	if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Price history maximum must be a positive integer')
+	let handle: Awaited<ReturnType<typeof open>> | undefined
 	try {
-		const contents = await readFile(path, 'utf8')
+		handle = await open(path, 'r')
+		const { size } = await handle.stat()
+		const chunks: Buffer[] = []
+		let position = size
+		let remainingBytes = Math.min(size, PRICE_HISTORY_TAIL_MAXIMUM_BYTES)
+		let newlineCount = 0
+		while (position > 0 && remainingBytes > 0 && newlineCount <= maximum) {
+			const length = Math.min(position, remainingBytes, 64 * 1_024)
+			position -= length
+			remainingBytes -= length
+			const chunk = Buffer.allocUnsafe(length)
+			let offset = 0
+			while (offset < length) {
+				const { bytesRead } = await handle.read(chunk, offset, length - offset, position + offset)
+				if (bytesRead === 0) throw new Error(`Price history ${path} ended during a bounded read`)
+				offset += bytesRead
+			}
+			chunks.unshift(chunk)
+			for (const byte of chunk) if (byte === 10) newlineCount++
+		}
+		let contents = Buffer.concat(chunks).toString('utf8')
+		if (position > 0) contents = contents.slice(contents.indexOf('\n') + 1)
 		const points: MarketPricePoint[] = []
 		for (const [index, line] of contents.split('\n').entries()) {
 			if (line.trim().length === 0) continue
+			if (Buffer.byteLength(line, 'utf8') > PRICE_HISTORY_RECORD_MAXIMUM_BYTES) {
+				console.warn(`Skipping oversized price history record at line ${(index + 1).toString()} in ${path}`)
+				continue
+			}
 			try {
 				const point = parsePriceHistoryPoint(JSON.parse(line))
 				if (point !== undefined) {
@@ -334,5 +372,7 @@ export async function loadPriceHistory(path: string, maximum = 2_000) {
 	} catch (error) {
 		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return []
 		throw error
+	} finally {
+		await handle?.close()
 	}
 }
