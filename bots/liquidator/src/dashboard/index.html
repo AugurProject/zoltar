@@ -21,8 +21,8 @@
 			</div>
 		</header>
 		<main>
-				<div id="global-error" class="notice error hidden" role="alert"></div>
-				<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
+			<div id="global-error" class="notice error hidden" role="alert"></div>
+			<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
 			<section aria-labelledby="overview-title">
 				<div class="section-heading">
 					<div>
@@ -54,7 +54,9 @@
 							</tr>
 						</thead>
 						<tbody id="universe-rows">
-							<tr><td colspan="6" class="empty">Scanning universe registry…</td></tr>
+							<tr>
+								<td colspan="6" class="empty">Scanning universe registry…</td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
@@ -68,18 +70,44 @@
 					<p id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</p>
 				</div>
 				<div id="centralized-market-summary" class="metric-grid">
-					<dl class="metric"><dt>CEX median REP / ETH</dt><dd id="centralized-market-price">—</dd></dl>
-					<dl class="metric"><dt>DEX consensus REP / ETH</dt><dd id="dex-market-price">—</dd></dl>
-					<dl class="metric"><dt>Guarded reference REP / ETH</dt><dd id="guarded-market-price">—</dd></dl>
-					<dl class="metric"><dt>DEX bid depth</dt><dd id="dex-market-bid-depth">—</dd></dl>
-					<dl class="metric"><dt>DEX ask depth</dt><dd id="dex-market-ask-depth">—</dd></dl>
-					<dl class="metric"><dt>CEX bid depth</dt><dd id="centralized-market-bid-depth">—</dd></dl>
-					<dl class="metric"><dt>CEX ask depth</dt><dd id="centralized-market-ask-depth">—</dd></dl>
-					<dl class="metric"><dt>Consensus sources</dt><dd id="centralized-market-source-count">0 CEX</dd></dl>
+					<dl class="metric">
+						<dt>CEX median REP / ETH</dt>
+						<dd id="centralized-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX consensus REP / ETH</dt>
+						<dd id="dex-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>Guarded reference REP / ETH</dt>
+						<dd id="guarded-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX bid depth</dt>
+						<dd id="dex-market-bid-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX ask depth</dt>
+						<dd id="dex-market-ask-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>CEX bid depth</dt>
+						<dd id="centralized-market-bid-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>CEX ask depth</dt>
+						<dd id="centralized-market-ask-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>Consensus sources</dt>
+						<dd id="centralized-market-source-count">0 CEX</dd>
+					</dl>
 				</div>
 				<div class="table-shell">
 					<table>
-						<caption>CEX observations</caption>
+						<caption>
+							CEX observations
+						</caption>
 						<thead>
 							<tr>
 								<th id="market-exchange-heading" scope="col">Exchange</th>
@@ -91,15 +119,32 @@
 							</tr>
 						</thead>
 						<tbody id="centralized-market-rows">
-							<tr><td colspan="6" class="empty">Add public exchange sources in the operator configuration.</td></tr>
+							<tr>
+								<td colspan="6" class="empty">Add public exchange sources in the operator configuration.</td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
 				<div class="table-shell source-shell">
 					<table>
-						<caption id="market-source-caption">Configured source admission</caption>
-						<thead><tr><th id="source-kind-heading" scope="col">Venue</th><th id="source-id-heading" scope="col">Source</th><th id="source-asset-heading" scope="col">REP asset</th><th id="source-market-heading" scope="col">Market</th><th id="source-status-heading" scope="col">Status</th><th id="source-reason-heading" scope="col">Reason</th></tr></thead>
-						<tbody id="market-source-rows"><tr><td colspan="6" class="empty">No source evidence yet.</td></tr></tbody>
+						<caption id="market-source-caption">
+							Configured source admission
+						</caption>
+						<thead>
+							<tr>
+								<th id="source-kind-heading" scope="col">Venue</th>
+								<th id="source-id-heading" scope="col">Source</th>
+								<th id="source-asset-heading" scope="col">REP asset</th>
+								<th id="source-market-heading" scope="col">Market</th>
+								<th id="source-status-heading" scope="col">Status</th>
+								<th id="source-reason-heading" scope="col">Reason</th>
+							</tr>
+						</thead>
+						<tbody id="market-source-rows">
+							<tr>
+								<td colspan="6" class="empty">No source evidence yet.</td>
+							</tr>
+						</tbody>
 					</table>
 				</div>
 				<form id="market-configuration-form">
@@ -137,7 +182,9 @@
 							</tr>
 						</thead>
 						<tbody id="pool-rows">
-							<tr><td colspan="7" class="empty">Scanning factory registry…</td></tr>
+							<tr>
+								<td colspan="7" class="empty">Scanning factory registry…</td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
@@ -151,42 +198,50 @@
 						</div>
 					</div>
 					<form id="strategy-form">
-					<fieldset id="strategy-fields" class="form-grid" disabled>
-						<label>Minimum debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
-						<label>Maximum debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
-						<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
-						<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
-						<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
-						<label>Fallback REP / ETH price<input name="fallbackRepPerEthPrice" inputmode="decimal" /></label>
-						<label>Wallet REP reserve<input name="walletRepReserve" inputmode="decimal" /></label>
-						<label>REP per pool limit<input name="maximumRepPerPool" inputmode="decimal" /></label>
-						<label>Total deployed REP limit<input name="maximumTotalDeployedRep" inputmode="decimal" /></label>
-						<label>Minimum REP withdrawal<input name="minimumRepWithdrawal" inputmode="decimal" /></label>
-						<label>Redeem fees above (ETH)<input name="redeemFeesAboveEth" inputmode="decimal" /></label>
-						<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label>
-						<label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label>
-						<label>Top-up health (bps)<input name="vaultTopUpHealthBps" inputmode="numeric" /></label>
-						<label>Target health (bps)<input name="vaultTargetHealthBps" inputmode="numeric" /></label>
-						<label>Withdrawal health (bps)<input name="vaultWithdrawHealthBps" inputmode="numeric" /></label>
-						<label>Candidate priority
-							<select name="candidatePriority">
-								<option value="largest-bonus">Largest bonus</option>
-								<option value="largest-debt">Largest debt</option>
-								<option value="lowest-top-up">Lowest REP top-up</option>
-							</select>
-						</label>
-						<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
-						<label class="check"><input name="allowAutomaticPoolCreation" type="checkbox" />Create missing desired pools</label>
-						<label class="check"><input name="allowAutomaticVaultMigrations" type="checkbox" />Automatic approved-universe vault migrations</label>
-						<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
-						<div class="form-actions">
-							<button type="submit">Save strategy</button>
-							<span id="strategy-status" class="action-status" role="alert"></span>
-						</div>
-					</fieldset></form>
+						<fieldset id="strategy-fields" class="form-grid" disabled>
+							<label>Minimum debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Maximum debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
+							<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
+							<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
+							<label>Fallback REP / ETH price<input name="fallbackRepPerEthPrice" inputmode="decimal" /></label>
+							<label>Wallet REP reserve<input name="walletRepReserve" inputmode="decimal" /></label>
+							<label>REP per pool limit<input name="maximumRepPerPool" inputmode="decimal" /></label>
+							<label>Total deployed REP limit<input name="maximumTotalDeployedRep" inputmode="decimal" /></label>
+							<label>Minimum REP withdrawal<input name="minimumRepWithdrawal" inputmode="decimal" /></label>
+							<label>Redeem fees above (ETH)<input name="redeemFeesAboveEth" inputmode="decimal" /></label>
+							<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label>
+							<label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label>
+							<label>Top-up health (bps)<input name="vaultTopUpHealthBps" inputmode="numeric" /></label>
+							<label>Target health (bps)<input name="vaultTargetHealthBps" inputmode="numeric" /></label>
+							<label>Withdrawal health (bps)<input name="vaultWithdrawHealthBps" inputmode="numeric" /></label>
+							<label
+								>Candidate priority
+								<select name="candidatePriority">
+									<option value="largest-bonus">Largest bonus</option>
+									<option value="largest-debt">Largest debt</option>
+									<option value="lowest-top-up">Lowest REP top-up</option>
+								</select>
+							</label>
+							<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
+							<label class="check"><input name="allowAutomaticPoolCreation" type="checkbox" />Create missing desired pools</label>
+							<label class="check"><input name="allowAutomaticVaultMigrations" type="checkbox" />Automatic approved-universe vault migrations</label>
+							<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
+							<div class="form-actions">
+								<button type="submit">Save strategy</button>
+								<span id="strategy-status" class="action-status" role="alert"></span>
+							</div>
+						</fieldset>
+					</form>
 				</section>
 				<section aria-labelledby="recovery-title">
-					<div class="section-heading"><div><p class="eyebrow">Durable transaction journal</p><h2 id="recovery-title">Transaction recovery</h2></div><button id="recheck-recovery" class="secondary compact" type="button">Recheck evidence</button></div>
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Durable transaction journal</p>
+							<h2 id="recovery-title">Transaction recovery</h2>
+						</div>
+						<button id="recheck-recovery" class="secondary compact" type="button">Recheck evidence</button>
+					</div>
 					<p class="muted">The bot blocks new execution while an intent is ambiguous. To reconcile a canceled or replaced public transaction, pause the bot and provide the finalized replacement hash. It must use the same sender and nonce and have 12 canonical confirmations.</p>
 					<div id="recovery-list" class="recovery-list"><p class="empty">No pending transaction intents.</p></div>
 				</section>

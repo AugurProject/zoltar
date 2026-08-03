@@ -4,16 +4,17 @@ import { createHash } from 'node:crypto'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const readme = await readFile('README.md', 'utf8')
-const auctionDesign = await readFile('docs/protocol-design/truth-auction.html', 'utf8')
-const html = await readFile('docs/architecture-deployment/escalation-game-architecture.html', 'utf8')
-const invariantsHtml = await readFile('docs/safety-operations/invariants.html', 'utf8')
-const liquidationHtml = await readFile('docs/protocol-design/liquidation.html', 'utf8')
-const openOracleIntegration = await readFile('docs/protocol-design/open-oracle-integration.html', 'utf8')
-const zoltarWhitepaper = await readFile('docs/whitepapers/zoltar-whitepaper.html', 'utf8')
-const whitepaperStatoblast = await readFile('docs/whitepapers/statoblast-whitepaper.html', 'utf8')
+const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
+const auctionDesign = normalizeHtmlSource(await readFile('docs/protocol-design/truth-auction.html', 'utf8'))
+const html = normalizeHtmlSource(await readFile('docs/architecture-deployment/escalation-game-architecture.html', 'utf8'))
+const invariantsHtml = normalizeHtmlSource(await readFile('docs/safety-operations/invariants.html', 'utf8'))
+const liquidationHtml = normalizeHtmlSource(await readFile('docs/protocol-design/liquidation.html', 'utf8'))
+const openOracleIntegration = normalizeHtmlSource(await readFile('docs/protocol-design/open-oracle-integration.html', 'utf8'))
+const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/whitepapers/zoltar-whitepaper.html', 'utf8'))
+const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/whitepapers/statoblast-whitepaper.html', 'utf8'))
 const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
 const normalizedDiagramSpecs = diagramSpecs.replaceAll(/\\n|\\t|\s+/g, ' ')
-const startHere = await readFile('docs/documentation.html', 'utf8')
+const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
 const operatorReference = await readFile('docs/safety-operations/operator-reference.md', 'utf8')
 const securityModel = await readFile('docs/safety-operations/security-model.html', 'utf8')
 const contractInteractionReference = await readFile('docs/safety-operations/contract-interaction-reference.md', 'utf8')
@@ -21,7 +22,7 @@ const contractReferenceGenerator = await readFile('scripts/generate-contract-int
 const docsReader = await readFile('docs/assets/js/docsReader.js', 'utf8')
 const eventStream = await readFile('docs/safety-operations/event-stream.md', 'utf8')
 const protocolTerms = await readFile('docs/assets/js/protocolTerms.js', 'utf8')
-const deploymentStatus = await readFile('docs/architecture-deployment/deployment-status.html', 'utf8')
+const deploymentStatus = normalizeHtmlSource(await readFile('docs/architecture-deployment/deployment-status.html', 'utf8'))
 const escalationGame = await readFile('solidity/contracts/peripherals/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/peripherals/EscalationGameClaimDelegate.sol', 'utf8')
 const escalationGameDepositDelegate = await readFile('solidity/contracts/peripherals/EscalationGameDepositDelegate.sol', 'utf8')
@@ -259,7 +260,7 @@ function assertNonDecisionLifecycleDocs(): void {
 	assert.match(normalizedOperatorReference, /\| Matching-question child outcome \|[\s\S]*`depositToEscalationGame` rejects new local deposits, and `activateForkMode` rejects every later pool fork transition[\s\S]*Child Outcome Resolution/)
 	assert.match(
 		normalizedStatoblast,
-		/<td>Second fork<\/td> <td> This unrelated continuation has no fixed outcome and did not inherit a threshold tie\. When new activity records a local non-decision, <code>canTriggerOwnFork\(\)<\/code> becomes true\. <\/td> <td> The same predicate also accepts an inherited threshold tie without a fixed outcome\./,
+		/<td>Second fork<\/td>\s*<td>\s*This unrelated continuation has no fixed outcome and did not inherit a threshold tie\. When new activity records a local non-decision, <code>canTriggerOwnFork\(\)<\/code> becomes true\.\s*<\/td>\s*<td>\s*The same predicate also accepts an inherited threshold tie without a fixed outcome\./,
 	)
 	assert.match(protocolTerms, /local or inherited origin determines the game's canTriggerOwnFork\(\) predicate, but a successful pool fork also requires no inherited fixed outcome\. Fixed-outcome pools reject new local escalation deposits before this state can be created/)
 	for (const forbiddenClaim of ['a later fork on the same question replaces the inherited outcome', 'the fixed result applies after continuation and is inherited through later unrelated descendants', 'a later unrelated fork keeps Yes as the payout outcome']) {
@@ -327,14 +328,14 @@ function assertAuditFindingRemediations(): void {
 
 function assertInvariantCatalogOwnership(): void {
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
-	const persistentHistoryEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-10">[\s\S]*?<\/details>/)?.[0]
-	const activeTreeEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11">[\s\S]*?<\/details>/)?.[0]
-	const carryAccountingEntry = normalizedInvariants.match(/<details class="invariant-entry" id="esc-03">[\s\S]*?<\/details>/)?.[0]
-	const carryCommitmentEntry = normalizedInvariants.match(/<details class="invariant-entry" id="esc-14">[\s\S]*?<\/details>/)?.[0]
-	const auctionAllocationEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-05">[\s\S]*?<\/details>/)?.[0]
-	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12">[\s\S]*?<\/details>/)?.[0]
-	const eventReplayEntry = normalizedInvariants.match(/<details class="invariant-entry" id="obs-01">[\s\S]*?<\/details>/)?.[0]
-	const shareSupplyEntry = normalizedInvariants.match(/<details class="invariant-entry" id="share-06">[\s\S]*?<\/details>/)?.[0]
+	const persistentHistoryEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-10"\s*>[\s\S]*?<\/details>/)?.[0]
+	const activeTreeEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
+	const carryAccountingEntry = normalizedInvariants.match(/<details class="invariant-entry" id="esc-03"\s*>[\s\S]*?<\/details>/)?.[0]
+	const carryCommitmentEntry = normalizedInvariants.match(/<details class="invariant-entry" id="esc-14"\s*>[\s\S]*?<\/details>/)?.[0]
+	const auctionAllocationEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-05"\s*>[\s\S]*?<\/details>/)?.[0]
+	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
+	const eventReplayEntry = normalizedInvariants.match(/<details class="invariant-entry" id="obs-01"\s*>[\s\S]*?<\/details>/)?.[0]
+	const shareSupplyEntry = normalizedInvariants.match(/<details class="invariant-entry" id="share-06"\s*>[\s\S]*?<\/details>/)?.[0]
 	assert.ok(persistentHistoryEntry, 'Invariant catalog must give AUC-10 a stable anchor for persistent tick history')
 	assert.ok(activeTreeEntry, 'Invariant catalog must retain AUC-11 for active-tree and public-model equivalence')
 	assert.ok(carryAccountingEntry, 'Invariant catalog must give ESC-03 a stable anchor for carry accounting')
@@ -357,10 +358,10 @@ function assertInvariantCatalogOwnership(): void {
 
 function assertInvariantCatalogLifecycleBoundaries(): void {
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
-	const allowanceEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08">[\s\S]*?<\/details>/)?.[0]
-	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03">[\s\S]*?<\/details>/)?.[0]
-	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11">[\s\S]*?<\/details>/)?.[0]
-	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12">[\s\S]*?<\/details>/)?.[0]
+	const allowanceEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08"\s*>[\s\S]*?<\/details>/)?.[0]
+	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03"\s*>[\s\S]*?<\/details>/)?.[0]
+	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
+	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
 	assert.ok(allowanceEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified allowance accounting')
 	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 active-index boundary accounting')
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
@@ -453,7 +454,7 @@ function assertZoltarForkDepths(): void {
 }
 
 function assertRecursiveForkGasStatusDocs(): void {
-	assert.match(invariantsHtml, /id="ext-05"[\s\S]*Recursive fork gas bound[\s\S]*Enforcement status<\/dt><dd>Reviewed preservation/)
+	assert.match(invariantsHtml, /id="ext-05"[\s\S]*Recursive fork gas bound[\s\S]*Enforcement status<\/dt>\s*<dd>Reviewed preservation/)
 	for (const [documentName, contents] of [
 		['README', readme],
 		['Operator reference', operatorReference],
