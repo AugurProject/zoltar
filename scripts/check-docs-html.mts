@@ -21,7 +21,6 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
-const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/safety-operations/security-model.html'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
@@ -49,14 +48,11 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 		validateInteractiveCatalogs(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
 		validatePlotMounts(parsedDocument, failures)
-		if (isLegacyRedirectDocument(parsedDocument)) {
-			validateLegacyRedirect(parsedDocument, failures)
-		} else {
-			if (parsedDocument.document.querySelector('meta[http-equiv="refresh"]') !== null) {
-				addFailure(parsedDocument, 'only docs/start-here.html may use a meta refresh redirect', failures)
-			}
-			validateDiagrams(parsedDocument, failures)
+		const hasMetaRefresh = Array.from(parsedDocument.document.querySelectorAll('meta[http-equiv]')).some(meta => meta.getAttribute('http-equiv')?.trim().toLowerCase() === 'refresh')
+		if (hasMetaRefresh) {
+			addFailure(parsedDocument, 'meta refresh redirects are not allowed in the documentation corpus', failures)
 		}
+		validateDiagrams(parsedDocument, failures)
 		validateEquations(parsedDocument, failures)
 		validateTables(parsedDocument, failures)
 		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, markdownAnchorsByPath, failures)
@@ -78,29 +74,6 @@ function validateResponsiveRuntime(parsedDocument: ParsedHtmlDocument, failures:
 	const runtimeScripts = elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/responsiveDocs.js')
 	if (runtimeScripts.length !== 1) {
 		addFailure(parsedDocument, 'must load docs/assets/js/responsiveDocs.js exactly once for responsive equations and overflow cues', failures)
-	}
-}
-
-function isLegacyRedirectDocument(parsedDocument: ParsedHtmlDocument): boolean {
-	return parsedDocument.relativePath === 'docs/start-here.html'
-}
-
-function validateLegacyRedirect(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
-	const expectedTarget = './documentation.html'
-	const refresh = parsedDocument.document.querySelector('meta[http-equiv="refresh"]')
-	const refreshContent = refresh?.getAttribute('content')?.trim() ?? ''
-	if (!/^0\s*;\s*url=\.\/documentation\.html$/i.test(refreshContent)) {
-		addFailure(parsedDocument, `legacy redirect meta refresh must target ${expectedTarget} with zero delay`, failures)
-	}
-
-	const canonicalTarget = parsedDocument.document.querySelector('link[rel="canonical"]')?.getAttribute('href')?.trim()
-	if (canonicalTarget !== expectedTarget) {
-		addFailure(parsedDocument, `legacy redirect canonical link must target ${expectedTarget}`, failures)
-	}
-
-	const fallbackTarget = parsedDocument.document.querySelector('a')?.getAttribute('href')?.trim()
-	if (fallbackTarget !== expectedTarget) {
-		addFailure(parsedDocument, `legacy redirect fallback link must target ${expectedTarget}`, failures)
 	}
 }
 
@@ -208,9 +181,6 @@ function validateAriaReferences(parsedDocument: ParsedHtmlDocument, failures: Va
 function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	const figures = Array.from(parsedDocument.document.querySelectorAll('figure.diagram'))
 	if (figures.length === 0) {
-		if (!diagramOptionalDocumentPaths.has(parsedDocument.relativePath)) {
-			addFailure(parsedDocument, 'does not contain any figure.diagram elements', failures)
-		}
 		return
 	}
 

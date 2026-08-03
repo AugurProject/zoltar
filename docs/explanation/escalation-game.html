@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>EscalationGame Architecture</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -101,12 +102,12 @@
 					</tbody>
 				</table>
 				<p>This order matters. New modules should join the inheritance ladder only when they truly need the full state surface. If a helper can compute a value without touching storage, it belongs in the proof verifier, a free function, or a test helper instead of widening the mutable stack.</p>
-				<p>For the carry-proof data structure itself, including leaf fields, peak bagging, the 64-peak bound, and nullifier replay protection, see <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
+				<p>For the carry-proof data structure itself, including leaf fields, peak bagging, the 64-peak bound, and nullifier replay protection, see <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
 			</section>
 
 			<section id="accounting-invariants">
 				<h2>Accounting Invariants</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../safety-operations/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../safety-operations/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../safety-operations/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../safety-operations/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../safety-operations/security-model.html#assumption-a21">A21 genesis REP behavior</a>, <a href="../safety-operations/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../safety-operations/security-model.html#assumption-a20">A20 proof-data availability</a>, and <a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../reference/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP behavior</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../reference/security-model.html#assumption-a20">A20 proof-data availability</a>, and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
 				<p>Safe refactors keep the local REP and unresolved-deposit counters in sync. Before aggregate export, every active vault lock appears in both its vault-local counter and the corresponding global total. Aggregate export is optional cleanup: it clears those counters and the parent vault's escrow, while the individual deposit rows remain only as canonical proof material and no longer represent parent logical authorization or physical escrow.</p>
 				<p>Child initialization copies the authenticated carry totals and funds the child game once at the applicable aggregate rate: one child REP per effective source REP for an unrelated fork, or the already-haircut aggregate backing for the escalation's own fork. It does not allocate that backing among vaults. After the child resolves, only proofs for winning deposits may settle. Any caller may relay a proof through the pool, while the committed depositor of the non-tradeable claim receives the winning payout from the aggregate game balance. The committed depositor remains the immutable payout owner. Inherited losing principal becomes terminal without a per-leaf transaction; local losing deposits still follow the ordinary local settlement rules.</p>
 				<p>The stable parent deposit identifier has two domains. In ordinary games it stays equal to the local <code>depositIndex</code>. In fork-continuation games it packs the creating game, outcome, and local index as <code>(uint256(uint160(address(this))) &lt;&lt; 96) | (uint256(outcomeIndex) &lt;&lt; 88) | depositIndex</code>. The address occupies 160 bits, the outcome occupies eight bits, and the local index occupies 88 bits. This reversible layout lets settlement recover the exact claim registry without a lookup table, so a child-local deposit and a grandchild-local deposit can never reuse the same carry/nullifier key just because both were appended at local index zero. That same identifier is stored in carry leaves, emitted by <code>LocalDepositAppended</code>, <code>CarryDepositConsumed</code>, and <code>ClaimDeposit</code>, returned by <code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through <code>consumedParentDepositIndexes</code>.</p>
@@ -149,7 +150,7 @@
 						<tr>
 							<td>Continuation funding</td>
 							<td>
-								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="../safety-operations/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
+								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../explanation/statoblast.html#migration">fork-migration derivation</a> and <a href="../reference/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
 							</td>
 						</tr>
 						<tr>
@@ -158,7 +159,7 @@
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="../whitepapers/statoblast-whitepaper.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
+							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="../explanation/statoblast.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -202,7 +203,7 @@
 
 			<section id="deployment-bytecode">
 				<h2>Deployment and Bytecode</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../safety-operations/security-model.html#assumption-a23">A23 verified deployment</a>, and <a href="../safety-operations/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a23">A23 verified deployment</a>, and <a href="../reference/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.</p>
 				<p>The proof verifier, deposit delegate, and claim delegate splits also exist because bytecode headroom is tight. Keeping proof math and the cohesive deposit mutation path outside the deployed game bytecode keeps the contract under the current bytecode budgets and leaves only limited headroom for small execution changes without collapsing the public game contract into an unreviewable blob.</p>
 				<div class="table-scroll" role="region" aria-label="Escalation game bytecode measurements" tabindex="0">
 					<table>
@@ -233,7 +234,7 @@
 					</table>
 				</div>
 				<p>The factory keeps this creation bytecode in two fixed code-storage carriers and reconstructs it with two <code>EXTCODECOPY</code> operations. Each carrier stays below EIP-170, and deploying bytecode as code is much cheaper than initializing one storage slot for every 32-byte word. This choice keeps deterministic factory deployment below the block gas limit; the two-part shape is fixed, so game creation does not introduce a user-sized loop.</p>
-				<p>Any Solidity change can also move deterministic deployment addresses, because address derivation uses init code. After contract changes, regenerate and review every network deployment manifest with the normal artifact workflow. Follow the <a href="../safety-operations/operator-reference.md#launch-release-checklist">Operator Reference launch release checklist</a> when those addresses intentionally change.</p>
+				<p>Any Solidity change can also move deterministic deployment addresses, because address derivation uses init code. After contract changes, regenerate and review every network deployment manifest with the normal artifact workflow. Follow the <a href="../reference/operator-guardrails.html#launch-release-checklist">Operator Reference launch release checklist</a> when those addresses intentionally change.</p>
 				<p>For gas-sensitive work, measure instead of assuming. Scenario tests are the first line of defense, and <code>bun run gas-costs</code> is the follow-up when deployment or settlement costs are part of the change.</p>
 			</section>
 
@@ -273,5 +274,7 @@
 
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>

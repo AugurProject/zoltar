@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Merkle Mountain Range Carry Proofs</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -78,7 +79,7 @@
 
 			<section id="proofs">
 				<h2>Proof Structure</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a20">A20 chain-data and proof availability</a> and <a href="../safety-operations/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a20">A20 chain-data and proof availability</a> and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
 				<p>A carried-deposit proof has two parts. First it proves membership in the inherited MMR snapshot for one outcome. Then it proves that the same <code>parentDepositIndex</code> has not already been consumed in this continuation's nullifier tree.</p>
 				<table>
 					<thead>
@@ -209,5 +210,7 @@
 		<script type="module" src="../assets/js/mmrProofPlanner.js"></script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>

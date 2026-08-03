@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Liquidation Design</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
@@ -95,7 +96,7 @@
 
 			<section id="bounded-execution">
 				<h2>Bounded Execution</h2>
-				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../architecture-deployment/escalation-game-architecture.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
+				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../explanation/escalation-game.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
 				<p>Settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas. They consume committed leaves with replay protection and do not create owner registries.</p>
 			</section>
 
@@ -106,5 +107,7 @@
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>

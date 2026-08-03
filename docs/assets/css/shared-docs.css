@@ -139,29 +139,6 @@
 	transform: translateY(0);
 }
 
-/* Documents embedded by documentation.html use the outer reader navigation. */
-body.reader-embedded > .skip-link,
-body.paper-statoblast.reader-embedded .sidebar,
-body.paper-zoltar.reader-embedded .sidebar {
-	display: none;
-}
-
-body.paper-statoblast.reader-embedded .site-shell,
-body.paper-zoltar.reader-embedded .site-shell {
-	display: block;
-	width: min(var(--docs-page-width), calc(100% - var(--docs-page-inline-gutter-mobile)));
-	padding: 0.5rem 0 2rem;
-}
-
-body.paper-statoblast.reader-embedded .paper-content,
-body.paper-zoltar.reader-embedded .paper-content {
-	min-width: 0;
-}
-
-body.doc-openoracle.reader-embedded main {
-	padding-top: 0.5rem;
-}
-
 /* OpenOracle integration document */
 
 body.doc-openoracle {
@@ -3335,12 +3312,9 @@ body.paper-zoltar .footer-note {
 	}
 }
 
-/*
-	Inside the searchable reader, every source document adopts the reader's visual
-	vocabulary. Standalone pages retain their own theme and print treatment.
-*/
+/* Native documentation routes share one visual vocabulary and retain their print treatment. */
 @media screen {
-	body.reader-embedded {
+	body.docs-shell-page {
 		color-scheme: light;
 		--bg: #fffdf8;
 		--paper: #fffdf8;
@@ -3383,13 +3357,13 @@ body.paper-zoltar .footer-note {
 		line-height: 1.62;
 	}
 
-	body.reader-embedded::before {
+	body.docs-shell-page::before {
 		display: none;
 	}
 
-	body.doc-openoracle.reader-embedded main,
-	body.paper-statoblast.reader-embedded .site-shell,
-	body.paper-zoltar.reader-embedded .site-shell {
+	body.doc-openoracle.docs-shell-page main,
+	body.paper-statoblast.docs-shell-page main,
+	body.paper-zoltar.docs-shell-page main {
 		display: block;
 		width: 100%;
 		max-width: none;
@@ -3397,51 +3371,45 @@ body.paper-zoltar .footer-note {
 		padding: clamp(0.55rem, 1.8vw, 1rem);
 	}
 
-	body.paper-statoblast.reader-embedded .paper-content,
-	body.paper-zoltar.reader-embedded .paper-content {
-		width: 100%;
-		min-width: 0;
-	}
-
-	body.reader-embedded :is(h1, h2) {
+	body.docs-shell-page :is(h1, h2) {
 		font-family: Georgia, "Times New Roman", serif;
 		font-weight: 500;
 		letter-spacing: -0.025em;
 	}
 
-	body.doc-openoracle.reader-embedded h1,
-	body.paper-statoblast.reader-embedded h1,
-	body.paper-zoltar.reader-embedded h1 {
+	body.doc-openoracle.docs-shell-page h1,
+	body.paper-statoblast.docs-shell-page h1,
+	body.paper-zoltar.docs-shell-page h1 {
 		max-width: 19ch;
 		font-size: clamp(2.25rem, 5.5vw, 3.7rem);
 		line-height: 1.03;
 	}
 
-	body.doc-openoracle.reader-embedded h2,
-	body.paper-statoblast.reader-embedded .paper-section h2,
-	body.paper-zoltar.reader-embedded .paper-section h2 {
+	body.doc-openoracle.docs-shell-page h2,
+	body.paper-statoblast.docs-shell-page .paper-section h2,
+	body.paper-zoltar.docs-shell-page .paper-section h2 {
 		font-size: clamp(1.55rem, 3.5vw, 2.3rem);
 		line-height: 1.12;
 	}
 
-	body.reader-embedded a {
+	body.docs-shell-page a {
 		color: var(--accent);
 		text-decoration-thickness: 0.08em;
 		text-underline-offset: 0.18em;
 	}
 
-	body.reader-embedded a:hover {
+	body.docs-shell-page a:hover {
 		color: var(--ink);
 	}
 
-	body.reader-embedded :is(a, button, input, select, [tabindex]):focus-visible {
+	body.docs-shell-page :is(a, button, input, select, [tabindex]):focus-visible {
 		outline: 3px solid var(--accent-soft);
 		outline-offset: 2px;
 	}
 
-	body.doc-openoracle.reader-embedded header,
-	body.paper-statoblast.reader-embedded .hero,
-	body.paper-zoltar.reader-embedded .hero {
+	body.doc-openoracle.docs-shell-page main > header,
+	body.paper-statoblast.docs-shell-page .hero,
+	body.paper-zoltar.docs-shell-page .hero {
 		margin: 0 0 0.9rem;
 		padding: clamp(1.25rem, 4vw, 2.5rem);
 		border: 1px solid var(--line);
@@ -3450,9 +3418,9 @@ body.paper-zoltar .footer-note {
 		box-shadow: none;
 	}
 
-	body.doc-openoracle.reader-embedded section,
-	body.paper-statoblast.reader-embedded .paper-section,
-	body.paper-zoltar.reader-embedded .paper-section {
+	body.doc-openoracle.docs-shell-page main > section,
+	body.paper-statoblast.docs-shell-page .paper-section,
+	body.paper-zoltar.docs-shell-page .paper-section {
 		margin: 0.9rem 0 0;
 		padding: clamp(1rem, 3vw, 1.75rem);
 		border: 1px solid var(--line);
@@ -3461,52 +3429,52 @@ body.paper-zoltar .footer-note {
 		box-shadow: none;
 	}
 
-	body.reader-embedded :is(.meta-card, .summary-card) {
+	body.docs-shell-page :is(.meta-card, .summary-card) {
 		border-top-color: color-mix(in srgb, var(--accent) 52%, var(--line));
 	}
 
-	body.reader-embedded :is(.diagram, .equation, .example-visual, .interactive-example, .table-wrap) {
+	body.docs-shell-page :is(.diagram, .equation, .example-visual, .interactive-example, .table-wrap) {
 		border-color: var(--line);
 		border-radius: 0.65rem;
 		box-shadow: none;
 	}
 
-	body.reader-embedded .interactive-tool-toolbar {
+	body.docs-shell-page .interactive-tool-toolbar {
 		border-color: var(--line);
 		border-radius: 0.65rem;
 		background: var(--soft);
 	}
 
-	body.reader-embedded :is(.interactive-tool-toolbar select, .interactive-tool-toolbar button, .interactive-tool-retry) {
+	body.docs-shell-page :is(.interactive-tool-toolbar select, .interactive-tool-toolbar button, .interactive-tool-retry) {
 		border-radius: 0.5rem;
 		background: var(--paper);
 	}
 
-	body.reader-embedded :is(table, th, td) {
+	body.docs-shell-page :is(table, th, td) {
 		border-color: var(--line);
 	}
 
-	body.reader-embedded th {
+	body.docs-shell-page th {
 		background: var(--table-head);
 	}
 }
 
 @media screen and (max-width: 640px) {
-	body.doc-openoracle.reader-embedded main,
-	body.paper-statoblast.reader-embedded .site-shell,
-	body.paper-zoltar.reader-embedded .site-shell {
+	body.doc-openoracle.docs-shell-page main,
+	body.paper-statoblast.docs-shell-page main,
+	body.paper-zoltar.docs-shell-page main {
 		padding: 0.4rem;
 	}
 
-	body.doc-openoracle.reader-embedded header,
-	body.paper-statoblast.reader-embedded .hero,
-	body.paper-zoltar.reader-embedded .hero {
+	body.doc-openoracle.docs-shell-page main > header,
+	body.paper-statoblast.docs-shell-page .hero,
+	body.paper-zoltar.docs-shell-page .hero {
 		padding: 1.05rem;
 	}
 
-	body.doc-openoracle.reader-embedded section,
-	body.paper-statoblast.reader-embedded .paper-section,
-	body.paper-zoltar.reader-embedded .paper-section {
+	body.doc-openoracle.docs-shell-page main > section,
+	body.paper-statoblast.docs-shell-page .paper-section,
+	body.paper-zoltar.docs-shell-page .paper-section {
 		padding: 0.85rem;
 	}
 

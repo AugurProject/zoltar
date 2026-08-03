@@ -124,7 +124,7 @@ Escalation escrow bookkeeping uses `VaultEscrowUpdated(vault indexed, escrowedRe
 
 Standard ERC-20 `Transfer` and `Approval`, plus ERC-1155 `TransferSingle`, `TransferBatch`, and `ApprovalForAll`, may be indexed for wallet balances and authorization, but they do not replace a Zoltar lifecycle or accounting field. The ERC-1155 ABI declares `URI`, but the current implementation never emits it; indexers must not wait for or synthesize that event. ERC-20 `Approval` is not an authoritative allowance reducer: a finite `transferFrom` spend decreases allowance without emitting `Approval`, while infinite allowance is neither decreased nor re-emitted. OpenOracle's `InternalApproval` likewise tracks only its separate internal-balance allowance and is not part of the packed report-state reducer. The imported `IAugur` event declarations are compatibility types; Zoltar contracts do not emit an Augur event stream.
 
-`DeploymentStatusOracle.DeploymentAddressesSet(address[])` is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by `getDeploymentMask()`; see [Deployment Status Oracle](../architecture-deployment/deployment-status.html).
+`DeploymentStatusOracle.DeploymentAddressesSet(address[])` is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by `getDeploymentMask()`; see [Deployment Status Oracle](../reference/deployment-status.html).
 
 ## Canonical reducers
 
@@ -162,4 +162,4 @@ Token events do not establish protocol cause. Attribute minting, migration, escr
 8. Consume winning, losing, exported, direct-parent, and forked-escrow continuation deposits by their explicit reasons and resulting commitments.
 9. Finish with complete-set, winning-share, REP, and pool-fee withdrawals. The final replayed checkpoints should match the corresponding storage getters when audited.
 
-The generated [Contract Interaction Reference](./contract-interaction-reference.md) maps transaction entrypoints to their primary events. The [Operator Reference](./operator-reference.md) documents lifecycle guardrails and recovery paths.
+Transaction entrypoints and their primary events are in the [Contract Interaction Reference](./contracts.html). Lifecycle guardrails and recovery paths are in [Operator Guardrails](./operator-guardrails.html).

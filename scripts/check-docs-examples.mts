@@ -167,7 +167,7 @@ async function renderDeploymentMapping(
 	rowCount: number
 	text: string
 }> {
-	const filePath = 'docs/architecture-deployment/deployment-status.html'
+	const filePath = 'docs/reference/deployment-status.html'
 	const html = await readFile(filePath, 'utf8')
 	const window = new Window({
 		url: pathToFileURL(filePath).href,
@@ -473,7 +473,7 @@ async function checkDeploymentMappingStates(): Promise<void> {
 }
 
 async function checkDeploymentLinkedScenarioRace(): Promise<void> {
-	const filePath = 'docs/architecture-deployment/deployment-status.html'
+	const filePath = 'docs/reference/deployment-status.html'
 	const html = await readFile(filePath, 'utf8')
 	const interactiveToolsSource = await readFile('docs/assets/js/interactiveTools.js', 'utf8')
 	const linkedState = JSON.stringify({ deploymentMask: '0x5' })
@@ -553,7 +553,7 @@ async function checkDeploymentLinkedScenarioRace(): Promise<void> {
 }
 
 async function checkMmrProofPlannerStates(): Promise<void> {
-	const html = await readFile('docs/architecture-deployment/merkle-mountain-range.html', 'utf8')
+	const html = await readFile('docs/reference/merkle-mountain-range.html', 'utf8')
 	const source = await readFile('docs/assets/js/mmrProofPlanner.js', 'utf8')
 	const window = new Window({
 		url: 'https://docs.example/merkle-mountain-range.html',
@@ -706,7 +706,7 @@ function checkDiagramControlStates(): void {
 async function checkInteractiveToolControls(): Promise<void> {
 	const linkedState = JSON.stringify({ aliceEth: '9', ethRaiseCap: '24' })
 	const window = new Window({
-		url: `https://docs.example/truth-auction.html?tool=simple-auction-example&state=${encodeURIComponent(linkedState)}#simple-auction-example`,
+		url: `https://docs.example/truth-auctions.html?tool=simple-auction-example&state=${encodeURIComponent(linkedState)}#simple-auction-example`,
 	})
 	try {
 		window.document.write(`
@@ -821,7 +821,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 }
 
 async function checkInvariantCatalogStates(): Promise<void> {
-	const html = await readFile('docs/safety-operations/invariants.html', 'utf8')
+	const html = await readFile('docs/reference/invariants.html', 'utf8')
 	const source = await readFile('docs/assets/js/invariantExplorer.js', 'utf8')
 	const window = new Window({
 		url: 'https://docs.example/invariants.html#esc-10',
@@ -901,230 +901,6 @@ async function checkInvariantCatalogStates(): Promise<void> {
 		assert.equal(visibleIds().length, 94, 'Reset filters must restore every catalog entry')
 	} finally {
 		window.close()
-	}
-}
-
-async function checkReaderRuntimeStates(): Promise<void> {
-	const html = await readFile('docs/documentation.html', 'utf8')
-	const generated = await readFile('docs/assets/js/docsReaderMarkdown.js', 'utf8')
-	const source = await readFile('docs/assets/js/docsReader.js', 'utf8')
-	const fetchRequests: Array<{
-		input: string
-		resolve: (response: { ok: boolean; text: () => Promise<string> }) => void
-	}> = []
-	const window = new Window({
-		url: 'https://docs.example/documentation.html#doc-protocol-design-truth-auction--simple-auction-example',
-	})
-	try {
-		window.document.write(html)
-		window.document.close()
-		window.HTMLElement.prototype.scrollIntoView = () => undefined
-		new Function('window', generated)(window)
-		const controlledFetch = (input: string) =>
-			new Promise<{ ok: boolean; text: () => Promise<string> }>(resolve => {
-				fetchRequests.push({ input, resolve })
-			})
-		const resolveFetch = async (index: number) => {
-			const request = fetchRequests[index]
-			if (request === undefined) throw new Error(`Reader fetch request ${index} is missing`)
-			request.resolve({
-				ok: true,
-				text: async () => '<!doctype html><html><head><title>Reader test</title></head><body><details id="simple-auction-example"></details><section id="deployment-mask-decoder"></section><section id="callback-rejection-and-recovery"></section></body></html>',
-			})
-			for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
-		}
-		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
-		runScript(window, window.document, window.CustomEvent, window.Element, controlledFetch, window.HTMLAnchorElement, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLTextAreaElement, undefined, window.URL, (callback: FrameRequestCallback) => {
-			callback(0)
-			return 1
-		})
-
-		const chapters = Array.from(window.document.querySelectorAll('.reader-chapter')).flatMap(chapter => (chapter instanceof window.HTMLElement ? [chapter] : []))
-		const activeChapters = chapters.filter(chapter => !chapter.hidden)
-		assert.equal(chapters.length, 14, 'reader runtime must create one lazy chapter shell per generated document')
-		assert.deepEqual(
-			activeChapters.map(chapter => chapter.getAttribute('data-document-path')),
-			['protocol-design/truth-auction.html'],
-			'a reader deep link must select only its target document',
-		)
-		assert.deepEqual(
-			fetchRequests.map(request => request.input),
-			['./protocol-design/truth-auction.html'],
-			'reader startup must request only the selected document',
-		)
-		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'non-selected reader frames must remain unsourced while the active request is pending')
-		assert.equal(window.document.querySelectorAll('.reader-nav-tool-link').length > 0, true, 'reader navigation must expose generated interactive-tool links')
-		const assertNavigationOrder = (documentPath: string, expectedFragments: string[]) => {
-			const expectedSet = new Set(expectedFragments)
-			const actualFragments = Array.from(window.document.querySelectorAll(`.reader-nav-document[data-navigation-document-path="${documentPath}"] a[data-document-fragment]`), link => link.getAttribute('data-document-fragment')).filter(fragment => fragment !== null && expectedSet.has(fragment))
-			assert.deepEqual(actualFragments, expectedFragments, `${documentPath} reader tools must remain in source order with their owning sections`)
-		}
-		assertNavigationOrder('architecture-deployment/deployment-status.html', ['ordering', 'deployment-mask-decoder', 'limit'])
-		assertNavigationOrder('architecture-deployment/merkle-mountain-range.html', ['proofs', 'mmr-proof-planner', 'snapshots'])
-		assertNavigationOrder('protocol-design/open-oracle-integration.html', ['security-guarantee', 'initial-report-estimator-example', 'callback-rejection-and-recovery', 'attack-model', 'binary-censorship-example', 'parameters'])
-		assertNavigationOrder('protocol-design/liquidation.html', ['incentives'])
-		assertNavigationOrder('whitepapers/statoblast-whitepaper.html', ['escalation', 'escalation-deposit-example', 'resolution-edge-example', 'migration', 'collateral-repair-example', 'auction'])
-
-		const deploymentDecoderLink = window.document.querySelector('.reader-nav-document[data-navigation-document-path="architecture-deployment/deployment-status.html"] a[data-document-fragment="deployment-mask-decoder"]')
-		if (!(deploymentDecoderLink instanceof window.HTMLAnchorElement)) throw new Error('Reader deployment decoder navigation link is missing')
-		deploymentDecoderLink.click()
-		assert.deepEqual(
-			chapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath']),
-			['architecture-deployment/deployment-status.html'],
-			'reader navigation must switch to only the selected document',
-		)
-		assert.deepEqual(
-			fetchRequests.map(request => request.input),
-			['./protocol-design/truth-auction.html', './architecture-deployment/deployment-status.html'],
-			'reader navigation must request its newly selected document',
-		)
-		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'navigating away must leave the stale and active pending frames unsourced')
-
-		await resolveFetch(0)
-		assert.equal(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]').length, 0, 'a stale request completion must not source its inactive frame')
-
-		await resolveFetch(1)
-		const sourcedAfterActiveResponse = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
-		assert.equal(sourcedAfterActiveResponse.length, 1, 'only the active frame may receive a source after its request completes')
-		assert.equal(sourcedAfterActiveResponse[0]?.getAttribute('data-document-frame'), 'architecture-deployment/deployment-status.html', 'the one sourced reader frame must belong to the active document')
-
-		const markdownLink = window.document.querySelector('.reader-nav-document-link[data-document-path="safety-operations/operator-reference.md"]')
-		if (!(markdownLink instanceof window.HTMLAnchorElement)) throw new Error('Reader Markdown navigation link is missing')
-		markdownLink.click()
-		const sourcedAfterMarkdownNavigation = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
-		assert.equal(sourcedAfterMarkdownNavigation.length, 1, 'sequential reader navigation must unload the previously sourced frame')
-		assert.equal(sourcedAfterMarkdownNavigation[0]?.getAttribute('data-document-frame'), 'safety-operations/operator-reference.md', 'the selected Markdown document must be the only sourced frame')
-
-		const callbackLink = window.document.querySelector('.reader-nav-document[data-navigation-document-path="protocol-design/open-oracle-integration.html"] a[data-document-fragment="callback-rejection-and-recovery"]')
-		if (!(callbackLink instanceof window.HTMLAnchorElement)) throw new Error('Reader callback navigation link is missing')
-		callbackLink.click()
-		assert.deepEqual(
-			chapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath']),
-			['protocol-design/open-oracle-integration.html'],
-			'callback navigation must select only the OpenOracle chapter',
-		)
-		await resolveFetch(2)
-		const sourcedAfterCallbackNavigation = Array.from(window.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
-		assert.equal(sourcedAfterCallbackNavigation.length, 1, 'callback navigation must retain only its active sourced frame')
-		assert.equal(sourcedAfterCallbackNavigation[0]?.getAttribute('data-document-frame'), 'protocol-design/open-oracle-integration.html', 'callback navigation must source the OpenOracle frame')
-		assert.equal(window.location.hash, '#doc-protocol-design-open-oracle-integration--callback-rejection-and-recovery', 'callback navigation must preserve its section fragment in reader history')
-	} finally {
-		window.close()
-	}
-
-	const historyFetchRequests: Array<{
-		input: string
-		resolve: (response: { ok: boolean; text: () => Promise<string> }) => void
-	}> = []
-	const historyWindow = new Window({
-		url: 'https://docs.example/documentation.html',
-	})
-	try {
-		historyWindow.document.write(html)
-		historyWindow.document.close()
-		let simulatedScrollY = 0
-		historyWindow.HTMLElement.prototype.scrollIntoView = () => {
-			simulatedScrollY = 0
-		}
-		Object.defineProperty(historyWindow, 'scrollY', {
-			configurable: true,
-			get: () => simulatedScrollY,
-		})
-		Object.defineProperty(historyWindow, 'scrollTo', {
-			configurable: true,
-			value: (optionsOrX: ScrollToOptions | number, y?: number) => {
-				const nextScrollY = typeof optionsOrX === 'number' ? y : optionsOrX.top
-				if (typeof nextScrollY === 'number') simulatedScrollY = nextScrollY
-			},
-		})
-		new Function('window', generated)(historyWindow)
-		const controlledFetch = (input: string) =>
-			new Promise<{ ok: boolean; text: () => Promise<string> }>(resolve => {
-				historyFetchRequests.push({ input, resolve })
-			})
-		const resolveFetch = async (index: number) => {
-			const request = historyFetchRequests[index]
-			if (request === undefined) throw new Error(`Reader history fetch request ${index} is missing`)
-			request.resolve({
-				ok: true,
-				text: async () => '<!doctype html><html><head><title>Reader history test</title></head><body><main>Reader history test</main></body></html>',
-			})
-			for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
-		}
-		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
-		runScript(
-			historyWindow,
-			historyWindow.document,
-			historyWindow.CustomEvent,
-			historyWindow.Element,
-			controlledFetch,
-			historyWindow.HTMLAnchorElement,
-			historyWindow.HTMLButtonElement,
-			historyWindow.HTMLDetailsElement,
-			historyWindow.HTMLElement,
-			historyWindow.HTMLInputElement,
-			historyWindow.HTMLTextAreaElement,
-			undefined,
-			historyWindow.URL,
-			(callback: FrameRequestCallback) => {
-				callback(0)
-				return 1
-			},
-		)
-		const historyChapters = Array.from(historyWindow.document.querySelectorAll('.reader-chapter')).flatMap(chapter => (chapter instanceof historyWindow.HTMLElement ? [chapter] : []))
-		const activePaths = () => historyChapters.filter(chapter => !chapter.hidden).map(chapter => chapter.dataset['documentPath'])
-		const historyHash = () => historyWindow.location.hash
-		const settleScrollStabilization = () => new Promise(resolve => setTimeout(resolve, 700))
-
-		assert.deepEqual(activePaths(), ['whitepapers/statoblast-whitepaper.html'], 'a hashless reader must start on the default first chapter')
-		await resolveFetch(0)
-		historyWindow.scrollTo({ top: 240 })
-		const deploymentLink = historyWindow.document.querySelector('.reader-nav-document-link[data-document-path="architecture-deployment/deployment-status.html"]')
-		if (!(deploymentLink instanceof historyWindow.HTMLAnchorElement)) throw new Error('Reader deployment navigation link is missing')
-		deploymentLink.click()
-		await resolveFetch(1)
-		await settleScrollStabilization()
-		assert.deepEqual(activePaths(), ['architecture-deployment/deployment-status.html'], 'forward reader navigation must select the requested chapter before Back')
-		assert.equal(historyHash(), '#doc-architecture-deployment-deployment-status', 'forward reader navigation must create a chapter hash')
-		historyWindow.scrollTo({ top: 740 })
-
-		const oracleLink = historyWindow.document.querySelector('.reader-nav-document-link[data-document-path="protocol-design/open-oracle-integration.html"]')
-		if (!(oracleLink instanceof historyWindow.HTMLAnchorElement)) throw new Error('Reader OpenOracle navigation link is missing')
-		oracleLink.click()
-		await resolveFetch(2)
-		await settleScrollStabilization()
-		assert.deepEqual(activePaths(), ['protocol-design/open-oracle-integration.html'], 'a second forward reader navigation must select its requested chapter')
-		assert.equal(historyHash(), '#doc-protocol-design-open-oracle-integration', 'a second forward reader navigation must retain the prior chapter in history')
-
-		historyWindow.history.back()
-		for (let attempt = 0; attempt < 20 && historyHash() !== '#doc-architecture-deployment-deployment-status'; attempt += 1) {
-			await new Promise(resolve => setTimeout(resolve, 0))
-		}
-		assert.equal(historyHash(), '#doc-architecture-deployment-deployment-status', 'the first browser Back must restore the prior reader chapter URL')
-		assert.deepEqual(activePaths(), ['architecture-deployment/deployment-status.html'], 'the first browser Back must restore the prior reader chapter')
-		await resolveFetch(3)
-		await settleScrollStabilization()
-		assert.equal(simulatedScrollY, 740, 'browser Back must retain the prior reader scroll position after the restored frame finishes loading')
-
-		historyWindow.history.back()
-		for (let attempt = 0; attempt < 20 && historyHash().length > 0; attempt += 1) {
-			await new Promise(resolve => setTimeout(resolve, 0))
-		}
-		assert.equal(historyHash(), '', 'browser Back must restore the reader initial hashless URL')
-		assert.deepEqual(activePaths(), ['whitepapers/statoblast-whitepaper.html'], 'browser Back to the hashless URL must restore the default first chapter')
-		assert.deepEqual(
-			historyFetchRequests.map(request => request.input),
-			['./whitepapers/statoblast-whitepaper.html', './architecture-deployment/deployment-status.html', './protocol-design/open-oracle-integration.html', './architecture-deployment/deployment-status.html', './whitepapers/statoblast-whitepaper.html'],
-			'sequential browser Back navigation must unload each later document and request the restored chapters in order',
-		)
-		await resolveFetch(4)
-		await settleScrollStabilization()
-		assert.equal(simulatedScrollY, 240, 'browser Back to the hashless reader URL must restore its saved scroll position')
-		const sourcedAfterBack = Array.from(historyWindow.document.querySelectorAll('iframe[data-reader-source-ready="true"]'))
-		assert.equal(sourcedAfterBack.length, 1, 'browser Back must leave exactly one sourced reader frame')
-		assert.equal(sourcedAfterBack[0]?.getAttribute('data-document-frame'), 'whitepapers/statoblast-whitepaper.html', 'the default first chapter must be the sole source after Back')
-	} finally {
-		historyWindow.close()
 	}
 }
 
@@ -1212,7 +988,7 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} zero-bid binding condition`)
 		assertEqual(example.output('ethRaised'), '0 ETH', `${scenario.filePath} zero-bid retained ETH`)
 		assertEqual(example.output('thresholdInputEth'), '0 ETH', `${scenario.filePath} zero-bid threshold input ETH`)
-		const expectedThreshold = scenario.filePath === 'docs/whitepapers/statoblast-whitepaper.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
+		const expectedThreshold = scenario.filePath === 'docs/explanation/statoblast.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
 		assertEqual(example.output('underfundedThreshold'), expectedThreshold, `${scenario.filePath} zero-bid threshold`)
 		assertEqual(example.output('aliceReceives'), '0 REP', `${scenario.filePath} zero-bid Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} zero-bid Bob REP`)
@@ -1235,9 +1011,9 @@ async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourc
 }
 
 async function checkCollateralRepairExample(): Promise<void> {
-	const html = await readFile('docs/whitepapers/statoblast-whitepaper.html', 'utf8')
+	const html = await readFile('docs/explanation/statoblast.html', 'utf8')
 	const window = new Window({
-		url: pathToFileURL('docs/whitepapers/statoblast-whitepaper.html').href,
+		url: pathToFileURL('docs/explanation/statoblast.html').href,
 	})
 	window.document.write(html)
 	window.document.close()
@@ -1246,7 +1022,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 		const script = window.document.querySelector('script:not([src])')
 		const scriptText = script?.textContent
 		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error('docs/whitepapers/statoblast-whitepaper.html is missing an inline collateral repair script')
+			throw new Error('docs/explanation/statoblast.html is missing an inline collateral repair script')
 		}
 
 		const runScript = new Function('window', 'document', scriptText)
@@ -1254,7 +1030,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 
 		const example = window.document.getElementById('collateral-repair-example')
 		if (example === null) {
-			throw new Error('docs/whitepapers/statoblast-whitepaper.html is missing #collateral-repair-example')
+			throw new Error('docs/explanation/statoblast.html is missing #collateral-repair-example')
 		}
 
 		const output = (name: string) => {
@@ -1293,7 +1069,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 }
 
 async function checkResolutionEdgeExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/whitepapers/statoblast-whitepaper.html', 'resolution-edge-example')
+	const example = await loadInteractiveExample('docs/explanation/statoblast.html', 'resolution-edge-example')
 
 	try {
 		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
@@ -1328,7 +1104,7 @@ async function checkResolutionEdgeExample(): Promise<void> {
 }
 
 async function checkEscalationDepositExample(): Promise<void> {
-	const filePath = 'docs/whitepapers/statoblast-whitepaper.html'
+	const filePath = 'docs/explanation/statoblast.html'
 	const html = await readFile(filePath, 'utf8')
 	const staticWindow = new Window({
 		url: pathToFileURL(filePath).href,
@@ -1419,7 +1195,7 @@ async function checkEscalationDepositExample(): Promise<void> {
 }
 
 async function checkDynamicWethReportExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/protocol-design/open-oracle-integration.html', 'initial-report-estimator-example')
+	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'initial-report-estimator-example')
 
 	try {
 		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
@@ -1497,7 +1273,7 @@ const scenarios: AuctionExampleScenario[] = [
 		defaultAliceReceives: '1 REP',
 		defaultBobReceives: '1.33 REP',
 		defaultCarolReceives: '1.67 REP',
-		filePath: 'docs/protocol-design/truth-auction.html',
+		filePath: 'docs/explanation/truth-auctions.html',
 		exampleId: 'simple-auction-example',
 		underfundedAliceReceives: '4 REP',
 	},
@@ -1510,7 +1286,7 @@ for (const scenario of scenarios) {
 	await checkAllZeroBids(scenario)
 }
 
-await checkSourceLabelsAndThresholdText('docs/protocol-design/truth-auction.html', [
+await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', [
 	'write("clearingMode", "underfunded qualification clearing")',
 	'write("bindingCondition", "underfunded")',
 	'write("thresholdInputEth", formatEth(winningEth))',
@@ -1530,15 +1306,14 @@ await checkMmrProofPlannerStates()
 checkDiagramControlStates()
 await checkInteractiveToolControls()
 await checkInvariantCatalogStates()
-await checkReaderRuntimeStates()
 checkExactRepCapEquality()
 
-const openOracleHtml = await readFile('docs/protocol-design/open-oracle-integration.html', 'utf8')
+const openOracleHtml = await readFile('docs/explanation/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
 
-const auctionDesignHtml = await readFile('docs/protocol-design/truth-auction.html', 'utf8')
+const auctionDesignHtml = await readFile('docs/explanation/truth-auctions.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
 assert.match(auctionDesignHtml, /complete REP sale cap[\s\S]*one effective price/i, 'auction design should explain complete weak-demand REP allocation')
 assert.match(auctionDesignHtml, /only bids at or above\s+the cap-implied qualification threshold/i, 'auction design should make threshold qualification explicit')
@@ -1560,15 +1335,15 @@ assert.match(auctionDesignHtml, /examples below use[\s\S]*formula above gives[\s
 assert.match(auctionDesignHtml, /complete\s+unmigrated allowance[\s\S]*Finalization rejects explicit repair contributions/i, 'auction design should document allowance allocation and rejected donations')
 assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 
-const operatorReferenceMarkdown = await readFile('docs/safety-operations/operator-reference.md', 'utf8')
+const operatorReferenceMarkdown = await readFile('docs/reference/operator-guardrails.md', 'utf8')
 assert.match(operatorReferenceMarkdown, /parent vault is checkpointed before its allowance is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceMarkdown, /statoblast-whitepaper\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast-whitepaper\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
+assert.match(operatorReferenceMarkdown, /statoblast\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
 assert.doesNotMatch(operatorReferenceMarkdown, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
 assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
 assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
-const contractInteractionReferenceMarkdown = await readFile('docs/safety-operations/contract-interaction-reference.md', 'utf8')
+const contractInteractionReferenceMarkdown = await readFile('docs/reference/contracts.md', 'utf8')
 const updateCollateralAmountRow = contractInteractionReferenceMarkdown.split('\n').find(line => line.startsWith('| `updateCollateralAmount()` |'))
 if (updateCollateralAmountRow === undefined) {
 	throw new Error('contract interaction reference should document updateCollateralAmount()')
@@ -1584,7 +1359,7 @@ if (redeemRepRow === undefined) {
 assert.match(redeemRepRow, /specified `vault` has no escalation escrow and has redeemable REP/i, 'contract interaction reference should scope the redemption escrow precondition to the specified vault')
 assert.doesNotMatch(redeemRepRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRep requires global escrow clearance')
 
-const statoblastHtml = await readFile('docs/whitepapers/statoblast-whitepaper.html', 'utf8')
+const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	const exampleId = bindMatch[1]
 	if (exampleId === undefined) {
@@ -1776,7 +1551,7 @@ assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, run
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
 assert.match(statoblastHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
 assert.match(statoblastHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
-const invariantsHtml = await readFile('docs/safety-operations/invariants.html', 'utf8')
+const invariantsHtml = await readFile('docs/reference/invariants.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
 const feeVectorDecayCandidate = 7n
 const feeVectorEligibleAllowance = 3n
@@ -1843,7 +1618,7 @@ assert.doesNotMatch(statoblastHtml, /data-source="cumulativeCollateralTargetAfte
 assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
 assert.match(statoblastHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
 assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.match(statoblastHtml, /truth-auction\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
+assert.match(statoblastHtml, /truth-auctions\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
 assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
 assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
 assert.doesNotMatch(statoblastHtml, /totalRepPurchased = underfundedWinningEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')

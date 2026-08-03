@@ -108,11 +108,10 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for `docs/assets/js/chartRuntime.js`
-and `docs/assets/js/docsReaderMarkdown.js`. These documentation bundles are tracked because
-the static reader loads them directly;
-`bun run docs:check-charts` and
-`bun run docs:check-reader` enforce freshness.
+Generated outputs are intentionally untracked, except for the documentation outputs listed
+below. They are tracked because the static documentation site loads them directly;
+`bun run docs:check-charts`, `bun run docs:check-contract-reference`, and
+`bun run docs:check-index` enforce freshness.
 
 | Output | Source or command |
 | --- | --- |
@@ -123,7 +122,11 @@ the static reader loads them directly;
 | `ui/js/**` | UI TypeScript build |
 | `ui/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
-| `docs/assets/js/docsReaderMarkdown.js` | `bun run docs:build-reader` |
+| `docs/assets/js/docsData.js` | `bun run docs:build-index` |
+| `docs/reference/contracts.md` | `bun run docs:generate-contract-reference` |
+| `docs/reference/contracts.html` | `docs/reference/contracts.md` via `bun run docs:build-index` |
+| `docs/reference/event-stream.html` | `bun run docs:build-index` |
+| `docs/reference/operator-guardrails.html` | `bun run docs:build-index` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
 

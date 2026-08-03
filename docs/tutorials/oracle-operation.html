@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Inspect an accepted oracle price · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Inspect an accepted oracle price</h1>
+				<p>Use the deterministic Security pool fixture to connect a settled OpenOracle report to the pool's valid REP/ETH price cache and the operations that consume it. The fixture starts after settlement; callback failure and recovery are covered separately as operational branches.</p>
+			</header>
+			<section id="open-the-oracle-view">
+				<h2>Open the Oracle view</h2>
+				<p>Serve the UI and open <code>http://localhost:12345/?simulate=1&amp;simScenario=security-pool#/open-oracle</code>. Wait for the <strong>Security pool</strong> scenario, then open the seeded report in the report browser. Uniswap-backed quoting is unavailable in simulation; the report and cached price are deterministic fixture state.</p>
+				<p><strong>Checkpoint:</strong> at least one seeded report is settled and distributed.</p>
+			</section>
+			<section id="stage-an-operation">
+				<h2>Inspect the coordinator</h2>
+				<p>Return to <strong>Will this resolve?</strong>, open its funded vault, and inspect the oracle manager. Confirm that the cached price is valid, the seeded report is no longer pending, and no staged operation remains attached to settlement.</p>
+				<p><strong>Checkpoint:</strong> the manager has a valid price and no pending report.</p>
+			</section>
+			<section id="inspect-the-report">
+				<h2>Inspect the report</h2>
+				<p>Compare the report's final token amounts, reporter, settlement time, and distributed state with the manager's cached REP/ETH price. Statoblast uses the accepted price for pool solvency; OpenOracle does not decide the market outcome.</p>
+			</section>
+			<section id="observe-completion">
+				<h2>Compare immediate and staged paths</h2>
+				<p>Open a price-sensitive vault action without submitting it. With the fixture's fresh price, the operation can execute immediately after staging; it does not need another report. If the price expires later, the same operation requires report funding or waits beside a pending report. Keep the exercise read-only so the deterministic checkpoint remains valid.</p>
+				<p><strong>Checkpoint:</strong> a fresh cached price changes the execution path but not the downstream pool safety checks.</p>
+			</section>
+			<section id="finish">
+				<h2>What you learned</h2>
+				<p>You connected a settled report, the cached price, and the immediate operation path without inventing a pending or rejected callback. Use <a href="../how-to/recover-oracle-operation.html">the recovery guide</a> for the distinct failure branches or continue to the <a href="../explanation/open-oracle.html">integration explanation</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

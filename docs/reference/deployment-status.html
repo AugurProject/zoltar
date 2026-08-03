@@ -5,12 +5,13 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Deployment Status Oracle</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
 				<h1>Deployment Status Oracle</h1>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../safety-operations/security-model.html#assumption-a23">A23 verified canonical deployments</a> and <a href="../safety-operations/security-model.html#assumption-a24">A24 client and RPC integrity</a>.</p>
+				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a23">A23 verified canonical deployments</a> and <a href="../reference/security-model.html#assumption-a24">A24 client and RPC integrity</a>.</p>
 				<p><code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not measure protocol readiness or initialization success. It only reports which configured deployment-step addresses currently contain runtime bytecode.</p>
 				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and frontends need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
 			</header>
@@ -344,5 +345,7 @@
 		</script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>
