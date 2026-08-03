@@ -104,6 +104,12 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 securityBondAllowanceMoved,
 		uint256 repAmountMoved
 	);
+	event VaultBadDebtRecorded(
+		address indexed targetVault,
+		uint256 badDebtAmount,
+		uint256 resultingVaultBadDebt,
+		uint256 resultingTotalBadDebt
+	);
 	event RedeemRep(
 		address indexed caller,
 		address indexed vault,
@@ -603,8 +609,8 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// Liquidation moves debt plus a 5%-bonus award paid entirely from free REP.
-	// Earned vault fees stay with the target. Forbidden dust triggers a full close.
+	// Liquidation moves only debt whose complete 5%-bonus award is funded by free REP.
+	// Earned fees and escalation claims stay with the target; max requests write off residual debt.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,
@@ -622,13 +628,13 @@ contract SecurityPool is SecurityPoolStorage {
 			pop(snapshotDenominator)
 		}
 		require(!isEscalationResolved(), 'Resolved');
-		_trackVault(callerVault);
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
 		uint256 debtToMove;
 		uint256 repToMove;
+		uint256 badDebtRecorded;
 		address delegate = liquidationDelegate;
 		bytes4 selector = SecurityPoolLiquidationDelegate.performBundledLiquidation.selector;
 		assembly ('memory-safe') {
@@ -640,35 +646,24 @@ contract SecurityPool is SecurityPoolStorage {
 			mstore(add(pointer, 0x64), snapshotTargetOwnership)
 			mstore(add(pointer, 0x84), snapshotTargetAllowance)
 			mstore(add(pointer, 0xa4), repEthPrice)
-			if iszero(delegatecall(gas(), delegate, pointer, 0xc4, pointer, 0x40)) {
+			if iszero(delegatecall(gas(), delegate, pointer, 0xc4, pointer, 0x60)) {
 				returndatacopy(pointer, 0, returndatasize())
 				revert(pointer, returndatasize())
 			}
 			debtToMove := mload(pointer)
 			repToMove := mload(add(pointer, 0x20))
+			badDebtRecorded := mload(add(pointer, 0x40))
 		}
 
-		// A proportional partial close may leave the target unsafe, but neither
-		// resulting vault may strand a position below the executable size floors.
-		_requireMinimumVaultRep(
-			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
-			securityVaults[targetVaultAddress].poolOwnership == 0 &&
-				securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target REP'
-		);
-		_requireMinimumSecurityBondAllowance(
-			securityVaults[targetVaultAddress].securityBondAllowance,
-			securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target debt'
-		);
-		_requireMinimumVaultRep(poolOwnershipToRep(securityVaults[callerVault].poolOwnership), false, 'Caller REP');
-		_requireMinimumSecurityBondAllowance(securityVaults[callerVault].securityBondAllowance, false, 'Caller debt');
+		if (debtToMove != 0) {
+			_trackVault(callerVault);
+		}
 		_syncActiveVault(targetVaultAddress);
-		_syncActiveVault(callerVault);
+		if (debtToMove != 0) _syncActiveVault(callerVault);
 
-		emit VaultLiquidated(callerVault, targetVaultAddress, debtToMove, repToMove);
+		if (debtToMove != 0) emit VaultLiquidated(callerVault, targetVaultAddress, debtToMove, repToMove);
 		_emitVaultAccountingCheckpoint(targetVaultAddress);
-		_emitVaultAccountingCheckpoint(callerVault);
+		if (debtToMove != 0) _emitVaultAccountingCheckpoint(callerVault);
 		_emitPoolAccountingCheckpoint(AccountingReason.AllowanceChange, callerVault);
 	}
 

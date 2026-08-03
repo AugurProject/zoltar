@@ -11,7 +11,7 @@
 			<header>
 				<h1>Liquidation Design</h1>
 				<p>
-					Liquidation transfers security-bond allowance from an unsafe vault to a healthy vault. The protocol computes a REP award with a fixed 5% bonus and transfers that award entirely as free REP. Non-tradeable escalation claims and accrued vault fees never transfer. Free-REP surplus remains with the target unless a nonzero remainder would fall below the minimum deposit, in which case that dust remainder is swept.
+					Liquidation transfers only the security-bond allowance whose complete fixed 5% award can be paid from an unsafe vault's free REP. Non-tradeable escalation claims, accrued vault fees, and free REP above the award never transfer. A maximum request records any untransferred residual as bad debt and removes it from active pool allowance instead of underpaying the liquidator or diluting other holders.
 				</p>
 			</header>
 
@@ -21,7 +21,7 @@
 					The <dfn>target vault</dfn> is the unsafe position being reduced, and the <dfn>liquidator vault</dfn> is the healthy position accepting its liabilities. Each vault can hold an ETH-denominated security-bond allowance, free REP represented by pool ownership, accrued fees, and non-tradeable escalation claims. Locally attributed escrow records REP deposited by that vault in the current game and counts toward current-game health. Inherited continuation backing remains aggregate until a committed deposit proof is settled and does not receive per-vault child health credit.
 				</p>
 				<p>
-					Execution quotes the debt slice and its fixed 5%-bonus REP award. Only free REP moves with the debt. Accrued fees and escalation claims stay with the target vault, and the liquidator must remain healthy after assuming the debt and receiving the free-REP award.
+					Execution first caps the debt slice to the amount whose fixed 5%-bonus REP award is fully funded. Only that free REP and funded debt move. Accrued fees and escalation claims stay with the target vault, and the liquidator must remain healthy after assuming the funded debt and receiving its complete award.
 				</p>
 			</section>
 
@@ -44,7 +44,7 @@
 					<p class="equation-caption"><span class="equation-label">Migration coverage</span>Only free REP can route parent OI.</p>
 				</div>
 				<p>
-					The migration multiplier is derived halfway between one and the configured pool multiplier, so <code>1 &lt; migrationSecurityMultiplier &lt; poolSecurityMultiplier</code>. Multipliers use basis points: an origin pool therefore requires at least <code>10,002 BPS</code> (<code>1.0002×</code>), which derives a migration multiplier of <code>10,001 BPS</code> (<code>1.0001×</code>). The exact minimum preserves both strict inequalities despite integer division. The lower bound makes OI routing costly to corrupt; the upper bound leaves some REP available for escalation without weakening the ordinary underwriting target.
+					The configured migration multiplier is derived halfway between one and the pool multiplier. The effective free-REP multiplier is the greater of that value and <code>10,500 BPS</code>, matching the complete liquidation award. At the minimum permitted pool multiplier of <code>10,002 BPS</code>, the halfway value is only <code>10,001 BPS</code>, so the 10,500-BPS liquidation reserve applies. This prevents a healthy vault from deliberately locking the free REP needed to fund its ordinary 105% liquidation award.
 				</p>
 			</section>
 
@@ -58,19 +58,26 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Liquidation award</span>Debt and output use atomic token units; <code>repEthPrice</code> is scaled by <code>PRICE_PRECISION = 10¹⁸</code>, and the 500 BPS bonus is applied over <code>BPS_DENOMINATOR = 10,000</code>.</p>
 				</div>
+				<div class="equation" id="eq-liquidation-funded-debt">
+					<math display="block" aria-label="maximum funded liquidation debt equals available free REP times price precision and the basis point denominator, divided by REP per ETH price times ten thousand five hundred, rounded down" data-source="maxFundedDebt = ⌊availableFreeRep * PRICE_PRECISION * BPS_DENOMINATOR / (repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))⌋">
+						<mrow><mi>maxFundedDebt</mi><mo>=</mo><mo>&#x230A;</mo><mfrac><mrow><mi>availableFreeRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow><mrow><mi>repEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>LIQUIDATION_REP_BONUS_BPS</mi><mo>)</mo></mrow></mfrac><mo>&#x230B;</mo></mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Funded debt cap</span>In an initialized pool, a partial request first computes <code>reserveOwnership = ⌈MIN_REP_DEPOSIT × poolOwnershipDenominator / totalRep⌉</code>. If that reserve is at least the target ownership, no partial debt or REP transfer is fundable. Otherwise, <code>availableFreeRep = ⌊(targetOwnership - reserveOwnership) × totalRep / poolOwnershipDenominator⌋</code>. A <dfn>maximum request</dfn> asks for at least the target's full current allowance (<code>requestedDebt >= targetAllowance</code>); it uses <code>availableFreeRep = ⌊targetOwnership × totalRep / poolOwnershipDenominator⌋</code>. The user queues that amount through the coordinator, which calls the pool; the pool's maximum-request path records remaining allowance through the bad-debt backstop. With a zero denominator, ownership converts at <code>PRICE_PRECISION</code>; with nonzero ownership denominator and zero pool REP, the available amount is zero.</p>
+				</div>
 				<p>
-					Integer execution converts the free-REP quote to ownership with a floor and converts it back to the reported REP amount with another floor. The <code>repAmountMoved</code> field in <code>VaultLiquidated</code> reports this final post-conversion amount. Full and dust-promoted closes use the same award, transferring all free REP only when the target remainder would otherwise violate the minimum-deposit floor.
+					Integer execution rounds the award up, converts it to pool ownership with another ceiling, and converts that ownership back to the reported REP amount with a floor. The ceilings ensure the liquidator receives at least the complete atomic-unit award. The <code>repAmountMoved</code> field in <code>VaultLiquidated</code> reports this final post-conversion amount; target surplus never substitutes for an underfunded award.
 				</p>
 				<figure class="diagram" id="fig-liquidation-punitive-flow">
-					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="860" data-plot-height="220" role="img" aria-label="Liquidation moves debt and a 5% bonus-priced free-REP award while target escalation claims, fees, and non-dust surplus remain"><span class="plot-chart-fallback">Liquidation assumes debt and takes a 5%-bonus free-REP award. Escalation claims, accrued fees, and non-dust surplus stay with the target vault.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Liquidation transfer</span>Debt and free REP move; claims and fees stay with their owner.</p>
+					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="860" data-plot-height="220" role="img" aria-label="Liquidation moves funded debt and its complete 5% free-REP award while target escalation claims, fees, and surplus remain; a maximum request records untransferred residual as bad debt"><span class="plot-chart-fallback">Liquidation assumes only funded debt and takes its complete 5%-bonus free-REP award. Escalation claims, accrued fees, and surplus stay with the target; a maximum request records untransferred residual as bad debt.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Liquidation transfer</span>Funded debt and its complete free-REP award move; claims, fees, and surplus stay, while a maximum request records untransferred residual allowance as bad debt.</p>
 				</figure>
 				<ul>
-					<li>Debt is capped by the requested and available allowance; debt-dust or REP-dust rules can promote the slice to a full close.</li>
-					<li>The award is quoted with an atomic-unit ceiling, converted to pool ownership with a floor, and converted back to the reported free-REP amount.</li>
+					<li>Debt is capped by the request, target allowance, and the complete award fundable from available free REP. A partial request also preserves the minimum target REP and debt positions.</li>
+					<li>The award is quoted with an atomic-unit ceiling, converted to pool ownership with a ceiling, and converted back to the reported free-REP amount.</li>
 					<li>The target retains all accrued unpaid fees, including fees checkpointed immediately before liquidation.</li>
 					<li>Every escalation claim remains owned by its committed depositor and pays only that vault if it wins.</li>
-					<li>A full liquidation moves all allowance and the free-REP award, but leaves escalation claims, accrued fees, and free REP above the award with the target unless the free-REP remainder would be nonzero below <code>MIN_REP_DEPOSIT</code>; only that dust case sweeps the remainder.</li>
+					<li>A maximum request normally moves the funded debt and its complete award. Any untransferred residual allowance is recorded in <code>vaultBadDebt</code> and cumulative <code>totalBadDebt</code>, then removed from total and fee-eligible active allowance.</li>
+					<li>If a positive funded slice would leave the caller's resulting allowance below <code>MIN_SECURITY_BOND_DEBT</code>, the maximum-request path transfers no debt, REP, or ownership and records the target's complete allowance as bad debt. It emits no <code>VaultLiquidated</code> or post-transfer caller checkpoint; fee updates before execution may still emit caller or target checkpoints.</li>
 				</ul>
 				<p>
 					There is no transfer or approval function for escalation claims. The claim remains bound to the depositor committed in the carry leaf, and settlement is its only payout path.
@@ -93,10 +100,10 @@
 					This separation also keeps settlement identity simple: the committed depositor remains the payout address at every fork depth. A liquidator must remain healthy after accepting the debt and free REP.
 				</p>
 				<p>
-					A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or the full remainder. Requiring instant target health would make many partial liquidations impossible and would force every keeper to finance a full close.
+					A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or submit a maximum request that moves only funded debt and records the untransferred remainder as bad debt. Requiring instant target health would make many partial liquidations impossible and would force keepers to finance a larger slice than requested, potentially the target's complete allowance.
 				</p>
 				<p>
-					The 105% quote is paid from free REP and compensates execution risk, gas, and capital. Accrued ETH fees and escalation claims are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept.
+					The 105% quote is paid from free REP and compensates execution risk, gas, and capital. Accrued ETH fees, escalation claims, and free-REP surplus are always inaccessible. The backstop never mints ownership or socializes the missing bonus: it writes the residual allowance out of active capacity, emits <code>VaultBadDebtRecorded</code>, and can leave existing collateral above active allowance so no additional complete sets can be created until capacity is restored.
 				</p>
 			</section>
 
@@ -111,7 +118,7 @@
 			<section id="queue-semantics">
 				<h2>Queued Execution</h2>
 				<p>
-					The oracle coordinator snapshots the target's allowance, free-REP ownership, pool REP-per-ownership rate, and numerically attributed current-game escalation REP when liquidation is queued, then validates the settled price at execution. Its minimum-distance guard uses those queue-time values, but execution invalidates only a changed target ownership or allowance and re-evaluates health from the live pool rate, live balances, and live escalation escrow. A target deposit, withdrawal, earlier liquidation, or allowance change therefore cancels the old quote, so collateral deliberately assigned to the target cannot become a queued keeper's windfall. A raw REP transfer to the pool changes no vault ownership and does not cancel execution. That distinction is game-theoretically necessary: otherwise an unsafe target could spend one atomic REP after every queue to buy a deterministic liquidation veto. The live pool rate converts the bonus-priced REP award into ownership units. A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary. The liquidator must remain healthy; both vaults must obey minimum REP and allowance floors, while the target may remain unsafe after a partial slice.
+					The oracle coordinator snapshots the target's allowance, free-REP ownership, pool REP-per-ownership rate, and numerically attributed current-game escalation REP when liquidation is queued, then validates the settled price at execution. Its minimum-distance guard uses those queue-time values, but execution invalidates only a changed target ownership or allowance and re-evaluates health from the live pool rate, live balances, and live escalation escrow. A target deposit, withdrawal, earlier liquidation, or allowance change therefore cancels the old quote, so collateral deliberately assigned to the target cannot become a queued keeper's windfall. A raw REP transfer to the pool changes no vault ownership and does not cancel execution. That distinction is game-theoretically necessary: otherwise an unsafe target could spend one atomic REP after every queue to buy a deterministic liquidation veto. The live pool rate converts the bonus-priced REP award into ownership units. A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary. A partial target with positive remaining allowance preserves both its REP and allowance floors. Whenever funded debt moves, the caller must satisfy both floors and remain healthy. A bad-debt-only maximum execution transfers nothing to the caller and therefore performs no caller position-floor check.
 				</p>
 			</section>
 		</main>

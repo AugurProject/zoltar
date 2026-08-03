@@ -7,6 +7,12 @@ import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 
 contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
+	event VaultBadDebtRecorded(
+		address indexed targetVault,
+		uint256 badDebtAmount,
+		uint256 resultingVaultBadDebt,
+		uint256 resultingTotalBadDebt
+	);
 
 	function resumeForkedEscalationGame() external {
 		// This is permissionless for liveness. The immutable carry commitment was
@@ -25,8 +31,9 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		uint256 snapshotTargetOwnership,
 		uint256 snapshotTargetAllowance,
 		uint256 repEthPrice
-	) external returns (uint256 debtToMove, uint256 repToMove) {
+	) external returns (uint256 debtToMove, uint256 repToMove, uint256 badDebtRecorded) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(callerVault != targetVault, 'Caller bad');
 		require(securityVaults[targetVault].poolOwnership == snapshotTargetOwnership, 'Target ownership changed');
 		require(
 			securityVaults[targetVault].securityBondAllowance == snapshotTargetAllowance,
@@ -46,34 +53,39 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			'Target safe'
 		);
 		uint256 ownershipToMove;
-		uint256 candidateDebtToMove = debtAmount > snapshotTargetAllowance ? snapshotTargetAllowance : debtAmount;
-		uint256 debtRemaining = snapshotTargetAllowance - candidateDebtToMove;
-		if (debtRemaining > 0 && debtRemaining < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT) {
-			candidateDebtToMove = snapshotTargetAllowance;
-		}
 		(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
 			securityVaults[targetVault].poolOwnership,
 			snapshotTargetAllowance,
-			candidateDebtToMove,
+			debtAmount,
 			repEthPrice,
 			pool.getTotalRepBalance(),
 			poolOwnershipDenominator
 		);
-		if (debtToMove != candidateDebtToMove) {
-			(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
-				securityVaults[targetVault].poolOwnership,
-				snapshotTargetAllowance,
-				debtToMove,
-				repEthPrice,
-				pool.getTotalRepBalance(),
-				poolOwnershipDenominator
-			);
+		if (
+			debtToMove != 0 &&
+			securityVaults[callerVault].securityBondAllowance + debtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+		) {
+			require(debtAmount >= snapshotTargetAllowance, 'Caller debt');
+			debtToMove = 0;
+			repToMove = 0;
+			ownershipToMove = 0;
 		}
-		require(debtToMove > 0, 'No liq');
+		if (debtAmount >= snapshotTargetAllowance) {
+			badDebtRecorded = snapshotTargetAllowance - debtToMove;
+			if (badDebtRecorded != 0) {
+				totalBadDebt += badDebtRecorded;
+				vaultBadDebt[targetVault] += badDebtRecorded;
+				totalSecurityBondAllowance -= badDebtRecorded;
+				feeEligibleSecurityBondAllowance -= badDebtRecorded;
+				emit VaultBadDebtRecorded(targetVault, badDebtRecorded, vaultBadDebt[targetVault], totalBadDebt);
+			}
+		}
+		require(debtToMove > 0 || badDebtRecorded > 0, 'No liq');
 
 		feeIndexRemainder = 0;
-		securityVaults[targetVault].securityBondAllowance = snapshotTargetAllowance - debtToMove;
+		securityVaults[targetVault].securityBondAllowance = snapshotTargetAllowance - debtToMove - badDebtRecorded;
 		securityVaults[targetVault].poolOwnership -= ownershipToMove;
+		if (debtToMove == 0) return (debtToMove, repToMove, badDebtRecorded);
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
 		uint256 callerEscalationRep;
@@ -93,6 +105,21 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 				statoblastSecurityMultiplierBps
 			),
 			'Caller bad'
+		);
+		uint256 targetAllowanceAfter = securityVaults[targetVault].securityBondAllowance;
+		uint256 targetFreeRepAfter = pool.poolOwnershipToRep(securityVaults[targetVault].poolOwnership);
+		require(
+			targetAllowanceAfter == 0 || targetAllowanceAfter >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
+			'Target debt'
+		);
+		require(targetAllowanceAfter == 0 || targetFreeRepAfter >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'Target REP');
+		require(
+			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
+			'Caller debt'
+		);
+		require(
+			pool.poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT,
+			'Caller REP'
 		);
 	}
 }

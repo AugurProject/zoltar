@@ -993,8 +993,8 @@
 		"width": 920
 	},
 	"fig-liquidation-punitive-flow": {
-		"ariaDescription": "Liquidation moves debt and a 5%-bonus free-REP award from the unsafe target vault while escalation claims, fees, and non-dust surplus remain with the target.",
-		"ariaLabel": "Liquidation moves debt and a free-REP award while target claims, fees, and non-dust surplus remain behind.",
+		"ariaDescription": "Liquidation moves only fully funded debt and its complete 5%-bonus free-REP award. Escalation claims, fees, and all surplus remain with the target; a maximum request records untransferred residual allowance as bad debt.",
+		"ariaLabel": "Liquidation moves funded debt and its free-REP award while target claims, fees, and surplus remain behind and residual allowance becomes bad debt.",
 		"height": 200,
 		"nodes": [
 			{
@@ -1057,7 +1057,7 @@
 				},
 				"children": [
 					{
-						"text": "unsafe debt"
+						"text": "unsafe allowance"
 					}
 				],
 				"tag": "text"
@@ -1071,7 +1071,7 @@
 				},
 				"children": [
 					{
-						"text": "retains claims and fees"
+						"text": "retains claims, fees, surplus"
 					}
 				],
 				"tag": "text"
@@ -1085,7 +1085,7 @@
 				},
 				"children": [
 					{
-						"text": "keeps non-dust surplus"
+						"text": "max residual → bad debt"
 					}
 				],
 				"tag": "text"
@@ -1107,7 +1107,7 @@
 				},
 				"children": [
 					{
-						"text": "debt + 5%-bonus free-REP award"
+						"text": "funded debt + complete 5% award"
 					}
 				],
 				"tag": "text"
@@ -1146,7 +1146,7 @@
 				},
 				"children": [
 					{
-						"text": "absorbs debt"
+						"text": "absorbs funded debt"
 					}
 				],
 				"tag": "text"

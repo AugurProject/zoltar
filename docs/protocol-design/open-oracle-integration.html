@@ -1112,8 +1112,7 @@
 							<span class="equation-label">Contract Liquidation Guard</span
 							>The coordinator computes both floored health thresholds from queue-time free and escalation REP, uses the
 							lower one because it is the first boundary to fail, and then applies the distance check
-							before calling the pool. Any ownership or allowance change first invalidates the quote. <code>SecurityPool</code> then rechecks target safety with live free REP plus live current-game escrow and rejects chunks that fail
-							target, caller, or floor checks. Equality passes only at the distance
+							before calling the pool. Here <code>migrationSecurityMultiplierBps = max(10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋, 10,500)</code>; the <a href="./liquidation.html#rule">liquidation design</a> owns its derivation and reserve rationale. Any ownership or allowance change first invalidates the quote. <code>SecurityPool</code> then rechecks target safety with live free REP plus live current-game escrow. A partial execution preserves the positive target REP and allowance floors, while any funded transfer must leave the caller above both floors and healthy. A maximum request instead records untransferred residual allowance as bad debt, including the complete allowance when its funded slice would leave the caller below the minimum active allowance. Equality passes only at the distance
 							check. Ordinary associated-REP coverage admits equality, while migration coverage is strict and is unhealthy at equality; <code>currentPrice</code> must still be strictly above
 							<code>thresholdPrice</code>.
 						</p>

@@ -15,6 +15,7 @@ const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
 const normalizedDiagramSpecs = diagramSpecs.replaceAll(/\\n|\\t|\s+/g, ' ')
 const startHere = await readFile('docs/documentation.html', 'utf8')
 const operatorReference = await readFile('docs/safety-operations/operator-reference.md', 'utf8')
+const securityModel = await readFile('docs/safety-operations/security-model.html', 'utf8')
 const contractInteractionReference = await readFile('docs/safety-operations/contract-interaction-reference.md', 'utf8')
 const contractReferenceGenerator = await readFile('scripts/generate-contract-interaction-reference.mts', 'utf8')
 const docsReader = await readFile('docs/assets/js/docsReader.js', 'utf8')
@@ -139,7 +140,7 @@ function assertLazyClaimCommitmentDocs(): void {
 	assert.match(html, /fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2\^64 - 1<\/code> leaves; it is not a 64-reporter or 64-portfolio cap/)
 	assert.match(html, /Claims are non-transferable commitments[\s\S]*never copies per-claim or per-owner state from its parent/)
 	assert.match(html, /Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once/)
-	assert.match(liquidationHtml, /Only free REP moves with the debt\. Accrued fees and escalation claims stay with the target vault/)
+	assert.match(liquidationHtml, /Only that free REP and funded debt move\. Accrued fees and escalation claims stay with the target vault/)
 	assert.doesNotMatch(liquidationHtml, /claim move|portfolio cap|owner slot/i)
 	assert.doesNotMatch(escalationGameClaimDelegate, /moveEscalationClaim|payoutClaimBundle|getClaimOwner|liquidationClaimRep/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
@@ -563,6 +564,7 @@ function assertLiquidationFullCloseDocs(): void {
 
 	for (const documentedClaim of [
 		'data-source="bonusRepQuote = ⌈debtMoved * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉"',
+		'data-source="maxFundedDebt = ⌊availableFreeRep * PRICE_PRECISION * BPS_DENOMINATOR / (repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))⌋"',
 		'data-source="value(freeRep + escalationRep) >= allowance * poolSecurityMultiplier"',
 		'data-source="allowance = 0 or value(freeRep) > allowance * migrationSecurityMultiplier"',
 		'A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them.',
@@ -577,8 +579,9 @@ function assertLiquidationFullCloseDocs(): void {
 
 	assert.match(whitepaperStatoblast, /href="\.\.\/protocol-design\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
-	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*5%-bonus free-REP award[\s\S]*escalation claims, fees, and non-dust surplus remain with the target/i, 'canonical liquidation diagram must show the free-REP-only award, claim and fee isolation, and the surplus dust exception')
-	assert.match(liquidationHtml, /Accrued ETH fees and escalation claims are always inaccessible; free-REP surplus is inaccessible except when its nonzero remainder would fall below the minimum-deposit floor and must be swept\./)
+	assert.match(diagramSpecs, /"fig-liquidation-punitive-flow"[\s\S]*complete 5%-bonus free-REP award[\s\S]*maximum request records untransferred residual allowance as bad debt/i, 'canonical liquidation diagram must show the fully funded free-REP award, claim and fee isolation, and the residual backstop')
+	assert.match(liquidationHtml, /Funded debt and its complete free-REP award move; claims, fees, and surplus stay, while a maximum request records untransferred residual allowance as bad debt/)
+	assert.match(liquidationHtml, /Accrued ETH fees, escalation claims, and free-REP surplus are always inaccessible\. The backstop never mints ownership or socializes the missing bonus/)
 	assert.match(eventStream, /Escalation continuation \| `ForkCarryCheckpoint`, `ForkContinuationResumed`, `InheritedThresholdTie`, `CarryDepositConsumed`/)
 	assert.doesNotMatch(eventStream, /PayoutClaimCheckpointImported|EscalationClaimMoved/)
 	assert.match(operatorReference, /calculateBundledLiquidationTransfer\(targetOwnership, targetAllowance, requestedDebt, repEthPrice, currentTotalRep, currentDenominator\)/, 'operator reference must preserve the current liquidation utility signature and parameter order')
@@ -768,13 +771,40 @@ function assertContractInteractionDistinctions(): void {
 		/Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="\.\.\/protocol-design\/liquidation\.html">liquidation design<\/a> gives the full accounting rationale\./,
 	)
 	assert.match(liquidationHtml, /data-source="allowance = 0 or value\(freeRep\) > allowance \* migrationSecurityMultiplier"/)
+	assert.match(
+		liquidationHtml,
+		/reserveOwnership = ⌈MIN_REP_DEPOSIT × poolOwnershipDenominator \/ totalRep⌉[\s\S]*reserve is at least the target ownership, no partial debt or REP transfer is fundable[\s\S]*availableFreeRep = ⌊\(targetOwnership - reserveOwnership\) × totalRep \/ poolOwnershipDenominator⌋[\s\S]*maximum request[\s\S]*requestedDebt >= targetAllowance[\s\S]*availableFreeRep = ⌊targetOwnership × totalRep \/ poolOwnershipDenominator⌋[\s\S]*user queues that amount through the coordinator[\s\S]*pool's maximum-request path/,
+	)
+	assert.match(securityPoolUtils, /if \(reserveOwnership >= targetOwnership\) return \(0, 0, 0\);/)
+	assert.match(securityPoolUtils, /bool resolveResidualAsBadDebt = requestedDebt >= targetAllowance;/)
+	assert.match(protocolTerms, /MIN_REP_DEPOSIT: 'The 10 REP minimum free-REP position for a security vault that retains positive allowance after a partial liquidation\. A maximum liquidation may clear the allowance without preserving this floor\.'/)
+	assert.match(protocolTerms, /MIN_SECURITY_BOND_DEBT: 'The 1 ETH minimum active security-bond allowance for a vault\. Bad-debt audit totals may record smaller amounts\.'/)
+	assert.match(liquidationHtml, /positive funded slice would leave the caller's resulting allowance below <code>MIN_SECURITY_BOND_DEBT<\/code>[\s\S]*transfers no debt, REP, or ownership[\s\S]*no <code>VaultLiquidated<\/code> or post-transfer caller checkpoint/)
+	assert.match(securityPoolLiquidationDelegate, /securityVaults\[callerVault\]\.securityBondAllowance \+ debtToMove < SecurityPoolUtils\.MIN_SECURITY_BOND_DEBT[\s\S]*debtToMove = 0;\s*repToMove = 0;\s*ownershipToMove = 0;/)
+	assert.match(securityModel, /effective free-REP\s+multiplier at least the 10,500-BPS liquidation-award reserve/)
+	assert.doesNotMatch(securityModel, /pool multiplier strictly above the migration multiplier/)
+	for (const representation of [operatorReference, contractInteractionReference, contractReferenceGenerator]) {
+		assert.doesNotMatch(representation, /surplus remains unless|floors quote-to-ownership|dust may promote/)
+	}
+	assert.match(operatorReference, /Requests below the target allowance are partial[\s\S]*Requests at or above the target allowance are maximum requests[\s\S]*award and quote-to-ownership conversion round up/)
+	assert.match(operatorReference, /user requests at least the target's full current allowance[\s\S]*coordinator calls the pool[\s\S]*maximum-request path records any untransferred allowance[\s\S]*funded slice that would leave the caller below its minimum allowance/)
+	for (const representation of [liquidationHtml, operatorReference, contractInteractionReference, contractReferenceGenerator, eventStream, invariantsHtml, whitepaperStatoblast, diagramSpecs]) {
+		assert.doesNotMatch(representation, /(?:any|an) unfunded residual/, 'Recorded bad debt must not be classified exclusively as unfunded')
+	}
+	assert.match(contractInteractionReference, /halfway migration component strictly greater than one[\s\S]*effective free-REP multiplier separately floors that component at the 10,500-BPS liquidation-award reserve/)
 	assert.match(securityPoolUtils, /if \(securityBondAllowance == 0\) return true/)
 	assert.match(openOracleIntegration, /thresholdPrice = min\(associatedRepThreshold, migrationThreshold\)/)
+	assert.match(
+		openOracleIntegration,
+		/migrationSecurityMultiplierBps = max\(10,000 \+ ⌊\(poolSecurityMultiplierBps - 10,000\) \/ 2⌋, 10,500\)[\s\S]*liquidation design[\s\S]*partial execution preserves the positive target REP and allowance floors[\s\S]*funded transfer must leave the caller above both floors and healthy[\s\S]*maximum request instead records untransferred residual allowance as bad debt[\s\S]*complete allowance when its funded slice would leave the caller below the minimum active allowance/,
+	)
+	assert.match(whitepaperStatoblast, /10,000 \+ ⌊\(poolSecurityMultiplierBps - 10,000\) \/ 2⌋[\s\S]*migrationSecurityMultiplierBps[\s\S]*10,500 BPS/)
+	assert.doesNotMatch(openOracleIntegration, /rejects chunks that fail\s+target, caller, or floor checks/)
 	assert.doesNotMatch(openOracleIntegration, /thresholdPrice = ⌊vaultRep \* PRICE_PRECISION/)
 	assert.doesNotMatch(whitepaperStatoblast, /data-source="securityBondAllowance \* statoblastSecurityMultiplierBps \* repPerEthPrice > repBacking/)
 	assert.match(
 		whitepaperStatoblast,
-		/A new allowance must satisfy two conditions: total\s+associated REP clears the pool multiplier, and REP outside escalation\s+strictly clears the lower migration multiplier\. The aggregate pool totals must\s+independently satisfy both conditions under the same helper\. Only vaults are\s+liquidation targets/,
+		/A new allowance must satisfy two conditions: total\s+associated REP clears the pool multiplier, and REP outside escalation\s+strictly clears the effective free-REP multiplier: the greater of the\s+halfway migration multiplier and the 10,500-BPS liquidation-award reserve\. The aggregate pool totals must\s+independently satisfy both conditions under the same helper\. Only vaults are\s+liquidation targets/,
 	)
 	assert.match(securityPool, /function _requirePoolBondCoverage\([\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*totalFreeRep,\s*totalEscalationRep,\s*totalSecurityBondAllowanceValue/)
 	assert.match(securityPool, /function performSetSecurityBondsAllowance\([\s\S]*SecurityPoolUtils\.isVaultHealthy\([\s\S]*'Vault allow'[\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*getTotalRepBalance\(\),\s*_getTotalEscalationRep\(\),\s*totalSecurityBondAllowance[\s\S]*'Pool allow'/)
@@ -878,7 +908,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /initializeChildForkedEscalationGameIfNeeded\(parent, child, childEscalationGame\)[\s\S]*When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use/)
 	assert.match(startTruthAuctionRow, /game reported during immediate completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
 	assert.match(finalizeTruthAuctionRow, /game reported at completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
-	assert.match(performLiquidationRow, /fixed 5%-bonus award, paid entirely as free REP[\s\S]*Escalation claims and accrued unpaid fees remain with the target/)
+	assert.match(performLiquidationRow, /complete 105% award is funded by target free REP[\s\S]*fixed 5%-bonus free-REP award[\s\S]*Escalation claims, accrued unpaid fees, and free-REP surplus remain with the target/)
+	assert.match(performLiquidationRow, /pre-execution target or caller `VaultAccountingCheckpoint` events as needed[\s\S]*post-transfer caller checkpoint only when debt moves/)
+	assert.match(performLiquidationRow, /otherwise funded slice would leave the caller below the minimum allowance[\s\S]*not transferred[\s\S]*complete target allowance is recorded/)
+	assert.match(securityPool, /updateVaultFees\(targetVaultAddress\);\s*updateVaultFees\(callerVault\);[\s\S]*if \(debtToMove != 0\) _emitVaultAccountingCheckpoint\(callerVault\);/)
 	assert.doesNotMatch(performLiquidationRow, /EscalationClaimMoved|Claim checkpoint pending|Claim move failed/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
 	assert.doesNotMatch(securityPoolLiquidationDelegate, /_moveEscalationClaim|previewLiquidationClaimRep|moveEscalationClaim/)

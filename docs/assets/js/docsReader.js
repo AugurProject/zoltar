@@ -30,7 +30,7 @@ const documentGroups = [
 			{
 				path: 'protocol-design/liquidation.html',
 				title: 'Liquidation design',
-				description: 'Bonus-priced partial liquidation, exact full closes, bounded claims, fee isolation, health calculations, and incentives.',
+				description: 'Bonus-priced funded liquidation, explicit bad-debt backstops, bound claims, fee isolation, health calculations, and incentives.',
 			},
 		],
 	},

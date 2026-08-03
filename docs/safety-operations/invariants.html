@@ -849,7 +849,9 @@
 									health tests. Associated REP may equal allowance times the pool
 									multiplier because ordinary liquidation requires a strict
 									shortfall. For positive allowance, free REP must be strictly
-									greater than allowance times the migration multiplier, so equality
+									greater than allowance times the effective free-REP multiplier: the
+									greater of the halfway migration multiplier and the 10,500-BPS
+									liquidation-award reserve. Equality
 									is unsafe. Later REP withdrawals and escalation deposits preserve
 									both boundaries for the affected vault and aggregate pool.
 								</div>
@@ -1138,7 +1140,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A liquidation transfers rather than creates aggregate ownership and allowance. It pays the fixed 5%-bonus award entirely from free REP. Escalation claims and accrued fees always remain with the target vault, while free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. The resulting liquidator must meet coverage rules;
+								A liquidation transfers rather than creates aggregate ownership. It moves only allowance whose complete fixed 5%-bonus award is funded by target free REP. Escalation claims, accrued fees, and free-REP surplus always remain with the target vault. A maximum request records untransferred residual allowance as bad debt and removes it from active and fee-eligible allowance without minting ownership or diluting another holder. The resulting liquidator must meet coverage rules whenever debt moves;
 								the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution must reject a target
 								whose protected ownership or allowance changed after staging, in either direction. The pool then re-evaluates health against live balances and the live REP-per-ownership rate. Target-assigned rescue collateral therefore invalidates the old quote instead of becoming collateral for a keeper who priced a smaller bundle, while an unsolicited pool-wide REP transfer cannot purchase a one-unit liquidation veto. A sufficiently large pool donation may still restore live health.
 							</div>

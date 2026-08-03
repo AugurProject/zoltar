@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+
 library SecurityPoolUtils {
 	uint256 constant MIGRATION_TIME = 8 weeks;
 	uint256 constant AUCTION_TIME = 1 weeks;
@@ -66,60 +68,64 @@ library SecurityPoolUtils {
 		uint256 currentTotalRep,
 		uint256 currentDenominator
 	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
-		if (targetAllowance == 0) return (0, 0, 0);
-		debtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
-		uint256 debtRemaining = targetAllowance - debtToMove;
-		if (debtRemaining > 0 && debtRemaining < MIN_SECURITY_BOND_DEBT) debtToMove = targetAllowance;
-		ownershipToMove = _getLiquidationOwnershipAward(
-			targetOwnership,
-			debtToMove,
-			repEthPrice,
-			currentTotalRep,
-			currentDenominator
-		);
-		uint256 remainingOwnership = targetOwnership - ownershipToMove;
-		uint256 remainingRep =
-			currentDenominator == 0
-				? remainingOwnership / PRICE_PRECISION
-				: (remainingOwnership * currentTotalRep) / currentDenominator;
-		if (debtToMove < targetAllowance && remainingRep < MIN_REP_DEPOSIT) {
-			debtToMove = targetAllowance;
-			ownershipToMove = _getLiquidationOwnershipAward(
-				targetOwnership,
-				debtToMove,
-				repEthPrice,
-				currentTotalRep,
-				currentDenominator
-			);
-			remainingOwnership = targetOwnership - ownershipToMove;
-			remainingRep =
-				currentDenominator == 0
-					? remainingOwnership / PRICE_PRECISION
-					: (remainingOwnership * currentTotalRep) / currentDenominator;
+		if (targetAllowance == 0 || requestedDebt == 0 || repEthPrice == 0) return (0, 0, 0);
+		bool resolveResidualAsBadDebt = requestedDebt >= targetAllowance;
+		if (!resolveResidualAsBadDebt && targetAllowance <= MIN_SECURITY_BOND_DEBT) return (0, 0, 0);
+		uint256 minimumRemainingRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT;
+		uint256 reserveOwnership;
+		if (minimumRemainingRep != 0) {
+			if (currentDenominator == 0 || currentTotalRep == 0) {
+				reserveOwnership = minimumRemainingRep * PRICE_PRECISION;
+			} else {
+				reserveOwnership = Math.mulDiv(
+					minimumRemainingRep,
+					currentDenominator,
+					currentTotalRep,
+					Math.Rounding.Ceil
+				);
+			}
 		}
-		if (debtToMove == targetAllowance && remainingRep < MIN_REP_DEPOSIT) ownershipToMove = targetOwnership;
+		if (reserveOwnership >= targetOwnership) return (0, 0, 0);
+		uint256 awardableOwnership = targetOwnership - reserveOwnership;
+		uint256 awardableRep =
+			currentDenominator == 0
+				? awardableOwnership / PRICE_PRECISION
+				: Math.mulDiv(awardableOwnership, currentTotalRep, currentDenominator);
+		uint256 maxFundedDebt = Math.mulDiv(
+			awardableRep,
+			PRICE_PRECISION * BPS_DENOMINATOR,
+			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)
+		);
+		uint256 requestedDebtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
+		uint256 requestedDebtRemaining = targetAllowance - requestedDebtToMove;
+		if (!resolveResidualAsBadDebt && requestedDebtRemaining > 0 && requestedDebtRemaining < MIN_SECURITY_BOND_DEBT)
+			requestedDebtToMove = targetAllowance - MIN_SECURITY_BOND_DEBT;
+		debtToMove = requestedDebtToMove < maxFundedDebt ? requestedDebtToMove : maxFundedDebt;
+		if (debtToMove == 0) return (0, 0, 0);
+		ownershipToMove = _getLiquidationOwnershipAward(debtToMove, repEthPrice, currentTotalRep, currentDenominator);
+		require(ownershipToMove <= awardableOwnership, 'Award unfunded');
 		repToMove =
 			currentDenominator == 0
 				? ownershipToMove / PRICE_PRECISION
-				: (ownershipToMove * currentTotalRep) / currentDenominator;
+				: Math.mulDiv(ownershipToMove, currentTotalRep, currentDenominator);
 	}
 
 	function _getLiquidationOwnershipAward(
-		uint256 targetOwnership,
 		uint256 debtToMove,
 		uint256 repEthPrice,
 		uint256 currentTotalRep,
 		uint256 currentDenominator
 	) private pure returns (uint256 ownershipToMove) {
-		uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
-		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
-		uint256 grossRepAward = repNumerator / repDenominator;
-		if (grossRepAward * repDenominator < repNumerator) grossRepAward += 1;
+		uint256 grossRepAward = Math.mulDiv(
+			debtToMove,
+			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS),
+			PRICE_PRECISION * BPS_DENOMINATOR,
+			Math.Rounding.Ceil
+		);
 		ownershipToMove =
 			currentDenominator == 0 || currentTotalRep == 0
 				? grossRepAward * PRICE_PRECISION
-				: (grossRepAward * currentDenominator) / currentTotalRep;
-		if (ownershipToMove > targetOwnership) ownershipToMove = targetOwnership;
+				: Math.mulDiv(grossRepAward, currentDenominator, currentTotalRep, Math.Rounding.Ceil);
 	}
 
 	function isVaultHealthy(
@@ -134,6 +140,9 @@ library SecurityPoolUtils {
 			return false;
 		if (securityBondAllowance == 0) return true;
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
+		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
+		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
+			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
 		return freeRep * valueScale > securityBondAllowance * migrationSecurityMultiplierBps * repEthPrice;
 	}
 
@@ -170,6 +179,9 @@ library SecurityPoolUtils {
 		uint256 associatedRepThreshold =
 			((freeRep + escalationRep) * valueScale) / (securityBondAllowance * poolSecurityMultiplierBps);
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
+		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
+		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
+			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
 		uint256 migrationThreshold = (freeRep * valueScale) / (securityBondAllowance * migrationSecurityMultiplierBps);
 		uint256 thresholdPrice =
 			associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold;

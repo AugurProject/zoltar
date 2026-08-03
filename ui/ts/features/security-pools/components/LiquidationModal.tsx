@@ -436,6 +436,7 @@ export function LiquidationModal({
 					]}
 					primary={[
 						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationSimulation?.debtToMove} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtRecorded} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.grossRepAward, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAward} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },

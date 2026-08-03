@@ -1,5 +1,5 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, getLiquidationRepToMove } from '@zoltar/shared/liquidation'
+import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationRepToMove, getMaxFundedLiquidationDebt } from '@zoltar/shared/liquidation'
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 const MIN_SECURITY_BOND_DEBT = 1n * 10n ** 18n
@@ -10,7 +10,9 @@ function isVaultLiquidatable(lastPrice: bigint | undefined, securityBondAllowanc
 	const escalationRep = escalationEscrowedRep ?? 0n
 	const valueScale = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
 	const poolHealthy = (repDepositShare + escalationRep) * valueScale >= securityBondAllowance * lastPrice * statoblastSecurityMultiplierBps
-	const migrationMultiplier = LIQUIDATION_BPS_DENOMINATOR + (statoblastSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
+	const configuredMigrationMultiplier = LIQUIDATION_BPS_DENOMINATOR + (statoblastSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
+	const liquidationReserveMultiplier = LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
+	const migrationMultiplier = configuredMigrationMultiplier < liquidationReserveMultiplier ? liquidationReserveMultiplier : configuredMigrationMultiplier
 	const migrationHealthy = securityBondAllowance === 0n || repDepositShare * valueScale > securityBondAllowance * lastPrice * migrationMultiplier
 	return !poolHealthy || !migrationHealthy
 }
@@ -22,7 +24,7 @@ function getPartialLiquidationTransfer(debtToMove: bigint, targetVaultSummary: S
 		if (quotedRep >= targetVaultSummary.repDepositShare) return { remainingRep: 0n, repToMove: targetVaultSummary.repDepositShare }
 		return { remainingRep: targetVaultSummary.repDepositShare - quotedRep, repToMove: quotedRep }
 	}
-	const ownershipToMove = poolOwnershipDenominator === 0n || totalRepBalance === 0n ? quotedRep * LIQUIDATION_PRICE_PRECISION : (quotedRep * poolOwnershipDenominator) / totalRepBalance
+	const ownershipToMove = poolOwnershipDenominator === 0n || totalRepBalance === 0n ? quotedRep * LIQUIDATION_PRICE_PRECISION : (quotedRep * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
 	if (ownershipToMove >= poolOwnership) return { remainingRep: 0n, repToMove: targetVaultSummary.repDepositShare }
 	const remainingOwnership = poolOwnership - ownershipToMove
 	return {
@@ -31,18 +33,34 @@ function getPartialLiquidationTransfer(debtToMove: bigint, targetVaultSummary: S
 	}
 }
 
-function getRepToMoveForLiquidation(debtToMove: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
-	const transfer = getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice)
-	return debtToMove === targetVaultSummary.securityBondAllowance && transfer.remainingRep < MIN_REP_DEPOSIT ? targetVaultSummary.repDepositShare : transfer.repToMove
+function getAwardableLiquidationRep(targetVaultSummary: SecurityPoolVaultSummary, reserveMinimumRep: boolean) {
+	const { poolOwnership, poolOwnershipDenominator, totalRepBalance } = targetVaultSummary
+	if (poolOwnership === undefined || poolOwnershipDenominator === undefined || totalRepBalance === undefined) {
+		if (!reserveMinimumRep) return targetVaultSummary.repDepositShare
+		return targetVaultSummary.repDepositShare > MIN_REP_DEPOSIT ? targetVaultSummary.repDepositShare - MIN_REP_DEPOSIT : 0n
+	}
+	let reserveOwnership = 0n
+	if (reserveMinimumRep) {
+		reserveOwnership = poolOwnershipDenominator === 0n || totalRepBalance === 0n ? MIN_REP_DEPOSIT * LIQUIDATION_PRICE_PRECISION : (MIN_REP_DEPOSIT * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
+	}
+	if (reserveOwnership >= poolOwnership) return 0n
+	const awardableOwnership = poolOwnership - reserveOwnership
+	return poolOwnershipDenominator === 0n ? awardableOwnership / LIQUIDATION_PRICE_PRECISION : (awardableOwnership * totalRepBalance) / poolOwnershipDenominator
 }
 
-function getPromotedDebtToMove(requestedDebt: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
+function getFundedLiquidationAmounts(requestedDebt: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint, callerAllowance = 0n) {
 	const targetAllowance = targetVaultSummary.securityBondAllowance
-	const debtToMove = requestedDebt < targetAllowance ? requestedDebt : targetAllowance
-	const debtRemaining = targetAllowance - debtToMove
-	if (debtRemaining > 0n && debtRemaining < MIN_SECURITY_BOND_DEBT) return targetAllowance
-	if (debtToMove < targetAllowance && getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice).remainingRep < MIN_REP_DEPOSIT) return targetAllowance
-	return debtToMove
+	const resolveResidualAsBadDebt = requestedDebt >= targetAllowance
+	if (!resolveResidualAsBadDebt && targetAllowance <= MIN_SECURITY_BOND_DEBT) return { badDebtRecorded: 0n, debtToMove: 0n }
+	const awardableRep = getAwardableLiquidationRep(targetVaultSummary, !resolveResidualAsBadDebt)
+	const maxFundedDebt = getMaxFundedLiquidationDebt(awardableRep, repPerEthPrice)
+	let requestedDebtToMove = requestedDebt < targetAllowance ? requestedDebt : targetAllowance
+	const requestedDebtRemaining = targetAllowance - requestedDebtToMove
+	if (!resolveResidualAsBadDebt && requestedDebtRemaining > 0n && requestedDebtRemaining < MIN_SECURITY_BOND_DEBT) requestedDebtToMove = targetAllowance - MIN_SECURITY_BOND_DEBT
+	let debtToMove = requestedDebtToMove < maxFundedDebt ? requestedDebtToMove : maxFundedDebt
+	if (debtToMove !== 0n && callerAllowance + debtToMove < MIN_SECURITY_BOND_DEBT && resolveResidualAsBadDebt) debtToMove = 0n
+	const badDebtRecorded = resolveResidualAsBadDebt ? targetAllowance - debtToMove : 0n
+	return { badDebtRecorded, debtToMove }
 }
 
 export function getLiquidationExecutionFailureDetail(errorMessage: string | undefined) {
@@ -90,6 +108,7 @@ type LiquidationSimulation = {
 		securityBondAllowance: bigint
 	}
 	debtToMove: bigint
+	badDebtRecorded: bigint
 	grossRepAward: bigint
 	repToMove: bigint
 	targetAccruedFeesRetained: bigint
@@ -130,11 +149,11 @@ export function simulateLiquidation({
 			statoblastSecurityMultiplierBps,
 			targetVaultSummary,
 		}) ?? targetAllowance
-	const debtToMove = getPromotedDebtToMove(liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove, targetVaultSummary, repPerEthPrice)
+	const { badDebtRecorded, debtToMove } = getFundedLiquidationAmounts(liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove, targetVaultSummary, repPerEthPrice, callerAllowance)
 	const grossRepAward = getLiquidationRepToMove(debtToMove, repPerEthPrice)
-	const repToMove = getRepToMoveForLiquidation(debtToMove, targetVaultSummary, repPerEthPrice)
+	const repToMove = getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice).repToMove
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
-	const targetAfterAllowance = targetAllowance - debtToMove
+	const targetAfterAllowance = targetAllowance - debtToMove - badDebtRecorded
 	const callerAfterRepDeposit = callerRepDeposit + repToMove
 	const callerAfterAllowance = callerAllowance + debtToMove
 	return {
@@ -148,6 +167,7 @@ export function simulateLiquidation({
 			repDepositShare: callerRepDeposit,
 			securityBondAllowance: callerAllowance,
 		},
+		badDebtRecorded,
 		debtToMove,
 		grossRepAward,
 		repToMove,
@@ -188,17 +208,18 @@ export function getDeterministicLiquidationFailureReason({
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
 	}
 	const targetMaxDebtToMove = maxDebtToMove === undefined || maxDebtToMove > targetVaultSummary.securityBondAllowance ? targetVaultSummary.securityBondAllowance : maxDebtToMove
-	const debtToMove = getPromotedDebtToMove(liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove, targetVaultSummary, repPerEthPrice ?? 0n)
-	if (debtToMove <= 0n) return liquidationCopy.executableDebtUnavailable
-	const repToMove = repPerEthPrice === undefined ? undefined : getRepToMoveForLiquidation(debtToMove, targetVaultSummary, repPerEthPrice)
-	const targetAfterAllowance = targetVaultSummary.securityBondAllowance - debtToMove
+	const requestedDebt = liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove
+	const { badDebtRecorded, debtToMove } = repPerEthPrice === undefined ? { badDebtRecorded: 0n, debtToMove: requestedDebt } : getFundedLiquidationAmounts(requestedDebt, targetVaultSummary, repPerEthPrice, callerVaultSummary?.securityBondAllowance ?? 0n)
+	if (debtToMove <= 0n && badDebtRecorded <= 0n) return liquidationCopy.executableDebtUnavailable
+	const repToMove = repPerEthPrice === undefined ? undefined : getPartialLiquidationTransfer(debtToMove, targetVaultSummary, repPerEthPrice).repToMove
+	const targetAfterAllowance = targetVaultSummary.securityBondAllowance - debtToMove - badDebtRecorded
 	const targetAfterRepDeposit = repToMove === undefined ? undefined : targetVaultSummary.repDepositShare - repToMove
 	const callerAfterRepDeposit = (callerVaultSummary?.repDepositShare ?? 0n) + (repToMove ?? 0n)
 	const callerAfterAllowance = (callerVaultSummary?.securityBondAllowance ?? 0n) + debtToMove
-	if (targetAfterRepDeposit !== undefined && targetAfterRepDeposit !== 0n && targetAfterRepDeposit < MIN_REP_DEPOSIT) return 'The target vault would fall below the minimum REP collateral after liquidation.'
+	if (targetAfterAllowance !== 0n && targetAfterRepDeposit !== undefined && targetAfterRepDeposit < MIN_REP_DEPOSIT) return 'The target vault would fall below the minimum REP collateral after liquidation.'
 	if (targetAfterAllowance !== 0n && targetAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'The target vault would fall below the minimum security bond allowance after liquidation.'
-	if (callerAfterRepDeposit < MIN_REP_DEPOSIT) return 'Your vault would remain below the minimum REP collateral after liquidation.'
-	if (callerAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'Your vault would remain below the minimum security bond allowance after liquidation.'
+	if (debtToMove !== 0n && callerAfterRepDeposit < MIN_REP_DEPOSIT) return 'Your vault would remain below the minimum REP collateral after liquidation.'
+	if (debtToMove !== 0n && callerAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'Your vault would remain below the minimum security bond allowance after liquidation.'
 	return undefined
 }
 

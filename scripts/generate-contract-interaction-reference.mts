@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/safety-operations/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '354644616554aa8fe921bdd9ac36f2f818ef842505060e548afad4107cff92e1'
+const expectedProductionSoliditySourceFingerprint = '2010c816b0d349b00ac128ba5c2f7da15d9d8f86e41942f3cc1856b421d0bb43'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -125,6 +125,7 @@ const eventSourceByName: Record<string, string> = {
 	UniverseForked: 'solidity/contracts/Zoltar.sol',
 	PoolAccountingCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
 	VaultAccountingCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	VaultBadDebtRecorded: 'solidity/contracts/peripherals/SecurityPool.sol',
 	VaultLiquidated: 'solidity/contracts/peripherals/SecurityPool.sol',
 	VaultEscrowUpdated: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	VaultUnresolvedTotalsExported: 'solidity/contracts/peripherals/EscalationGameState.sol',
@@ -326,7 +327,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '8dbfd34f8cc65c286e4f9614f7baa462e9334ba3955c95f8979240d64e2bed94'
+const referencedEventAbiFingerprint = 'c9b0bcaaddd862796e4cb025ea35d428b2ba798ff5ceceb77d4821b26a8833d5'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -676,7 +677,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`statoblastSecurityMultiplierBps > 10_001`, which leaves an integer-BPS migration multiplier strictly between one and the pool multiplier; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective free-REP multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../protocol-design/liquidation.html#rule). `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
@@ -690,12 +691,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'bb73df11c7ac59958621e85029f9d7a7f57163872f70d6078a1f60537635e22b',
+		compiledAbiFingerprint: 'ebb5706c95848b7f6503366d9def241d87202ce9d55bf01a970642a8605e1ee7',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '6ce917ef8a66a97297f894460aeaf0578c2b8c315bc6c3967e15af0edca4dec8',
+		readAbiFingerprint: '43889522e14a3aa075aef6b20dcff8f55408671b5daaa3cd3500e106954767c3',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebt`, `vaultBadDebt`, and `systemState`. Bad-debt getters are cumulative audit totals; active allowance excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
 			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -742,6 +743,8 @@ const contractReferences: ContractReference[] = [
 			{ name: 'currentRetentionRate', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'awaitingForkContinuation', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'securityVaults', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalBadDebt', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'vaultBadDebt', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'systemState', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
@@ -869,11 +872,11 @@ const contractReferences: ContractReference[] = [
 				call: '`performLiquidation(...)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves allowance and the fixed 5%-bonus award, paid entirely as free REP, to the caller. Escalation claims and accrued unpaid fees remain with the target; free-REP surplus remains unless its nonzero remainder would fall below the minimum-deposit floor. Any rescue deposit invalidates the quote instead of enlarging the keeper's purchase.",
+					"Moves the funded allowance and its fixed 5%-bonus free-REP award to the caller. Escalation claims, accrued unpaid fees, and free-REP surplus remain with the target. When the user requests at least the target's full current allowance through the coordinator, the pool's maximum-request path records any untransferred residual in `vaultBadDebt` and cumulative `totalBadDebt`, and removes it from active and fee-eligible allowance without minting ownership or socializing the bonus. If an otherwise funded slice would leave the caller below the minimum allowance, that slice is not transferred and the complete target allowance is recorded instead.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate; computed debt is positive; caller remains healthy; both resulting vaults satisfy minimum REP and allowance floors. A partial transfer may leave the target unsafe.',
-				signals: 'Fee-accrual checkpoints as needed; then `VaultLiquidated` with the final post-conversion `repAmountMoved`, both vault `VaultAccountingCheckpoint` events, and `PoolAccountingCheckpoint`',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate. Ordinary moved debt is capped to the amount whose complete 105% award is funded by target free REP. A partial target with remaining allowance preserves its REP and allowance floors. When debt moves, the caller satisfies both floors and remains healthy. A bad-debt-only maximum execution performs no caller transfer or position-floor check.',
+				signals: 'Fee-accrual and pre-execution target or caller `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` and the post-transfer caller checkpoint only when debt moves; `VaultBadDebtRecorded` when a residual is written off; final target and pool accounting checkpoints',
 			},
 			{
 				call: '`performSetSecurityBondsAllowance(callerVault, amount)`',

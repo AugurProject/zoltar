@@ -47,10 +47,11 @@ export const stagedOperationTimeoutHelpText = 'Enter whole minutes. Queued stage
 export const formatTimeoutHelpTextResolved = (duration: string) => `This queued staged operation will expire ${duration} after the oracle settlement window completes.`
 export const immediateLiquidationSuccessDetail = 'A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.'
 export const debtAssumed = 'Debt Assumed'
+export const residualBadDebt = 'Residual Bad Debt Recorded'
 export const resultingCallerRep = 'Your Free REP After'
 export const resultingCallerBond = 'Your Bond Allowance After'
 export const liquidationStateRisk =
-	'The action assumes the target’s liabilities and moves a 5%-bonus award using only the target’s free REP. Escalation claims and accrued fees stay with the target vault. Free-REP surplus stays unless its nonzero remainder would fall below the minimum deposit, in which case that remainder is swept.'
+	'The action assumes only debt whose complete 5%-bonus award is funded by the target’s free REP. Escalation claims, free-REP surplus, and accrued fees stay with the target vault. A maximum request records any untransferred residual as bad debt and removes it from active pool allowance.'
 export const queuedLiquidationRisk =
 	'When the oracle price is not usable, the action is queued and can expire before execution. A later change to the target’s REP ownership or allowance invalidates it. Pool-wide REP changes are evaluated at execution, so unsolicited token transfers cannot cancel an otherwise valid liquidation.'
 export const bufferedQueueCost = 'Buffered Queue Cost'

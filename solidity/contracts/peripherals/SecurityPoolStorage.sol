@@ -31,4 +31,6 @@ abstract contract SecurityPoolStorage {
 	mapping(address => address) internal newerActiveVaults;
 	mapping(address => bool) internal isActiveVault;
 	SystemState public systemState;
+	uint256 public totalBadDebt;
+	mapping(address => uint256) public vaultBadDebt;
 }

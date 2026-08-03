@@ -84,7 +84,7 @@ Fork snapshot events require two-part provenance. First require the configured `
 | Escalation auction retention | `TruthAuctionHaircutApplied` |
 | Remaining share economic-claim supply | `ShareTokenSupplySet`; then the `resultingShareTokenSupply` field on complete-set and winning-share action events |
 | Escalation continuation | `ForkCarryCheckpoint`, `ForkContinuationResumed`, `InheritedThresholdTie`, `CarryDepositConsumed` |
-| Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
+| Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint`, `VaultBadDebtRecorded` |
 | Auction demand, settlement, and refund liabilities | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled`, `EthRefundDeferred`, `PendingEthRefundWithdrawn` |
 | Coordinator operations | `StagedOperationQueued`, `StagedOperationEscalationRepSnapshotted`, `ExecutedStagedOperation`, terminal report events, `CoordinatorStateCheckpoint` |
 
@@ -110,6 +110,7 @@ The events below close discovery, fork-migration, and economically relevant auct
 | `EscalationGame.TruthAuctionHaircutApplied` | `repBefore`, `repRemoved`, `repRemaining`, `rebasedElapsed` | Applies the one-time auction retention ratio to effective escalation balances and claims, and replaces the continuation's elapsed curve position. Integer products divide down in atomic REP units. |
 | `EscalationGame.ForkContinuationResumed` | `resumedAt` | Starts post-fork time after aggregate backing is complete. Reducers retain the haircut's rebased elapsed position separately; the deadline is `max(rebasedCurveEnd, resumedAt + 3 days)`. |
 | `OpenOraclePriceCoordinator.StagedOperationEscalationRepSnapshotted` | `operationId indexed`, `snapshotTargetEscalationRep` | Completes the immediately preceding queue record with the target vault's escalation-locked REP. A separate event preserves full-width accounting and keeps the coordinator factory deployable; reducers require the matching `StagedOperationQueued` first. |
+| `SecurityPool.VaultBadDebtRecorded` | `targetVault indexed`, `badDebtAmount`, `resultingVaultBadDebt`, `resultingTotalBadDebt` | Records an untransferred residual from a maximum liquidation request. This includes an award-unfunded remainder and a funded slice rejected because it would leave the caller below the minimum allowance. Add no ownership or keeper debt for the recorded amount; replace the target and cumulative audit totals with the resulting fields. The accompanying accounting checkpoints expose the reduced active allowance. |
 | `UniformPriceDualCapBatchAuction.EthRefundDeferred` | `bidder indexed`, `amount`, `pendingAmount` | Adds `amount` to the bidder's refund liability and replaces its authoritative balance with `pendingAmount` after a positive refund push fails. |
 | `UniformPriceDualCapBatchAuction.PendingEthRefundWithdrawn` | `bidder indexed`, `amount` | Clears the bidder's complete deferred-refund liability immediately before the pull callback. A failed pull reverts this event and the clear. |
 
@@ -127,7 +128,7 @@ Standard ERC-20 `Transfer` and `Approval`, plus ERC-1155 `TransferSingle`, `Tran
 
 ## Canonical reducers
 
-Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record, including `vaultFeeRemainder`, and its global denominators on `VaultAccountingCheckpoint`. Action events explain cause; checkpoint values are authoritative when both appear.
+Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record, including `vaultFeeRemainder`, and its global denominators on `VaultAccountingCheckpoint`. Reduce `VaultBadDebtRecorded` from the recognized pool address to replace the target's cumulative writeoff and the pool's cumulative `totalBadDebt`; these audit totals are deliberately separate from active allowance. Action events explain cause; checkpoint values are authoritative when both appear.
 
 Share economic-claim accounting is replace based. When `startTruthAuction` prepares the child after its migration window and emits `ShareTokenSupplySet`, replace that pool's remaining economic claim supply with the event value; this includes source entitlements whose child ERC-1155 balances have not materialized yet. ERC-1155 transfers and `Migrate` update materialized token balances but do not change this denominator. `CompleteSetCreated`, `CompleteSetRedeemed`, and `SharesRedeemed` subsequently replace it through `resultingShareTokenSupply`.
 

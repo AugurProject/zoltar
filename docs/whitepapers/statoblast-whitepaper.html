@@ -358,7 +358,8 @@
 							ETH-denominated obligations. Vault operators choose their security
 							bond allowance. A new allowance must satisfy two conditions: total
 							associated REP clears the pool multiplier, and REP outside escalation
-							strictly clears the lower migration multiplier. The aggregate pool totals must
+							strictly clears the effective free-REP multiplier: the greater of the
+							halfway migration multiplier and the 10,500-BPS liquidation-award reserve. The aggregate pool totals must
 							independently satisfy both conditions under the same helper. Only vaults are
 							liquidation targets. <code>BPS_DENOMINATOR = 10_000</code>
 							converts the stored Statoblast multiplier from basis points.
@@ -396,23 +397,21 @@
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Condition</span>
-							Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="../protocol-design/liquidation.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only free REP and is strict for positive allowances, so equality is unsafe; zero allowance is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.
+							Associated REP includes free REP and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="../protocol-design/liquidation.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only free REP and is strict for positive allowances. Its effective multiplier is floored at 10,500 BPS so an admitted position normally reserves the complete liquidation award even at the 10,002-BPS minimum pool multiplier. Equality is unsafe; zero allowance is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.
 						</p>
 						</div>
 						<p>
 							Equality at ordinary pool-coverage admission is permitted because that
 							liquidation test uses the strict inverse inequality. Migration coverage is
 							strict: REP outside escalation must be worth more than allowance times the
-							migration multiplier. Later REP withdrawals and escalation deposits cannot
+							effective free-REP multiplier, including the 105% liquidation reserve floor. Later REP withdrawals and escalation deposits cannot
 							violate either vault condition or either aggregate condition while the
 							allowance remains active.
 							All operands are atomic integers: the contract compares the products
 							exactly, while a derived maximum allowance rounds the quotient down.
 							The pool-wide maximum uses that floored aggregate ceiling minus the
 							allowances already assigned to other vaults.
-							Liquidation requires the target to be
-							liquidatable, bounds the transfer, and verifies that the caller
-							remains safe while aggregate allowance is preserved.
+							Liquidation requires the target to be liquidatable, caps ordinary moved debt to the amount whose complete 105% award is funded by target free REP, and verifies that the caller remains safe. A maximum request records any untransferred residual as bad debt and removes it from active allowance rather than assigning undercompensated or sub-minimum debt.
 						</p>
 					<h3>Complete Sets</h3>
 					<p>
@@ -613,7 +612,7 @@
 						</p>
 					</div>
 					<h3>Solvency Operations and Liquidation</h3>
-					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves allowance and a fixed 5%-bonus free-REP award to a caller vault that remains healthy. Escalation claims never move and remain payable only to their committed depositors. Accrued fees remain exclusively claimable by the target vault; free-REP surplus also remains unless its nonzero remainder would fall below the minimum-deposit floor. A partial move may leave the target unsafe, but both resulting vaults must respect minimum executable-position floors.</p>
+					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves only allowance whose complete fixed 5%-bonus award is funded by target free REP to a caller vault that remains healthy. Escalation claims never move and remain payable only to their committed depositors. Accrued fees and free-REP surplus remain exclusively claimable by the target vault. A request at least equal to the target's full allowance records untransferred residual allowance as bad debt and removes it from active capacity without minting ownership or diluting other holders. A partial target with remaining allowance preserves its REP and allowance floors; any funded move leaves the caller above both floors. A bad-debt-only maximum execution transfers nothing to the caller, including when the otherwise funded slice would create sub-minimum caller debt.</p>
 
 					<p>Read how the liquidation works from <a href="../protocol-design/liquidation.html">Liquidation Design</a>.</p>
 				</section>
@@ -1564,7 +1563,7 @@
 						<p class="equation-caption"><span class="equation-label">Migration security</span>Free REP must strictly oversecure the vault's permitted underwriting obligation; actual OI routing is calculated separately.</p>
 					</div>
 					<p>
-						The implementation derives <code>migrationSecurityMultiplier = 1 + (poolSecurityMultiplier - 1) / 2</code>. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../protocol-design/liquidation.html#rule">liquidation design</a>. There is no allowance-independent fraction of associated REP that must remain free: available escalation capacity depends on the vault's current allowance, REP price, and integer rounding, and a zero-allowance vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.
+						The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so free REP normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../protocol-design/liquidation.html#rule">liquidation design</a>. There is no allowance-independent fraction of associated REP that must remain free: available escalation capacity depends on the vault's current allowance, REP price, and integer rounding, and a zero-allowance vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.
 					</p>
 					<p>
 						A vault's migrated OI share is its free-REP share of all free REP at the fork. <code>migrateVault</code> sends the vault's complete unlocked position and that proportional OI share to one selected child, then clears the parent source. The vault cannot divide or reuse that migration weight across sibling universes. This single-use rule prevents duplicate OI while still letting the holder choose the branch in which the whole vault remains economically coherent.
