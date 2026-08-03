@@ -211,6 +211,17 @@ void describe('security vault helpers', () => {
 		).toBe(undefined)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
+				escalationEscrowedRep: 1n,
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 0n,
+				securityBondAllowance: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalRepDeposit: undefined,
+				totalSecurityBondAllowance: undefined,
+			}),
+		).toBe(0n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
 				securityBondAllowance: 0n,
@@ -328,5 +339,24 @@ void describe('security vault helpers', () => {
 				statoblastSecurityMultiplierBps: undefined,
 			}),
 		).toBe(undefined)
+	})
+
+	void test('uses floor plus one for strict migration backing at integral and non-integral boundaries', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				repDepositShare: 10n,
+				repPerEthPrice: 10n ** 18n,
+				securityBondAllowance: 1n,
+				statoblastSecurityMultiplierBps: 20_000n,
+			}),
+		).toBe(8n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				repDepositShare: 10n,
+				repPerEthPrice: 10n ** 18n,
+				securityBondAllowance: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
+			}),
+		).toBe(6n)
 	})
 })

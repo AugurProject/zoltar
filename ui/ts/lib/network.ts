@@ -1,6 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { parseChainId, sameChainId } from './chainId.js'
 
 const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[1n, 'Ethereum'],
@@ -26,17 +27,7 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[534352n, 'Scroll'],
 ])
 
-function parseChainId(chainId: string) {
-	try {
-		return BigInt(chainId)
-	} catch (error) {
-		if (error instanceof SyntaxError) return undefined
-		throw error
-	}
-}
-
 export function getChainIdDecimalLabel(chainId: string | undefined) {
-	if (chainId === undefined) return undefined
 	return parseChainId(chainId)?.toString()
 }
 
@@ -56,7 +47,7 @@ export function getKnownChainName(chainId: string | undefined) {
 
 export function isSupportedAppChain(chainId: string | undefined) {
 	const profile = getActiveNetworkProfile()
-	return profile.isSupportedAppChain && chainId === profile.chainIdHex
+	return profile.isSupportedAppChain && sameChainId(chainId, profile.chainIdHex)
 }
 
 export function isActiveAppChain(chainId: string | undefined) {

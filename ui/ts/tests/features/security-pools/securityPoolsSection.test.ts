@@ -649,7 +649,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.getByText('Security Pool Address')).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
-		expect(within(contextDetails).getByText('Total REP Backing')).not.toBeNull()
+		expect(within(contextDetails).getByText('Total Free REP')).not.toBeNull()
 		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 

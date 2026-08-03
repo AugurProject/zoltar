@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+
 library SecurityPoolUtils {
 	uint256 constant MIGRATION_TIME = 8 weeks;
 	uint256 constant AUCTION_TIME = 1 weeks;
@@ -58,57 +60,133 @@ library SecurityPoolUtils {
 		return (numerator / PRICE_PRECISION, numerator % PRICE_PRECISION);
 	}
 
-	function calculateLiquidationTransfer(
-		uint256 snapshotTargetOwnership,
-		uint256 snapshotTargetAllowance,
-		uint256 snapshotTotalRep,
-		uint256 snapshotDenominator,
+	function calculateBundledLiquidationTransfer(
+		uint256 targetOwnership,
+		uint256 targetAllowance,
 		uint256 requestedDebt,
 		uint256 repEthPrice,
-		uint256 currentTargetOwnership,
 		uint256 currentTotalRep,
 		uint256 currentDenominator
 	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
-		uint256 vaultRep =
-			snapshotDenominator == 0
-				? snapshotTargetOwnership / PRICE_PRECISION
-				: (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
-		uint256 maxDebtToMove;
-		if (vaultRep > MIN_REP_DEPOSIT) {
-			maxDebtToMove =
-				((vaultRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR) /
-				(repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS));
-			if (maxDebtToMove > snapshotTargetAllowance) maxDebtToMove = snapshotTargetAllowance;
-		}
-		if (
-			maxDebtToMove < snapshotTargetAllowance && snapshotTargetAllowance - maxDebtToMove <= MIN_SECURITY_BOND_DEBT
-		) {
-			maxDebtToMove =
-				snapshotTargetAllowance > MIN_SECURITY_BOND_DEBT
-					? snapshotTargetAllowance - MIN_SECURITY_BOND_DEBT
-					: snapshotTargetAllowance;
-		}
-		debtToMove = requestedDebt > maxDebtToMove ? maxDebtToMove : requestedDebt;
-		if (debtToMove == 0) return (0, 0, 0);
-		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
-		uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
-		repToMove = repNumerator / repDenominator;
-		if (repToMove * repDenominator < repNumerator) repToMove += 1;
-		ownershipToMove =
-			currentDenominator == 0 || currentTotalRep == 0
-				? repToMove * PRICE_PRECISION
-				: (repToMove * currentDenominator) / currentTotalRep;
-		if (debtToMove == snapshotTargetAllowance) {
-			uint256 remainingRep =
-				currentDenominator == 0 || ownershipToMove >= currentTargetOwnership
-					? 0
-					: ((currentTargetOwnership - ownershipToMove) * currentTotalRep) / currentDenominator;
-			if (ownershipToMove >= currentTargetOwnership || remainingRep < MIN_REP_DEPOSIT) {
-				repToMove =
-					currentDenominator == 0 ? 0 : (currentTargetOwnership * currentTotalRep) / currentDenominator;
-				ownershipToMove = currentTargetOwnership;
+		if (targetAllowance == 0 || requestedDebt == 0 || repEthPrice == 0) return (0, 0, 0);
+		bool resolveResidualAsBadDebt = requestedDebt >= targetAllowance;
+		if (!resolveResidualAsBadDebt && targetAllowance <= MIN_SECURITY_BOND_DEBT) return (0, 0, 0);
+		uint256 minimumRemainingRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT;
+		uint256 reserveOwnership;
+		if (minimumRemainingRep != 0) {
+			if (currentDenominator == 0 || currentTotalRep == 0) {
+				reserveOwnership = minimumRemainingRep * PRICE_PRECISION;
+			} else {
+				reserveOwnership = Math.mulDiv(
+					minimumRemainingRep,
+					currentDenominator,
+					currentTotalRep,
+					Math.Rounding.Ceil
+				);
 			}
 		}
+		if (reserveOwnership >= targetOwnership) return (0, 0, 0);
+		uint256 awardableOwnership = targetOwnership - reserveOwnership;
+		uint256 awardableRep =
+			currentDenominator == 0
+				? awardableOwnership / PRICE_PRECISION
+				: Math.mulDiv(awardableOwnership, currentTotalRep, currentDenominator);
+		uint256 maxFundedDebt = Math.mulDiv(
+			awardableRep,
+			PRICE_PRECISION * BPS_DENOMINATOR,
+			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)
+		);
+		uint256 requestedDebtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
+		uint256 requestedDebtRemaining = targetAllowance - requestedDebtToMove;
+		if (!resolveResidualAsBadDebt && requestedDebtRemaining > 0 && requestedDebtRemaining < MIN_SECURITY_BOND_DEBT)
+			requestedDebtToMove = targetAllowance - MIN_SECURITY_BOND_DEBT;
+		debtToMove = requestedDebtToMove < maxFundedDebt ? requestedDebtToMove : maxFundedDebt;
+		if (debtToMove == 0) return (0, 0, 0);
+		ownershipToMove = _getLiquidationOwnershipAward(debtToMove, repEthPrice, currentTotalRep, currentDenominator);
+		require(ownershipToMove <= awardableOwnership, 'Award unfunded');
+		repToMove =
+			currentDenominator == 0
+				? ownershipToMove / PRICE_PRECISION
+				: Math.mulDiv(ownershipToMove, currentTotalRep, currentDenominator);
+	}
+
+	function _getLiquidationOwnershipAward(
+		uint256 debtToMove,
+		uint256 repEthPrice,
+		uint256 currentTotalRep,
+		uint256 currentDenominator
+	) private pure returns (uint256 ownershipToMove) {
+		uint256 grossRepAward = Math.mulDiv(
+			debtToMove,
+			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS),
+			PRICE_PRECISION * BPS_DENOMINATOR,
+			Math.Rounding.Ceil
+		);
+		ownershipToMove =
+			currentDenominator == 0 || currentTotalRep == 0
+				? grossRepAward * PRICE_PRECISION
+				: Math.mulDiv(grossRepAward, currentDenominator, currentTotalRep, Math.Rounding.Ceil);
+	}
+
+	function isVaultHealthy(
+		uint256 freeRep,
+		uint256 escalationRep,
+		uint256 securityBondAllowance,
+		uint256 repEthPrice,
+		uint256 poolSecurityMultiplierBps
+	) external pure returns (bool) {
+		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
+		if ((freeRep + escalationRep) * valueScale < securityBondAllowance * poolSecurityMultiplierBps * repEthPrice)
+			return false;
+		if (securityBondAllowance == 0) return true;
+		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
+		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
+		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
+			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
+		return freeRep * valueScale > securityBondAllowance * migrationSecurityMultiplierBps * repEthPrice;
+	}
+
+	function isLiquidationBeyondMinPriceDistance(
+		uint256 freeRep,
+		uint256 escalationRep,
+		uint256 securityBondAllowance,
+		uint256 poolSecurityMultiplierBps,
+		uint256 currentPrice,
+		uint256 minPriceDistanceBps
+	) external pure returns (bool) {
+		return
+			_isLiquidationBeyondMinPriceDistance(
+				freeRep,
+				escalationRep,
+				securityBondAllowance,
+				poolSecurityMultiplierBps,
+				currentPrice,
+				minPriceDistanceBps
+			);
+	}
+
+	function _isLiquidationBeyondMinPriceDistance(
+		uint256 freeRep,
+		uint256 escalationRep,
+		uint256 securityBondAllowance,
+		uint256 poolSecurityMultiplierBps,
+		uint256 currentPrice,
+		uint256 minPriceDistanceBps
+	) internal pure returns (bool) {
+		if (minPriceDistanceBps == 0) return true;
+		if (securityBondAllowance == 0 || currentPrice == 0) return false;
+		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
+		uint256 associatedRepThreshold =
+			((freeRep + escalationRep) * valueScale) / (securityBondAllowance * poolSecurityMultiplierBps);
+		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
+		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
+		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
+			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
+		uint256 migrationThreshold = (freeRep * valueScale) / (securityBondAllowance * migrationSecurityMultiplierBps);
+		uint256 thresholdPrice =
+			associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold;
+		if (currentPrice <= thresholdPrice) return false;
+		return ((currentPrice - thresholdPrice) * BPS_DENOMINATOR) / currentPrice >= minPriceDistanceBps;
 	}
 
 	// Starts at MAX_RETENTION_RATE, decreases linearly until the 80% utilization dip,

@@ -416,6 +416,47 @@ describe('funded execution orchestration', () => {
 		expect(calls).toEqual(['persist', 'submit'])
 	})
 
+	test('runs the final market guard before journaling and cannot leave a recoverable intent when blocked', async () => {
+		const calls: string[] = []
+		await expect(
+			journaledSubmission(
+				async () => {
+					calls.push('persist')
+				},
+				async () => {
+					calls.push('submit')
+				},
+				async () => {
+					await Promise.resolve()
+					calls.push('guard')
+					throw new Error('market expired')
+				},
+			),
+		).rejects.toThrow('market expired')
+		expect(calls).toEqual(['guard'])
+	})
+
+	test('rechecks the final market guard after the durable journal is synced', async () => {
+		const calls: string[] = []
+		let checks = 0
+		await expect(
+			journaledSubmission(
+				async () => {
+					calls.push('persist')
+				},
+				async () => {
+					calls.push('submit')
+				},
+				() => {
+					checks += 1
+					calls.push(`guard-${checks.toString()}`)
+					if (checks === 2) throw new Error('market changed during persistence')
+				},
+			),
+		).rejects.toThrow('market changed during persistence')
+		expect(calls).toEqual(['guard-1', 'persist', 'guard-2'])
+	})
+
 	test('does not submit until journal contents and directory entry are synced', async () => {
 		const calls: string[] = []
 		let opened = 0

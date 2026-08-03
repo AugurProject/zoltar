@@ -17,6 +17,7 @@ export type DeploymentStepId =
 	| 'shareTokenFactory'
 	| 'priceOracleManagerAndOperatorQueuerFactory'
 	| 'securityPoolForker'
+	| 'escalationGameClaimDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
@@ -241,6 +242,7 @@ export type OpenOracleReportSummary = {
 	reportId: bigint
 	reportTimestamp: bigint
 	settlementTimestamp: bigint
+	timeType: boolean
 	token1: Address
 	token2: Address
 	token1Decimals: number
@@ -340,8 +342,11 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 
 export type SecurityPoolVaultSummary = {
 	escalationEscrowedRep: bigint
+	poolOwnership?: bigint
+	poolOwnershipDenominator?: bigint
 	repDepositShare: bigint
 	securityBondAllowance: bigint
+	totalRepBalance?: bigint
 	unpaidEthFees: bigint
 	vaultAddress: Address
 }

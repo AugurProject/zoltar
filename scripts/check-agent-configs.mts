@@ -9,7 +9,25 @@ const supportedModelReasoningEfforts = new Map([
 	['gpt-5.6-terra', new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])],
 ])
 const requiredContractHeadings = ['## Handoff', '## Scope', '## Severity', '## Output', '## Scoring', '## Closure']
-const requiredInstructionFragments = ['.codex/review-contract.md', 'Do not modify files.', 'Review limitations']
+const requiredContractOutputFragments = ['`Issues`', '`Total score: <0-100>`', 'nothing else']
+const forbiddenContractOutputFragments = ['`Acceptance criteria assessment`', '`Validation assessment`', '`Review limitations`', 'with a brief rationale', 'Specialized agents may require additional sections']
+const requiredFinalInstruction = 'Return only the issue list and total score required by `.codex/review-contract.md`, with nothing before or after them.'
+const requiredInstructionFragments = ['.codex/review-contract.md', 'Do not modify files.']
+const forbiddenInstructionOutputFragments = [
+	'Return the exact core sections',
+	'followed by:',
+	'`Story arc`',
+	'`What works well`',
+	'`Contract sync assessment`',
+	'`Contract coverage and omissions assessment`',
+	'`Diagram, chart, and interactive semantics assessment`',
+	'`Duplication and canonical ownership assessment`',
+	'`Visual evidence assessment`',
+	'`Viewport and state coverage`',
+	'`UI copy necessity assessment`',
+	'`Design-system consistency`',
+	'`Accessibility observations`',
+]
 
 type AgentValidation = {
 	errors: string[]
@@ -71,6 +89,10 @@ function validateAgentConfigSource(filePath: string, source: string): AgentValid
 		for (const fragment of requiredInstructionFragments) {
 			if (!instructions.includes(fragment)) errors.push(`${filePath}: developer_instructions must include ${JSON.stringify(fragment)}`)
 		}
+		for (const fragment of forbiddenInstructionOutputFragments) {
+			if (instructions.includes(fragment)) errors.push(`${filePath}: developer_instructions must not include legacy output ${JSON.stringify(fragment)}`)
+		}
+		if (!instructions.trimEnd().endsWith(requiredFinalInstruction)) errors.push(`${filePath}: developer_instructions must end with the exclusive output instruction`)
 	}
 
 	return { errors, name }
@@ -93,6 +115,12 @@ function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: str
 	const contractHeadingLines = new Set(reviewContract.split(/\r?\n/).map(line => line.trim()))
 	for (const heading of requiredContractHeadings) {
 		if (!contractHeadingLines.has(heading)) errors.push(`.codex/review-contract.md: missing ${heading}`)
+	}
+	for (const fragment of requiredContractOutputFragments) {
+		if (!reviewContract.includes(fragment)) errors.push(`.codex/review-contract.md: output contract must include ${JSON.stringify(fragment)}`)
+	}
+	for (const fragment of forbiddenContractOutputFragments) {
+		if (reviewContract.includes(fragment)) errors.push(`.codex/review-contract.md: output contract must not include legacy output ${JSON.stringify(fragment)}`)
 	}
 
 	const referencedAgentFiles = [...rootInstructions.matchAll(/\.codex\/agents\/([A-Za-z0-9_-]+\.toml)/g)].map(match => match[1]).filter(fileName => fileName !== undefined)

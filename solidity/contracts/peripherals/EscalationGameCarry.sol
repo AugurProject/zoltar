@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Constants } from '../Constants.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	CarriedDepositProof,
@@ -16,6 +17,7 @@ import {
 	OutcomeState,
 	OutcomeStateView
 } from './EscalationGameTypes.sol';
+
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
@@ -125,7 +127,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			uint256 minimumBacking = requiredRepAtFork - requiredRepAtFork / Constants.MINIMUM_FORK_BURN_DIVISOR;
 			if (forkCarryInitialBacking < minimumBacking) return false;
 			if (forkCarryBackingExportedBeforeResume > forkCarryInitialBacking) return false;
-			requiredRep = forkCarryInitialBacking - forkCarryBackingExportedBeforeResume;
+			requiredRep = _applyTruthAuctionRetention(forkCarryInitialBacking - forkCarryBackingExportedBeforeResume);
 		}
 		return repToken.balanceOf(address(this)) >= requiredRep;
 	}
@@ -201,7 +203,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
-
 		bytes32[3] memory normalizedNullifierRoots;
 		bytes32[3] memory carryRoots;
 		uint256 totalCarry;
@@ -233,6 +234,13 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			);
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
+		// Continuations receive aggregate backing rather than per-vault bundles.
+		// Keep that inherited backing auctionable even though no local deposit
+		// initialized the ordinary escrow-accounting registry.
+		if (totalEscrowedRep == 0) {
+			forkCarryEscrowedRep = forkCarryInitialBacking;
+			totalEscrowedRep = forkCarryInitialBacking;
+		}
 		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
 		if (proofVerifier.hasReachedNonDecision(snapshotResolutionBalances, nonDecisionThreshold)) {
 			nonDecisionState = NonDecisionState.InheritedThresholdTie;
@@ -247,6 +255,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotCarryTotals,
 			snapshotResolutionBalances
 		);
+		forkCarrySourceGame = sourceGame;
+		if (sourceGame != address(0x0)) {
+			_delegateClaimCall(abi.encodeCall(EscalationGameClaimDelegate.initializeForkClaimCheckpoint, (sourceGame)));
+		}
 		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) {
 			emit InheritedThresholdTie(sourceGame);
 		}
@@ -284,7 +296,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		uint256 depositIndex
 	) internal view returns (uint256) {
 		if (!forkContinuation) return depositIndex;
-		return uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)));
+		return (uint256(uint160(address(this))) << 96) | (uint256(outcomeIndex) << 88) | depositIndex;
 	}
 
 	function _appendLocalCarryLeafToCurrentSnapshot(OutcomeState storage state, uint256 nodeId) internal {
@@ -319,7 +331,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);
-		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amount);
+		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amount, proof.cumulativeAmount);
 	}
 
 	function _consumeLocalDeposit(
@@ -471,25 +483,31 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
-		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] -= amount;
 		uint256 nodeId = state.localNodeIds[depositIndex];
 		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
-		_consumeUnresolvedRepForVault(depositor, amount);
+		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amount);
 	}
 
-	function _consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) private {
+	function _consumeCarriedDeposit(
+		uint8 outcomeIndex,
+		uint256 parentDepositIndex,
+		uint256 amount,
+		uint256 cumulativeAmount
+	) private {
 		require(!_isCarriedDepositConsumed(outcomeIndex, parentDepositIndex), 'Deposit settled');
 		OutcomeState storage state = outcomeState[outcomeIndex];
+		uint256 sourceRetainedAmount = _applyInheritedSourceRetention(amount, parentDepositIndex);
 		require(
-			_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal >= amount,
+			_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal >= sourceRetainedAmount,
 			'Carried REP low'
 		);
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;
+		uint256 sourceBasisAmount = _applyInheritedSourceStorageBasis(amount, cumulativeAmount, parentDepositIndex);
 		uint256 inheritedAmountToConsume =
-			amount > state.inheritedUnresolvedTotal ? state.inheritedUnresolvedTotal : amount;
+			sourceBasisAmount > state.inheritedUnresolvedTotal ? state.inheritedUnresolvedTotal : sourceBasisAmount;
 		state.inheritedUnresolvedTotal -= inheritedAmountToConsume;
-		if (amount > inheritedAmountToConsume) {
-			state.localUnresolvedTotal -= amount - inheritedAmountToConsume;
+		if (sourceBasisAmount > inheritedAmountToConsume) {
+			state.localUnresolvedTotal -= sourceBasisAmount - inheritedAmountToConsume;
 		}
 	}
 
@@ -533,6 +551,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 		BinaryOutcomes.BinaryOutcome finalResolution = getFinalQuestionResolution();
 		if (finalResolution != BinaryOutcomes.BinaryOutcome.None && uint8(finalResolution) != outcomeIndex) return 0;
-		return inheritedUnresolvedTotal;
+		return _applyTruthAuctionRetention(inheritedUnresolvedTotal);
 	}
 }

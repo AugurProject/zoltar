@@ -47,35 +47,23 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		// A non-decision alone does not authorize forked escrow claims; fork-time escrow state is also required.
-		require(
-			forkDataByPool[parent].unresolvedEscalationAtFork && escalationGame.canTriggerOwnFork(),
-			'Non-decision required'
-		);
-		require(forkDataByPool[parent].ownFork, 'Own fork required');
+		// This module is embedded in SecurityPoolForker's creation code. Data-free
+		// guards keep that initcode below EIP-3860's hard deployment limit.
+		if (!forkDataByPool[parent].unresolvedEscalationAtFork || !escalationGame.canTriggerOwnFork()) revert();
+		if (!forkDataByPool[parent].ownFork) revert();
 		(ISecurityPool child, EscalationGame childEscalationGame) = _getOrDeployChildPool(parent, uint8(outcomeIndex));
-		require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
-		require(
-			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
-			'Claim window closed'
-		);
-		require(address(childEscalationGame) != address(0x0), 'Child game missing');
+		if (child.systemState() != SystemState.ForkMigration) revert();
+		if (block.timestamp > forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME) revert();
+		if (address(childEscalationGame) == address(0x0)) revert();
 		(uint256 repMigratedFromEscalationGame, uint256 sourcePrincipalClaimed) = _claimWinningDepositsFromGame(
 			escalationGame,
+			childEscalationGame,
 			vault,
 			outcomeIndex,
 			depositIndexes
 		);
 		directlyClaimedEscalationPrincipalByPoolAndOutcome[parent][uint8(outcomeIndex)] += sourcePrincipalClaimed;
 		uint256 childRepToSweep = repMigratedFromEscalationGame;
-		if (childRepToSweep > 0) {
-			childEscalationGame.recordForkedEscrowForOutcome(
-				vault,
-				outcomeIndex,
-				sourcePrincipalClaimed,
-				childRepToSweep
-			);
-			childEscalationGame.exportForkedEscrowByOutcome(vault, vault);
-		}
 		emit ClaimForkedEscalationDepositsToWallet(
 			parent,
 			vault,
@@ -101,6 +89,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 
 	function _claimWinningDepositsFromGame(
 		EscalationGame escalationGame,
+		EscalationGame childEscalationGame,
 		address vault,
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
 		uint256[] calldata depositIndexes
@@ -112,12 +101,21 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 				depositIndex,
 				outcomeIndex
 			);
-			require(depositor == vault, 'Wrong deposit vault');
+			if (depositor != vault) revert();
+			childEscalationGame.recordForkedEscrowForOutcome(
+				depositor,
+				outcomeIndex,
+				sourcePrincipal,
+				amountToWithdraw
+			);
+			childEscalationGame.exportForkedEscrowByOutcome(depositor, depositor);
 			uint256 stableParentDepositIndex = depositIndex;
 			if (escalationGame.forkContinuation()) {
-				stableParentDepositIndex = uint256(
-					keccak256(abi.encode(address(escalationGame), uint8(outcomeIndex), depositIndex))
-				);
+				if (depositIndex >= (uint256(1) << 88)) revert();
+				stableParentDepositIndex =
+					(uint256(uint160(address(escalationGame))) << 96) |
+					(uint256(uint8(outcomeIndex)) << 88) |
+					depositIndex;
 			}
 			bytes32 depositId = _getEscalationDepositId(
 				escalationGame.securityPool(),
@@ -137,23 +135,17 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool migratedChild,
 		EscalationGame migratedChildEscalationGame
 	) public {
-		require(msg.sender == vault, 'Only vault');
-		require(
-			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
-			'Migration closed'
-		);
+		if (msg.sender != vault) revert();
+		if (block.timestamp > forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME) revert();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		require(parentForkData.unresolvedEscalationAtFork, 'No unresolved deposits');
-		require(
-			!escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex],
-			'Entitlement materialized'
-		);
+		if (!parentForkData.unresolvedEscalationAtFork) revert();
+		if (escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex]) revert();
 		ISecurityPool child = migratedChild;
 		EscalationGame childEscalationGame = migratedChildEscalationGame;
 		if (address(child) == address(0x0)) {
 			(child, childEscalationGame) = _getOrDeployChildPool(parent, childOutcomeIndex);
 		} else {
-			require(address(childrenByPoolAndOutcome[parent][childOutcomeIndex]) == address(child), 'Child game');
+			if (address(childrenByPoolAndOutcome[parent][childOutcomeIndex]) != address(child)) revert();
 			_validateChildEscalationGame(child, childEscalationGame);
 		}
 		EscalationMigrationEntitlement storage entitlement = escalationMigrationEntitlementByPoolAndVault[parent][
@@ -162,7 +154,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		if (!entitlement.initialized) {
 			_initializeEscalationMigrationEntitlement(parent, parent.escalationGame(), vault, entitlement);
 		}
-		require(address(childEscalationGame) != address(0x0), 'Child game missing');
+		if (address(childEscalationGame) == address(0x0)) revert();
 		escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex] = true;
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 		emit EscalationMigrationEntitlementMaterialized(

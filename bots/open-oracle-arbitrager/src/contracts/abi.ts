@@ -27,6 +27,7 @@ export const constantProductFactoryAbi = [
 
 export const constantProductPairAbi = [
 	{ type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 	{
 		type: 'function',
 		name: 'getReserves',

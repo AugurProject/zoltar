@@ -139,6 +139,7 @@ void describe('deployment helpers', () => {
 			'shareTokenFactory',
 			'priceOracleManagerAndOperatorQueuerFactory',
 			'securityPoolForker',
+			'escalationGameClaimDelegate',
 			'escalationGameFactory',
 			'securityPoolFactory',
 		])

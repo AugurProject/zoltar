@@ -8,15 +8,35 @@ type GlobalTransactionTrayProps = {
 }
 
 const dismissedKeys = new Set<string>()
+const MAX_REMEMBERED_DISMISSALS = 100
 
 function getTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
 	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
 }
 
+function getDismissalTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
+	const dismissKey = transaction?.dismissKey
+	if (dismissKey !== undefined && !dismissKey.startsWith('transaction-request-')) return dismissKey
+	return transaction?.hash ?? dismissKey ?? transaction?.operationKey
+}
+
 function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
-	const transactionKey = getTransactionKey(transaction)
+	const transactionKey = getDismissalTransactionKey(transaction)
 	if (transactionKey === undefined || transaction === undefined) return undefined
 	return `${transaction.tone}:${transactionKey}`
+}
+
+function shouldRememberDismissal(transaction: GlobalTransactionPresentation) {
+	const transactionKey = getDismissalTransactionKey(transaction)
+	return transactionKey !== undefined && !transactionKey.startsWith('transaction-request-')
+}
+
+function rememberDismissal(dismissKey: string) {
+	if (dismissedKeys.size >= MAX_REMEMBERED_DISMISSALS) {
+		const oldestDismissedKey = dismissedKeys.values().next().value
+		if (oldestDismissedKey !== undefined) dismissedKeys.delete(oldestDismissedKey)
+	}
+	dismissedKeys.add(dismissKey)
 }
 
 export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransactionTrayProps) {
@@ -72,7 +92,7 @@ export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransacti
 	const compact = canDismiss && routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey
 	const dismiss = () => {
 		if (transactionDismissKey === undefined) return
-		dismissedKeys.add(transactionDismissKey)
+		if (shouldRememberDismissal(transaction)) rememberDismissal(transactionDismissKey)
 		setDismissedKey(transactionDismissKey)
 	}
 

@@ -182,6 +182,30 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
+	test('does not present free REP alone as a pool health gauge when escalation REP changes ordinary coverage', async () => {
+		const pool = createSecurityPool({
+			statoblastSecurityMultiplierBps: 20_000n,
+			totalRepDeposit: 16n * 10n ** 18n,
+			totalSecurityBondAllowance: 10n * 10n ** 18n,
+			vaultCount: 1n,
+			vaults: [
+				{
+					escalationEscrowedRep: 4n * 10n ** 18n,
+					repDepositShare: 16n * 10n ** 18n,
+					securityBondAllowance: 10n * 10n ** 18n,
+					unpaidEthFees: 0n,
+					vaultAddress: '0x0000000000000000000000000000000000000100',
+				},
+			],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Pool collateralization')).toBeNull()
+		expect(documentQueries.queryByText('Below target')).toBeNull()
+	})
+
 	test('gives same-titled pool actions distinct accessible names', async () => {
 		const firstAddress = '0x0000000000000000000000000000000000000100'
 		const secondAddress = '0x0000000000000000000000000000000000000101'

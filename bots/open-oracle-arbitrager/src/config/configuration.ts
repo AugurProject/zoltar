@@ -7,10 +7,12 @@ import { networkConfiguration, type NetworkConfiguration } from '#config/network
 import type { RiskLimits } from '#core/safety-controls'
 import { loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
+import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
 export type Configuration = MutableStrategy & {
+	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
 	coordinatorAddresses: Address[]
 	deploymentManifest: DeploymentManifest | undefined
@@ -63,6 +65,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
 	return {
 		...saved.strategy,
+		centralizedMarkets: saved.centralizedMarkets,
 		connectivity: saved.connectivity,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
 		deploymentManifest: deployment.deploymentManifest,

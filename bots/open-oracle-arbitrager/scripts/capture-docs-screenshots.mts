@@ -70,6 +70,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
 			['dashboard-markets.png', 'markets'],
+			['dashboard-markets-mobile.png', 'markets'],
+			['dashboard-opportunities.png', 'operations'],
+			['dashboard-opportunities-mobile.png', 'operations'],
 			...(process.env['OPEN_ORACLE_CAPTURE_DEPLOYMENT'] === '1'
 				? ([
 						['deployment-desktop.png', 'deployment-configuration'],
@@ -84,12 +87,23 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					] as const)
 				: []),
 		] as const) {
-			const mobile = name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
+			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
 			if (section !== undefined) {
-				await command('Runtime.evaluate', { expression: `document.getElementById(${JSON.stringify(section)})?.scrollIntoView()` }, sessionId)
+				await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const section = document.getElementById(${JSON.stringify(section)})
+							if (section === null) return
+							for (const scroller of document.querySelectorAll('.table-scroll')) scroller.scrollLeft = 0
+							window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - 16))
+						})()`,
+					},
+					sessionId,
+				)
 				await Bun.sleep(250)
 			}
 			const capture = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true }, sessionId)
@@ -284,6 +298,71 @@ const positionDerivedSnapshot = operatorSnapshot(
 		balances: undefined,
 		blockNumber: '23842152',
 		blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
+		centralizedMarket: {
+			assetId: rep,
+			askDepthEth: 63n * 10n ** 17n,
+			bidDepthEth: 71n * 10n ** 17n,
+			chainId: 1,
+			maximumPriceRepPerEth: 1042n * 10n ** 16n,
+			minimumPriceRepPerEth: 1031n * 10n ** 16n,
+			observations: [
+				{ assetId: rep, askDepthEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: 38n * 10n ** 17n, chainId: 1, ethTickerTimestamp: now, exchangeId: 'kraken', observedAt: now, orderBookTimestamp: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', usesEthTicker: true },
+				{
+					assetId: rep,
+					askDepthEth: 29n * 10n ** 17n,
+					bestAskQuote: '0.097',
+					bestBidQuote: '0.096',
+					bidDepthEth: 33n * 10n ** 17n,
+					chainId: 1,
+					ethTickerTimestamp: undefined,
+					exchangeId: 'coinbase',
+					observedAt: now,
+					orderBookTimestamp: now,
+					priceRepPerEth: 1042n * 10n ** 16n,
+					repMarket: 'REP/ETH',
+					usesEthTicker: false,
+				},
+			],
+			priceRepPerEth: 10365n * 10n ** 15n,
+			reasons: [],
+			reliable: true,
+		},
+		marketConsensus: {
+			assetId: rep,
+			cex: {
+				askDepthEth: 63n * 10n ** 17n,
+				bidDepthEth: 71n * 10n ** 17n,
+				kind: 'cex',
+				maximumPriceRepPerEth: 1042n * 10n ** 16n,
+				minimumPriceRepPerEth: 1031n * 10n ** 16n,
+				observations: [
+					{ assetId: rep, askDepthEth: 34n * 10n ** 17n, bidDepthEth: 38n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'kraken:1', observedAt: now, priceRepPerEth: 1031n * 10n ** 16n, sourceId: 'kraken' },
+					{ assetId: rep, askDepthEth: 29n * 10n ** 17n, bidDepthEth: 33n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'coinbase:1', observedAt: now, priceRepPerEth: 1042n * 10n ** 16n, sourceId: 'coinbase' },
+				],
+				priceRepPerEth: 10365n * 10n ** 15n,
+				reasons: [],
+				reliable: true,
+			},
+			chainId: 1,
+			dex: {
+				askDepthEth: 48n * 10n ** 17n,
+				bidDepthEth: 52n * 10n ** 17n,
+				kind: 'dex',
+				maximumPriceRepPerEth: 1041n * 10n ** 16n,
+				minimumPriceRepPerEth: 1037n * 10n ** 16n,
+				observations: [
+					{ assetId: rep, askDepthEth: 24n * 10n ** 17n, bidDepthEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v2:1', observedAt: now, priceRepPerEth: 1037n * 10n ** 16n, sourceId: 'uniswap-v2' },
+					{ assetId: rep, askDepthEth: 24n * 10n ** 17n, bidDepthEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v3:1', observedAt: now, priceRepPerEth: 1041n * 10n ** 16n, sourceId: 'uniswap-v3' },
+				],
+				priceRepPerEth: 1039n * 10n ** 16n,
+				reasons: [],
+				reliable: true,
+			},
+			priceRepPerEth: 103775n * 10n ** 14n,
+			reasons: [],
+			reliable: true,
+			sourceCount: 4,
+		},
 		endpointChecks: [],
 		executionHistory: [],
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
@@ -320,6 +399,8 @@ const snapshot = {
 	balances: { availableEth: '1.842', availableRep: '184.25', availableWeth: '2.375', repValueWeth: '0.770165', totalValueWeth: '4.987165' },
 	blockNumber: '23842152',
 	blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
+	centralizedMarket: positionDerivedSnapshot.centralizedMarket,
+	marketConsensus: positionDerivedSnapshot.marketConsensus,
 	connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
 	deployment: positionDerivedSnapshot.deployment,
 	endpointChecks: [
@@ -346,10 +427,12 @@ const snapshot = {
 	],
 	opportunities: [
 		{
+			centralizedPriceDeviationBps: '86',
 			decision: 'selected' as const,
 			direction: 'sell-rep' as const,
 			estimatedNetProfitEth: '0.0158',
 			estimatedNetProfitWeth: '0.0158',
+			executablePriceRepPerEth: '10.284',
 			hasRequiredInventory: true,
 			pool,
 			poolFee: 3_000,
@@ -363,10 +446,12 @@ const snapshot = {
 			windowUnit: 'blocks' as const,
 		},
 		{
+			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable' as const,
 			direction: 'buy-rep' as const,
 			estimatedNetProfitEth: '-0.0012',
 			estimatedNetProfitWeth: '-0.0012',
+			executablePriceRepPerEth: '9.845',
 			hasRequiredInventory: true,
 			pool: address(0x3201),
 			poolFee: 10_000,

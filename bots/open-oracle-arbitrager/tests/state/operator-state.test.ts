@@ -104,10 +104,12 @@ describe('operator strategy settings', () => {
 			operationLog: [],
 			opportunities: [
 				{
+					centralizedPriceDeviationBps: '25',
 					decision: 'eligible',
 					direction: 'buy-rep',
 					estimatedNetProfitEth: '1',
 					estimatedNetProfitWeth: '1',
+					executablePriceRepPerEth: '10',
 					hasRequiredInventory: true,
 					pool: address,
 					poolFee: 3_000,

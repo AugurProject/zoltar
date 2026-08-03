@@ -254,7 +254,7 @@ describe('injected backend read transport', () => {
 		let sendRawTransactionCalls = 0
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			if (method === 'eth_accounts') return [zeroAddress]
-			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_chainId') return '0x01'
 			if (method === 'eth_getTransactionCount') return '0x1'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice') return '0x1'

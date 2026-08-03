@@ -29,7 +29,7 @@ For a visual-review handoff, the parent must additionally provide:
 - console or runtime errors observed during browser QA
 - relevant states or surfaces that were inaccessible or intentionally not exercised, with reasons
 
-If an input is unavailable, the reviewer must continue with best effort and record the gap under `Review limitations` instead of guessing.
+If an input is unavailable, the reviewer must continue with best effort and account for the gap when scoring instead of guessing. Report it only when it creates a concrete issue.
 
 ## Scope
 
@@ -37,7 +37,7 @@ Review the task change, not every difference that happens to be present in the w
 
 Use the merge base of the supplied baseline and `HEAD` for committed branch scope. Inspect the staged and unstaged views when needed to understand partial changes. Discover and follow every `AGENTS.md` applicable to a changed path.
 
-Findings must be supported by repository evidence. Put uncertainty, inaccessible dependencies, stale refs, and unverified assumptions in `Review limitations`, not in findings.
+Findings must be supported by repository evidence. Do not report uncertainty, inaccessible dependencies, stale refs, or unverified assumptions as issues. Account for them when scoring.
 
 ## Severity
 
@@ -49,7 +49,12 @@ Do not report speculative, preference-only, or style-only concerns. Do not lower
 
 ## Output
 
-Start with findings grouped under `High`, `Medium`, and `Low`. Write `None` under an empty group. For each finding include:
+Return exactly these two sections and nothing else:
+
+1. `Issues`
+2. `Total score: <0-100>`
+
+Under `Issues`, group findings under `High`, `Medium`, and `Low`. Write `None` when there are no findings; when any findings exist, omit empty severity groups. For each finding include:
 
 - `path:line`
 - severity
@@ -58,14 +63,7 @@ Start with findings grouped under `High`, `Medium`, and `Low`. Write `None` unde
 - concrete suggested fix
 - validation that would catch the issue
 
-Then include:
-
-- `Acceptance criteria assessment`
-- `Validation assessment`
-- `Review limitations`, or `None`
-- `Review score: <0-100>` with a brief rationale
-
-Specialized agents may require additional sections after findings. Keep the report concise and do not manufacture findings to meet a quota.
+Do not include assessment sections, review limitations, rationale, praise, summaries, preambles, or specialty appendices. Keep the issue list concise and do not manufacture findings to meet a quota.
 
 ## Scoring
 
@@ -84,4 +82,4 @@ The parent agent must disposition every finding:
 - For advisory Low findings, either improve the touched code or text when the change is clearly beneficial and in scope, or record why the item is deferred.
 - For a non-issue, clarify names, tests, comments, or the review handoff only when the concern reveals real ambiguity. Do not make unrelated edits merely to silence a stochastic review.
 
-Rerun affected validation and the relevant reviewer after material fixes. A task is review-clean when no valid High or Medium findings remain and every Low finding has an explicit disposition. If the same unsupported finding repeats with no new evidence, record it as a review limitation instead of creating an unbounded review loop.
+Rerun affected validation and the relevant reviewer after material fixes. A task is review-clean when no valid High or Medium findings remain and every Low finding has an explicit disposition. If the same unsupported finding repeats with no new evidence, ignore it instead of creating an unbounded review loop.

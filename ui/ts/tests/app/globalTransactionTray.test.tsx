@@ -8,6 +8,7 @@ import { GlobalTransactionTray } from '../../app/components/GlobalTransactionTra
 import { createMarketCreationSuccessPresentation, createSecurityPoolCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../lib/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -228,11 +229,35 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert')).not.toBeNull()
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
 		expect(documentQueries.getByText('Action canceled in wallet.')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
 		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
 		expect(dismissButton.parentElement?.classList.contains('global-transaction-actions')).toBe(true)
+	})
+
+	test('does not hide a new request-scoped failure after the tray remounts', async () => {
+		const transaction = {
+			detail: 'Action canceled in wallet.',
+			dismissKey: 'transaction-request-remount-collision',
+			title: 'Creating Question',
+			tone: 'error' as const,
+		}
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
+		await act(() => {
+			renderedComponent.unmount()
+		})
+
+		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = rerenderedComponent.cleanup
+		expect(within(document.body).getByRole('alert')).not.toBeNull()
+		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
 	})
 
 	test('renders a failed submitted transaction with both the failure reason and hash link', async () => {
@@ -280,6 +305,76 @@ describe('GlobalTransactionTray', () => {
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
 		cleanupRenderedComponent = rerenderedComponent.cleanup
 		expect(rerenderedComponent.container.textContent).toBe('')
+	})
+
+	test('remembers a production-shaped hash-backed completion without hiding a fresh request failure', async () => {
+		const intent = {
+			action: 'createMarket',
+			requiresWalletConfirmation: false,
+			source: 'zoltar',
+			submittedTitle: 'Creating Question',
+		}
+		const hash = '0xa234000000000000000000000000000000000000000000000000000000000000' as const
+		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), intent)
+		transactionState = markTransactionSubmitted(transactionState, hash)
+		transactionState = markTransactionPresented(transactionState, {
+			dismissKey: hash,
+			hash,
+			title: 'Question Created',
+			tone: 'success',
+		})
+		const completedTransaction = transactionState.active
+		if (completedTransaction === undefined) throw new Error('Completed transaction should be active')
+		expect(completedTransaction.operationKey).toBe('transaction-request-1')
+
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+		})
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
+
+		const remountedCompletion = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
+		expect(remountedCompletion.container.textContent).toBe('')
+		await remountedCompletion.cleanup()
+
+		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), 'Action canceled in wallet.').active
+		if (freshRequestFailure === undefined) throw new Error('Fresh request failure should be active')
+		expect(freshRequestFailure.operationKey).toBe('transaction-request-1')
+		const freshRequestTray = await renderIntoDocument(<GlobalTransactionTray transaction={freshRequestFailure} />)
+		cleanupRenderedComponent = freshRequestTray.cleanup
+		expect(within(freshRequestTray.container).getByRole('alert')).not.toBeNull()
+		expect(within(freshRequestTray.container).getByText('Action canceled in wallet.')).not.toBeNull()
+	})
+
+	test('evicts the oldest remembered dismissal after the bounded limit', async () => {
+		const createTransaction = (index: number) => ({
+			dismissKey: `dismissal-cap-${index.toString()}`,
+			title: `Completed transaction ${index.toString()}`,
+			tone: 'success' as const,
+		})
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		for (let index = 0; index <= 100; index += 1) {
+			await act(() => {
+				render(<GlobalTransactionTray transaction={createTransaction(index)} />, renderedComponent.container)
+			})
+			await act(() => {
+				fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+			})
+		}
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
+
+		const evictedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
+		expect(within(evictedTransaction.container).getByText('Completed transaction 0')).not.toBeNull()
+		await evictedTransaction.cleanup()
+
+		const rememberedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(100)} />)
+		cleanupRenderedComponent = rememberedTransaction.cleanup
+		expect(rememberedTransaction.container.textContent).toBe('')
 	})
 
 	test('keeps a pending transaction visible when remounted with the same hash', async () => {

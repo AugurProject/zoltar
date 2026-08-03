@@ -17,6 +17,8 @@ const TOKEN_ADDRESS = '0x00000000000000000000000000000000000000a1'
 const NEXT_TOKEN_ADDRESS = '0x00000000000000000000000000000000000000b2'
 const ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000c3'
 const NEXT_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000d4'
+const CASE_VARIANT_TOKEN_ADDRESS = '0x00000000000000000000000000000000000000A1'
+const CASE_VARIANT_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000C3'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -80,6 +82,22 @@ describe('WalletAssetControl', () => {
 			expect(acceptedButton.textContent).toContain('Request accepted')
 			expect(documentQueries.getByRole('status').textContent).toBe('Universe 0xa REP wallet request accepted')
 		})
+	})
+
+	test('preserves accepted state across equivalent address casing', async () => {
+		const onWatchAsset = mock(async () => ({ status: 'accepted' }) satisfies WalletAssetWatchResult)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Universe 0xa REP wallet request accepted' })).not.toBeNull()
+		})
+
+		render(<WalletAssetControl accountAddress={CASE_VARIANT_ACCOUNT_ADDRESS} address={CASE_VARIANT_TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+
+		expect(documentQueries.getByRole('button', { name: 'Universe 0xa REP wallet request accepted' })).not.toBeNull()
 	})
 
 	test('discards a pending wallet result when the token address changes', async () => {

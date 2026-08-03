@@ -12,6 +12,7 @@ import { getWethAddress } from '../../protocol/uniswapQuoter.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
 import type { DeploymentStatus } from '../../types/contracts.js'
 import { useLoadController } from '../../hooks/useLoadController.js'
+import { sameChainId } from '../../lib/chainId.js'
 
 type ChainClock = {
 	currentBlockNumber: bigint | undefined
@@ -198,6 +199,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const isManagingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
 	const nextChainClockRefresh = useRequestGuard()
+	const chainClockRefreshRef = useRef<{ activeEnvironmentNonce: number; backend: ChainBackend; promise: Promise<void> } | undefined>(undefined)
 	const renderedBackend = getActiveBackend()
 	const walletActionContextRef = useRef({ activeEnvironmentNonce, backend: renderedBackend })
 	const connectWalletGenerationRef = useRef(0)
@@ -243,26 +245,35 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		deploymentStatusesLoaded.value = false
 		augurStatoblastDeployed.value = undefined
 	}
-	const refreshChainClock = async (backend: ChainBackend) => {
+	const refreshChainClock = (backend: ChainBackend) => {
+		const activeRequest = chainClockRefreshRef.current
+		if (activeRequest !== undefined && activeRequest.activeEnvironmentNonce === activeEnvironmentNonce && activeRequest.backend === backend) return activeRequest.promise
 		const isCurrent = nextChainClockRefresh()
 		const requestEnvironmentNonce = activeEnvironmentNonce
 		const isCurrentChainClockRequest = () => {
 			const context = chainClockContextRef.current
 			return isCurrent() && context.enableChainClock && context.activeEnvironmentNonce === requestEnvironmentNonce && getActiveBackend() === backend
 		}
-		try {
-			const nextChainClock = await loadBackendChainClock(backend)
-			if (!isCurrentChainClockRequest()) return
-			currentTimestamp.value = nextChainClock.currentTimestamp
-			currentBlockNumber.value = nextChainClock.currentBlockNumber
-			chainClockError.value = undefined
-			updateReadBackendStatus(backend, nextChainClock)
-		} catch (error) {
-			if (!isCurrentChainClockRequest()) return
-			clearChainClock()
-			updateReadBackendStatus(backend)
-			chainClockError.value = getErrorMessage(error, 'Failed to refresh chain clock')
-		}
+		const promise = (async () => {
+			try {
+				const nextChainClock = await loadBackendChainClock(backend)
+				if (!isCurrentChainClockRequest()) return
+				currentTimestamp.value = nextChainClock.currentTimestamp
+				currentBlockNumber.value = nextChainClock.currentBlockNumber
+				chainClockError.value = undefined
+				updateReadBackendStatus(backend, nextChainClock)
+			} catch (error) {
+				if (!isCurrentChainClockRequest()) return
+				clearChainClock()
+				updateReadBackendStatus(backend)
+				chainClockError.value = getErrorMessage(error, 'Failed to refresh chain clock')
+			}
+		})()
+		chainClockRefreshRef.current = { activeEnvironmentNonce: requestEnvironmentNonce, backend, promise }
+		void promise.finally(() => {
+			if (chainClockRefreshRef.current?.promise === promise) chainClockRefreshRef.current = undefined
+		})
+		return promise
 	}
 
 	useLayoutEffect(() => {
@@ -270,6 +281,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		const environmentChanged = previousContext.activeEnvironmentNonce !== activeEnvironmentNonce
 		previousChainClockContextRef.current = { activeEnvironmentNonce, enableChainClock }
 		nextChainClockRefresh()
+		chainClockRefreshRef.current = undefined
 		if (!enableChainClock || environmentChanged) {
 			clearChainClock()
 			chainClockError.value = undefined
@@ -372,7 +384,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				return
 			}
 		}
-		const walletOnExpectedChain = connectedChainId === backend.profile.chainIdHex
+		const walletOnExpectedChain = sameChainId(connectedChainId, backend.profile.chainIdHex)
 		backend.setReadTransportMode?.(walletOnExpectedChain ? 'provider' : 'rpc')
 		if (!walletOnExpectedChain) {
 			clearChainClock()

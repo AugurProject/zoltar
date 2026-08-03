@@ -51,6 +51,7 @@ void describe('input helpers', () => {
 	void test('parseReportIdInput enforces bigint parsing and handles malformed values', () => {
 		expect(parseReportIdInput('42')).toBe(42n)
 		expect(() => parseReportIdInput('  not-a-number  ')).toThrow('Report ID must be a whole number')
+		expect(() => parseReportIdInput('-1')).toThrow('Report ID must be non-negative')
 	})
 
 	void test('resolveOptionalAddressInput falls back for empty input and parses valid addresses', () => {

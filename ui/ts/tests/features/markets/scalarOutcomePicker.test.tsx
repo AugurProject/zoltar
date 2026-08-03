@@ -51,7 +51,7 @@ describe('ScalarOutcomePicker', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const slider = documentQueries.getByRole('slider') as HTMLInputElement
+		const slider = documentQueries.getByRole('slider', { name: 'Select scalar target' }) as HTMLInputElement
 		const invalidToggle = documentQueries.getByRole('checkbox', { name: 'Invalid' }) as HTMLInputElement
 
 		expect(documentQueries.getByText('0 USD')).not.toBeNull()

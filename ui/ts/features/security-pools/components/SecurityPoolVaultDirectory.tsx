@@ -1,9 +1,7 @@
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
-import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 type SecurityPoolVaultDirectoryProps = {
@@ -25,34 +23,29 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 	return (
 		<div className='vault-position-list'>
 			{showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
-			{pool.vaults.map(vault => {
-				const collateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
-				const collateralizationTarget = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
-				return (
-					<div className='vault-position-strip' key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
-						<div className='vault-position-strip-head'>
-							<div className='vault-position-strip-title'>
-								<CollateralizationCircle collateralizationPercent={collateralizationPercent} className='vault-position-title-collateralization' size='small' targetCollateralizationPercent={collateralizationTarget} />
-								<div className='vault-position-title-copy'>{renderTitle === undefined ? <AddressValue address={vault.vaultAddress} /> : renderTitle(vault)}</div>
-							</div>
-							<div className='vault-position-strip-meta'>{renderBadge === undefined ? null : renderBadge(vault)}</div>
+			{pool.vaults.map(vault => (
+				<div className='vault-position-strip' key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
+					<div className='vault-position-strip-head'>
+						<div className='vault-position-strip-title'>
+							<div className='vault-position-title-copy'>{renderTitle === undefined ? <AddressValue address={vault.vaultAddress} /> : renderTitle(vault)}</div>
 						</div>
-						<VaultMetricGrid
-							className='workflow-vault-grid'
-							layout='preview'
-							escalationEscrowedRep={vault.escalationEscrowedRep}
-							repDepositShare={vault.repDepositShare}
-							repPerEthPrice={repPerEthPrice}
-							repPerEthSource={repPerEthSource}
-							repPerEthSourceUrl={repPerEthSourceUrl}
-							selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
-							securityBondAllowance={vault.securityBondAllowance}
-							unpaidEthFees={vault.unpaidEthFees}
-						/>
-						<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>
+						<div className='vault-position-strip-meta'>{renderBadge === undefined ? null : renderBadge(vault)}</div>
 					</div>
-				)
-			})}
+					<VaultMetricGrid
+						className='workflow-vault-grid'
+						layout='preview'
+						escalationEscrowedRep={vault.escalationEscrowedRep}
+						repDepositShare={vault.repDepositShare}
+						repPerEthPrice={repPerEthPrice}
+						repPerEthSource={repPerEthSource}
+						repPerEthSourceUrl={repPerEthSourceUrl}
+						selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
+						securityBondAllowance={vault.securityBondAllowance}
+						unpaidEthFees={vault.unpaidEthFees}
+					/>
+					<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>
+				</div>
+			))}
 		</div>
 	)
 }

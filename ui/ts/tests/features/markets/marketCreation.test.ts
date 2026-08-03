@@ -422,13 +422,13 @@ void describe('market creation helpers', () => {
 	})
 
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
-		for (const statoblastSecurityMultiplierBps of ['0', '1']) {
+		for (const statoblastSecurityMultiplierBps of ['0', '1', '1.0001']) {
 			expect(() =>
 				createSecurityPoolParameters({
 					marketId: '42',
 					statoblastSecurityMultiplierBps,
 				} as SecurityPoolFormState),
-			).toThrow('Statoblast security multiplier must be greater than 1')
+			).toThrow('Statoblast security multiplier must be at least 1.0002')
 		}
 	})
 })

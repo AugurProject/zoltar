@@ -29,6 +29,22 @@ async function temporaryDirectory() {
 function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOperatorSettings {
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
+		centralizedMarkets: {
+			assetAddress: address,
+			assetChainId: 1,
+			assetSymbol: 'REP',
+			depthBps: 500n,
+			maximumDexDeviationBps: 1_000n,
+			maximumObservationAgeMilliseconds: 30_000,
+			maximumVenueDispersionBps: 500n,
+			minimumAskDepthEth: 0n,
+			minimumBidDepthEth: 0n,
+			minimumSourceCount: 1,
+			orderBookLimit: 20,
+			requestTimeoutMilliseconds: 5_000,
+			requiredForExecution: false,
+			sources: [],
+		},
 		connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl },
 		deployment: {
 			coordinatorAddresses: [],

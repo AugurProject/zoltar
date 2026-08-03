@@ -102,7 +102,16 @@ const mainCompilerSettings = {
 	evmVersion: 'osaka',
 	optimizer: {
 		enabled: true,
-		runs: 200,
+		// The protocol favors deployability of the immutable coordination contracts.
+		// Their lifecycle paths are infrequent compared with deployment, so the
+		// size-oriented profile is the safer tradeoff as bounded claim accounting grows.
+		runs: 0,
+	},
+	metadata: {
+		// Deployment manifests already bind the compiler settings and complete
+		// bytecode, so an appended metadata trailer adds size without adding trust.
+		appendCBOR: false,
+		bytecodeHash: 'none',
 	},
 	outputSelection: {
 		'*': {

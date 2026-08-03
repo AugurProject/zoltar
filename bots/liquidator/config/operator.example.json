@@ -1,0 +1,90 @@
+{
+	"version": 1,
+	"approvedUniverses": ["0"],
+	"childMarketConfigurations": [],
+	"desiredPools": [],
+	"centralizedMarkets": {
+		"assetAddress": "0x0000000000000000000000000000000000000000",
+		"assetChainId": 11155111,
+		"assetSymbol": "REP",
+		"depthBps": 500,
+		"maximumDexDeviationBps": 1000,
+		"maximumObservationAgeMilliseconds": 30000,
+		"maximumVenueDispersionBps": 500,
+		"minimumAskDepthEth": "2",
+		"minimumBidDepthEth": "2",
+		"minimumSourceCount": 2,
+		"orderBookLimit": 20,
+		"requestTimeoutMilliseconds": 5000,
+		"requiredForExecution": false,
+		"sources": [],
+		"venueConsensus": {
+			"allowSingleGroupFallback": false,
+			"dexProbeDepthEth": "1",
+			"dexSources": [],
+			"maximumGroupDeviationBps": 500,
+			"minimumDexAskDepthEth": "0.5",
+			"minimumDexBidDepthEth": "0.5",
+			"minimumDexSourceCount": 2,
+			"minimumSourceObservationCount": 2,
+			"minimumSourceObservationSpanMilliseconds": 10000,
+			"minimumTotalSourceCount": 3
+		}
+	},
+	"network": {
+		"name": "sepolia",
+		"chainId": 11155111,
+		"explorerUrl": "https://sepolia.etherscan.io"
+	},
+	"deployment": {
+		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
+		"weth": "0x0000000000000000000000000000000000000000",
+		"zoltar": "0x0000000000000000000000000000000000000000"
+	},
+	"connectivity": {
+		"readRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+		"publicRpcUrls": ["https://ethereum-sepolia-rpc.publicnode.com"],
+		"quorumRpcUrls": []
+	},
+	"submission": {
+		"mode": "public",
+		"minimumRelaySuccesses": 1,
+		"relayUrls": []
+	},
+	"runtime": {
+		"execute": false,
+		"once": false,
+		"pollMilliseconds": 12000,
+		"ui": true,
+		"uiHost": "127.0.0.1",
+		"uiPort": 4183,
+		"stateFile": ".state/operator-state.json",
+		"maxVaultsPerPool": 1000
+	},
+	"selectedPools": [],
+	"strategy": {
+		"allowAutomaticDeposits": true,
+		"allowAutomaticPoolCreation": false,
+		"allowAutomaticVaultMigrations": true,
+		"allowAutomaticWithdrawals": true,
+		"candidatePriority": "largest-bonus",
+		"fallbackRepPerEthPrice": "0",
+		"maximumGasCostEth": "0.02",
+		"maximumLiquidationDebtEth": "25",
+		"maximumOracleRequestCostEth": "0.02",
+		"maximumRepPerPool": "10000",
+		"maximumTotalDeployedRep": "25000",
+		"minimumLiquidationDebtEth": "1",
+		"minimumRepWithdrawal": "10",
+		"minimumRewardValueEth": "0.02",
+		"redeemFeesAboveEth": "0.01",
+		"stalePriceFundingBufferBps": 15000,
+		"stagedOperationValidForSeconds": 240,
+		"vaultTargetHealthBps": 12500,
+		"vaultTopUpHealthBps": 11000,
+		"vaultWithdrawHealthBps": 15000,
+		"walletRepReserve": "100"
+	},
+	"paused": false,
+	"privateKey": null
+}

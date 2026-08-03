@@ -27,6 +27,34 @@ function OperationModalHarness() {
 	)
 }
 
+function BusyOperationModalHarness() {
+	return (
+		<OperationModal closeDisabled isOpen onClose={() => undefined} title='Busy action'>
+			<button type='button'>Available action</button>
+		</OperationModal>
+	)
+}
+
+function DisclosureOperationModalHarness() {
+	return (
+		<OperationModal isOpen onClose={() => undefined} title='Review transaction'>
+			<div hidden>
+				<button type='button'>Hidden action</button>
+			</div>
+			<div inert>
+				<button type='button'>Inert action</button>
+			</div>
+			<a href='#skipped-action' tabIndex={-1}>
+				Skipped action
+			</a>
+			<details>
+				<summary>Technical details</summary>
+				<p>Call data</p>
+			</details>
+		</OperationModal>
+	)
+}
+
 function CompletingOperationModalHarness() {
 	const [isOpen, setIsOpen] = useState(true)
 	const [completionKey, setCompletionKey] = useState<string | undefined>()
@@ -457,7 +485,7 @@ describe('OperationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
-		expect(within(dialog).getByRole('status').textContent).toContain('The share migration transaction failed.')
+		expect(within(dialog).getByRole('alert').textContent).toContain('The share migration transaction failed.')
 	})
 
 	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
@@ -497,7 +525,7 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Fail new transaction' }))
 		})
-		expect(within(dialog).getByRole('status').textContent).toContain('The new transaction failed.')
+		expect(within(dialog).getByRole('alert').textContent).toContain('The new transaction failed.')
 
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
@@ -822,6 +850,7 @@ describe('OperationModal', () => {
 	test('lets only the top stacked modal handle Escape', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
+		document.body.style.overflow = 'scroll'
 
 		await act(() => {
 			render(<StackedDismissibleOperationModalHarness />, container)
@@ -829,6 +858,7 @@ describe('OperationModal', () => {
 
 		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
 		expect(within(container).getByRole('dialog', { name: 'Second action' })).not.toBeNull()
+		expect(document.body.style.overflow).toBe('hidden')
 
 		await act(() => {
 			fireEvent.keyDown(document, { key: 'Escape' })
@@ -836,11 +866,13 @@ describe('OperationModal', () => {
 
 		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
 		expect(within(container).queryByRole('dialog', { name: 'Second action' })).toBeNull()
+		expect(document.body.style.overflow).toBe('hidden')
 
 		await act(() => {
 			fireEvent.keyDown(document, { key: 'Escape' })
 		})
 		expect(within(container).queryByRole('dialog', { name: 'First action' })).toBeNull()
+		expect(document.body.style.overflow).toBe('scroll')
 
 		render(null, container)
 		container.remove()
@@ -903,6 +935,44 @@ describe('OperationModal', () => {
 		expect(document.activeElement).toBe(closeButton)
 
 		render(null, container)
+		container.remove()
+	})
+
+	test('includes disclosure summaries in the modal Tab order', async () => {
+		const renderedComponent = await renderIntoDocument(<DisclosureOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const dialog = within(document.body).getByRole('dialog', { name: 'Review transaction' })
+		const closeButton = within(dialog).getByRole('button', { name: 'Close' })
+		const summary = within(dialog).getByText('Technical details', { selector: 'summary' })
+
+		expect(document.activeElement).toBe(closeButton)
+		await act(() => {
+			fireEvent.keyDown(closeButton, { key: 'Tab' })
+		})
+		expect(document.activeElement).toBe(summary)
+		await act(() => {
+			fireEvent.keyDown(summary, { key: 'Tab' })
+		})
+		expect(document.activeElement).toBe(closeButton)
+	})
+
+	test('focuses an available control and locks page scrolling when the close button is disabled', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		document.body.style.overflow = 'scroll'
+
+		await act(() => {
+			render(<BusyOperationModalHarness />, container)
+		})
+
+		const availableAction = within(container).getByRole('button', { name: 'Available action' })
+		expect(document.activeElement).toBe(availableAction)
+		expect(document.body.style.overflow).toBe('hidden')
+
+		await act(() => {
+			render(null, container)
+		})
+		expect(document.body.style.overflow).toBe('scroll')
 		container.remove()
 	})
 

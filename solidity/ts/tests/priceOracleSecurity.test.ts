@@ -756,7 +756,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
 			{
 				args: [...baseArgs.slice(0, 6), 0n, ...baseArgs.slice(7)] as OracleCoordinatorConstructorArgs,
-				message: /initial report priority fee must be greater than zero/i,
+				message: /initial priority fee zero/i,
 			},
 			{
 				args: [...baseArgs.slice(0, 15), false, ...baseArgs.slice(16)] as OracleCoordinatorConstructorArgs,
@@ -764,7 +764,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			},
 			{
 				args: buildArgsWithSizingParameters(0n, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /dispute gas units must be greater than zero/i,
+				message: /dispute gas units zero/i,
 			},
 			{
 				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 9999n, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
@@ -784,7 +784,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			},
 			{
 				args: buildArgsWithRiskParameters(0n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
-				message: /escalation halt multiplier must be greater than zero/i,
+				message: /escalation multiplier zero/i,
 			},
 			{
 				args: buildArgsWithRiskParameters(ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, 9999n, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
@@ -818,7 +818,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'setSecurityPool',
 				args: [configuredPool],
 			}),
-			/Security pool has already been set on the oracle coordinator/,
+			/Security pool already set/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -827,7 +827,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'setRepEthPrice',
 				args: [lastPriceBefore + 1n],
 			}),
-			/Only the security pool can seed the REP\/ETH price/,
+			/Only security pool/,
 		)
 
 		assert.strictEqual(
@@ -855,7 +855,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [1n, 0n],
 				value: ethCost - 1n,
 			}),
-			/ETH bounty is too small to request a fresh oracle price/,
+			/Oracle bounty too small/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -865,7 +865,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [0n, 0n],
 				value: ethCost,
 			}),
-			/Initial oracle REP per ETH price must be non-zero/,
+			/Initial oracle price zero/,
 		)
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No pending oracle price request can be recovered/)
 		await assert.rejects(
@@ -899,7 +899,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [1n, 1n << 128n],
 				value: ethCost,
 			}),
-			/Oracle initial WETH report amount exceeds uint128 maximum/,
+			/WETH report exceeds uint128/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -909,7 +909,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [(1n << 128n) * 10n ** 18n, 1n],
 				value: ethCost,
 			}),
-			/Oracle initial REP report amount exceeds uint128 maximum/,
+			/REP report exceeds uint128/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -923,7 +923,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 
 		await requestPrice(client, priceOracle)
-		await assert.rejects(requestPriceWithValue(client, priceOracle, ethCost), /Oracle price request is already pending/)
+		await assert.rejects(requestPriceWithValue(client, priceOracle, ethCost), /Oracle request already pending/)
 	})
 
 	test('staged operation public guards cover argument geometry, request funding, and execution prerequisites', async () => {
@@ -941,7 +941,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Staged operation amount must be non-zero/)
 		await assert.rejects(stage(OperationType.SetSecurityBondsAllowance, client.account.address, 0n, 0n), /Staged operation timeout must be positive/)
 		await assert.rejects(stage(OperationType.SetSecurityBondsAllowance, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n), /Staged operation timeout exceeds the maximum allowed/)
-		await assert.rejects(stage(OperationType.SetSecurityBondsAllowance, otherVault, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Self-targeted staged operation target must match the initiator vault/)
+		await assert.rejects(stage(OperationType.SetSecurityBondsAllowance, otherVault, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Self operation target mismatch/)
 		await assert.rejects(stage(OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Caller bad/)
 		await assert.rejects(
 			client.writeContract({
@@ -950,7 +950,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'executeStagedOperation',
 				args: [1n],
 			}),
-			/Staged operation does not exist or was already consumed/,
+			/Staged operation unavailable/,
 		)
 
 		const counterBefore = await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] })
@@ -974,7 +974,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'executeStagedOperation',
 				args: [counterBefore + 1n],
 			}),
-			/A valid oracle price is required before executing staged operations/,
+			/Valid oracle price required/,
 		)
 	})
 
@@ -1092,7 +1092,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'getSettlementCallbackGasLimit',
 				args: [],
 			}),
-			/Settlement callback gas limit exceeds uint32 maximum/,
+			/Callback gas exceeds uint32/,
 		)
 	})
 
@@ -1620,7 +1620,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(executionLog.args.errorMessage, 'Bond min', 'minimum bond failure must expose its exact dynamic reason')
 		assert.deepStrictEqual(await getSecurityVault(client, securityPool, client.account.address), vaultBefore, 'minimum bond failure must roll back the staged allowance update')
 
-		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /Staged operation does not exist or was already consumed/)
+		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /Staged operation unavailable/)
 	})
 
 	test('vault allowance admission matches the liquidation threshold and withdrawal bond guards roll back', async () => {
@@ -1720,7 +1720,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
 		assert.strictEqual(executionLog.args.success, false, 'an unencumbered vault withdrawal must fail when aggregate pool backing is insufficient')
-		assert.strictEqual(executionLog.args.errorMessage, 'Pool bond', 'aggregate withdrawal failure must expose its exact dynamic reason')
+		assert.strictEqual(executionLog.args.errorMessage, 'Unknown error', 'aggregate withdrawal failure must expose the compact data-free pool guard')
 		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate withdrawal failure must roll back both vaults, complete pool accounting, ownership, and REP balances')
 	})
 
@@ -1761,7 +1761,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const stateBefore = await readPoolGuardState(guardedVaults)
 		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the aggregate bond failure must exercise first-deposit game deployment')
 
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Pool bond/)
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /execution reverted/)
 		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate bond failure must roll back game deployment, both vaults, pool accounting, ownership, REP, and escrow')
 	})
 
@@ -1997,7 +1997,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await settlePendingReportWithPrice(10n ** 18n)
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'test setup should seed a fresh cached oracle price')
 
-		await assert.rejects(async () => await requestPrice(client, priceOracle), /A fresh oracle price is already available/i)
+		await assert.rejects(async () => await requestPrice(client, priceOracle), /Oracle price already fresh/i)
 	})
 
 	test('expired pending auto-execute slots do not block later valid oracle settlements', async () => {
@@ -2340,7 +2340,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await executeStagedOperation(client, priceOracle, manualOperationId)
 
-		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /Staged operation does not exist or was already consumed/)
+		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /Staged operation unavailable/)
 	})
 
 	test('non-liquidation staged operations require the initiator vault as target', async () => {
@@ -2348,7 +2348,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const nonLiquidationOperations = [OperationType.WithdrawRep, OperationType.SetSecurityBondsAllowance]
 
 		for (const operation of nonLiquidationOperations) {
-			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /Self-targeted staged operation target must match the initiator vault/)
+			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /Self operation target mismatch/)
 		}
 	})
 

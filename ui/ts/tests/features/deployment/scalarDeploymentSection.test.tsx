@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ScalarDeploymentSection } from '../../../features/markets/components/ScalarDeploymentSection.js'
 import { getScalarOutcomeIndex } from '../../../features/markets/lib/scalarOutcome.js'
@@ -77,6 +78,22 @@ describe('ScalarDeploymentSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Loading scalar range…')).not.toBeNull()
+	})
+
+	test('preserves hook order when question details finish loading', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ScalarDeploymentSection accountAddress={undefined} childUniverses={[]} hasForked={false} isOnActiveAppChain={false} onCreateChildUniverseForOutcomeIndex={() => undefined} questionDetails={undefined} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} />,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				<ScalarDeploymentSection accountAddress={undefined} childUniverses={[]} hasForked={false} isOnActiveAppChain={false} onCreateChildUniverseForOutcomeIndex={() => undefined} questionDetails={createQuestionDetails()} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} />,
+				renderedComponent.container,
+			)
+		})
+
+		expect(within(document.body).getByRole('slider')).not.toBeNull()
 	})
 
 	test('clamps selected ticks before confirming child universe deployment', async () => {

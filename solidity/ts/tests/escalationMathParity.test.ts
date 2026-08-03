@@ -5,7 +5,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -97,14 +97,14 @@ describe('Escalation math parity', () => {
 				}),
 		)
 
-	const resumeEscalationFromFork = async (escalationGameAddress: Address) =>
+	const resumeEscalationFromFork = async (testSecurityPoolAddress: Address) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					address: escalationGameAddress,
-					functionName: 'resumeFromFork',
+					abi: escalationGameProofTestPoolArtifact.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'resumeEscalationGameFromFork',
 					args: [],
 				}),
 		)
@@ -170,7 +170,7 @@ describe('Escalation math parity', () => {
 			data: encodeDeployData({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress],
+				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -454,7 +454,7 @@ describe('Escalation math parity', () => {
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentYesCarryTotal, parentYesCarryTotal)
 		const childBindingCapital = await readBindingCapital(child.escalationGameAddress)
 		assert.strictEqual(childBindingCapital, losingDepositAmount, 'child fork should inherit the parent binding-capital depth for this snapshot')
-		await resumeEscalationFromFork(child.escalationGameAddress)
+		await resumeEscalationFromFork(child.testSecurityPoolAddress)
 		const forkResumedAt = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
@@ -463,7 +463,9 @@ describe('Escalation math parity', () => {
 		})
 		const resolvingAttritionCost = (25n * reportBond) / 10n
 		const elapsedAtTargetCost = await readTimeSinceStartFromAttritionCost(child.escalationGameAddress, resolvingAttritionCost)
-		await mockWindow.setTime(forkResumedAt + (elapsedAtTargetCost > 0n ? elapsedAtTargetCost : 1n))
+		const freshResponsePeriod = 3n * 24n * 60n * 60n
+		const elapsedAfterResume = elapsedAtTargetCost > freshResponsePeriod ? elapsedAtTargetCost : freshResponsePeriod
+		await mockWindow.setTime(forkResumedAt + elapsedAfterResume + 1n)
 
 		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash], new SparseNullifierTree().getProof(1n))
 		const childBalances = await getBalances(client, child.escalationGameAddress)

@@ -622,7 +622,7 @@ export function ReportingSection({
 							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
 						]}
-						risks={[reportingCopy.reportingLossAndLockRisk, reportingCopy.reportTimerRisk]}
+						risks={[reportingCopy.reportingLossAndLockRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
 						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },

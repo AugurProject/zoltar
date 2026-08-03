@@ -29,6 +29,24 @@ function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: 
 describe('saved simulation states', () => {
 	const listSavedSimulationStateRecordIds = () => getSavedSimulationStateStorageSummary().records.map(record => record.id)
 
+	test('reports unavailable storage without throwing', () => {
+		const unavailableStorage: Storage = {
+			length: 0,
+			clear: () => undefined,
+			getItem: () => {
+				throw new DOMException('Storage unavailable', 'SecurityError')
+			},
+			key: () => null,
+			removeItem: () => undefined,
+			setItem: () => undefined,
+		}
+
+		expect(getSavedSimulationStateStorageSummary(unavailableStorage)).toEqual({
+			records: [],
+			warning: 'Saved simulation state storage is unavailable.',
+		})
+	})
+
 	test('serializes and parses a versioned simulation state envelope', () => {
 		const serialized = createSerializedSavedState({
 			name: 'Saved baseline',
