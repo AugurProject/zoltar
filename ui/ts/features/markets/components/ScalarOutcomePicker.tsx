@@ -5,25 +5,37 @@ import { MetricField } from '../../../components/MetricField.js'
 import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../../types.js'
 import { clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { useId } from 'preact/hooks'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
 }
 
 export function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
+	const sliderLabelId = useId()
 	const selectedTickValue = clampScalarTickIndex(getSafeSelectedTickValue(selectedTick), details.numTicks)
 	const resolvedSelectedTick = selectedTickValue.toString()
 
 	return (
 		<div className='market-scalar-deploy workflow-subsection'>
 			<div className='field scalar-slider-field'>
-				<span>{label}</span>
+				<span id={sliderLabelId}>{label}</span>
 				<div className='scalar-slider-with-invalid'>
 					<div className={`scalar-slider-rail ${isInvalid ? 'is-disabled' : ''}`}>
 						<div className='scalar-slider-track' />
 						<div className='scalar-slider-input-wrapper'>
 							<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(selectedTickValue, details.numTicks) }} />
-							<input disabled={disabled || isInvalid} type='range' min='0' max={details.numTicks.toString()} step='1' value={resolvedSelectedTick} aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
+							<input
+								aria-labelledby={sliderLabelId}
+								disabled={disabled || isInvalid}
+								type='range'
+								min='0'
+								max={details.numTicks.toString()}
+								step='1'
+								value={resolvedSelectedTick}
+								aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined}
+								onInput={event => onSelectedTickChange(event.currentTarget.value)}
+							/>
 						</div>
 					</div>
 					<span className='scalar-or-divider'>{marketCopy.or}</span>

@@ -439,6 +439,8 @@ void describe('OpenOracleSection', () => {
 		try {
 			await flushAsyncWork()
 			const documentQueries = within(document.body)
+			const searchInput = documentQueries.getByRole('textbox', { name: 'Search this page' }) as HTMLInputElement
+			expect(searchInput.placeholder).toBe('Filter this page by report ID, token symbol, or token address')
 			expect(documentQueries.getByText('Report Block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement Block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
