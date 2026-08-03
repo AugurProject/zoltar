@@ -194,8 +194,33 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 .docs-navigation-section > summary,
 .docs-navigation-topic > summary {
+	display: flex;
+	gap: 0.6rem;
+	align-items: center;
+	justify-content: space-between;
 	list-style: none;
 	cursor: pointer;
+}
+
+.docs-navigation-section > summary::after,
+.docs-navigation-topic > summary::after {
+	width: 0.4rem;
+	height: 0.4rem;
+	border: solid currentcolor;
+	border-width: 0 1.5px 1.5px 0;
+	content: "";
+	transform: rotate(-45deg);
+}
+
+.docs-navigation-section[open] > summary::after,
+.docs-navigation-topic[open] > summary::after {
+	transform: rotate(45deg);
+}
+
+.docs-navigation summary:focus-visible,
+.docs-mobile-outline summary:focus-visible {
+	outline: 2px solid var(--docs-shell-accent);
+	outline-offset: 2px;
 }
 
 .docs-navigation-section > summary::-webkit-details-marker,
@@ -387,6 +412,23 @@ body.docs-shell-page:has(.docs-search[open]) {
 	padding: 0.7rem 1rem 0;
 	color: var(--docs-shell-muted);
 	font-size: 0.82rem;
+}
+
+.docs-search-retry {
+	margin: 0.7rem 1rem 0;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--docs-shell-line);
+	border-radius: 0.45rem;
+	background: var(--docs-shell-accent-soft);
+	color: var(--docs-shell-accent);
+	font: inherit;
+	font-size: 0.82rem;
+	font-weight: 760;
+	cursor: pointer;
+}
+
+.docs-search-retry[hidden] {
+	display: none;
 }
 
 .docs-search-results {

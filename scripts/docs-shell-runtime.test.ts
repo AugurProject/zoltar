@@ -34,10 +34,10 @@ async function loadShell(url = 'http://localhost/docs/tutorials/first-market.htm
 	}
 }
 
-async function finishSearchLoad() {
-	const searchScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
-	if (searchScript === null) throw new Error('Lazy documentation search script is missing')
-	Function(await Bun.file('docs/assets/js/docsSearchData.js').text())()
+async function finishSearchLoad(source?: string) {
+	const searchScript = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')).at(-1)
+	if (searchScript === undefined) throw new Error('Lazy documentation search script is missing')
+	Function(source ?? (await Bun.file('docs/assets/js/docsSearchData.js').text()))()
 	searchScript.dispatchEvent(new Event('load'))
 	await Promise.resolve()
 }
@@ -99,6 +99,49 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
 		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Explore a seeded market and security pool')
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('documentation search failure stays actionable and retries the lazy request', async () => {
+	const shell = await loadShell()
+	try {
+		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
+		const failedScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
+		if (failedScript === null) throw new Error('Initial lazy documentation search script is missing')
+		failedScript.dispatchEvent(new Event('error'))
+		await Promise.resolve()
+		await Promise.resolve()
+		const status = document.querySelector('.docs-search-status')
+		const retry = document.querySelector<HTMLButtonElement>('.docs-search-retry')
+		expect(status?.textContent).toBe('Search is unavailable.')
+		expect(retry?.hidden).toBeFalse()
+
+		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
+		if (input === null) throw new Error('Search input is missing')
+		input.value = 'market'
+		input.dispatchEvent(new Event('input'))
+		expect(status?.textContent).toBe('Search is unavailable.')
+		expect(retry?.hidden).toBeFalse()
+
+		const searchSource = await Bun.file('docs/assets/js/docsSearchData.js').text()
+		const originalAppend = document.head.append
+		let retryScript: HTMLScriptElement | undefined
+		document.head.append = (...nodes) => {
+			const script = nodes.find(node => node instanceof HTMLScriptElement && node.src.endsWith('/assets/js/docsSearchData.js'))
+			if (script instanceof HTMLScriptElement) retryScript = script
+			else originalAppend.call(document.head, ...nodes)
+		}
+		retry?.click()
+		document.head.append = originalAppend
+		expect(status?.textContent).toBe('Loading documentation search…')
+		expect(retry?.hidden).toBeTrue()
+		if (retryScript === undefined) throw new Error('Retried lazy documentation search script is missing')
+		Function(searchSource)()
+		retryScript.dispatchEvent(new Event('load'))
+		await Promise.resolve()
+		expect(status?.textContent).toMatch(/^\d+ results$/)
 	} finally {
 		shell.cleanup()
 	}

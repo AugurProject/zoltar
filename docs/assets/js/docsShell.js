@@ -205,11 +205,15 @@
 	searchForm.append(searchInput, closeSearch)
 	const searchStatus = element('p', 'docs-search-status', 'Start typing to search all documentation.')
 	searchStatus.setAttribute('role', 'status')
+	const retrySearch = element('button', 'docs-search-retry', 'Retry search')
+	retrySearch.type = 'button'
+	retrySearch.hidden = true
 	const searchResults = element('ol', 'docs-search-results')
-	dialog.append(searchForm, searchStatus, searchResults)
+	dialog.append(searchForm, searchStatus, retrySearch, searchResults)
 	document.body.append(dialog)
 	let searchIndex = Array.isArray(window.statoblastDocsSearch) ? window.statoblastDocsSearch : undefined
 	let searchLoadPromise
+	let searchLoadFailed = false
 
 	function loadSearchIndex() {
 		if (searchIndex !== undefined) return Promise.resolve(searchIndex)
@@ -219,29 +223,38 @@
 			searchScript.src = docsUrl('assets/js/docsSearchData.js')
 			searchScript.addEventListener('load', () => {
 				if (!Array.isArray(window.statoblastDocsSearch)) {
+					searchLoadPromise = undefined
 					reject(new Error('Documentation search data is malformed'))
 					return
 				}
 				searchIndex = window.statoblastDocsSearch
 				resolve(searchIndex)
 			})
-			searchScript.addEventListener('error', () => reject(new Error('Documentation search data failed to load')))
+			searchScript.addEventListener('error', () => {
+				searchLoadPromise = undefined
+				reject(new Error('Documentation search data failed to load'))
+			})
 			document.head.append(searchScript)
 		})
 		return searchLoadPromise
+	}
+	function beginSearchLoad() {
+		searchLoadFailed = false
+		retrySearch.hidden = true
+		searchStatus.textContent = 'Loading documentation search…'
+		void loadSearchIndex()
+			.then(updateSearch)
+			.catch(() => {
+				searchLoadFailed = true
+				searchStatus.textContent = 'Search is unavailable.'
+				retrySearch.hidden = false
+			})
 	}
 
 	function openSearch() {
 		if (!dialog.open) dialog.showModal()
 		searchInput.focus()
-		if (searchIndex === undefined) {
-			searchStatus.textContent = 'Loading documentation search…'
-			void loadSearchIndex()
-				.then(updateSearch)
-				.catch(() => {
-					searchStatus.textContent = 'Search is unavailable. Reload the page and try again.'
-				})
-		}
+		if (searchIndex === undefined && !searchLoadFailed) beginSearchLoad()
 	}
 	function closeSearchDialog() {
 		dialog.close()
@@ -249,6 +262,7 @@
 	}
 	searchButton.addEventListener('click', openSearch)
 	closeSearch.addEventListener('click', closeSearchDialog)
+	retrySearch.addEventListener('click', beginSearchLoad)
 	searchForm.addEventListener('submit', event => event.preventDefault())
 	dialog.addEventListener('click', event => {
 		if (event.target === dialog) closeSearchDialog()
@@ -299,9 +313,11 @@
 		const query = normalized(searchInput.value)
 		searchResults.replaceChildren()
 		if (searchIndex === undefined) {
-			searchStatus.textContent = 'Loading documentation search…'
+			searchStatus.textContent = searchLoadFailed ? 'Search is unavailable.' : 'Loading documentation search…'
+			retrySearch.hidden = !searchLoadFailed
 			return
 		}
+		retrySearch.hidden = true
 		if (query.length < 2) {
 			searchStatus.textContent = 'Enter at least two characters.'
 			return
