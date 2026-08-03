@@ -38,11 +38,11 @@ import {
 } from '@zoltar/shared/openOracle'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettingsForQuorum, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { applyStrategy, loadConfiguration, mutableStrategy, type Configuration } from '#config/configuration'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
-import { prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import {
@@ -119,7 +119,7 @@ import { quorumValue } from '#monitoring/read-quorum'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from '#monitoring/resilience'
 import { adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
-import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, validateSubmissionForConnectivity, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import {
 	calculateFee,
@@ -1257,6 +1257,7 @@ async function executeDispute(
 							() =>
 								submitSignedBundle({
 									address: account.address,
+									minimumSuccessfulRelays: config.submission.minimumRelaySuccesses,
 									relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 									signMessage,
 									targetBlockNumber,
@@ -2050,6 +2051,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 				() =>
 					submitSignedBundle({
 						address: account.address,
+						minimumSuccessfulRelays: config.submission.minimumRelaySuccesses,
 						relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 						signMessage,
 						targetBlockNumber,
@@ -2384,10 +2386,15 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
 					}),
 				updateConnectivity: async value => {
-					const next = validateConnectivitySettings(value)
+					const next = validateConnectivitySettingsForQuorum(value, (pendingDeployment ?? fixedState.deployment).quorumRpcUrls)
+					validateSubmissionForConnectivity(pendingSubmission ?? config.submission, next)
 					await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
 					return queueSettingsUpdate(async () => {
-						await persistFocusedSettings(settings => ({ ...settings, connectivity: next }))
+						await persistFocusedSettings(settings => {
+							validateIndependentReadRpcUrls(next.readRpcUrl, settings.deployment.quorumRpcUrls)
+							validateSubmissionForConnectivity(settings.submission, next)
+							return { ...settings, connectivity: next }
+						})
 						pendingConnectivity = next
 						recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
 						return next
@@ -2395,10 +2402,15 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				},
 				updateDeployment: value => {
 					const next = validateDeploymentSettings(value)
+					validateIndependentReadRpcUrls((pendingConnectivity ?? config.connectivity).readRpcUrl, next.quorumRpcUrls)
 					return queueSettingsUpdate(async () => {
 						const previous = pendingDeployment ?? fixedState.deployment
 						const tokens = prepareDeploymentTokenTransition(pendingTokenAddresses ?? config.tokenAddresses, restartTokenAddresses, previous.rep, next.rep)
-						await persistFocusedSettings(settings => ({ ...settings, deployment: next, tokenAddresses: tokens.restart }))
+						await persistFocusedSettings(settings => {
+							assertFocusedDeploymentCompatible(next.rep, settings.centralizedMarkets)
+							validateIndependentReadRpcUrls(settings.connectivity.readRpcUrl, next.quorumRpcUrls)
+							return { ...settings, deployment: next, tokenAddresses: tokens.restart }
+						})
 						pendingDeployment = next
 						pendingTokenAddresses = tokens.active
 						restartTokenAddresses = tokens.restart
@@ -2519,10 +2531,10 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					})
 				},
 				updateSubmission: async value => {
-					const next = validateSubmissionSettings(value)
+					const next = validateSubmissionForConnectivity(validateSubmissionSettings(value), pendingConnectivity ?? config.connectivity)
 					await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
 					return queueSettingsUpdate(async () => {
-						await persistFocusedSettings(settings => ({ ...settings, submission: next }))
+						await persistFocusedSettings(settings => ({ ...settings, submission: validateSubmissionForConnectivity(next, settings.connectivity) }))
 						pendingSubmission = next
 						recordOperation(state, { category: 'configuration', details: next.relayUrls.map(endpointLabel).join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
 						return pendingSubmission

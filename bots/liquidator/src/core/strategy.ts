@@ -160,6 +160,10 @@ export function sortCandidates(candidates: readonly LiquidationCandidate[], prio
 	})
 }
 
+export function selectAllowedCandidate(candidates: readonly LiquidationCandidate[], priority: CandidatePriority, allowed: (candidate: LiquidationCandidate) => boolean) {
+	return sortCandidates(candidates, priority).find(allowed)
+}
+
 export function surplusRepForWithdrawal(caller: VaultPosition, pool: Pick<PoolRiskContext, 'multiplierBps' | 'price'>, strategy: Pick<StrategySettings, 'minimumRepWithdrawal' | 'vaultTargetHealthBps' | 'vaultWithdrawHealthBps'>) {
 	if (caller.rep === 0n) return 0n
 	const retainedRep = requiredRepForAllowance(caller.allowance, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)

@@ -14,6 +14,7 @@ import {
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
+	singleFlight,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
@@ -829,7 +830,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 }
 
-async function refresh() {
+const refresh = singleFlight(async () => {
 	try {
 		const value: unknown = await api<unknown>('/api/state')
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
@@ -845,7 +846,7 @@ async function refresh() {
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'
 	}
-}
+})
 
 element('refresh-button').addEventListener('click', () => void refresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
