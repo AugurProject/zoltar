@@ -6,7 +6,6 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { AddressInfo } from '../../../components/AddressInfo.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { Badge } from '../../../components/Badge.js'
-import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
@@ -30,7 +29,7 @@ import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/m
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../../open-oracle/lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
-import { formatStatoblastSecurityMultiplier, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { useModalFocusIsolation } from '../../../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
@@ -219,9 +218,6 @@ export function LiquidationModal({
 	const liquidationAmountValue = tryParseRepAmountInput(liquidationAmount)
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
-	const poolOracleCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, poolOraclePrice)
-	const quotedPriceCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, repPerEthPrice)
-	const callerPoolOracleCollateralization = callerVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(callerVaultSummary.repDepositShare, callerVaultSummary.securityBondAllowance, poolOraclePrice)
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails, currentTimestamp)
@@ -367,15 +363,15 @@ export function LiquidationModal({
 					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
-					<CollateralizationMetricField
-						collateralizationPercent={poolOracleCollateralization}
-						label={liquidationCopy.targetCollateralizationAtOpenOracle}
-						repPerEthSource={undefined}
-						repPerEthSourceUrl={undefined}
-						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
-						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
-						unavailableCopy={commonCopy.unavailable}
-					/>
+					<MetricField label={liquidationCopy.targetBondAllowance}>
+						<CurrencyValue value={targetVaultSummary?.securityBondAllowance} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={liquidationCopy.targetFreeRep}>
+						<CurrencyValue value={targetVaultSummary?.repDepositShare} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.targetEscalationRep}>
+						<CurrencyValue value={targetVaultSummary?.escalationEscrowedRep} suffix={commonCopy.rep} />
+					</MetricField>
 					<MetricField
 						label={
 							<span>
@@ -385,39 +381,15 @@ export function LiquidationModal({
 					>
 						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
 					</MetricField>
-					<CollateralizationMetricField
-						collateralizationPercent={quotedPriceCollateralization}
-						label={
-							<span>
-								{repPriceSourceCopy.quotedCollateralizationLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
-							</span>
-						}
-						repPerEthSource={repPerEthSource}
-						repPerEthSourceUrl={repPerEthSourceUrl}
-						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
-						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
-						unavailableCopy={commonCopy.unavailable}
-					/>
-					<CollateralizationMetricField
-						collateralizationPercent={callerPoolOracleCollateralization}
-						label={liquidationCopy.callerCollateralizationAtOpenOracle}
-						repPerEthSource={undefined}
-						repPerEthSourceUrl={undefined}
-						securityBondAllowance={callerVaultSummary?.securityBondAllowance}
-						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
-						unavailableCopy={commonCopy.unavailable}
-					/>
-					{liquidationSimulation === undefined ? undefined : (
-						<CollateralizationMetricField
-							collateralizationPercent={liquidationSimulation.callerAfter.collateralization}
-							label={liquidationCopy.resultingCallerCollateralization}
-							repPerEthSource={undefined}
-							repPerEthSourceUrl={undefined}
-							securityBondAllowance={liquidationSimulation.callerAfter.securityBondAllowance}
-							statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
-							unavailableCopy={commonCopy.unavailable}
-						/>
-					)}
+					<MetricField label={liquidationCopy.callerBondAllowance}>
+						<CurrencyValue value={callerVaultSummary?.securityBondAllowance} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={liquidationCopy.callerFreeRep}>
+						<CurrencyValue value={callerVaultSummary?.repDepositShare} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.callerEscalationRep}>
+						<CurrencyValue value={callerVaultSummary?.escalationEscrowedRep} suffix={commonCopy.rep} />
+					</MetricField>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
 					<WarningSurface as='section' surface='flat' variant='compact'>
@@ -463,8 +435,11 @@ export function LiquidationModal({
 						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
 					]}
 					primary={[
-						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationAmountValue} suffix={commonCopy.eth} /> },
-						{ label: liquidationCopy.repMoved, value: <CurrencyValue value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationSimulation?.debtToMove} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtRecorded} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.grossRepAward, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAward} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
 						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequired, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequired} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[

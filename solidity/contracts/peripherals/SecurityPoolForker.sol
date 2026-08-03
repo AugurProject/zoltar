@@ -44,6 +44,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		uint256 childPoolRepSplit,
 		uint256 pendingChildRep
 	);
+
 	event ClaimForkedEscalationDepositsToWallet(
 		ISecurityPool indexed parent,
 		address indexed vault,
@@ -383,7 +384,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		ISecurityPool child,
 		EscalationGame childEscalationGame
 	) external returns (EscalationGame) {
-		require(msg.sender == address(this), 'Forker');
+		if (msg.sender != address(this)) revert();
 		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
@@ -431,7 +432,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[securityPool];
-		require(address(migrationProxy) != address(0x0), 'Proxy');
+		if (address(migrationProxy) == address(0x0)) revert();
 		require(securityPool.systemState() == SystemState.PoolForked, 'Unforked');
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		uint256 migrationAmount = data.ownFork ? data.vaultRepAtFork : data.auctionableRepAtFork;
@@ -596,7 +597,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		// the existing vaults' ownership anchor. With no migrated REP the full cap may
 		// sell; finalization then installs the standard PRICE_PRECISION ownership rate
 		// because the inherited denominator has no live child-vault owners.
-		data.truthAuction.startAuction(ethToBuy, _getTruthAuctionCap(data, parentData));
+		data.truthAuction.startAuction(ethToBuy, _getTruthAuctionCap(securityPool, data, parentData));
 	}
 
 	function _isAllRepMigrated(
@@ -620,13 +621,27 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	}
 
 	function _getTruthAuctionCap(
+		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data,
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (uint256) {
 		uint256 poolAuctionableRepAtFork = _getPoolAuctionableRepAtFork(parentData);
+		uint256 escalationRep = _getEscalationAuctionableRep(securityPool, parentData);
+		uint256 combinedAuctionableRep = poolAuctionableRepAtFork + escalationRep;
 		uint256 migratedRepHaircut = data.migratedRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR;
-		if (migratedRepHaircut >= poolAuctionableRepAtFork) return 0;
-		return poolAuctionableRepAtFork - migratedRepHaircut;
+		if (migratedRepHaircut >= combinedAuctionableRep) return 0;
+		uint256 cap = combinedAuctionableRep - migratedRepHaircut;
+		if (cap == combinedAuctionableRep && address(securityPool.escalationGame()) != address(0x0)) cap -= 1;
+		return cap;
+	}
+
+	function _getEscalationAuctionableRep(
+		ISecurityPool securityPool,
+		SecurityPoolForkerForkData storage parentData
+	) private view returns (uint256) {
+		if (!parentData.unresolvedEscalationAtFork) return 0;
+		EscalationGame game = securityPool.escalationGame();
+		return address(game) == address(0x0) ? 0 : game.totalEscrowedRep();
 	}
 
 	function _getPoolAuctionableRepAtFork(
@@ -640,6 +655,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
 		SecurityPoolForkerForkData storage parentData = _getForkData(securityPool.parent());
 		(uint256 repPurchased, uint256 auctionEthReceived) = _consumeTruthAuctionRep(securityPool, data);
+		uint256 escalationRepSold = _applyEscalationTruthAuctionHaircut(securityPool, parentData, repPurchased);
 		_delegateMigrationCall(
 			vaultMigrationDelegate,
 			abi.encodeWithSelector(
@@ -649,7 +665,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 				parentData.collateralAtFork
 			)
 		);
-		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
+		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased, escalationRepSold);
 		_finalizeEscalationStateAfterAuction(securityPool, parentData.unresolvedEscalationAtFork);
 		emit TruthAuctionFinalized(securityPool);
 		securityPool.updateRetentionRate();
@@ -675,46 +691,46 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data,
 		SecurityPoolForkerForkData storage parentData,
-		uint256 repPurchased
+		uint256 repPurchased,
+		uint256 escalationRepSold
 	) private {
-		uint256 repAvailable = _getPoolAuctionableRepAtFork(parentData);
-		if (repAvailable > 0) {
+		uint256 poolRepBefore = _getPoolAuctionableRepAtFork(parentData);
+		uint256 escalationRepBefore = _getEscalationAuctionableRep(securityPool, parentData) + escalationRepSold;
+		uint256 combinedRepBefore = poolRepBefore + escalationRepBefore;
+		uint256 poolRepAfter = poolRepBefore + escalationRepSold;
+		if (poolRepAfter > 0) {
 			uint256 currentOwnershipDenominator = securityPool.poolOwnershipDenominator();
-			uint256 auctionPoolOwnershipPerRep = _calculateAuctionPoolOwnershipPerRep(
-				currentOwnershipDenominator,
-				repAvailable,
-				repPurchased
-			);
+			uint256 incumbentRepAfter =
+				combinedRepBefore == 0 ? 0 : (poolRepBefore * (combinedRepBefore - repPurchased)) / combinedRepBefore;
+			uint256 auctionPoolOwnershipPerRep =
+				currentOwnershipDenominator == 0 || incumbentRepAfter == 0
+					? SecurityPoolUtils.PRICE_PRECISION
+					: (currentOwnershipDenominator - 1) / incumbentRepAfter + 1;
 			if (auctionPoolOwnershipPerRep > 0) {
 				// Make every auction claim an exact ownership conversion. The final denominator
 				// is a multiple of total pool REP, so `amount * auctionPoolOwnershipPerRep`
 				// round-trips through `poolOwnershipToRep` without per-claim ceiling drift.
 				data.auctionPoolOwnershipPerRep = auctionPoolOwnershipPerRep;
-				securityPool.setOwnershipDenominator(repAvailable * auctionPoolOwnershipPerRep);
-			} else if (currentOwnershipDenominator == 0) {
-				securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
+				securityPool.setOwnershipDenominator(poolRepAfter * auctionPoolOwnershipPerRep);
 			}
 		}
 		if (securityPool.poolOwnershipDenominator() == 0) {
 			// wipe all rep holders in vaults
-			securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
+			securityPool.setOwnershipDenominator(poolRepAfter * SecurityPoolUtils.PRICE_PRECISION);
 		}
 	}
 
-	function _calculateAuctionPoolOwnershipPerRep(
-		uint256 currentOwnershipDenominator,
-		uint256 repAvailable,
+	function _applyEscalationTruthAuctionHaircut(
+		ISecurityPool securityPool,
+		SecurityPoolForkerForkData storage parentData,
 		uint256 repPurchased
-	) private pure returns (uint256) {
-		if (repPurchased == 0 || repAvailable == 0) return 0;
-		uint256 unsoldRep = repAvailable - repPurchased;
-		if (unsoldRep == 0) {
-			// A full-cap sale is reachable only without a live migrated-REP residue.
-			// Do not derive its rate from the parent's phantom inherited denominator.
-			return SecurityPoolUtils.PRICE_PRECISION;
-		}
-		if (currentOwnershipDenominator == 0) return SecurityPoolUtils.PRICE_PRECISION;
-		return (currentOwnershipDenominator - 1) / unsoldRep + 1;
+	) private returns (uint256 escalationRepSold) {
+		uint256 escalationRepBefore = _getEscalationAuctionableRep(securityPool, parentData);
+		if (escalationRepBefore == 0 || repPurchased == 0) return 0;
+		uint256 combinedRepBefore = _getPoolAuctionableRepAtFork(parentData) + escalationRepBefore;
+		escalationRepSold = (repPurchased * escalationRepBefore) / combinedRepBefore;
+		if (escalationRepSold == 0) return 0;
+		securityPool.escalationGame().applyTruthAuctionHaircut(escalationRepSold);
 	}
 
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
@@ -872,6 +888,6 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	}
 
 	receive() external payable {
-		require(trustedAuctionAddresses[msg.sender], 'Trusted');
+		if (!trustedAuctionAddresses[msg.sender]) revert();
 	}
 }

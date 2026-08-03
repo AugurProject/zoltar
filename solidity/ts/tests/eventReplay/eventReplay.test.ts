@@ -556,6 +556,66 @@ describe('event-only replay', () => {
 		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.amount !== 4n) throw new Error('second coordinator operation counter collided')
 	})
 
+	test('escalation claim replay preserves immutable depositors and truth-auction retention', () => {
+		const game: Address = '0x1111111111111111111111111111111111111111'
+		const firstVault: Address = '0x2222222222222222222222222222222222222222'
+		const secondVault: Address = '0x3333333333333333333333333333333333333333'
+		const postResumeVault: Address = '0x6666666666666666666666666666666666666666'
+		const logs = [
+			createReplayLog({
+				emitter: game,
+				eventName: 'LocalDepositAppended',
+				logIndex: 0,
+				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmount: 100n, parentDepositIndex: 0n, cumulativeRepAmount: 100n },
+			}),
+			createReplayLog({
+				emitter: game,
+				eventName: 'LocalDepositAppended',
+				logIndex: 1,
+				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmount: 50n, parentDepositIndex: 0n, cumulativeRepAmount: 50n },
+			}),
+			createReplayLog({
+				emitter: game,
+				eventName: 'DepositOnOutcome',
+				logIndex: 2,
+				args: { depositor: firstVault, outcome: 1n, repAmount: 100n, depositIndex: 0n, cumulativeRepAmount: 100n, resultingVaultEscrowedRep: 100n, resultingTotalEscrowedRep: 100n },
+			}),
+			createReplayLog({
+				emitter: game,
+				eventName: 'DepositOnOutcome',
+				logIndex: 3,
+				args: { depositor: secondVault, outcome: 2n, repAmount: 50n, depositIndex: 0n, cumulativeRepAmount: 50n, resultingVaultEscrowedRep: 50n, resultingTotalEscrowedRep: 150n },
+			}),
+			createReplayLog({
+				emitter: game,
+				eventName: 'TruthAuctionHaircutApplied',
+				logIndex: 4,
+				args: { repBefore: 150n, repRemoved: 60n, repRemaining: 90n, rebasedElapsed: 10n },
+			}),
+			createReplayLog({
+				emitter: game,
+				eventName: 'LocalDepositAppended',
+				logIndex: 5,
+				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, repAmount: 1n, parentDepositIndex: 0n, cumulativeRepAmount: 1n },
+			}),
+		]
+
+		const replayed = replayZoltarEvents(logs)
+		const bundles = replayed.escalationClaimBundles.get(game)
+		const firstBundle = bundles?.get(firstVault)
+		const secondBundle = bundles?.get(secondVault)
+		const postResumeBundle = bundles?.get(postResumeVault)
+		if (firstBundle === undefined || secondBundle === undefined || postResumeBundle === undefined) throw new Error('claim bundles missing')
+		expect(firstBundle.depositor).toBe(firstVault)
+		expect(secondBundle.depositor).toBe(secondVault)
+		expect((firstBundle.claimRepShares * 90n) / 150n).toBe(60n)
+		expect((secondBundle.claimRepShares * 90n) / 150n).toBe(30n)
+		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(90n)
+		expect(replayed.escalationResolutionBalances.get(game)).toEqual([1n, 60n, 30n])
+		expect(postResumeBundle.claimRepShares).toBe(2n)
+		expect((postResumeBundle.claimRepShares * 90n) / 150n).toBe(1n)
+	})
+
 	test('local carry consumption updates peaks before a recursive fork checkpoint', () => {
 		const parentGame = '0x1111111111111111111111111111111111111111'
 		const childGame = '0x2222222222222222222222222222222222222222'
@@ -1373,8 +1433,9 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetOwnership, storedOperation[6], 'queued ownership snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetAllowance, storedOperation[7], 'queued allowance snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalRep, storedOperation[8], 'queued REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotDenominator, storedOperation[9], 'queued denominator snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetEscalationRep, storedOperation[8], 'queued escalation REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalRep, storedOperation[9], 'queued REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotDenominator, storedOperation[10], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,

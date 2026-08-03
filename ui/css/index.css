@@ -3716,14 +3716,6 @@ strong.metric-value-danger {
 	overflow-wrap: anywhere;
 }
 
-.transaction-review .currency-value-wrap,
-.transaction-review .currency-value,
-.transaction-review button.currency-value.copyable {
-	max-width: none;
-	overflow: visible;
-	white-space: nowrap;
-}
-
 .transaction-review-details {
 	display: grid;
 	gap: 0.45rem;
@@ -6477,7 +6469,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .security-pool-browse-vault-row-top-compact {
-	grid-template-columns: minmax(0, 1.45fr) minmax(9.9rem, 0.78fr) minmax(9.9rem, 0.78fr);
+	grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(8.5rem, 0.72fr));
 	align-items: start;
 }
 

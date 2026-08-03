@@ -15,6 +15,7 @@ export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, 
 
 export function getVaultWithdrawGuardMessage({
 	bufferRequiredEthCost = false,
+	escalationEscrowedRep = 0n,
 	requiredEthCost,
 	stagedOperationTimeoutMinutes,
 	withdrawAmount,
@@ -22,6 +23,7 @@ export function getVaultWithdrawGuardMessage({
 	walletEthBalance,
 }: {
 	bufferRequiredEthCost?: boolean | undefined
+	escalationEscrowedRep?: bigint | undefined
 	requiredEthCost: bigint | undefined
 	stagedOperationTimeoutMinutes: bigint | undefined
 	withdrawAmount: bigint | undefined
@@ -30,6 +32,7 @@ export function getVaultWithdrawGuardMessage({
 }) {
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return undefined
+	if (escalationEscrowedRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'

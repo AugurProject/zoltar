@@ -113,10 +113,11 @@ describe('security pool creation guards', () => {
 	})
 
 	test('validates the Statoblast security multiplier before submission', () => {
-		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a Statoblast security multiplier greater than 1x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a Statoblast security multiplier of at least 1.0002x.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('abc')).toBe('Enter a multiplier in x with at most 4 decimal places.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('2.00001')).toBe('Enter a multiplier in x with at most 4 decimal places.')
-		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Statoblast security multiplier must be greater than 1x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Statoblast security multiplier must be at least 1.0002x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1.0001')).toBe('Statoblast security multiplier must be at least 1.0002x.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('2.0001')).toBeUndefined()
 	})
 

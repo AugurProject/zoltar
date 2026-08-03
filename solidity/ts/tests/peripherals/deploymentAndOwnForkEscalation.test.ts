@@ -2,6 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { deployChild, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -56,6 +57,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		depositToEscalationGame,
 		getPoolOwnershipDenominator,
 		getRepToken,
+		getAwaitingForkContinuation,
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
@@ -366,7 +368,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		assert.strictEqual(configuredPriorityFee, customPriorityFeeWeiPerGas)
 		assert.notStrictEqual(customAddresses.shareToken, securityPoolAddresses.shareToken, 'the priority fee must be part of the origin lineage identity')
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps, 0n), /initial report priority fee must be greater than zero/i)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps, 0n), /Initial priority fee zero/)
 	})
 
 	test('stateful factory sequences keep one canonical collateral ledger per child token namespace', async () => {
@@ -590,10 +592,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			return getQuestionId(deploymentQuestionData, outcomes)
 		}
 		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /Multiplier must exceed 10000 BPS/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /Multiplier must exceed 10001 BPS/)
 
 		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 10_000n), /Multiplier must exceed 10000 BPS/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 10_000n), /Multiplier must exceed 10001 BPS/)
+
+		const unrepresentableMigrationMultiplierQuestionId = await createBinaryQuestion(`unrepresentable migration multiplier ${await mockWindow.getTime()}`)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, unrepresentableMigrationMultiplierQuestionId, 10_001n), /Multiplier must exceed 10001 BPS/)
+
+		const minimumStrictMultiplierQuestionId = await createBinaryQuestion(`minimum strict migration multiplier ${await mockWindow.getTime()}`)
+		await deployOriginSecurityPool(client, genesisUniverse, minimumStrictMultiplierQuestionId, 10_002n)
 
 		const fractionalMultiplierQuestionId = await createBinaryQuestion(`fractional multiplier ${await mockWindow.getTime()}`)
 		const fractionalMultiplierBps = 15_000n
@@ -917,6 +925,17 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesChildPool)
 		if ((await getSystemState(client, yesChildPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, yesChildPool)
+		for (let progressCall = 0; progressCall < 16 && (await getAwaitingForkContinuation(client, yesChildPool)); progressCall++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesChildPool,
+					functionName: 'resumeForkedEscalationGame',
+					args: [],
+				}),
+			)
+		}
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesChildPool), false, 'bounded continuation progress should complete before reading the child escalation deadline')
 		const childEscalationEndDate = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getEscalationGameEndDate',

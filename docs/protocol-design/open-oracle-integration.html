@@ -1051,26 +1051,36 @@
 				<div class="equation" id="eq-openoracle-contract-liquidation-guard">
 					<math
 						display="block"
-						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
-						data-source="thresholdPrice = ⌊vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)⌋; currentPrice > thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ >= minLiquidationPriceDistanceBps"
+						aria-label="contract liquidation guard uses queue-time free and escalation REP to compute the lower of the floored associated REP threshold and strict migration REP threshold, followed by the floored distance check"
+						data-source="associatedRepThreshold = ⌊(snapshotFreeRep + snapshotEscalationRep) * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * poolSecurityMultiplierBps)⌋; migrationThreshold = ⌊snapshotFreeRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * migrationSecurityMultiplierBps)⌋; thresholdPrice = min(associatedRepThreshold, migrationThreshold); currentPrice > thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ >= minLiquidationPriceDistanceBps"
 					>
 						<mtable>
 							<mtr>
-								<mtd><mi>thresholdPrice</mi></mtd>
+								<mtd><mi>associatedRepThreshold</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd
 									><mo form="prefix" stretchy="true">⌊</mo
 									><mfrac
 										><mrow
-											><mi>vaultRep</mi><mo>&#x22C5;</mo
+											><mo>(</mo><mi>snapshotFreeRep</mi><mo>+</mo><mi>snapshotEscalationRep</mi><mo>)</mo><mo>&#x22C5;</mo
 											><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo
 											><mi>BPS_DENOMINATOR</mi></mrow
 										><mrow
 											><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo
-											><mi>statoblastSecurityMultiplierBps</mi></mrow
+											><mi>poolSecurityMultiplierBps</mi></mrow
 										></mfrac
 									><mo form="postfix" stretchy="true">⌋</mo></mtd
 								>
+							</mtr>
+							<mtr>
+								<mtd><mi>migrationThreshold</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mo form="prefix" stretchy="true">⌊</mo><mfrac><mrow><mi>snapshotFreeRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow><mrow><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplierBps</mi></mrow></mfrac><mo form="postfix" stretchy="true">⌋</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>thresholdPrice</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>associatedRepThreshold</mi><mo>,</mo><mi>migrationThreshold</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>currentPrice</mi></mtd>
@@ -1100,11 +1110,10 @@
 					</math>
 						<p class="equation-caption">
 							<span class="equation-label">Contract Liquidation Guard</span
-							>The coordinator computes the floored threshold and distance checks
-							before calling the pool. <code>SecurityPool</code> then rechecks the
-							scaled liquidation-threshold inequality and rejects chunks that fail
-							target, caller, or floor checks. Equality passes only at the distance
-							check; <code>currentPrice</code> must still be strictly above
+							>The coordinator computes both floored health thresholds from queue-time free and escalation REP, uses the
+							lower one because it is the first boundary to fail, and then applies the distance check
+							before calling the pool. Here <code>migrationSecurityMultiplierBps = max(10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋, 10,500)</code>; the <a href="./liquidation.html#rule">liquidation design</a> owns its derivation and reserve rationale. Any ownership or allowance change first invalidates the quote. <code>SecurityPool</code> then rechecks target safety with live free REP plus live current-game escrow. A partial execution preserves the positive target REP and allowance floors, while any funded transfer must leave the caller above both floors and healthy. A maximum request instead records untransferred residual allowance as bad debt, including the complete allowance when its funded slice would leave the caller below the minimum active allowance. Equality passes only at the distance
+							check. Ordinary associated-REP coverage admits equality, while migration coverage is strict and is unhealthy at equality; <code>currentPrice</code> must still be strictly above
 							<code>thresholdPrice</code>.
 						</p>
 				</div>

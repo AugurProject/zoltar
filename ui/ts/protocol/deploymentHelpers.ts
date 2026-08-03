@@ -8,6 +8,7 @@ import {
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_Multicall3_Multicall3,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
@@ -69,10 +70,11 @@ export const getShareTokenFactoryByteCode = (zoltarAddress: Address) =>
 		args: [zoltarAddress],
 	})
 
-export const getEscalationGameFactoryByteCode = () =>
+export const getEscalationGameFactoryByteCode = (claimDelegate: Address) =>
 	encodeDeployData({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+		args: [claimDelegate],
 	})
 
 export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = (wethAddress = getWethAddress()) =>
@@ -185,6 +187,7 @@ export function getZoltarAddress(profile: NetworkProfile = getRuntimeNetworkProf
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
 	const zoltarAddressHelpers = getZoltarAddressHelpers(profile)
 	return createInfraContractAddressHelper({
+		escalationGameClaimDelegateBytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 		getEscalationGameFactoryByteCode,
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolForkerByteCode,

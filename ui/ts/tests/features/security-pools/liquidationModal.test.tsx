@@ -7,6 +7,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { LiquidationModal } from '../../../features/security-pools/components/LiquidationModal.js'
+import { simulateLiquidation } from '../../../features/security-pools/lib/liquidation.js'
 import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
@@ -106,6 +107,14 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		...selectedPool,
 		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
 	}
+}
+
+function getTransactionReviewValue(label: string) {
+	const labelElement = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === label)
+	if (!(labelElement instanceof HTMLElement)) throw new Error(`Expected ${label} label`)
+	const valueElement = labelElement.nextElementSibling
+	if (!(valueElement instanceof HTMLElement)) throw new Error(`Expected ${label} value`)
+	return valueElement.textContent
 }
 
 function createEndedPoolState() {
@@ -853,7 +862,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = noGainRenderedComponent.cleanup
 
-		expect(within(document.body).getByText('This liquidation amount is too small to improve the target vault health after rounding.')).not.toBeNull()
+		expect(within(document.body).getByText('This liquidation amount rounds to no transferable bundled position.')).not.toBeNull()
 	})
 
 	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
@@ -1051,7 +1060,7 @@ describe('LiquidationModal', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(amountChanges).toEqual(['20'])
+		expect(amountChanges).toEqual(['50'])
 	})
 
 	test('fills the liquidation amount from the dust-safe liquidation Max value', async () => {
@@ -1084,7 +1093,7 @@ describe('LiquidationModal', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(amountChanges).toEqual(['0.4'])
+		expect(amountChanges).toEqual(['1.4'])
 	})
 
 	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
@@ -1228,14 +1237,14 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
 	})
 
-	test('disables liquidation when the entered chunk is too small to improve target health after rounding', async () => {
+	test('allows an atomic bonus-priced liquidation', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1259,8 +1268,169 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
-		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This liquidation amount is too small to improve the target vault health after rounding.')).not.toBeNull()
+		expect(button.disabled).toBe(false)
+		expect(documentQueries.getByText(/Escalation claims, free-REP surplus, and accrued fees stay with the target vault/)).not.toBeNull()
+		expect(documentQueries.getByText(/A maximum request records any untransferred residual as bad debt/)).not.toBeNull()
+	})
+
+	test('previews the exact post-ownership-conversion REP amount after a pool donation', () => {
+		const totalRepBalance = 200n * ETH + 1n
+		const poolOwnershipDenominator = 200n * ETH * ETH
+		const targetVaultSummary = createTargetVaultSummary({
+			poolOwnership: 100n * ETH * ETH,
+			poolOwnershipDenominator,
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: 100n * ETH,
+			totalRepBalance,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
+			liquidationAmount: 1n * ETH,
+			repPerEthPrice: 1n * ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+		const quotedRep = (105n * ETH) / 100n
+		const ownershipMoved = (quotedRep * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
+		const exactRepMoved = (ownershipMoved * totalRepBalance) / poolOwnershipDenominator
+
+		expect(exactRepMoved).toBe(quotedRep)
+		expect(simulation.repToMove).toBe(exactRepMoved)
+	})
+
+	test('matches the contract partial reserve when the pool ownership rate is non-integral', () => {
+		const totalRepBalance = 20n * ETH
+		const poolOwnership = 20n * ETH * ETH + 1n
+		const poolOwnershipDenominator = poolOwnership
+		const targetVaultSummary = createTargetVaultSummary({
+			poolOwnership,
+			poolOwnershipDenominator,
+			repDepositShare: 20n * ETH,
+			securityBondAllowance: 20n * ETH,
+			totalRepBalance,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
+			liquidationAmount: 10n * ETH,
+			repPerEthPrice: ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+		const reserveOwnership = (10n * ETH * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
+		const awardableRep = ((poolOwnership - reserveOwnership) * totalRepBalance) / poolOwnershipDenominator
+		const expectedDebt = (awardableRep * ETH * 10_000n) / (ETH * 10_500n)
+
+		expect(awardableRep).toBe(10n * ETH - 1n)
+		expect(simulation.debtToMove).toBe(expectedDebt)
+		expect(simulation.badDebtRecorded).toBe(0n)
+	})
+
+	test('caps debt at the fully funded award and previews residual bad debt at the minimum multiplier', () => {
+		const targetVaultSummary = createTargetVaultSummary({
+			escalationEscrowedRep: 900n * ETH,
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: 900n * ETH,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 1000n * ETH }),
+			liquidationAmount: 900n * ETH,
+			repPerEthPrice: 2n * ETH,
+			statoblastSecurityMultiplierBps: 10_002n,
+			targetVaultSummary,
+		})
+		const expectedDebt = (100n * ETH * ETH * 10_000n) / (2n * ETH * 10_500n)
+
+		expect(simulation.debtToMove).toBe(expectedDebt)
+		expect(simulation.repToMove).toBe(100n * ETH - 1n)
+		expect(simulation.badDebtRecorded).toBe(900n * ETH - expectedDebt)
+		expect(simulation.targetAfter.escalationEscrowedRep).toBe(900n * ETH)
+		expect(simulation.targetAfter.securityBondAllowance).toBe(0n)
+	})
+
+	test('does not preview negative debt for a partial request against sub-minimum auction allowance', () => {
+		const targetVaultSummary = createTargetVaultSummary({
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: ETH / 2n,
+		})
+		const callerVaultSummary = createTargetVaultSummary({ repDepositShare: 100n * ETH, securityBondAllowance: 0n })
+		const partial = simulateLiquidation({
+			callerVaultSummary,
+			liquidationAmount: ETH / 4n,
+			repPerEthPrice: 300n * ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+		const maximum = simulateLiquidation({
+			callerVaultSummary,
+			liquidationAmount: ETH / 2n,
+			repPerEthPrice: 300n * ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+
+		expect(partial.debtToMove).toBe(0n)
+		expect(partial.badDebtRecorded).toBe(0n)
+		expect(partial.targetAfter.securityBondAllowance).toBe(ETH / 2n)
+		expect(maximum.debtToMove).toBe(0n)
+		expect(maximum.badDebtRecorded).toBe(ETH / 2n)
+		expect(maximum.targetAfter.securityBondAllowance).toBe(0n)
+	})
+
+	test('leaves escalation REP with the target during liquidation', () => {
+		const targetVaultSummary = createTargetVaultSummary({
+			escalationEscrowedRep: 11n * ETH,
+			repDepositShare: 100n * ETH,
+			securityBondAllowance: 100n * ETH,
+		})
+		const simulation = simulateLiquidation({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
+			liquidationAmount: 50n * ETH,
+			repPerEthPrice: ETH,
+			statoblastSecurityMultiplierBps: 20_000n,
+			targetVaultSummary,
+		})
+
+		expect(simulation.repToMove).toBe((105n * ETH) / 2n)
+		expect(simulation.targetAfter.escalationEscrowedRep).toBe(11n * ETH)
+		expect(simulation.callerAfter.escalationEscrowedRep).toBe(0n)
+	})
+
+	test('renders the full free-REP award and retained fees', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 11n * ETH,
+				repDepositShare: 100n * ETH,
+				securityBondAllowance: 100n * ETH,
+				unpaidEthFees: 7n * ETH,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 52.50 REP')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
+	})
+
+	test('does not credit target escalation REP against the free-REP award', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 300n * ETH,
+				repDepositShare: 300n * ETH,
+				securityBondAllowance: 100n * ETH,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 105.00 REP')
+		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 105.00 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1336,7 +1506,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 29n * 10n ** 18n,
+				repDepositShare: 20n * 10n ** 18n,
 				securityBondAllowance: 1n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
@@ -1386,6 +1556,33 @@ describe('LiquidationModal', () => {
 
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByText('Your vault would remain liquidatable after this liquidation.')).not.toBeNull()
+	})
+
+	test('does not use target escalation REP to make the caller appear healthy', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 0n,
+				repDepositShare: 23n * ETH,
+				securityBondAllowance: 0n,
+				vaultAddress: defaultCallerVaultAddress,
+			}),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
+			liquidationAmount: '50',
+			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({
+				escalationEscrowedRep: 100n * ETH,
+				repDepositShare: 100n * ETH,
+				securityBondAllowance: 100n * ETH,
+				vaultAddress: defaultTargetVaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
+
+		expect(executeButton.disabled).toBe(true)
+		expect(documentQueries.getByText('Your vault would become liquidatable after this liquidation.')).not.toBeNull()
 	})
 
 	test('renders the target vault with the shared address value component', async () => {
@@ -1473,12 +1670,12 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Your Vault')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
-		expect(documentQueries.getByText('Your REP After')).not.toBeNull()
+		expect(documentQueries.getByText('Your Free REP After')).not.toBeNull()
 		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
-		expect(documentQueries.getByText('REP Moved')).not.toBeNull()
+		expect(documentQueries.getByText('Free REP Moved')).not.toBeNull()
 	})
 
-	test('shows zero REP moved when no punitive liquidation amount is executable', async () => {
+	test('shows only the fully funded award and the residual bad debt for a maximum liquidation', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
 			accountAddress: callerVaultAddress,
@@ -1498,16 +1695,20 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 2n * 10n ** 18n,
 				securityBondAllowance: 2n * 10n ** 18n,
+				unpaidEthFees: 25n * 10n ** 16n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
-		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
+		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 2.00 REP')
+		expect(getTransactionReviewValue('Residual Bad Debt Recorded')).toBe('≈ 1.81 ETH')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 0.25 ETH')
 	})
 
 	test('allows execution when the entered amount exceeds the executable cap because execution will clamp it', async () => {
@@ -1565,6 +1766,9 @@ describe('LiquidationModal', () => {
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum security bond allowance after liquidation.')).toBe(false)
+		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
+		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
+		expect(debtAssumedLabel.nextElementSibling?.textContent).toBe('≈ 8.57 ETH')
 	})
 
 	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the executable cap', async () => {
@@ -1604,7 +1808,7 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						repDepositShare: 12_000n * 10n ** 18n,
+						repDepositShare: 30_000n * 10n ** 18n,
 						securityBondAllowance: 1_000n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
@@ -1631,12 +1835,16 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
+		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
+		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
+		const debtAssumedValue = debtAssumedLabel.nextElementSibling
+		if (!(debtAssumedValue instanceof HTMLElement)) throw new Error('Expected Debt Assumed value')
+		expect(debtAssumedValue.textContent).toBe('≈ 584.13 ETH')
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
@@ -1645,6 +1853,7 @@ describe('LiquidationModal', () => {
 		const repMovedValueAfter = repMovedLabel.nextElementSibling
 		if (!(repMovedValueAfter instanceof HTMLElement)) throw new Error('Expected Rep Moved value after input')
 		expect(repMovedValueAfter.textContent).toBe(clampedPreviewText)
+		expect(debtAssumedValue.textContent).toBe('≈ 584.13 ETH')
 
 		render(null, container)
 		container.remove()
@@ -1659,7 +1868,6 @@ describe('LiquidationModal', () => {
 
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText(/Uniswap V4 REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V4 Price/)).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -1672,75 +1880,34 @@ describe('LiquidationModal', () => {
 
 		documentQueries = within(document.body)
 		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
-		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V3 Price/)).not.toBeNull()
 	})
 
-	test('uses the shared collateralization success and danger classes in the modal', async () => {
-		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
-		const renderedComponent = await renderLiquidationModal({
-			accountAddress: callerVaultAddress,
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-				lastPrice: 3n * 10n ** 18n,
-			}),
-			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 24n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-				vaultAddress: callerVaultAddress,
-			}),
-			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const targetOpenOracleValue = documentQueries.getByText(/66\.67 %/).closest('.metric-field-value')
-		const callerOpenOracleValue = documentQueries.getByText(/400\.00 %/).closest('.metric-field-value')
-		const callerAfterLiquidationLabel = documentQueries.getByText(/^Your Collateralization After$/)
-		const callerAfterLiquidationValue = callerAfterLiquidationLabel.parentElement?.querySelector('.metric-field-value')
-
-		expect(targetOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-danger']))
-		expect(callerOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
-		expect(callerAfterLiquidationValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
-	})
-
-	test('renders exact-threshold collateralization as green in the modal', async () => {
+	test('keeps dual-coverage liquidation decisions aligned with neutral exact REP and allowance context', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
-			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const thresholdMetric = within(document.body).getByText('Target Collateralization at Oracle Price').parentElement
-		const thresholdValue = thresholdMetric?.querySelector('.metric-field-value')
-
-		expect(thresholdValue?.className).toContain('metric-value-success')
-	})
-
-	test('shows no active allowance for zero-allowance collateralization rows in the modal', async () => {
-		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-				lastPrice: 1n * 10n ** 18n,
+			selectedPool: createSelectedPool({
+				lastOraclePrice: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 4n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				escalationEscrowedRep: 4n * 10n ** 18n,
+				repDepositShare: 16n * 10n ** 18n,
+				securityBondAllowance: 10n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Unavailable')).toBeNull()
-		expect(documentQueries.getAllByText('No active allowance')).toHaveLength(2)
+		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('Target Bond Allowance')).not.toBeNull()
+		expect(documentQueries.getByText('Target Free REP')).not.toBeNull()
+		expect(documentQueries.getByText('Target Escalation REP')).not.toBeNull()
+		expect(documentQueries.queryByText(/Collateralization/)).toBeNull()
+		expect(documentQueries.queryByText('Below target')).toBeNull()
 	})
 
 	test('shows refreshing status while the modal is loading Open Oracle validity', async () => {

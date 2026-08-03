@@ -53,7 +53,7 @@ export function getCollateralizationTone(collateralizationPercent: bigint | unde
 	return collateralizationPercent < getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps) ? 'danger' : 'success'
 }
 
-export function getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps: bigint) {
+function getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps: bigint) {
 	return (statoblastSecurityMultiplierBps * PERCENT_MULTIPLIER * PRICE_PRECISION) / BPS_DENOMINATOR
 }
 

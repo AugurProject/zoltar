@@ -9,6 +9,7 @@ import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
@@ -16,8 +17,9 @@ contract EscalationGame is EscalationGameSettlement {
 	constructor(
 		ISecurityPool _securityPool,
 		ReputationToken _repToken,
-		EscalationGameProofVerifier _proofVerifier
-	) EscalationGameState(_securityPool, _repToken, _proofVerifier) {
+		EscalationGameProofVerifier _proofVerifier,
+		EscalationGameClaimDelegate _claimDelegate
+	) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
 		depositDelegate = new EscalationGameDepositDelegate();
 	}
 
@@ -37,7 +39,7 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 _forkCarryInitialBacking
 	) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
-		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Fork time too high');
+		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert();
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
@@ -47,23 +49,27 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function resumeFromFork() external {
-		require(owner == msg.sender || address(securityPool) == msg.sender, 'Only owner or security pool');
-		require(forkContinuation, 'No fork mode');
-		require(forkResumedAt == 0, 'Fork resumed');
-		require(isForkCarryFundingComplete(), 'Fork carry underfunded');
-		forkResumedAt = block.timestamp;
-		emit ForkContinuationResumed(block.timestamp);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
+	}
+
+	function applyTruthAuctionHaircut(uint256 repToRemove) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.applyTruthAuctionHaircut, (repToRemove)));
 	}
 
 	function previewDepositOnOutcome(
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 amount
 	) external view returns (uint256 acceptedAmount, uint256 resultingCumulativeAmount) {
-		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
-		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
-		require(amount >= startBond, 'Below start bond');
+		// Keep one reason for this read-only quote path so the size-constrained game
+		// can retain the state-changing paths' more specific failure reasons.
+		require(
+			nonDecisionState == NonDecisionState.None &&
+				outcome != BinaryOutcomes.BinaryOutcome.None &&
+				getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None &&
+				outcomeState[uint8(outcome)].balance < nonDecisionThreshold &&
+				amount >= startBond,
+			'Invalid deposit preview'
+		);
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
@@ -82,27 +88,39 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 expectedCumulativeAmount
 	) external returns (uint256 parentDepositIndex) {
 		require(msg.sender == address(securityPool), 'Only security pool');
-		(bool success, bytes memory returnData) = address(depositDelegate).delegatecall(
+		bytes memory returnData = _delegateDepositCall(
 			abi.encodeCall(
 				EscalationGameDepositDelegate.recordDeposit,
 				(depositor, outcome, amount, expectedCumulativeAmount)
 			)
 		);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(returnData, 0x20), mload(returnData))
-			}
-		}
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
 
 	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {
-		require(owner == msg.sender, 'Only game owner');
-		require(activationTime == 0, 'Game started');
-		require(_nonDecisionThreshold > _startBond, 'Threshold too low');
-		require(_startBond > 0, 'Start bond zero');
+		if (owner != msg.sender) revert();
+		require(activationTime == 0 && _nonDecisionThreshold > _startBond && _startBond > 0, 'Invalid game start');
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBond, _nonDecisionThreshold);
+	}
+
+	function _getDepositDelegate() internal view override returns (address) {
+		return address(depositDelegate);
+	}
+
+	fallback() external {
+		address claimDelegateAddress = address(claimDelegate);
+		assembly ('memory-safe') {
+			// Every selector not implemented by the inherited game belongs to the
+			// shared claim module. Its normal dispatcher also rejects unknown calls.
+			calldatacopy(0, 0, calldatasize())
+			if iszero(delegatecall(gas(), claimDelegateAddress, 0, calldatasize(), 0, 0)) {
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
+			}
+			returndatacopy(0, 0, returndatasize())
+			return(0, returndatasize())
+		}
 	}
 }

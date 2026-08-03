@@ -36,8 +36,12 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
 			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCost(getBindingCapital());
-			if (requiredElapsed <= forkElapsedAtStart) return forkResumedAt;
-			return forkResumedAt + (requiredElapsed - forkElapsedAtStart);
+			uint256 curveEnd =
+				requiredElapsed <= forkElapsedAtStart
+					? forkResumedAt
+					: forkResumedAt + (requiredElapsed - forkElapsedAtStart);
+			uint256 minimumResponseEnd = forkResumedAt + activationDelay;
+			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
 		return activationTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
 	}
@@ -136,6 +140,17 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 				actualForkThreshold,
 				nonDecisionThreshold
 			);
+	}
+
+	function _computeCarriedWinningWithdrawal(
+		uint8 outcomeIndex,
+		uint256 depositAmount,
+		uint256 cumulativeAmount,
+		uint256 parentDepositIndex
+	) internal view returns (uint256 amountToWithdraw, uint256 burnAmount) {
+		depositAmount = _applyInheritedSourceRetention(depositAmount, parentDepositIndex);
+		cumulativeAmount = _applyInheritedSourceRetention(cumulativeAmount, parentDepositIndex);
+		return _computeWinningWithdrawal(outcomeIndex, depositAmount, cumulativeAmount);
 	}
 
 	function _getOutcomeBalances()

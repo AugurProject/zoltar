@@ -3,19 +3,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
-import {
-	calculateAnnualizedRetentionFeePercent,
-	calculateAuctionModel,
-	calculateCollateralRepairModel,
-	calculateEscalationDepositModel,
-	calculateForkThresholdSeries,
-	calculateLiquidationHealth,
-	calculateOracleSecurityModel,
-	calculateResolutionModel,
-	describeLiquidationHealth,
-	normalizedEscalationCost,
-	parseLiquidationMultiplierBps,
-} from '../docs/charts/chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
 import { updateDiagramControl } from '../docs/charts/diagramControl'
 
 type InteractiveExampleHarness = {
@@ -885,17 +873,17 @@ async function checkInvariantCatalogStates(): Promise<void> {
 
 		const entries = Array.from(window.document.querySelectorAll('details.invariant-entry')).flatMap(entry => (entry instanceof window.HTMLDetailsElement ? [entry] : []))
 		const visibleIds = () => entries.filter(entry => !entry.hidden).map(entry => entry.id)
-		assert.equal(entries.length, 93, 'the invariant catalog must include every documented property')
-		assert.equal(new Set(entries.map(entry => entry.id)).size, 93, 'every invariant catalog entry must have a unique stable id')
-		assert.equal(count.textContent, '93 of 93 invariants', 'the invariant explorer must report the complete default catalog')
+		assert.equal(entries.length, 94, 'the invariant catalog must include every documented property')
+		assert.equal(new Set(entries.map(entry => entry.id)).size, 94, 'every invariant catalog entry must have a unique stable id')
+		assert.equal(count.textContent, '94 of 94 invariants', 'the invariant explorer must report the complete default catalog')
 		assert.equal(window.document.querySelector('#esc-10')?.hasAttribute('open'), true, 'an invariant fragment must open its matching entry')
 		assert.deepEqual({ status: status.options.length, subsystem: subsystem.options.length, type: type.options.length }, { status: 5, subsystem: 10, type: 5 }, 'invariant facets must be derived from all catalog metadata values plus their All options')
-		assert.equal(window.document.querySelectorAll('.invariant-entry-actions').length, 93, 'every invariant must receive permalink actions')
+		assert.equal(window.document.querySelectorAll('.invariant-entry-actions').length, 94, 'every invariant must receive permalink actions')
 
 		search.value = 'replay'
 		search.dispatchEvent(new window.Event('input', { bubbles: true }))
-		assert.deepEqual(visibleIds(), ['esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
-		assert.equal(count.textContent, '4 of 93 invariants', 'filtered invariant count must remain explicit')
+		assert.deepEqual(visibleIds(), ['vault-04', 'esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
+		assert.equal(count.textContent, '5 of 94 invariants', 'filtered invariant count must remain explicit')
 		expand.click()
 		assert(
 			entries.filter(entry => !entry.hidden).every(entry => entry.open),
@@ -909,8 +897,8 @@ async function checkInvariantCatalogStates(): Promise<void> {
 
 		reset.click()
 		assert.equal(search.value, '', 'Reset filters must clear the search query')
-		assert.equal(count.textContent, '93 of 93 invariants', 'Reset filters must restore the complete result count')
-		assert.equal(visibleIds().length, 93, 'Reset filters must restore every catalog entry')
+		assert.equal(count.textContent, '94 of 94 invariants', 'Reset filters must restore the complete result count')
+		assert.equal(visibleIds().length, 94, 'Reset filters must restore every catalog entry')
 	} finally {
 		window.close()
 	}
@@ -974,7 +962,7 @@ async function checkReaderRuntimeStates(): Promise<void> {
 		assertNavigationOrder('architecture-deployment/deployment-status.html', ['ordering', 'deployment-mask-decoder', 'limit'])
 		assertNavigationOrder('architecture-deployment/merkle-mountain-range.html', ['proofs', 'mmr-proof-planner', 'snapshots'])
 		assertNavigationOrder('protocol-design/open-oracle-integration.html', ['security-guarantee', 'initial-report-estimator-example', 'callback-rejection-and-recovery', 'attack-model', 'binary-censorship-example', 'parameters'])
-		assertNavigationOrder('protocol-design/liquidation.html', ['sliders', 'liquidation-health-example', 'liquidation-path-example', 'incentives'])
+		assertNavigationOrder('protocol-design/liquidation.html', ['incentives'])
 		assertNavigationOrder('whitepapers/statoblast-whitepaper.html', ['escalation', 'escalation-deposit-example', 'resolution-edge-example', 'migration', 'collateral-repair-example', 'auction'])
 
 		const deploymentDecoderLink = window.document.querySelector('.reader-nav-document[data-navigation-document-path="architecture-deployment/deployment-status.html"] a[data-document-fragment="deployment-mask-decoder"]')
@@ -1137,80 +1125,6 @@ async function checkReaderRuntimeStates(): Promise<void> {
 		assert.equal(sourcedAfterBack[0]?.getAttribute('data-document-frame'), 'whitepapers/statoblast-whitepaper.html', 'the default first chapter must be the sole source after Back')
 	} finally {
 		historyWindow.close()
-	}
-}
-
-async function checkLiquidationMultiplierBoundaries(): Promise<void> {
-	const filePath = 'docs/protocol-design/liquidation.html'
-	const html = await readFile(filePath, 'utf8')
-	const window = new Window({
-		url: pathToFileURL(filePath).href,
-	})
-	try {
-		window.document.write(html)
-		window.document.close()
-
-		const output = (name: string) => {
-			const element = window.document.querySelector(`[data-liquidation-output="${name}"]`)
-			if (!(element instanceof window.HTMLElement)) throw new Error(`Missing liquidation output: ${name}`)
-			return element.textContent.trim()
-		}
-		const defaultFallback = {
-			cap: output('cap'),
-			postDebt: output('postDebt'),
-			repMoved: output('repMoved'),
-			required: output('required'),
-			shortfall: output('shortfall'),
-			status: output('status'),
-		}
-
-		const script = window.document.querySelector('script:not([src])')
-		const scriptText = script?.textContent
-		if (scriptText === undefined || scriptText.trim().length === 0) throw new Error(`${filePath} is missing its inline calculator script`)
-		const runScript = new Function('document', scriptText)
-		runScript(window.document)
-
-		assert.deepEqual(
-			{
-				cap: output('cap'),
-				postDebt: output('postDebt'),
-				repMoved: output('repMoved'),
-				required: output('required'),
-				shortfall: output('shortfall'),
-				status: output('status'),
-			},
-			defaultFallback,
-			'liquidation calculator runtime defaults must match its static fallback',
-		)
-
-		const setInput = (name: string, value: string) => {
-			const input = window.document.querySelector(`[data-liquidation-input="${name}"]`)
-			if (!(input instanceof window.HTMLInputElement)) throw new Error(`Missing liquidation input: ${name}`)
-			input.value = value
-			input.dispatchEvent(new window.Event('input', { bubbles: true }))
-		}
-		setInput('rep', '110')
-		setInput('debt', '25')
-		setInput('price', '4')
-
-		for (const [multiplier, expected] of [
-			['1.0999', { required: '109.99 REP', shortfall: '0 REP', status: 'Safe' }],
-			['1.1', { required: '110 REP', shortfall: '0 REP', status: 'Safe' }],
-			['1.1001', { required: '110.01 REP', shortfall: '0.01 REP', status: 'Liquidatable' }],
-		] as const) {
-			setInput('multiplier', multiplier)
-			assert.deepEqual(
-				{
-					required: output('required'),
-					shortfall: output('shortfall'),
-					status: output('status'),
-				},
-				expected,
-				`liquidation calculator must preserve the exact ${multiplier}x BPS boundary`,
-			)
-		}
-	} finally {
-		window.close()
 	}
 }
 
@@ -1617,7 +1531,6 @@ checkDiagramControlStates()
 await checkInteractiveToolControls()
 await checkInvariantCatalogStates()
 await checkReaderRuntimeStates()
-await checkLiquidationMultiplierBoundaries()
 checkExactRepCapEquality()
 
 const openOracleHtml = await readFile('docs/protocol-design/open-oracle-integration.html', 'utf8')
@@ -1716,25 +1629,6 @@ assert.equal(forkThresholdSeries.length, 21, 'fork-threshold Plot should include
 assert.deepEqual(forkThresholdSeries[0], { forkThreshold: 5, generation: 0, theoreticalSupply: 100 }, 'fork-threshold Plot should begin from the genesis theoretical supply and five-percent threshold')
 assert.ok((forkThresholdSeries[20]?.theoreticalSupply ?? 0) < (forkThresholdSeries[19]?.theoreticalSupply ?? 0), 'fork-threshold Plot should decay monotonically by generation')
 assert.equal(forkThresholdSeries[20]?.forkThreshold, (forkThresholdSeries[20]?.theoreticalSupply ?? 0) / 20, 'fork-threshold Plot should keep the threshold at five percent of theoretical supply')
-assert.deepEqual(calculateLiquidationHealth(1000n, 75n, 20_000n, 4n), { currentRequiredRep: 600, currentRequiredRepDisplay: '600', state: 'safe', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a safely backed vault')
-assert.deepEqual(calculateLiquidationHealth(1000n, 50n, 20_000n, 10n), { currentRequiredRep: 1000, currentRequiredRepDisplay: '1000', state: 'safe', thresholdPrice: 10 }, 'liquidation Plot should keep exact threshold equality safe')
-assert.equal(calculateLiquidationHealth(1000n, 50n, 20_000n, 11n).state, 'liquidatable', 'liquidation Plot should become liquidatable immediately above the threshold')
-for (const [multiplierInput, expectedState, expectedRequiredRep] of [
-	['1.0999', 'safe', '109.99'],
-	['1.1000', 'safe', '110'],
-	['1.1001', 'liquidatable', '110.01'],
-] as const) {
-	const multiplierBps = parseLiquidationMultiplierBps(multiplierInput)
-	assert.notEqual(multiplierBps, undefined, `liquidation Plot should parse ${multiplierInput}x as BPS`)
-	if (multiplierBps === undefined) throw new Error(`Missing parsed multiplier for ${multiplierInput}`)
-	const model = calculateLiquidationHealth(110n, 25n, multiplierBps, 4n)
-	assert.equal(model.state, expectedState, `liquidation Plot should classify the ${multiplierInput}x fractional boundary exactly`)
-	assert.equal(model.currentRequiredRepDisplay, expectedRequiredRep, `liquidation Plot should preserve the ${multiplierInput}x required REP precision`)
-	assert.match(describeLiquidationHealth('Liquidation threshold curve.', 110n, model), new RegExp(`required backing is ${expectedRequiredRep.replace('.', '\\.')} REP against 110 unlocked REP, so the vault is ${expectedState}`), `liquidation Plot accessible description should preserve the ${multiplierInput}x boundary`)
-}
-assert.deepEqual(calculateLiquidationHealth(1000n, 75n, 20_000n, 10n), { currentRequiredRep: 1500, currentRequiredRepDisplay: '1500', state: 'liquidatable', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a vault above its price threshold')
-assert.equal(calculateLiquidationHealth(1000n, 0n, 20_000n, 10n).thresholdPrice, Number.POSITIVE_INFINITY, 'liquidation Plot should have no finite threshold without allowance')
-
 const defaultAuction = calculateAuctionModel(12, 4, [
 	{ eth: 3, key: 'alice', name: 'Alice', price: 5 },
 	{ eth: 4, key: 'bob', name: 'Bob', price: 4 },
