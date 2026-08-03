@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { candidateScreeningPrice } from '../../src/monitoring/pool-monitor.ts'
 import { getAddress } from '../helpers/ethereum.ts'
 
@@ -89,6 +89,22 @@ describe('liquidation strategy', () => {
 		expect(liquidationExecutionAllowed(0n, true)).toBe(false)
 		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, false)).toBe(false)
 		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, true)).toBe(true)
+	})
+
+	test('selects the highest-priority candidate whose market permits execution', () => {
+		const pool: PoolRiskContext = {
+			address: poolAddress,
+			denominator: 1_000n * PRICE_PRECISION,
+			manager: managerAddress,
+			minLiquidationPriceDistanceBps: 0n,
+			multiplierBps: 20_000n,
+			price: 10n * PRICE_PRECISION,
+			totalRep: 1_000n * PRICE_PRECISION,
+		}
+		const lower = evaluateCandidate(pool, vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION), vault(callerAddress, 0n, 0n), strategy())
+		if (lower === undefined) throw new Error('Expected a liquidation candidate')
+		const higher = { ...lower, bonusValueEth: lower.bonusValueEth + 1n, target: { ...lower.target, address: managerAddress } }
+		expect(selectAllowedCandidate([lower, higher], 'largest-bonus', candidate => candidate.target.address === lower.target.address)).toBe(lower)
 	})
 
 	test('caps stale exposure using the buffered acquisition ceiling', () => {
