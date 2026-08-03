@@ -16,6 +16,7 @@
 	document.head.append(favicon)
 
 	document.body.classList.add('docs-shell-page')
+	if (currentPage === undefined) document.body.classList.add('docs-landing-page')
 	main.id = main.id || 'main-content'
 	main.tabIndex = -1
 
@@ -62,7 +63,7 @@
 	const navigation = element('nav', 'docs-navigation')
 	for (const section of data.sections) {
 		const sectionDetails = element('details', 'docs-navigation-section')
-		sectionDetails.open = currentPage === undefined || currentPage.section === section.id
+		sectionDetails.open = currentPage?.section === section.id
 		sectionDetails.append(element('summary', '', section.title))
 		const topics = new Map()
 		for (const page of sectionPages(section.id)) {
@@ -72,7 +73,7 @@
 		}
 		for (const [topic, pages] of topics) {
 			const topicDetails = element('details', 'docs-navigation-topic')
-			topicDetails.open = currentPage === undefined || pages.some(page => page.path === currentPage.path)
+			topicDetails.open = pages.some(page => page.path === currentPage?.path)
 			topicDetails.append(element('summary', '', topic))
 			const list = element('ul', 'docs-navigation-list')
 			for (const page of pages) {
@@ -105,7 +106,7 @@
 		outline.append(item)
 		outlineLinks.set(id, link)
 	}
-	if (outline.childElementCount === 0) right.hidden = true
+	if (currentPage === undefined || outline.childElementCount === 0) right.hidden = true
 	right.append(outline)
 	const mobileOutline = element('details', 'docs-mobile-outline')
 	mobileOutline.append(element('summary', '', 'On this page'), outline.cloneNode(true))
@@ -139,8 +140,6 @@
 			pager.append(link)
 		}
 		main.append(pager)
-	} else if (!right.hidden) {
-		main.prepend(mobileOutline)
 	}
 
 	const layout = element('div', 'docs-layout')
@@ -148,6 +147,7 @@
 	layout.append(left, main, right)
 	const backdrop = element('button', 'docs-navigation-backdrop')
 	backdrop.type = 'button'
+	backdrop.tabIndex = -1
 	backdrop.setAttribute('aria-label', 'Close documentation menu')
 	document.body.prepend(skipLink, topbar)
 	document.body.append(backdrop)
@@ -155,8 +155,14 @@
 	function isMobileNavigation() {
 		return window.innerWidth <= 820
 	}
+	function navigationNodeVisible(node) {
+		for (let ancestor = node.parentElement; ancestor !== null && ancestor !== left; ancestor = ancestor.parentElement) {
+			if (ancestor.matches('details:not([open])') && ancestor.firstElementChild !== node) return false
+		}
+		return true
+	}
 	function navigationFocusables() {
-		return [menuButton, ...left.querySelectorAll('a[href], summary, button'), backdrop].filter(node => !node.inert)
+		return [menuButton, ...left.querySelectorAll('a[href], summary, button')].filter(node => !node.inert && navigationNodeVisible(node))
 	}
 	function syncNavigationIsolation() {
 		const mobile = isMobileNavigation()
@@ -202,10 +208,40 @@
 	const searchResults = element('ol', 'docs-search-results')
 	dialog.append(searchForm, searchStatus, searchResults)
 	document.body.append(dialog)
+	let searchIndex = Array.isArray(window.statoblastDocsSearch) ? window.statoblastDocsSearch : undefined
+	let searchLoadPromise
+
+	function loadSearchIndex() {
+		if (searchIndex !== undefined) return Promise.resolve(searchIndex)
+		if (searchLoadPromise !== undefined) return searchLoadPromise
+		searchLoadPromise = new Promise((resolve, reject) => {
+			const searchScript = document.createElement('script')
+			searchScript.src = docsUrl('assets/js/docsSearchData.js')
+			searchScript.addEventListener('load', () => {
+				if (!Array.isArray(window.statoblastDocsSearch)) {
+					reject(new Error('Documentation search data is malformed'))
+					return
+				}
+				searchIndex = window.statoblastDocsSearch
+				resolve(searchIndex)
+			})
+			searchScript.addEventListener('error', () => reject(new Error('Documentation search data failed to load')))
+			document.head.append(searchScript)
+		})
+		return searchLoadPromise
+	}
 
 	function openSearch() {
 		if (!dialog.open) dialog.showModal()
 		searchInput.focus()
+		if (searchIndex === undefined) {
+			searchStatus.textContent = 'Loading documentation search…'
+			void loadSearchIndex()
+				.then(updateSearch)
+				.catch(() => {
+					searchStatus.textContent = 'Search is unavailable. Reload the page and try again.'
+				})
+		}
 	}
 	function closeSearchDialog() {
 		dialog.close()
@@ -245,32 +281,42 @@
 	function normalized(value) {
 		return value
 			.toLocaleLowerCase()
-			.replace(/[^a-z0-9]+/g, ' ')
+			.normalize('NFKD')
+			.replace(/\p{M}+/gu, '')
+			.replace(/[^\p{L}\p{N}]+/gu, ' ')
 			.trim()
 	}
 	function searchTermScore(entry, normalizedTitle, term) {
 		if (normalizedTitle.startsWith(term)) return 8
 		if (normalizedTitle.includes(term)) return 5
-		if (entry.headings.some(heading => normalized(heading).includes(term))) return 3
+		const heading = normalized(entry.heading)
+		if (heading.startsWith(term)) return 6
+		if (heading.includes(term)) return 4
+		if (entry.keywords.some(keyword => normalized(keyword).includes(term))) return 3
 		return 1
 	}
 	function updateSearch() {
 		const query = normalized(searchInput.value)
 		searchResults.replaceChildren()
+		if (searchIndex === undefined) {
+			searchStatus.textContent = 'Loading documentation search…'
+			return
+		}
 		if (query.length < 2) {
 			searchStatus.textContent = 'Enter at least two characters.'
 			return
 		}
 		const terms = query.split(/\s+/)
-		const matches = data.searchIndex
-			.map(entry => {
-				const title = normalized(entry.title)
-				const haystack = normalized(`${entry.title} ${entry.sectionTitle} ${entry.topic} ${entry.keywords.join(' ')} ${entry.headings.join(' ')} ${entry.text}`)
-				if (!terms.every(term => haystack.includes(term))) return undefined
-				const score = terms.reduce((total, term) => total + searchTermScore(entry, title, term), 0)
-				return { entry, score }
-			})
-			.filter(Boolean)
+		const matchesByPath = new Map()
+		for (const entry of searchIndex) {
+			const title = normalized(entry.title)
+			const haystack = normalized(`${entry.title} ${entry.sectionTitle} ${entry.topic} ${entry.keywords.join(' ')} ${entry.heading} ${entry.text}`)
+			if (!terms.every(term => haystack.includes(term))) continue
+			const score = terms.reduce((total, term) => total + searchTermScore(entry, title, term), entry.weight)
+			const previous = matchesByPath.get(entry.path)
+			if (previous === undefined || score > previous.score) matchesByPath.set(entry.path, { entry, score })
+		}
+		const matches = Array.from(matchesByPath.values())
 			.sort((left, right) => right.score - left.score || left.entry.title.localeCompare(right.entry.title))
 			.slice(0, 20)
 		searchStatus.textContent = matches.length === 0 ? 'No matching documentation.' : `${matches.length} result${matches.length === 1 ? '' : 's'}`
@@ -278,7 +324,8 @@
 			const item = element('li', '')
 			const link = element('a', '')
 			link.href = docsUrl(entry.path, entry.fragment)
-			link.append(element('span', 'docs-search-result-meta', `${entry.sectionTitle} · ${entry.topic}`), element('strong', '', entry.title), element('span', 'docs-search-result-snippet', entry.summary))
+			const snippet = entry.heading.length > 0 ? `${entry.heading} — ${entry.summary}` : entry.summary
+			link.append(element('span', 'docs-search-result-meta', `${entry.sectionTitle} · ${entry.topic}`), element('strong', '', entry.title), element('span', 'docs-search-result-snippet', snippet))
 			item.append(link)
 			searchResults.append(item)
 		}

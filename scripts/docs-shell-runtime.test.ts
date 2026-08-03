@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
-const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver'] as const
+const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 
 async function loadShell(url = 'http://localhost/docs/tutorials/first-market.html', viewportWidth = 1280) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
@@ -12,7 +12,8 @@ async function loadShell(url = 'http://localhost/docs/tutorials/first-market.htm
 	for (const key of globalKeys) {
 		Object.defineProperty(globalThis, key, { configurable: true, value: windowValues[key], writable: true })
 	}
-	const source = await Bun.file('docs/tutorials/first-market.html').text()
+	const route = new URL(url).pathname.replace(/^.*\/docs\//, '')
+	const source = await Bun.file(`docs/${route}`).text()
 	document.write(source)
 	document.close()
 	Function(await Bun.file('docs/assets/js/docsData.js').text())()
@@ -33,6 +34,14 @@ async function loadShell(url = 'http://localhost/docs/tutorials/first-market.htm
 	}
 }
 
+async function finishSearchLoad() {
+	const searchScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
+	if (searchScript === null) throw new Error('Lazy documentation search script is missing')
+	Function(await Bun.file('docs/assets/js/docsSearchData.js').text())()
+	searchScript.dispatchEvent(new Event('load'))
+	await Promise.resolve()
+}
+
 test('documentation shell provides native Diátaxis navigation without an iframe', async () => {
 	const shell = await loadShell()
 	try {
@@ -45,12 +54,25 @@ test('documentation shell provides native Diátaxis navigation without an iframe
 		expect(document.querySelector('.docs-mobile-outline')).not.toBeNull()
 		expect(document.querySelector('.docs-search-icon')?.textContent).toBe('⌕')
 		expect(document.querySelector('.docs-search-button kbd')?.textContent).toBe('Ctrl/⌘ K')
+		expect(document.querySelector('script[src$="/assets/js/docsSearchData.js"]')).toBeNull()
 	} finally {
 		shell.cleanup()
 	}
 })
 
-test('documentation search indexes the complete corpus', async () => {
+test('documentation landing keeps global navigation compact and omits a redundant page outline', async () => {
+	const shell = await loadShell('http://localhost/docs/documentation.html')
+	try {
+		expect(document.body.classList.contains('docs-landing-page')).toBeTrue()
+		expect(document.querySelectorAll('.docs-navigation-section[open]')).toHaveLength(0)
+		expect(document.querySelector('.docs-right')?.hasAttribute('hidden')).toBeTrue()
+		expect(document.querySelector('.docs-mobile-outline')).toBeNull()
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('documentation search loads on demand, normalizes Unicode, and links to the best matching section', async () => {
 	const shell = await loadShell()
 	try {
 		const searchButton = document.querySelector<HTMLButtonElement>('.docs-search-button')
@@ -58,12 +80,25 @@ test('documentation search indexes the complete corpus', async () => {
 		const dialog = document.querySelector<HTMLDialogElement>('.docs-search')
 		expect(dialog?.open).toBeTrue()
 		expect(dialog?.getAttribute('aria-label')).toBe('Search documentation')
+		expect(document.querySelector('.docs-search-status')?.textContent).toBe('Loading documentation search…')
+		await finishSearchLoad()
 		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
 		if (input === null) throw new Error('Search input is missing')
-		input.value = 'reorg indexer'
+		input.value = 'noncanonical replacement branch'
 		input.dispatchEvent(new Event('input'))
 		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Build a reorg-safe event indexer')
-		expect(document.querySelector('.docs-search-status')?.textContent).toMatch(/^\d+ results$/)
+		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/how-to/build-event-indexer.html#handle-reorganizations')
+		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toMatch(/^Handle reorganizations —/)
+		expect(document.querySelector('.docs-search-status')?.textContent).toBe('1 result')
+
+		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
+		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
+		const keywords: unknown = Reflect.get(searchData[0], 'keywords')
+		if (!Array.isArray(keywords)) throw new Error('Search fixture keywords are missing')
+		keywords.push('Diátaxis')
+		input.value = 'diataxis'
+		input.dispatchEvent(new Event('input'))
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Explore a seeded market and security pool')
 	} finally {
 		shell.cleanup()
 	}
@@ -82,7 +117,22 @@ test('mobile menu isolates focus while open and restores desktop navigation afte
 		expect(left?.inert).toBeFalse()
 		expect(main?.inert).toBeTrue()
 		expect(document.activeElement?.closest('.docs-left')).not.toBeNull()
-		document.querySelector<HTMLButtonElement>('.docs-navigation-backdrop')?.click()
+		const backdrop = document.querySelector<HTMLButtonElement>('.docs-navigation-backdrop')
+		expect(backdrop?.tabIndex).toBe(-1)
+		const visibleNavigationItems = Array.from(document.querySelectorAll<HTMLElement>('.docs-left summary, .docs-left a')).filter(node => {
+			for (let ancestor = node.parentElement; ancestor !== null && !ancestor.classList.contains('docs-left'); ancestor = ancestor.parentElement) {
+				if (ancestor.matches('details:not([open])') && ancestor.firstElementChild !== node) return false
+			}
+			return true
+		})
+		const lastNavigationItem = visibleNavigationItems.at(-1)
+		if (lastNavigationItem === undefined) throw new Error('Visible mobile navigation item is missing')
+		lastNavigationItem.focus()
+		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }))
+		expect(document.activeElement).toBe(button)
+		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }))
+		expect(document.activeElement).toBe(lastNavigationItem)
+		backdrop?.click()
 		expect(document.body.dataset['docsNavigationOpen']).toBe('false')
 		expect(left?.inert).toBeTrue()
 		expect(main?.inert).toBeFalse()

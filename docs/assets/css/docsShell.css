@@ -154,6 +154,10 @@ body.docs-shell-page:has(.docs-search[open]) {
 	padding: 0 1.5rem;
 }
 
+.docs-shell-page.docs-landing-page .docs-layout {
+	grid-template-columns: var(--docs-shell-left-width) minmax(0, 1fr);
+}
+
 .docs-left,
 .docs-right {
 	position: sticky;

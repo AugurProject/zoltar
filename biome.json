@@ -43,7 +43,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["docs/assets/js/chartRuntime.js", "docs/assets/js/docsData.js"],
+			"includes": ["docs/assets/js/chartRuntime.js", "docs/assets/js/docsData.js", "docs/assets/js/docsSearchData.js"],
 			"formatter": {
 				"enabled": false
 			},

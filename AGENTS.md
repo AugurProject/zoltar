@@ -123,6 +123,7 @@ below. They are tracked because the static documentation site loads them directl
 | `ui/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
+| `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.md` | `bun run docs:generate-contract-reference` |
 | `docs/reference/contracts.html` | `docs/reference/contracts.md` via `bun run docs:build-index` |
 | `docs/reference/event-stream.html` | `bun run docs:build-index` |
