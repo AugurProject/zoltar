@@ -217,8 +217,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		// priority-fee configuration.
 		// Zero-utilization origin pools always start at the protocol retention curve's maximum rate.
 		require(
-			statoblastSecurityMultiplierBps > SecurityPoolUtils.BPS_DENOMINATOR,
-			'Multiplier must exceed 10000 BPS'
+			statoblastSecurityMultiplierBps > SecurityPoolUtils.BPS_DENOMINATOR + 1,
+			'Multiplier must exceed 10001 BPS'
 		);
 
 		// Validate that the question exists

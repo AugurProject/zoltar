@@ -104,3 +104,9 @@ struct ForkedEscrowState {
 	uint256 childRep;
 	uint256 childRepClaimed;
 }
+
+// Escalation claims are deliberately not tokens. A bundle is keyed by, and
+// permanently owned by, the vault that originated its deposits.
+struct EscalationClaimBundle {
+	uint256 escrowedRep;
+}

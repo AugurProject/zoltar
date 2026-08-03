@@ -1,7 +1,9 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { getLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import {
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness,
@@ -9,9 +11,8 @@ import {
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
 } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
-import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
-import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
@@ -232,7 +233,7 @@ describe('Peripherals: truth auction', () => {
 			}),
 			/Need game/,
 		)
-		await assert.rejects(migrateRepToZoltar(client, parentPool, [QuestionOutcome.Yes]), /Proxy/)
+		await assert.rejects(migrateRepToZoltar(client, parentPool, [QuestionOutcome.Yes]), /execution reverted/)
 		await assert.rejects(initiateSecurityPoolFork(client, parentPool), /Unforked/)
 		await assert.rejects(
 			client.writeContract({
@@ -250,7 +251,7 @@ describe('Peripherals: truth auction', () => {
 				functionName: 'initializeChildForkedEscalationGameIfNeeded',
 				args: [parentPool, parentPool, addressString(0n)],
 			}),
-			/Forker/,
+			/execution reverted/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -278,6 +279,105 @@ describe('Peripherals: truth auction', () => {
 	})
 
 	describe('auction startup and migration isolation', () => {
+		test('external-fork escalation backing is auctionable before the child game resumes', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+			await approveAndDepositRep(passiveRepHolder, 2n * forkThreshold, questionId)
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			const losingReporter = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			await approveAndDepositRep(losingReporter, repDeposit, questionId)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
+			await depositToEscalationGame(losingReporter, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+			await triggerExternalForkForSecurityPool(undefined, 'external escalation auction accounting source')
+			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+			const parentRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+			assert.ok(parentRepBuckets.escalationChildRepPerSelectedOutcome > 0n, 'the external fork should preserve unresolved escalation backing')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			const unresolvedMigrationHash = await client.writeContract({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'migrateVaultWithUnresolvedEscalation',
+				args: [securityPoolAddresses.securityPool, client.account.address, BigInt(QuestionOutcome.Yes)],
+			})
+			await client.waitForTransactionReceipt({ hash: unresolvedMigrationHash })
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const childEscalationGame = await client.readContract({
+				address: yesSecurityPool.securityPool,
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'escalationGame',
+			})
+			const childEscalationBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), childEscalationGame)
+			const recordedEscalationBacking = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'totalEscrowedRep',
+			})
+			strictEqualTypeSafe(childEscalationBalance, parentRepBuckets.escalationChildRepPerSelectedOutcome, 'the child game should physically hold the external-fork escalation bucket before resume')
+			strictEqualTypeSafe(recordedEscalationBacking, childEscalationBalance, 'pre-resume escrow accounting must expose all physically backed escalation REP to the truth auction')
+			const outcomeBalancesBeforeAuction = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getOutcomeBalances',
+			})
+			const vaultBeforeAuction = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'the OI shortfall should require a truth auction')
+			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+			const combinedAuctionableRep = parentForkData.auctionableRepAtFork + childEscalationBalance
+			const expectedAuctionCap = combinedAuctionableRep - migratedRep / 1_000_000n
+			strictEqualTypeSafe(await getMaxRepBeingSold(client, yesSecurityPool.truthAuction), expectedAuctionCap, 'the auction cap should include external-fork escalation backing before resume')
+			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, expectedAuctionCap / 2n, await getEthRaiseCap(client, yesSecurityPool.truthAuction))
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			assert.ok((await getTotalRepPurchased(client, yesSecurityPool.truthAuction)) > 0n, 'the regression requires a nonzero repair purchase')
+			const repBeforeHaircut = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'truthAuctionRepBefore',
+			})
+			const repRemainingAfterHaircut = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'truthAuctionRepRemaining',
+			})
+			strictEqualTypeSafe(repBeforeHaircut, childEscalationBalance, 'the external-fork haircut denominator should include all child-game backing')
+			assert.ok(repRemainingAfterHaircut < repBeforeHaircut, 'the external-fork truth auction should remove escalation backing')
+			const outcomeBalancesAfterAuction = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getOutcomeBalances',
+			})
+			for (let outcomeIndex = 0; outcomeIndex < outcomeBalancesAfterAuction.length; outcomeIndex += 1) {
+				strictEqualTypeSafe(outcomeBalancesAfterAuction[outcomeIndex], (outcomeBalancesBeforeAuction[outcomeIndex] * repRemainingAfterHaircut) / repBeforeHaircut, 'external-fork outcome balances should rebase by the auction retention ratio')
+			}
+			const vaultAfterAuction = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			strictEqualTypeSafe(vaultAfterAuction.repInEscalationGame, (vaultBeforeAuction.repInEscalationGame * repRemainingAfterHaircut) / repBeforeHaircut, 'the carried escalation claim should retain the same auction fraction as its backing')
+			const forkResumedAt = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'forkResumedAt',
+			})
+			const gameEndDate = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+			})
+			assert.ok(forkResumedAt > 0n, 'truth-auction finalization should resume the external-fork continuation')
+			assert.ok(gameEndDate >= forkResumedAt + 3n * DAY, 'the resumed continuation should receive a fresh minimum response period')
+		})
+
 		test('truth-auction finalization starts long-dated child fee accrual at activation', async () => {
 			const { yesSecurityPool } = await setupLongDatedChildAuction('long-dated child fee activation source')
 			const collateralAtActivation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
@@ -790,7 +890,18 @@ describe('Peripherals: truth auction', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childRepToken = getRepTokenAddress(yesUniverse)
+			const childEscalationGame = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' })
+			const bindingCapitalBeforeFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getBindingCapital' })
+			const curveElapsedBeforeFinalize = await client.readContract({
+				address: childEscalationGame,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'computeTimeSinceStartFromAttritionCost',
+				args: [bindingCapitalBeforeFinalize],
+			})
+			assert.ok(curveElapsedBeforeFinalize > 3n * DAY, 'the deadline regression requires more than one minimum response period of pre-haircut curve time')
+			const outcomeBalancesBeforeFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalances' })
 			const originalVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			const escalationClaimBeforeFinalize = originalVaultBeforeFinalize.repInEscalationGame
 			const childBalanceBeforeFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			const originalClaimBeforeFinalize = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.repDepositShare)
 			assert.ok(originalClaimBeforeFinalize > 0n, 'the migrated vault should retain a positive unlocked child REP claim before finalization')
@@ -817,6 +928,31 @@ describe('Peripherals: truth auction', () => {
 			const originalClaimAfterFinalize = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalVaultAfterFinalize.repDepositShare)
 			assert.ok(originalClaimAfterFinalize > 0n, 'the migrated vault should remain redeemable after finalization')
 			assert.ok(originalClaimAfterFinalize <= childBalanceAfterFinalize, 'the migrated vault claim should stay bounded by the child pools remaining REP balance')
+			const escalationRepBeforeAuction = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'truthAuctionRepBefore' })
+			const escalationRepRemainingAfterAuction = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'truthAuctionRepRemaining' })
+			assert.ok(escalationRepBeforeAuction > 0n, 'the test auction should sell inherited escalation backing')
+			assert.ok(escalationRepRemainingAfterAuction < escalationRepBeforeAuction, 'the test auction should apply a nonzero escalation haircut')
+			const expectedEscalationClaim = (escalationClaimBeforeFinalize * escalationRepRemainingAfterAuction) / escalationRepBeforeAuction
+			strictEqualTypeSafe(originalVaultAfterFinalize.repInEscalationGame, expectedEscalationClaim, 'the truth auction should apply the same proportional REP retention to the escalation claim')
+			if (escalationRepBeforeAuction > 0n) {
+				const outcomeBalancesAfterFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalances' })
+				for (let outcomeIndex = 0; outcomeIndex < outcomeBalancesAfterFinalize.length; outcomeIndex += 1) {
+					strictEqualTypeSafe(outcomeBalancesAfterFinalize[outcomeIndex], (outcomeBalancesBeforeFinalize[outcomeIndex] * escalationRepRemainingAfterAuction) / escalationRepBeforeAuction, 'the effective outcome balance should move backward by the auction retention ratio')
+				}
+				const forkResumedAt = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'forkResumedAt' })
+				const forkElapsedAfterFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'forkElapsedAtStart' })
+				const bindingCapitalAfterFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getBindingCapital' })
+				const requiredElapsedAfterFinalize = await client.readContract({
+					address: childEscalationGame,
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					functionName: 'computeTimeSinceStartFromAttritionCost',
+					args: [bindingCapitalAfterFinalize],
+				})
+				const gameEndDate = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' })
+				assert.ok(forkElapsedAfterFinalize < curveElapsedBeforeFinalize, 'the haircut should move the elapsed curve coordinate backward')
+				strictEqualTypeSafe(forkElapsedAfterFinalize, requiredElapsedAfterFinalize, 'the haircut should rebase elapsed time to the weakened binding capital')
+				strictEqualTypeSafe(gameEndDate, forkResumedAt + 3n * DAY, 'immediate resume should clamp the recomputed deadline to exactly one fresh minimum response period')
+			}
 
 			const childBalanceBeforeRedeem = childBalanceAfterFinalize
 			await redeemRep(client, yesSecurityPool.securityPool, client.account.address)
@@ -1883,6 +2019,8 @@ describe('Peripherals: truth auction', () => {
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepBeforeLiquidation = await poolOwnershipToRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repDepositShare)
+			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalRepBalance', args: [] })
+			const denominatorBeforeLiquidation = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
 			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION * 10_000n) / (targetVaultBeforeLiquidation.securityBondAllowance * statoblastSecurityMultiplierBps)
 			const forcedPrice = (liquidationThresholdPrice + 1n) * 2n
 			const liquidationChunk = targetVaultBeforeLiquidation.securityBondAllowance / 10n
@@ -1893,7 +2031,6 @@ describe('Peripherals: truth auction', () => {
 
 			const liquidationAttemptStartBlock = await client.getBlockNumber()
 			await liquidateClaimableChildVault(liquidationChunk)
-			const settledLiquidationPrice = await getLastPrice(client, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
@@ -1924,7 +2061,9 @@ describe('Peripherals: truth auction', () => {
 
 			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
 
-			const expectedRepMove = getExpectedLiquidationRepMove(actualDebtMoved, settledLiquidationPrice)
+			const quotedRepMove = getLiquidationRepToMove(actualDebtMoved, forcedPrice)
+			const expectedOwnershipMove = (quotedRepMove * denominatorBeforeLiquidation) / totalRepBeforeLiquidation
+			const expectedRepMove = (expectedOwnershipMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
 			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')
 			approximatelyEqual(targetRepAfterLiquidation, targetRepBeforeLiquidation - expectedRepMove, 2n, 'liquidation should seize migrated vault REP before claim')
 			approximatelyEqual(

@@ -259,7 +259,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Open Interest Minted')).not.toBeNull()
-		expect(documentQueries.getByText('Total REP Backing')).not.toBeNull()
+		expect(documentQueries.getByText('Total Free REP')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Security Bond Allowance')).toBeNull()
 		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
@@ -306,7 +306,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		})
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
-		expect(documentQueries.getAllByText('Escrowed REP').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Escalation REP').length).toBeGreaterThan(0)
 	})
 
 	test('keeps directory liquidation review available when the oracle price is stale', async () => {
@@ -405,7 +405,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Parent Pool')).toBeNull()
 	})
 
-	test('marks selected-pool collateralization as success when it is above the multiplier threshold', async () => {
+	test('does not present free REP alone as selected-pool collateralization health', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -427,8 +427,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const collateralizationMetric = document.querySelector('.security-pool-collateralization-display.tone-success, .security-pool-hero-collateralization.tone-success, .security-pool-card-title-collateralization.tone-success')
-		expect(collateralizationMetric).not.toBeNull()
-		expect(collateralizationMetric?.textContent?.includes('400')).toBe(true)
+		expect(collateralizationMetric).toBeNull()
+		expect(within(document.body).getByText('Total Free REP')).not.toBeNull()
 	})
 
 	test('renders the claim-fees modal vault with the shared address value component', async () => {

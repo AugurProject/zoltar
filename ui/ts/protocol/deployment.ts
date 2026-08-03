@@ -1,7 +1,14 @@
 import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import {
+	DeploymentStatusOracle_DeploymentStatusOracle,
+	ScalarOutcomes_ScalarOutcomes,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	peripherals_SecurityPoolUtils_SecurityPoolUtils,
+	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	peripherals_openOracle_OpenOracle_OpenOracle,
+} from '../contractArtifact.js'
 import {
 	MULTICALL3_BYTECODE,
 	PROXY_DEPLOYER_ADDRESS,
@@ -60,6 +67,7 @@ function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfi
 		addresses.shareTokenFactory,
 		addresses.priceOracleManagerAndOperatorQueuerFactory,
 		addresses.securityPoolForker,
+		addresses.escalationGameClaimDelegate,
 		addresses.escalationGameFactory,
 		addresses.securityPoolFactory,
 	] satisfies Address[]
@@ -286,11 +294,18 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
 		},
 		{
+			id: 'escalationGameClaimDelegate',
+			label: 'Escalation Claim Checkpoint Delegate',
+			address: addresses.escalationGameClaimDelegate,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
+		},
+		{
 			id: 'escalationGameFactory',
 			label: 'Escalation Game Factory',
 			address: addresses.escalationGameFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode()),
+			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
+			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
 		},
 		{
 			id: 'securityPoolFactory',

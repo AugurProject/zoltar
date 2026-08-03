@@ -43,7 +43,11 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>Binds the proof to the beneficiary vault.</td>
+							<td>
+								Binds the proof and payout to the original depositor. This ownership
+								is immutable: liquidation moves only free REP and cannot acquire or
+								split the committed escalation claim.
+							</td>
 						</tr>
 						<tr>
 							<td><code>outcome</code></td>

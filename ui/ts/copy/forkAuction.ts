@@ -10,6 +10,8 @@ export const entryDepthLead = 'Entry depth: '
 export const escalationDepositDetailsUnavailable = 'Escalation deposit details are unavailable for this pool right now.'
 export const ethRaisedPerCap = 'ETH Raised / Cap'
 export const forkDepositSettlementAvailabilityDetail = 'Winning fork-carried escalation deposits can be settled after this child pool finalizes.'
+export const escalationAuctionHaircutDetail =
+	'A repair auction can sell from both free pool REP and paused escalation REP. Purchased REP is floor-allocated to the game; claims already present share that game-specific retention ratio. This prioritizes restoring open-interest collateral over preserving escalation rewards, and the game resumes from reduced effective balances with a fresh response period.'
 export const initiallyDepositedLead = 'Initially deposited: '
 export const loadedDepthEth = 'Visible Depth (ETH)'
 export const loadingCurrentChainTime = 'Loading current chain time.'
@@ -182,7 +184,7 @@ export const poolRepAlreadyMigratedDetail = 'Pool REP has already been migrated 
 export const poolRepStagedForVaultMigrationDetail = 'Pool REP for this outcome is already staged and will sweep into the child universe during vault migration.'
 export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate pool to ${outcomeLabel} universe`
 export const migratingPoolToUniverseTruncated = 'Migrating pool to universe…'
-export const vaultMigrationDetail = 'This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.'
+export const vaultMigrationDetail = 'This moves all remaining free REP migration power and security-bond allowance from your parent vault into the selected child pool. Escalation claims have zero parent-OI migration power and follow their separate claim path.'
 export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
 export const alreadyMigratedStatus = 'Already migrated'
 export const truthAuctionStatus = 'Truth Auction Status'

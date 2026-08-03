@@ -207,7 +207,7 @@ function parseQuestionIdInput(value: string) {
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	const questionId = parseQuestionIdInput(form.marketId)
 	const statoblastSecurityMultiplierBps = parseStatoblastSecurityMultiplierBpsInput(form.statoblastSecurityMultiplierBps)
-	if (statoblastSecurityMultiplierBps <= 10_000n) throw new Error('Statoblast security multiplier must be greater than 1')
+	if (statoblastSecurityMultiplierBps <= 10_001n) throw new Error('Statoblast security multiplier must be at least 1.0002')
 	const initialReportPriorityFeeWeiPerGas = parseDecimalInput(form.initialReportPriorityFeeGwei, 'Initial report priority fee', 9)
 	if (initialReportPriorityFeeWeiPerGas <= 0n) throw new Error('Initial report priority fee must be greater than 0')
 	return {
