@@ -76,7 +76,10 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			'aria-description': option.reason,
 			title: option.reason,
 			onClick: (event: MouseEvent) => {
-				if (option.disabled) return
+				if (option.disabled) {
+					event.preventDefault()
+					return
+				}
 				if (option.href !== undefined && (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return
 				onChange(option.value)
 			},
@@ -88,9 +91,9 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			return { 'aria-pressed': active }
 		})()
 		const commonProps = { ...sharedProps, ...semanticProps }
-		if (option.href !== undefined && option.disabled !== true)
+		if (option.href !== undefined)
 			return (
-				<a key={option.value} {...commonProps} href={option.href}>
+				<a key={option.value} {...commonProps} aria-disabled={option.disabled === true ? 'true' : undefined} href={option.disabled === true ? undefined : option.href} role={option.disabled === true ? 'link' : undefined} tabIndex={option.disabled === true ? 0 : undefined}>
 					{option.label}
 				</a>
 			)

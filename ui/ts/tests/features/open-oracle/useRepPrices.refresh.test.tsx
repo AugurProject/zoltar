@@ -24,7 +24,7 @@ function createDeferred<T>() {
 
 function createHarness(useRepPrices: UseRepPrices) {
 	return function RepPricesHarness() {
-		const { repPerEthPrice, repUsdcPrice, refreshRepPrices } = useRepPrices()
+		const { repPerEthFailure, repPerEthPrice, repUsdcFailure, repUsdcPrice, refreshRepPrices } = useRepPrices()
 
 		return (
 			<div>
@@ -32,7 +32,9 @@ function createHarness(useRepPrices: UseRepPrices) {
 					Refresh
 				</button>
 				<span data-testid='rep-per-eth'>{repPerEthPrice?.toString() ?? '-'}</span>
+				<span data-testid='rep-per-eth-failure'>{repPerEthFailure ?? '-'}</span>
 				<span data-testid='rep-per-usdc'>{repUsdcPrice?.toString() ?? '-'}</span>
+				<span data-testid='rep-per-usdc-failure'>{repUsdcFailure ?? '-'}</span>
 			</div>
 		)
 	}
@@ -142,6 +144,50 @@ describe('useRepPrices refresh races', () => {
 		await waitFor(() => {
 			expect(remountedQueries.getByTestId('rep-per-eth').textContent).toBe('3')
 			expect(remountedQueries.getByTestId('rep-per-usdc').textContent).toBe('30')
+		})
+	})
+
+	test('does not renew a failed quote when the other quote refreshes successfully', async () => {
+		const repAddress = getAddress('0x00000000000000000000000000000000000000e2')
+		let ethCallCount = 0
+		let usdcCallCount = 0
+		mock.module('../../../protocol/uniswapQuoter.js', () => ({
+			ETH_ADDRESS: getAddress('0x00000000000000000000000000000000000000f2'),
+			getRepAddress: () => repAddress,
+			isRepPricingEnabled: () => true,
+			quoteBestExactInputWithSource: mock(async () => {
+				ethCallCount += 1
+				return { amountOut: BigInt(ethCallCount), source: { poolUrl: undefined, protocol: 'mock' as const } }
+			}),
+			quoteBestV3ExactInputWithSource: mock(async () => {
+				throw new Error('quoteBestV3ExactInputWithSource should not be called in this test')
+			}),
+			quoteRepForUsdcV4WithSource: mock(async () => {
+				usdcCallCount += 1
+				if (usdcCallCount === 1) return { amountOut: 10n, source: { poolUrl: undefined, protocol: 'mock' as const } }
+				throw new Error('No pool is available for the REP/USDC quote')
+			}),
+		}))
+		installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
+		})
+		const { useRepPrices } = await import(`../../../features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
+		const Harness = createHarness(useRepPrices)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		await waitFor(() => {
+			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('1')
+			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('10')
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Refresh' }))
+
+		await waitFor(() => {
+			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('2')
+			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
+			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).toBe('no-liquidity')
 		})
 	})
 })

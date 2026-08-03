@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import { useEffect, useMemo, useState } from 'preact/hooks'
+import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -54,6 +54,7 @@ function resolveApprovalButtonLabel({
 }
 export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
+	const amountValidationMessageId = useId()
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
 	useEffect(() => {
 		setDraftAmount('')
@@ -126,12 +127,25 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			<label className='field approval-amount-field'>
 				<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol)}</span>
 				<div className='field-inline approval-amount-controls'>
-					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder={commonCopy.leaveBlankForRequiredTotal} invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
+					<FormInput
+						aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
+						className='field-inline-input'
+						value={draftAmount}
+						onInput={event => setDraftAmount(event.currentTarget.value)}
+						placeholder={commonCopy.leaveBlankForRequiredTotal}
+						invalid={amountValidationMessage !== undefined}
+						disabled={controlsDisabled}
+					/>
 					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={controlsDisabled}>
 						{commonCopy.max}
 					</button>
 				</div>
 			</label>
+			{amountValidationMessage === undefined ? undefined : (
+				<p className='field-error' id={amountValidationMessageId} role='alert'>
+					{amountValidationMessage}
+				</p>
+			)}
 
 			<div className='actions'>
 				<TransactionActionButton
@@ -141,7 +155,8 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 					pending={pending}
 					tone='secondary'
 					availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
-					showDisabledReason={allowanceMessage === undefined}
+					disabledReasonElementId={allowanceMessage === undefined && amountValidationMessage !== undefined ? amountValidationMessageId : undefined}
+					showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined}
 				/>
 			</div>
 

@@ -44,6 +44,12 @@ function DisclosureOperationModalHarness() {
 			<div inert>
 				<button type='button'>Inert action</button>
 			</div>
+			<div style={{ display: 'none' }}>
+				<button type='button'>Display hidden action</button>
+			</div>
+			<div style={{ visibility: 'hidden' }}>
+				<button type='button'>Visibility hidden action</button>
+			</div>
 			<a href='#skipped-action' tabIndex={-1}>
 				Skipped action
 			</a>

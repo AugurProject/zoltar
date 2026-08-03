@@ -53,9 +53,8 @@ export function useCopyToClipboard(valueKey?: string) {
 				copied.value = false
 				copyResetTimeout.current = undefined
 			}, 1200)
-		} catch (error) {
+		} catch {
 			if (!isCurrentRequest()) return
-			if (!(error instanceof DOMException) && !(error instanceof ClipboardUnavailableError)) throw error
 			copied.value = false
 			copyError.value = commonCopy.copyFailed
 			if (copyResetTimeout.current !== undefined) {
