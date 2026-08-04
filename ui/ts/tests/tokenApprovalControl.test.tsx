@@ -166,7 +166,12 @@ describe('TokenApprovalControl', () => {
 		})
 
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
+		const amountInput = documentQueries.getByPlaceholderText('Leave blank for required total')
+		const validationMessage = documentQueries.getByText('Approval amount must be a decimal number.')
 		expect(approveButton.disabled).toBe(true)
 		expect(approveButton.title).toBe('Approval amount must be a decimal number.')
+		expect(amountInput.getAttribute('aria-describedby')).toBe(validationMessage.id)
+		expect(approveButton.getAttribute('aria-describedby')).toBe(validationMessage.id)
+		expect(document.body.querySelectorAll('.field-error')).toHaveLength(1)
 	})
 })

@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { getActiveBackend } from '../../../lib/activeEnvironment.js'
@@ -29,10 +29,11 @@ type RepPrices = {
 }
 
 type CachedRepPrices = {
-	cachedAtMs: number
+	repPerEthCachedAtMs: number | undefined
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: PriceSource | undefined
 	repPerEthSourceUrl: string | undefined
+	repUsdcCachedAtMs: number | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: PriceSource | undefined
 	repUsdcSourceUrl: string | undefined
@@ -59,8 +60,17 @@ function getCachedRepPrices(backend: ChainBackend) {
 function getFreshCachedRepPrices(backend: ChainBackend) {
 	const cachedRepPrices = getCachedRepPrices(backend)
 	if (cachedRepPrices === undefined) return undefined
-	if (Date.now() - cachedRepPrices.cachedAtMs > REP_PRICE_CACHE_TTL_MILLISECONDS) return undefined
+	const now = Date.now()
+	if (cachedRepPrices.repPerEthCachedAtMs === undefined || now - cachedRepPrices.repPerEthCachedAtMs >= REP_PRICE_CACHE_TTL_MILLISECONDS) return undefined
+	if (backend.profile.repPricingMode !== 'unavailable' && (cachedRepPrices.repUsdcCachedAtMs === undefined || now - cachedRepPrices.repUsdcCachedAtMs >= REP_PRICE_CACHE_TTL_MILLISECONDS)) return undefined
 	return cachedRepPrices
+}
+
+function getNextRepPriceExpiry(cachedRepPrices: CachedRepPrices | undefined, backend: ChainBackend) {
+	if (cachedRepPrices === undefined) return undefined
+	const cachedAtValues = [cachedRepPrices.repPerEthCachedAtMs, backend.profile.repPricingMode === 'unavailable' ? undefined : cachedRepPrices.repUsdcCachedAtMs].filter(value => value !== undefined)
+	if (cachedAtValues.length === 0) return undefined
+	return Math.min(...cachedAtValues) + REP_PRICE_CACHE_TTL_MILLISECONDS
 }
 
 export function resetRepPriceCacheForTesting() {
@@ -111,17 +121,19 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {
-			cachedAtMs: Date.now(),
-			repPerEthPrice: getCachedRepPrices(backend)?.repPerEthPrice,
-			repPerEthSource: getCachedRepPrices(backend)?.repPerEthSource,
-			repPerEthSourceUrl: getCachedRepPrices(backend)?.repPerEthSourceUrl,
-			repUsdcPrice: getCachedRepPrices(backend)?.repUsdcPrice,
-			repUsdcSource: getCachedRepPrices(backend)?.repUsdcSource,
-			repUsdcSourceUrl: getCachedRepPrices(backend)?.repUsdcSourceUrl,
+			repPerEthCachedAtMs: undefined,
+			repPerEthPrice: undefined,
+			repPerEthSource: undefined,
+			repPerEthSourceUrl: undefined,
+			repUsdcCachedAtMs: undefined,
+			repUsdcPrice: undefined,
+			repUsdcSource: undefined,
+			repUsdcSourceUrl: undefined,
 		}
 		let hasNextCachedRepPrices = false
 
 		if (repPerEthResult.status === 'fulfilled') {
+			nextCachedRepPrices.repPerEthCachedAtMs = Date.now()
 			nextCachedRepPrices.repPerEthPrice = repPerEthResult.value.price
 			nextCachedRepPrices.repPerEthSource = repPerEthResult.value.source
 			nextCachedRepPrices.repPerEthSourceUrl = repPerEthResult.value.sourceUrl
@@ -129,11 +141,13 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 		}
 
 		if (repUsdcResult.status === 'fulfilled') {
+			nextCachedRepPrices.repUsdcCachedAtMs = Date.now()
 			nextCachedRepPrices.repUsdcPrice = repUsdcResult.value.amountOut
 			nextCachedRepPrices.repUsdcSource = repUsdcResult.value.source.protocol === 'mock' ? 'mock' : 'v4'
 			nextCachedRepPrices.repUsdcSourceUrl = repUsdcResult.value.source.poolUrl
 			hasNextCachedRepPrices = true
 		} else if (!isRepPricingEnabled()) {
+			nextCachedRepPrices.repUsdcCachedAtMs = Date.now()
 			nextCachedRepPrices.repUsdcPrice = undefined
 			nextCachedRepPrices.repUsdcSource = undefined
 			nextCachedRepPrices.repUsdcSourceUrl = undefined
@@ -144,13 +158,16 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 			repPerEthFailure: repPerEthResult.status === 'rejected' ? classifyRepPriceFailure(repPerEthResult.reason) : undefined,
 			repUsdcFailure: repUsdcResult.status === 'rejected' ? classifyRepPriceFailure(repUsdcResult.reason) : undefined,
 		}
-		if (!hasNextCachedRepPrices) return { prices: getCachedRepPrices(backend), ...failures }
 		if (repPriceRefreshGenerationByBackend.get(backend) !== refreshGeneration) {
 			return {
 				prices: getCachedRepPrices(backend),
 				repPerEthFailure: undefined,
 				repUsdcFailure: undefined,
 			}
+		}
+		if (!hasNextCachedRepPrices) {
+			repPriceCacheByBackend.delete(backend)
+			return { prices: undefined, ...failures }
 		}
 		repPriceCacheByBackend.set(backend, nextCachedRepPrices)
 		return { prices: nextCachedRepPrices, ...failures }
@@ -169,7 +186,8 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 
 export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepPrices {
 	const backend = getActiveBackend()
-	const cachedRepPrices = getCachedRepPrices(backend)
+	const cachedRepPrices = getFreshCachedRepPrices(backend)
+	const displayedBackend = useRef(backend)
 	const repPerEthPrice = useSignal<bigint | undefined>(cachedRepPrices?.repPerEthPrice)
 	const repPerEthFailure = useSignal<RepPriceFailure | undefined>(undefined)
 	const repPerEthSource = useSignal<PriceSource | undefined>(cachedRepPrices?.repPerEthSource)
@@ -180,16 +198,18 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 	const repUsdcSourceUrl = useSignal<string | undefined>(cachedRepPrices?.repUsdcSourceUrl)
 	const repPricesLoad = useLoadController()
 	const nextRepPricesLoad = useRequestGuard()
+	const cacheExpiry = useSignal<number | undefined>(getNextRepPriceExpiry(cachedRepPrices, backend))
 	const applyRepPriceLoadResult = (result: RepPriceLoadResult) => {
-		repPerEthFailure.value = result.prices?.repPerEthPrice === undefined ? result.repPerEthFailure : undefined
-		repUsdcFailure.value = result.prices?.repUsdcPrice === undefined ? result.repUsdcFailure : undefined
-		if (result.prices === undefined) return
-		repPerEthPrice.value = result.prices.repPerEthPrice
-		repPerEthSource.value = result.prices.repPerEthSource
-		repPerEthSourceUrl.value = result.prices.repPerEthSourceUrl
-		repUsdcPrice.value = result.prices.repUsdcPrice
-		repUsdcSource.value = result.prices.repUsdcSource
-		repUsdcSourceUrl.value = result.prices.repUsdcSourceUrl
+		displayedBackend.current = backend
+		repPerEthFailure.value = result.repPerEthFailure
+		repUsdcFailure.value = result.repUsdcFailure
+		repPerEthPrice.value = result.prices?.repPerEthPrice
+		repPerEthSource.value = result.prices?.repPerEthSource
+		repPerEthSourceUrl.value = result.prices?.repPerEthSourceUrl
+		repUsdcPrice.value = result.prices?.repUsdcPrice
+		repUsdcSource.value = result.prices?.repUsdcSource
+		repUsdcSourceUrl.value = result.prices?.repUsdcSourceUrl
+		cacheExpiry.value = getNextRepPriceExpiry(result.prices, backend)
 	}
 
 	const refreshRepPricesInternal = (forceRefresh: boolean) => {
@@ -212,32 +232,54 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 			})
 			.catch(error => {
 				if (!isRecoverableQuoteError(error)) throw error
-				// prices unavailable — leave the last successful values in place
+				if (!isCurrent()) return
+				const failure = classifyRepPriceFailure(error)
+				applyRepPriceLoadResult({ prices: undefined, repPerEthFailure: failure, repUsdcFailure: failure })
 			})
 	}
 
 	const refreshRepPrices = () => {
+		if (getActiveBackend() !== backend) return
 		refreshRepPricesInternal(true)
 	}
 
 	useEffect(() => {
 		if (!enabled) return
+		const nextCachedRepPrices = getFreshCachedRepPrices(backend)
+		applyRepPriceLoadResult({
+			prices: nextCachedRepPrices,
+			repPerEthFailure: undefined,
+			repUsdcFailure: undefined,
+		})
 		refreshRepPricesInternal(false)
 	}, [backend, enabled])
 
-	const hasLoadedRepPrices = repPerEthPrice.value !== undefined || repUsdcPrice.value !== undefined
+	useEffect(() => {
+		if (!enabled || cacheExpiry.value === undefined) return
+		const delay = Math.max(0, cacheExpiry.value - Date.now())
+		const timeout = window.setTimeout(() => {
+			applyRepPriceLoadResult({ prices: undefined, repPerEthFailure: undefined, repUsdcFailure: undefined })
+			refreshRepPricesInternal(true)
+		}, delay)
+		return () => window.clearTimeout(timeout)
+	}, [backend, cacheExpiry.value, enabled])
+
+	const pricesMatchBackend = displayedBackend.current === backend
+	const currentRepPerEthPrice = pricesMatchBackend ? repPerEthPrice.value : undefined
+	const currentRepUsdcPrice = pricesMatchBackend ? repUsdcPrice.value : undefined
+	const hasLoadedRepPrices = currentRepPerEthPrice !== undefined || currentRepUsdcPrice !== undefined
 
 	return {
 		isLoadingRepPrices: repPricesLoad.isLoading.value && !hasLoadedRepPrices,
 		isRefreshingRepPrices: repPricesLoad.isLoading.value,
-		repPerEthFailure: repPerEthFailure.value,
-		repPerEthPrice: repPerEthPrice.value,
-		repPerEthSource: repPerEthSource.value,
-		repPerEthSourceUrl: repPerEthSourceUrl.value,
-		repUsdcFailure: repUsdcFailure.value,
-		repUsdcPrice: repUsdcPrice.value,
-		repUsdcSource: repUsdcSource.value,
-		repUsdcSourceUrl: repUsdcSourceUrl.value,
+		repPerEthFailure: pricesMatchBackend ? repPerEthFailure.value : undefined,
+		repPerEthPrice: currentRepPerEthPrice,
+		repPerEthSource: pricesMatchBackend ? repPerEthSource.value : undefined,
+		repPerEthSourceUrl: pricesMatchBackend ? repPerEthSourceUrl.value : undefined,
+		repUsdcFailure: pricesMatchBackend ? repUsdcFailure.value : undefined,
+		repUsdcPrice: currentRepUsdcPrice,
+		repUsdcSource: pricesMatchBackend ? repUsdcSource.value : undefined,
+		repUsdcSourceUrl: pricesMatchBackend ? repUsdcSourceUrl.value : undefined,
 		refreshRepPrices,
 	}
 }

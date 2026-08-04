@@ -6976,10 +6976,18 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	box-shadow: none;
 }
 
-.view-tabs.route .view-tab:hover:not(:disabled) {
+.view-tabs.route .view-tab:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: rgba(13, 27, 44, 0.5);
 	border-color: rgba(56, 213, 255, 0.1);
 	color: var(--text);
+}
+
+.view-tabs.route .view-tab:disabled,
+.view-tabs.route .view-tab[aria-disabled="true"] {
+	border-color: var(--disabled-control-border);
+	background: var(--disabled-control-bg);
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
 }
 
 .view-tabs.route .view-tab.active {
