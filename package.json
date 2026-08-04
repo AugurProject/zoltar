@@ -25,7 +25,7 @@
 	},
 	"overrides": {
 		"brace-expansion": "5.0.9",
-		"fast-uri": "3.1.4",
+		"fast-uri": "3.1.5",
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
 		"ws": "8.21.0"
