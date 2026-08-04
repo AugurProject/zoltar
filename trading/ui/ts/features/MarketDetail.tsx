@@ -2,8 +2,8 @@ import { useMemo, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { formatUnits, parseUnits, shortAddress } from '../app/format.ts'
+import { demoCashToShares, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { formatBpsMultiplier, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 
@@ -44,27 +44,27 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 			<dl class='metrics'>
 				<div>
 					<dt>Complete-set shares</dt>
-					<dd>{formatUnits(quote.completeSetShares)}</dd>
+					<dd>{formatShareAmount(quote.completeSetShares)}</dd>
 				</div>
 				<div>
 					<dt>Opposite shares swapped</dt>
-					<dd>{formatUnits(quote.oppositeSharesSwapped)}</dd>
+					<dd>{formatShareAmount(quote.oppositeSharesSwapped)}</dd>
 				</div>
 				<div>
 					<dt>Additional {side}</dt>
-					<dd>{formatUnits(quote.additionalLongShares)}</dd>
+					<dd>{formatShareAmount(quote.additionalLongShares)}</dd>
 				</div>
 				<div class='metrics__strong'>
 					<dt>Total {side} delivered</dt>
-					<dd>{formatUnits(quote.totalLongShares)}</dd>
+					<dd>{formatShareAmount(quote.totalLongShares)}</dd>
 				</div>
 				<div>
 					<dt>INVALID insurance</dt>
-					<dd>{formatUnits(quote.invalidInsurance)}</dd>
+					<dd>{formatShareAmount(quote.invalidInsurance)}</dd>
 				</div>
 				<div>
 					<dt>AMM fee</dt>
-					<dd>{formatUnits(quote.feeAmount)} shares</dd>
+					<dd>{formatShareAmount(quote.feeAmount)}</dd>
 				</div>
 			</dl>
 		)
@@ -72,15 +72,15 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 		<dl class='metrics'>
 			<div>
 				<dt>INVALID required</dt>
-				<dd>{formatUnits(quote.invalidRequired)}</dd>
+				<dd>{formatShareAmount(quote.invalidRequired)}</dd>
 			</div>
 			<div>
 				<dt>{side} swapped</dt>
-				<dd>{formatUnits(quote.longSharesSwapped)}</dd>
+				<dd>{formatShareAmount(quote.longSharesSwapped)}</dd>
 			</div>
 			<div>
 				<dt>Total {side} required</dt>
-				<dd>{formatUnits(quote.totalLongShares)}</dd>
+				<dd>{formatShareAmount(quote.totalLongShares)}</dd>
 			</div>
 			<div class='metrics__strong'>
 				<dt>Estimated ETH</dt>
@@ -88,6 +88,10 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 			</div>
 		</dl>
 	)
+}
+
+export function quoteDemoEnterPosition(market: DemoMarket, side: 'YES' | 'NO', eth: bigint) {
+	return quoteEnterPosition(side, demoCashToShares(eth, market), market.yesReserve, market.noReserve, market.feeBps)
 }
 
 export function MarketDetail({ market, scenario }: { market: DemoMarket; scenario: string }) {
@@ -99,6 +103,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 	const closedReason = tradingClosedReason(market.lifecycle)
 	const conditional = conditionalYesProbability(market.yesReserve, market.noReserve)
 	const yesPercent = Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
+	const collateralPerShare = (market.securityPool.completeSetCollateral * 10n ** 18n) / market.securityPool.shareTokenSupply
 	const parsed = useMemo(() => {
 		try {
 			return { value: parseUnits(amount) }
@@ -110,7 +115,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 		if (parsed.value === undefined || parsed.value === 0n || market.pair === undefined) return undefined
 		const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 		if (mode === 'exit' && parsed.value >= oppositeReserve) return undefined
-		return mode === 'enter' ? quoteEnterPosition(side, parsed.value * 10n ** 18n, market.yesReserve, market.noReserve, market.feeBps) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
+		return mode === 'enter' ? quoteDemoEnterPosition(market, side, parsed.value) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
 	}, [market, mode, parsed.value, side])
 	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance: 1_820n * 10n ** 18n, invalidBalance: 750n * 10n ** 18n, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const exitExceedsInsurance = mode === 'exit' && parsed.value !== undefined && parsed.value > maxExit
@@ -163,6 +168,11 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							</button>
 						</div>
 					</div>
+					{mode === 'enter' ? (
+						<p class='pool-mint-note'>
+							Submitted ETH goes to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. That pool reconciles collateral and mints complete-set shares at its live rate.
+						</p>
+					) : null}
 					<div class='side-picker' aria-label='Outcome'>
 						<button type='button' aria-pressed={side === 'YES'} onClick={() => setSide('YES')}>
 							<span>YES</span>
@@ -191,7 +201,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 						<div class='coverage'>
 							<div>
 								<span>Maximum insured {side} exit</span>
-								<strong>{formatUnits(maxExit)} shares</strong>
+								<strong>{formatShareAmount(maxExit)}</strong>
 							</div>
 							<p>Your INVALID balance covers only {formatUnits(750n * 10n ** 18n)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.</p>
 							{exitExceedsInsurance ? (
@@ -237,11 +247,11 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 						<dl class='fact-list'>
 							<div>
 								<dt>YES reserve</dt>
-								<dd>{formatUnits(market.yesReserve)}</dd>
+								<dd>{formatShareAmount(market.yesReserve)}</dd>
 							</div>
 							<div>
 								<dt>NO reserve</dt>
-								<dd>{formatUnits(market.noReserve)}</dd>
+								<dd>{formatShareAmount(market.noReserve)}</dd>
 							</div>
 							<div>
 								<dt>Trading fee</dt>
@@ -249,7 +259,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							</div>
 							<div>
 								<dt>Collateral rate</dt>
-								<dd>0.9874 ETH / 1e18 shares</dd>
+								<dd>{formatUnits(collateralPerShare)} ETH / share</dd>
 							</div>
 						</dl>
 					</section>
@@ -274,6 +284,26 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 								<dd>
 									<AddressValue value={market.pool} />
 								</dd>
+							</div>
+							<div>
+								<dt>Pool system state</dt>
+								<dd>{market.securityPool.systemState}</dd>
+							</div>
+							<div>
+								<dt>Question outcome</dt>
+								<dd>{market.securityPool.questionOutcome}</dd>
+							</div>
+							<div>
+								<dt>Statoblast security multiplier</dt>
+								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
+							</div>
+							<div>
+								<dt>Initial report priority fee</dt>
+								<dd>{market.securityPool.initialReportPriorityFeeGwei.toString()} gwei</dd>
+							</div>
+							<div>
+								<dt>Active vaults</dt>
+								<dd>{market.securityPool.activeVaultCount.toString()}</dd>
 							</div>
 							<div>
 								<dt>Pair</dt>

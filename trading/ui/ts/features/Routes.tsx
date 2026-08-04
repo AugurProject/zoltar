@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { lifecycleLabel } from '../demo/markets.ts'
-import { formatUnits, shortAddress } from '../app/format.ts'
+import { demoCashToShares, lifecycleLabel } from '../demo/markets.ts'
+import { formatBpsMultiplier, formatShareAmount, formatUnits } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
-import { Status } from '../components/Status.tsx'
+import { AddressValue, Status } from '../components/Status.tsx'
 
 export function MarketList({ market }: { market: DemoMarket }) {
 	const yesPercent = Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10
@@ -28,9 +28,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 						<h2>
 							<a href='#/market'>{market.question}</a>
 						</h2>
-						<p>
-							{market.universe} · Pool {shortAddress(market.pool)}
-						</p>
+						<p>{market.universe}</p>
 					</div>
 					<div class='market-row__price'>
 						<ProbabilityBar yesPercent={yesPercent} />
@@ -38,7 +36,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 					<dl class='market-row__metrics'>
 						<div>
 							<dt>Liquidity</dt>
-							<dd>{market.pair === undefined ? 'Pair not created' : '1,428.57 shares'}</dd>
+							<dd>{market.pair === undefined ? 'Pair not created' : formatShareAmount(market.yesReserve + market.noReserve)}</dd>
 						</div>
 						<div>
 							<dt>Fee</dt>
@@ -48,18 +46,65 @@ export function MarketList({ market }: { market: DemoMarket }) {
 					<a class='row-action' href={market.pair === undefined ? '#/liquidity' : '#/market'}>
 						{market.pair === undefined ? 'Create + initialize' : 'Open market'} →
 					</a>
+					<div class='market-row__pool'>
+						<div class='market-row__pool-identity'>
+							<span>SecurityPool used by this AMM</span>
+							<AddressValue value={market.pool} />
+						</div>
+						<dl>
+							<div>
+								<dt>System state</dt>
+								<dd>{market.securityPool.systemState}</dd>
+							</div>
+							<div>
+								<dt>Outcome</dt>
+								<dd>{market.securityPool.questionOutcome}</dd>
+							</div>
+							<div>
+								<dt>Security multiplier</dt>
+								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
+							</div>
+							<div>
+								<dt>Bond allowance</dt>
+								<dd>{formatUnits(market.securityPool.feeEligibleSecurityBondAllowance)} ETH</dd>
+							</div>
+							<div>
+								<dt>Collateral</dt>
+								<dd>{formatUnits(market.securityPool.completeSetCollateral)} ETH</dd>
+							</div>
+							<div>
+								<dt>Fork continuation</dt>
+								<dd>{market.securityPool.awaitingForkContinuation ? 'Awaiting' : 'Not awaiting'}</dd>
+							</div>
+						</dl>
+					</div>
 				</article>
 			</section>
 		</main>
 	)
 }
 
+export function liquidityActionAvailability(market: DemoMarket) {
+	return { createOrAdd: market.lifecycle === 'open', remove: true } as const
+}
+
+export function quoteDemoEthLiquidity(market: DemoMarket, targetBps: bigint) {
+	const initialCompleteSetShares = demoCashToShares(1n * 10n ** 18n, market)
+	const addedCompleteSetShares = demoCashToShares(1n * 10n ** 17n, market)
+	return {
+		initial: quoteInitialLiquidity(initialCompleteSetShares, targetBps),
+		added: quoteAddLiquidity(market.yesReserve, market.noReserve, addedCompleteSetShares, addedCompleteSetShares),
+		addedCompleteSetShares,
+	} as const
+}
+
 export function Liquidity({ market }: { market: DemoMarket }) {
 	const [probability, setProbability] = useState('70')
 	const targetBps = BigInt(Math.max(1, Math.min(99, Number(probability) || 0))) * 100n
-	const initial = quoteInitialLiquidity(1_000n * 10n ** 18n, targetBps)
-	const added = quoteAddLiquidity(market.yesReserve, market.noReserve, 100n * 10n ** 18n, 100n * 10n ** 18n)
+	const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, targetBps)
 	const removed = quoteRemoveLiquidity(market.yesReserve, market.noReserve, 100n * 10n ** 18n, 428_571n * 10n ** 18n)
+	const actionAvailability = liquidityActionAvailability(market)
+	const closedReason = actionAvailability.createOrAdd ? undefined : lifecycleLabel(market.lifecycle)
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -96,25 +141,27 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 					<dl class='metrics'>
 						<div>
 							<dt>YES reserve</dt>
-							<dd>{formatUnits(initial.yesUsed)}</dd>
+							<dd>{formatShareAmount(initial.yesUsed)}</dd>
 						</div>
 						<div>
 							<dt>NO reserve</dt>
-							<dd>{formatUnits(initial.noUsed)}</dd>
+							<dd>{formatShareAmount(initial.noUsed)}</dd>
 						</div>
 						<div>
 							<dt>Unused YES returned</dt>
-							<dd>{formatUnits(initial.yesReturned)}</dd>
+							<dd>{formatShareAmount(initial.yesReturned)}</dd>
 						</div>
 						<div>
 							<dt>INVALID retained</dt>
-							<dd>{formatUnits(initial.invalidReturned)}</dd>
+							<dd>{formatShareAmount(initial.invalidReturned)}</dd>
 						</div>
 					</dl>
 					<div class='warning'>
 						<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
 					</div>
-					<button class='primary-action'>Create pair + initialize</button>
+					<button class='primary-action' disabled={!actionAvailability.createOrAdd}>
+						{closedReason === undefined ? 'Create pair + initialize' : `Creation closed · ${closedReason}`}
+					</button>
 				</section>
 				<section class='section'>
 					<div class='section-heading'>
@@ -128,37 +175,41 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 						<dl class='metrics'>
 							<div>
 								<dt>YES used</dt>
-								<dd>{formatUnits(added.yesUsed)}</dd>
+								<dd>{formatShareAmount(added.yesUsed)}</dd>
 							</div>
 							<div>
 								<dt>NO used</dt>
-								<dd>{formatUnits(added.noUsed)}</dd>
+								<dd>{formatShareAmount(added.noUsed)}</dd>
 							</div>
 							<div>
 								<dt>INVALID retained</dt>
-								<dd>100.0000</dd>
+								<dd>{formatShareAmount(addedCompleteSetShares)}</dd>
 							</div>
 							<div>
 								<dt>Unused NO returned</dt>
-								<dd>{formatUnits(added.noReturned)}</dd>
+								<dd>{formatShareAmount(added.noReturned)}</dd>
 							</div>
 						</dl>
-						<button class='secondary-action'>Add proportional liquidity</button>
+						<button class='secondary-action' disabled={!actionAvailability.createOrAdd}>
+							{closedReason === undefined ? 'Add proportional liquidity' : `Addition closed · ${closedReason}`}
+						</button>
 					</div>
 					<div class='operation-block'>
 						<h3>Remove 100 LP tokens</h3>
 						<dl class='metrics'>
 							<div>
 								<dt>Raw YES returned</dt>
-								<dd>{formatUnits(removed.yesOut)}</dd>
+								<dd>{formatShareAmount(removed.yesOut)}</dd>
 							</div>
 							<div>
 								<dt>Raw NO returned</dt>
-								<dd>{formatUnits(removed.noOut)}</dd>
+								<dd>{formatShareAmount(removed.noOut)}</dd>
 							</div>
 						</dl>
 						<p>No INVALID is consumed and no complete set is redeemed.</p>
-						<button class='secondary-action'>Remove into raw shares</button>
+						<button class='secondary-action' disabled={!actionAvailability.remove}>
+							Remove into raw shares
+						</button>
 					</div>
 				</section>
 			</div>
@@ -288,7 +339,7 @@ export function Help() {
 				<article>
 					<span>01</span>
 					<h2>Create a complete set</h2>
-					<p>Your ETH creates equal INVALID, YES, and NO shares at the SecurityPool’s current exchange rate.</p>
+					<p>Your ETH is sent to the selected Statoblast SecurityPool, which creates equal INVALID, YES, and NO shares at its current exchange rate.</p>
 				</article>
 				<article>
 					<span>02</span>

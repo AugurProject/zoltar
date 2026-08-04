@@ -602,6 +602,64 @@ summary {
 	padding: 1.5rem 0.25rem;
 	border-bottom: 1px solid var(--line);
 }
+.market-row__pool {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: minmax(260px, 0.8fr) minmax(0, 2fr);
+	gap: 1.5rem;
+	padding: 1rem;
+	border: 1px solid var(--line);
+	background: rgb(255 255 255 / 1.5%);
+}
+.market-row__pool-identity {
+	display: grid;
+	align-content: start;
+	gap: 0.45rem;
+}
+.market-row__pool-identity > span {
+	color: var(--accent);
+	font:
+		10px ui-monospace,
+		monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+.market-row__pool-identity .address {
+	max-width: 100%;
+	overflow: visible;
+	text-overflow: clip;
+	overflow-wrap: anywhere;
+}
+.market-row__pool dl {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.8rem 1.25rem;
+	margin: 0;
+}
+.market-row__pool dl div {
+	display: grid;
+	gap: 0.2rem;
+}
+.market-row__pool dt {
+	color: var(--muted);
+	font-size: 9px;
+}
+.market-row__pool dd {
+	margin: 0;
+	font:
+		10px ui-monospace,
+		monospace;
+}
+.pool-mint-note {
+	margin: -0.25rem 0 1rem;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.5;
+}
+.pool-mint-note__address {
+	overflow-wrap: anywhere;
+	color: #c7d2dc;
+}
 .market-row__top {
 	display: flex;
 	gap: 1rem;
@@ -841,6 +899,9 @@ footer {
 	.market-row__main {
 		grid-column: 1 / -1;
 	}
+	.market-row__pool {
+		grid-template-columns: 1fr;
+	}
 	.explanation-flow {
 		grid-template-columns: 1fr 1fr;
 	}
@@ -919,6 +980,9 @@ footer {
 	.market-row__metrics {
 		display: flex;
 		justify-content: space-between;
+	}
+	.market-row__pool dl {
+		grid-template-columns: 1fr 1fr;
 	}
 	.balance-strip {
 		grid-template-columns: 1fr 1fr;

@@ -7,6 +7,16 @@ export function formatUnits(value: bigint, decimals = 18, maximumFractionDigits 
 	return `${negative ? '-' : ''}${whole.toLocaleString()}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
+export function formatShareAmount(value: bigint, maximumFractionDigits = 4) {
+	return `${formatUnits(value, 18, maximumFractionDigits)} shares`
+}
+
+export function formatBpsMultiplier(value: bigint) {
+	const whole = value / 10_000n
+	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
+	return `${whole}${fraction.length > 0 ? `.${fraction}` : ''}×`
+}
+
 export function parseUnits(value: string, decimals = 18) {
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') throw new Error('Enter a valid nonnegative amount')
 	const [whole = '0', fraction = ''] = value.split('.')
