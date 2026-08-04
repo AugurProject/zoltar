@@ -3,70 +3,65 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Browse the complete Statoblast protocol documentation one document at a time." />
+		<meta name="description" content="Learn, operate, look up, and understand the Statoblast protocol." />
 		<title>Statoblast documentation</title>
-		<link rel="stylesheet" href="./assets/css/docsReader.css" />
+		<link rel="stylesheet" href="./assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="./assets/css/docsShell.css" />
 	</head>
-	<body class="doc-reader">
-		<a class="skip-link" href="#reader-content">Skip to documentation</a>
+	<body class="doc-openoracle docs-home">
+		<main>
+			<header>
+				<p class="docs-type-badge">Protocol documentation</p>
+				<h1>Build a clear model of Statoblast</h1>
+				<p>Choose the kind of help you need. Learn in a guided environment, complete a task, look up an exact contract rule, or understand the protocol's design.</p>
+			</header>
 
-		<header class="reader-header">
-			<h1>Statoblast documentation</h1>
-		</header>
+			<section id="tutorials">
+				<h2>Tutorials</h2>
+				<p>Start here when the protocol is new to you. Each tutorial provides a safe, linear learning experience in simulation.</p>
+				<ul>
+					<li><a href="./tutorials/first-market.html">Explore a seeded market and security pool</a></li>
+					<li><a href="./tutorials/disputed-market.html">Inspect a market after an escalation fork</a></li>
+					<li><a href="./tutorials/fork-migration.html">Trace a fork into child recovery</a></li>
+					<li><a href="./tutorials/oracle-operation.html">Inspect an accepted oracle price</a></li>
+				</ul>
+			</section>
 
-		<div class="reader-progress" aria-hidden="true">
-			<span data-reading-progress></span>
-		</div>
+			<section id="how-to-guides">
+				<h2>How-to guides</h2>
+				<p>Use these while doing real work. They assume familiarity and stay focused on a concrete operational or integration goal.</p>
+				<ul>
+					<li><a href="./how-to/prepare-release.html">Prepare an immutable release</a></li>
+					<li><a href="./how-to/operate-security-pool.html">Operate a security pool</a></li>
+					<li><a href="./how-to/migrate-fork.html">Migrate through a fork</a></li>
+					<li><a href="./how-to/build-event-indexer.html">Build a reorg-safe event indexer</a></li>
+				</ul>
+			</section>
 
-		<div class="reader-shell">
-			<aside id="reader-sidebar" class="reader-sidebar" aria-label="Documentation navigation">
-				<div class="reader-sidebar-inner">
-					<button class="reader-sidebar-toggle" type="button" aria-label="Collapse menu" aria-controls="reader-navigation-panel" aria-expanded="true" title="Collapse menu" data-sidebar-toggle>
-						<span class="reader-sidebar-toggle-icon" aria-hidden="true"></span>
-						<span data-sidebar-toggle-label>Collapse menu</span>
-					</button>
+			<section id="reference">
+				<h2>Reference</h2>
+				<p>Consult authoritative descriptions of the machinery: contracts, events, invariants, assumptions, deployment state, and proof formats.</p>
+				<ul>
+					<li><a href="./reference/contracts.html">Contract interactions</a></li>
+					<li><a href="./reference/event-stream.html">Event stream</a></li>
+					<li><a href="./reference/invariants.html">Protocol invariants</a></li>
+					<li><a href="./reference/security-model.html">Security model</a></li>
+					<li><a href="./reference/merkle-mountain-range.html">Merkle Mountain Range proofs</a></li>
+				</ul>
+			</section>
 
-					<div id="reader-navigation-panel" data-sidebar-panel>
-						<nav data-reader-navigation></nav>
-					</div>
-				</div>
-			</aside>
-
-			<main id="reader-content" class="reader-content" tabindex="-1">
-				<div data-reader-documents></div>
-
-				<noscript>
-					<section class="reader-noscript">
-						<h2>JavaScript is required for the documentation reader.</h2>
-						<p>You can still open every source document directly:</p>
-						<ul>
-							<li><a href="./whitepapers/statoblast-whitepaper.html">Statoblast whitepaper</a></li>
-							<li><a href="./whitepapers/zoltar-whitepaper.html">Zoltar whitepaper</a></li>
-							<li><a href="./protocol-design/truth-auction.html">Truth auction</a></li>
-							<li><a href="./protocol-design/open-oracle-integration.html">OpenOracle integration</a></li>
-							<li><a href="./protocol-design/liquidation.html">Liquidation design</a></li>
-							<li><a href="./safety-operations/security-model.html">Protocol security model</a></li>
-							<li><a href="./safety-operations/invariants.html">Protocol invariants</a></li>
-							<li><a href="./safety-operations/operator-reference.md">Operator reference</a></li>
-							<li>
-								<a href="./safety-operations/contract-interaction-reference.md"> Contract interaction reference </a>
-							</li>
-							<li><a href="./safety-operations/event-stream.md">Event stream contract</a></li>
-							<li><a href="./architecture-deployment/contract-interactions.html">Contract interaction map</a></li>
-							<li>
-								<a href="./architecture-deployment/escalation-game-architecture.html"> EscalationGame architecture </a>
-							</li>
-							<li><a href="./architecture-deployment/deployment-status.html">Deployment status oracle</a></li>
-							<li>
-								<a href="./architecture-deployment/merkle-mountain-range.html">Merkle Mountain Range proofs</a>
-							</li>
-						</ul>
-					</section>
-				</noscript>
-			</main>
-		</div>
-
-		<script src="./assets/js/docsReaderMarkdown.js"></script>
-		<script src="./assets/js/docsReader.js"></script>
+			<section id="explanation">
+				<h2>Explanation</h2>
+				<p>Step back from the controls to understand branching truth, security pools, contract boundaries, liquidation incentives, and collateral repair.</p>
+				<ul>
+					<li><a href="./explanation/statoblast.html">Statoblast protocol</a></li>
+					<li><a href="./explanation/zoltar.html">Zoltar and branching truth</a></li>
+					<li><a href="./explanation/contract-architecture.html">Contract architecture</a></li>
+					<li><a href="./explanation/open-oracle.html">OpenOracle integration</a></li>
+				</ul>
+			</section>
+		</main>
+		<script src="./assets/js/docsData.js"></script>
+		<script src="./assets/js/docsShell.js"></script>
 	</body>
 </html>

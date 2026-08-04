@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Migrate through a fork · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Migrate through a fork</h1>
+				<p>Select a child branch, then apply the deadline and materialization rule for each position type. Not every claim expires with the child-creation window.</p>
+			</header>
+			<section id="verify-the-fork">
+				<h2>Verify the fork</h2>
+				<p>Confirm the parent universe's fork question, outcome encoding, fork time, valid child identifiers, and the pool's own fork-activation state. Verify that fork activation automatically materialized the parent's deterministic pool migration proxy; it is not a separate migration-window action. A Zoltar fork does not by itself prove that a particular pool has completed its snapshot transition.</p>
+			</section>
+			<section id="choose-the-branch">
+				<h2>Choose the branch</h2>
+				<p>Evaluate outcome evidence independently and choose the intended child universe. Record the exact child identifier. Migration expresses branch support and can have irreversible economic consequences; do not infer the branch from display order or an unverified interface.</p>
+			</section>
+			<section id="migrate-each-position">
+				<h2>Migrate each position</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Position or action</th>
+							<th>Time rule</th>
+							<th>Verification</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Create a missing Statoblast child pool</td>
+							<td>Must occur within the pool-local eight-week migration window.</td>
+							<td>Confirm the deterministic child identifier, parent pool, and deployed code.</td>
+						</tr>
+						<tr>
+							<td>Deploy a Zoltar child universe or split raw Zoltar migration REP</td>
+							<td>No Statoblast eight-week pool deadline; follow Zoltar fork identity, outcome, and balance rules.</td>
+							<td>Verify the child universe and REP token derived from the fork question and selected outcome.</td>
+						</tr>
+						<tr>
+							<td>Migrate vault ownership, vault REP, or unlocked REP</td>
+							<td>Use the Statoblast pool-local migration window and ownership checks.</td>
+							<td>Compare parent deltas with child ownership, allowance, REP, and collateral.</td>
+						</tr>
+						<tr>
+							<td>Claim direct own-fork escalation deposits</td>
+							<td>Use the own-fork claim window and require an unpriced child branch.</td>
+							<td>Verify the authenticated depositor, outcome, consumed source claim, and child REP recipient.</td>
+						</tr>
+						<tr>
+							<td>Materialize shares into an existing child</td>
+							<td>No expiry after the child exists; creating a missing destination remains deadline-gated.</td>
+							<td>Verify the source entitlement, child share balance, and replay protection.</td>
+						</tr>
+						<tr>
+							<td>Settle carried escalation claims</td>
+							<td>Follow the child continuation lifecycle and proof rules rather than treating the claim as ordinary vault migration.</td>
+							<td>Verify the parent snapshot, carry proof, immutable depositor, and settlement state.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p><a href="../reference/invariants.html#fork-05"><code>FORK-05</code></a> is the canonical deadline and post-deadline share-materialization rule.</p>
+			</section>
+			<section id="reconcile-the-child">
+				<h2>Reconcile the child</h2>
+				<p>Compare migrated REP, collateral, open interest, ownership, allowance, shares, and carried escalation totals with the parent deltas. Expect collateral to follow migration rather than appear in full in every child.</p>
+			</section>
+			<section id="complete-child-recovery">
+				<h2>Complete child recovery</h2>
+				<p>After the window, determine whether the child needs a <a href="./run-truth-auction.html">truth auction</a> and whether a paused escalation continuation can resume. Do not reopen normal operation until the child satisfies its lifecycle and backing gates.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

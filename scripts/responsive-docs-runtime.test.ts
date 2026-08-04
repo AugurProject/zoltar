@@ -9,7 +9,7 @@ function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', val
 }
 
 test('responsive docs compact equations and label unavoidable equation and table overflow', async () => {
-	const environment = installDomEnvironment('http://localhost/docs/whitepapers/statoblast-whitepaper.html')
+	const environment = installDomEnvironment('http://localhost/docs/explanation/statoblast.html')
 	try {
 		document.write(`
 			<div class="equation" style="padding: 8px">

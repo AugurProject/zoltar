@@ -108,11 +108,10 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for `docs/assets/js/chartRuntime.js`
-and `docs/assets/js/docsReaderMarkdown.js`. These documentation bundles are tracked because
-the static reader loads them directly;
-`bun run docs:check-charts` and
-`bun run docs:check-reader` enforce freshness.
+Generated outputs are intentionally untracked, except for the documentation outputs listed
+below. They are tracked because the static documentation site loads them directly;
+`bun run docs:check-charts`, `bun run docs:check-contract-reference`, and
+`bun run docs:check-index` enforce freshness.
 
 | Output | Source or command |
 | --- | --- |
@@ -123,7 +122,9 @@ the static reader loads them directly;
 | `ui/js/**` | UI TypeScript build |
 | `ui/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
-| `docs/assets/js/docsReaderMarkdown.js` | `bun run docs:build-reader` |
+| `docs/assets/js/docsData.js` | `bun run docs:build-index` |
+| `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
+| `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
 
@@ -170,6 +171,7 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
+- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there.
 - Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
