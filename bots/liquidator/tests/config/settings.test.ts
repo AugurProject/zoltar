@@ -73,7 +73,7 @@ const settings = {
 		walletRepReserve: '100',
 	},
 	submission: {
-		minimumBundleSimulations: 1,
+		minimumBundleRelaySuccesses: 1,
 		mode: 'public',
 		relayUrls: [],
 	},

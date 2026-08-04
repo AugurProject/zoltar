@@ -7,7 +7,7 @@ import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { replacementCredit } from '#core/position-accounting'
 import { parseDecimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
-import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitSignedBundle } from '#execution/transaction-submission'
+import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle } from '#execution/transaction-submission'
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
@@ -248,7 +248,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	}
 	const relaySimulations = await simulateSignedBundleEveryRelay({
 		address: account.address,
-		minimumSuccessfulRelays: config.submission.minimumBundleSimulations,
+		minimumSuccessfulRelays: config.submission.minimumBundleRelaySuccesses,
 		relayUrls: config.submission.relayUrls,
 		signMessage,
 		stateBlockNumber: blockNumber,
@@ -266,7 +266,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			journaledSubmission(
 				() => persistPosition(lifecyclePosition),
 				() =>
-					submitSignedBundle({
+					submitConfiguredSignedBundle(config.submission, {
 						address: account.address,
 						relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 						signMessage,

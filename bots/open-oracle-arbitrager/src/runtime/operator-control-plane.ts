@@ -1,6 +1,6 @@
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
-import { prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -10,7 +10,7 @@ import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-l
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { authenticatedExecutionToken } from '#config/runtime-deployment'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettingsForQuorum, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
@@ -94,10 +94,13 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
 			}),
 		updateConnectivity: async value => {
-			const next = validateConnectivitySettings(value)
+			const next = validateConnectivitySettingsForQuorum(value, (pending.deployment ?? fixedState.deployment).quorumRpcUrls)
 			await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
 			return queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => ({ ...settings, connectivity: next }))
+				await persistFocusedSettings(settings => {
+					validateIndependentReadRpcUrls(next.readRpcUrl, settings.deployment.quorumRpcUrls)
+					return { ...settings, connectivity: next }
+				})
 				pending.connectivity = next
 				recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
 				return next
@@ -105,10 +108,15 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 		},
 		updateDeployment: value => {
 			const next = validateDeploymentSettings(value)
+			validateIndependentReadRpcUrls((pending.connectivity ?? config.connectivity).readRpcUrl, next.quorumRpcUrls)
 			return queueSettingsUpdate(async () => {
 				const previous = pending.deployment ?? fixedState.deployment
 				const tokens = prepareDeploymentTokenTransition(pending.tokenAddresses ?? config.tokenAddresses, pending.restartTokenAddresses, previous.rep, next.rep)
-				await persistFocusedSettings(settings => ({ ...settings, deployment: next, tokenAddresses: tokens.restart }))
+				await persistFocusedSettings(settings => {
+					assertFocusedDeploymentCompatible(next.rep, settings.centralizedMarkets)
+					validateIndependentReadRpcUrls(settings.connectivity.readRpcUrl, next.quorumRpcUrls)
+					return { ...settings, deployment: next, tokenAddresses: tokens.restart }
+				})
 				pending.deployment = next
 				pending.tokenAddresses = tokens.active
 				pending.restartTokenAddresses = tokens.restart

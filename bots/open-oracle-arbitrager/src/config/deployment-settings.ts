@@ -1,5 +1,6 @@
 import { getAddress, type Address } from '#ethereum'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
+import { validateReadRpcUrls } from '#monitoring/connectivity'
 
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
@@ -35,11 +36,7 @@ function addressArray(value: unknown, name: string) {
 
 function urlArray(value: unknown) {
 	if (!Array.isArray(value) || value.length > 8 || value.some(item => typeof item !== 'string')) throw new Error('Quorum RPC URLs must contain no more than 8 URLs')
-	return value.map(item => {
-		const url = new URL(String(item))
-		if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Quorum RPC URLs must use http or https')
-		return url.toString()
-	})
+	return validateReadRpcUrls(value.map(item => String(item)))
 }
 
 export function validateDeploymentSettings(value: unknown): DeploymentSettings {
@@ -69,6 +66,12 @@ export function validateDeploymentSettings(value: unknown): DeploymentSettings {
 
 export function replacePrimaryRepToken(tokenAddresses: readonly Address[], previousRep: Address, nextRep: Address) {
 	return [nextRep, ...tokenAddresses.filter(address => address.toLowerCase() !== previousRep.toLowerCase() && address.toLowerCase() !== nextRep.toLowerCase())]
+}
+
+export function assertFocusedDeploymentCompatible(rep: Address, centralizedMarkets: { assetAddress: Address }) {
+	if (rep.toLowerCase() !== centralizedMarkets.assetAddress.toLowerCase()) {
+		throw new Error('Focused deployment updates cannot change REP without updating the centralized market configuration in the complete configuration editor')
+	}
 }
 
 export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly Address[], restartTokenAddresses: readonly Address[] | undefined, previousRep: Address, nextRep: Address) {

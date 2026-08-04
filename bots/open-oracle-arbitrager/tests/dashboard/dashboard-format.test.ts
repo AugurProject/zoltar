@@ -13,6 +13,7 @@ import {
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
+	singleFlight,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
@@ -54,6 +55,25 @@ describe('dashboard exact ETH formatting', () => {
 			inputDisabled: true,
 			setDisabled: true,
 		})
+	})
+
+	test('serializes overlapping dashboard refreshes and preserves one trailing request', async () => {
+		let calls = 0
+		let release: (() => void) | undefined
+		const refresh = singleFlight(async () => {
+			calls++
+			if (calls === 1) {
+				await new Promise<void>(resolve => {
+					release = resolve
+				})
+			}
+		})
+		const first = refresh()
+		const second = refresh()
+		expect(calls).toBe(1)
+		release?.()
+		await Promise.all([first, second])
+		expect(calls).toBe(2)
 	})
 
 	test('shows block delay against the operator computer without hiding clock skew', () => {

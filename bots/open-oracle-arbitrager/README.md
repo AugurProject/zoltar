@@ -418,16 +418,19 @@ broadcast. Restarting the command is required to change between dry-run and
 execution.
 
 Private bundle delivery is the example default. Configure relay URLs and the
-successful simulation threshold under `submission.minimumBundleSimulations`, either
-in the focused dashboard form or the complete JSON editor. This threshold applies
-only to pre-submission bundle simulations. Transaction fan-out succeeds after one
-relay or public RPC accepts the canonical transaction hash.
+successful bundle-relay threshold under `submission.minimumBundleRelaySuccesses`,
+either in the focused dashboard form or the complete JSON editor. In private mode,
+this threshold applies both to pre-submission bundle simulations and to final bundle
+fan-out. The bot proceeds only when at least that many simulated relays accept the
+canonical bundle submission. Public transaction fan-out succeeds after one public
+RPC accepts the canonical transaction hash.
 
 Execution supports **Private relays** and **Public mempool** delivery. Private mode
-requires at least one relay and supports up to eight. The configurable successful
-simulation threshold determines how many relays must validate the exact complete
-bundle; submission is sent only to those successful relays. A broken optional relay
-therefore cannot disable trading unless the configured threshold requires it.
+requires at least one relay and supports up to eight. The configurable bundle-relay
+threshold determines how many relays must validate and then accept the exact complete
+bundle; submission is sent only to relays whose simulations succeeded. A broken
+optional relay therefore cannot disable trading unless the configured threshold
+requires it.
 Startup and dashboard updates probe every private relay with `eth_chainId`, then
 send intentionally invalid `eth_callBundle` and `eth_sendBundle` requests. A
 compatible relay returns method-specific authentication or parameter errors; a

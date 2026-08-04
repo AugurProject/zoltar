@@ -131,3 +131,52 @@ export async function acquireLiquidatorProcessLocks(settings: LiquidatorLockSett
 }
 
 export type LiquidatorProcessLocks = Awaited<ReturnType<typeof acquireLiquidatorProcessLocks>>
+
+export type LiquidatorShutdownController = ReturnType<typeof createLiquidatorShutdownController>
+
+export async function acquireLiquidatorProcessLocksForShutdown(settings: LiquidatorLockSettings, shutdown: Pick<LiquidatorShutdownController, 'isRequested'>, acquire: typeof acquireLiquidatorProcessLocks = acquireLiquidatorProcessLocks) {
+	const locks = await acquire(settings)
+	if (!shutdown.isRequested()) return locks
+	await locks.release()
+	return undefined
+}
+
+export function liquidatorDashboardLifecycle(dashboard: { stop: () => Promise<void> }) {
+	return { [Symbol.asyncDispose]: () => dashboard.stop() }
+}
+
+export function createLiquidatorShutdownController() {
+	let requested = false
+	let disposed = false
+	const waiters = new Set<() => void>()
+	const requestShutdown = () => {
+		requested = true
+		for (const finish of [...waiters]) finish()
+	}
+	process.on('SIGINT', requestShutdown)
+	process.on('SIGTERM', requestShutdown)
+	return {
+		[Symbol.dispose]: () => {
+			if (disposed) return
+			disposed = true
+			process.off('SIGINT', requestShutdown)
+			process.off('SIGTERM', requestShutdown)
+			for (const finish of [...waiters]) finish()
+		},
+		isRequested: () => requested,
+		wait: (milliseconds: number) => {
+			if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) throw new Error('Shutdown wait must be a non-negative integer')
+			if (requested) return Promise.resolve()
+			return new Promise<void>(resolve => {
+				let timer: ReturnType<typeof setTimeout>
+				const finish = () => {
+					clearTimeout(timer)
+					waiters.delete(finish)
+					resolve()
+				}
+				timer = setTimeout(finish, milliseconds)
+				waiters.add(finish)
+			})
+		},
+	}
+}

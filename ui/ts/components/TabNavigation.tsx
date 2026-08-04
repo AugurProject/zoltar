@@ -42,6 +42,7 @@ export function TabNavigation({ route, showDeployTab = true, augurStatoblastDepl
 						</option>
 					))}
 				</select>
+				{augurStatoblastDeployed ? undefined : <span className='detail disabled-reason'>{disabledTabReason}</span>}
 			</label>
 			<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
 				{appCopy.protocolGuide}

@@ -81,7 +81,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			twapSeconds: 2_400,
 		},
 		submission: {
-			minimumBundleSimulations: 1,
+			minimumBundleRelaySuccesses: 1,
 			mode: 'private' as const,
 			relayUrls: ['https://relay.flashbots.net/', 'https://relay.example/'],
 		},

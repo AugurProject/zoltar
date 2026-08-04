@@ -101,8 +101,10 @@ function isTopModalBackdrop(backdropElement: HTMLElement | null | undefined) {
 function getFocusableElements(dialogElement: HTMLElement | null) {
 	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []).filter(element => {
 		if (element.closest('[hidden], [inert]') !== null) return false
-		let ancestor = element.parentElement
+		let ancestor: HTMLElement | null = element
 		while (ancestor !== null) {
+			const style = window.getComputedStyle(ancestor)
+			if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false
 			if (ancestor.tagName === 'DETAILS' && !ancestor.hasAttribute('open') && !(element.tagName === 'SUMMARY' && element.parentElement === ancestor)) return false
 			ancestor = ancestor.parentElement
 		}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '#ethereum'
-import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
+import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -32,13 +32,13 @@ function expectedBundleHash(transactions: readonly Hex[]) {
 describe('transaction submission settings', () => {
 	test('validates modes, normalizes relay URLs, and rejects unsafe endpoints', () => {
 		expect(validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.flashbots.net/'] })).toEqual({
-			minimumBundleSimulations: 1,
+			minimumBundleRelaySuccesses: 1,
 			mode: 'private',
 			relayUrls: ['https://relay.flashbots.net/'],
 		})
-		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ minimumBundleSimulations: 1, mode: 'public', relayUrls: [] })
-		expect(validateSubmissionSettings({ minimumBundleSimulations: 2, mode: 'private', relayUrls: ['https://one.example', 'https://two.example'] }).minimumBundleSimulations).toBe(2)
-		expect(() => validateSubmissionSettings({ minimumBundleSimulations: 2, mode: 'private', relayUrls: ['https://one.example'] })).toThrow('Minimum bundle simulations')
+		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+		expect(validateSubmissionSettings({ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example', 'https://two.example'] }).minimumBundleRelaySuccesses).toBe(2)
+		expect(() => validateSubmissionSettings({ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example'] })).toThrow('Minimum bundle relay successes')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: [] })).toThrow('at least one relay')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['http://relay.example'] })).toThrow('HTTPS')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://user:secret@relay.example'] })).toThrow('credentials')
@@ -309,6 +309,38 @@ describe('signed transaction delivery', () => {
 				params: [{ blockNumber: '0x64', txs: [serializedTransaction, '0x1234'] }],
 			},
 		])
+	})
+
+	test('enforces the configured successful relay threshold during bundle submission', async () => {
+		const accepted = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash([serializedTransaction]) } }))
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'submission rejected' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedBundle({
+				address,
+				minimumSuccessfulRelays: 2,
+				relayUrls: [accepted, rejected],
+				signMessage: () => Promise.resolve(signature),
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('required 2 accepting relays')
+	})
+
+	test('applies the configured simulation threshold to entry and lifecycle bundle submission', async () => {
+		const accepted = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash([serializedTransaction]) } }))
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'submission rejected' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitConfiguredSignedBundle(
+				{ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: [accepted, rejected] },
+				{
+					address,
+					relayUrls: [accepted, rejected],
+					signMessage: () => Promise.resolve(signature),
+					targetBlockNumber: 100n,
+					transactions: [serializedTransaction],
+				},
+			),
+		).rejects.toThrow('required 2 accepting relays')
 	})
 
 	test.each(['', 'bundle', '0x1234'])('rejects malformed relay bundle hash %p', async bundleHash => {

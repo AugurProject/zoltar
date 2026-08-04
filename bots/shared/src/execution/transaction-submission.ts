@@ -5,7 +5,7 @@ import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bou
 export type SubmissionMode = 'private' | 'public'
 
 export type SubmissionSettings = {
-	minimumBundleSimulations: number
+	minimumBundleRelaySuccesses: number
 	mode: SubmissionMode
 	relayUrls: readonly string[]
 }
@@ -80,8 +80,8 @@ export function validateSubmissionSettings(value: unknown): SubmissionSettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Submission settings must be a JSON object')
 	const record = value as Record<string, unknown>
 	const keys = Object.keys(record)
-	if (keys.some(key => key !== 'minimumBundleSimulations' && key !== 'mode' && key !== 'relayUrls') || !keys.includes('mode') || !keys.includes('relayUrls')) {
-		throw new Error('Submission settings require mode, relayUrls, and optional minimumBundleSimulations')
+	if (keys.some(key => key !== 'minimumBundleRelaySuccesses' && key !== 'mode' && key !== 'relayUrls') || !keys.includes('mode') || !keys.includes('relayUrls')) {
+		throw new Error('Submission settings require mode, relayUrls, and optional minimumBundleRelaySuccesses')
 	}
 	if (record['mode'] !== 'public' && record['mode'] !== 'private') throw new Error('Submission mode must be public or private')
 	const rawRelayUrls = record['relayUrls']
@@ -94,13 +94,13 @@ export function validateSubmissionSettings(value: unknown): SubmissionSettings {
 	}
 	const relayUrls = [...new Set(normalizedRelayUrls)]
 	if (record['mode'] === 'private' && relayUrls.length === 0) throw new Error('Private submission requires at least one relay URL')
-	const minimumBundleSimulations = record['minimumBundleSimulations'] ?? 1
+	const minimumBundleRelaySuccesses = record['minimumBundleRelaySuccesses'] ?? 1
 	const maximumRelaySuccesses = record['mode'] === 'private' ? relayUrls.length : 8
-	if (typeof minimumBundleSimulations !== 'number' || !Number.isSafeInteger(minimumBundleSimulations) || minimumBundleSimulations < 1 || minimumBundleSimulations > maximumRelaySuccesses) {
-		throw new Error(record['mode'] === 'private' ? 'Minimum bundle simulations must be an integer between 1 and the configured private relay count' : 'Minimum bundle simulations must be an integer between 1 and 8')
+	if (typeof minimumBundleRelaySuccesses !== 'number' || !Number.isSafeInteger(minimumBundleRelaySuccesses) || minimumBundleRelaySuccesses < 1 || minimumBundleRelaySuccesses > maximumRelaySuccesses) {
+		throw new Error(record['mode'] === 'private' ? 'Minimum bundle relay successes must be an integer between 1 and the configured private relay count' : 'Minimum bundle relay successes must be an integer between 1 and 8')
 	}
 	return {
-		minimumBundleSimulations,
+		minimumBundleRelaySuccesses,
 		mode: record['mode'],
 		relayUrls,
 	}
@@ -305,8 +305,20 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 	return { failedTargets, successful }
 }
 
-export async function submitSignedBundle(parameters: { address: Address; relayUrls: readonly string[]; signMessage: (message: string | Uint8Array) => Promise<Hex>; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }): Promise<SubmittedBundle> {
+export async function submitSignedBundle(parameters: {
+	address: Address
+	minimumSuccessfulRelays?: number | undefined
+	relayUrls: readonly string[]
+	signMessage: (message: string | Uint8Array) => Promise<Hex>
+	targetBlockNumber: bigint
+	timeoutMilliseconds?: number | undefined
+	transactions: readonly Hex[]
+}): Promise<SubmittedBundle> {
 	if (parameters.transactions.length === 0) throw new Error('Bundle must contain at least one transaction')
+	const minimumSuccessfulRelays = parameters.minimumSuccessfulRelays ?? 1
+	if (!Number.isSafeInteger(minimumSuccessfulRelays) || minimumSuccessfulRelays < 1 || minimumSuccessfulRelays > parameters.relayUrls.length) {
+		throw new Error('Bundle submission relay threshold must be between 1 and the configured relay count')
+	}
 	const expectedBundleHash = bundleIdentity(parameters.transactions).bundleHash
 	const body = JSON.stringify({
 		id: 1,
@@ -342,7 +354,12 @@ export async function submitSignedBundle(parameters: { address: Address; relayUr
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: rejectionMessage(result.reason), target })
 	}
-	if (acceptedTargets.length === 0) throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	if (acceptedTargets.length < minimumSuccessfulRelays) {
+		if (acceptedTargets.length === 0 && minimumSuccessfulRelays === 1) {
+			throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+		}
+		throw new SubmissionFailure(`Bundle submission required ${minimumSuccessfulRelays.toString()} accepting relays but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	}
 	return { acceptedTargets, failedTargets }
 }
 

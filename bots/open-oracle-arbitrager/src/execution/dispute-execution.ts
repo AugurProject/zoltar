@@ -31,7 +31,7 @@ import { type PositionRecord } from '#state/position-store'
 import { bestSuccessful } from '#monitoring/resilience'
 import { positionRiskLimitMismatch, projectedLifecycleGasReserveWeth } from '#core/safety-controls'
 import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, fundedCapitalAtRiskWeth, hasFreshSubmissionWindow, hedgeWethLimit, isSelfReport, meetsProfitThreshold, spotTwapDeviationWithinLimit, type ArbitrageQuote } from '#core/strategy'
-import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, type SubmissionTargetResult } from '#execution/transaction-submission'
+import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle, SubmissionFailure, type SubmissionTargetResult } from '#execution/transaction-submission'
 import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { Venue } from '#core/venue-strategy'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
@@ -393,7 +393,7 @@ export async function executeDispute(
 			() =>
 				simulateSignedBundleEveryRelay({
 					address: account.address,
-					minimumSuccessfulRelays: config.submission.minimumBundleSimulations,
+					minimumSuccessfulRelays: config.submission.minimumBundleRelaySuccesses,
 					relayUrls: config.submission.relayUrls,
 					signMessage,
 					stateBlockNumber: quoteBlockNumber,
@@ -448,7 +448,7 @@ export async function executeDispute(
 						journaledSubmission(
 							() => persistPosition(stagedPosition),
 							() =>
-								submitSignedBundle({
+								submitConfiguredSignedBundle(config.submission, {
 									address: account.address,
 									relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 									signMessage,

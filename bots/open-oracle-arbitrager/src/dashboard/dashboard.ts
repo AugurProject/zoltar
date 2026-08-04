@@ -14,6 +14,7 @@ import {
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
+	singleFlight,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
@@ -388,7 +389,7 @@ function loadSubmission(submission: SubmissionSettings) {
 	const mode = element<HTMLSelectElement>('submission-mode')
 	mode.value = submission.mode
 	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
-	element<HTMLInputElement>('minimum-bundle-simulations').value = submission.minimumBundleSimulations.toString()
+	element<HTMLInputElement>('minimum-bundle-relay-successes').value = submission.minimumBundleRelaySuccesses.toString()
 }
 
 function loadConnectivity(connectivity: ConnectivitySettings) {
@@ -829,7 +830,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 }
 
-async function refresh() {
+const refresh = singleFlight(async () => {
 	try {
 		const value: unknown = await api<unknown>('/api/state')
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
@@ -845,7 +846,7 @@ async function refresh() {
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'
 	}
-}
+})
 
 element('refresh-button').addEventListener('click', () => void refresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
@@ -952,7 +953,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 	setText('submission-status', 'Applying submission settings…')
 	try {
 		const submission = {
-			minimumBundleSimulations: Number(element<HTMLInputElement>('minimum-bundle-simulations').value),
+			minimumBundleRelaySuccesses: Number(element<HTMLInputElement>('minimum-bundle-relay-successes').value),
 			mode: element<HTMLSelectElement>('submission-mode').value,
 			relayUrls: element<HTMLTextAreaElement>('relay-urls')
 				.value.split('\n')

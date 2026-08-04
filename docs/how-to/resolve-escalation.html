@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Advance an escalation game · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Advance an escalation game</h1>
+				<p>Submit deposits and advance public transitions without confusing local settlement with fork continuation.</p>
+			</header>
+			<section id="identify-the-game">
+				<h2>Identify the game</h2>
+				<p>Verify the pool, question, universe, active game address, round, tentative answer, deposit target, deadline, and whether the game is an ordinary game or a child continuation.</p>
+			</section>
+			<section id="prepare-a-deposit">
+				<h2>Prepare a deposit</h2>
+				<p>Choose an eligible outcome and calculate the accepted REP amount from current state. Confirm approval, balance, recipient compatibility, deadline inclusion margin, and the economic risk of the claim. Do not submit from a stale round snapshot.</p>
+			</section>
+			<section id="advance-the-round">
+				<h2>Advance the round</h2>
+				<p>Submit the deposit, verify the deposit event and resulting round values, then wait for or execute the next public transition once its deadline and threshold conditions are satisfied. Keep independent evidence for the underlying answer.</p>
+			</section>
+			<section id="settle-or-fork">
+				<h2>Settle or enter fork handling</h2>
+				<p>If the game selects a local winner, settle it and verify claim accounting before withdrawal. If it reaches non-decision, activate the pool fork path and verify the Zoltar fork relationship. Do not treat a paused child continuation as an ordinary unsettled parent game.</p>
+			</section>
+			<section id="continue-after-a-fork">
+				<h2>Continue after a fork</h2>
+				<p>For child continuations, verify the parent snapshot and carry proof, then finalize any required truth auction. The configured <code>SecurityPoolForker</code> applies a haircut only when purchased REP removes a positive escalation allocation, while the game is paused. Finalization then activates the pool and immediately attempts continuation resumption. Incomplete aggregate backing reverts the entire finalization; reconcile the missing backing and retry finalization rather than calling a separate recovery transition. Use permissionless <code>resumeForkedEscalationGame()</code> only for a pool that is already operational but still has its awaiting-continuation flag. See the <a href="../reference/merkle-mountain-range.html">proof reference</a> and <a href="../explanation/escalation-game.html">architecture explanation</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

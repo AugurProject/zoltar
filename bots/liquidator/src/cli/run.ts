@@ -16,7 +16,7 @@ import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUni
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireLiquidatorProcessLocks, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks } from '#core/process-locks'
+import { acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
@@ -35,7 +35,7 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
-async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks) {
+async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks, shutdown: LiquidatorShutdownController) {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
@@ -326,6 +326,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}),
 			})
 		: undefined
+	await using dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -354,6 +355,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	let lastDryRunKey: string | undefined
 	await pollUntilStopped(
 		async () => {
+			if (shutdown.isRequested()) return true
 			if (configurationMutationGate.isActive()) return false
 			state.scanning = true
 			state.error = undefined
@@ -495,29 +497,15 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
 					}
-					const selected = selectedCandidate(state.pools, settings)
+					const selected = selectedCandidate(state.pools, settings, pool => settings.selectedPools.some(selectedPool => selectedPool.toLowerCase() === pool.address.toLowerCase()) && liquidationExecutionAllowed(pool.lastPrice, marketPriceAllowsExecution(pool, settings, state)))
 					if (selected !== undefined) {
-						if (!settings.selectedPools.some(pool => pool.toLowerCase() === selected.pool.address.toLowerCase())) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						const centralizedPriceAllowed = marketPriceAllowsExecution(selected.pool, settings, state)
-						if (!liquidationExecutionAllowed(selected.pool.lastPrice, centralizedPriceAllowed)) {
-							recordActivity(state, {
-								details: `pool=${selected.pool.address}`,
-								kind: 'scan',
-								message: selected.pool.lastPrice === 0n ? 'Candidate skipped because its pool has no coordinator REP price' : 'Candidate skipped because its REP price disagrees with the independent market reference',
-								status: 'info',
-							})
-							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						}
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))
 					}
 				} else if (!state.paused) {
-					const selected = selectedCandidate(state.pools, settings)
+					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
 					if (selected !== undefined) {
-						if (!marketPriceAllowsExecution(selected.pool, settings, state)) {
-							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						}
 						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)
@@ -553,23 +541,29 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.scanning = false
 			}
 		},
-		() => new Promise(resolve => setTimeout(resolve, settings.runtime.pollMilliseconds)),
+		() => shutdown.wait(settings.runtime.pollMilliseconds),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
-	).finally(() => dashboard?.stop())
+	)
 }
 
 async function main() {
 	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
 	const loaded = await loadSettings()
+	using shutdown = createLiquidatorShutdownController()
 	let locks: LiquidatorProcessLocks
 	try {
-		locks = await acquireLiquidatorProcessLocks({
-			chainId: loaded.settings.network.chainId,
-			execute: loaded.settings.runtime.execute,
-			privateKey: loaded.settings.privateKey,
-			stateFile: loaded.settings.runtime.stateFile,
-		})
+		const acquired = await acquireLiquidatorProcessLocksForShutdown(
+			{
+				chainId: loaded.settings.network.chainId,
+				execute: loaded.settings.runtime.execute,
+				privateKey: loaded.settings.privateKey,
+				stateFile: loaded.settings.runtime.stateFile,
+			},
+			shutdown,
+		)
+		if (acquired === undefined) return
+		locks = acquired
 	} catch (error) {
 		if (error instanceof LiquidatorProcessLockAcquisitionError) {
 			await error.releaseProcessLocks()
@@ -578,7 +572,7 @@ async function main() {
 		throw error
 	}
 	try {
-		await runOperator(loaded, locks)
+		await runOperator(loaded, locks, shutdown)
 	} finally {
 		await locks.release()
 	}

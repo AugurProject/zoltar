@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
-import { paragraphSourceSpans } from './format-html-prose.mts'
+import { paragraphSourceSpans, repositoryHtmlFilePaths } from './format-html-prose.mts'
 
 type ParsedHtmlDocument = {
 	document: Document
@@ -30,20 +30,9 @@ const ariaIdReferenceAttributes = [
 	{ allowsMultiple: true, name: 'aria-owns' },
 ] as const
 
-function trackedHtmlFilePaths(): string[] {
-	const result = Bun.spawnSync(['git', 'ls-files', '-z', ':(glob)**/*.html'], { cwd: repositoryRootPath })
-	if (result.exitCode !== 0) throw new Error(`Unable to list tracked HTML files: ${result.stderr.toString().trim()}`)
-	return result.stdout
-		.toString()
-		.split('\0')
-		.filter(Boolean)
-		.map(filePath => path.join(repositoryRootPath, filePath))
-		.sort()
-}
-
 async function validateHtmlStructure(): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
-	const htmlFilePaths = trackedHtmlFilePaths()
+	const htmlFilePaths = repositoryHtmlFilePaths().toSorted()
 	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(parsedDocument => [parsedDocument.filePath, parsedDocument]))
 
@@ -165,5 +154,5 @@ if (import.meta.main) {
 		throw new Error(`HTML structure validation failed:\n${failures.map(failure => `- ${failure.relativePath}: ${failure.message}`).join('\n')}`)
 	}
 
-	console.log(`Validated structure and local references for ${trackedHtmlFilePaths().length} HTML files`)
+	console.log(`Validated structure and local references for ${repositoryHtmlFilePaths().length} HTML files`)
 }

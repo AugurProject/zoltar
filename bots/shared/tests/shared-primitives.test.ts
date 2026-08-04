@@ -251,7 +251,7 @@ describe('shared bot primitives', () => {
 					publicSubmit: async () => hash,
 					serializedTransaction: '0x1234',
 					settings: {
-						minimumBundleSimulations: 1,
+						minimumBundleRelaySuccesses: 1,
 						mode: 'private',
 						relayUrls: [`http://127.0.0.1:${relay.port.toString()}`],
 					},

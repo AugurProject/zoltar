@@ -105,6 +105,8 @@ async function dashboard() {
 	}
 	let snapshot = state('rpc secret at /api/internal')
 	let rejectPause = false
+	let stateRequestCount = 0
+	let releaseStateRequest: (() => void) | undefined
 	window.fetch = async input => {
 		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
@@ -114,7 +116,11 @@ async function dashboard() {
 				headers: { 'content-type': 'application/json' },
 			})
 		}
-		if (url.pathname === '/api/state') return new window.Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })
+		if (url.pathname === '/api/state') {
+			stateRequestCount += 1
+			if (releaseStateRequest !== undefined) await new Promise<void>(resolve => (releaseStateRequest = resolve))
+			return new window.Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })
+		}
 		if (url.pathname === '/api/test-market-sources') {
 			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
 		}
@@ -138,12 +144,34 @@ async function dashboard() {
 		setSnapshot: (next: ReturnType<typeof state>) => {
 			snapshot = next
 		},
+		stateRequestCount: () => stateRequestCount,
+		suspendNextStateRequest: () => {
+			releaseStateRequest = () => undefined
+		},
+		releaseStateRequest: () => {
+			const release = releaseStateRequest
+			releaseStateRequest = undefined
+			release?.()
+		},
 		window,
 		waitUntilComplete: () => page.waitUntilComplete(),
 	}
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('serializes overlapping polling refreshes and preserves one trailing request', async () => {
+		const page = await dashboard()
+		const before = page.stateRequestCount()
+		page.suspendNextStateRequest()
+		const first = page.refresh()
+		const second = page.refresh()
+		await Bun.sleep(1)
+		expect(page.stateRequestCount()).toBe(before + 1)
+		page.releaseStateRequest()
+		await Promise.all([first, second])
+		expect(page.stateRequestCount()).toBe(before + 2)
+	})
+
 	test('preserves focused controls and expanded pool addresses across polling', async () => {
 		const page = await dashboard()
 		const checkbox = page.window.document.querySelector('[data-record-key^="pool:"]')

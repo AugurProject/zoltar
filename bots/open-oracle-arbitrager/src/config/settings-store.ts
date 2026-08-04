@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '#ethereum'
-import { validateConnectivitySettings, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
+import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
 import { signerCandidate } from '#config/signer'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
@@ -205,10 +205,11 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const deployment = validateDeploymentSettings(record['deployment'])
 	const connectivity = validateConnectivitySettings(record['connectivity'])
-	const submission = validateSubmissionSettings(record['submission'])
+	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
 	const chainId = record['network'] === 'mainnet' ? 1 : 11_155_111
 	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
 	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
+	const submission = validateSubmissionSettings(record['submission'])
 	return {
 		centralizedMarkets,
 		connectivity,

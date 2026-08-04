@@ -95,7 +95,10 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 }
 
 export function getPublicNetworkProfile(network: string | undefined) {
-	return network?.toLowerCase() === 'sepolia' ? SEPOLIA_NETWORK_PROFILE : MAINNET_NETWORK_PROFILE
+	const normalizedNetwork = network?.trim().toLowerCase()
+	if (normalizedNetwork === undefined || normalizedNetwork === '' || normalizedNetwork === 'mainnet') return MAINNET_NETWORK_PROFILE
+	if (normalizedNetwork === 'sepolia') return SEPOLIA_NETWORK_PROFILE
+	throw new RangeError(`Unsupported network "${network}". Use "mainnet" or "sepolia".`)
 }
 
 export function getNetworkSwitchTarget(profile: NetworkProfile) {

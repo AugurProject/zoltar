@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Operate a security pool · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Operate a security pool</h1>
+				<p>Maintain a pool without crossing its solvency, lifecycle, or authority boundaries.</p>
+			</header>
+			<section id="confirm-identity">
+				<h2>Confirm pool identity</h2>
+				<p>Verify the chain, pool address, question, universe, factory relationship, share token, truth auction, price coordinator, WETH, and REP token. Stop if the pool is not part of the reviewed deployment.</p>
+			</section>
+			<section id="inspect-lifecycle">
+				<h2>Inspect lifecycle state</h2>
+				<p>Determine whether the pool is active, locally resolving, forked, migrating, awaiting repair, or finalized. Do not infer permission from a visible UI control; confirm the exact prerequisites for the intended entrypoint in the <a href="../reference/contracts.html">contract interaction reference</a>.</p>
+			</section>
+			<section id="maintain-backing">
+				<h2>Maintain backing</h2>
+				<ol>
+					<li>Compare open interest and collateral using the protocol's current accounting fields.</li>
+					<li>Inspect vault REP, security-bond allowance, locked amounts, and any pending price-sensitive operation.</li>
+					<li>Before reducing backing, obtain the fresh-price workflow required by the coordinator.</li>
+					<li>Do not assume depositing REP can cancel a liquidation that has already become executable.</li>
+				</ol>
+			</section>
+			<section id="advance-public-transitions">
+				<h2>Advance public transitions</h2>
+				<p>Monitor deadlines and settle-ready states. Arrange independent transaction submission for required public transitions rather than assuming another participant will advance them. Record transaction hashes and the resulting events.</p>
+			</section>
+			<section id="respond-to-unsafe-state">
+				<h2>Respond to unsafe state</h2>
+				<p>If a vault is liquidatable, follow <a href="./liquidate-vault.html">the liquidation guide</a>. If a staged callback failed, follow <a href="./recover-oracle-operation.html">the recovery guide</a>. If the universe forked, stop ordinary pool work and follow <a href="./migrate-fork.html">the migration guide</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

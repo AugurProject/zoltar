@@ -93,7 +93,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			pollMilliseconds: 1_000,
 			twapSeconds: 1_800,
 		},
-		submission: { minimumBundleSimulations: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 		tokenAddresses: [],
 	}
 }
