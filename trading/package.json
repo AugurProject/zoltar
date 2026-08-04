@@ -1,0 +1,36 @@
+{
+	"name": "@zoltar/trading",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"license": "Unlicense",
+	"scripts": {
+		"refresh:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
+		"setup": "bun install --frozen-lockfile && bun run compile && bun run ui:build",
+		"compile": "bun ./ts/compiler/compile.mts",
+		"generate": "bun run compile",
+		"tsc": "bun x tsc --project tsconfig.json",
+		"test": "cd .. && bun run ensure-shared-build && cd trading && bun run refresh:shared-dependency && bun run compile && bun run tsc && bun test ./ts/tests ./ui/ts/tests",
+		"coverage": "bun test --coverage ./ts/tests ./ui/ts/tests",
+		"check": "bunx @biomejs/biome check package.json tsconfig.json scripts ts ui/ts ui/build ui/css docs README.md SECURITY.md AGENTS.md && bun run format:check && bun run test",
+		"format": "bunx @biomejs/biome format --write package.json tsconfig.json scripts ts ui/ts ui/build ui/css docs README.md SECURITY.md AGENTS.md && cd .. && bunx prettier --write 'trading/contracts/**/*.sol'",
+		"format:check": "bunx @biomejs/biome format package.json tsconfig.json scripts ts ui/ts ui/build ui/css docs README.md SECURITY.md AGENTS.md && cd .. && bunx prettier --check 'trading/contracts/**/*.sol'",
+		"ui:build": "bun ./ui/build/build.mts",
+		"ui:serve": "bun ./ui/build/serve.mts",
+		"qa:browser": "bun ./scripts/browser-qa.mts",
+		"deploy:local": "bun ./ts/deploy/deploy-local.mts",
+		"gas-costs": "bun run compile && TRADING_REPORT_GAS=1 bun test ./ts/tests/pairRouter.integration.test.ts && bun ./ts/tests/gas-costs.mts"
+	},
+	"dependencies": {
+		"@preact/signals": "2.0.1",
+		"@zoltar/shared": "file:../shared",
+		"preact": "10.26.4",
+		"tevm": "1.0.0-rc.151"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.11",
+		"bun-types": "1.3.11",
+		"solc": "0.8.35",
+		"typescript": "5.8.2"
+	}
+}
