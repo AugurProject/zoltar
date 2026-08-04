@@ -480,8 +480,8 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 	const pendingStagedOperations = Reflect.get(value, 'pendingStagedOperations')
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
 	if (version !== 1 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
-	if (pendingStagedOperations !== undefined && !Array.isArray(pendingStagedOperations)) throw new Error('pendingStagedOperations must be an array')
-	if (pendingTransactions !== undefined && !Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
+	if (!Array.isArray(pendingStagedOperations)) throw new Error('pendingStagedOperations must be an array')
+	if (!Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
 	return {
 		activities: activities.flatMap(activity => {
 			if (typeof activity !== 'object' || activity === null || Array.isArray(activity)) return []
@@ -506,21 +506,20 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 			]
 		}),
 		lastScannedBlock: typeof lastScannedBlock === 'string' ? lastScannedBlock : undefined,
-		pendingStagedOperations:
-			pendingStagedOperations?.map((operation: unknown) => {
-				if (typeof operation !== 'object' || operation === null || Array.isArray(operation)) throw new Error('Pending staged operation must be an object')
-				const operationId = Reflect.get(operation, 'operationId')
-				const queuedBlock = Reflect.get(operation, 'queuedBlock')
-				if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
-				return {
-					coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
-					operationId: BigInt(operationId),
-					queuedBlock: BigInt(queuedBlock),
-					target: getAddress(String(Reflect.get(operation, 'target'))),
-				}
-			}) ?? [],
+		pendingStagedOperations: pendingStagedOperations.map((operation: unknown) => {
+			if (typeof operation !== 'object' || operation === null || Array.isArray(operation)) throw new Error('Pending staged operation must be an object')
+			const operationId = Reflect.get(operation, 'operationId')
+			const queuedBlock = Reflect.get(operation, 'queuedBlock')
+			if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
+			return {
+				coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
+				operationId: BigInt(operationId),
+				queuedBlock: BigInt(queuedBlock),
+				target: getAddress(String(Reflect.get(operation, 'target'))),
+			}
+		}),
 		pendingTransactions: (await Promise.all(
-			pendingTransactions?.map(async (intent: unknown) => {
+			pendingTransactions.map(async (intent: unknown) => {
 				if (typeof intent !== 'object' || intent === null || Array.isArray(intent)) throw new Error('Pending transaction intent must be an object')
 				const hash = Reflect.get(intent, 'hash')
 				const kind = Reflect.get(intent, 'kind')
@@ -576,7 +575,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 									})()
 				const requiresMarketEvidence = typeof rawRequiresMarketEvidence === 'boolean' ? rawRequiresMarketEvidence : kind === 'deposit' || kind === 'liquidation' || kind === 'withdrawal'
 				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, requiresMarketEvidence, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
-			}) ?? [],
+			}),
 		)) as PendingTransactionIntent[],
 		version: 1,
 	}

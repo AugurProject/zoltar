@@ -1,5 +1,6 @@
 import type { Hex } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
+import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
 export type NetworkName = 'mainnet' | 'sepolia'
 
@@ -93,7 +94,7 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 	})
 	let value: JsonRpcResponse
 	try {
-		value = (await response.json()) as JsonRpcResponse
+		value = (await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'RPC')) as JsonRpcResponse
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`RPC returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
@@ -146,7 +147,7 @@ async function assertRelayMethodCapability(url: string, method: 'eth_callBundle'
 	if (!response.ok) throw new Error(`Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`)
 	let value: unknown
 	try {
-		value = await response.json()
+		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'Bundle relay capability check')
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Bundle relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error

@@ -11,6 +11,11 @@ import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/ce
 
 const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
+export function assertDistinctPersistentPaths(settingsFile: string, runtime: Pick<PersistedOperatorSettings['runtime'], 'historyFile' | 'positionFile' | 'priceHistoryFile'>) {
+	const persistentPaths = [settingsFile, runtime.historyFile, runtime.positionFile, runtime.priceHistoryFile].map(path => resolve(path))
+	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error('Operator settings and runtime persistence files must use distinct paths')
+}
+
 export type Configuration = MutableStrategy & {
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
@@ -63,6 +68,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	if (saved.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Execution is enabled, but deployment.quorumRpcUrls has no independent read RPC')
 	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
 	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
+	assertDistinctPersistentPaths(settingsFile, saved.runtime)
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,

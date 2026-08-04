@@ -81,7 +81,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			twapSeconds: 2_400,
 		},
 		submission: {
-			minimumRelaySuccesses: 2,
+			minimumBundleRelaySuccesses: 1,
 			mode: 'private' as const,
 			relayUrls: ['https://relay.flashbots.net/', 'https://relay.example/'],
 		},
@@ -90,17 +90,6 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
-	test('rejects a public submission threshold above the configured RPC count', () => {
-		const stored = serializeOperatorSettings(settings(undefined))
-		expect(() =>
-			parseOperatorSettings({
-				...stored,
-				connectivity: { ...stored.connectivity, publicRpcUrls: ['https://submit-one.example/'] },
-				submission: { minimumRelaySuccesses: 2, mode: 'public', relayUrls: [] },
-			}),
-		).toThrow('cannot exceed the configured public RPC count')
-	})
-
 	test('syncs settings contents and the parent directory before returning success', async () => {
 		const events: string[] = []
 		let opened = 0
@@ -205,5 +194,17 @@ describe('operator settings persistence', () => {
 		expect(loadOperatorSettings(path)).rejects.toThrow('Unknown operator configuration field')
 		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), 'utf8')
 		expect(loadOperatorSettings(path)).rejects.toThrow('unsupported version')
+	})
+
+	test('rejects persistent runtime files that resolve to the same path', () => {
+		const value = settings(undefined)
+		expect(() =>
+			parseOperatorSettings(
+				serializeOperatorSettings({
+					...value,
+					runtime: { ...value.runtime, positionFile: '.state/shared.jsonl', priceHistoryFile: '.state/nested/../shared.jsonl' },
+				}),
+			),
+		).toThrow('must use distinct paths')
 	})
 })

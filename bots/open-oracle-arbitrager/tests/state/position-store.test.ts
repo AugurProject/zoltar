@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '#ethereum'
@@ -21,6 +21,13 @@ describe('durable OpenOracle position journal', () => {
 		await first.release()
 		const second = await acquirePositionJournalLock(path)
 		await second.release()
+	})
+
+	test('rejects a journal lock directory writable by other users', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		await chmod(directory, 0o777)
+		await expect(acquirePositionJournalLock(join(directory, 'positions.json'))).rejects.toThrow('unsafe permissions')
 	})
 
 	test('allows only one process to execute with a signer on a network', async () => {

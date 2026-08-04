@@ -10,12 +10,14 @@ import {
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
 	conservativeStaleTopUp,
+	requireFinalizedTransactionReceipt,
 	planVaultMaintenance,
 	requirePendingStagedOperation,
 	requireSuccessfulStagedOperation,
 	validateReceiptExpectation,
 } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
+import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -92,6 +94,13 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 }
 
 describe('liquidator execution safety', () => {
+	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
+		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([
+			{ fromBlock: 5n, toBlock: 10_004n },
+			{ fromBlock: 10_005n, toBlock: 20_004n },
+			{ fromBlock: 20_005n, toBlock: 25_005n },
+		])
+	})
 	test('rechecks market consensus immediately before price-dependent submission', async () => {
 		await expect(assertMarketPriceStillAllowed(async () => true)).resolves.toBeUndefined()
 		await expect(assertMarketPriceStillAllowed(async () => false)).rejects.toThrow('Market consensus expired')
@@ -109,6 +118,15 @@ describe('liquidator execution safety', () => {
 	test('pauses instead of continuing after restart recovers a reverted transaction', () => {
 		expect(() => requireRecoveredTransactionSuccess('reverted', `0x${'11'.repeat(32)}`)).toThrow('reverted')
 		expect(() => requireRecoveredTransactionSuccess('success', `0x${'11'.repeat(32)}`)).not.toThrow()
+	})
+
+	test('stops a dependent transaction sequence while the first receipt awaits canonical finality', () => {
+		let dependentTransactionStarted = false
+		expect(() => {
+			requireFinalizedTransactionReceipt('Approve REP', `0x${'11'.repeat(32)}`, { observed: true, receipt: undefined })
+			dependentTransactionStarted = true
+		}).toThrow('awaiting canonical finality')
+		expect(dependentTransactionStarted).toBe(false)
 	})
 
 	test('retains ambiguous price-dependent intents until a receipt or private finality proof exists', () => {
