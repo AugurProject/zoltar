@@ -38,7 +38,9 @@ describe('network profile helpers', () => {
 		expect(SEPOLIA_NETWORK_PROFILE.usdcAddress).toBe(getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'))
 		expect(buildTransactionExplorerUrl(SEPOLIA_NETWORK_PROFILE, '0xabc')).toBe('https://sepolia.etherscan.io/tx/0xabc')
 		expect(getPublicNetworkProfile('sepolia')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile('mainnet')).toBe(MAINNET_NETWORK_PROFILE)
 		expect(getPublicNetworkProfile(undefined)).toBe(MAINNET_NETWORK_PROFILE)
+		expect(() => getPublicNetworkProfile('sepolai')).toThrow('Unsupported network "sepolai". Use "mainnet" or "sepolia".')
 	})
 
 	test('creates a deterministic simulation profile from constructor inputs', () => {

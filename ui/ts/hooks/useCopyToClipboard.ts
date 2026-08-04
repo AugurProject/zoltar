@@ -2,7 +2,17 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useId, useLayoutEffect, useRef } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 
-class ClipboardUnavailableError extends Error {}
+class ClipboardWriteError extends Error {}
+
+async function writeClipboardText(text: string) {
+	const clipboard = navigator.clipboard
+	if (clipboard === undefined || typeof clipboard.writeText !== 'function') throw new ClipboardWriteError('Clipboard API is unavailable')
+	try {
+		await clipboard.writeText(text)
+	} catch (error) {
+		throw new ClipboardWriteError('Clipboard write failed', { cause: error })
+	}
+}
 
 export function useCopyToClipboard(valueKey?: string) {
 	const copied = useSignal(false)
@@ -43,26 +53,25 @@ export function useCopyToClipboard(valueKey?: string) {
 			copyResetTimeout.current = undefined
 		}
 		try {
-			const clipboard = navigator.clipboard
-			if (clipboard === undefined || typeof clipboard.writeText !== 'function') throw new ClipboardUnavailableError('Clipboard API is unavailable')
-			await clipboard.writeText(text)
-			if (!isCurrentRequest()) return
-			copied.value = true
-			copyResetTimeout.current = window.setTimeout(() => {
-				if (!isCurrentRequest()) return
-				copied.value = false
-				copyResetTimeout.current = undefined
-			}, 1200)
+			await writeClipboardText(text)
 		} catch (error) {
+			if (!(error instanceof ClipboardWriteError)) throw error
 			if (!isCurrentRequest()) return
-			if (!(error instanceof DOMException) && !(error instanceof ClipboardUnavailableError)) throw error
 			copied.value = false
 			copyError.value = commonCopy.copyFailed
 			if (copyResetTimeout.current !== undefined) {
 				window.clearTimeout(copyResetTimeout.current)
 				copyResetTimeout.current = undefined
 			}
+			return
 		}
+		if (!isCurrentRequest()) return
+		copied.value = true
+		copyResetTimeout.current = window.setTimeout(() => {
+			if (!isCurrentRequest()) return
+			copied.value = false
+			copyResetTimeout.current = undefined
+		}, 1200)
 	}
 
 	return { copied, copyError, copyErrorId, copyText }

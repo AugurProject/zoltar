@@ -193,7 +193,7 @@ describe('useCopyToClipboard', () => {
 		expect(activeHook.copyError.value).toBe('Copy failed — select the value and copy it manually.')
 	})
 
-	test('rethrows unexpected clipboard implementation failures', async () => {
+	test('reports ordinary clipboard implementation failures without rejecting', async () => {
 		setClipboardWriteText(async () => {
 			throw new Error('unexpected clipboard implementation failure')
 		})
@@ -207,7 +207,31 @@ describe('useCopyToClipboard', () => {
 		const activeHook = hook
 		if (activeHook === undefined) throw new Error('hook did not mount')
 
-		await expect(activeHook.copyText('copy me')).rejects.toThrow('unexpected clipboard implementation failure')
+		await expect(activeHook.copyText('copy me')).resolves.toBeUndefined()
+		expect(activeHook.copyError.value).toBe('Copy failed — select the value and copy it manually.')
+	})
+
+	test('does not hide timer failures after a successful clipboard write', async () => {
+		setClipboardWriteText(async () => undefined)
+		let hook: CopyHook | undefined
+		function Probe() {
+			hook = useCopyToClipboard()
+			return <output>{hook.copyError.value}</output>
+		}
+		const renderedComponent = await renderIntoDocument(<Probe />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const activeHook = hook
+		if (activeHook === undefined) throw new Error('hook did not mount')
+		const timerError = new Error('timer failed')
+		window.setTimeout = ((_handler: TimerHandler, _timeout?: number): number => {
+			throw timerError
+		}) as typeof window.setTimeout
+
+		await expect(
+			act(async () => {
+				await activeHook.copyText('copy me')
+			}),
+		).rejects.toBe(timerError)
 		expect(activeHook.copyError.value).toBeUndefined()
 	})
 })

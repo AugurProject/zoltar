@@ -105,11 +105,17 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 
-		const zoltarTab = within(document.body).getByRole('button', { name: 'Zoltar' }) as HTMLButtonElement
-		expect(zoltarTab.disabled).toBe(true)
+		const documentQueries = within(document.body)
+		const zoltarTab = documentQueries.getByRole('link', { name: 'Zoltar' }) as HTMLAnchorElement
+		expect(zoltarTab.getAttribute('aria-disabled')).toBe('true')
+		expect(zoltarTab.getAttribute('href')).toBeNull()
+		expect(zoltarTab.tabIndex).toBe(0)
 		expect(zoltarTab.title).toBe('Deploy the application contracts before using this section.')
 		expect(zoltarTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
+		expect(documentQueries.getByText('Deploy the application contracts before using this section.', { selector: '.mobile-route-select .disabled-reason' })).toBeDefined()
 
+		zoltarTab.focus()
+		expect(document.activeElement).toBe(zoltarTab)
 		fireEvent.click(zoltarTab)
 		expect(routeChanges).toEqual([])
 	})
