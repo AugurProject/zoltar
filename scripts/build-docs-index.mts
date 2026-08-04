@@ -3,9 +3,6 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Window } from 'happy-dom'
-import * as prettier from 'prettier'
-import { markdownHeadingIds } from './docs-markdown-anchors.mts'
-import { formatParagraphsOnSingleLines } from './format-html-prose.mts'
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectory = path.join(repositoryRoot, 'docs')
@@ -13,11 +10,6 @@ const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')
 const searchDataOutputPath = path.join(docsDirectory, 'assets/js/docsSearchData.js')
 const categoryDirectories = ['tutorials', 'how-to', 'reference', 'explanation'] as const
-const markdownSources = new Map([
-	['reference/contracts.html', 'reference/contracts.md'],
-	['reference/event-stream.html', 'reference/event-stream.md'],
-	['reference/operator-guardrails.html', 'reference/operator-guardrails.md'],
-])
 
 type DocsSection = {
 	id: string
@@ -64,43 +56,6 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 	}
 }
 
-function renderMarkdown(markdown: string): string {
-	const ids = markdownHeadingIds(markdown)
-	let headingIndex = 0
-	return Bun.markdown.html(markdown).replace(/<h([1-6])([^>]*)>/g, (...matches) => {
-		const level = matches[1]
-		const attributes = matches[2]
-		assert(typeof level === 'string' && typeof attributes === 'string', 'rendered Markdown heading match is malformed')
-		const id = ids[headingIndex]
-		headingIndex += 1
-		assert(id !== undefined, 'rendered Markdown has more headings than its source')
-		assert(!/\sid=/.test(attributes), 'rendered Markdown unexpectedly contains heading ids')
-		return `<h${level}${attributes} id="${id}">`
-	})
-}
-
-async function markdownPage(title: string, content: string, outputPath: string): Promise<string> {
-	const source = `<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>${title} · Statoblast docs</title>
-		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
-		<link rel="stylesheet" href="../assets/css/docsShell.css" />
-	</head>
-	<body class="doc-openoracle markdown-reference">
-		<main><article>${content}</article></main>
-		<script src="../assets/js/responsiveDocs.js"></script>
-		<script src="../assets/js/docsData.js"></script>
-		<script src="../assets/js/docsShell.js"></script>
-	</body>
-</html>
-`
-	const options = (await prettier.resolveConfig(outputPath)) ?? {}
-	return formatParagraphsOnSingleLines(await prettier.format(source, { ...options, filepath: outputPath, plugins: [] }))
-}
-
 async function filesIn(directory: string): Promise<string[]> {
 	const entries = await readdir(path.join(docsDirectory, directory), { withFileTypes: true })
 	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => `${directory}/${entry.name}`)
@@ -111,6 +66,12 @@ const manifestValue: unknown = JSON.parse(await readFile(manifestPath, 'utf8'))
 assertManifest(manifestValue)
 const manifest = manifestValue
 const sectionById = new Map(manifest.sections.map(section => [section.id, section]))
+const isMarkdownPath = (filePath: string) => ['.md', '.markdown'].includes(path.extname(filePath).toLowerCase())
+assert.equal(isMarkdownPath('reference/example.MD'), true, 'uppercase Markdown extensions must be rejected')
+assert.equal(isMarkdownPath('reference/example.MarkDown'), true, 'long Markdown extensions must be rejected case-insensitively')
+assert.equal(isMarkdownPath('reference/example.html'), false, 'HTML documentation must remain allowed')
+const markdownPaths = [...new Bun.Glob('**/*').scanSync({ cwd: docsDirectory, onlyFiles: true })].filter(isMarkdownPath).toSorted()
+assert.deepEqual(markdownPaths, [], 'docs must use canonical HTML sources; convert and remove Markdown files')
 
 const landingSource = await readFile(path.join(docsDirectory, 'documentation.html'), 'utf8')
 const landingWindow = new Window({ url: 'https://docs.statoblast.test/documentation.html' })
@@ -136,19 +97,6 @@ for (const [sectionId, landingSectionId] of [
 	}
 }
 landingWindow.close()
-
-for (const [outputPath, sourcePath] of markdownSources) {
-	const page = manifest.pages.find(candidate => candidate.path === outputPath)
-	assert(page !== undefined, `generated Markdown route ${outputPath} is missing from docs manifest`)
-	const markdown = await readFile(path.join(docsDirectory, sourcePath), 'utf8')
-	const absoluteOutputPath = path.join(docsDirectory, outputPath)
-	const output = await markdownPage(page.title, renderMarkdown(markdown), absoluteOutputPath)
-	if (checkOnly) {
-		assert.equal(await readFile(absoluteOutputPath, 'utf8').catch(() => ''), output, `${outputPath} is stale; run bun run docs:build-index`)
-	} else {
-		await writeFile(absoluteOutputPath, output)
-	}
-}
 
 const actualPagePaths = (await Promise.all(categoryDirectories.map(filesIn))).flat().toSorted()
 assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the four Diátaxis directories')

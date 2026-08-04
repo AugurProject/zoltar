@@ -124,10 +124,7 @@ below. They are tracked because the static documentation site loads them directl
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
-| `docs/reference/contracts.md` | `bun run docs:generate-contract-reference` |
-| `docs/reference/contracts.html` | `docs/reference/contracts.md` via `bun run docs:build-index` |
-| `docs/reference/event-stream.html` | `bun run docs:build-index` |
-| `docs/reference/operator-guardrails.html` | `bun run docs:build-index` |
+| `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
 
@@ -174,6 +171,7 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
+- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there.
 - Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.

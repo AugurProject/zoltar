@@ -2,7 +2,6 @@ import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
-import { markdownHeadingIds } from './docs-markdown-anchors.mts'
 
 type ParsedHtmlDocument = {
 	document: Document
@@ -21,7 +20,6 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
-const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
 	const failures = await validateDocsHtml()
@@ -36,10 +34,8 @@ export async function assertDocsHtmlValid(): Promise<void> {
 export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
 	const htmlFilePaths = await findDocsFiles('.html')
-	const markdownFilePaths = await findDocsFiles('.md')
 	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(document => [document.filePath, document]))
-	const markdownAnchorsByPath = await collectMarkdownAnchorsByPath(markdownFilePaths)
 
 	for (const parsedDocument of parsedDocuments) {
 		validateTextEnvelope(parsedDocument, failures)
@@ -55,11 +51,7 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 		validateDiagrams(parsedDocument, failures)
 		validateEquations(parsedDocument, failures)
 		validateTables(parsedDocument, failures)
-		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, markdownAnchorsByPath, failures)
-	}
-
-	for (const markdownFilePath of markdownFilePaths) {
-		await validateMarkdownLinks(markdownFilePath, parsedDocumentsByPath, markdownAnchorsByPath, failures)
+		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, failures)
 	}
 
 	for (const parsedDocument of parsedDocuments) {
@@ -402,7 +394,7 @@ function validateTables(parsedDocument: ParsedHtmlDocument, failures: Validation
 	}
 }
 
-async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, failures: ValidationFailure[]): Promise<void> {
+async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, failures: ValidationFailure[]): Promise<void> {
 	for (const link of Array.from(parsedDocument.document.querySelectorAll('a[href]'))) {
 		const rawHref = link.getAttribute('href')
 		const href = rawHref?.trim()
@@ -413,30 +405,11 @@ async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocum
 		if (rawHref !== href) {
 			addFailure(parsedDocument, `${describeElement(link)} href has leading or trailing whitespace`, failures)
 		}
-		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, markdownAnchorsByPath, parsedDocument.relativePath, failures)
+		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, parsedDocument.relativePath, failures)
 	}
 }
 
-async function validateMarkdownLinks(markdownFilePath: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, failures: ValidationFailure[]): Promise<void> {
-	const text = await readFile(markdownFilePath, 'utf8')
-	const relativePath = relativeToRepository(markdownFilePath)
-	if (conflictMarkerPattern.test(text)) {
-		failures.push({
-			message: 'contains unresolved conflict markers',
-			relativePath,
-		})
-	}
-
-	for (const match of text.matchAll(markdownLinkPattern)) {
-		const href = match[1]
-		if (href === undefined) {
-			continue
-		}
-		await validateLocalLink(markdownFilePath, href, parsedDocumentsByPath, markdownAnchorsByPath, relativePath, failures)
-	}
-}
-
-async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
+async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
 	if (isExternalLink(href)) {
 		return
 	}
@@ -476,27 +449,6 @@ async function validateLocalLink(sourceFilePath: string, href: string, parsedDoc
 		}
 		return
 	}
-
-	const markdownAnchors = markdownAnchorsByPath.get(targetFilePath)
-	if (markdownAnchors !== undefined && !markdownAnchors.has(fragment)) {
-		failures.push({
-			message: `links to missing Markdown fragment "${href}"`,
-			relativePath: sourceRelativePath,
-		})
-	}
-}
-
-async function collectMarkdownAnchorsByPath(markdownFilePaths: string[]): Promise<Map<string, Set<string>>> {
-	const anchorsByPath = new Map<string, Set<string>>()
-	for (const filePath of markdownFilePaths) {
-		const text = await readFile(filePath, 'utf8')
-		anchorsByPath.set(filePath, collectMarkdownAnchors(text))
-	}
-	return anchorsByPath
-}
-
-function collectMarkdownAnchors(text: string): Set<string> {
-	return new Set(markdownHeadingIds(text))
 }
 
 function splitHref(href: string): [string, string | undefined] {

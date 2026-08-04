@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { Window } from 'happy-dom'
 import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
 import { updateDiagramControl } from '../docs/charts/diagramControl'
+import { htmlToDocumentationText } from './docs-html-text.mts'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -1335,16 +1336,16 @@ assert.match(auctionDesignHtml, /examples below use[\s\S]*formula above gives[\s
 assert.match(auctionDesignHtml, /complete\s+unmigrated allowance[\s\S]*Finalization rejects explicit repair contributions/i, 'auction design should document allowance allocation and rejected donations')
 assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 
-const operatorReferenceMarkdown = await readFile('docs/reference/operator-guardrails.md', 'utf8')
-assert.match(operatorReferenceMarkdown, /parent vault is checkpointed before its allowance is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceMarkdown, /statoblast\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
-assert.doesNotMatch(operatorReferenceMarkdown, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
-assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
-assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
-assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
+const operatorReferenceText = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
+assert.match(operatorReferenceText, /parent vault is checkpointed before its allowance is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
+assert.match(operatorReferenceText, /statoblast\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
+assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
+assert.match(operatorReferenceText, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
+assert.match(operatorReferenceText, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
+assert.match(operatorReferenceText, /Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
-const contractInteractionReferenceMarkdown = await readFile('docs/reference/contracts.md', 'utf8')
-const updateCollateralAmountRow = contractInteractionReferenceMarkdown.split('\n').find(line => line.startsWith('| `updateCollateralAmount()` |'))
+const contractInteractionReferenceText = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))
+const updateCollateralAmountRow = contractInteractionReferenceText.split('\n').find(line => line.startsWith('`updateCollateralAmount()`\t'))
 if (updateCollateralAmountRow === undefined) {
 	throw new Error('contract interaction reference should document updateCollateralAmount()')
 }
@@ -1352,7 +1353,7 @@ assert.match(updateCollateralAmountRow, /question end while this pool's universe
 assert.match(updateCollateralAmountRow, /activated child starts a separate fee epoch/i, 'contract interaction reference should distinguish a child fee epoch from its parent cutoff')
 assert.doesNotMatch(updateCollateralAmountRow, /earlier question-end or universe-fork clamp/i, 'contract interaction reference should not describe the conditional fee cutoff as a minimum')
 
-const redeemRepRow = contractInteractionReferenceMarkdown.split('\n').find(line => line.startsWith('| `redeemRep(vault)` |'))
+const redeemRepRow = contractInteractionReferenceText.split('\n').find(line => line.startsWith('`redeemRep(vault)`\t'))
 if (redeemRepRow === undefined) {
 	throw new Error('contract interaction reference should document redeemRep(vault)')
 }

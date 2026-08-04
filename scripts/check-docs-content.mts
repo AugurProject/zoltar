@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { htmlToDocumentationText } from './docs-html-text.mts'
 
 const normalizeWhitespace = (text: string) => text.replace(/\s+/g, ' ')
 const htmlToVisibleText = (text: string) =>
@@ -214,6 +215,10 @@ const normalizeDuplicateCandidate = (text: string) =>
 		.replace(/\s+/g, ' ')
 		.trim()
 
+const htmlDocumentationTextFixture = htmlToDocumentationText('<main><div>Container warning</div><dl><dt>Term</dt><dd>Definition warning</dd></dl><details><summary>Disclosure warning</summary><p>Expanded warning</p></details><figure><figcaption>Figure warning</figcaption></figure><script>Hidden warning</script></main>')
+assert.match(htmlDocumentationTextFixture, /Container warning[\s\S]*Definition warning[\s\S]*Disclosure warning[\s\S]*Expanded warning[\s\S]*Figure warning/, 'HTML documentation text extraction must retain visible prose from semantic containers')
+assert.doesNotMatch(htmlDocumentationTextFixture, /Hidden warning/, 'HTML documentation text extraction must ignore script content')
+
 const normalizeDuplicateFormula = (text: string) =>
 	normalizeDuplicateSyntax(text)
 		.replace(/[^a-z0-9_=+\-*/<>^?:.%()[\],&|!]+/g, ' ')
@@ -256,17 +261,21 @@ const recordDuplicateParagraphs = async (blocks: DuplicateBlockMap, path: string
 const duplicateDetectorFixtureBlocks: DuplicateBlockMap = new Map()
 const duplicateDetectorFixture = 'Canonical duplication fixtures preserve meaningful operators while ignoring ordinary sentence punctuation across the rendered documentation sources reviewed by this content check.'
 await recordDuplicateParagraphs(duplicateDetectorFixtureBlocks, 'docs/example.html', `<script>const embedded = ${JSON.stringify(`<p>${duplicateDetectorFixture}</p>`)}</script><template><p>${duplicateDetectorFixture}</p></template><p>${duplicateDetectorFixture}<script>${duplicateDetectorFixture}</script></p>`)
-await recordDuplicateParagraphs(duplicateDetectorFixtureBlocks, 'docs/example.md', `${duplicateDetectorFixture}\n\n\`\`\`html\n<p>${duplicateDetectorFixture}</p>\n\`\`\`\n\n| Example |\n| --- |\n| ${duplicateDetectorFixture} |\n\n- ${duplicateDetectorFixture}`)
+await recordDuplicateParagraphs(duplicateDetectorFixtureBlocks, 'README-example.md', `${duplicateDetectorFixture}\n\n\`\`\`html\n<p>${duplicateDetectorFixture}</p>\n\`\`\`\n\n| Example |\n| --- |\n| ${duplicateDetectorFixture} |\n\n- ${duplicateDetectorFixture}`)
 await recordDuplicateParagraphs(duplicateDetectorFixtureBlocks, 'docs/example.js', `export const example = '${duplicateDetectorFixture}'`)
-assert.deepEqual(Array.from(duplicateDetectorFixtureBlocks.values()), [['docs/example.html:paragraph 1', 'docs/example.md:paragraph 1']], 'duplicate paragraph detection should compare rendered HTML and Markdown prose but ignore JavaScript source')
+assert.deepEqual(Array.from(duplicateDetectorFixtureBlocks.values()), [['docs/example.html:paragraph 1', 'README-example.md:paragraph 1']], 'duplicate paragraph detection should compare rendered HTML and repository-level Markdown prose but ignore JavaScript source')
 
 const inlineCodeFixtureBlocks: DuplicateBlockMap = new Map()
 const inlineCodeFixturePrefix = 'Rendered duplication candidates retain the inline identifier'
 const inlineCodeFixtureSuffix = 'while comparing otherwise identical technical paragraphs across HTML and Markdown documentation sources.'
 await recordDuplicateParagraphs(inlineCodeFixtureBlocks, 'docs/inline-example.html', `<p>${inlineCodeFixturePrefix} <code>alphaLimit</code> ${inlineCodeFixtureSuffix}</p>`)
-await recordDuplicateParagraphs(inlineCodeFixtureBlocks, 'docs/inline-example.md', `${inlineCodeFixturePrefix} \`alphaLimit\` ${inlineCodeFixtureSuffix}`)
-await recordDuplicateParagraphs(inlineCodeFixtureBlocks, 'docs/distinct-inline-example.md', `${inlineCodeFixturePrefix} \`betaLimit\` ${inlineCodeFixtureSuffix}`)
-assert.deepEqual(Array.from(inlineCodeFixtureBlocks.values()), [['docs/inline-example.html:paragraph 1', 'docs/inline-example.md:paragraph 1'], ['docs/distinct-inline-example.md:paragraph 1']], 'duplicate paragraph detection should align HTML and Markdown inline code while preserving identifier differences')
+await recordDuplicateParagraphs(inlineCodeFixtureBlocks, 'README-inline-example.md', `${inlineCodeFixturePrefix} \`alphaLimit\` ${inlineCodeFixtureSuffix}`)
+await recordDuplicateParagraphs(inlineCodeFixtureBlocks, 'README-distinct-inline-example.md', `${inlineCodeFixturePrefix} \`betaLimit\` ${inlineCodeFixtureSuffix}`)
+assert.deepEqual(
+	Array.from(inlineCodeFixtureBlocks.values()),
+	[['docs/inline-example.html:paragraph 1', 'README-inline-example.md:paragraph 1'], ['README-distinct-inline-example.md:paragraph 1']],
+	'duplicate paragraph detection should align HTML and repository-level Markdown inline code while preserving identifier differences',
+)
 
 const duplicateDetectorFormulaFixture = 'result = a + b + c + d + e'
 assert.deepEqual(
@@ -276,9 +285,9 @@ assert.deepEqual(
 )
 
 const duplicateBlocks: DuplicateBlockMap = new Map()
-const generatedDocumentationFiles = new Set(['docs/assets/js/chartRuntime.js', 'docs/assets/js/docsData.js', 'docs/reference/contracts.html', 'docs/reference/event-stream.html', 'docs/reference/operator-guardrails.html'])
+const generatedDocumentationFiles = new Set(['docs/assets/js/chartRuntime.js', 'docs/assets/js/docsData.js', 'docs/reference/contracts.html'])
 
-const docsGlob = new Bun.Glob('docs/**/*.{html,js,md}')
+const docsGlob = new Bun.Glob('docs/**/*.{html,js}')
 const paths = ['README.md']
 for await (const path of docsGlob.scan('.')) {
 	paths.push(path)
@@ -323,7 +332,7 @@ const discouragedPatternFixtures = [
 ]
 
 for (const fixture of discouragedPatternFixtures) {
-	const violations = findDiscouragedDocsWording(fixture.path ?? 'docs/example.md', fixture.text)
+	const violations = findDiscouragedDocsWording(fixture.path ?? 'README-example.md', fixture.text)
 	assert.ok(
 		violations.some(violation => violation.includes(fixture.expected)),
 		`${fixture.expected} fixture should be detected`,
@@ -354,7 +363,7 @@ const architectureSection = architectureSectionMatch?.[0] ?? ''
 const zoltarWhitepaper = (await Bun.file('docs/explanation/zoltar.html').text()).replaceAll(/\s+/g, ' ')
 const openOracleIntegration = (await Bun.file('docs/explanation/open-oracle.html').text()).replaceAll(/\s+/g, ' ')
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
-const operatorReference = await Bun.file('docs/reference/operator-guardrails.md').text()
+const operatorReference = htmlToDocumentationText(await Bun.file('docs/reference/operator-guardrails.html').text())
 const escalationGameArchitecture = await Bun.file('docs/explanation/escalation-game.html').text()
 const invariantsHtml = (await Bun.file('docs/reference/invariants.html').text()).replaceAll(/\s+/g, ' ')
 const startHere = (await Bun.file('docs/documentation.html').text()).replaceAll(/\s+/g, ' ')
@@ -362,7 +371,7 @@ const sharedDocsCss = await Bun.file('docs/assets/css/shared-docs.css').text()
 const functionStyleRoundingPattern = /(?<!Math\.)\b(?:floor|ceil)\(/
 assert.match('floor(displayedValue)', functionStyleRoundingPattern, 'displayed function-style rounding fixture should be rejected')
 assert.doesNotMatch('Math.floor(executableValue)', functionStyleRoundingPattern, 'executable Math.floor calls should remain allowed')
-const visibleFormulaSourcePaths = [...new Bun.Glob('docs/**/*.html').scanSync('.'), ...new Bun.Glob('docs/**/*.md').scanSync('.'), 'docs/assets/js/protocolTerms.js', 'docs/charts/diagramSpecs.json', 'docs/charts/chartRuntime.ts']
+const visibleFormulaSourcePaths = [...new Bun.Glob('docs/**/*.html').scanSync('.'), 'docs/assets/js/protocolTerms.js', 'docs/charts/diagramSpecs.json', 'docs/charts/chartRuntime.ts']
 for (const path of visibleFormulaSourcePaths) {
 	const source = await Bun.file(path).text()
 	const visibleSource = path.endsWith('.html') ? source.replaceAll(/<script\b[\s\S]*?<\/script>/gi, '') : source
@@ -439,13 +448,13 @@ assert.match(operatorReference, /open-oracle\.html#intentional-economic-tradeoff
 assert.match(operatorReference, /open-oracle\.html#attack-model/)
 assert.doesNotMatch(operatorReference, /requestPriceEthCost =|qualification threshold is `ceil|rounded cumulative allocations|cap-implied qualification threshold|multiplier `115`|one through six wei/)
 assert.match(whitepaper, /Every selected continuation receives the complete parent game snapshot\.[\s\S]{0,420}complete game REP[\s\S]{0,160}post-haircut game REP/)
-assert.match(operatorReference, /\| Canonical continuation snapshot \| Fork initialization stores the complete parent `Invalid`\/`Yes`\/`No` balances, carry totals, peaks, leaf counts, and nullifier roots once\./)
-assert.match(operatorReference, /\| Aggregate escalation backing \| An external unrelated fork reproduces the drained game's escalation REP one-for-one[\s\S]*?own fork transfers post-haircut aggregate backing/)
-assert.match(operatorReference, /\[fork-migration derivation\]\(\.\.\/explanation\/statoblast\.html#migration\)[\s\S]*?\[`FORK-08`\]\(\.\/invariants\.html#fork-08\)/)
-assert.match(operatorReference, /\| Direct-claim replay protection \| A successful direct own-fork claim records both the stable parent deposit identity and cumulative claimed principal by outcome\./)
+assert.match(operatorReference, /Canonical continuation snapshot\tFork initialization stores the complete parent `Invalid`\/`Yes`\/`No` balances, carry totals, peaks, leaf counts, and nullifier roots once\./)
+assert.match(operatorReference, /Aggregate escalation backing\tAn external unrelated fork reproduces the drained game's escalation REP one-for-one[\s\S]*?own fork transfers post-haircut aggregate backing/)
+assert.match(operatorReference, /fork-migration derivation \(\.\.\/explanation\/statoblast\.html#migration\)[\s\S]*?`FORK-08` \(\.\/invariants\.html#fork-08\)/)
+assert.match(operatorReference, /Direct-claim replay protection\tA successful direct own-fork claim records both the stable parent deposit identity and cumulative claimed principal by outcome\./)
 assert.match(operatorReference, /effective inherited principal subtracts immediate-parent direct claims/)
-assert.match(operatorReference, /\| Optional vault cleanup \| See \[Optional parent-lock cleanup\]\(#escalation-resolution-and-deposits\)[\s\S]*?never processes another vault/)
-assert.doesNotMatch(operatorReference, /\| Optional vault cleanup \| The public `migrateVaultWithUnresolvedEscalation` wrapper first runs ordinary migration/)
+assert.match(operatorReference, /Optional vault cleanup\tSee Optional parent-lock cleanup \(#escalation-resolution-and-deposits\)[\s\S]*?never processes another vault/)
+assert.doesNotMatch(operatorReference, /Optional vault cleanup\tThe public `migrateVaultWithUnresolvedEscalation` wrapper first runs ordinary migration/)
 assert.match(operatorReference, /External fork withdrawal lock[\s\S]*?winning inherited deposits settle there by proof[\s\S]*?inherited losers require no transaction[\s\S]*?parent lock accounting is optional/)
 assert.match(operatorReference, /authenticated winning proofs can then be relayed permissionlessly to pay their committed depositors, inherited losers retire without proofs/i)
 assert.match(invariantsHtml, /<code>ESC-13<\/code>[\s\S]{0,900}live threshold later falls to or below that configured bond[\s\S]{0,180}<code>nonDecisionThreshold - 1<\/code>/)
