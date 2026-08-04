@@ -104,17 +104,12 @@
 		link.href = `#${encodeURIComponent(id)}`
 		item.append(link)
 		outline.append(item)
-		outlineLinks.set(id, [link])
+		outlineLinks.set(id, link)
 	}
 	if (currentPage === undefined || outline.childElementCount === 0) right.hidden = true
 	right.append(outline)
 	const mobileOutline = element('details', 'docs-mobile-outline')
-	const mobileOutlineList = outline.cloneNode(true)
-	for (const link of mobileOutlineList.querySelectorAll('a[href^="#"]')) {
-		const id = decodeURIComponent(link.getAttribute('href').slice(1))
-		outlineLinks.get(id)?.push(link)
-	}
-	mobileOutline.append(element('summary', '', 'On this page'), mobileOutlineList)
+	mobileOutline.append(element('summary', '', 'On this page'), outline.cloneNode(true))
 
 	if (currentPage !== undefined && currentSection !== undefined) {
 		const context = element('div', 'docs-page-context')
@@ -358,8 +353,8 @@
 			entries => {
 				const visible = entries.filter(entry => entry.isIntersecting).sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0]
 				if (visible === undefined) return
-				for (const links of outlineLinks.values()) for (const link of links) link.removeAttribute('aria-current')
-				for (const link of outlineLinks.get(visible.target.id) ?? []) link.setAttribute('aria-current', 'location')
+				for (const link of outlineLinks.values()) link.removeAttribute('aria-current')
+				outlineLinks.get(visible.target.id)?.setAttribute('aria-current', 'location')
 			},
 			{ rootMargin: '-20% 0px -70% 0px' },
 		)

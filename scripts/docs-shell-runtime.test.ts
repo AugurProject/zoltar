@@ -9,24 +9,6 @@ async function loadShell(url = 'http://localhost/docs/tutorials/first-market.htm
 	const environment = installDomEnvironment(url)
 	Object.defineProperty(environment.window, 'innerWidth', { configurable: true, value: viewportWidth, writable: true })
 	const windowValues = environment.window as unknown as Record<string, unknown>
-	type ObservedEntry = { boundingClientRect: { top: number }; isIntersecting: boolean; target: Element }
-	let intersectionCallback: ((entries: readonly ObservedEntry[]) => void) | undefined
-	class DocumentationIntersectionObserver {
-		constructor(callback: (entries: readonly ObservedEntry[]) => void) {
-			intersectionCallback = callback
-		}
-
-		disconnect() {}
-
-		observe() {}
-
-		takeRecords() {
-			return []
-		}
-
-		unobserve() {}
-	}
-	windowValues['IntersectionObserver'] = DocumentationIntersectionObserver
 	for (const key of globalKeys) {
 		Object.defineProperty(globalThis, key, { configurable: true, value: windowValues[key], writable: true })
 	}
@@ -47,11 +29,6 @@ async function loadShell(url = 'http://localhost/docs/tutorials/first-market.htm
 				if (descriptor === undefined) Reflect.deleteProperty(globalThis, key)
 				else Object.defineProperty(globalThis, key, descriptor)
 			}
-		},
-		intersect: (id: string) => {
-			const target = document.getElementById(id)
-			if (target === null || intersectionCallback === undefined) throw new Error(`Observed documentation section ${id} is unavailable`)
-			intersectionCallback([{ boundingClientRect: { top: 0 }, isIntersecting: true, target }])
 		},
 		window: environment.window,
 	}
@@ -90,17 +67,6 @@ test('documentation landing keeps global navigation compact and omits a redundan
 		expect(document.querySelectorAll('.docs-navigation-section[open]')).toHaveLength(0)
 		expect(document.querySelector('.docs-right')?.hasAttribute('hidden')).toBeTrue()
 		expect(document.querySelector('.docs-mobile-outline')).toBeNull()
-	} finally {
-		shell.cleanup()
-	}
-})
-
-test('responsive outlines track the current section in both desktop and mobile copies', async () => {
-	const shell = await loadShell('http://localhost/docs/tutorials/first-market.html', 390)
-	try {
-		shell.intersect('before-you-start')
-		expect(document.querySelector('.docs-right .docs-outline-list a[href="#before-you-start"]')?.getAttribute('aria-current')).toBe('location')
-		expect(document.querySelector('.docs-mobile-outline .docs-outline-list a[href="#before-you-start"]')?.getAttribute('aria-current')).toBe('location')
 	} finally {
 		shell.cleanup()
 	}

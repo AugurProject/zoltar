@@ -1110,22 +1110,18 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`startTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect:
-					"Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction. An immediate completion that must resume unresolved escalation is atomic with its continuation-funding check; failure rolls the child back to `ForkMigration`, so callers reconcile backing and retry `startTruthAuction`.",
+				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
-				preconditions:
-					'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary), and immediate completion requires its aggregate carry backing to satisfy [FORK-08](./invariants.html#fork-08).',
-				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; successful immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` for an unresolved continuation',
+				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary).',
+				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect:
-					'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level even when demand is weak, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected. When unresolved escalation must resume, incomplete aggregate carry backing reverts the entire finalization; after reconciling backing, callers retry `finalizeTruthAuction`.',
+				effect: 'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions:
-					'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary), and its aggregate carry backing satisfies [FORK-08](./invariants.html#fork-08).',
-				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` when an unresolved continuation is successfully funded and resumed',
+				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
+				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
@@ -1456,8 +1452,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`recoverSettledPendingReport()`',
 				caller: 'Anyone',
-				effect:
-					'Withdraws all coordinator-owned OpenOracle WETH and REP credits to the stored pending-report sponsor, then clears a pending report whose normal callback path did not clear coordinator state. If the pending-operation slot names a live staged operation, deactivates and removes that operation from active and pending collections, then advances the slot; other staged operations remain active.',
+				effect: 'Clears a pending report whose normal callback path did not clear coordinator state. If the pending-operation slot names a live staged operation, deactivates and removes that operation from active and pending collections, then advances the slot; other staged operations remain active.',
 				declarations: [{ name: 'recoverSettledPendingReport' }],
 				preconditions: 'A pending report ID exists and its stored OpenOracle `storedGame(reportId).settlementTimestamp` is nonzero.',
 				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`, and `CoordinatorStateCheckpoint`',
@@ -1465,8 +1460,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`openOracleCallback(...)`',
 				caller: 'Configured `OpenOracle` only',
-				effect:
-					'Withdraws all coordinator-owned OpenOracle WETH and REP credits to the stored pending-report sponsor. A valid settlement then updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
+				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; excessive settlement basefee, a saturated `uint24` report counter, an uneconomic final history record at its recorded base fee plus configured priority fee, or zero values reject the price after clearing pending report state.',
 				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',

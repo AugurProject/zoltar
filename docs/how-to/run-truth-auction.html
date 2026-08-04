@@ -15,7 +15,7 @@
 			</header>
 			<section id="confirm-eligibility">
 				<h2>Confirm eligibility</h2>
-				<p>Verify that the parent migration window ended, the child is still in <code>ForkMigration</code>, and its truth-auction transition has not already started. <code>startTruthAuction(securityPool)</code> either starts the auction transition or atomically finalizes and activates the child when all REP migrated or no collateral repair is required. If that immediate path reverts because continuation carry backing is incomplete, the transition rolls back and the child remains in <code>ForkMigration</code>; reconcile the backing and retry <code>startTruthAuction</code>.</p>
+				<p>Verify that the parent migration window ended, the child is still in <code>ForkMigration</code>, and its truth-auction transition has not already started. <code>startTruthAuction(securityPool)</code> always enters the transition, but it can finalize and activate the child immediately when all REP migrated or no collateral repair is required.</p>
 			</section>
 			<section id="record-the-caps">
 				<h2>Record the caps</h2>
@@ -33,7 +33,7 @@
 			</section>
 			<section id="clear-and-finalize">
 				<h2>Finalize and activate</h2>
-				<p>After the bid window, call <code>finalizeTruthAuction(securityPool)</code>. The bounded finalization computes the clearing result, transfers the ETH actually raised into child collateral, fixes the REP and allowance conversion rates, conditionally applies a haircut when purchased REP removes a positive escalation allocation, and makes the child operational. If a required continuation lacks aggregate backing, the resumption attempt reverts the ended-auction finalization; reconcile backing and retry <code>finalizeTruthAuction</code>. Finalization does not settle individual bids, credit bidder vaults, or deliver their refunds.</p>
+				<p>After the bid window, call <code>finalizeTruthAuction(securityPool)</code>. The bounded finalization computes the clearing result, transfers the ETH actually raised into child collateral, fixes the REP and allowance conversion rates, conditionally applies a haircut when purchased REP removes a positive escalation allocation, and makes the child operational. If a required continuation lacks aggregate backing, the resumption attempt reverts finalization; reconcile backing and retry. Finalization does not settle individual bids, credit bidder vaults, or deliver their refunds.</p>
 			</section>
 			<section id="settle-individual-bids">
 				<h2>Settle individual bids</h2>
@@ -41,7 +41,7 @@
 			</section>
 			<section id="check-the-result">
 				<h2>Check the result</h2>
-				<p>Determine whether the child reached complete backing or accepted only the repair supported by auction demand. Weak demand does not block finalization: the child activates with the collateral actually raised. A separate continuation-backing gate applies when the fork carried unresolved escalation; if the child game lacks the aggregate REP required by <a href="../reference/invariants.html#fork-08"><code>FORK-08</code></a >, the transaction reverts. After reconciling carry funding, retry <code>startTruthAuction</code> when the immediate no-auction path rolled back, or retry <code>finalizeTruthAuction</code> when an ended auction remains awaiting finalization. Use <code>resumeForkedEscalationGame()</code> only when the child is already operational and still marked as awaiting continuation. Use the <a href="../explanation/truth-auctions.html">auction explanation</a> for clearing formulas and worked examples.</p>
+				<p>Determine whether the child reached complete backing or only accepted the repair supported by demand. Use <code>resumeForkedEscalationGame()</code> only when the child is already operational and still marked as awaiting continuation; an underfunded auction finalization must be retried after backing is reconciled. Use the <a href="../explanation/truth-auctions.html">auction explanation</a> for clearing formulas and worked examples.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>
