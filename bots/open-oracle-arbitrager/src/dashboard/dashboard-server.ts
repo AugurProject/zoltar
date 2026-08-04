@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
@@ -9,6 +10,7 @@ type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	hostname?: '0.0.0.0' | '127.0.0.1'
+	password?: string | undefined
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
 	updateConfiguration?: (value: unknown) => unknown | Promise<unknown>
@@ -92,11 +94,6 @@ function sameOrigin(request: Request, authority: string) {
 	return origin !== null && origin === `http://${authority}`
 }
 
-async function requireJson(request: Request) {
-	if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') throw new Error('Content-Type must be application/json')
-	return request.json()
-}
-
 export function startDashboardServer(port: number, controller: DashboardController) {
 	const directory = import.meta.dir
 	const projectDirectory = join(directory, '..', '..')
@@ -104,12 +101,17 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
+	const hostname = controller.hostname ?? '127.0.0.1'
+	validateDashboardAuthentication(hostname, controller.password)
 	let authority = ''
 	const server = Bun.serve({
-		hostname: controller.hostname ?? '127.0.0.1',
+		hostname,
 		port,
 		async fetch(request) {
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
+			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
+				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
+			}
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/') return new Response(Bun.file(join(directory, 'index.html')), { headers: securityHeaders('text/html; charset=utf-8') })
 			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
@@ -176,7 +178,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					if (controller.updateConfiguration === undefined) throw new Error('Complete configuration is unavailable')
-					return json(await controller.updateConfiguration(await requireJson(request)))
+					return json(await controller.updateConfiguration(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT ? 409 : 400)
 				}
@@ -184,7 +186,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ settings: await controller.updateStrategy(await requireJson(request)) })
+					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -192,7 +194,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ submission: await controller.updateSubmission(await requireJson(request)) })
+					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -200,7 +202,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ connectivity: await controller.updateConnectivity(await requireJson(request)) })
+					return json({ connectivity: await controller.updateConnectivity(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -209,7 +211,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					if (controller.updateDeployment === undefined) throw new Error('Deployment configuration is unavailable')
-					return json({ deployment: await controller.updateDeployment(await requireJson(request)) })
+					return json({ deployment: await controller.updateDeployment(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -218,7 +220,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
-					return json(await controller.deployExecutor(await requireJson(request)))
+					return json(await controller.deployExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -227,7 +229,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					if (controller.predictExecutor === undefined) throw new Error('Executor prediction is unavailable')
-					return json(await controller.predictExecutor(await requireJson(request)))
+					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -236,7 +238,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					if (controller.updateTokens === undefined) throw new Error('Token configuration is unavailable')
-					return json({ tokenAddresses: await controller.updateTokens(await requireJson(request)) })
+					return json({ tokenAddresses: await controller.updateTokens(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -244,7 +246,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/signer') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json(await controller.updateSigner(await requireJson(request)))
+					return json(await controller.updateSigner(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -252,7 +254,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/paused') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					const value = await requireJson(request)
+					const value = await boundedDashboardJson(request)
 					if (typeof value !== 'object' || value === null || !('paused' in value) || typeof value['paused'] !== 'boolean') throw new Error('paused must be a boolean')
 					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })

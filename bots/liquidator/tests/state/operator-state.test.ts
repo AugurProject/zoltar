@@ -6,6 +6,19 @@ import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitRe
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
 
 describe('liquidator durable state', () => {
+	test('rejects a current state journal that omits recovery collections', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-schema-'))
+		const path = join(directory, 'state.json')
+		try {
+			await writeFile(path, JSON.stringify({ activities: [], pendingStagedOperations: [], version: 1 }), 'utf8')
+			await expect(loadDurableState(path)).rejects.toThrow('pendingTransactions')
+			await writeFile(path, JSON.stringify({ activities: [], pendingTransactions: [], version: 1 }), 'utf8')
+			await expect(loadDurableState(path)).rejects.toThrow('pendingStagedOperations')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
 	test('never resubmits a recovered price-dependent intent without fresh evidence', () => {
 		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: true })).toBe(false)
 		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: false })).toBe(true)
@@ -139,7 +152,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, '{"version":1,"activities":[],"pendingTransactions":"invalid"}')
+			await writeFile(path, '{"version":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}')
 			expect(loadDurableState(path)).rejects.toThrow('pendingTransactions must be an array')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
@@ -154,6 +167,7 @@ describe('liquidator durable state', () => {
 				path,
 				JSON.stringify({
 					activities: [],
+					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
 							hash: `0x${'11'.repeat(32)}`,
@@ -200,6 +214,7 @@ describe('liquidator durable state', () => {
 				path,
 				JSON.stringify({
 					activities: [],
+					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
 							hash: keccak256(serializedTransaction),

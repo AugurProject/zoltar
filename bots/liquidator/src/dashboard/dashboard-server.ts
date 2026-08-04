@@ -1,9 +1,11 @@
 import { join } from 'node:path'
+import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 
 export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
+	password?: string | undefined
 	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
 	setMarketConfiguration?: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
@@ -35,14 +37,8 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
-async function requestJson(request: Request) {
-	if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') {
-		throw new Error('Content-Type must be application/json')
-	}
-	return request.json()
-}
-
 export function startDashboardServer(port: number, controller: DashboardController) {
+	validateDashboardAuthentication(controller.hostname, controller.password)
 	const directory = import.meta.dir
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
@@ -53,6 +49,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		async fetch(request) {
 			if (request.headers.get('host') !== authority) {
 				return json({ error: 'Request authority is not accepted' }, 403)
+			}
+			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
+				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/') {
@@ -101,7 +100,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			const handler = handlers.get(url.pathname)
 			if (request.method === 'PUT' && handler !== undefined) {
 				try {
-					return json(await handler(await requestJson(request)))
+					return json(await handler(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

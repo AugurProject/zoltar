@@ -5,8 +5,11 @@
 	"type": "module",
 	"exports": {
 		"./config/signer": "./src/config/signer.ts",
+		"./dashboard/security": "./src/dashboard/security.ts",
 		"./ethereum": "./src/ethereum.ts",
 		"./execution/signer-operation-gate": "./src/execution/signer-operation-gate.ts",
+		"./execution/canonical-finality": "./src/execution/canonical-finality.ts",
+		"./execution/process-lock": "./src/execution/process-lock.ts",
 		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
