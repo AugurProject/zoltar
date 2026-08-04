@@ -1,0 +1,130 @@
+import { beforeAll, describe, expect, test } from 'bun:test'
+import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { useIsolatedAnvilNode } from '../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.ts'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../solidity/ts/testSupport/simulator/utils/clients.ts'
+import { TEST_ADDRESSES } from '../../../solidity/ts/testSupport/simulator/utils/constants.ts'
+import { tradingContracts } from '../artifacts/contractArtifact.ts'
+
+const mocks = tradingContracts['trading/contracts/test/TradingProtocolMocks.sol']
+const factoryArtifact = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+const pairArtifact = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
+const routerArtifact = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+const rate = 10n ** 18n
+const universe = 17n
+const question = 91n
+
+describe('factory, pair, and router integration', () => {
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
+	let client: WriteClient
+	let account: Address
+	let token: Address
+	let questionData: Address
+	let coreFactory: Address
+	let pool: Address
+	let factory: Address
+	let router: Address
+	let pair: Address
+
+	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) {
+		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }), value })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		if (receipt.status === 'reverted' || receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Contract deployment failed')
+		return receipt.contractAddress
+	}
+
+	async function initialize(value = 10_000n, conditionalYesBps = 7_000n) {
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, conditionalYesBps, 1n, account, 10n ** 12n], value }))
+	}
+
+	async function tokenBalance(owner: Address, outcome: 0n | 1n | 2n) {
+		const tokenId = (universe << 8n) | outcome
+		return await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'balanceOf', args: [owner, tokenId] })
+	}
+
+	async function measuredTransaction(label: string, execute: () => Promise<Hex>) {
+		const hash = await writeContractAndWait(client, execute)
+		const receipt = await client.getTransactionReceipt({ hash })
+		if (process.env.TRADING_REPORT_GAS === '1') console.log(`gas:${label}=${receipt.gasUsed}`)
+		return receipt.gasUsed
+	}
+
+	beforeAll(async () => {
+		const ethereum = getAnvilWindowEthereum()
+		account = `0x${TEST_ADDRESSES[0].toString(16).padStart(40, '0')}`
+		await ethereum.impersonateAccount(account)
+		await ethereum.setBalance(account, 10n ** 24n)
+		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		const zoltar = await deploy(mocks.TradingMockZoltar)
+		questionData = await deploy(mocks.TradingMockQuestionData)
+		const forker = await deploy(mocks.TradingMockForker)
+		token = await deploy(mocks.TradingMockShareToken)
+		coreFactory = await deploy(mocks.TradingMockCoreFactory)
+		pool = await deploy(mocks.TradingMockSecurityPool, [token, coreFactory, zoltar, questionData, forker, universe, question, rate])
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockForker.abi, address: forker, functionName: 'setQuestionOutcome', args: [pool, 3] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setCanonicalPool', args: [universe, pool] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPool', args: [pool, universe] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 10n ** 12n] }))
+		factory = await deploy(factoryArtifact, [coreFactory, 30n])
+		router = await deploy(routerArtifact, [factory])
+		await writeContractAndWait(client, () => client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [pool] }))
+		pair = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [pool] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [router, true] }))
+		await setBaselineSnapshot()
+	})
+
+	test('validates canonical identity and deterministic pair address', async () => {
+		const predicted = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'predictPair', args: [pool] })
+		expect(predicted).toBe(pair)
+		expect(await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'isPair', args: [pair] })).toBe(true)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'invalidTokenId' })).toBe(universe << 8n)
+	})
+
+	test('initializes at alternative odds, enters YES, exits an insured amount, and preserves forced ETH', async () => {
+		await initialize()
+		const initialReserves = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
+		expect(initialReserves[1]).toBe(10_000n * rate)
+		expect(initialReserves[0]).toBe((10_000n * rate * 3_000n) / 7_000n)
+		expect(await tokenBalance(pair, 0n)).toBe(0n)
+		const invalidBefore = await tokenBalance(account, 0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'setSharesPerEth', args: [2n * rate] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, 10n ** 12n], value: 1_000n }))
+		expect((await tokenBalance(account, 0n)) - invalidBefore).toBe(2_000n * rate)
+		expect(await tokenBalance(pair, 0n)).toBe(0n)
+
+		const force = await deploy(mocks.TradingForceEth, [], 7n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingForceEth.abi, address: force, functionName: 'force', args: [router] }))
+		expect(await client.getBalance({ address: router })).toBe(7n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'exitPosition', args: [pair, 1, 100n * rate, 1_000n * rate, 50n, account, 10n ** 12n] }))
+		expect(await client.getBalance({ address: router })).toBe(7n)
+		expect(await tokenBalance(router, 0n)).toBe(0n)
+		expect(await tokenBalance(router, 1n)).toBe(0n)
+		expect(await tokenBalance(router, 2n)).toBe(0n)
+	})
+
+	test('rejects INVALID donations and closes swaps while keeping LP removal open', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, universe << 8n, 1n] }))
+		await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, universe << 8n, 1n, '0x'] })).rejects.toThrow('Unsupported share id')
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
+		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'approve', args: [router, liquidity] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'removeLiquidity', args: [pair, liquidity, 1n, 1n, account, 10n ** 12n] }))
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
+		expect(await tokenBalance(pair, 0n)).toBe(0n)
+	})
+
+	test('benchmarks every hot operation against a funded pool fixture', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		await measuredTransaction('exact-input-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 100n * rate, 1n, account] }))
+		await measuredTransaction('exact-output-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactOutput', args: [false, 10n * rate, 100n * rate, account] }))
+		await measuredTransaction('eth-entry', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, 10n ** 12n], value: 1_000n }))
+		await measuredTransaction('insured-exit', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'exitPosition', args: [pair, 1, 100n * rate, 1_000n * rate, 1n, account, 10n ** 12n] }))
+		await measuredTransaction('add-liquidity', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, 1n, account, 10n ** 12n], value: 1_000n }))
+		const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
+		const liquidityToRemove = liquidity / 10n
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'approve', args: [router, liquidityToRemove] }))
+		await measuredTransaction('remove-liquidity', () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'removeLiquidity', args: [pair, liquidityToRemove, 1n, 1n, account, 10n ** 12n] }))
+	})
+})

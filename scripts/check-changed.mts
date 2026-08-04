@@ -15,6 +15,7 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^scripts\//,
 	/^shared\/ts\//,
 	/^solidity\/ts\//,
+	/^trading\/(?!contracts\/).*\.(?:json|md|ts|tsx|mts|css|html)$/,
 	/^ui\/AGENTS\.md$/,
 	/^ui\/ts\//,
 	/^ui\/build\//,
