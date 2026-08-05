@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { diagramBackgroundElements, enforceDiagramBackground, expandDiagramAttributes, isolateDiagramBackground, restoreDiagramAttributes, restoreDiagramBackground } from '../docs/charts/diagramControl.ts'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
 function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', value: number) {
@@ -7,6 +8,42 @@ function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', val
 		value,
 	})
 }
+
+test('full-screen diagrams isolate background siblings without inerting their ancestor path', () => {
+	const environment = installDomEnvironment('http://localhost/docs/reference/deployment-status.html')
+	try {
+		document.body.innerHTML = '<header></header><main><section><p>Before</p><figure id="diagram"></figure><p>After</p></section></main><footer></footer>'
+		const diagram = document.getElementById('diagram')
+		if (diagram === null) throw new Error('Diagram background fixture is missing')
+		const header = document.querySelector('header')
+		const footer = document.querySelector('footer')
+		if (header === null || footer === null) throw new Error('Diagram background state fixture is missing')
+		header.inert = true
+		expect(diagramBackgroundElements(diagram).map(element => element.tagName)).toEqual(['P', 'P', 'HEADER', 'FOOTER'])
+		const background = isolateDiagramBackground(diagram)
+		expect(background.map(state => state.inert)).toEqual([false, false, true, false])
+		footer.inert = false
+		enforceDiagramBackground(background)
+		expect(footer.inert).toBeTrue()
+		restoreDiagramBackground(background)
+		expect(header.inert).toBeTrue()
+		expect(footer.inert).toBeFalse()
+		diagram.setAttribute('role', 'region')
+		const attributes = expandDiagramAttributes(diagram)
+		expect(diagram.getAttribute('role')).toBe('dialog')
+		expect(diagram.getAttribute('aria-modal')).toBe('true')
+		restoreDiagramAttributes(diagram, attributes)
+		expect(diagram.getAttribute('role')).toBe('region')
+		expect(diagram.getAttribute('aria-modal')).toBeNull()
+		diagram.removeAttribute('role')
+		const absentAttributes = expandDiagramAttributes(diagram)
+		restoreDiagramAttributes(diagram, absentAttributes)
+		expect(diagram.getAttribute('role')).toBeNull()
+		expect(diagram.getAttribute('aria-modal')).toBeNull()
+	} finally {
+		environment.cleanup()
+	}
+})
 
 test('responsive docs compact equations and label unavoidable equation and table overflow', async () => {
 	const environment = installDomEnvironment('http://localhost/docs/explanation/statoblast.html')
@@ -138,10 +175,11 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(matrixMath.getAttribute('style')).toContain('font-size')
 		expect(matrixEquation.querySelector('.docs-overflow-cue')?.textContent).toContain('full equation')
 		expect(piecewiseEquation.classList.contains('equation-array')).toBeTrue()
-		expect(piecewiseEquation.classList.contains('equation-compact-active')).toBeFalse()
-		expect(piecewiseEquation.querySelector('.docs-equation-compact')).toBeNull()
-		expect(piecewiseMath.getAttribute('style')).toContain('font-size')
-		expect(piecewiseEquation.querySelector('.docs-overflow-cue')?.textContent).toContain('full equation')
+		expect(piecewiseEquation.classList.contains('equation-compact-active')).toBeTrue()
+		expect(piecewiseEquation.querySelector('.docs-equation-compact')?.textContent).toContain('if accepted')
+		expect(piecewiseEquation.querySelectorAll('.docs-equation-compact-case')).toHaveLength(2)
+		expect(piecewiseEquation.classList.contains('docs-content-overflows')).toBeFalse()
+		expect(piecewiseEquation.querySelector('.docs-overflow-cue')).toBeNull()
 		expect(tableWrap.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
 		expect(bareTableContainer.getAttribute('role')).toBe('region')
 		expect(bareTableContainer.getAttribute('aria-label')).toBe('Deployment mapping')

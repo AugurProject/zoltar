@@ -691,14 +691,16 @@ function checkDiagramControlStates(): void {
 		button.setAttribute('aria-pressed', 'true')
 
 		updateDiagramControl(button, cue, true)
-		assert.equal(button.textContent, 'View full size', 'fit mode must name the action that reveals the full-size diagram')
+		assert.equal(button.textContent, 'Close full screen', 'expanded mode must name the action that returns to the document')
 		assert.equal(button.getAttribute('aria-pressed'), null, 'an action-labeled diagram control must not announce a contradictory pressed state')
-		assert.equal(cue.textContent, 'Full size reveals detailed labels.', 'fit mode must explain the available detail')
+		assert.equal(button.getAttribute('aria-expanded'), 'true', 'expanded mode must expose its relationship to the full-screen diagram')
+		assert.equal(cue.textContent, 'Diagram is fitted to the screen. Press Escape to close.', 'expanded mode must explain the fitted layout and keyboard exit')
 
 		updateDiagramControl(button, cue, false)
-		assert.equal(button.textContent, 'Fit to width', 'full-size mode must name the action that restores the fitted diagram')
-		assert.equal(button.getAttribute('aria-pressed'), null, 'full-size mode must remain an action button rather than a stateful toggle')
-		assert.equal(cue.textContent, 'Scroll horizontally to inspect labels.', 'full-size mode must explain horizontal inspection')
+		assert.equal(button.textContent, 'View full screen', 'document mode must name the action that opens the larger fitted diagram')
+		assert.equal(button.getAttribute('aria-pressed'), null, 'document mode must remain an action button rather than a stateful toggle')
+		assert.equal(button.getAttribute('aria-expanded'), 'false', 'document mode must expose that the full-screen diagram is closed')
+		assert.equal(cue.textContent, 'Full screen provides more room for detailed labels.', 'document mode must explain the available detail')
 	} finally {
 		window.close()
 	}
