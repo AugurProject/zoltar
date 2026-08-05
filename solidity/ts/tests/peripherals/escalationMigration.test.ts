@@ -243,7 +243,7 @@ describe('Peripherals: escalation migration', () => {
 		assert.deepStrictEqual(await readChildStateGuard(), stateBefore, 'inactive claim path must preserve the activated child, deposits, REP, and parent vault')
 	})
 
-	test('own-fork claims reject another vaults deposit and roll back consumption, child deployment, and REP state', async () => {
+	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)

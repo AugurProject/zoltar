@@ -22,6 +22,7 @@ const atomicIdentifierWithHumanUnit = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|Atto
 const atomicIdentifierAssignedHumanAmount = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)(?:<\/code>)?\s*(?:=|:|is|of)\s*(?:<code>)?\d+(?:\.\d+)?\s*(?:ETH|REP|shares)\b/i
 const bigintDeclaration = /\b([A-Za-z_$][A-Za-z0-9_$]*)\??:\s*bigint\b/g
 const ambiguousVaultBackingTerminology = /\bvault[ -]collateral\b/i
+const ambiguousVaultActorTerminology = /\b(?:REP vaults|vault users)\b/i
 const ambiguousParentEscalationTerminology = /\b(?:parent[- ]locks?|parent escalation[- ]locks?|unresolved[- ]locks?|escalation[- ]lock accounting)\b/i
 const ambiguousLiquidationBackingTerminology = /\b(?:target-assigned rescue collateral|seize the rescue deposit)\b/i
 const ambiguousPoolHeldRepTerminology = /(?<!-)\bpool REP\b/i
@@ -86,6 +87,7 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 		if (unsuffixedAtomicEthIdentifier !== undefined) failures.push(`${path}: atomic ETH/WETH bigint identifier ${unsuffixedAtomicEthIdentifier} lacks an AttoEth suffix`)
 	}
 	if (path !== terminologyCheckPath && ambiguousVaultBackingTerminology.test(source)) failures.push(`${path}: uses vault collateral where REP backing or settlement collateral is required`)
+	if (path !== terminologyCheckPath && ambiguousVaultActorTerminology.test(source)) failures.push(`${path}: uses a vault container as an actor instead of naming the vault owner`)
 	if (path !== terminologyCheckPath && ambiguousParentEscalationTerminology.test(source)) failures.push(`${path}: uses an ambiguous parent escalation-lock alias`)
 	if (path !== terminologyCheckPath && ambiguousLiquidationBackingTerminology.test(source)) failures.push(`${path}: describes target-assigned REP backing as rescue collateral or seizure`)
 	if (path !== terminologyCheckPath && ambiguousPoolHeldRepTerminology.test(source)) failures.push(`${path}: uses pool REP instead of pool-held REP`)

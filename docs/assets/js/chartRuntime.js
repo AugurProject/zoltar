@@ -491,7 +491,7 @@ var sH=(t,r)=>()=>(r||t((r={exports:{}}).exports,r),r.exports);var CH=sH((Gy,aP)
 							`}],tag:"text"},{attributes:{class:"svg-line","marker-end":"url(#arrow-system)",d:"M 240 91 H 315"},tag:"path"},{attributes:{class:"svg-green",x:"315",y:"54",width:"210",height:"74",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"420",y:"84","text-anchor":"middle"},children:[{text:`
 								Security Pool
 							`}],tag:"text"},{attributes:{class:"svg-small",x:"420",y:"107","text-anchor":"middle"},children:[{text:`
-								REP vaults + ETH shares
+								Security vaults + ETH shares
 							`}],tag:"text"},{attributes:{class:"svg-line","marker-end":"url(#arrow-system)",d:"M 525 91 H 610"},tag:"path"},{attributes:{class:"svg-gold",x:"610",y:"54",width:"250",height:"74",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"735",y:"84","text-anchor":"middle"},children:[{text:`
 								Escalation Game
 							`}],tag:"text"},{attributes:{class:"svg-small",x:"735",y:"107","text-anchor":"middle"},children:[{text:`

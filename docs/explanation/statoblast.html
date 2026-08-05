@@ -18,7 +18,7 @@
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
 				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
 				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
 				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>
@@ -30,10 +30,10 @@
 					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 				</div>
 				<p>The stack has two protocol identities. <code>Zoltar</code> is the base truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur Statoblast</code> is the application layer that adds market collateral, underwriting, local disputes, migration, and collateral repair. For the base oracle layer, see <a href="./zoltar.html">zoltar.html</a>.</p>
-				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders and REP vaults use it, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery.</p>
+				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery.</p>
 				<ol>
 					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
-					<li>REP vaults fund underwriting capacity and users mint ETH-backed complete sets.</li>
+					<li>Vault owners fund security vaults with REP backing, and users mint ETH-backed complete sets.</li>
 					<li>After question end, disputes first try to resolve locally through the escalation game.</li>
 					<li>If local resolution reaches non-decision, Statoblast can trigger a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution. In either case, a separate pool-fork activation snapshots the parent before child-pool migration begins.</li>
 					<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
@@ -136,7 +136,7 @@
 								<div class="architecture-arrow" aria-hidden="true">→</div>
 								<div class="architecture-component architecture-component-primary">
 									<code>SecurityPool</code>
-									<p>Owns its ETH collateral, REP vault accounting, coverage commitments, fees, lifecycle status, and the pointer to its escalation game.</p>
+									<p>Owns its settlement collateral, security-vault REP backing accounting, coverage commitments, fees, lifecycle status, and the pointer to its escalation game.</p>
 								</div>
 								<div class="architecture-arrow" aria-hidden="true">↔</div>
 								<div class="architecture-component">
