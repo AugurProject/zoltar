@@ -43,7 +43,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeResolution = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.vaultRepBackingAttoRep)
+		const vaultRepBeforeResolution = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.repBackingUnits)
 		const shareSupplyBeforeResolution = await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool)
 		const holderSharesBeforeResolution = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.ok(vaultRepBeforeResolution > reportBond, 'the vault REP redemption must represent a funded claim')
@@ -126,6 +126,6 @@ describe('Audit regression: escalation start configuration liveness', () => {
 
 		assert.strictEqual(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'resolved open interest must be fully redeemable')
 		const vaultAfterRedemption = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		assert.strictEqual(vaultAfterRedemption.vaultRepBackingAttoRep, 0n, 'the funded vault REP claim must be fully redeemable')
+		assert.strictEqual(vaultAfterRedemption.repBackingUnits, 0n, 'the funded vault REP claim must be fully redeemable')
 	})
 })

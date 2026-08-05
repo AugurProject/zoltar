@@ -46,7 +46,7 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 		depositAmount: '0',
 		coverageCommitmentEthAmount: '0',
 		repWithdrawAmount: '0',
-		selectedVaultAddress: '',
+		selectedVaultOwner: '',
 		securityPoolAddress: '',
 		stagedOperationTimeoutMinutes: '5',
 	}

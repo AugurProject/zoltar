@@ -105,7 +105,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		strictEqualTypeSafe(migratedRepAttoRep, parentForkData.auctionableRepAtForkAttoRep, 'migrating the complete backingUnits denominator should reconcile every fork-time REP unit')
 
 		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, vaultClients[0].account.address)
-		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.vaultRepBackingAttoRep)
+		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits)
 		strictEqualTypeSafe(honestRep, repDeposit, 'the migrated vault should retain its full 1,000 REP claim')
 		strictEqualTypeSafe(honestVault.coverageCommitmentAttoEth, coverageCommitmentAttoEthPerVault, 'the migrated vault should retain its coverage commitment')
 
@@ -116,6 +116,6 @@ describe('Truth-auction REP donation rounding regression', () => {
 		strictEqualTypeSafe(ethRaiseCapAttoEth, 0n, 'full backingUnits migration should finalize without starting an auction')
 		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), forkTimeCollateral, 'full backingUnits migration should activate with the complete fork-time collateral snapshot')
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the fully migrated child should activate immediately')
-		strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.vaultRepBackingAttoRep), repDeposit, 'auction finalization should not dilute migrated vault backingUnits')
+		strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits), repDeposit, 'auction finalization should not dilute migrated vault backingUnits')
 	})
 })

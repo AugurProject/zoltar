@@ -18,23 +18,23 @@ function getMigrationSecurityMultiplierBps(poolSecurityMultiplierBps: bigint) {
 	return BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2n
 }
 
-export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
-	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
-	if (trimmedSelectedVaultAddress !== '') return trimmedSelectedVaultAddress
+export function getSelectedVaultOwner(selectedVaultOwner: string | undefined, accountAddress: Address | undefined) {
+	const trimmedSelectedVaultOwner = selectedVaultOwner?.trim() ?? ''
+	if (trimmedSelectedVaultOwner !== '') return trimmedSelectedVaultOwner
 	return accountAddress?.toString()
 }
 
-export function isSelectedVaultOwnedByAccount(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
-	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
-	if (trimmedSelectedVaultAddress === '' || accountAddress === undefined) return false
-	return sameAddress(trimmedSelectedVaultAddress, accountAddress)
+export function isSelectedVaultOwnedByAccount(selectedVaultOwner: string | undefined, accountAddress: Address | undefined) {
+	const trimmedSelectedVaultOwner = selectedVaultOwner?.trim() ?? ''
+	if (trimmedSelectedVaultOwner === '' || accountAddress === undefined) return false
+	return sameAddress(trimmedSelectedVaultOwner, accountAddress)
 }
 
-export function doesLoadedSecurityVaultMatchSelection({ accountAddress, securityPoolAddress, securityVaultDetails, selectedVaultAddress }: { accountAddress: Address | undefined; securityPoolAddress: string | undefined; securityVaultDetails: SecurityVaultDetails | undefined; selectedVaultAddress: string | undefined }) {
+export function doesLoadedSecurityVaultMatchSelection({ accountAddress, securityPoolAddress, securityVaultDetails, selectedVaultOwner }: { accountAddress: Address | undefined; securityPoolAddress: string | undefined; securityVaultDetails: SecurityVaultDetails | undefined; selectedVaultOwner: string | undefined }) {
 	if (securityVaultDetails === undefined) return false
-	const effectiveSelectedVaultAddress = getSelectedVaultAddress(selectedVaultAddress, accountAddress)
-	if (effectiveSelectedVaultAddress === undefined) return false
-	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultAddress)
+	const effectiveSelectedVaultOwner = getSelectedVaultOwner(selectedVaultOwner, accountAddress)
+	if (effectiveSelectedVaultOwner === undefined) return false
+	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
 export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined) {

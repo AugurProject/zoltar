@@ -200,7 +200,7 @@ function usePeripheralsTestFixture() {
 
 	const getVaultRepClaim = async (vaultAddress: Address) => {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
-		return await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.vaultRepBackingAttoRep)
+		return await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 	}
 	const { finalizeQuestionAsYesWithoutFork, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupStartedTruthAuction, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } = createPeripheralsTruthAuctionScenarioHelpers({
 		genesisUniverse,

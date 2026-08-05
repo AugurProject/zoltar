@@ -331,7 +331,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'fork-migration',

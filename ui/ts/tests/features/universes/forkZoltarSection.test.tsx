@@ -11,7 +11,7 @@ import type { MarketDetails, ZoltarUniverseSummary } from '../../../types/contra
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
-const REP = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
 
 function createQuestion(): MarketDetails {
@@ -189,13 +189,13 @@ describe('ForkZoltarSection', () => {
 				onForkZoltar: () => undefined,
 				onZoltarForkQuestionIdChange: () => undefined,
 				zoltarForkActiveAction: undefined,
-				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP_PER_REP },
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
 				zoltarForkQuestionId: '0x01',
-				zoltarForkRepBalanceAttoRep: 1000n * REP,
+				zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP_PER_REP,
 				zoltarQuestions: [createQuestion()],
-				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP_PER_REP, zoltarAddress: ZOLTAR_ADDRESS }),
 				zoltarUniverseState: 'ready',
 			}),
 		)
@@ -224,13 +224,13 @@ describe('ForkZoltarSection', () => {
 				onForkZoltar,
 				onZoltarForkQuestionIdChange: () => undefined,
 				zoltarForkActiveAction: undefined,
-				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP_PER_REP },
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
 				zoltarForkQuestionId: '0x01',
-				zoltarForkRepBalanceAttoRep: 1000n * REP,
+				zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP_PER_REP,
 				zoltarQuestions: [createQuestion()],
-				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP_PER_REP, zoltarAddress: ZOLTAR_ADDRESS }),
 				zoltarUniverseState: 'ready',
 			}),
 		)
@@ -259,11 +259,11 @@ describe('ForkZoltarSection', () => {
 			onForkZoltar: () => undefined,
 			onZoltarForkQuestionIdChange: () => undefined,
 			zoltarForkActiveAction: undefined,
-			zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+			zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP_PER_REP },
 			zoltarForkError: undefined,
 			zoltarForkPending: false,
 			zoltarForkQuestionId: questionId,
-			zoltarForkRepBalanceAttoRep: 1000n * REP,
+			zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP_PER_REP,
 			zoltarQuestions: [
 				createQuestion(),
 				{
@@ -272,7 +272,7 @@ describe('ForkZoltarSection', () => {
 					title: 'Second fork question title',
 				},
 			],
-			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP_PER_REP, zoltarAddress: ZOLTAR_ADDRESS }),
 			zoltarUniverseState: 'ready' as const,
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))
@@ -333,13 +333,13 @@ describe('ForkZoltarSection', () => {
 				onForkZoltar,
 				onZoltarForkQuestionIdChange: () => undefined,
 				zoltarForkActiveAction: undefined,
-				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP_PER_REP },
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
 				zoltarForkQuestionId: '0x01',
-				zoltarForkRepBalanceAttoRep: 1000n * REP,
+				zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP_PER_REP,
 				zoltarQuestions: [createQuestion()],
-				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP_PER_REP, zoltarAddress: ZOLTAR_ADDRESS }),
 				zoltarUniverseState: 'ready',
 			}),
 		)
@@ -366,13 +366,13 @@ describe('ForkZoltarSection', () => {
 			onForkZoltar,
 			onZoltarForkQuestionIdChange: () => undefined,
 			zoltarForkActiveAction: undefined,
-			zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+			zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP_PER_REP },
 			zoltarForkError: undefined,
 			zoltarForkPending: false,
 			zoltarForkQuestionId: '0x01',
-			zoltarForkRepBalanceAttoRep: 1000n * REP,
+			zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP_PER_REP,
 			zoltarQuestions: [createQuestion()],
-			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP_PER_REP, zoltarAddress: ZOLTAR_ADDRESS }),
 			zoltarUniverseState: 'ready' as const,
 		}
 		const renderedComponent = await renderIntoDocument(

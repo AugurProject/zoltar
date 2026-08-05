@@ -28,7 +28,7 @@ import { parseAddressInput } from '../../../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseBigIntInput, parseEthAmountInput, parseRepAmountInput } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '../../../lib/required.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, getStagedOperationTimeoutSeconds, MIN_COVERAGE_COMMITMENT_ATTO_ETH, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_COVERAGE_COMMITMENT_ATTO_ETH, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
@@ -101,9 +101,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 	const nextSecurityVaultLoad = useRequestGuard()
 	const lastEffectiveVaultSelectionKey = useRef<string | undefined>(undefined)
-	const effectiveSelectedVaultAddress = getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress)
+	const effectiveSelectedVaultOwner = getSelectedVaultOwner(securityVaultForm.value.selectedVaultOwner, accountAddress)
 	const effectiveSecurityPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? securityVaultForm.value.securityPoolAddress : selectedSecurityPoolAddress
-	const effectiveVaultSelectionKey = `${normalizeAddress(effectiveSecurityPoolAddressInput) ?? ''}:${normalizeAddress(effectiveSelectedVaultAddress) ?? ''}`
+	const effectiveVaultSelectionKey = `${normalizeAddress(effectiveSecurityPoolAddressInput) ?? ''}:${normalizeAddress(effectiveSelectedVaultOwner) ?? ''}`
 	const currentVaultSelectionKeyRef = useRef(effectiveVaultSelectionKey)
 	currentVaultSelectionKeyRef.current = effectiveVaultSelectionKey
 	const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
@@ -185,9 +185,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	}
 	const isVaultSelectionCurrent = (selectionKey: string) => currentVaultSelectionKeyRef.current === selectionKey
 
-	const resolveSelectedVaultAddress = () => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before selecting a security vault')
-		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
+	const resolveSelectedVaultOwner = () => {
+		const selectedVaultOwner = requireDefined(getSelectedVaultOwner(securityVaultForm.value.selectedVaultOwner, accountAddress), 'Enter a vault owner address or connect a wallet before selecting a security vault')
+		return parseAddressInput(selectedVaultOwner, 'Selected vault owner address')
 	}
 	const createVaultActionSnapshot = (): SecurityVaultActionSnapshot => ({
 		effectiveSecurityPoolAddressInput,
@@ -195,9 +195,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		form: { ...securityVaultForm.value },
 	})
 	const isVaultActionSnapshotCurrent = (snapshot: SecurityVaultActionSnapshot) => snapshot.effectiveVaultSelectionKey === lastEffectiveVaultSelectionKey.current
-	const resolveSelectedVaultAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(snapshot.form.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before selecting a security vault')
-		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
+	const resolveSelectedVaultOwnerFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
+		const selectedVaultOwner = requireDefined(getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress), 'Enter a vault owner address or connect a wallet before selecting a security vault')
+		return parseAddressInput(selectedVaultOwner, 'Selected vault owner address')
 	}
 	const resolveSecurityVaultPoolAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => parseAddressInput(requireDefined(snapshot.effectiveSecurityPoolAddressInput, 'Security pool address is required'), 'Security pool address')
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
@@ -222,10 +222,10 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 
 	useEffect(() => {
 		if (accountAddress === undefined) return
-		if (securityVaultForm.value.selectedVaultAddress.trim() !== '') return
+		if (securityVaultForm.value.selectedVaultOwner.trim() !== '') return
 		securityVaultForm.value = {
 			...securityVaultForm.value,
-			selectedVaultAddress: accountAddress.toString(),
+			selectedVaultOwner: accountAddress.toString(),
 		}
 	}, [accountAddress])
 
@@ -279,11 +279,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			},
 			load: async () => {
 				const securityPoolAddress = resolveSecurityVaultPoolAddress()
-				const vaultAddress = vaultAddressInput?.trim() === '' || vaultAddressInput === undefined ? resolveSelectedVaultAddress() : parseAddressInput(vaultAddressInput, 'Selected vault address')
+				const vaultAddress = vaultAddressInput?.trim() === '' || vaultAddressInput === undefined ? resolveSelectedVaultOwner() : parseAddressInput(vaultAddressInput, 'Selected vault owner address')
 				if (vaultAddressInput !== undefined)
 					securityVaultForm.value = {
 						...securityVaultForm.value,
-						selectedVaultAddress: vaultAddress.toString(),
+						selectedVaultOwner: vaultAddress.toString(),
 					}
 				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 				if (!isCurrent()) return undefined
@@ -323,7 +323,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
-			vaultAddress: getSelectedVaultAddress(snapshot.form.selectedVaultAddress, accountAddress),
+			vaultAddress: getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress),
 		}
 		let securityPoolAddress: Address | undefined
 		try {
@@ -357,11 +357,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				async walletAddress => {
 					securityPoolAddress = resolveSecurityVaultPoolAddressFromSnapshot(snapshot)
 					if (securityVaultMissing.value) throw new Error('Security pool does not exist')
-					const selectedVaultAddress = resolveSelectedVaultAddressFromSnapshot(snapshot)
-					if (!sameAddress(selectedVaultAddress, walletAddress)) throw new Error('Selected vault is read-only')
+					const selectedVaultOwner = resolveSelectedVaultOwnerFromSnapshot(snapshot)
+					if (!sameAddress(selectedVaultOwner, walletAddress)) throw new Error('Selected vault is read-only')
 					securityVaultError.value = undefined
 					securityVaultResult.value = undefined
-					return await action(selectedVaultAddress, securityPoolAddress, isCurrentSelection)
+					return await action(selectedVaultOwner, securityPoolAddress, isCurrentSelection)
 				},
 				errorFallback,
 				async (result, walletAddress) => {
@@ -559,8 +559,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 
 	useEffect(() => {
 		if (!enabled) return
-		const selectedVaultAddress = securityVaultForm.value.selectedVaultAddress.trim()
-		if (accountAddress === undefined || selectedVaultAddress === '') {
+		const selectedVaultOwner = securityVaultForm.value.selectedVaultOwner.trim()
+		if (accountAddress === undefined || selectedVaultOwner === '') {
 			clearRepLoaders()
 			return
 		}
@@ -570,9 +570,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				accountAddress,
 				securityPoolAddress: securityVaultForm.value.securityPoolAddress,
 				securityVaultDetails: securityVaultDetails.value,
-				selectedVaultAddress,
+				selectedVaultOwner,
 			}) ||
-			!sameAddress(selectedVaultAddress, accountAddress)
+			!sameAddress(selectedVaultOwner, accountAddress)
 		) {
 			clearRepLoaders()
 			return
@@ -590,7 +590,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		void reloadSecurityVaultRepAllowance(currentSecurityVaultDetails.repToken, accountAddress, currentSecurityVaultDetails.securityPoolAddress).catch(error => {
 			if (!isRecoverableContractReadError(error)) throw error
 		})
-	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
+	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultOwner])
 
 	return {
 		approveRep,

@@ -42,8 +42,8 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		return (child, childEscalationGame);
 	}
 
-	function ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) public {
-		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredSplit);
+	function ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplitAttoRep) public {
+		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredSplitAttoRep);
 	}
 
 	function finalizeTruthAuctionRepair(

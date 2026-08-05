@@ -6,7 +6,7 @@ type IntegerLike = bigint | number
 type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 export type StagedOperationTuple = {
-	amount: bigint
+	operationAmountAttoRepOrAttoEth: bigint
 	initiatorVault: Address
 	operation: IntegerLike
 	targetVault: Address
@@ -86,7 +86,7 @@ export function requireUniverseTupleArray(value: unknown, context: string): Univ
 }
 
 function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
-	return isObjectRecord(value) && typeof value['amount'] === 'bigint' && typeof value['initiatorVault'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
+	return isObjectRecord(value) && typeof value['operationAmountAttoRepOrAttoEth'] === 'bigint' && typeof value['initiatorVault'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
 }
 
 export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {

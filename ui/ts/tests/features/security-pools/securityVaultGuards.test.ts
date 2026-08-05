@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetCoverageCommitmentGuardMessage, getVaultWithdrawGuardMessage } from '../../../features/security-pools/lib/securityVaultGuards.js'
 
-const ETH = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
 
 describe('security vault guards', () => {
 	test('blocks deposit until deterministic deposit prerequisites are met', () => {
@@ -213,19 +213,19 @@ describe('security vault guards', () => {
 				isPriceValid: false,
 				isOnActiveAppChain: true,
 				pendingReportId: 0n,
-				requiredCostAttoEth: 10n * ETH,
-				walletBalanceAttoEth: 5n * ETH,
+				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
+				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to request a new price.')
 
 		expect(
 			getVaultWithdrawGuardMessage({
 				bufferRequiredEthCost: true,
-				requiredCostAttoEth: 10n * ETH,
+				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
 				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 1n * ETH,
-				withdrawableRepAmountAttoRep: 5n * ETH,
-				walletBalanceAttoEth: 5n * ETH,
+				withdrawAmount: 1n * ATTO_ETH_PER_ETH,
+				withdrawableRepAmountAttoRep: 5n * ATTO_ETH_PER_ETH,
+				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to queue this REP withdrawal.')
 
@@ -233,10 +233,10 @@ describe('security vault guards', () => {
 			getVaultSetCoverageCommitmentGuardMessage({
 				maxCoverageCommitmentAttoEthAmount: undefined,
 				bufferRequiredEthCost: true,
-				requiredCostAttoEth: 10n * ETH,
+				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
 				coverageCommitmentAttoEthAmount: 0n,
 				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 5n * ETH,
+				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to queue this coverage commitment update.')
 	})

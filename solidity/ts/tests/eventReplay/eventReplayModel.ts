@@ -54,7 +54,7 @@ export type ForkReplay = {
 	ownFork: boolean
 	unresolvedEscalation: boolean
 	settlementCollateralAtForkAttoEth: bigint
-	poolRepAtForkAttoRep: bigint
+	totalPoolHeldRepAtForkAttoRep: bigint
 	auctionableRepAtForkAttoRep: bigint
 	escalationSourceRepAtForkAttoRep: bigint
 	escalationChildRepAtForkAttoRep: bigint
@@ -120,7 +120,7 @@ export type CoordinatorOperationReplay = {
 	operation: bigint
 	initiatorVault: Address
 	targetVault: Address
-	amount: bigint
+	operationAmountAttoRepOrAttoEth: bigint
 	queuedAt: bigint
 	validForSeconds: bigint
 	snapshotTargetBackingUnits: bigint
@@ -889,7 +889,7 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 			ownFork: requireBoolean(log.args, 'ownFork'),
 			unresolvedEscalation,
 			settlementCollateralAtForkAttoEth: requireBigInt(log.args, 'settlementCollateralAtForkAttoEth'),
-			poolRepAtForkAttoRep: requireBigInt(log.args, 'poolRepAtForkAttoRep'),
+			totalPoolHeldRepAtForkAttoRep: requireBigInt(log.args, 'totalPoolHeldRepAtForkAttoRep'),
 			auctionableRepAtForkAttoRep: requireBigInt(log.args, 'auctionableRepAtForkAttoRep'),
 			escalationSourceRepAtForkAttoRep: requireBigInt(log.args, 'escalationSourceRepAtForkAttoRep'),
 			escalationChildRepAtForkAttoRep: requireBigInt(log.args, 'escalationChildRepAtForkAttoRep'),
@@ -1414,7 +1414,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			operation: requireBigInt(log.args, 'operation'),
 			initiatorVault: requireAddress(log.args, 'initiatorVault'),
 			targetVault: requireAddress(log.args, 'targetVault'),
-			amount: requireBigInt(log.args, 'amount'),
+			operationAmountAttoRepOrAttoEth: requireBigInt(log.args, 'operationAmountAttoRepOrAttoEth'),
 			queuedAt: requireBigInt(log.args, 'queuedAt'),
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),

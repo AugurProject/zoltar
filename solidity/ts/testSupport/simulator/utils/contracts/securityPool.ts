@@ -17,7 +17,7 @@ const getAwaitingForkContinuationAbi = [
 ] as const
 
 type SecurityVault = {
-	vaultRepBackingAttoRep: bigint
+	repBackingUnits: bigint
 	coverageCommitmentAttoEth: bigint
 	claimableFeesAttoEth: bigint
 	feeIndex: bigint
@@ -184,7 +184,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		}),
 		'Security vault',
 	)
-	const vaultRepBackingAttoRep = requireBigInt(securityVaultData[0], 'Security vault rep deposit share')
+	const repBackingUnits = requireBigInt(securityVaultData[0], 'Security vault REP backing units')
 	const coverageCommitmentAttoEth = requireBigInt(securityVaultData[1], 'Security vault coverage commitment')
 	const claimableFeesAttoEth = requireBigInt(securityVaultData[2], 'Security vault unpaid ETH fees')
 	const feeIndex = requireBigInt(securityVaultData[3], 'Security vault fee index')
@@ -207,9 +207,9 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 						address: escalationGameAddress,
 						args: [securityVault],
 					}),
-					'Escrowed REP by vault',
+					'Dispute-staked REP by vault',
 				)
-	return { vaultRepBackingAttoRep, coverageCommitmentAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedRepAttoRep }
+	return { repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedRepAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>

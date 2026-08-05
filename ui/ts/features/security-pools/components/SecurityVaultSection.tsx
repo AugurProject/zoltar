@@ -43,7 +43,7 @@ import {
 	getSecurityVaultMaxCoverageCommitmentAttoEthAmount,
 	getStagedOperationTimeoutSeconds,
 	getSecurityVaultWithdrawableRepAmount,
-	getSelectedVaultAddress,
+	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
 	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
@@ -126,8 +126,8 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 		</EntityCard>
 	)
 }
-export function getQueuedVaultOperation({ pendingOperation, selectedVaultAddress, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultAddress: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
-	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultAddress)) {
+export function getQueuedVaultOperation({ pendingOperation, selectedVaultOwner, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
+	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultOwner)) {
 		if (securityVaultResult?.action === 'queueWithdrawRep' && pendingOperation.operation === 'withdrawRep') return { amount: pendingOperation.amount, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
 		if (securityVaultResult?.action === 'queueSetCoverageCommitmentAttoEth' && pendingOperation.operation === 'setCoverageCommitment') return { amount: pendingOperation.amount, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
 	}
@@ -313,24 +313,24 @@ export function SecurityVaultSection({
 		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',
 		coverageCommitmentEthAmount: securityVaultForm.coverageCommitmentEthAmount ?? '0',
 		securityPoolAddress: securityVaultForm.securityPoolAddress ?? '',
-		selectedVaultAddress: securityVaultForm.selectedVaultAddress ?? '',
+		selectedVaultOwner: securityVaultForm.selectedVaultOwner ?? '',
 		stagedOperationTimeoutMinutes: securityVaultForm.stagedOperationTimeoutMinutes ?? DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString(),
 	}
-	const selectedVaultAddress = getSelectedVaultAddress(normalizedSecurityVaultForm.selectedVaultAddress, accountState.address)
+	const selectedVaultOwner = getSelectedVaultOwner(normalizedSecurityVaultForm.selectedVaultOwner, accountState.address)
 	const currentSelectedVaultDetails = doesLoadedSecurityVaultMatchSelection({
 		accountAddress: accountState.address,
 		securityPoolAddress: normalizedSecurityVaultForm.securityPoolAddress,
 		securityVaultDetails,
-		selectedVaultAddress: normalizedSecurityVaultForm.selectedVaultAddress,
+		selectedVaultOwner: normalizedSecurityVaultForm.selectedVaultOwner,
 	})
 		? securityVaultDetails
 		: undefined
-	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
+	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwner, accountState.address)
 	const vaultTransactionContext = [
 		...(selectedMarketTitle === undefined ? [] : [{ label: commonCopy.question, value: selectedMarketTitle }]),
 		{ label: commonCopy.securityPoolAddress, value: <AddressValue address={currentSelectedVaultDetails?.securityPoolAddress ?? normalizedSecurityVaultForm.securityPoolAddress} /> },
 		...(currentSelectedVaultDetails?.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={currentSelectedVaultDetails.universeId} /> }]),
-		{ label: securityPoolCopy.vault, value: <AddressValue address={selectedVaultAddress === '' ? undefined : selectedVaultAddress} /> },
+		{ label: securityPoolCopy.vault, value: <AddressValue address={selectedVaultOwner === '' ? undefined : selectedVaultOwner} /> },
 		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 	]
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
@@ -437,12 +437,12 @@ export function SecurityVaultSection({
 	const hasLoadedSelectedVaultDetails = currentSelectedVaultDetails !== undefined
 	const canUseLoadedVaultActions = canUseOwnedVaultActions && hasLoadedSelectedVaultDetails && isOnActiveAppChain
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
-	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
-	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
+	const autoLoadKey = `${normalizeAddress(selectedVaultOwner) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
+	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: oracleManagerDetails?.pendingOperation,
-		selectedVaultAddress: selectedVaultAddress ?? '',
+		selectedVaultOwner: selectedVaultOwner ?? '',
 		securityVaultResult,
 	})
 	const queuedVaultOperationStatus = getQueuedVaultOperationStatus({
@@ -523,12 +523,12 @@ export function SecurityVaultSection({
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
-		if (selectedVaultAddress === undefined || selectedVaultAddress === '') return
+		if (selectedVaultOwner === undefined || selectedVaultOwner === '') return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastAutoLoadKey.current === autoLoadKey) return
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
-	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultAddress])
+	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: securityPoolCopy.depositRepToVault,
@@ -821,7 +821,7 @@ export function SecurityVaultSection({
 			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
-					<MetricField label={securityPoolCopy.vault}>{selectedVaultAddress === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultAddress} />}</MetricField>
+					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
 				</MetricGrid>
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
@@ -1024,9 +1024,9 @@ export function SecurityVaultSection({
 				<SectionBlock title={securityPoolCopy.vaultLookup} variant='embedded'>
 					{vaultLoadNotice}
 					<LookupFieldRow
-						label={securityPoolCopy.selectedVaultAddress}
-						value={normalizedSecurityVaultForm.selectedVaultAddress}
-						onInput={selectedVaultAddressInput => onSecurityVaultFormChange({ selectedVaultAddress: selectedVaultAddressInput })}
+						label={securityPoolCopy.selectedVaultOwner}
+						value={normalizedSecurityVaultForm.selectedVaultOwner}
+						onInput={selectedVaultOwnerInput => onSecurityVaultFormChange({ selectedVaultOwner: selectedVaultOwnerInput })}
 						placeholder={commonCopy.hexValuePlaceholder}
 						action={
 							<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>

@@ -72,7 +72,7 @@ const securityPoolForkSnapshotEvent = {
 		{ name: 'ownFork', type: 'bool', indexed: false },
 		{ name: 'unresolvedEscalation', type: 'bool', indexed: false },
 		{ name: 'settlementCollateralAtForkAttoEth', type: 'uint256', indexed: false },
-		{ name: 'poolRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'totalPoolHeldRepAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'auctionableRepAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'escalationSourceRepAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'escalationChildRepAtForkAttoRep', type: 'uint256', indexed: false },
@@ -459,7 +459,7 @@ describe('event-only replay', () => {
 					operation: 2n,
 					initiatorVault: forker,
 					targetVault: pool,
-					amount: 3n,
+					operationAmountAttoRepOrAttoEth: 3n,
 					queuedAt: 27n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
@@ -518,7 +518,7 @@ describe('event-only replay', () => {
 					operation: 0n,
 					initiatorVault: firstVault,
 					targetVault: firstVault,
-					amount: 3n,
+					operationAmountAttoRepOrAttoEth: 3n,
 					queuedAt: 10n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
@@ -537,7 +537,7 @@ describe('event-only replay', () => {
 					operation: 1n,
 					initiatorVault: secondVault,
 					targetVault: secondVault,
-					amount: 4n,
+					operationAmountAttoRepOrAttoEth: 4n,
 					queuedAt: 11n,
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
@@ -552,8 +552,8 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents(logs.toReversed())
 		if (replayed.escalationDeposits.get(firstGame)?.get('1:1')?.depositor !== firstVault) throw new Error('first game deposit counter collided')
 		if (replayed.escalationDeposits.get(secondGame)?.get('1:1')?.depositor !== secondVault) throw new Error('second game deposit counter collided')
-		if (replayed.coordinatorOperations.get(firstCoordinator)?.get(1n)?.amount !== 3n) throw new Error('first coordinator operation counter collided')
-		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.amount !== 4n) throw new Error('second coordinator operation counter collided')
+		if (replayed.coordinatorOperations.get(firstCoordinator)?.get(1n)?.operationAmountAttoRepOrAttoEth !== 3n) throw new Error('first coordinator operation counter collided')
+		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.operationAmountAttoRepOrAttoEth !== 4n) throw new Error('second coordinator operation counter collided')
 	})
 
 	test('escalation claim replay preserves immutable depositors and truth-auction retention', () => {
@@ -801,7 +801,7 @@ describe('event-only replay', () => {
 					ownFork: true,
 					unresolvedEscalation: true,
 					settlementCollateralAtForkAttoEth: 0n,
-					poolRepAtForkAttoRep: 0n,
+					totalPoolHeldRepAtForkAttoRep: 0n,
 					auctionableRepAtForkAttoRep: 0n,
 					escalationSourceRepAtForkAttoRep: 10n,
 					escalationChildRepAtForkAttoRep: 0n,
@@ -1266,7 +1266,7 @@ describe('event-only replay', () => {
 					operation: 1n,
 					initiatorVault: migrator,
 					targetVault: pool,
-					amount: 2n,
+					operationAmountAttoRepOrAttoEth: 2n,
 					queuedAt: 21n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
@@ -1428,7 +1428,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.operation, storedOperation[0], 'queued operation type replay mismatch')
 		strictEqualTypeSafe(operation.initiatorVault, storedOperation[1], 'queued initiator replay mismatch')
 		strictEqualTypeSafe(operation.targetVault, storedOperation[2], 'queued target replay mismatch')
-		strictEqualTypeSafe(operation.amount, storedOperation[3], 'queued amount replay mismatch')
+		strictEqualTypeSafe(operation.operationAmountAttoRepOrAttoEth, storedOperation[3], 'queued operation amount replay mismatch')
 		strictEqualTypeSafe(operation.queuedAt, storedOperation[4], 'queued timestamp replay mismatch')
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[6], 'queued backingUnits snapshot replay mismatch')
@@ -1667,7 +1667,7 @@ describe('event-only replay', () => {
 				functionName: 'getVaultFeeRemainder',
 				args: [vault],
 			})
-			strictEqualTypeSafe(replayedVault.repBackingUnits, storedVault.vaultRepBackingAttoRep, `seeded backingUnits replay mismatch for ${vault}`)
+			strictEqualTypeSafe(replayedVault.repBackingUnits, storedVault.repBackingUnits, `seeded backingUnits replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.coverageCommitmentAttoEth, storedVault.coverageCommitmentAttoEth, `seeded coverageCommitmentAttoEth replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVault.claimableFeesAttoEth, `seeded unpaid-fees replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.feeIndex, storedVault.feeIndex, `seeded vault fee-index replay mismatch for ${vault}`)
@@ -1823,7 +1823,7 @@ describe('event-only replay', () => {
 	})
 
 	test('external forks emit one canonical pool snapshot after REP is locked', async () => {
-		const poolRepAtForkAttoRep = await fixture.getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
+		const totalPoolHeldRepAtForkAttoRep = await fixture.getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
 		const settlementCollateralAtForkAttoEth = await fixture.getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 		const transactionHash = await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay fork source')
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
@@ -1845,8 +1845,8 @@ describe('event-only replay', () => {
 		})
 		strictEqualTypeSafe(snapshotLog.args.migrationProxy, expectedMigrationProxy, 'migration proxy snapshot mismatch')
 		strictEqualTypeSafe(snapshotLog.args.settlementCollateralAtForkAttoEth, settlementCollateralAtForkAttoEth, 'fork collateral snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.poolRepAtForkAttoRep, poolRepAtForkAttoRep, 'fork REP snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.auctionableRepAtForkAttoRep, poolRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
+		strictEqualTypeSafe(snapshotLog.args.totalPoolHeldRepAtForkAttoRep, totalPoolHeldRepAtForkAttoRep, 'fork REP snapshot mismatch')
+		strictEqualTypeSafe(snapshotLog.args.auctionableRepAtForkAttoRep, totalPoolHeldRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
 		strictEqualTypeSafe(snapshotLog.args.ownFork, false, 'external fork should not be marked as own fork')
 		strictEqualTypeSafe(snapshotLog.args.unresolvedEscalation, false, 'test fork should not report unresolved escalation')
 	})

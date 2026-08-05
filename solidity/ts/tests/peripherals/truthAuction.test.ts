@@ -802,12 +802,12 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.vaultRepBackingAttoRep)
+			let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 			const requiredVaultRepAttoRep = 4n * forkThresholdAttoRep
 			if (vaultRepAttoRep < requiredVaultRepAttoRep) {
 				await approveAndDepositRepToVault(client, requiredVaultRepAttoRep - vaultRepAttoRep, questionId)
 				vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-				vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.vaultRepBackingAttoRep)
+				vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 			}
 			assert.ok(vaultRepAttoRep >= requiredVaultRepAttoRep, 'test setup needs pool-held vault REP backing plus dispute-staked REP')
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -849,7 +849,7 @@ describe('Peripherals: truth auction', () => {
 
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const clientVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const clientClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeFinalize.vaultRepBackingAttoRep)
+			const clientClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeFinalize.repBackingUnits)
 
 			assert.ok(clientClaimBeforeFinalize > 0n, 'the migrated vault should retain a positive child-pool REP claim before immediate finalization')
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), 0n, 'the no-collateral fast path requires zero remaining parent collateral')
@@ -903,18 +903,18 @@ describe('Peripherals: truth auction', () => {
 			const originalVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const escalationClaimBeforeFinalize = originalVaultBeforeFinalize.disputeStakedRepAttoRep
 			const childBalanceBeforeFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
-			const originalClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.vaultRepBackingAttoRep)
+			const originalClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.repBackingUnits)
 			assert.ok(originalClaimBeforeFinalize > 0n, 'the migrated vault should retain positive pool-held child REP backing before finalization')
 			assert.ok(originalClaimBeforeFinalize <= childBalanceBeforeFinalize, "before finalization the migrated vault claim should stay bounded by the child pool's pool-held REP balance")
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const poolRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
+			const totalPoolHeldRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 				const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-				const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, poolRepAtForkAttoRep / 2n, expectedEthToBuy)
+				const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, totalPoolHeldRepAtForkAttoRep / 2n, expectedEthToBuy)
 				assert.ok(tickToPrice(auctionTick) > 0n, 'auction participation should produce a valid clearing price when a truth auction is needed')
 				await mockWindow.advanceTime(7n * DAY + DAY)
 				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -925,7 +925,7 @@ describe('Peripherals: truth auction', () => {
 
 			const originalVaultAfterFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const childBalanceAfterFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
-			const originalClaimAfterFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultAfterFinalize.vaultRepBackingAttoRep)
+			const originalClaimAfterFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultAfterFinalize.repBackingUnits)
 			assert.ok(originalClaimAfterFinalize > 0n, 'the migrated vault should remain redeemable after finalization')
 			assert.ok(originalClaimAfterFinalize <= childBalanceAfterFinalize, 'the migrated vault claim should stay bounded by the child pools remaining REP balance')
 			const disputeStakedRepBeforeAuctionAttoRep = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'truthAuctionRepBeforeAttoRep' })
@@ -989,11 +989,11 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const poolRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
+			const totalPoolHeldRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 				const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-				await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, poolRepAtForkAttoRep, expectedEthToBuy)
+				await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, totalPoolHeldRepAtForkAttoRep, expectedEthToBuy)
 				await mockWindow.advanceTime(7n * DAY + DAY)
 				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			} else {
@@ -1003,13 +1003,13 @@ describe('Peripherals: truth auction', () => {
 
 			const clientVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
-			const clientClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.vaultRepBackingAttoRep)
-			const attackerClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.vaultRepBackingAttoRep)
+			const clientClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.repBackingUnits)
+			const attackerClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repBackingUnits)
 			assert.ok(clientClaimBeforeRedeem > 0n, 'the first migrated holder should retain a positive redeemable claim after finalization')
 			assert.ok(attackerClaimBeforeRedeem > 0n, 'the second migrated holder should retain a positive redeemable claim after finalization')
 
 			await redeemRepFromVault(attackerClient, yesSecurityPool.securityPool, attackerClient.account.address)
-			const clientClaimAfterFirstRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.vaultRepBackingAttoRep)
+			const clientClaimAfterFirstRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.repBackingUnits)
 			approximatelyEqual(clientClaimAfterFirstRedeem, clientClaimBeforeRedeem, 10n, 'redeeming one migrated holder should not brick the remaining migrated holder')
 
 			const childBalanceBeforeFinalRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
@@ -1402,7 +1402,7 @@ describe('Peripherals: truth auction', () => {
 
 			// Verify they got backingUnits shares matching purchasedRep (with tolerance for rounding)
 			const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			const repFromBackingUnits = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vault.vaultRepBackingAttoRep)
+			const repFromBackingUnits = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vault.repBackingUnits)
 			assert.ok(repFromBackingUnits > 0n, 'auction participant should have some rep')
 		})
 
@@ -1457,7 +1457,7 @@ describe('Peripherals: truth auction', () => {
 			const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'finalized losing bidder should receive their full ETH refund')
-			strictEqualTypeSafe(losingVaultAfterClaim.vaultRepBackingAttoRep, losingVaultBeforeClaim.vaultRepBackingAttoRep, 'refund-only finalized claim should not mint REP backing units')
+			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'refund-only finalized claim should not mint REP backing units')
 			strictEqualTypeSafe(losingVaultAfterClaim.coverageCommitmentAttoEth, losingVaultBeforeClaim.coverageCommitmentAttoEth, 'refund-only finalized claim should not assign coverage commitment')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'refund-only finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'refund-only finalized claim should not create a new vault')
@@ -1488,16 +1488,16 @@ describe('Peripherals: truth auction', () => {
 
 			const winningVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
-			const winningRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAfterClaim.vaultRepBackingAttoRep)
-			const losingRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, losingVaultAfterClaim.vaultRepBackingAttoRep)
+			const winningRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAfterClaim.repBackingUnits)
+			const losingRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, losingVaultAfterClaim.repBackingUnits)
 			const winningLimitPrice = tickToPrice(winningTick)
 			const minimumWinningRepAtLimit = (expectedEthToBuy * PRICE_PRECISION) / winningLimitPrice
 
 			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - losingEthBeforeClaim, losingEth, 'losing auction participant should receive their ETH back')
 			strictEqualTypeSafe(await getETHBalance(client, winningBidder.account.address), winningEthBeforeClaim, 'winning auction participant should not receive an ETH refund for a filled bid')
-			strictEqualTypeSafe(losingVaultAfterClaim.vaultRepBackingAttoRep, losingVaultBeforeClaim.vaultRepBackingAttoRep, 'losing auction participant should not receive vault backingUnits')
+			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'losing auction participant should not receive vault backingUnits')
 			strictEqualTypeSafe(losingRepClaim, 0n, 'losing auction participant should not receive a REP vault claim')
-			strictEqualTypeSafe(winningVaultBeforeClaim.vaultRepBackingAttoRep, 0n, 'winning auction participant should start without child-pool vault backingUnits')
+			strictEqualTypeSafe(winningVaultBeforeClaim.repBackingUnits, 0n, 'winning auction participant should start without child-pool vault backingUnits')
 			assert.ok(winningRepClaim >= minimumWinningRepAtLimit, 'winning auction participant should receive a vault REP claim at least as good as their limit order')
 
 			await finalizeChildQuestionAsYes(yesSecurityPool)
@@ -1509,7 +1509,7 @@ describe('Peripherals: truth auction', () => {
 			const winningVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
 
 			strictEqualTypeSafe(winningRepBalanceAfterRedeem - winningRepBalanceBeforeRedeem, winningRepClaim, 'winning auction participant should eventually redeem the purchased vault REP to their wallet')
-			strictEqualTypeSafe(winningVaultAfterRedeem.vaultRepBackingAttoRep, 0n, 'redeeming purchased auction REP should empty the participants vault backingUnits')
+			strictEqualTypeSafe(winningVaultAfterRedeem.repBackingUnits, 0n, 'redeeming purchased auction REP should empty the participants vault backingUnits')
 		})
 
 		test('multiple filled auction participants can all redeem purchased vault REP', async () => {
@@ -1535,8 +1535,8 @@ describe('Peripherals: truth auction', () => {
 
 			const winningVaultAAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderA.account.address)
 			const winningVaultBAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderB.account.address)
-			const winningARepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.vaultRepBackingAttoRep)
-			const winningBRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.vaultRepBackingAttoRep)
+			const winningARepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.repBackingUnits)
+			const winningBRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
 			const minimumWinningARepAtLimit = (winningEthA * PRICE_PRECISION) / tickToPrice(winningTickA)
 			const minimumWinningBRepAtLimit = (winningEthB * PRICE_PRECISION) / tickToPrice(winningTickB)
 			assert.ok(winningARepClaim >= minimumWinningARepAtLimit, 'first filled auction participant should receive vault REP at least as good as their limit order')
@@ -1548,8 +1548,8 @@ describe('Peripherals: truth auction', () => {
 			const winningARepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderA.account.address)
 			const winningBRepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderB.account.address)
 			const childRepBeforeRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
-			const winningARedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.vaultRepBackingAttoRep)
-			const winningBRedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.vaultRepBackingAttoRep)
+			const winningARedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.repBackingUnits)
+			const winningBRedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
 
 			await redeemRepFromVault(winningBidderA, yesSecurityPool.securityPool, winningBidderA.account.address)
 			await redeemRepFromVault(winningBidderB, yesSecurityPool.securityPool, winningBidderB.account.address)
@@ -1560,8 +1560,8 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe((await getERC20Balance(client, childRepToken, winningBidderA.account.address)) - winningARepBeforeRedeem, winningARedeemClaim, 'first filled auction participant should redeem their purchased vault REP')
 			strictEqualTypeSafe((await getERC20Balance(client, childRepToken, winningBidderB.account.address)) - winningBRepBeforeRedeem, winningBRedeemClaim, 'second filled auction participant should redeem their purchased vault REP')
 			strictEqualTypeSafe(childRepBeforeRedeem - (await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)), totalRedeemedRep, 'multi-winner redemptions should debit only the REP paid to auction participants')
-			strictEqualTypeSafe(winningVaultAAfterRedeem.vaultRepBackingAttoRep, 0n, 'redeeming purchased auction REP should empty the first participants vault backingUnits')
-			strictEqualTypeSafe(winningVaultBAfterRedeem.vaultRepBackingAttoRep, 0n, 'redeeming purchased auction REP should empty the second participants vault backingUnits')
+			strictEqualTypeSafe(winningVaultAAfterRedeem.repBackingUnits, 0n, 'redeeming purchased auction REP should empty the first participants vault backingUnits')
+			strictEqualTypeSafe(winningVaultBAfterRedeem.repBackingUnits, 0n, 'redeeming purchased auction REP should empty the second participants vault backingUnits')
 		})
 
 		test('claimAuctionProceeds handles a zero-REP finalized refund path when totalRepPurchasedAttoRep is zero', async () => {
@@ -1622,7 +1622,7 @@ describe('Peripherals: truth auction', () => {
 			const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'zero-REP finalized claim should release the full ETH refund')
-			strictEqualTypeSafe(losingVaultAfterClaim.vaultRepBackingAttoRep, losingVaultBeforeClaim.vaultRepBackingAttoRep, 'zero-REP finalized claim should not mint REP backing units')
+			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'zero-REP finalized claim should not mint REP backing units')
 			strictEqualTypeSafe(losingVaultAfterClaim.coverageCommitmentAttoEth, losingVaultBeforeClaim.coverageCommitmentAttoEth, 'zero-REP finalized claim should not assign coverage commitment')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'zero-REP finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
@@ -1652,13 +1652,13 @@ describe('Peripherals: truth auction', () => {
 			const expectedAuctionedCoverageCommitmentAttoEth = unmigratedCoverageCommitmentAttoEth
 			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
 			const finalizerVaultAfter = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(finalizerVaultAfter.vaultRepBackingAttoRep, finalizerVaultBefore.vaultRepBackingAttoRep, 'finalizing an underfunded auction must not issue REP backing units to the finalizer')
+			strictEqualTypeSafe(finalizerVaultAfter.repBackingUnits, finalizerVaultBefore.repBackingUnits, 'finalizing an underfunded auction must not issue REP backing units to the finalizer')
 			strictEqualTypeSafe(finalizerVaultAfter.coverageCommitmentAttoEth, finalizerVaultBefore.coverageCommitmentAttoEth, 'finalizing an underfunded auction must not assign coverage commitment to the finalizer')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, attacker.account.address, [{ tick: attackerTick, bidIndex: 0n }])
 
 			const attackerVault = await getSecurityVault(client, yesSecurityPool.securityPool, attacker.account.address)
-			const attackerRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVault.vaultRepBackingAttoRep)
+			const attackerRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVault.repBackingUnits)
 			strictEqualTypeSafe(attackerRepClaim, expectedAttackerRep, 'settling the only qualifying bid should credit the complete auction REP cap')
 			strictEqualTypeSafe(attackerVault.coverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
 		})
@@ -1691,7 +1691,7 @@ describe('Peripherals: truth auction', () => {
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionWinner.account.address, [{ tick: winningTick, bidIndex: 0n }])
 			const winnerVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionWinner.account.address)
 			strictEqualTypeSafe(await getTotalRepBackingUnits(client, yesSecurityPool.securityPool), auctionCap * PRICE_PRECISION, 'a zero-migration full sale should normalize backingUnits to the standard REP scale')
-			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winnerVault.vaultRepBackingAttoRep), auctionCap, 'the complete-cap winner should be able to convert every backingUnits unit back to REP')
+			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winnerVault.repBackingUnits), auctionCap, 'the complete-cap winner should be able to convert every backingUnits unit back to REP')
 
 			const freshVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			const freshDeposit = 10n * 10n ** 18n
@@ -1708,7 +1708,7 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(freshVault, yesSecurityPool.securityPool, freshDeposit)
 
 			const freshVaultState = await getSecurityVault(client, yesSecurityPool.securityPool, freshVault.account.address)
-			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, freshVaultState.vaultRepBackingAttoRep), freshDeposit, 'a minimum fresh deposit should remain exactly convertible after zero-migration auction settlement')
+			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, freshVaultState.repBackingUnits), freshDeposit, 'a minimum fresh deposit should remain exactly convertible after zero-migration auction settlement')
 		})
 
 		test('coverage commitment', async () => {
@@ -1811,7 +1811,7 @@ describe('Peripherals: truth auction', () => {
 			})
 			await client.waitForTransactionReceipt({ hash: claimHash })
 			const winnerVault = await getSecurityVault(client, yesSecurityPool.securityPool, rejectingWinner)
-			assert.ok(winnerVault.vaultRepBackingAttoRep > 0n, 'permissionless settlement should assign the winner REP backingUnits')
+			assert.ok(winnerVault.repBackingUnits > 0n, 'permissionless settlement should assign the winner REP backingUnits')
 			strictEqualTypeSafe(winnerVault.coverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
 			const pendingRefund = await client.readContract({
 				abi: auctionAbi,
@@ -1908,11 +1908,11 @@ describe('Peripherals: truth auction', () => {
 
 			const mixedBidderBalanceAfterSettlement = await getETHBalance(client, mixedBidder.account.address)
 			const mixedVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, mixedBidder.account.address)
-			const settledWinningRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, mixedVaultAfterSettlement.vaultRepBackingAttoRep)
+			const settledWinningRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, mixedVaultAfterSettlement.repBackingUnits)
 
 			strictEqualTypeSafe(mixedBidderBalanceAfterSettlement - mixedBidderBalanceBeforeSettlement, losingEth, 'mixed finalized settlement should return the losing-bid ETH in the same call')
 			approximatelyEqual(settledWinningRep, expectedWinningRep, 1_000n, 'mixed finalized settlement should still mint the expected winning REP')
-			assert.ok(mixedVaultAfterSettlement.vaultRepBackingAttoRep > mixedVaultBeforeSettlement.vaultRepBackingAttoRep, 'mixed finalized settlement should increase REP backing units for the winning bid')
+			assert.ok(mixedVaultAfterSettlement.repBackingUnits > mixedVaultBeforeSettlement.repBackingUnits, 'mixed finalized settlement should increase REP backing units for the winning bid')
 		})
 
 		test('claimAuctionProceeds preserves winner accounting when a finalized losing refund is settled first', async () => {
@@ -1923,7 +1923,7 @@ describe('Peripherals: truth auction', () => {
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
 
 			const winningVault = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
-			const winningRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVault.vaultRepBackingAttoRep)
+			const winningRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVault.repBackingUnits)
 			const expectedWinningRep = (expectedEthToBuy * PRICE_PRECISION) / tickToPrice(winningTick)
 
 			approximatelyEqual(winningRep, expectedWinningRep, 1_000n, 'winning claims should still receive the expected REP after a losing refund settles first')
@@ -2019,7 +2019,7 @@ describe('Peripherals: truth auction', () => {
 
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
-			const targetRepBeforeLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.vaultRepBackingAttoRep)
+			const targetRepBeforeLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repBackingUnits)
 			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldRepAttoRep', args: [] })
 			const denominatorBeforeLiquidation = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
 			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION * 10_000n) / (targetVaultBeforeLiquidation.coverageCommitmentAttoEth * statoblastSecurityMultiplierBps)
@@ -2035,7 +2035,7 @@ describe('Peripherals: truth auction', () => {
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
-			const targetRepAfterLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterLiquidation.vaultRepBackingAttoRep)
+			const targetRepAfterLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterLiquidation.repBackingUnits)
 
 			if (targetVaultAfterLiquidation.coverageCommitmentAttoEth >= targetVaultBeforeLiquidation.coverageCommitmentAttoEth) {
 				const coordinatorLogs = await client.getLogs({
@@ -2069,8 +2069,8 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(coverageCommitmentTransferredAttoEth > 0n, true, 'coverage commitment')
 			approximatelyEqual(targetRepAfterLiquidation, targetRepBeforeLiquidation - expectedRepMove, 2n, 'liquidation should transfer migrated vault REP backing before claim')
 			approximatelyEqual(
-				await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultAfterLiquidation.vaultRepBackingAttoRep),
-				(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultBeforeLiquidation.vaultRepBackingAttoRep)) + expectedRepMove,
+				await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultAfterLiquidation.repBackingUnits),
+				(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultBeforeLiquidation.repBackingUnits)) + expectedRepMove,
 				2n,
 				'liquidation should transfer migrated vault REP backing into the liquidator vault',
 			)
@@ -2088,13 +2088,13 @@ describe('Peripherals: truth auction', () => {
 
 			const targetVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
-			const targetRepAfterClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterClaim.vaultRepBackingAttoRep)
+			const targetRepAfterClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterClaim.repBackingUnits)
 
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation, 'claim timing should not change child collateral totals after liquidation')
 			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool), childCoverageCommitmentAttoEthAfterLiquidation, 'coverage commitment')
 			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalRepPurchasedAttoRep, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
 			strictEqualTypeSafe(targetVaultAfterClaim.coverageCommitmentAttoEth - targetVaultAfterLiquidation.coverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(liquidatorVaultAfterClaim.vaultRepBackingAttoRep, liquidatorVaultAfterLiquidation.vaultRepBackingAttoRep, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
+			strictEqualTypeSafe(liquidatorVaultAfterClaim.repBackingUnits, liquidatorVaultAfterLiquidation.repBackingUnits, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.coverageCommitmentAttoEth, liquidatorVaultAfterLiquidation.coverageCommitmentAttoEth, 'coverage commitment')
 
 			await mockWindow.advanceTime(DAY)
@@ -2292,11 +2292,11 @@ describe('Peripherals: truth auction', () => {
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: firstAuctionTick, bidIndex: 0n }])
 			const vaultAfterFirstClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const repAfterFirstClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vaultAfterFirstClaim.vaultRepBackingAttoRep)
+			const repAfterFirstClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vaultAfterFirstClaim.repBackingUnits)
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: secondAuctionTick, bidIndex: 1n }])
 			const vaultAfterSecondClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const repAfterSecondClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vaultAfterSecondClaim.vaultRepBackingAttoRep)
+			const repAfterSecondClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vaultAfterSecondClaim.repBackingUnits)
 
 			assert.ok(repAfterFirstClaim > 0n, 'first claim should credit some REP-backed backingUnits')
 			assert.ok(repAfterSecondClaim > repAfterFirstClaim, 'second claim should be able to add the remaining winning bid')

@@ -20,7 +20,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 
 		const getVaultRep = async (vault: typeof client.account.address) => {
 			const state = await getSecurityVault(client, securityPool, vault)
-			return await backingUnitsToAttoRep(client, securityPool, state.vaultRepBackingAttoRep)
+			return await backingUnitsToAttoRep(client, securityPool, state.repBackingUnits)
 		}
 
 		const targetRepBefore = await getVaultRep(client.account.address)
@@ -49,11 +49,11 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const requiredRepAttoRep = (coverageCommitmentAttoEth * statoblastSecurityMultiplierBps * reportedRepEthPrice) / (PRICE_PRECISION * BPS_DENOMINATOR)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, repDeposit - requiredRepAttoRep, reportedRepEthPrice)
 		const boundaryVault = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, boundaryVault.vaultRepBackingAttoRep), requiredRepAttoRep, 'withdrawal should reach the exact multiplier-adjusted boundary')
+		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, boundaryVault.repBackingUnits), requiredRepAttoRep, 'withdrawal should reach the exact multiplier-adjusted boundary')
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, 1n * 10n ** 18n, reportedRepEthPrice)
 		const afterRejectedWithdrawal = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, afterRejectedWithdrawal.vaultRepBackingAttoRep), requiredRepAttoRep, 'withdrawal beyond the exact boundary should be consumed without changing vault backing')
+		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, afterRejectedWithdrawal.repBackingUnits), requiredRepAttoRep, 'withdrawal beyond the exact boundary should be consumed without changing vault backing')
 	})
 
 	test('a vault cannot move multiplier-required REP into an escalation game', async () => {
@@ -67,6 +67,6 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 
 		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 2n), /Vault backing insufficient/)
 		const target = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, target.vaultRepBackingAttoRep), repDeposit, 'rejected escalation deposit should preserve multiplier backing')
+		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, target.repBackingUnits), repDeposit, 'rejected escalation deposit should preserve multiplier backing')
 	})
 })

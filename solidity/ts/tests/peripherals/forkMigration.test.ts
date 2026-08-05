@@ -881,8 +881,8 @@ describe('Peripherals: fork migration', () => {
 			const quotedRepMove = getLiquidationVaultRepBackingToTransfer(coverageCommitmentTransferAttoEth, forcedPrice)
 			const expectedBackingUnitsMove = (quotedRepMove * denominatorBeforeLiquidation + totalRepBeforeLiquidation - 1n) / totalRepBeforeLiquidation
 			const expectedRepMove = (expectedBackingUnitsMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
-			const expectedTargetClaimAfter = ((targetVaultBeforeLiquidation.vaultRepBackingAttoRep - expectedBackingUnitsMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
-			const expectedLiquidatorClaimAfter = ((liquidatorVaultBeforeLiquidation.vaultRepBackingAttoRep + expectedBackingUnitsMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedTargetClaimAfter = ((targetVaultBeforeLiquidation.repBackingUnits - expectedBackingUnitsMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
+			const expectedLiquidatorClaimAfter = ((liquidatorVaultBeforeLiquidation.repBackingUnits + expectedBackingUnitsMove) * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
 			strictEqualTypeSafe(expectedRepMove, quotedRepMove, 'ceiling backingUnits conversion should preserve the complete quoted award after a pool donation')
 
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
@@ -897,7 +897,7 @@ describe('Peripherals: fork migration', () => {
 			const originalClaim = await getVaultRepClaim(client.account.address)
 			const liquidatorClaim = await getVaultRepClaim(liquidatorClient.account.address)
 			strictEqualTypeSafe(originalVault.coverageCommitmentAttoEth, securityPoolCoverageCommitmentAttoEth - coverageCommitmentTransferAttoEth, 'original vault should keep only the non-transferred coverage commitment')
-			strictEqualTypeSafe(originalVault.vaultRepBackingAttoRep, targetVaultBeforeLiquidation.vaultRepBackingAttoRep - expectedBackingUnitsMove, 'liquidation should move the share-rounded target backingUnits')
+			strictEqualTypeSafe(originalVault.repBackingUnits, targetVaultBeforeLiquidation.repBackingUnits - expectedBackingUnitsMove, 'liquidation should move the share-rounded target backingUnits')
 			strictEqualTypeSafe(originalClaim, expectedTargetClaimAfter, 'the target claim should use its exact remaining backingUnits at the live pool rate')
 			assert.ok(originalVault.claimableFeesAttoEth >= targetFeesBeforeLiquidation, 'the target should retain every fee accrued before liquidation')
 			strictEqualTypeSafe(liquidatorVault.coverageCommitmentAttoEth, coverageCommitmentTransferAttoEth, "liquidator doesn't have the liquidated security pool coverageCommitmentAttoEth")
@@ -924,7 +924,7 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimAfter = await getVaultRepClaim(client.account.address)
 
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, targetVaultBefore.coverageCommitmentAttoEth, 'same-vault liquidation should not move target coverage commitment')
-			strictEqualTypeSafe(targetVaultAfter.vaultRepBackingAttoRep, targetVaultBefore.vaultRepBackingAttoRep, 'same-vault liquidation should not move target backingUnits')
+			strictEqualTypeSafe(targetVaultAfter.repBackingUnits, targetVaultBefore.repBackingUnits, 'same-vault liquidation should not move target backingUnits')
 			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore, 'same-vault liquidation should not move target REP')
 		})
 
@@ -949,7 +949,7 @@ describe('Peripherals: fork migration', () => {
 
 			// Snapshot state before attack (just before queuing liquidation)
 			const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			const snapshotTargetBackingUnits = vaultBefore.vaultRepBackingAttoRep
+			const snapshotTargetBackingUnits = vaultBefore.repBackingUnits
 			const snapshotTotalPoolHeldRepAttoRep = await getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
 			const snapshotTotalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 
@@ -962,7 +962,7 @@ describe('Peripherals: fork migration', () => {
 
 			// Record liquidator's backingUnits before attack
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const liquidatorBeforeBackingUnits = liquidatorVaultBefore.vaultRepBackingAttoRep
+			const liquidatorBeforeBackingUnits = liquidatorVaultBefore.repBackingUnits
 
 			// The target owner rescues the vault while liquidation is pending.
 			const extraRepAmount = repDeposit * 5n
@@ -971,7 +971,7 @@ describe('Peripherals: fork migration', () => {
 			// Capture state after deposit but before liquidation
 			const vaultAfterDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const targetClaimAfterDeposit = await getVaultRepClaim(client.account.address)
-			const afterDepositBackingUnits = vaultAfterDeposit.vaultRepBackingAttoRep
+			const afterDepositBackingUnits = vaultAfterDeposit.repBackingUnits
 			const denominatorAfter = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 			const totalRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
@@ -983,8 +983,8 @@ describe('Peripherals: fork migration', () => {
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, securityPoolCoverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(targetVaultAfter.vaultRepBackingAttoRep, afterDepositBackingUnits, 'the target must retain the backingUnits created by its rescue deposit')
-			strictEqualTypeSafe(liquidatorVaultAfter.vaultRepBackingAttoRep, liquidatorBeforeBackingUnits, 'the stale liquidation must not move backingUnits to the liquidator')
+			strictEqualTypeSafe(targetVaultAfter.repBackingUnits, afterDepositBackingUnits, 'the target must retain the backingUnits created by its rescue deposit')
+			strictEqualTypeSafe(liquidatorVaultAfter.repBackingUnits, liquidatorBeforeBackingUnits, 'the stale liquidation must not move backingUnits to the liquidator')
 			strictEqualTypeSafe(await getVaultRepClaim(client.account.address), targetClaimAfterDeposit, 'the target must retain its complete live REP claim')
 			strictEqualTypeSafe(await getVaultRepClaim(liquidatorClient.account.address), repDeposit * 10n, 'the liquidator must not receive REP from a stale quote')
 			approximatelyEqual(snapshotExpectedRepDeposit, repDeposit, 1n, 'the snapshot claim should still match the original REP deposit before the attack deposit')
@@ -1023,7 +1023,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClaimAfterFirstLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
 			const expectedRepMove = getLiquidationVaultRepBackingToTransfer(coverageCommitmentTransferAttoEth, PRICE_PRECISION * 10n)
 			strictEqualTypeSafe(targetVaultAfterFirstLiquidation.coverageCommitmentAttoEth, 0n, 'maximum liquidation should clear the full target coverage commitment when enough REP is available')
-			assert.ok(targetVaultAfterFirstLiquidation.vaultRepBackingAttoRep < targetVaultBefore.vaultRepBackingAttoRep, 'max liquidation should reduce the target backingUnits')
+			assert.ok(targetVaultAfterFirstLiquidation.repBackingUnits < targetVaultBefore.repBackingUnits, 'max liquidation should reduce the target backingUnits')
 			strictEqualTypeSafe(liquidatorVaultAfterFirstLiquidation.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth + coverageCommitmentTransferAttoEth, 'the liquidator should assume the full requested coverage commitment when the target has enough REP to pay the penalty')
 			approximatelyEqual(targetClaimAfterFirstLiquidation, targetRepBeforeLiquidation - expectedRepMove, 1n, 'max liquidation should leave target REP above the capped gross award')
 			approximatelyEqual(liquidatorClaimAfterFirstLiquidation, repDeposit * 2n + expectedRepMove, 1n, 'max liquidation should transfer vault REP backing to the liquidator')
@@ -1035,7 +1035,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorVaultAfterSecondLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
 			strictEqualTypeSafe(targetVaultAfterSecondLiquidation.coverageCommitmentAttoEth, targetVaultAfterFirstLiquidation.coverageCommitmentAttoEth, 'once fully liquidated, the vault should not change under the same price')
-			strictEqualTypeSafe(targetVaultAfterSecondLiquidation.vaultRepBackingAttoRep, targetVaultAfterFirstLiquidation.vaultRepBackingAttoRep, 'a second same-price liquidation should not move more REP after coverage commitment is cleared')
+			strictEqualTypeSafe(targetVaultAfterSecondLiquidation.repBackingUnits, targetVaultAfterFirstLiquidation.repBackingUnits, 'a second same-price liquidation should not move more REP after coverage commitment is cleared')
 			strictEqualTypeSafe(liquidatorVaultAfterSecondLiquidation.coverageCommitmentAttoEth, liquidatorVaultAfterFirstLiquidation.coverageCommitmentAttoEth, 'a second same-price liquidation should not move more coverage commitment after coverage commitment is cleared')
 		})
 
@@ -1063,7 +1063,7 @@ describe('Peripherals: fork migration', () => {
 			assert.strictEqual(executionLog.args.success, true, `full proportional liquidation failed with ${executionLog.args.errorMessage}`)
 			strictEqualTypeSafe(targetVaultBefore.coverageCommitmentAttoEth, securityPoolCoverageCommitmentAttoEth, 'coverage commitment')
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, 0n, 'coverage commitment')
-			strictEqualTypeSafe(targetVaultAfter.vaultRepBackingAttoRep, targetVaultBefore.vaultRepBackingAttoRep, 'an unassignable funded slice should not move target REP')
+			strictEqualTypeSafe(targetVaultAfter.repBackingUnits, targetVaultBefore.repBackingUnits, 'an unassignable funded slice should not move target REP')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, 0n, 'a fresh liquidator must not receive a forbidden sub-minimum coverage commitment')
 			strictEqualTypeSafe(await getVaultBadDebt(securityPoolAddresses.securityPool, client.account.address), securityPoolCoverageCommitmentAttoEth, 'coverage commitment')
 		})
@@ -1101,7 +1101,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetClaimBefore, minimumRepDeposit, 'setup should leave the target at the minimum REP deposit')
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, 0n, 'full-close liquidation should clear the minimum-size target coverage commitment')
 			const expectedAward = getLiquidationVaultRepBackingToTransfer(minimumCoverageCommitmentAttoEth, liquidationPrice)
-			assert.ok(targetVaultAfter.vaultRepBackingAttoRep > 0n, 'exact-award liquidation should leave target REP beyond the 105% award')
+			assert.ok(targetVaultAfter.repBackingUnits > 0n, 'exact-award liquidation should leave target REP beyond the 105% award')
 			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore - expectedAward, 'the target should retain REP beyond the exact 105% award')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth + minimumCoverageCommitmentAttoEth, 'coverage commitment')
 			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, expectedAward, 'the liquidator should receive the complete 105% award and no excess target REP')
@@ -1135,7 +1135,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, 0n, 'full-close liquidation should still clear the target coverage commitment when the computed REP penalty exceeds the vault balance')
-			assert.ok(targetVaultAfter.vaultRepBackingAttoRep > 0n, 'a fully unfunded award must not transfer target vault REP backing')
+			assert.ok(targetVaultAfter.repBackingUnits > 0n, 'a fully unfunded award must not transfer target vault REP backing')
 			strictEqualTypeSafe(targetClaimAfter, minimumRepDeposit, 'the bad-debt backstop should leave target REP untouched')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth, 'the liquidator must not assume coverage commitment without a valid minimum-sized funded slice')
 			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'the liquidator should not receive REP when no coverage commitment moves')
@@ -1195,7 +1195,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(100000n)
 
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const targetBackingUnitsBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)).vaultRepBackingAttoRep
+			const targetBackingUnitsBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)).repBackingUnits
 
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumCoverageCommitmentAttoEth, liquidationPrice)
 			await writeContractAndWait(targetClient, () =>
@@ -1216,7 +1216,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
 
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, 0n, 'an unsolicited pool donation must not cancel the quoted coverage commitment transfer')
-			assert.ok(targetVaultAfter.vaultRepBackingAttoRep > 0n, 'exact-award liquidation should preserve target backingUnits beyond the award')
+			assert.ok(targetVaultAfter.repBackingUnits > 0n, 'exact-award liquidation should preserve target backingUnits beyond the award')
 			strictEqualTypeSafe(targetClaimAfter, targetClaimAfterDonation - getLiquidationVaultRepBackingToTransfer(minimumCoverageCommitmentAttoEth, liquidationPrice), 'the donation must not change the exact 105% award')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth + minimumCoverageCommitmentAttoEth, 'coverage commitment')
 			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimAfterDonation + getLiquidationVaultRepBackingToTransfer(minimumCoverageCommitmentAttoEth, liquidationPrice), 'the liquidator should receive the complete award without taking the target surplus')
@@ -1250,10 +1250,10 @@ describe('Peripherals: fork migration', () => {
 			assert.strictEqual(executionLog.args.success, true, `dust-promoted liquidation failed with ${executionLog.args.errorMessage}`)
 			const cappedCoverageCommitmentTransferAttoEth = securityPoolCoverageCommitmentAttoEth - 1n * 10n ** 18n
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, 1n * 10n ** 18n, 'the capped partial liquidation should preserve the minimum valid target coverage commitment')
-			assert.ok(targetVaultAfter.vaultRepBackingAttoRep > 0n, 'the partial liquidation should leave pool-held vault REP backing beyond the gross award')
+			assert.ok(targetVaultAfter.repBackingUnits > 0n, 'the partial liquidation should leave pool-held vault REP backing beyond the gross award')
 			strictEqualTypeSafe(targetRepAfter, targetRepBefore - getLiquidationVaultRepBackingToTransfer(cappedCoverageCommitmentTransferAttoEth, dustRoundingPrice), 'the capped partial liquidation should move only its complete 105% award')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth + cappedCoverageCommitmentTransferAttoEth, 'the liquidator should receive only the capped coverage commitment')
-			assert.ok(liquidatorVaultAfter.vaultRepBackingAttoRep > liquidatorVaultBefore.vaultRepBackingAttoRep, 'liquidator should receive the target REP bundle')
+			assert.ok(liquidatorVaultAfter.repBackingUnits > liquidatorVaultBefore.repBackingUnits, 'liquidator should receive the target REP bundle')
 		})
 
 		test('tiny liquidation preserves the bonus without a separate gain condition', async () => {
@@ -1291,9 +1291,9 @@ describe('Peripherals: fork migration', () => {
 
 			assert.strictEqual(executionLog.args.success, true, `tiny proportional liquidation failed with ${executionLog.args.errorMessage}`)
 			strictEqualTypeSafe(targetVaultAfter.coverageCommitmentAttoEth, targetVaultBefore.coverageCommitmentAttoEth - tinyLiquidationAmount, 'tiny liquidation should move the requested coverage commitment')
-			assert.ok(targetVaultAfter.vaultRepBackingAttoRep < targetVaultBefore.vaultRepBackingAttoRep, 'tiny liquidation should move the corresponding backingUnits fraction')
+			assert.ok(targetVaultAfter.repBackingUnits < targetVaultBefore.repBackingUnits, 'tiny liquidation should move the corresponding backingUnits fraction')
 			strictEqualTypeSafe(liquidatorVaultAfter.coverageCommitmentAttoEth, liquidatorVaultBefore.coverageCommitmentAttoEth + tinyLiquidationAmount, 'caller should receive the requested coverage commitment')
-			assert.ok(liquidatorVaultAfter.vaultRepBackingAttoRep > liquidatorVaultBefore.vaultRepBackingAttoRep, 'caller should receive the corresponding backingUnits fraction')
+			assert.ok(liquidatorVaultAfter.repBackingUnits > liquidatorVaultBefore.repBackingUnits, 'caller should receive the corresponding backingUnits fraction')
 		})
 
 		test('liquidation leaves escalation claims with their original depositor', async () => {
@@ -1403,9 +1403,9 @@ describe('Peripherals: fork migration', () => {
 			const targetBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, client.account.address)
 			const liquidatorBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, liquidatorClient.account.address)
 			const otherHolderBefore = await getSecurityVault(client, minimumMultiplierPool.securityPool, otherHolderClient.account.address)
-			const targetVaultRepBackingBeforeAttoRep = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, targetBefore.vaultRepBackingAttoRep)
-			const liquidatorVaultRepBackingBefore = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, liquidatorBefore.vaultRepBackingAttoRep)
-			const otherHolderVaultRepBackingBefore = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, otherHolderBefore.vaultRepBackingAttoRep)
+			const targetVaultRepBackingBeforeAttoRep = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, targetBefore.repBackingUnits)
+			const liquidatorVaultRepBackingBefore = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, liquidatorBefore.repBackingUnits)
+			const otherHolderVaultRepBackingBefore = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, otherHolderBefore.repBackingUnits)
 			strictEqualTypeSafe(targetBefore.disputeStakedRepAttoRep, escrowedRep, 'setup should bind the escalation claim to the target')
 			strictEqualTypeSafe(targetVaultRepBackingBeforeAttoRep, repDeposit - escrowedRep, 'setup should leave only the liquidation reserve as target pool-held vault REP backing')
 
@@ -1422,8 +1422,8 @@ describe('Peripherals: fork migration', () => {
 			const targetAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, client.account.address)
 			const liquidatorAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, liquidatorClient.account.address)
 			const otherHolderAfter = await getSecurityVault(client, minimumMultiplierPool.securityPool, otherHolderClient.account.address)
-			const liquidatorVaultRepBackingAfter = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, liquidatorAfter.vaultRepBackingAttoRep)
-			const otherHolderVaultRepBackingAfter = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, otherHolderAfter.vaultRepBackingAttoRep)
+			const liquidatorVaultRepBackingAfter = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, liquidatorAfter.repBackingUnits)
+			const otherHolderVaultRepBackingAfter = await backingUnitsToAttoRep(client, minimumMultiplierPool.securityPool, otherHolderAfter.repBackingUnits)
 			const expectedBadDebt = targetCoverageCommitmentAttoEth - maximumFundedCoverageCommitmentAttoEth
 
 			strictEqualTypeSafe(targetAfter.coverageCommitmentAttoEth, 0n, 'the explicit backstop should clear the residual target coverage commitment')
@@ -2228,7 +2228,7 @@ describe('Peripherals: fork migration', () => {
 			const vaultAfterRedeem = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const walletRepAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-			strictEqualTypeSafe(vaultAfterRedeem.vaultRepBackingAttoRep, 0n, 'rep redemption should still empty the vault after the unrelated fork')
+			strictEqualTypeSafe(vaultAfterRedeem.repBackingUnits, 0n, 'rep redemption should still empty the vault after the unrelated fork')
 			strictEqualTypeSafe(vaultAfterRedeem.disputeStakedRepAttoRep, 0n, 'rep redemption should leave no escrowed REP after the unrelated fork')
 			strictEqualTypeSafe(walletRepAfterEscrowSettlement - walletRepBeforeClaims, reportBond, 'escrow settlement should return dispute-staked REP after the unrelated fork')
 			strictEqualTypeSafe(walletRepAfterRedeem - walletRepAfterEscrowSettlement, repDeposit - reportBond, 'rep redemption should return vault-held REP after the unrelated fork')
@@ -2272,7 +2272,7 @@ describe('Peripherals: fork migration', () => {
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 			const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const yesPoolBalance = await getERC20Balance(client, await getRepToken(client, yesSecurityPool.securityPool), yesSecurityPool.securityPool)
-			assert.ok((await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesVault.vaultRepBackingAttoRep)) > 0n, 'the yes-side vault should still retain positive pool-held child REP backing')
+			assert.ok((await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesVault.repBackingUnits)) > 0n, 'the yes-side vault should still retain positive pool-held child REP backing')
 			const migratedRepInYes = await getMigratedRepAttoRep(client, yesSecurityPool.securityPool)
 			assert.ok(migratedRepInYes > 0n, 'yes pool should track migrated REP')
 			assert.ok(migratedRepInYes < yesPoolBalance, 'migrated rep should stay below the full child REP balance when escrow payouts are carved out separately')
@@ -2320,8 +2320,8 @@ describe('Peripherals: fork migration', () => {
 			}
 
 			// auction yes
-			const poolRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
-			const auctionedEthInYes = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInYes) / poolRepAtForkAttoRep
+			const totalPoolHeldRepAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
+			const auctionedEthInYes = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInYes) / totalPoolHeldRepAtForkAttoRep
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			const yesAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			let yesAuctionTick: bigint | undefined
@@ -2329,14 +2329,14 @@ describe('Peripherals: fork migration', () => {
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 				yesAuctionEthRaiseCap = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 				approximatelyEqual(yesAuctionEthRaiseCap, auctionedEthInYes, 10n, 'Need to buy half of open interest on yes')
-				yesAuctionTick = await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, poolRepAtForkAttoRep / 4n, auctionedEthInYes)
+				yesAuctionTick = await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, totalPoolHeldRepAtForkAttoRep / 4n, auctionedEthInYes)
 			} else {
 				strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes child should either enter the truth auction or finalize immediately')
 				strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
 			}
 
 			// auction no
-			const auctionedEthInNo = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInNo) / poolRepAtForkAttoRep
+			const auctionedEthInNo = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInNo) / totalPoolHeldRepAtForkAttoRep
 			await startTruthAuction(client, noSecurityPool.securityPool)
 			const noAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			let noAuctionTick: bigint | undefined
@@ -2344,7 +2344,7 @@ describe('Peripherals: fork migration', () => {
 			if ((await getSystemState(client, noSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 				noAuctionEthRaiseCap = await getEthRaiseCapAttoEth(client, noSecurityPool.truthAuction)
 				approximatelyEqual(noAuctionEthRaiseCap, auctionedEthInNo, 10n, 'Need to buy half of open interest on no')
-				noAuctionTick = await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, (poolRepAtForkAttoRep * 3n) / 4n, auctionedEthInNo)
+				noAuctionTick = await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, (totalPoolHeldRepAtForkAttoRep * 3n) / 4n, auctionedEthInNo)
 			} else {
 				strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'no child should either enter the truth auction or finalize immediately')
 				strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, noSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
@@ -2356,7 +2356,7 @@ describe('Peripherals: fork migration', () => {
 			let invalidAuctionTick: bigint | undefined
 			if ((await getSystemState(client, invalidSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 				approximatelyEqual(await getEthRaiseCapAttoEth(client, invalidSecurityPool.truthAuction), ownForkParentCollateralAtFork, 10n, 'Need to buy all of open interest on invalid')
-				invalidAuctionTick = await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, poolRepAtForkAttoRep - burnAmount - poolRepAtForkAttoRep / 1_000_000n, ownForkParentCollateralAtFork)
+				invalidAuctionTick = await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, totalPoolHeldRepAtForkAttoRep - burnAmount - totalPoolHeldRepAtForkAttoRep / 1_000_000n, ownForkParentCollateralAtFork)
 			} else {
 				strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.Operational, 'invalid child should either enter the truth auction or finalize immediately')
 				strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, invalidSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
@@ -2379,16 +2379,16 @@ describe('Peripherals: fork migration', () => {
 			if (yesAuctionTick !== undefined) {
 				await claimAuctionProceeds(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address, [{ tick: yesAuctionTick, bidIndex: 0n }])
 				const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
-				yesAuctionParticipantRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesAuctionParticipantVault.vaultRepBackingAttoRep)
+				yesAuctionParticipantRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesAuctionParticipantVault.repBackingUnits)
 				const yesClearingPrice = tickToPrice(yesAuctionTick)
 				const expectedYesRep = (yesAuctionEthRaiseCap * 1_000_000_000_000_000_000n) / yesClearingPrice
 				approximatelyEqual(yesAuctionParticipantRep, expectedYesRep, 1_000n, 'yes auction participant should get expected REP')
 			}
 
 			const originalYesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const originalYesVaultRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalYesVault.vaultRepBackingAttoRep)
+			const originalYesVaultRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalYesVault.repBackingUnits)
 			assert.ok(originalYesVaultRep > yesAuctionParticipantRep, 'original yes vault holder should retain the majority of REP backingUnits after the auction')
-			strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)).vaultRepBackingAttoRep, 0n, 'attacker should have zero as they did not migrate to yes')
+			strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)).repBackingUnits, 0n, 'attacker should have zero as they did not migrate to yes')
 
 			const balancePriorYesRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 			await redeemShares(openInterestHolder, yesSecurityPool.securityPool)
@@ -2416,16 +2416,16 @@ describe('Peripherals: fork migration', () => {
 			if (noAuctionTick !== undefined) {
 				await claimAuctionProceeds(client, noSecurityPool.securityPool, noAuctionParticipant.account.address, [{ tick: noAuctionTick, bidIndex: 0n }])
 				const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
-				const noAuctionParticipantRep = await backingUnitsToAttoRep(client, noSecurityPool.securityPool, noAuctionParticipantVault.vaultRepBackingAttoRep)
+				const noAuctionParticipantRep = await backingUnitsToAttoRep(client, noSecurityPool.securityPool, noAuctionParticipantVault.repBackingUnits)
 				const noClearingPrice = tickToPrice(noAuctionTick)
 				const expectedNoRep = (noAuctionEthRaiseCap * 1_000_000_000_000_000_000n) / noClearingPrice
 				approximatelyEqual(noAuctionParticipantRep, expectedNoRep, 1_000n, 'no auction participant should get expected REP')
 			}
 
 			const originalNoVault = await getSecurityVault(client, noSecurityPool.securityPool, attackerClient.account.address)
-			const originalNoVaultRep = await backingUnitsToAttoRep(client, noSecurityPool.securityPool, originalNoVault.vaultRepBackingAttoRep)
+			const originalNoVaultRep = await backingUnitsToAttoRep(client, noSecurityPool.securityPool, originalNoVault.repBackingUnits)
 			approximatelyEqual(originalNoVaultRep, (repBalanceInGenesisPool * 1n) / 4n - burnAmount, repBalanceInGenesisPool, 'original no vault holder should hold rest 1/4 of rep')
-			strictEqualTypeSafe((await getSecurityVault(client, noSecurityPool.securityPool, client.account.address)).vaultRepBackingAttoRep, 0n, 'client should have zero as they did not migrate to no')
+			strictEqualTypeSafe((await getSecurityVault(client, noSecurityPool.securityPool, client.account.address)).repBackingUnits, 0n, 'client should have zero as they did not migrate to no')
 			const balancePriorNoRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 			await redeemShares(openInterestHolder, noSecurityPool.securityPool)
 			const actualNoSharesAfterRedeem = await balanceOfSharesInAttoEth(client, noSecurityPool.securityPool, noSecurityPool.shareToken, noUniverse, addressString(TEST_ADDRESSES[2]))
@@ -2450,7 +2450,7 @@ describe('Peripherals: fork migration', () => {
 			if (invalidAuctionTick !== undefined) {
 				await claimAuctionProceeds(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address, [{ tick: invalidAuctionTick, bidIndex: 0n }])
 				const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
-				const invalidAuctionParticipantRep = await backingUnitsToAttoRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.vaultRepBackingAttoRep)
+				const invalidAuctionParticipantRep = await backingUnitsToAttoRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.repBackingUnits)
 				const invalidClearingPrice = tickToPrice(invalidAuctionTick)
 				const expectedInvalidRep = (ownForkParentCollateralAtFork * 1_000_000_000_000_000_000n) / invalidClearingPrice
 				approximatelyEqual(invalidAuctionParticipantRep, expectedInvalidRep, 1_000n, 'invalid auction participant should get expected REP')
@@ -2691,16 +2691,16 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
-			const attackerClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.vaultRepBackingAttoRep)
+			const attackerClaimBeforeRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repBackingUnits)
 			const denominatorBeforeRedeem = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
 
 			await redeemRepFromVault(client, yesSecurityPool.securityPool, client.account.address)
 
 			const clientVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const denominatorAfterRedeem = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
-			const attackerClaimAfterRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.vaultRepBackingAttoRep)
+			const attackerClaimAfterRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repBackingUnits)
 
-			strictEqualTypeSafe(clientVaultAfterRedeem.vaultRepBackingAttoRep, 0n, 'redeeming a vault should zero out its child-REP backing units')
+			strictEqualTypeSafe(clientVaultAfterRedeem.repBackingUnits, 0n, 'redeeming a vault should zero out its child-REP backing units')
 			assert.ok(denominatorAfterRedeem <= denominatorBeforeRedeem, 'redeeming a vault should not increase the child pool denominator')
 			approximatelyEqual(attackerClaimAfterRedeem, attackerClaimBeforeRedeem, 10n, 'redeeming another vault should preserve the remaining vault claim up to rounding')
 			await assert.rejects(redeemRepFromVault(client, yesSecurityPool.securityPool, client.account.address), /No redeemable REP/)
@@ -2744,10 +2744,10 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational once migration and truth-auction processing finish')
 
 			const childVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			assert.ok(childVaultBeforeRedeem.vaultRepBackingAttoRep > 0n, 'child migration should create redeemable vault backingUnits')
+			assert.ok(childVaultBeforeRedeem.repBackingUnits > 0n, 'child migration should create redeemable vault backingUnits')
 			await redeemRepFromVault(client, yesSecurityPool.securityPool, client.account.address)
 			const childVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(childVaultAfterRedeem.vaultRepBackingAttoRep, 0n, 'operational child pool should allow redeemed backingUnits to clear')
+			strictEqualTypeSafe(childVaultAfterRedeem.repBackingUnits, 0n, 'operational child pool should allow redeemed backingUnits to clear')
 		})
 
 		test('child pool prices complete sets against all fork-time claims after balanced partial migration', async () => {
@@ -3004,7 +3004,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const yesVaultRepAfterEscalationClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesVault.vaultRepBackingAttoRep)
+			const yesVaultRepAfterEscalationClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, yesVault.repBackingUnits)
 			const migratedRepAttoRep = await getMigratedRepAttoRep(client, yesSecurityPool.securityPool)
 			const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const walletRepAfterEscalationClaim = await getERC20Balance(client, yesChildRepToken, client.account.address)
@@ -3013,9 +3013,9 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(migratedRepAttoRep >= migratedRepBeforeEscalation, 'later vault migration should not reduce child migrated REP accounting')
 			assert.ok(walletRepAfterEscalationClaim > walletRepBeforeEscalationClaim, 'claiming an own-fork escalation deposit should pay child REP directly to the wallet')
 			assert.ok(parentVaultAfterMigration.disputeStakedRepAttoRep < parentVaultBeforeEscalationClaim.disputeStakedRepAttoRep, 'claiming a winning parent escalation deposit should reduce the parent escalation escrow')
-			assert.ok(yesVault.vaultRepBackingAttoRep > 0n, 'vault migration should still create child REP backing units for pool-held REP')
+			assert.ok(yesVault.repBackingUnits > 0n, 'vault migration should still create child REP backing units for pool-held REP')
 			assert.ok(yesVaultRepAfterEscalationClaim > 0n, 'vault migration should create pool-held child-vault REP backing')
-			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).vaultRepBackingAttoRep, 0n, 'parent vault should be emptied after migration')
+			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repBackingUnits, 0n, 'parent vault should be emptied after migration')
 		})
 	})
 
@@ -3216,13 +3216,13 @@ describe('Peripherals: fork migration', () => {
 
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
 			const vaultAfterEscalationClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(vaultAfterEscalationClaim.vaultRepBackingAttoRep, 0n, 'own-fork escalation claims should not mint child backingUnits')
+			strictEqualTypeSafe(vaultAfterEscalationClaim.repBackingUnits, 0n, 'own-fork escalation claims should not mint child backingUnits')
 			strictEqualTypeSafe(vaultAfterEscalationClaim.coverageCommitmentAttoEth, 0n, 'claiming own-fork escalation should not migrate the parent coverage commitment')
 
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const vaultAfterVaultMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
-			assert.ok(vaultAfterVaultMigration.vaultRepBackingAttoRep > 0n, 'migrateVault should populate child backingUnits from the unlocked parent vault state')
+			assert.ok(vaultAfterVaultMigration.repBackingUnits > 0n, 'migrateVault should populate child backingUnits from the unlocked parent vault state')
 			strictEqualTypeSafe(vaultAfterVaultMigration.coverageCommitmentAttoEth, securityPoolCoverageCommitmentAttoEth, 'migrateVault should preserve the already-migrated parent coverage commitment')
 		})
 
@@ -3243,12 +3243,12 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
-			assert.ok(childVault.vaultRepBackingAttoRep > 0n, 'migrateVault should still migrate backingUnits at the inclusive deadline')
+			assert.ok(childVault.repBackingUnits > 0n, 'migrateVault should still migrate backingUnits at the inclusive deadline')
 		})
 
 		test('migrateVault allows the exact external-fork migration deadline and rejects one second later', async () => {
 			const parentVaultBeforeFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			assert.ok(parentVaultBeforeFork.vaultRepBackingAttoRep > 0n, 'test setup should leave parent-vault REP backing units before the external fork')
+			assert.ok(parentVaultBeforeFork.repBackingUnits > 0n, 'test setup should leave parent-vault REP backing units before the external fork')
 			await triggerExternalForkForSecurityPool(undefined, 'external vault migration deadline source')
 
 			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
@@ -3258,7 +3258,7 @@ describe('Peripherals: fork migration', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			assert.ok(childVault.vaultRepBackingAttoRep > 0n, 'migrateVault should still move non-escrowed vault REP backing units at the inclusive external-fork deadline')
+			assert.ok(childVault.repBackingUnits > 0n, 'migrateVault should still move non-escrowed vault REP backing units at the inclusive external-fork deadline')
 
 			await mockWindow.setTime(migrationDeadline + 1n)
 			await assert.rejects(migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes), /migration window closed/i)
@@ -3545,7 +3545,7 @@ describe('Peripherals: fork migration', () => {
 			const vaultRepBeforeRedemption = await getERC20Balance(client, childRepToken, client.account.address)
 			await redeemRepFromVault(client, fixedChildPool.securityPool, client.account.address)
 			assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) > vaultRepBeforeRedemption, 'fixed-child vault REP should remain redeemable after every rejected deposit and fork path')
-			strictEqualTypeSafe((await getSecurityVault(client, fixedChildPool.securityPool, client.account.address)).vaultRepBackingAttoRep, 0n, 'fixed-child REP redemption should consume the vault backingUnits claim')
+			strictEqualTypeSafe((await getSecurityVault(client, fixedChildPool.securityPool, client.account.address)).repBackingUnits, 0n, 'fixed-child REP redemption should consume the vault backingUnits claim')
 		})
 
 		test('a fixed-outcome child rejects recycling a redeemed complete set through a recursive matching fork', async () => {
@@ -3831,7 +3831,7 @@ describe('Peripherals: fork migration', () => {
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			assert.ok(ownForkRepBuckets.vaultRepAtForkAttoRep > 0n, 'test setup should leave pool-held vault REP backing at fork')
 			assert.ok(ownForkRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep > 0n, 'test setup should include separate dispute-staked REP at fork')
-			const expectedChildRepClaim = (parentVaultBeforeFork.vaultRepBackingAttoRep * ownForkRepBuckets.vaultRepAtForkAttoRep) / parentDenominatorBeforeFork
+			const expectedChildRepClaim = (parentVaultBeforeFork.repBackingUnits * ownForkRepBuckets.vaultRepAtForkAttoRep) / parentDenominatorBeforeFork
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -3839,7 +3839,7 @@ describe('Peripherals: fork migration', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const childRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, childVault.vaultRepBackingAttoRep)
+			const childRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, childVault.repBackingUnits)
 			strictEqualTypeSafe(childRepClaim, expectedChildRepClaim, 'child vault backingUnits should redeem the full migrated vault REP bucket')
 		})
 
@@ -4011,7 +4011,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(migratedAfterEscalation, migratedBeforeEscalation, 'own-fork escalation claim should not increase child pool migrated REP accounting')
 			strictEqualTypeSafe(parentVaultBeforeMigration.disputeStakedRepAttoRep - parentVaultAfterMigration.disputeStakedRepAttoRep, 2n * winningDeposit, 'migration should clear exactly the winning deposits principal from the parent escalation escrow')
 			strictEqualTypeSafe(childCollateralAfterEscalation, childCollateralBeforeEscalation, 'own-fork escalation claim should not transfer pool collateral')
-			strictEqualTypeSafe(childVaultAfterMigration.vaultRepBackingAttoRep, 0n, 'own-fork escalation claim should not mint child REP backing units')
+			strictEqualTypeSafe(childVaultAfterMigration.repBackingUnits, 0n, 'own-fork escalation claim should not mint child REP backing units')
 			assert.ok(walletRepAfterEscalation > walletRepBeforeEscalation, 'own-fork escalation claim should pay child REP directly to the wallet')
 			strictEqualTypeSafe(parentGameClaimLogs.length, 2, 'own-fork wallet claim should emit one parent-game claim log per source deposit')
 			assert.deepStrictEqual(

@@ -244,7 +244,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					repWithdrawAmount: '',
 					coverageCommitmentEthAmount: '',
 					securityPoolAddress: zeroAddress,
-					selectedVaultAddress: zeroAddress,
+					selectedVaultOwner: zeroAddress,
 				},
 			}),
 		})
@@ -282,7 +282,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: /Vault Summary/ })
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
-		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
+		expect(documentQueries.getByText('Selected Vault Owner')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
@@ -454,7 +454,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: vaultAddress,
+							selectedVaultOwner: vaultAddress,
 						},
 					}),
 				})}
@@ -494,7 +494,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: selectedPoolAddress,
+							selectedVaultOwner: selectedPoolAddress,
 						},
 					}),
 				})}
@@ -525,7 +525,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: '',
-							selectedVaultAddress: selectedPoolAddress,
+							selectedVaultOwner: selectedPoolAddress,
 						},
 					}),
 				})}
@@ -557,7 +557,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -614,7 +614,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 						walletRepBalanceAttoRep: 10n * 10n ** 18n,
 					}),
@@ -657,7 +657,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -706,7 +706,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -751,7 +751,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: otherVaultAddress,
+							selectedVaultOwner: otherVaultAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -794,7 +794,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -860,7 +860,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {
-		const formChanges: Array<{ selectedVaultAddress?: string }> = []
+		const formChanges: Array<{ selectedVaultOwner?: string }> = []
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -889,7 +889,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -907,7 +907,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Select vault' }))
 		})
 
-		expect(formChanges).toContainEqual({ selectedVaultAddress: vaultAddress })
+		expect(formChanges).toContainEqual({ selectedVaultOwner: vaultAddress })
 		expect(loadSecurityVaultCalls).toContain(vaultAddress)
 	})
 })

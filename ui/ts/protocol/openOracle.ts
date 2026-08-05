@@ -211,7 +211,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				const stagedOperation = activeOperations[index]
 				if (stagedOperation === undefined) throw new Error('Missing staged operation details')
 				return {
-					amount: stagedOperation.amount,
+					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
 					initiatorVault: stagedOperation.initiatorVault,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId,
@@ -229,7 +229,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			})
 			if (stagedOperation.initiatorVault !== zeroAddress) {
 				pendingOperation = {
-					amount: stagedOperation.amount,
+					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
 					initiatorVault: stagedOperation.initiatorVault,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId: pendingOperationSlotId,

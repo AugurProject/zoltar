@@ -9,7 +9,7 @@ import {
 	getOracleManagerPriceValidUntilTimestamp,
 	getSecurityVaultMaxCoverageCommitmentAttoEthAmount,
 	getSecurityVaultWithdrawableRepAmount,
-	getSelectedVaultAddress,
+	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
 	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
@@ -23,10 +23,10 @@ import { loadSecurityVaultDetails } from '../../../protocol/index.js'
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {
 		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		expect(getSelectedVaultAddress('', accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress('   ', accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress(undefined, accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress(undefined, undefined)).toBe(undefined)
+		expect(getSelectedVaultOwner('', accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner('   ', accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner(undefined, accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner(undefined, undefined)).toBe(undefined)
 	})
 
 	void test('detects whether the selected vault is owned by the connected wallet', () => {
@@ -62,7 +62,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(true)
 
@@ -71,7 +71,7 @@ void describe('security vault helpers', () => {
 				accountAddress: vaultAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: '',
+				selectedVaultOwner: '',
 			}),
 		).toBe(true)
 
@@ -80,7 +80,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: accountAddress,
+				selectedVaultOwner: accountAddress,
 			}),
 		).toBe(false)
 
@@ -89,7 +89,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress: zeroAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(false)
 
@@ -98,7 +98,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: undefined,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(false)
 	})

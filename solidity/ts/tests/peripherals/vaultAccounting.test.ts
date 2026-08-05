@@ -142,7 +142,7 @@ describe('Peripherals: vault accounting', () => {
 
 		strictEqualTypeSafe(depositArgs.vault, client.account.address, 'event should identify the updated vault')
 		strictEqualTypeSafe(depositArgs.repAmountAttoRep, depositAmount, 'event should include the deposited REP amount')
-		strictEqualTypeSafe(depositArgs.repBackingUnits, vault.vaultRepBackingAttoRep, 'event should include updated vault backingUnits')
+		strictEqualTypeSafe(depositArgs.repBackingUnits, vault.repBackingUnits, 'event should include updated vault backingUnits')
 		strictEqualTypeSafe(depositArgs.totalRepBackingUnits, totalRepBackingUnits, 'event should include updated REP backing units denominator')
 	})
 
@@ -374,8 +374,8 @@ describe('Peripherals: vault accounting', () => {
 		const walletRepAfterWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(claimLog?.args.amountToWithdrawAttoRep, reportBond, 'single-sided winning withdrawal should pay back the full original REP principal')
-		assert.ok(vaultBeforeWithdrawal.vaultRepBackingAttoRep < vaultBeforeDeposit.vaultRepBackingAttoRep, "depositing into escalation should reduce the vault's pool-held REP backing units")
-		strictEqualTypeSafe(vaultAfterWithdrawal.vaultRepBackingAttoRep, vaultBeforeWithdrawal.vaultRepBackingAttoRep, 'with escrow custody, settling a break-even deposit should not re-mint vault backingUnits')
+		assert.ok(vaultBeforeWithdrawal.repBackingUnits < vaultBeforeDeposit.repBackingUnits, "depositing into escalation should reduce the vault's pool-held REP backing units")
+		strictEqualTypeSafe(vaultAfterWithdrawal.repBackingUnits, vaultBeforeWithdrawal.repBackingUnits, 'with escrow custody, settling a break-even deposit should not re-mint vault backingUnits')
 		strictEqualTypeSafe(walletRepAfterWithdrawal - walletRepBeforeDeposit, reportBond, 'a break-even escalation round-trip should return REP to the wallet instead')
 		strictEqualTypeSafe(vaultAfterWithdrawal.disputeStakedRepAttoRep, 0n, 'escalation lock should be released after withdrawal')
 	})
@@ -533,7 +533,7 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(availableRepBeforeWithdrawal, repDeposit * 2n - lockedDeposit, 'available REP should exclude the locked escalation deposit')
 		strictEqualTypeSafe(aliceWalletRepAfterWithdrawal - aliceWalletRepBeforeWithdrawal, repDeposit, 'withdrawal should still allow the caller to exit its full unlocked collateral claim')
 		strictEqualTypeSafe(availableRepAfterWithdrawal, repDeposit - lockedDeposit, 'remaining available REP should still exclude the locked stake after withdrawal')
-		strictEqualTypeSafe(aliceVaultAfterWithdrawal.vaultRepBackingAttoRep, 0n, 'full vault withdrawal should remove the callers backingUnits share')
+		strictEqualTypeSafe(aliceVaultAfterWithdrawal.repBackingUnits, 0n, 'full vault withdrawal should remove the callers backingUnits share')
 		strictEqualTypeSafe(attackerVaultAfterWithdrawal.disputeStakedRepAttoRep, lockedDeposit, 'the other vaults locked escalation stake should remain intact')
 	})
 
@@ -551,7 +551,7 @@ describe('Peripherals: vault accounting', () => {
 		const walletRepAfterWithdrawAttempt = await getERC20Balance(escrowedVault, addressString(GENESIS_REPUTATION_TOKEN), escrowedVault.account.address)
 		strictEqualTypeSafe(vaultBeforeWithdrawAttempt.disputeStakedRepAttoRep, lockedDeposit, 'test setup should create active escrow')
 		strictEqualTypeSafe(vaultAfterWithdrawAttempt.disputeStakedRepAttoRep, lockedDeposit, 'failed withdrawal should leave active escrow intact')
-		strictEqualTypeSafe(vaultAfterWithdrawAttempt.vaultRepBackingAttoRep, vaultBeforeWithdrawAttempt.vaultRepBackingAttoRep, 'failed withdrawal should not change REP backing units')
+		strictEqualTypeSafe(vaultAfterWithdrawAttempt.repBackingUnits, vaultBeforeWithdrawAttempt.repBackingUnits, 'failed withdrawal should not change REP backing units')
 		strictEqualTypeSafe(walletRepAfterWithdrawAttempt, walletRepBeforeWithdrawAttempt, 'failed withdrawal should not transfer REP')
 	})
 
@@ -568,7 +568,7 @@ describe('Peripherals: vault accounting', () => {
 		const vaultAfterRedeem = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const walletRepAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		strictEqualTypeSafe(vaultAfterRedeem.vaultRepBackingAttoRep, 0n, 'redeemRepFromVault should empty the vault after escalation settles')
+		strictEqualTypeSafe(vaultAfterRedeem.repBackingUnits, 0n, 'redeemRepFromVault should empty the vault after escalation settles')
 		strictEqualTypeSafe(vaultAfterRedeem.disputeStakedRepAttoRep, 0n, 'redeemRepFromVault should not recreate escrowed REP')
 		strictEqualTypeSafe(walletRepAfterRedeem - walletRepAfterSettlement, repDeposit - reportBond, 'redeemRepFromVault should only return the vault-held REP claim after escalation settles')
 		strictEqualTypeSafe(vaultAfterSettlement.disputeStakedRepAttoRep, 0n, 'settling escalation should clear the remaining escrowed REP')
@@ -578,11 +578,16 @@ describe('Peripherals: vault accounting', () => {
 	test('depositToEscalationGame burns enough backingUnits after the pool share price appreciates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const benefactorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const vaultBeforeDonation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRepBackingBeforeDonationAttoRep = await getVaultRepClaim(client.account.address)
 		await mockWindow.setTime(endTime + 10000n)
 		await transferRepToAddress(benefactorClient, securityPoolAddresses.securityPool, repDeposit)
 
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const totalRepBeforeEscrow = (await getVaultRepClaim(client.account.address)) + vaultBeforeEscrow.disputeStakedRepAttoRep
+		const vaultRepBackingAfterDonationAttoRep = await getVaultRepClaim(client.account.address)
+		const totalRepBeforeEscrow = vaultRepBackingAfterDonationAttoRep + vaultBeforeEscrow.disputeStakedRepAttoRep
+		strictEqualTypeSafe(vaultBeforeEscrow.repBackingUnits, vaultBeforeDonation.repBackingUnits, 'a direct pool-held REP donation must not mint REP backing units')
+		assert.ok(vaultRepBackingAfterDonationAttoRep > vaultRepBackingBeforeDonationAttoRep, 'unchanged REP backing units must convert to more vault REP backing after a pool-held REP donation')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -604,7 +609,7 @@ describe('Peripherals: vault accounting', () => {
 		const totalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const backingUnitsToEscrow = (escrowAmount * totalRepBackingUnits + totalRepBeforeEscrow - 1n) / totalRepBeforeEscrow
-		const expectedRepAfterEscrow = ((vaultBeforeEscrow.vaultRepBackingAttoRep - backingUnitsToEscrow) * (totalRepBeforeEscrow - escrowAmount)) / totalRepBackingUnits
+		const expectedRepAfterEscrow = ((vaultBeforeEscrow.repBackingUnits - backingUnitsToEscrow) * (totalRepBeforeEscrow - escrowAmount)) / totalRepBackingUnits
 		const targetCoverageCommitmentAttoEth = expectedRepAfterEscrow + 1n
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, targetCoverageCommitmentAttoEth)
@@ -612,14 +617,14 @@ describe('Peripherals: vault accounting', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		assert.ok(vaultBeforeEscrow.vaultRepBackingAttoRep > 0n, 'target vault should already be funded')
+		assert.ok(vaultBeforeEscrow.repBackingUnits > 0n, 'target vault should already be funded')
 		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetCoverageCommitmentAttoEth, 'the pool-wide bond should still be satisfied after escrow')
 		assert.ok(expectedRepAfterEscrow < targetCoverageCommitmentAttoEth, 'coverage commitment')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escrowAmount)
 		const vaultAfterEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.ok(vaultAfterEscrow.disputeStakedRepAttoRep >= escrowAmount, 'the escrowed REP should be accepted when the post-transfer denominator keeps the vault above its bond threshold')
-		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.vaultRepBackingAttoRep)) >= targetCoverageCommitmentAttoEth, 'the remaining claim should still satisfy the local bond after escrow')
+		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.repBackingUnits)) >= targetCoverageCommitmentAttoEth, 'the remaining claim should still satisfy the local bond after escrow')
 	})
 
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
@@ -893,7 +898,7 @@ describe('Peripherals: vault accounting', () => {
 		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex])
 		const attackerVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 		strictEqualTypeSafe(attackerVaultAfterSettlement.disputeStakedRepAttoRep, 0n, 'losing-side settlement should clear the resolved escalation lock')
-		strictEqualTypeSafe(attackerVaultAfterSettlement.vaultRepBackingAttoRep, attackerVaultBeforeSettlement.vaultRepBackingAttoRep, 'settling a fully losing escalation deposit should not mint new vault backingUnits to the loser')
+		strictEqualTypeSafe(attackerVaultAfterSettlement.repBackingUnits, attackerVaultBeforeSettlement.repBackingUnits, 'settling a fully losing escalation deposit should not mint new vault backingUnits to the loser')
 		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /Deposit settled/)
 	})
 
@@ -954,8 +959,8 @@ describe('Peripherals: vault accounting', () => {
 
 		const firstVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const secondVault = await getSecurityVault(client, secondSecurityPoolAddresses.securityPool, client.account.address)
-		const firstPoolHeldVaultRepBackingAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, firstVault.vaultRepBackingAttoRep)
-		const secondPoolHeldVaultRepBackingAttoRep = await backingUnitsToAttoRep(client, secondSecurityPoolAddresses.securityPool, secondVault.vaultRepBackingAttoRep)
+		const firstPoolHeldVaultRepBackingAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, firstVault.repBackingUnits)
+		const secondPoolHeldVaultRepBackingAttoRep = await backingUnitsToAttoRep(client, secondSecurityPoolAddresses.securityPool, secondVault.repBackingUnits)
 
 		strictEqualTypeSafe(firstVault.disputeStakedRepAttoRep, 0n, 'the first pool should have no remaining escalation locks after both settlements')
 		strictEqualTypeSafe(secondVault.disputeStakedRepAttoRep, 0n, 'the mirror pool should have no remaining escalation locks after both settlements')

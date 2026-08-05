@@ -289,8 +289,8 @@ function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSetting
 	return pool.stagedOperations.reduce((total, operation) => {
 		if (operation.operation !== 0n || operation.initiatorVault.toLowerCase() !== pool.botVault.address.toLowerCase()) return total
 		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldRepAttoRep) / operation.snapshotTotalRepBackingUnits
-		const estimatedRepAttoRep = (operation.amount * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
-		if (operation.isPendingSettlement || operation.amount === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedRepAttoRep > snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
+		const estimatedRepAttoRep = (operation.operationAmountAttoRepOrAttoEth * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
+		if (operation.isPendingSettlement || operation.operationAmountAttoRepOrAttoEth === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedRepAttoRep > snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
 		return total + (estimatedRepAttoRep < snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
 	}, 0n)
 }

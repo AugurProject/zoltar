@@ -167,7 +167,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(address(migrationProxy) != address(0x0), 'Proxy missing');
 		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] = 0;
 		migrationProxy.sweepChildRep(address(child), child.repToken(), pendingChildRepAttoRep);
-		emit ChildPoolRepSwept(
+		emit PoolHeldRepSweptToChild(
 			parent,
 			child,
 			outcomeIndex,
@@ -218,13 +218,17 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(child.repToken().balanceOf(address(child)) >= requiredMigratedRepAttoRep, 'Child REP short');
 	}
 
-	function _ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) internal {
-		uint256 alreadySplit = childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex];
-		if (alreadySplit >= requiredSplit) return;
-		uint256 shortfall = requiredSplit - alreadySplit;
-		_splitMigrationRepToChild(parent, outcomeIndex, shortfall, forkDataByPool[parent].ownFork, false);
-		childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex] = requiredSplit;
-		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] += shortfall;
+	function _ensureChildPoolRepSplit(
+		ISecurityPool parent,
+		uint256 outcomeIndex,
+		uint256 requiredSplitAttoRep
+	) internal {
+		uint256 alreadySplitAttoRep = childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex];
+		if (alreadySplitAttoRep >= requiredSplitAttoRep) return;
+		uint256 splitShortfallAttoRep = requiredSplitAttoRep - alreadySplitAttoRep;
+		_splitMigrationRepToChild(parent, outcomeIndex, splitShortfallAttoRep, forkDataByPool[parent].ownFork, false);
+		childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex] = requiredSplitAttoRep;
+		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] += splitShortfallAttoRep;
 		emit ChildRepSplit(
 			parent,
 			outcomeIndex,

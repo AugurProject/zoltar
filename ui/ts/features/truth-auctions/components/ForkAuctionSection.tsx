@@ -1282,7 +1282,7 @@ export function ForkAuctionSection({
 			{forkAuctionDetails?.ownForkRepBuckets === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.advancedDiagnostics}>
 					<div className='fork-workflow-summary-metrics'>
-						<MetricField label={forkAuctionCopy.poolRepAtForkAttoRep}>
+						<MetricField label={forkAuctionCopy.totalPoolHeldRepAtForkAttoRep}>
 							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtForkAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={forkAuctionCopy.escalationChildRepPerSelectedOutcomeAttoRep}>

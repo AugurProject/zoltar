@@ -373,7 +373,7 @@ describe('Peripherals: escalation migration', () => {
 		const depositCount = 65
 		const totalUnresolvedDeposit = BigInt(depositCount) * reportBond
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.vaultRepBackingAttoRep)
+		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		if (vaultRepBeforeTopUp < totalUnresolvedDeposit) {
 			await approveAndDepositRepToVault(client, totalUnresolvedDeposit - vaultRepBeforeTopUp, questionId)
 		}
@@ -422,7 +422,7 @@ describe('Peripherals: escalation migration', () => {
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.vaultRepBackingAttoRep)
+		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
@@ -456,7 +456,7 @@ describe('Peripherals: escalation migration', () => {
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.vaultRepBackingAttoRep)
+		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		if (vaultRepBeforeTopUp < 3n * forkThresholdAttoRep) {
 			await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep - vaultRepBeforeTopUp, questionId)
 		}
@@ -471,7 +471,7 @@ describe('Peripherals: escalation migration', () => {
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVault.disputeStakedRepAttoRep, parentVaultBefore.disputeStakedRepAttoRep, 'expired migration must leave unresolved parent dispute-staked REP accounting untouched')
-		strictEqualTypeSafe(parentVault.vaultRepBackingAttoRep, parentVaultBefore.vaultRepBackingAttoRep, 'expired migration must leave parent backingUnits untouched')
+		strictEqualTypeSafe(parentVault.repBackingUnits, parentVaultBefore.repBackingUnits, 'expired migration must leave parent backingUnits untouched')
 	})
 
 	test('external-fork unresolved migration expires without requiring another user to process it', async () => {
@@ -543,7 +543,7 @@ describe('Peripherals: escalation migration', () => {
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.vaultRepBackingAttoRep)
+		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
@@ -740,7 +740,7 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.vaultRepBackingAttoRep)
+		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultRepAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultRepAttoRep, questionId)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
@@ -789,7 +789,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(entitlementAfterYes[0], true, 'the first selected child should persist the vault entitlement')
 		assert.deepStrictEqual(entitlementAfterYes[2], [false, true, false], 'only the selected yes child should be marked materialized')
 		const parentVaultAfterExport = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(parentVaultAfterExport.vaultRepBackingAttoRep, 0n, 'the parent vault should have no remaining REP backing after migration')
+		strictEqualTypeSafe(parentVaultAfterExport.repBackingUnits, 0n, 'the parent vault should have no remaining REP backing after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.coverageCommitmentAttoEth, 0n, 'the parent vault should have no remaining coverage commitment after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedRepAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
 		const activeParentVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
@@ -922,7 +922,7 @@ describe('Peripherals: escalation migration', () => {
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.vaultRepBackingAttoRep)
+		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
@@ -1110,7 +1110,7 @@ describe('Peripherals: escalation migration', () => {
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const winningVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, winningVault.vaultRepBackingAttoRep)
+		const winningVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, winningVault.repBackingUnits)
 		if (winningVaultRep < forkThresholdAttoRep) await approveAndDepositRepToVault(client, forkThresholdAttoRep - winningVaultRep, questionId)
 		await approveAndDepositRepToVault(losingClient, forkThresholdAttoRep, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
@@ -1199,7 +1199,7 @@ describe('Peripherals: escalation migration', () => {
 		const firstWinningPrincipal = forkThresholdAttoRep / 2n
 		const secondWinningPrincipal = forkThresholdAttoRep - firstWinningPrincipal
 		const firstWinnerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const firstWinnerRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, firstWinnerVault.vaultRepBackingAttoRep)
+		const firstWinnerRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, firstWinnerVault.repBackingUnits)
 		if (firstWinnerRep < firstWinningPrincipal) await approveAndDepositRepToVault(client, firstWinningPrincipal - firstWinnerRep, questionId)
 		await approveAndDepositRepToVault(secondWinner, secondWinningPrincipal, questionId)
 		await approveAndDepositRepToVault(losingClient, forkThresholdAttoRep, questionId)
@@ -1278,7 +1278,7 @@ describe('Peripherals: escalation migration', () => {
 		const firstYesDeposit = forkThresholdAttoRep / 3n
 		const secondYesDeposit = forkThresholdAttoRep - firstYesDeposit
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.vaultRepBackingAttoRep)
+		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultRepAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultRepAttoRep, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYesDeposit)
@@ -1709,6 +1709,6 @@ describe('Peripherals: escalation migration', () => {
 		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex])
 		const clientVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(clientVaultAfterSettlement.disputeStakedRepAttoRep, 0n, 'permissionless settlement should clear the owners lock')
-		strictEqualTypeSafe(clientVaultAfterSettlement.vaultRepBackingAttoRep >= clientVaultBeforeSettlement.vaultRepBackingAttoRep, true, 'permissionless settlement should preserve or increase the owners vault claim')
+		strictEqualTypeSafe(clientVaultAfterSettlement.repBackingUnits >= clientVaultBeforeSettlement.repBackingUnits, true, 'permissionless settlement should preserve or increase the owners vault claim')
 	})
 })

@@ -31,7 +31,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		setForkAuctionFormSecurityPoolAddress: () => undefined,
 		setOpenOracleFormReportId: () => undefined,
 		setReportingFormSecurityPoolAddress: () => undefined,
-		setSecurityVaultFormSelectedVaultAddress: () => undefined,
+		setSecurityVaultFormSelectedVaultOwner: () => undefined,
 		setSecurityVaultFormSecurityPoolAddress: () => undefined,
 		setSecurityPoolFormMarketId: () => undefined,
 		setTradingFormSecurityPoolAddress: () => undefined,
@@ -389,7 +389,7 @@ describe('app route effects integration', () => {
 					setReportingFormSecurityPoolAddress: value => {
 						reportingUpdates.push(value)
 					},
-					setSecurityVaultFormSelectedVaultAddress: value => {
+					setSecurityVaultFormSelectedVaultOwner: value => {
 						selectedVaultUpdates.push(value)
 					},
 					setSecurityVaultFormSecurityPoolAddress: value => {
@@ -419,7 +419,7 @@ describe('app route effects integration', () => {
 			accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 			route: 'security-pools',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			setSecurityVaultFormSelectedVaultAddress: value => {
+			setSecurityVaultFormSelectedVaultOwner: value => {
 				selectedVaultUpdates.push(value)
 			},
 		})

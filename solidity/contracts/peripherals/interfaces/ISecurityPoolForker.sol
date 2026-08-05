@@ -14,7 +14,7 @@ interface ISecurityPoolForkerEvents {
 		bool ownFork,
 		bool unresolvedEscalation,
 		uint256 settlementCollateralAtForkAttoEth,
-		uint256 poolRepAtForkAttoRep,
+		uint256 totalPoolHeldRepAtForkAttoRep,
 		uint256 auctionableRepAtForkAttoRep,
 		uint256 escalationSourceRepAtForkAttoRep,
 		uint256 escalationChildRepAtForkAttoRep,
@@ -33,7 +33,7 @@ interface ISecurityPoolForkerEvents {
 	event ParentRepLocked(
 		ISecurityPool indexed parentPool,
 		address indexed migrationProxy,
-		uint256 poolRepAmountAttoRep,
+		uint256 poolHeldRepAmountAttoRep,
 		uint256 disputeStakedRepAmountAttoRep,
 		uint256 resultingLockedRepAttoRep
 	);
@@ -68,12 +68,12 @@ interface ISecurityPoolForkerEvents {
 		uint256 resultingDisputeStakedRepBalanceAttoRep
 	);
 	/// @notice Child REP moved into its pool, including the resulting pool token balance.
-	event ChildPoolRepSwept(
+	event PoolHeldRepSweptToChild(
 		ISecurityPool indexed parentPool,
 		ISecurityPool indexed childPool,
 		uint256 indexed outcomeIndex,
 		uint256 repAmountAttoRep,
-		uint256 resultingChildPoolRepBalanceAttoRep
+		uint256 resultingChildPoolHeldRepBalanceAttoRep
 	);
 }
 

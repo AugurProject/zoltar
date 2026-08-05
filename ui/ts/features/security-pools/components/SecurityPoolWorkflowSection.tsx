@@ -72,7 +72,7 @@ import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
-import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultAddress, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultOwner, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
 import { formatUniverseIdHex } from '../../universes/lib/universe.js'
 import { useForkWorkflowSelectionState } from '../../truth-auctions/hooks/useForkWorkflowSelectionState.js'
@@ -347,21 +347,21 @@ export function SecurityPoolWorkflowSection({
 		poolOracleManagerDetails,
 		selectedPoolManagerAddress,
 	})
-	const selectedVaultAddressInput = securityVault.securityVaultForm.selectedVaultAddress ?? ''
-	const selectedVaultAddress = getSelectedVaultAddress(selectedVaultAddressInput, accountState.address) ?? ''
-	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddressInput, accountState.address)
+	const selectedVaultOwnerInput = securityVault.securityVaultForm.selectedVaultOwner ?? ''
+	const selectedVaultOwner = getSelectedVaultOwner(selectedVaultOwnerInput, accountState.address) ?? ''
+	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountState.address)
 	const selectedVaultSecurityPoolAddress = securityVault.securityVaultForm.securityPoolAddress.trim()
 	const selectedVaultDetails = doesLoadedSecurityVaultMatchSelection({
 		accountAddress: accountState.address,
 		securityPoolAddress: selectedPool?.securityPoolAddress,
 		securityVaultDetails: securityVault.securityVaultDetails,
-		selectedVaultAddress: selectedVaultAddressInput,
+		selectedVaultOwner: selectedVaultOwnerInput,
 	})
 		? securityVault.securityVaultDetails
 		: undefined
 	const selectedVaultExistsOnchain = doesSecurityVaultExistOnchain(selectedVaultDetails)
 	const currentSecurityVaultResult = selectedVaultDetails === undefined ? undefined : securityVault.securityVaultResult
-	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
+	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
 		accountAddress: accountState.address,
 		hasLoadedCurrentVault,
@@ -370,8 +370,8 @@ export function SecurityPoolWorkflowSection({
 		onLoadSecurityVault: securityVault.onLoadSecurityVault,
 		onSecurityVaultFormChange: securityVault.onSecurityVaultFormChange,
 		selectedPoolAddress: selectedPool?.securityPoolAddress,
-		selectedVaultAddress,
-		selectedVaultAddressInput: securityVault.securityVaultForm.selectedVaultAddress,
+		selectedVaultOwner,
+		selectedVaultOwnerInput: securityVault.securityVaultForm.selectedVaultOwner,
 		selectedVaultSecurityPoolAddress,
 		showSelectedPoolWorkflowDetails,
 		view,
@@ -386,7 +386,7 @@ export function SecurityPoolWorkflowSection({
 	const lastForkAuctionOutcomeRefreshHash = useRef<string | undefined>(undefined)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
-		selectedVaultAddress,
+		selectedVaultOwner,
 		securityVaultResult: currentSecurityVaultResult,
 	})
 	const liquidationNoticeState = getLiquidationNoticeState({
@@ -857,9 +857,9 @@ export function SecurityPoolWorkflowSection({
 										>
 											{selectedVaultLoadNotice}
 											<LookupFieldRow
-												label={securityPoolCopy.selectedVaultAddress}
-												value={selectedVaultAddressInput}
-												onInput={selectedVaultAddress => securityVault.onSecurityVaultFormChange({ selectedVaultAddress })}
+												label={securityPoolCopy.selectedVaultOwner}
+												value={selectedVaultOwnerInput}
+												onInput={selectedVaultOwner => securityVault.onSecurityVaultFormChange({ selectedVaultOwner })}
 												placeholder={commonCopy.hexValuePlaceholder}
 												resolvedValue={selectedVaultDetails === undefined ? undefined : <AddressValue address={selectedVaultDetails.vaultAddress} />}
 												resolvedValueLabel={securityPoolCopy.selectedVault}
@@ -903,7 +903,7 @@ export function SecurityPoolWorkflowSection({
 																<button
 																	className='secondary'
 																	onClick={() => {
-																		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: vault.vaultAddress.toString() })
+																		securityVault.onSecurityVaultFormChange({ selectedVaultOwner: vault.vaultAddress.toString() })
 																		setVaultView('selected-vault')
 																		void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
 																	}}
@@ -921,7 +921,7 @@ export function SecurityPoolWorkflowSection({
 															</div>
 														)
 													}}
-													renderBadge={vault => (selectedVaultAddress !== '' && sameCaseInsensitiveText(selectedVaultAddress, vault.vaultAddress) ? <Badge tone='ok'>{commonCopy.selected}</Badge> : undefined)}
+													renderBadge={vault => (selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='ok'>{commonCopy.selected}</Badge> : undefined)}
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
 													repPerEthSourceUrl={repPerEthSourceUrl}
@@ -947,7 +947,7 @@ export function SecurityPoolWorkflowSection({
 															key: 'liquidate-vault',
 															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
 															title: securityPoolCopy.reviewLiquidationTitle,
-															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
+															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
 																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.coverageCommitmentAttoEth),

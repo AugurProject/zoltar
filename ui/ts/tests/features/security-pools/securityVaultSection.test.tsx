@@ -66,7 +66,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 			repWithdrawAmount: '',
 			coverageCommitmentEthAmount: '',
 			securityPoolAddress: zeroAddress,
-			selectedVaultAddress: zeroAddress,
+			selectedVaultOwner: zeroAddress,
 		},
 		securityVaultMissing: false,
 		securityVaultRepApproval: {
@@ -194,7 +194,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -209,7 +209,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 
-	test('directs a missing vault lookup to another vault address', async () => {
+	test('directs a missing vault lookup to another vault owner address', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -221,7 +221,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Try another vault address.')).not.toBeNull()
+		expect(documentQueries.getByText('Try another vault owner address.')).not.toBeNull()
 		expect(documentQueries.queryByText('Try another pool address.')).toBeNull()
 	})
 
@@ -287,7 +287,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 					securityVaultResult: {
 						action: 'queueWithdrawRep',
@@ -319,7 +319,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 					securityVaultResult: {
 						action: 'queueSetCoverageCommitmentAttoEth',
@@ -477,7 +477,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -503,7 +503,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: otherVaultAddress,
+						selectedVaultOwner: otherVaultAddress,
 					},
 				})}
 			/>,
@@ -611,7 +611,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '0',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -638,7 +638,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -666,7 +666,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -689,7 +689,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -715,7 +715,7 @@ describe('SecurityVaultSection', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					})}
 				/>
@@ -746,7 +746,7 @@ describe('SecurityVaultSection', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					})}
 				/>
@@ -807,7 +807,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '0.5',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,
@@ -849,7 +849,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '1',
 						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 					walletRepBalanceAttoRep: 10n * 10n ** 18n,
 				})}
@@ -873,7 +873,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 					securityVaultRepApproval: {
 						error: undefined,
@@ -952,7 +952,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
-						selectedVaultAddress: '0x00000000000000000000000000000000000000a1',
+						selectedVaultOwner: '0x00000000000000000000000000000000000000a1',
 					},
 				})}
 			/>,
@@ -980,7 +980,7 @@ describe('SecurityVaultSection', () => {
 						repWithdrawAmount: '',
 						coverageCommitmentEthAmount: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
-						selectedVaultAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
 					},
 				})}
 			/>,

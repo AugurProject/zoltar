@@ -102,7 +102,7 @@ describe('Security vault integration', () => {
 		expect(vaults).toEqual([walletAddress])
 
 		const vault = await getSecurityVault(client, securityPoolAddress, walletAddress)
-		const repFromBackingUnits = await backingUnitsToAttoRep(client, securityPoolAddress, vault.vaultRepBackingAttoRep)
+		const repFromBackingUnits = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
 		expect(repFromBackingUnits).toBe(depositAmount)
 
 		const updatedVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)

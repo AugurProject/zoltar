@@ -149,7 +149,7 @@ export const migrationStarted = 'Migration Started'
 export const migrationEnds = 'Migration Ends'
 export const forkType = 'Fork Type'
 export const advancedDiagnostics = 'Advanced Diagnostics'
-export const poolRepAtForkAttoRep = 'Pool-held REP at fork'
+export const totalPoolHeldRepAtForkAttoRep = 'Pool-held REP at fork'
 export const escalationChildRepPerSelectedOutcomeAttoRep = 'Dispute-staked REP per selected outcome'
 export const escrowSourceRepAtForkAttoRep = 'Dispute-staked REP source at fork'
 export const formatSettleSelectedValueForkCarriedDeposits = (outcomeLabel: CopyTemplateValue) => `Settle selected ${outcomeLabel} fork-carried deposits`
@@ -179,7 +179,7 @@ export const worthNowPendingClaimFinalization = 'Worth now: Pending direct claim
 export const formatClaimSelectedValueParentDeposits = (outcomeLabel: CopyTemplateValue) => `Claim selected ${outcomeLabel} deposits`
 export const claimingParentEscalationDepositsTruncated = 'Claiming parent escalation deposits…'
 export const migratePoolToUniverse = 'Migrate Pool To Universe'
-export const poolRepMigrationDetail = 'This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.'
+export const poolRepMigrationDetail = 'This moves pool-held REP attributed to the selected outcome into the child universe. It affects the outcome pool, not just your vault.'
 export const poolRepAlreadyMigratedDetail = 'Pool-held REP has already been migrated to the selected child universe.'
 export const poolRepStagedForVaultMigrationDetail = 'Pool-held REP for this outcome is already staged and will sweep into the child universe during vault migration.'
 export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate pool to ${outcomeLabel} universe`

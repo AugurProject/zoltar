@@ -18,15 +18,15 @@ const client = createPublicClient({
 	transport: http(RPC_URL),
 })
 
-const ONE_ETH = 10n ** 18n
-const ONE_REP = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 const describe = process.env['RUN_MAINNET_INTEGRATION_TESTS'] === '1' ? baseDescribe : baseDescribe.skip
 
 void describe('Uniswap V4 Quoter — integration', () => {
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
-			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, USDC_ADDRESS, ONE_ETH, { fee: 500, tickSpacing: 10 })
+			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, USDC_ADDRESS, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
 			// At time of writing ETH is roughly $2 191 — assert a wide range to keep test non-brittle
 			expect(usdcOut).toBeGreaterThan(100n * 10n ** 6n) // > $100 USDC
 			expect(usdcOut).toBeLessThan(100_000n * 10n ** 6n) // < $100 000 USDC
@@ -36,7 +36,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 			const ethOut = await quoteExactInput(client, USDC_ADDRESS, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
 			// 1 USDC should buy a small fraction of ETH (more than 0 attoETH, less than 1 ETH)
 			expect(ethOut).toBeGreaterThan(0n)
-			expect(ethOut).toBeLessThan(ONE_ETH)
+			expect(ethOut).toBeLessThan(ATTO_ETH_PER_ETH)
 		})
 	})
 
@@ -45,11 +45,11 @@ void describe('Uniswap V4 Quoter — integration', () => {
 	// If REP V4 pools are ever created, these tests will start returning prices instead.
 	void describe('REP/ETH — no V4 pool exists yet', () => {
 		void test('quoteRepForEth throws because no V4 REP pool exists', async () => {
-			await expect(quoteRepForEth(client, ONE_REP)).rejects.toThrow()
+			await expect(quoteRepForEth(client, ATTO_REP_PER_REP)).rejects.toThrow()
 		})
 
 		void test('quoteEthForRep throws because no V4 REP pool exists', async () => {
-			await expect(quoteEthForRep(client, ONE_ETH)).rejects.toThrow()
+			await expect(quoteEthForRep(client, ATTO_ETH_PER_ETH)).rejects.toThrow()
 		})
 
 		void test('quoteTokenForEth(REP) throws for all standard fee tiers', async () => {
@@ -59,14 +59,14 @@ void describe('Uniswap V4 Quoter — integration', () => {
 				{ fee: 3000, tickSpacing: 60 },
 				{ fee: 10000, tickSpacing: 200 },
 			]) {
-				await expect(quoteTokenForEth(client, REP_ADDRESS, ONE_REP, poolConfig)).rejects.toThrow()
+				await expect(quoteTokenForEth(client, REP_ADDRESS, ATTO_REP_PER_REP, poolConfig)).rejects.toThrow()
 			}
 		})
 	})
 
 	void describe('REP/USDC — no V4 pool exists yet', () => {
 		void test('quoteExactInput(REP→USDC) throws because no V4 REP pool exists', async () => {
-			await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ONE_REP)).rejects.toThrow()
+			await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP_PER_REP)).rejects.toThrow()
 		})
 
 		void test('quoteEthForToken(USDC via REP) throws for all standard fee tiers', async () => {
@@ -76,7 +76,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 				{ fee: 3000, tickSpacing: 60 },
 				{ fee: 10000, tickSpacing: 200 },
 			]) {
-				await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ONE_REP, poolConfig)).rejects.toThrow()
+				await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP_PER_REP, poolConfig)).rejects.toThrow()
 			}
 		})
 	})
@@ -84,7 +84,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 	// REP/WETH V3 1% pool is the live source used as fallback when V4 is unavailable
 	void describe('REP/ETH — Uniswap V3 (1% pool)', () => {
 		void test('quoteRepForEthV3 returns a plausible REP price in ETH', async () => {
-			const ethOut = await quoteRepForEthV3(client, ONE_REP)
+			const ethOut = await quoteRepForEthV3(client, ATTO_REP_PER_REP)
 			// At time of writing REP is roughly $0.40 and ETH ~$2 191 → ~0.00018 ETH per REP
 			// Assert a wide range to avoid brittleness
 			expect(ethOut).toBeGreaterThan(10n ** 12n) // > 0.000001 ETH

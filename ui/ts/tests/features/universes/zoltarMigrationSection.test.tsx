@@ -12,7 +12,7 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
-const REP = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000b2' as const
 
@@ -65,15 +65,15 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarForkApproval: {
 			error: undefined,
 			loading: false,
-			value: 20n * REP,
+			value: 20n * ATTO_REP_PER_REP,
 		},
-		zoltarForkRepBalanceAttoRep: 20n * REP,
+		zoltarForkRepBalanceAttoRep: 20n * ATTO_REP_PER_REP,
 		zoltarMigrationActiveAction: undefined,
 		zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
 		zoltarMigrationError: undefined,
 		zoltarMigrationForm: createForm(),
 		zoltarMigrationPending: false,
-		zoltarMigrationPreparedRepBalanceAttoRep: 10n * REP,
+		zoltarMigrationPreparedRepBalanceAttoRep: 10n * ATTO_REP_PER_REP,
 		zoltarUniverse: createUniverse(),
 		zoltarUniverseState: 'ready',
 		...overrides,
@@ -137,7 +137,7 @@ describe('ZoltarMigrationSection', () => {
 					zoltarForkApproval: {
 						error: undefined,
 						loading: false,
-						value: 10n * REP,
+						value: 10n * ATTO_REP_PER_REP,
 					},
 					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 				}),
@@ -242,7 +242,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * REP },
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * ATTO_REP_PER_REP },
 					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
 				}),
 			),

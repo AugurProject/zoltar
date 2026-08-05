@@ -76,7 +76,7 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 				data: encodeAbiParameters(
 					[
 						{ name: 'operation', type: 'uint8' },
-						{ name: 'amount', type: 'uint256' },
+						{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256' },
 						{ name: 'queuedAt', type: 'uint256' },
 						{ name: 'validForSeconds', type: 'uint256' },
 						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },

@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = '2569b6172e8b9f68d6e3619e02b53ca83a9e1b9911c5bc0f557210c9294e81a8'
+const expectedProductionSoliditySourceFingerprint = 'ec4aae2b0f393ea313f2beac34d8b2212d5e816a897d9450bae34929d69f3b4a'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -61,7 +61,7 @@ const eventSourceByName: Record<string, string> = {
 	CarryDepositConsumed: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	ChildDisputeStakedRepMaterialized: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildPoolLinked: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	ChildPoolRepSwept: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	PoolHeldRepSweptToChild: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildRepSplit: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	ClaimAuctionProceeds: 'solidity/contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol',
 	ClaimDeposit: 'solidity/contracts/peripherals/EscalationGameState.sol',
@@ -201,8 +201,8 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
-		name: 'ChildPoolRepSwept',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 repAmountAttoRep,uint256 resultingChildPoolRepBalanceAttoRep',
+		name: 'PoolHeldRepSweptToChild',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 repAmountAttoRep,uint256 resultingChildPoolHeldRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
@@ -316,7 +316,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 			{ argument: 'parent', offset: '0x04' },
 			{ argument: 'migrationProxy', offset: '0x24' },
 			{ argument: 'sourceGame', offset: '0x44' },
-			{ argument: 'poolRepAtForkAttoRep', offset: '0x64' },
+			{ argument: 'totalPoolHeldRepAtForkAttoRep', offset: '0x64' },
 			{ argument: 'disputeStakedRepAtForkAttoRep', offset: '0x84' },
 			{ argument: 'resultingLockedRepAttoRep', offset: '0xa4' },
 		],
@@ -329,7 +329,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'fcf0cd75358a88ebae758836a93c22c643adb136843246a2ce88665ce669d2b5'
+const referencedEventAbiFingerprint = '650724acb47f809ac28ffaf1a160fe5a86b304de80d157881aa55cfe2056d6b2'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -474,7 +474,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '73f9aad63165cacbff5bd02fd57a6b5a3f73737545018ecdf152c46f905c8c32',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': '651673bb591a5b420cde1eaf82f35bb06b457d2b6de9b1eeba0d9ee3ac67a958',
+	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'f7e70b36683703f5b6e23f0d3430e433a0436b0061f3f16e80433e71c2f9b0b3',
 	'solidity/contracts/peripherals/SecurityPool.sol': '9e6cca595916aeb3a3535504e033a7695402f1adbf157e076dca8f32afc199bb',
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -1013,7 +1013,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '7333ac5b75a94212d20327acb0df380364b15dd8d3dcdf57e7872c3979d1486c',
+		compiledAbiFingerprint: 'c3b05b0c6c2b7b73a920c2ff07615b6c00e2dc372a2f529a7d8efe808d23f97e',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
 		readAbiFingerprint: '082be6acbff6fabaa8fa5095520eba0eee9592a06e5aebcf188acb0d5ab5a7c4',
@@ -1077,7 +1077,7 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					"Parent in migration window; selected fork outcome is well formed; child pool is not already deployed. The returned auction is nonzero, deployed, and has never been trusted by this forker; the child's fork-data slot is unused; and the child reports the expected parent, universe, source factory, forker, and auction. The selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). These relationship checks do not independently prove configured-factory registration.",
 				signals:
-					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `TotalRepBackingUnitsSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
+					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `TotalRepBackingUnitsSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `PoolHeldRepSweptToChild` as continuation and backing state requires',
 			},
 			{
 				call: '`migrateVault(securityPool, outcomeIndex)`',
@@ -1105,7 +1105,7 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					'Caller equals `vault`; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies `canTriggerOwnFork()` by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, unclaimed deposit identities, and every deposit to commit `vault` as its immutable depositor.',
 				signals:
-					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `TotalRepBackingUnitsSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
+					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `TotalRepBackingUnitsSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `PoolHeldRepSweptToChild` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},
 			{
 				call: '`startTruthAuction(securityPool)`',
@@ -1367,7 +1367,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '222424855ecbae2077d9b04f8fae5d047cba86a3d42f4143ef53692a23d926b5',
+		compiledAbiFingerprint: 'e1caab0f5475a2700a2422625504278ed103050b0c918c85a4343e8823b819f4',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, coverage-commitment, and liquidation operations behind it.',
 		readAbiFingerprint: 'ffa866abf9af610b796116aafe1af8755b7f09381b1ca344863eb6bb7d929cea',
@@ -1553,7 +1553,7 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals:
-					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `DisputeStakedRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildDisputeStakedRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
+					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `DisputeStakedRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `PoolHeldRepSweptToChild`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildDisputeStakedRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
 			},
 			{
 				call: '`authorize(securityPoolCandidate)`',
@@ -2227,7 +2227,7 @@ function assertDeclarationCheckerRegression(): void {
 			ISecurityPool parent,
 			address migrationProxy,
 			address sourceGame,
-			uint256 poolRepAtForkAttoRep,
+			uint256 totalPoolHeldRepAtForkAttoRep,
 			uint256 disputeStakedRepAtForkAttoRep,
 			uint256 resultingLockedRepAttoRep
 		) external payable {}
@@ -2237,7 +2237,7 @@ function assertDeclarationCheckerRegression(): void {
 			mstore(add(pointer, 0x04), parent)
 			mstore(add(pointer, 0x24), migrationProxy)
 			mstore(add(pointer, 0x44), sourceGame)
-			mstore(add(pointer, 0x64), poolRepAtForkAttoRep)
+			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
 			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
 			mstore(add(pointer, 0xa4), resultingLockedRepAttoRep)
 			delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)

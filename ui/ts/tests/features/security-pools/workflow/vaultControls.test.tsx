@@ -25,7 +25,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 				})}
@@ -70,7 +70,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: '',
+							selectedVaultOwner: '',
 						},
 					}),
 				})}
@@ -80,7 +80,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		expect(loadSecurityVaultCalls.every(vaultAddress => vaultAddress === undefined)).toBe(true)
-		expect(within(document.body).queryByText('Enter a vault address or connect a wallet to inspect vault details.')).toBeNull()
+		expect(within(document.body).queryByText('Enter a vault owner address or connect a wallet to inspect vault details.')).toBeNull()
 	})
 
 	test('keeps REP approval guidance inside the approval control in the deposit modal', async () => {
@@ -98,7 +98,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 						walletRepBalanceAttoRep: 25n * 10n ** 18n,
 						securityVaultRepApproval: {
@@ -160,7 +160,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '10000',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -215,7 +215,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -270,7 +270,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '0',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -323,7 +323,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '',
 							coverageCommitmentEthAmount: '1.5',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -375,7 +375,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							repWithdrawAmount: '1',
 							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',

@@ -196,7 +196,7 @@ async function loadPool(
 			const id = ids[index]
 			if (id === undefined) throw new Error('Coordinator returned mismatched staged operation arrays')
 			stagedOperations.push({
-				amount: operation.amount,
+				operationAmountAttoRepOrAttoEth: operation.operationAmountAttoRepOrAttoEth,
 				id,
 				initiatorVault: getAddress(operation.initiatorVault),
 				isPendingSettlement: pendingSettlementOperationIds.includes(id),

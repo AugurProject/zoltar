@@ -42,7 +42,7 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 })
 
 test('security-pool count summaries own their complete prose', () => {
-	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault address above to inspect any specific vault.')
+	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault owner address above to inspect any specific vault.')
 })
 
 test('reporting risk copy keeps escalation claims with their committed depositor', () => {

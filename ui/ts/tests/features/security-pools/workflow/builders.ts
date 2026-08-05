@@ -94,7 +94,7 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 			repWithdrawAmount: '',
 			coverageCommitmentEthAmount: '',
 			securityPoolAddress: '',
-			selectedVaultAddress: '',
+			selectedVaultOwner: '',
 		},
 		securityVaultMissing: false,
 		securityVaultRepApproval: {

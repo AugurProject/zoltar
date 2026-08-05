@@ -23,7 +23,7 @@ export function requirePendingStagedOperation(receipt: TransactionReceipt, coord
 		try {
 			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
 			if (decoded.eventName !== 'StagedOperationQueued') continue
-			if (decoded.args.operation === 0n && decoded.args.initiatorVault.toLowerCase() === initiator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.amount === amount && decoded.args.isPendingSlot) return decoded.args.operationId
+			if (decoded.args.operation === 0n && decoded.args.initiatorVault.toLowerCase() === initiator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.operationAmountAttoRepOrAttoEth === amount && decoded.args.isPendingSlot) return decoded.args.operationId
 		} catch (error) {
 			void error
 		}

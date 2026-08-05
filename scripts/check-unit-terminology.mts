@@ -16,6 +16,7 @@ const humanDecimalUnderAtomicProperty = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|At
 const humanControlWithAtomicKey = /data-example-(?:input|output|value)=["'][^"']*(?:AttoEth|AttoRep|AttoShares)[^"']*["']/
 const ambiguousRepStateTerminology = /\b(?:unlocked[^\n]{0,32}REP|REP[^\n]{0,32}unlocked|unlocked (?:vault|position|balances|state)|viewerVaultAvailableDisputeStakedRepAttoRep|loadingAvailableVaultRep|repPlacedAtRisk|availableVaultRepAfterReport|_migrateVaultUnlockedState)\b/i
 const repeatedAtomicSuffix = /(?:AttoEth|AttoRep|AttoShares){2}/
+const ambiguousAtomicScaleConstant = /\b(?:ONE_ETH|ONE_REP|ETH|REP)\s*=\s*10n\s*\*\*\s*18n\b/
 const atomicIdentifierWithHumanUnit = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)\s+(?:ETH|REP|shares)\b/
 const atomicIdentifierAssignedHumanAmount = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)(?:<\/code>)?\s*(?:=|:|is|of)\s*(?:<code>)?\d+(?:\.\d+)?\s*(?:ETH|REP|shares)\b/i
 const bigintDeclaration = /\b([A-Za-z_$][A-Za-z0-9_$]*)\??:\s*bigint\b/g
@@ -61,6 +62,7 @@ function findUnsuffixedAtomicEthBigintIdentifier(source: string) {
 if (findUnsuffixedAtomicEthBigintIdentifier('type Unsafe = { wethRefund: bigint }') !== 'wethRefund') throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed atomic WETH declaration')
 if (findUnsuffixedAtomicEthBigintIdentifier('type Safe = { wethRefundAttoEth: bigint; priceRepPerEth: bigint }') !== undefined) throw new Error('Unit terminology checker rejected canonical attoETH or REP-per-ETH declarations')
 if (!missingAtomicSuffixIdentifiers.test('const initialWeth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an inferred unsuffixed atomic WETH value')
+if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new Error('Unit terminology checker negative fixture did not detect an ambiguous atomic scale constant')
 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {
@@ -75,6 +77,7 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 	if (humanControlWithAtomicKey.test(source)) failures.push(`${path}: exposes a human-unit documentation control under an atomic-unit key`)
 	if (path !== terminologyCheckPath && ambiguousRepStateTerminology.test(source)) failures.push(`${path}: uses ambiguous unlocked or available-dispute-staked REP terminology`)
 	if (path !== terminologyCheckPath && repeatedAtomicSuffix.test(source)) failures.push(`${path}: repeats an atomic-unit suffix`)
+	if (path !== terminologyCheckPath && ambiguousAtomicScaleConstant.test(source)) failures.push(`${path}: uses an atomic scale constant without an explicit atto-unit name`)
 	if (path !== terminologyCheckPath && atomicIdentifierWithHumanUnit.test(source)) failures.push(`${path}: pairs an atomic-unit identifier with a human-display unit`)
 	if (path !== terminologyCheckPath && atomicIdentifierAssignedHumanAmount.test(source)) failures.push(`${path}: assigns a human-display amount to an atomic-unit identifier`)
 	if (!isTestSource && path !== terminologyCheckPath) {

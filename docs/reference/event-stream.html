@@ -136,7 +136,7 @@
 						</tr>
 						<tr>
 							<td>Child pool and migrated vault</td>
-							<td><code>ChildPoolLinked</code>, <code>ChildRepSplit</code>, <code>ChildPoolRepSwept</code>, <code>ChildDisputeStakedRepMaterialized</code>, <code>VaultMigrationCheckpoint</code></td>
+							<td><code>ChildPoolLinked</code>, <code>ChildRepSplit</code>, <code>PoolHeldRepSweptToChild</code>, <code>ChildDisputeStakedRepMaterialized</code>, <code>VaultMigrationCheckpoint</code></td>
 						</tr>
 						<tr>
 							<td>Vault escalation entitlement</td>
@@ -221,8 +221,8 @@
 							<td>Records child REP delivered as continuation-game backing and its resulting balance.</td>
 						</tr>
 						<tr>
-							<td><code>SecurityPoolForker.ChildPoolRepSwept</code></td>
-							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>outcomeIndex indexed</code>, <code>repAmountAttoRep</code>, <code>resultingChildPoolRepBalanceAttoRep</code></td>
+							<td><code>SecurityPoolForker.PoolHeldRepSweptToChild</code></td>
+							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>outcomeIndex indexed</code>, <code>repAmountAttoRep</code>, <code>resultingChildPoolHeldRepBalanceAttoRep</code></td>
 							<td>Records pending child REP delivered to the pool and its resulting balance.</td>
 						</tr>
 						<tr>

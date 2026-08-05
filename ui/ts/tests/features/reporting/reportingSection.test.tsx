@@ -17,10 +17,10 @@ import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
-const REP = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 
 function rep(value: bigint) {
-	return value * REP
+	return value * ATTO_REP_PER_REP
 }
 
 function getClosestSection(heading: HTMLElement | null) {
@@ -104,10 +104,10 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 1n * REP,
-		viewerVaultRepBackingAttoRep: 11n * REP,
+		viewerVaultDisputeStakedRepAttoRep: 1n * ATTO_REP_PER_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP_PER_REP,
 		...overrides,
 	}
 }
@@ -148,10 +148,10 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 1n * REP,
-		viewerVaultRepBackingAttoRep: 11n * REP,
+		viewerVaultDisputeStakedRepAttoRep: 1n * ATTO_REP_PER_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP_PER_REP,
 	}
 
 	return {
@@ -170,7 +170,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
-		settlementCollateralAttoEth: 1n * REP,
+		settlementCollateralAttoEth: 1n * ATTO_REP_PER_REP,
 		currentTime: 150n,
 		forkThresholdAttoRep: rep(100n),
 		marketDetails: createMarketDetails(),
@@ -183,10 +183,10 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedRepAttoRep: 0n,
-		viewerVaultRepBackingAttoRep: 10n * REP,
+		viewerVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
 		...overrides,
 	}
 }
@@ -619,7 +619,7 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
-						viewerPoolHeldVaultRepBackingAttoRep: 2n * REP,
+						viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP_PER_REP,
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',

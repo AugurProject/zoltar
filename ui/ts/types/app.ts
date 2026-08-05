@@ -55,7 +55,7 @@ export type SecurityVaultFormState = {
 	depositAmount: string
 	coverageCommitmentEthAmount: string
 	repWithdrawAmount: string
-	selectedVaultAddress: string
+	selectedVaultOwner: string
 	securityPoolAddress: string
 	stagedOperationTimeoutMinutes?: string
 }

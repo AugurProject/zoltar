@@ -35,7 +35,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const getUserRepClaim = async (client: WriteClient, securityPoolAddress: Address) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	return await backingUnitsToAttoRep(client, securityPoolAddress, vault.vaultRepBackingAttoRep)
+	return await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
 }
 
 describe('Escalation Game Fork Threshold Test', () => {

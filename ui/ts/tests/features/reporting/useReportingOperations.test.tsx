@@ -16,7 +16,7 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
-const REP = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -236,7 +236,7 @@ describe('useReportingOperations', () => {
 		const latestDetails: ReportingDetails = {
 			settlementCollateralAttoEth: 1n,
 			currentTime: 150n,
-			forkThresholdAttoRep: 40n * REP,
+			forkThresholdAttoRep: 40n * ATTO_REP_PER_REP,
 			marketDetails: {
 				answerUnit: '',
 				createdAt: 1n,
@@ -252,19 +252,19 @@ describe('useReportingOperations', () => {
 				startTime: 1n,
 				title: 'Will this resolve?',
 			},
-			nonDecisionThresholdAttoRep: 20n * REP,
+			nonDecisionThresholdAttoRep: 20n * ATTO_REP_PER_REP,
 			questionOutcome: 'none',
 			securityPoolAddress,
-			startBondAttoRep: 1n * REP,
+			startBondAttoRep: 1n * ATTO_REP_PER_REP,
 			status: 'not-started',
 			systemState: 'operational',
 			universeId: 1n,
 			settlementState: 'locked',
 			parentWithdrawalEnabled: false,
-			viewerPoolHeldVaultRepBackingAttoRep: 8n * REP,
+			viewerPoolHeldVaultRepBackingAttoRep: 8n * ATTO_REP_PER_REP,
 			viewerVaultExists: true,
 			viewerVaultDisputeStakedRepAttoRep: 0n,
-			viewerVaultRepBackingAttoRep: 8n * REP,
+			viewerVaultRepBackingAttoRep: 8n * ATTO_REP_PER_REP,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)
 		const reportOutcomeInSecurityPool = mock(async () => {

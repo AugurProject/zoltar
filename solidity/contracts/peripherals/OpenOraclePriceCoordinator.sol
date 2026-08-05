@@ -56,7 +56,7 @@ struct StagedOperation {
 	OperationType operation;
 	address initiatorVault;
 	address targetVault;
-	uint256 amount;
+	uint256 operationAmountAttoRepOrAttoEth;
 	uint256 queuedAt;
 	uint256 validForSeconds;
 	uint256 snapshotTargetBackingUnits;
@@ -130,7 +130,7 @@ contract OpenOraclePriceCoordinator {
 		OperationType operation,
 		address indexed initiatorVault,
 		address indexed targetVault,
-		uint256 amount,
+		uint256 operationAmountAttoRepOrAttoEth,
 		uint256 queuedAt,
 		uint256 validForSeconds,
 		uint256 snapshotTargetBackingUnits,
@@ -556,13 +556,13 @@ contract OpenOraclePriceCoordinator {
 	function requestPriceIfNeededAndStageOperation(
 		OperationType operation,
 		address targetVault,
-		uint256 amount,
+		uint256 operationAmountAttoRepOrAttoEth,
 		uint256 validForSeconds,
 		uint256 proposedRepPerEthPrice,
 		uint256 requestedInitialWethAttoEth
 	) public payable {
 		if (operation != OperationType.SetCoverageCommitment) {
-			require(amount > 0, 'Staged operation amount must be non-zero');
+			require(operationAmountAttoRepOrAttoEth > 0, 'Staged operation amount must be non-zero');
 		}
 		require(validForSeconds > 0, 'Staged operation timeout must be positive');
 		require(
@@ -585,7 +585,7 @@ contract OpenOraclePriceCoordinator {
 			);
 		}
 		if (operation == OperationType.WithdrawRep) {
-			(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(msg.sender, amount);
+			(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(msg.sender, operationAmountAttoRepOrAttoEth);
 			require(withdrawRepAmountAttoRep > 0, 'Withdraw amount has no effect');
 		}
 		stagedOperationCounter++;
@@ -609,7 +609,7 @@ contract OpenOraclePriceCoordinator {
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
-			amount: amount,
+			operationAmountAttoRepOrAttoEth: operationAmountAttoRepOrAttoEth,
 			queuedAt: block.timestamp,
 			validForSeconds: validForSeconds,
 			snapshotTargetBackingUnits: snapshotTargetBackingUnits,
@@ -740,7 +740,7 @@ contract OpenOraclePriceCoordinator {
 			securityPool.performLiquidation(
 				stagedOperation.initiatorVault,
 				stagedOperation.targetVault,
-				stagedOperation.amount,
+				stagedOperation.operationAmountAttoRepOrAttoEth,
 				stagedOperation.snapshotTargetBackingUnits,
 				stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
 				stagedOperation.snapshotTotalPoolHeldRepAttoRep,
@@ -759,7 +759,12 @@ contract OpenOraclePriceCoordinator {
 
 	function _executeWithdrawRepStagedOperation(uint256 operationId, StagedOperation memory stagedOperation) private {
 		_consumeStagedOperation(operationId);
-		try securityPool.withdrawRepFromVault(stagedOperation.initiatorVault, stagedOperation.amount) {
+		try
+			securityPool.withdrawRepFromVault(
+				stagedOperation.initiatorVault,
+				stagedOperation.operationAmountAttoRepOrAttoEth
+			)
+		{
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
 		} catch Error(string memory reason) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
@@ -775,7 +780,12 @@ contract OpenOraclePriceCoordinator {
 		StagedOperation memory stagedOperation
 	) private {
 		_consumeStagedOperation(operationId);
-		try securityPool.executeCoverageCommitmentUpdate(stagedOperation.initiatorVault, stagedOperation.amount) {
+		try
+			securityPool.executeCoverageCommitmentUpdate(
+				stagedOperation.initiatorVault,
+				stagedOperation.operationAmountAttoRepOrAttoEth
+			)
+		{
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
 		} catch Error(string memory reason) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
@@ -793,7 +803,7 @@ contract OpenOraclePriceCoordinator {
 			stagedOperation.operation,
 			stagedOperation.initiatorVault,
 			stagedOperation.targetVault,
-			stagedOperation.amount,
+			stagedOperation.operationAmountAttoRepOrAttoEth,
 			stagedOperation.queuedAt,
 			stagedOperation.validForSeconds,
 			stagedOperation.snapshotTargetBackingUnits,
@@ -850,7 +860,7 @@ contract OpenOraclePriceCoordinator {
 	function _hasWithdrawEffect(StagedOperation memory stagedOperation) private view returns (bool) {
 		(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(
 			stagedOperation.initiatorVault,
-			stagedOperation.amount
+			stagedOperation.operationAmountAttoRepOrAttoEth
 		);
 		return withdrawRepAmountAttoRep > 0;
 	}

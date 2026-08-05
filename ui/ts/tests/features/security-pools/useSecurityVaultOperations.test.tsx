@@ -202,7 +202,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				depositAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
@@ -266,7 +266,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -323,7 +323,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				coverageCommitmentEthAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
@@ -389,7 +389,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				coverageCommitmentEthAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -453,7 +453,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -499,7 +499,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -558,7 +558,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -618,7 +618,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				depositAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
@@ -632,7 +632,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 
@@ -699,7 +699,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 
@@ -755,7 +755,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '1',
 			}))
 		})
@@ -770,7 +770,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 

@@ -104,7 +104,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 			repWithdrawAmount: '',
 			coverageCommitmentEthAmount: '',
 			securityPoolAddress: '',
-			selectedVaultAddress: '',
+			selectedVaultOwner: '',
 		},
 		securityVaultMissing: false,
 		securityVaultRepApproval: {

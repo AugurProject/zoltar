@@ -424,7 +424,7 @@ function assertEventStreamSemantics(): void {
 		'`SecurityPoolForker.ChildPoolLinked`',
 		'`SecurityPoolForker.ChildRepSplit`',
 		'`SecurityPoolForker.ChildDisputeStakedRepMaterialized`',
-		'`SecurityPoolForker.ChildPoolRepSwept`',
+		'`SecurityPoolForker.PoolHeldRepSweptToChild`',
 		'`SecurityPoolForker.EscalationMigrationEntitlementInitialized`',
 		'`SecurityPoolForker.EscalationMigrationEntitlementMaterialized`',
 		'`ReputationToken.TheoreticalSupplySet(totalTheoreticalSupplyAttoRep)`',
@@ -441,7 +441,7 @@ function assertEventStreamSemantics(): void {
 	]) {
 		assert.ok(normalizedEventStream.includes(documentedClaim), `Missing event-stream unit or value-semantics claim: ${documentedClaim}`)
 	}
-	for (const documentedField of ['resultingDisputeStakedRepBalanceAttoRep', 'resultingChildPoolRepBalanceAttoRep', 'childRepAttoRep', 'repBeforeAttoRep', 'repRemovedAttoRep', 'repRemainingAttoRep', 'amountAttoEth']) {
+	for (const documentedField of ['resultingDisputeStakedRepBalanceAttoRep', 'resultingChildPoolHeldRepBalanceAttoRep', 'childRepAttoRep', 'repBeforeAttoRep', 'repRemovedAttoRep', 'repRemainingAttoRep', 'amountAttoEth']) {
 		assert.ok(normalizedEventStream.includes(`\`${documentedField}\``), `Missing canonical event field in event-stream reference: ${documentedField}`)
 	}
 	assert.match(truthAuctionInterface, /event AuctionFinalized\([\s\S]*grossAcceptedAttoEth,[\s\S]*repSoldAttoRep,[\s\S]*bidAtClearingTickAttoEth/)
@@ -1175,10 +1175,10 @@ function assertContractInteractionDistinctions(): void {
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
 	}
-	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 poolRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedRepAttoRep\s*\) external payable/)
+	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 totalPoolHeldRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedRepAttoRep\s*\) external payable/)
 	assert.match(
 		securityPoolForker,
-		/mstore\(pointer, shl\(224, 0x408d33da\)\)[\s\S]*mstore\(add\(pointer, 0x04\), parent\)[\s\S]*mstore\(add\(pointer, 0x24\), migrationProxy\)[\s\S]*mstore\(add\(pointer, 0x44\), sourceGame\)[\s\S]*mstore\(add\(pointer, 0x64\), poolRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0x84\), disputeStakedRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0xa4\), resultingLockedRepAttoRep\)[\s\S]*delegatecall\(gas\(\), eventEmitter, pointer, 0xc4, 0, 0\)/,
+		/mstore\(pointer, shl\(224, 0x408d33da\)\)[\s\S]*mstore\(add\(pointer, 0x04\), parent\)[\s\S]*mstore\(add\(pointer, 0x24\), migrationProxy\)[\s\S]*mstore\(add\(pointer, 0x44\), sourceGame\)[\s\S]*mstore\(add\(pointer, 0x64\), totalPoolHeldRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0x84\), disputeStakedRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0xa4\), resultingLockedRepAttoRep\)[\s\S]*delegatecall\(gas\(\), eventEmitter, pointer, 0xc4, 0, 0\)/,
 	)
 	assert.match(operatorReference, /Payability permits delegatecalls from value-bearing protocol flows; callers must not send ETH directly/)
 	assert.match(truthAuction, /function _allocateFromCumulativePosition\(/)

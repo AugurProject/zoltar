@@ -2158,11 +2158,11 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.deepStrictEqual(Array.from(pendingSettlementOperationIds), [1n, 2n, 3n, 4n], 'pending settlement operations should stay in queue order')
 		assert.strictEqual(activeStagedOperationCount, 5n, 'active staged operation count should track pending and manual operations')
 		assert.deepStrictEqual(Array.from(operationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should enumerate newest queued operations first')
-		assert.strictEqual(activeOperations[0]?.amount, fifthCoverageCommitmentAttoEth, 'newest overflow operation should retain its amount')
-		assert.strictEqual(activeOperations[1]?.amount, fourthCoverageCommitmentAttoEth, 'newest pending operation should retain its amount')
-		assert.strictEqual(activeOperations[2]?.amount, thirdCoverageCommitmentAttoEth, 'middle pending operation should retain its amount')
-		assert.strictEqual(activeOperations[3]?.amount, secondCoverageCommitmentAttoEth, 'older pending operation should retain its amount')
-		assert.strictEqual(activeOperations[4]?.amount, firstCoverageCommitmentAttoEth, 'oldest pending operation should retain its amount')
+		assert.strictEqual(activeOperations[0]?.operationAmountAttoRepOrAttoEth, fifthCoverageCommitmentAttoEth, 'newest overflow operation should retain its amount')
+		assert.strictEqual(activeOperations[1]?.operationAmountAttoRepOrAttoEth, fourthCoverageCommitmentAttoEth, 'newest pending operation should retain its amount')
+		assert.strictEqual(activeOperations[2]?.operationAmountAttoRepOrAttoEth, thirdCoverageCommitmentAttoEth, 'middle pending operation should retain its amount')
+		assert.strictEqual(activeOperations[3]?.operationAmountAttoRepOrAttoEth, secondCoverageCommitmentAttoEth, 'older pending operation should retain its amount')
+		assert.strictEqual(activeOperations[4]?.operationAmountAttoRepOrAttoEth, firstCoverageCommitmentAttoEth, 'oldest pending operation should retain its amount')
 
 		const { pendingReportId: settledReportId, settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
 		await assertCoordinatorReplayMatchesStorage([...queuedOperationLogs, ...settleReceipt.logs], 'reported price and staged execution')
@@ -2201,7 +2201,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(vaultAfterSettlement.coverageCommitmentAttoEth, fourthCoverageCommitmentAttoEth, 'pending settlement operations should execute in queue order')
 		assert.strictEqual(updatedActiveStagedOperationCount, 1n, 'active staged operation count should leave only the overflow operation')
 		assert.deepStrictEqual(Array.from(remainingOperationIds), [5n], 'active staged operations should keep the overflow operation active')
-		assert.strictEqual(remainingOperations[0]?.amount, fifthCoverageCommitmentAttoEth, 'overflow operation should stay in the active preview')
+		assert.strictEqual(remainingOperations[0]?.operationAmountAttoRepOrAttoEth, fifthCoverageCommitmentAttoEth, 'overflow operation should stay in the active preview')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement should leave a fresh price available for manual overflow execution')
 
 		await executeStagedOperation(client, priceOracle, 5n)
@@ -2273,7 +2273,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await settlePendingReportWithPrice(10n ** 18n)
 
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPool, withdrawalClient.account.address)
-		assert.strictEqual(vaultAfterWithdrawal.vaultRepBackingAttoRep, 0n, 'over-requested withdrawal should still withdraw the full vault balance')
+		assert.strictEqual(vaultAfterWithdrawal.repBackingUnits, 0n, 'over-requested withdrawal should still withdraw the full vault balance')
 	})
 
 	test('pending withdrawals that become zero-effect during execution fail without blocking the successful withdrawal', async () => {
@@ -2297,7 +2297,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		assert.strictEqual(secondExecutionLog.args.success, false, 'second pending withdrawal should fail after the first empties the vault')
 		assert.strictEqual(secondExecutionLog.args.errorMessage, 'withdraw amount has no effect', 'second pending withdrawal should expose the zero-effect reason')
-		assert.strictEqual(vaultAfterSettlement.vaultRepBackingAttoRep, 0n, 'first pending withdrawal should empty the vault')
+		assert.strictEqual(vaultAfterSettlement.repBackingUnits, 0n, 'first pending withdrawal should empty the vault')
 		assert.strictEqual(firstStagedOperation[1], zeroAddress, 'successful pending withdrawal should be consumed')
 		assert.strictEqual(secondStagedOperation[1], zeroAddress, 'zero-effect pending withdrawal should be consumed')
 	})

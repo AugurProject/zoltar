@@ -201,7 +201,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		ISecurityPool parent,
 		address migrationProxy,
 		address sourceGame,
-		uint256 poolRepAtForkAttoRep,
+		uint256 totalPoolHeldRepAtForkAttoRep,
 		uint256 disputeStakedRepAtForkAttoRep,
 		uint256 resultingLockedRepAttoRep
 	) private {
@@ -212,7 +212,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			mstore(add(pointer, 0x04), parent)
 			mstore(add(pointer, 0x24), migrationProxy)
 			mstore(add(pointer, 0x44), sourceGame)
-			mstore(add(pointer, 0x64), poolRepAtForkAttoRep)
+			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
 			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
 			mstore(add(pointer, 0xa4), resultingLockedRepAttoRep)
 			if iszero(delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)) {
