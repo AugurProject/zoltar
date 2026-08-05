@@ -50,7 +50,7 @@
 			</section>
 			<section id="integration-boundary">
 				<h2>Integration boundary</h2>
-				<p>Each security pool has a coordinator. A user requests or executes a pool operation through that coordinator. When its cached price is fresh, the coordinator can use it immediately; when it is stale, the coordinator stages the operation behind a new OpenOracle report and later accepts the callback only if the operation-specific checks still pass.</p>
+				<p>Each security pool has a coordinator. A user requests or executes a pool operation through that coordinator. When its cached price is fresh, the coordinator can use it immediately; when it is stale, the coordinator stages the operation behind a new OpenOracle report. Report-level checks determine whether the callback is accepted and the price cache updated; operation-level pool checks then determine whether each queued operation succeeds or emits an execution failure.</p>
 				<p>The coordinator converts settled WETH and REP amounts into a REP/ETH price using <code>lastPrice = amount2 × 10<sup>18</sup> ÷ amount1</code>. Addresses, limits, gas costs, report parameters, and deployment wiring are release-specific; consult the coordinator reference for the selected deployment.</p>
 			</section>
 			<section id="detailed-record">

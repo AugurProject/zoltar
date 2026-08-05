@@ -19,7 +19,8 @@
 			</section>
 			<section id="security-intuition">
 				<h2>Security intuition</h2>
-				<p>Settlement makes a report usable; disputes can replace it before the settlement deadline; correction and callback recovery keep the coordinator from treating an incomplete operation as successful. The coordinator applies pool-specific checks both before requesting a report and after callback.</p>
+				<p>The triggering sponsor funds the initial report, an independent corrector can replace it before settlement, and a settler closes the report after the dispute window. Settlement makes a report usable; it does not prove that the external price is correct. A callback then lets the coordinator accept or reject the report, while each queued operation still undergoes its own pool-specific checks.</p>
+				<p>Correction depends on capital and timely inclusion, and disputes can delay settlement indefinitely while valid replacement positions remain profitable. Accepted-price notional is not capped by the coordinator, so these are economic and liveness boundaries rather than absolute guarantees. See <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a19">A19 observable correctable price</a>, <a href="../reference/security-model.html#assumption-a20">A20 data availability</a>, and the <a href="./open-oracle-appendix.html#security-guarantee">security appendix</a>.</p>
 			</section>
 			<section id="alternatives-and-boundaries">
 				<h2>Boundaries and alternatives</h2>

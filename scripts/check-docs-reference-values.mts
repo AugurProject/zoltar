@@ -722,17 +722,21 @@ function assertOperationalGuideSemantics(): void {
 	assert.match(oracleRecoveryGuide, /Fresh price[\s\S]*First stale operation[\s\S]*Report already pending[\s\S]*Rejected report/)
 	assert.match(oracleTutorial, /StagedOperationQueued[\s\S]*StagedOperationDisputeStakedRepSnapshotted[\s\S]*PriceRequested/)
 	assert.match(disputedTutorial, /withdrawForkedEscalationDeposits\(outcome, proofs\)[\s\S]*withdrawFromEscalationGame\(outcome, depositIndexes\)/)
-	assert.match(openOracleSchema, /"schemaVersion": 1[\s\S]*OpenOraclePriceCoordinator\.sol[\s\S]*"stale-no-report"[\s\S]*"SecurityPoolSet"[\s\S]*"CoordinatorStateCheckpoint"[\s\S]*"checkpointReasons"[\s\S]*"openOracleCallback"/)
+	assert.match(openOracleSchema, /"schemaVersion": 2[\s\S]*OpenOraclePriceCoordinator\.sol[\s\S]*"stale-cache"[\s\S]*"SecurityPoolSet"[\s\S]*"CoordinatorStateCheckpoint"[\s\S]*"checkpointReasons"[\s\S]*"openOracleCallback"/)
 	assert.doesNotMatch(readme, /open-oracle\.html#/, 'README must not retain fragments moved to the OpenOracle appendix')
 	assert.match(readme, /open-oracle-appendix\.html#/, 'README must route detailed OpenOracle fragments to the appendix')
 	const coordinatorSchema = JSON.parse(openOracleSchema) as {
-		states?: string[]
-		transitions?: Array<{ from?: string; trigger?: string; to?: string }>
+		dimensions?: Record<string, string[]>
+		transitions?: Array<{ dimension?: string; from?: string; trigger?: string; to?: string }>
 		functions?: Record<string, string>
 		eventSignatures?: Record<string, string>
 	}
-	assert.deepEqual(coordinatorSchema.states, ['fresh-cache', 'stale-no-report', 'pending-report', 'settled-callback', 'rejected-report', 'recovery-candidate', 'active-staged-operations', 'empty-operation-queue'])
-	assert.ok(coordinatorSchema.transitions?.every(transition => Boolean(transition.from && transition.trigger && transition.to)))
+	assert.deepEqual(coordinatorSchema.dimensions, {
+		cache: ['fresh-cache', 'stale-cache'],
+		report: ['no-report', 'pending-report', 'settled-callback', 'rejected-report', 'recovery-candidate'],
+		operations: ['empty-operation-queue', 'active-staged-operations'],
+	})
+	assert.ok(coordinatorSchema.transitions?.every(transition => Boolean(transition.dimension && transition.from && transition.trigger && transition.to)))
 	assert.equal(coordinatorSchema.functions?.['storedGame'], undefined)
 	for (const functionName of ['MAX_PENDING_SETTLEMENT_OPERATIONS', 'executeStagedOperation', 'getActiveStagedOperations', 'openOracleCallback', 'requestPrice', 'requestPriceIfNeededAndStageOperation', 'stagedOperations', 'weth']) {
 		assert.ok(coordinatorSchema.functions?.[functionName], `coordinator schema is missing ${functionName}`)

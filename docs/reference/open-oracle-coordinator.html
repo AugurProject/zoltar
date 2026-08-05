@@ -11,10 +11,10 @@
 		<main>
 			<header>
 				<h1>OpenOracle coordinator reference</h1>
-				<p>Normative state, event, and parameter boundaries for <code>OpenOraclePriceCoordinator</code>. Current deployment values remain release-specific.</p>
+				<p>Normative state, event, and parameter boundaries for <code>OpenOraclePriceCoordinator</code>. Cache freshness, report lifecycle, and staged-operation queue are orthogonal observable dimensions; current deployment values remain release-specific.</p>
 			</header>
 			<section id="states">
-				<h2>Coordinator states</h2>
+				<h2>Coordinator state dimensions</h2>
 				<table>
 					<thead>
 						<tr>
@@ -37,7 +37,7 @@
 						<tr>
 							<td>Pending report</td>
 							<td>Pending report ID and pending operation slot</td>
-							<td>Additional operations join the bounded callback batch.</td>
+							<td>Additional operations may join the pending callback batch when sponsored by the pending reporter.</td>
 						</tr>
 						<tr>
 							<td>Settled callback</td>
@@ -51,8 +51,8 @@
 						</tr>
 						<tr>
 							<td>Recovery candidate</td>
-							<td>Pending operation consumed or callback rejected</td>
-							<td>Re-read active and pending lists before execution or replacement.</td>
+							<td>Nonzero pending report whose OpenOracle settlement timestamp is nonzero</td>
+							<td><code>recoverSettledPendingReport()</code> withdraws coordinator balances and consumes the pending slot once.</td>
 						</tr>
 						<tr>
 							<td>Active staged operations</td>

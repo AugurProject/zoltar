@@ -77,7 +77,7 @@
 							><mo>⌋</mo></mrow
 						>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Associated REP liquidation threshold</span>The queue-time price guard includes the target's pool-held vault REP backing and dispute-staked REP; the migration threshold separately uses backing without dispute stake, and the stricter threshold governs execution.</p>
+					<p class="equation-caption"><span class="equation-label">Associated REP liquidation threshold</span><code>associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × poolSecurityMultiplierBps)⌋</code>. The migration threshold is <code>⌊snapshotTargetVaultRepBackingAttoRep × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × migrationSecurityMultiplierBps)⌋</code>, where <code>migrationSecurityMultiplierBps = max(BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)</code>. Execution uses <code>thresholdPrice = min(associatedRepThreshold, migrationThreshold)</code>, requires <code>currentPrice &gt; thresholdPrice</code>, and then requires <code>⌊(currentPrice - thresholdPrice) × BPS_DENOMINATOR / currentPrice⌋ ≥ minPriceDistanceBps</code>; equality and prices below the threshold fail.</p>
 				</div>
 				<div class="example" id="liquidation-numeric-example">
 					<h3>Numeric example</h3>
