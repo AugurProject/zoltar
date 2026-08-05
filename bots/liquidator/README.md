@@ -82,8 +82,12 @@ forked parent pool where its signer has non-escrowed vault accounting and one de
 child universe is approved. During the protocol's eight-week migration window
 it calls the
 parent's `SecurityPoolForker.migrateVault(parent, outcomeIndex)`. The migration
-moves the signer's complete non-escrowed vault accounting to the chosen child and atomically
-creates the child security pool when it does not exist. The bot does not split a
+moves the signer's REP backing units and coverage commitment to the chosen child
+and atomically creates the child security pool when it does not exist. Claimable
+fees remain redeemable from the parent, while escalation accounting follows its
+separate migration path described in the
+[canonical migration design](../../docs/explanation/statoblast.html#migration).
+The bot does not split a
 parent vault across outcomes. Once the child becomes operational, normal vault
 maintenance and liquidation continue there because the next registry scan
 inherits the selected parent pool onto its approved child. A missing approved

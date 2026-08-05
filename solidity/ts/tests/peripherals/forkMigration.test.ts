@@ -2239,7 +2239,7 @@ describe('Peripherals: fork migration', () => {
 		test('two security pools with disagreement', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const openInterestAmount = 10n * 10n ** 18n
+			const openInterestAmount = 10n * 10n ** 18n + 1n
 			const openInterestArray = [openInterestAmount, openInterestAmount, openInterestAmount]
 			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
@@ -2291,6 +2291,13 @@ describe('Peripherals: fork migration', () => {
 			const parentEth = await getETHBalance(client, securityPoolAddresses.securityPool)
 			const yesEth = await getETHBalance(client, yesSecurityPool.securityPool)
 			const noEth = await getETHBalance(client, noSecurityPool.securityPool)
+			const parentWideRepDenominatorAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
+			const yesTargetNumerator = ownForkParentCollateralAtFork * migratedRepInYes
+			const parentWideTargetAfterYesAttoEth = (yesTargetNumerator + parentWideRepDenominatorAttoRep - 1n) / parentWideRepDenominatorAttoRep
+			const parentWideTargetAfterNoAttoEth = (ownForkParentCollateralAtFork * (migratedRepInYes + migratedRepInNo) + parentWideRepDenominatorAttoRep - 1n) / parentWideRepDenominatorAttoRep
+			assert.notEqual(yesTargetNumerator % parentWideRepDenominatorAttoRep, 0n, 'test must exercise indivisible attoETH ceiling allocation')
+			strictEqualTypeSafe(yesEth, parentWideTargetAfterYesAttoEth, 'first child should receive the first parent-wide cumulative collateral ceiling')
+			strictEqualTypeSafe(noEth, parentWideTargetAfterNoAttoEth - parentWideTargetAfterYesAttoEth, 'interleaved second-child migration should receive only the new parent-wide cumulative collateral delta')
 			const parentFees = await getTotalClaimableVaultFeesAttoEth(client, securityPoolAddresses.securityPool)
 			const yesFees = await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool)
 			const noFees = await getTotalClaimableVaultFeesAttoEth(client, noSecurityPool.securityPool)

@@ -5836,7 +5836,7 @@
 		"width": 920
 	},
 	"fig-statoblast-proportional-migration": {
-		"ariaDescription": "Parent REP backing units normally determine a floored migrated REP\n\t\t\t\t\t\t\t\tdelta. When cumulative migrated backing units reach the parent total,\n\t\t\t\t\t\t\t\tthe final migration routes the remaining REP delta into the selected child;\n\t\t\t\t\t\t\t\tcumulative routed REP sets its settlement-collateral target.",
+		"ariaDescription": "Parent REP backing units normally determine a floored migrated REP\n\t\t\t\t\t\t\t\tdelta. When cumulative migrated backing units reach the parent total,\n\t\t\t\t\t\t\t\tthe final migration routes the remaining REP delta into the selected child.\n\t\t\t\t\t\t\t\tParent-wide cumulative REP sets the collateral ceiling, and the selected child receives only its new per-call delta.",
 		"ariaLabel": "Proportional migration accounting",
 		"height": 330,
 		"nodes": [
@@ -5980,7 +5980,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tChild Collateral\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tSelected Child Delta\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -5994,7 +5994,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tcumulative routed REP target\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tnew parent-wide ceiling delta\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -6080,7 +6080,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tcumulative ceiling target\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tparent-wide cumulative ceiling\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"

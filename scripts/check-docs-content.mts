@@ -482,6 +482,10 @@ assert.match(whitepaper, /href="#migration">Forks and Migration<\/a>[\s\S]{0,220
 assert.match(whitepaper, /operator-guardrails\.html#escalation-resolution-and-deposits/)
 assert.doesNotMatch(liquidatorReadme, /seiz(?:e|ed|ing)[^\n]*REP|bonus-priced REP/i)
 assert.match(liquidatorReadme, /5%-bonus vault REP backing award,[\s\S]*represented by REP backing units/)
+assert.match(liquidatorReadme, /migration\s+moves the signer's REP backing units and coverage commitment/i)
+assert.match(liquidatorReadme, /Claimable\s+fees remain redeemable from the parent/i)
+assert.match(liquidatorReadme, /escalation accounting follows its\s+separate migration path/i)
+assert.match(liquidatorReadme, /statoblast\.html#migration/)
 assert.doesNotMatch(whitepaper, /id="fig-statoblast-unresolved-migration"|Unresolved Escalation Continuation Trace/)
 assert.match(
 	whitepaper,

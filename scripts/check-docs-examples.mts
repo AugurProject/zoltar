@@ -1626,7 +1626,7 @@ assert.match(
 )
 assert.match(statoblastHtml, /Fee accrual is lazy[\s\S]*global fee index[\s\S]*vault operations checkpoint each vault[\s\S]*explicit remainders/i, 'whitepaper should explain lazy global and per-vault fee checkpointing')
 assert.match(statoblastHtml, /Per-vault fractional remainders survive public\s+checkpoints/i, 'whitepaper should document per-vault fractional carry')
-assert.match(statoblastHtml, /actualSettlementCollateralDeltaAttoEth = min\(requestedSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth\)/i, 'whitepaper own-fork settlement collateral formula should reserve accrued parent fees')
+assert.match(statoblastHtml, /actualSelectedChildSettlementCollateralDeltaAttoEth = min\(selectedChildSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth\)/i, 'whitepaper own-fork settlement collateral formula should reserve accrued parent fees')
 assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+settlement collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
@@ -1641,25 +1641,29 @@ assert.match(
 )
 assert.match(
 	statoblastHtml,
-	/id="fig-statoblast-proportional-migration"[\s\S]*normally determine a floored migrated REP[\s\S]*cumulative migrated backing units reach the parent total[\s\S]*remaining REP delta into the selected child[\s\S]*cumulative routed REP sets its settlement-collateral target/i,
-	'whitepaper migration figure fallback and caption should distinguish provisional floors from final REP-backing-unit reconciliation',
+	/id="fig-statoblast-proportional-migration"[\s\S]*normally determine a floored migrated REP[\s\S]*cumulative migrated backing units reach the parent total[\s\S]*remaining REP delta into the selected child[\s\S]*parent-wide cumulative REP allocation sets one collateral ceiling[\s\S]*selected child receives only the increase/i,
+	'whitepaper migration figure fallback and caption should distinguish child REP reconciliation from parent-wide collateral rounding',
 )
 assert.match(
 	statoblastHtml,
 	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDeltaAttoRep<\/mi>[\s\S]*<mi>migrationRepDenominatorAtForkAttoRep<\/mi>[\s\S]*<mi>priorMigratedAttoRep<\/mi>[\s\S]*<mi>cumulativeMigratedRepBackingUnits<\/mi>[\s\S]*<mi>parentTotalRepBackingUnits<\/mi>[\s\S]*<mi>provisionalMigratedRepDeltaAttoRep<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
 	'whitepaper visible migration equation should render the final REP-backing-unit reconciliation branch',
 )
-assert.match(diagramSpecsSource, /"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*cumulative routed REP target[\s\S]*cumulative ceiling target/i, 'proportional migration diagram should show provisional REP flooring, final reconciliation, and cumulative collateral routing')
+assert.match(
+	diagramSpecsSource,
+	/"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*Selected Child Delta[\s\S]*new parent-wide ceiling delta[\s\S]*parent-wide cumulative ceiling/i,
+	'proportional migration diagram should show provisional REP flooring, child reconciliation, and parent-wide collateral routing',
+)
 assert.match(statoblastHtml, /data-source="settlementCollateralShortfallAttoEth = max\(0, parentSettlementCollateralAtForkAttoEth - forkSettlementCollateralReceivedAttoEth\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; cumulativeSettlementCollateralTargetAttoEthAfterMigration = ⌈parentSettlementCollateralAtForkAttoEth \\cdot cumulativeRepTransferredAfterMigrationAttoRep \/ migrationRepDenominatorAtForkAttoRep⌉/i,
-	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
+	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; parentWideCumulativeSettlementCollateralTargetAttoEth = ⌈parentSettlementCollateralAtForkAttoEth \\cdot parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep \/ migrationRepDenominatorAtForkAttoRep⌉/i,
+	'whitepaper should use the fork-specific denominator and parent-wide counters in cumulative collateral migration',
 )
 assert.doesNotMatch(
 	statoblastHtml,
-	/data-source="cumulativeSettlementCollateralTargetAttoEthAfterMigration = ceil\(parentSettlementCollateralAtForkAttoEth \\cdot cumulativeRepTransferredAfterMigrationAttoRep \/ vaultRepAtForkAttoRep\)/i,
+	/data-source="(?:cumulativeSettlementCollateralTargetAttoEthAfterMigration|parentWideCumulativeSettlementCollateralTargetAttoEth) = ceil\(parentSettlementCollateralAtForkAttoEth \\cdot (?:cumulativeRepTransferredAfterMigrationAttoRep|parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep) \/ vaultRepAtForkAttoRep\)/i,
 	'whitepaper should not present the own-fork denominator as the generalized settlement-collateral migration formula',
 )
 assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
