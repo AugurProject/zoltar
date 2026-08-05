@@ -74,7 +74,7 @@ var sH=(t,r)=>()=>(r||t((r={exports:{}}).exports,r),r.exports);var CH=sH((Gy,aP)
 								redemption.`,ariaLabel:"Actor swimlane lifecycle",height:430,nodes:[{children:[{attributes:{id:"arrow-swimlane",viewBox:"0 0 10 10",refX:"8",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},children:[{attributes:{d:"M 0 0 L 10 5 L 0 10 z",fill:"currentColor"},tag:"path"}],tag:"marker"}],tag:"defs"},{attributes:{class:"svg-box",x:"40",y:"48",width:"900",height:"92",rx:"10"},tag:"rect"},{attributes:{class:"svg-box",x:"40",y:"170",width:"900",height:"92",rx:"10"},tag:"rect"},{attributes:{class:"svg-box",x:"40",y:"292",width:"900",height:"92",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"95",y:"101","text-anchor":"middle"},children:[{text:`
 								Trader
 							`}],tag:"text"},{attributes:{class:"svg-label",x:"95",y:"223","text-anchor":"middle"},children:[{text:`
-								Vault
+								Vault owner
 							`}],tag:"text"},{attributes:{class:"svg-label",x:"95",y:"345","text-anchor":"middle"},children:[{text:`
 								Protocol
 							`}],tag:"text"},{attributes:{class:"svg-line",x1:"150",y1:"50",x2:"150",y2:"382"},tag:"line"},{attributes:{class:"svg-blue",x:"190",y:"72",width:"150",height:"46",rx:"8"},tag:"rect"},{attributes:{class:"svg-small",x:"265",y:"100","text-anchor":"middle"},children:[{text:`
@@ -99,7 +99,7 @@ var sH=(t,r)=>()=>(r||t((r={exports:{}}).exports,r),r.exports);var CH=sH((Gy,aP)
 								repair ETH
 							`}],tag:"text"}],width:980},"fig-statoblast-asset-flow":{ariaDescription:`Users send ETH to the security pool, which mints shares. A
 								redemption request goes to the pool; the pool burns the relevant
-								shares and pays ETH. Vaults send REP and receive fees; fork
+								shares and pays ETH. Vault owners send REP and receive fees; fork
 								repair can sell child REP for ETH.`,ariaLabel:"ETH, REP, shares, and fee flow",height:430,nodes:[{children:[{attributes:{id:"arrow-assets",viewBox:"0 0 10 10",refX:"8",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},children:[{attributes:{d:"M 0 0 L 10 5 L 0 10 z",fill:"currentColor"},tag:"path"}],tag:"marker"}],tag:"defs"},{attributes:{class:"svg-blue",x:"54",y:"58",width:"170",height:"72",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"139",y:"90","text-anchor":"middle"},children:[{text:`
 								Trader
 							`}],tag:"text"},{attributes:{class:"svg-small",x:"139",y:"113","text-anchor":"middle"},children:[{text:`
@@ -125,7 +125,7 @@ var sH=(t,r)=>()=>(r||t((r={exports:{}}).exports,r),r.exports);var CH=sH((Gy,aP)
 							`}],tag:"text"},{attributes:{class:"svg-line","marker-end":"url(#arrow-assets)","data-flow":"pool-to-trader-eth-payout",d:"M 384 138 C 330 220 280 220 224 138"},tag:"path"},{attributes:{class:"svg-small",x:"304",y:"228","text-anchor":"middle"},children:[{text:`
 								ETH payout
 							`}],tag:"text"},{attributes:{class:"svg-gold",x:"54",y:"272",width:"170",height:"72",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"139",y:"304","text-anchor":"middle"},children:[{text:`
-								Vault
+								Vault owner
 							`}],tag:"text"},{attributes:{class:"svg-small",x:"139",y:"327","text-anchor":"middle"},children:[{text:`
 								deposits REP
 							`}],tag:"text"},{attributes:{class:"svg-green",x:"384",y:"276",width:"200",height:"76",rx:"10"},tag:"rect"},{attributes:{class:"svg-label",x:"484",y:"308","text-anchor":"middle"},children:[{text:`

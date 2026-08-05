@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
-const sourceFilesResult = Bun.spawnSync(['rg', '--files'], { stdout: 'pipe' })
-if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate source files for unit terminology validation')
+const sourceFilesResult = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], { stdout: 'pipe' })
+if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repository files for unit terminology validation')
 
 const protectedVendorPath = 'solidity/contracts/peripherals/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'scripts/check-unit-terminology.mts'

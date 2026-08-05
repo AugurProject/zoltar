@@ -2350,7 +2350,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tVault\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tVault owner\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -2689,7 +2689,7 @@
 		"width": 980
 	},
 	"fig-statoblast-asset-flow": {
-		"ariaDescription": "Users send ETH to the security pool, which mints shares. A\n\t\t\t\t\t\t\t\tredemption request goes to the pool; the pool burns the relevant\n\t\t\t\t\t\t\t\tshares and pays ETH. Vaults send REP and receive fees; fork\n\t\t\t\t\t\t\t\trepair can sell child REP for ETH.",
+		"ariaDescription": "Users send ETH to the security pool, which mints shares. A\n\t\t\t\t\t\t\t\tredemption request goes to the pool; the pool burns the relevant\n\t\t\t\t\t\t\t\tshares and pays ETH. Vault owners send REP and receive fees; fork\n\t\t\t\t\t\t\t\trepair can sell child REP for ETH.",
 		"ariaLabel": "ETH, REP, shares, and fee flow",
 		"height": 430,
 		"nodes": [
@@ -2984,7 +2984,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tVault\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tVault owner\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
