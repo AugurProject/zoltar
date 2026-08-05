@@ -720,17 +720,17 @@
 							<td><a href="../explanation/statoblast.html#pools">Fee accrual</a></td>
 						</tr>
 						<tr>
-							<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetCoverageCommitmentAttoEth, requestedCommitmentTransferAttoEth, repEthPrice, currentPoolHeldRepBalanceAttoRep, currentTotalRepBackingUnits)</code></td>
+							<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetCoverageCommitmentAttoEth, requestedCommitmentTransferAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits)</code></td>
 							<td>Returns zero when the request, coverage commitment, or price is zero. Caps coverage commitment by the request, coverage commitment, and the complete 5%-bonus award fundable from available target pool-held vault REP backing. Requests below the target coverage commitment are partial: they reserve the minimum target REP deposit and preserve at least the minimum remaining coverage commitment. Requests at or above the target coverage commitment are maximum requests and may use all target pool-held vault REP backing, allowing the pool's liquidation path to record any untransferred residual through the explicit bad-debt backstop. The award and quote-to-backing-unit conversion round up before the reported REP conversion rounds down, ensuring the moved REP backing units fund the complete attoREP award without sweeping target surplus.</td>
 							<td><a href="../explanation/liquidations.html#punitive-liquidation">Vault liquidation</a></td>
 						</tr>
 						<tr>
-							<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedRepAttoRep, coverageCommitmentAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
+							<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, coverageCommitmentAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
 							<td>Ordinary associated-REP equality is healthy. Positive coverage commitment additionally requires strict pool-held vault REP backing migration coverage, so migration equality is unhealthy; zero coverage commitment bypasses that second comparison.</td>
 							<td><a href="../explanation/liquidations.html#rule">Two health conditions</a></td>
 						</tr>
 						<tr>
-							<td><code>isLiquidationBeyondMinPriceDistance(poolHeldVaultRepBackingAttoRep, disputeStakedRepAttoRep, coverageCommitmentAttoEth, poolSecurityMultiplierBps, currentPrice, minPriceDistanceBps)</code></td>
+							<td><code>isLiquidationBeyondMinPriceDistance(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, coverageCommitmentAttoEth, poolSecurityMultiplierBps, currentPrice, minPriceDistanceBps)</code></td>
 							<td>Zero configured distance returns true. Otherwise zero coverage commitment or price returns false; the function floors both price thresholds, selects the lower one, requires price strictly above it, and then applies the BPS distance floor.</td>
 							<td><a href="../explanation/open-oracle.html#eq-openoracle-contract-liquidation-guard">OpenOracle liquidation guard</a></td>
 						</tr>

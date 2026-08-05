@@ -11,7 +11,7 @@ type PendingParentEscalationClaimSelection = {
 
 type UseForkAuctionInteractionStateParameters = {
 	accountAddress: Address | undefined
-	connectedWalletDisputeStakedRepAttoRep: bigint | undefined
+	connectedWalletDisputeStakedAttoRep: bigint | undefined
 	forkAuctionActiveAction: ForkAuctionSectionProps['forkAuctionActiveAction']
 	forkAuctionError: string | undefined
 	forkAuctionResult: ForkAuctionSectionProps['forkAuctionResult']
@@ -21,7 +21,7 @@ type UseForkAuctionInteractionStateParameters = {
 	startTruthAuctionSecurityPoolAddress: Address | undefined
 }
 
-export function useForkAuctionInteractionState({ accountAddress, connectedWalletDisputeStakedRepAttoRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
+export function useForkAuctionInteractionState({ accountAddress, connectedWalletDisputeStakedAttoRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
 	const [pendingStartTruthAuctionSecurityPoolAddress, setPendingStartTruthAuctionSecurityPoolAddress] = useState<Address | undefined>(undefined)
 	const isStartTruthAuctionInProgressState = startTruthAuctionSecurityPoolAddress !== undefined && sameAddress(pendingStartTruthAuctionSecurityPoolAddress, startTruthAuctionSecurityPoolAddress)
 	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
@@ -57,19 +57,19 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 		setHasCompletedVaultMigration(true)
 		setIsVaultMigrationPending(false)
 		setPendingParentEscalationClaimSelection(undefined)
-		if (connectedWalletDisputeStakedRepAttoRep !== undefined) {
-			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + connectedWalletDisputeStakedRepAttoRep)
+		if (connectedWalletDisputeStakedAttoRep !== undefined) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + connectedWalletDisputeStakedAttoRep)
 		}
-	}, [connectedWalletDisputeStakedRepAttoRep, forkAuctionResult, securityPoolAddress])
+	}, [connectedWalletDisputeStakedAttoRep, forkAuctionResult, securityPoolAddress])
 
 	useEffect(() => {
 		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'claimParentEscalationDeposits' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress) || pendingParentEscalationClaimSelection === undefined) {
 			return
 		}
 		const claimSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingParentEscalationClaimSelection.outcome)
-		const claimedRepAttoRep = claimSide?.userDeposits.filter(deposit => pendingParentEscalationClaimSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amountAttoRep, 0n)
-		if (claimedRepAttoRep !== undefined && claimedRepAttoRep > 0n) {
-			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + claimedRepAttoRep)
+		const claimedAttoRep = claimSide?.userDeposits.filter(deposit => pendingParentEscalationClaimSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amountAttoRep, 0n)
+		if (claimedAttoRep !== undefined && claimedAttoRep > 0n) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + claimedAttoRep)
 		}
 		setPendingParentEscalationClaimSelection(undefined)
 	}, [forkAuctionResult, pendingParentEscalationClaimSelection, reportingDetails, securityPoolAddress])
@@ -111,7 +111,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 
 	useEffect(() => {
 		setOptimisticClaimedParentDisputeStakedRep(0n)
-	}, [connectedWalletDisputeStakedRepAttoRep])
+	}, [connectedWalletDisputeStakedAttoRep])
 
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return

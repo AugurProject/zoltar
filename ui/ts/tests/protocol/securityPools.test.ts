@@ -317,7 +317,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
-				if (request.functionName === 'getTotalPoolHeldRepAttoRep') return 100n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -331,7 +331,7 @@ describe('securityPools protocol client', () => {
 		expect(securityVaultSummaryBatchCount).toBe(1)
 		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
-		expect(pool.vaults.map(vault => vault.disputeStakedRepAttoRep)).toEqual([5n, 6n])
+		expect(pool.vaults.map(vault => vault.disputeStakedAttoRep)).toEqual([5n, 6n])
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
@@ -381,7 +381,7 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalPoolHeldRepAttoRep') return 100n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -397,7 +397,7 @@ describe('securityPools protocol client', () => {
 		expect(pool.hasLoadedVaults).toBe(true)
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
 		expect(pool.vaultCount).toBe(5n)
-		expect(pool.totalPoolHeldRepAttoRep).toBe(100n)
+		expect(pool.totalPoolHeldAttoRep).toBe(100n)
 		expect(pool.questionId).toBe('0x1')
 	})
 
@@ -445,7 +445,7 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Empty browse-page loads should not fetch per-vault summaries')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalPoolHeldRepAttoRep') return 100n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -534,7 +534,7 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalPoolHeldRepAttoRep') return 5n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 5n
 				if (request.functionName === 'totalRepBackingUnits') return 1n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -555,7 +555,7 @@ describe('securityPools protocol client', () => {
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
 		expect(selectedPool.feeEligibleCoverageCommitmentAttoEth).toBe(3n)
-		expect(selectedPool.totalPoolHeldRepAttoRep).toBe(5n)
+		expect(selectedPool.totalPoolHeldAttoRep).toBe(5n)
 		expect(selectedPool.totalCoverageCommitmentAttoEth).toBe(9n)
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
@@ -583,10 +583,10 @@ describe('securityPools protocol client', () => {
 			settlementCollateralAttoEth: 11n,
 			feeEligibleCoverageCommitmentAttoEth: 17n,
 			shareTokenSupplyAttoShares: 22n,
-			totalPoolHeldRepAttoRep: 33n,
+			totalPoolHeldAttoRep: 33n,
 			totalCoverageCommitmentAttoEth: 44n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldRepAttoRep'])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep'])
 		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
 	})
 })

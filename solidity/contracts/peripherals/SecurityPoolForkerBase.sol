@@ -26,12 +26,12 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		return keccak256(abi.encode(factory, originId, outcomeIndex, parentDepositIndex));
 	}
 
-	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 repAmountAttoRep) public view returns (uint256) {
+	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 attoRepAmount) public view returns (uint256) {
 		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
 		uint256 childRepBalanceAttoRep = securityPool.repToken().balanceOf(address(securityPool));
 		if (totalRepBackingUnits == 0 || childRepBalanceAttoRep == 0)
-			return repAmountAttoRep * SecurityPoolUtils.PRICE_PRECISION;
-		return (repAmountAttoRep * totalRepBackingUnits) / childRepBalanceAttoRep;
+			return attoRepAmount * SecurityPoolUtils.PRICE_PRECISION;
+		return (attoRepAmount * totalRepBackingUnits) / childRepBalanceAttoRep;
 	}
 
 	function backingUnitsToAttoRep(ISecurityPool securityPool, uint256 repBackingUnits) public view returns (uint256) {
@@ -101,11 +101,11 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		ISecurityPool parent,
 		uint256 vaultRepAtForkAttoRep,
 		uint256 escalationChildRepAtForkAttoRep,
-		uint256 escalationSourceRepAttoRep
+		uint256 escalationSourceAttoRep
 	) internal {
 		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[parent];
 		repBuckets.vaultRepAtForkAttoRep = vaultRepAtForkAttoRep;
 		repBuckets.escalationChildRepAtForkAttoRep = escalationChildRepAtForkAttoRep;
-		repBuckets.escalationSourceRepAtForkAttoRep = escalationSourceRepAttoRep;
+		repBuckets.escalationSourceRepAtForkAttoRep = escalationSourceAttoRep;
 	}
 }

@@ -367,10 +367,10 @@ export function LiquidationModal({
 						<CurrencyValue value={targetVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 					<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
-						<CurrencyValue value={targetVaultSummary?.vaultRepBackingAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue value={targetVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={liquidationCopy.targetDisputeStakedRepAttoRep}>
-						<CurrencyValue value={targetVaultSummary?.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.targetDisputeStakedAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField
 						label={
@@ -385,10 +385,10 @@ export function LiquidationModal({
 						<CurrencyValue value={callerVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 					<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
-						<CurrencyValue value={callerVaultSummary?.vaultRepBackingAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue value={callerVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={liquidationCopy.callerDisputeStakedRepAttoRep}>
-						<CurrencyValue value={callerVaultSummary?.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.callerDisputeStakedAttoRep}>
+						<CurrencyValue value={callerVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
@@ -438,12 +438,12 @@ export function LiquidationModal({
 						{ label: liquidationCopy.coverageCommitmentAssumed, value: <CurrencyValue value={liquidationSimulation?.coverageCommitmentToTransferAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultRepBackingToTransferAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
 						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[
-						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.coverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={

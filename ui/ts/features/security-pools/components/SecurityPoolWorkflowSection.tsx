@@ -90,7 +90,7 @@ function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { fo
 		forkOutcome: forkAuctionDetails.forkOutcome,
 		forkOwnSecurityPool: forkAuctionDetails.forkOwnSecurityPool,
 		marketDetails: forkAuctionDetails.marketDetails,
-		migratedRepAttoRep: forkAuctionDetails.migratedRepAttoRep,
+		migratedAttoRep: forkAuctionDetails.migratedAttoRep,
 		questionOutcome: forkAuctionDetails.questionOutcome,
 		securityPoolAddress: forkAuctionDetails.securityPoolAddress,
 		systemState: forkAuctionDetails.systemState,
@@ -960,7 +960,7 @@ export function SecurityPoolWorkflowSection({
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 												oracleManagerDetails={currentPoolOracleManagerDetails}
 												poolState={selectedPoolStateModel}
-												selectedPoolTotalPoolHeldRepAttoRep={selectedPool?.totalPoolHeldRepAttoRep}
+												selectedPoolTotalPoolHeldAttoRep={selectedPool?.totalPoolHeldAttoRep}
 												selectedPoolTotalCoverageCommitmentAttoEth={selectedPool?.totalCoverageCommitmentAttoEth}
 												selectedMarketTitle={selectedPool?.marketDetails.title}
 												showHeader={false}

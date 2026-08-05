@@ -49,13 +49,13 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		uint256 sourcePrincipalTotalAttoRep,
 		uint256 childRepTotalAttoRep,
 		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedRepAttoRep,
+		uint256 totalDisputeStakedAttoRep,
 		uint256 outcomeBalanceAttoRep
 	);
 	event VaultEscrowUpdated(
 		address indexed vault,
 		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedRepAttoRep
+		uint256 totalDisputeStakedAttoRep
 	);
 	event ForkedEscrowClaimed(
 		address indexed depositor,
@@ -128,8 +128,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
 		require(bundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
 		bundle.disputeStakedRepClaimUnits -= claimUnits;
-		totalDisputeStakedRepAttoRep -= amountAttoRep;
-		emit VaultEscrowUpdated(depositor, disputeStakedRepByVaultAttoRep(depositor), totalDisputeStakedRepAttoRep);
+		totalDisputeStakedAttoRep -= amountAttoRep;
+		emit VaultEscrowUpdated(depositor, disputeStakedRepByVaultAttoRep(depositor), totalDisputeStakedAttoRep);
 	}
 
 	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) internal {
@@ -169,11 +169,11 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _consumeUnresolvedRepForVault(address depositor, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		uint256 unresolvedRepAttoRep = unresolvedRepByVaultAttoRep[depositor];
-		require(unresolvedRepAttoRep >= amountAttoRep, 'Vault unresolved REP low');
-		require(totalLocalUnresolvedRepAttoRep >= amountAttoRep, 'Local unresolved REP low');
-		unresolvedRepByVaultAttoRep[depositor] = unresolvedRepAttoRep - amountAttoRep;
-		totalLocalUnresolvedRepAttoRep -= amountAttoRep;
+		uint256 unresolvedAttoRep = unresolvedRepByVaultAttoRep[depositor];
+		require(unresolvedAttoRep >= amountAttoRep, 'Vault unresolved REP low');
+		require(totalLocalUnresolvedAttoRep >= amountAttoRep, 'Local unresolved REP low');
+		unresolvedRepByVaultAttoRep[depositor] = unresolvedAttoRep - amountAttoRep;
+		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 
 	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) internal {

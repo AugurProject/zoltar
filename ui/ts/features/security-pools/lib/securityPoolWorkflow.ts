@@ -131,13 +131,13 @@ export function getForkWorkflowStageSelection({
 		| {
 				claimingAvailable: boolean
 				hasForkActivity: boolean
-				migratedRepAttoRep: bigint
+				migratedAttoRep: bigint
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
 	forkOutcome: ListedSecurityPool['forkOutcome'] | undefined
-	previewPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'migratedRepAttoRep' | 'truthAuctionStartedAt'> | undefined
+	previewPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'migratedAttoRep' | 'truthAuctionStartedAt'> | undefined
 	selectedStageView: ForkWorkflowSelectionStage | undefined
 	stageView: ForkAuctionStageView | undefined
 	systemState: SecurityPoolSystemState | undefined
@@ -149,7 +149,7 @@ export function getForkWorkflowStageSelection({
 			: getForkAuctionStageView({
 					claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
 					forkOutcome: forkOutcome ?? 'none',
-					migratedRepAttoRep: forkAuctionDetails?.migratedRepAttoRep ?? previewPool?.migratedRepAttoRep ?? 0n,
+					migratedAttoRep: forkAuctionDetails?.migratedAttoRep ?? previewPool?.migratedAttoRep ?? 0n,
 					systemState,
 					truthAuction: forkAuctionDetails?.truthAuction,
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
@@ -182,13 +182,13 @@ export function getSelectedPoolForkWorkflowView({
 		| {
 				claimingAvailable: boolean
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRepAttoRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRepAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }) {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,
@@ -199,7 +199,7 @@ export function getSelectedPoolForkWorkflowView({
 			getForkAuctionStageView({
 				claimingAvailable: currentForkAuctionDetails.claimingAvailable,
 				forkOutcome: currentForkAuctionDetails.forkOutcome,
-				migratedRepAttoRep: currentForkAuctionDetails.migratedRepAttoRep,
+				migratedAttoRep: currentForkAuctionDetails.migratedAttoRep,
 				systemState: currentForkAuctionDetails.systemState,
 				truthAuction: currentForkAuctionDetails.truthAuction,
 				truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
@@ -222,13 +222,13 @@ export function getCurrentSelectedPoolForkStage({
 		| {
 				claimingAvailable: boolean
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRepAttoRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRepAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }): ForkAuctionStageView {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,
@@ -238,7 +238,7 @@ export function getCurrentSelectedPoolForkStage({
 		return getForkAuctionStageView({
 			claimingAvailable: currentForkAuctionDetails.claimingAvailable,
 			forkOutcome: currentForkAuctionDetails.forkOutcome,
-			migratedRepAttoRep: currentForkAuctionDetails.migratedRepAttoRep,
+			migratedAttoRep: currentForkAuctionDetails.migratedAttoRep,
 			systemState: currentForkAuctionDetails.systemState,
 			truthAuction: currentForkAuctionDetails.truthAuction,
 			truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
@@ -246,7 +246,7 @@ export function getCurrentSelectedPoolForkStage({
 	if (selectedPool === undefined) return 'migration'
 	return getForkAuctionStageView({
 		forkOutcome: selectedPool.forkOutcome,
-		migratedRepAttoRep: selectedPool.migratedRepAttoRep,
+		migratedAttoRep: selectedPool.migratedAttoRep,
 		systemState: selectedPool.systemState,
 		truthAuctionStartedAt: selectedPool.truthAuctionStartedAt,
 	})
@@ -259,12 +259,12 @@ export function hasCurrentSelectedPoolForkActivity({
 	forkAuctionDetails:
 		| {
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRepAttoRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedRepAttoRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
 }) {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,

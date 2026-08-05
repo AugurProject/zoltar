@@ -213,7 +213,7 @@ export function useTradingOperations(
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,
 							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
-							totalPoolHeldRepAttoRep: latestMintCapacity.totalPoolHeldRepAttoRep,
+							totalPoolHeldAttoRep: latestMintCapacity.totalPoolHeldAttoRep,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}

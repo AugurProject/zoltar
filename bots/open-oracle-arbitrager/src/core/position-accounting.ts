@@ -1,16 +1,16 @@
 import type { ArbitrageDirection } from '#core/strategy'
 
-export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualHedgeWethAttoEth: bigint, currentAmount1: bigint, feeWethAttoEth: bigint, protocolFeeWethAttoEth: bigint) {
-	const openOracleWeth = currentAmount1 + feeWethAttoEth + protocolFeeWethAttoEth
-	return direction === 'sell-rep' ? actualHedgeWethAttoEth - openOracleWeth : currentAmount1 - actualHedgeWethAttoEth
+export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualHedgeAttoWeth: bigint, currentAmount1: bigint, feeAttoWeth: bigint, protocolFeeAttoWeth: bigint) {
+	const openOracleWeth = currentAmount1 + feeAttoWeth + protocolFeeAttoWeth
+	return direction === 'sell-rep' ? actualHedgeAttoWeth - openOracleWeth : currentAmount1 - actualHedgeAttoWeth
 }
 
 export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, settlerRewardAttoEth: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
 	return hedgedProfitBeforeGas + settlerRewardAttoEth - entryGasCost - lifecycleGasCost
 }
 
-export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeWethAttoEth: bigint, actualHedgeWethAttoEth: bigint) {
-	return direction === 'sell-rep' ? quotedProfitBeforeGas + actualHedgeWethAttoEth - quotedHedgeWethAttoEth : quotedProfitBeforeGas + quotedHedgeWethAttoEth - actualHedgeWethAttoEth
+export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeAttoWeth: bigint, actualHedgeAttoWeth: bigint) {
+	return direction === 'sell-rep' ? quotedProfitBeforeGas + actualHedgeAttoWeth - quotedHedgeAttoWeth : quotedProfitBeforeGas + quotedHedgeAttoWeth - actualHedgeAttoWeth
 }
 
 export function expectedWithdrawalToken2(direction: ArbitrageDirection, currentAmount2: bigint, newAmount2: bigint) {

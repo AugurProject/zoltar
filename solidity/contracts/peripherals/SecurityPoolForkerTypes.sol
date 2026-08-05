@@ -4,10 +4,10 @@ pragma solidity 0.8.35;
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 
 struct SecurityPoolForkerForkData {
-	uint256 auctionableRepAtForkAttoRep;
+	uint256 auctionableAttoRepAtFork;
 	UniformPriceDualCapBatchAuction truthAuction;
 	uint256 truthAuctionStarted;
-	uint256 migratedRepAttoRep;
+	uint256 migratedAttoRep;
 	uint256 auctionedCoverageCommitmentAttoEth;
 	uint256 claimedAuctionRepPurchasedAttoRep;
 	uint256 claimedAuctionedCoverageCommitmentAttoEth;
@@ -42,7 +42,7 @@ struct OwnForkChildRepAllocation {
 struct EscalationMigrationEntitlement {
 	uint256[3] sourcePrincipalByOutcomeAttoRep;
 	uint256[3] currentRepByOutcomeAttoRep;
-	uint256 totalCurrentRepAttoRep;
+	uint256 totalCurrentAttoRep;
 	bool initialized;
 }
 

@@ -430,7 +430,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 								universeId: 1n,
 								viewerPoolHeldVaultRepBackingAttoRep: 0n,
 								viewerVaultExists: true,
-								viewerVaultDisputeStakedRepAttoRep: 0n,
+								viewerVaultDisputeStakedAttoRep: 0n,
 								viewerVaultRepBackingAttoRep: 0n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,

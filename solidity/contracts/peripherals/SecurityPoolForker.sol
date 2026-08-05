@@ -42,7 +42,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		ISecurityPool indexed parent,
 		uint256 indexed outcomeIndex,
 		uint256 childPoolRepSplitAttoRep,
-		uint256 pendingChildRepAttoRep
+		uint256 pendingChildAttoRep
 	);
 
 	event ClaimForkedEscalationDepositsToWallet(
@@ -58,7 +58,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		ISecurityPool indexed securityPool,
 		uint256 settlementCollateralAttoEth,
 		uint256 repMigratedAttoRep,
-		uint256 auctionableRepAtForkAttoRep
+		uint256 auctionableAttoRepAtFork
 	);
 	event TruthAuctionFinalized(ISecurityPool indexed securityPool);
 	function forkData(
@@ -67,10 +67,10 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		public
 		view
 		returns (
-			uint256 auctionableRepAtForkAttoRep,
+			uint256 auctionableAttoRepAtFork,
 			UniformPriceDualCapBatchAuction truthAuction,
 			uint256 truthAuctionStarted,
-			uint256 migratedRepAttoRep,
+			uint256 migratedAttoRep,
 			uint256 auctionedCoverageCommitmentAttoEth,
 			uint256 escalationElapsedAtFork,
 			uint256 escalationStartBondAtForkAttoRep,
@@ -82,10 +82,10 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
-			data.auctionableRepAtForkAttoRep,
+			data.auctionableAttoRepAtFork,
 			data.truthAuction,
 			data.truthAuctionStarted,
-			data.migratedRepAttoRep,
+			data.migratedAttoRep,
 			data.auctionedCoverageCommitmentAttoEth,
 			data.escalationElapsedAtFork,
 			data.escalationStartBondAtForkAttoRep,
@@ -96,8 +96,8 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		);
 	}
 
-	function getMigratedRepAttoRep(ISecurityPool securityPool) public view returns (uint256) {
-		return forkDataByPool[securityPool].migratedRepAttoRep;
+	function getMigratedAttoRep(ISecurityPool securityPool) public view returns (uint256) {
+		return forkDataByPool[securityPool].migratedAttoRep;
 	}
 
 	function getForkActivationTime(ISecurityPool securityPool) external view returns (uint256) {
@@ -137,7 +137,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	function getEscalationMigrationEntitlementStatus(
 		ISecurityPool securityPool,
 		address vault
-	) external view returns (bool initialized, uint256 totalCurrentRepAttoRep, bool[3] memory materializedByOutcome) {
+	) external view returns (bool initialized, uint256 totalCurrentAttoRep, bool[3] memory materializedByOutcome) {
 		EscalationMigrationEntitlement storage entitlement = escalationMigrationEntitlementByPoolAndVault[securityPool][
 			vault
 		];
@@ -146,7 +146,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 				vault
 			][outcomeIndex];
 		}
-		return (entitlement.initialized, entitlement.totalCurrentRepAttoRep, materializedByOutcome);
+		return (entitlement.initialized, entitlement.totalCurrentAttoRep, materializedByOutcome);
 	}
 
 	function getOwnForkRepBuckets(
@@ -175,7 +175,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		view
 		returns (
 			bool ownFork,
-			uint256 auctionableRepAtForkAttoRep,
+			uint256 auctionableAttoRepAtFork,
 			uint256 vaultRepAtForkAttoRep,
 			uint256 escalationChildRepPerSelectedOutcomeAttoRep,
 			uint256 escrowSourceRepAtForkAttoRep
@@ -184,7 +184,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
 			data.ownFork,
-			data.auctionableRepAtForkAttoRep,
+			data.auctionableAttoRepAtFork,
 			data.vaultRepAtForkAttoRep,
 			data.escalationChildRepAtForkAttoRep,
 			data.escalationSourceRepAtForkAttoRep
@@ -203,7 +203,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		address sourceGame,
 		uint256 totalPoolHeldRepAtForkAttoRep,
 		uint256 disputeStakedRepAtForkAttoRep,
-		uint256 resultingLockedRepAttoRep
+		uint256 resultingLockedAttoRep
 	) private {
 		address eventEmitter = forkEventEmitter;
 		assembly ('memory-safe') {
@@ -214,7 +214,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			mstore(add(pointer, 0x44), sourceGame)
 			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
 			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
-			mstore(add(pointer, 0xa4), resultingLockedRepAttoRep)
+			mstore(add(pointer, 0xa4), resultingLockedAttoRep)
 			if iszero(delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)) {
 				revert(0, 0)
 			}
@@ -430,7 +430,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		// Keep this migration accounting invariant data-free so the forker remains deployable
 		// under the EIP-3860 initcode limit.
 		if (migrationBalanceAttoRep != previousMigrationBalanceAttoRep + repToLockAttoRep) revert();
-		data.auctionableRepAtForkAttoRep = previousMigrationBalanceAttoRep + poolRepToLockAttoRep;
+		data.auctionableAttoRepAtFork = previousMigrationBalanceAttoRep + poolRepToLockAttoRep;
 		_emitForkSnapshotEvents(
 			securityPool,
 			address(migrationProxy),
@@ -447,7 +447,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		if (address(migrationProxy) == address(0x0)) revert();
 		require(securityPool.systemState() == SystemState.PoolForked, 'Unforked');
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		uint256 migrationAmountAttoRep = data.ownFork ? data.vaultRepAtForkAttoRep : data.auctionableRepAtForkAttoRep;
+		uint256 migrationAmountAttoRep = data.ownFork ? data.vaultRepAtForkAttoRep : data.auctionableAttoRepAtFork;
 		if (migrationAmountAttoRep > 0) {
 			for (uint256 index = 0; index < outcomeIndices.length; index++) {
 				uint256 outcomeIndex = outcomeIndices[index];
@@ -556,7 +556,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		emit TruthAuctionStarted(
 			securityPool,
 			parentSettlementCollateralAttoEth,
-			data.migratedRepAttoRep,
+			data.migratedAttoRep,
 			poolAuctionableRepAtForkAttoRep
 		);
 		_startTruthAuctionOrFinalize(securityPool, data, parentData, parentSettlementCollateralAttoEth);
@@ -584,10 +584,10 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		);
 		data = _getForkData(securityPool);
 		parentData = _getForkData(parent);
-		uint256 requiredRepAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		_delegateEnsureChildPoolRepSplit(parent, data.outcomeIndex, requiredRepAttoRep);
+		uint256 requiredAttoRep = _getPoolAuctionableRepAtFork(parentData);
+		_delegateEnsureChildPoolRepSplit(parent, data.outcomeIndex, requiredAttoRep);
 		// Keep this invariant guard data-free: a revert string exceeds the EVM initcode limit.
-		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredRepAttoRep) revert();
+		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredAttoRep) revert();
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateSettlementCollateral();
@@ -632,7 +632,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage data,
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (bool) {
-		return data.migratedRepAttoRep >= _getPoolAuctionableRepAtFork(parentData);
+		return data.migratedAttoRep >= _getPoolAuctionableRepAtFork(parentData);
 	}
 
 	function _computeSettlementCollateralToRaiseAttoEth(
@@ -641,7 +641,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (uint256 settlementCollateralToRaiseAttoEth) {
 		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		if (poolAuctionableRepAtForkAttoRep == 0 || data.migratedRepAttoRep >= poolAuctionableRepAtForkAttoRep)
+		if (poolAuctionableRepAtForkAttoRep == 0 || data.migratedAttoRep >= poolAuctionableRepAtForkAttoRep)
 			return 0;
 		if (data.forkSettlementCollateralReceivedAttoEth >= parentSettlementCollateralAttoEth) return 0;
 		// Migration rounds each branch's cumulative collateral target up. Auction only
@@ -656,13 +656,13 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (uint256) {
 		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		uint256 disputeStakedRepAttoRep = _getEscalationAuctionableRep(securityPool, parentData);
-		uint256 combinedAuctionableRepAttoRep = poolAuctionableRepAtForkAttoRep + disputeStakedRepAttoRep;
+		uint256 disputeStakedAttoRep = _getEscalationAuctionableRep(securityPool, parentData);
+		uint256 combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + disputeStakedAttoRep;
 		uint256 migratedRepHaircutAttoRep =
-			data.migratedRepAttoRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR;
-		if (migratedRepHaircutAttoRep >= combinedAuctionableRepAttoRep) return 0;
-		uint256 cap = combinedAuctionableRepAttoRep - migratedRepHaircutAttoRep;
-		if (cap == combinedAuctionableRepAttoRep && address(securityPool.escalationGame()) != address(0x0)) cap -= 1;
+			data.migratedAttoRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR;
+		if (migratedRepHaircutAttoRep >= combinedAuctionableAttoRep) return 0;
+		uint256 cap = combinedAuctionableAttoRep - migratedRepHaircutAttoRep;
+		if (cap == combinedAuctionableAttoRep && address(securityPool.escalationGame()) != address(0x0)) cap -= 1;
 		return cap;
 	}
 
@@ -672,13 +672,13 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	) private view returns (uint256) {
 		if (!parentData.unresolvedEscalationAtFork) return 0;
 		EscalationGame game = securityPool.escalationGame();
-		return address(game) == address(0x0) ? 0 : game.totalDisputeStakedRepAttoRep();
+		return address(game) == address(0x0) ? 0 : game.totalDisputeStakedAttoRep();
 	}
 
 	function _getPoolAuctionableRepAtFork(
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (uint256) {
-		return parentData.ownFork ? parentData.vaultRepAtForkAttoRep : parentData.auctionableRepAtForkAttoRep;
+		return parentData.ownFork ? parentData.vaultRepAtForkAttoRep : parentData.auctionableAttoRepAtFork;
 	}
 
 	function _finalizeTruthAuction(ISecurityPool securityPool) private {
@@ -727,7 +727,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 				(bool sent, ) = payable(address(securityPool)).call{ value: ethReceived }('');
 				require(sent, 'ETH');
 			}
-			repPurchasedAttoRep = data.truthAuction.totalRepPurchasedAttoRep();
+			repPurchasedAttoRep = data.truthAuction.totalAttoRepPurchased();
 		}
 	}
 
@@ -813,8 +813,8 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		if (repToForkAttoRep < forkThresholdAttoRep) revert();
 		if (repToForkAttoRep > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToForkAttoRep);
 		migrationProxy.forkUniverse(securityPool.questionId());
-		uint256 excessForkRepAttoRep = repToForkAttoRep - forkThresholdAttoRep;
-		if (excessForkRepAttoRep > 0) migrationProxy.lockRep(excessForkRepAttoRep);
+		uint256 excessForkAttoRep = repToForkAttoRep - forkThresholdAttoRep;
+		if (excessForkAttoRep > 0) migrationProxy.lockRep(excessForkAttoRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		if (forkTime == 0) revert();
 		// The universe fork extends the parent's fee horizon from the question end
@@ -822,20 +822,20 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		// collateral so the migration snapshot never includes fee-backed ETH.
 		securityPool.updateSettlementCollateral();
 		_snapshotEscalationAtFork(securityPool, data, escalationGame, forkTime);
-		uint256 auctionableRepAtForkAttoRep = zoltar.getMigrationRepBalanceAttoRep(
+		uint256 auctionableAttoRepAtFork = zoltar.getMigrationRepBalanceAttoRep(
 			address(migrationProxy),
 			securityPool.universeId()
 		);
 		uint256 forkHaircutAttoRep = forkThresholdAttoRep / zoltar.forkBurnDivisor();
 		uint256 escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep;
-		uint256 vaultRepAtForkAttoRep = auctionableRepAtForkAttoRep - escalationChildRepAtForkAttoRep;
+		uint256 vaultRepAtForkAttoRep = auctionableAttoRepAtFork - escalationChildRepAtForkAttoRep;
 		_initializeOwnForkRepBuckets(
 			securityPool,
 			vaultRepAtForkAttoRep,
 			escalationChildRepAtForkAttoRep,
 			disputeStakedRepToForkAttoRep
 		);
-		data.auctionableRepAtForkAttoRep = auctionableRepAtForkAttoRep;
+		data.auctionableAttoRepAtFork = auctionableAttoRepAtFork;
 		data.settlementCollateralAtForkAttoEth = securityPool.settlementCollateralAttoEth();
 		data.migratedRepAllocatedForSettlementCollateralAttoRep = 0;
 		data.settlementCollateralTransferredAttoEth = 0;
@@ -908,7 +908,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			data,
 			amountAttoRep,
 			newCoverageCommitmentAttoEth,
-			data.truthAuction.totalRepPurchasedAttoRep()
+			data.truthAuction.totalAttoRepPurchased()
 		);
 	}
 

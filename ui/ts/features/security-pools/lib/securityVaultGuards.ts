@@ -15,7 +15,7 @@ export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, 
 
 export function getVaultWithdrawGuardMessage({
 	bufferRequiredEthCost = false,
-	disputeStakedRepAttoRep = 0n,
+	disputeStakedAttoRep = 0n,
 	requiredCostAttoEth,
 	stagedOperationTimeoutMinutes,
 	withdrawAmount,
@@ -23,7 +23,7 @@ export function getVaultWithdrawGuardMessage({
 	walletBalanceAttoEth,
 }: {
 	bufferRequiredEthCost?: boolean | undefined
-	disputeStakedRepAttoRep?: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
 	requiredCostAttoEth: bigint | undefined
 	stagedOperationTimeoutMinutes: bigint | undefined
 	withdrawAmount: bigint | undefined
@@ -32,7 +32,7 @@ export function getVaultWithdrawGuardMessage({
 }) {
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return undefined
-	if (disputeStakedRepAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
+	if (disputeStakedAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
 	if (withdrawableRepAmountAttoRep === undefined || withdrawableRepAmountAttoRep <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmountAttoRep)} REP or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
@@ -77,8 +77,8 @@ export function getVaultSetCoverageCommitmentGuardMessage({
 	return undefined
 }
 
-export function getVaultRedeemRepGuardMessage({ disputeStakedRepAttoRep, redeemableRepAmountAttoRep }: { disputeStakedRepAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined }) {
-	if (disputeStakedRepAttoRep !== undefined && disputeStakedRepAttoRep > 0n) return 'Settle escalation deposits before redeeming REP.'
+export function getVaultRedeemRepGuardMessage({ disputeStakedAttoRep, redeemableRepAmountAttoRep }: { disputeStakedAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined }) {
+	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return 'Settle escalation deposits before redeeming REP.'
 	if (redeemableRepAmountAttoRep === undefined || redeemableRepAmountAttoRep <= 0n) return 'No redeemable REP is available for this vault.'
 	return undefined
 }

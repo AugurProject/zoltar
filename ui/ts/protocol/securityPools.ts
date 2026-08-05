@@ -126,11 +126,11 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'readContract'>,
 		args: [],
 	})
 	if (sameAddress(escalationGameAddress, zeroAddress)) {
-		return vaultAddresses.map(() => ({ disputeStakedRepAttoRep: 0n }))
+		return vaultAddresses.map(() => ({ disputeStakedAttoRep: 0n }))
 	}
 	return await Promise.all(
 		vaultAddresses.map(async vaultAddress => ({
-			disputeStakedRepAttoRep: await client.readContract({
+			disputeStakedAttoRep: await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				functionName: 'disputeStakedRepByVaultAttoRep',
 				address: escalationGameAddress,
@@ -187,7 +187,7 @@ async function loadSecurityPoolVaultSummaries(
 		readRequiredMulticall(client, securityVaultSummaryContracts).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalPoolHeldRepAttoRep',
+			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -207,14 +207,14 @@ async function loadSecurityPoolVaultSummaries(
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
 			const currentEscalationData = escalationVaultData[index]
 			if (currentEscalationData === undefined) throw new Error('Unexpected escalation vault response')
-			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.disputeStakedRepAttoRep === 0n) return []
+			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.disputeStakedAttoRep === 0n) return []
 			const [repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth] = currentVaultData
 			return [
 				{
-					disputeStakedRepAttoRep: currentEscalationData.disputeStakedRepAttoRep,
+					disputeStakedAttoRep: currentEscalationData.disputeStakedAttoRep,
 					repBackingUnits,
 					totalRepBackingUnits,
-					vaultRepBackingAttoRep: getVaultRepBackingAttoRepFromRepBackingUnits({
+					vaultAttoRepBacking: getVaultRepBackingAttoRepFromRepBackingUnits({
 						repBackingUnits,
 						totalRepBackingUnits,
 						totalPoolHeldRepBalanceAttoRep,
@@ -261,7 +261,7 @@ async function loadSecurityPoolDetails(
 ): Promise<ListedSecurityPool> {
 	const { initialReportPriorityFeeAttoEthPerGas, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, statoblastSecurityMultiplierBps, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 	const shouldLoadVaults = shouldLoadSecurityPoolVaults(deployment, options)
-	const [[settlementCollateralAttoEth, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupplyAttoShares, totalPoolHeldRepAttoRep, poolAccountingSnapshot, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
+	const [[settlementCollateralAttoEth, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -313,7 +313,7 @@ async function loadSecurityPoolDetails(
 			},
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'getTotalPoolHeldRepAttoRep',
+				functionName: 'getTotalPoolHeldAttoRep',
 				address: securityPoolAddress,
 				args: [],
 			},
@@ -338,7 +338,7 @@ async function loadSecurityPoolDetails(
 				})
 			: getSecurityPoolVaultCount(client, securityPoolAddress).then(createDeferredSecurityPoolVaultSummary),
 	])
-	const { truthAuctionStartedAt, migratedRepAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
+	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	return {
@@ -349,7 +349,7 @@ async function loadSecurityPoolDetails(
 		forkOwnSecurityPool,
 		hasForkActivity: deriveHasForkActivity({
 			forkOutcome,
-			migratedRepAttoRep,
+			migratedAttoRep,
 			systemState,
 			truthAuctionStartedAt,
 		}),
@@ -358,7 +358,7 @@ async function loadSecurityPoolDetails(
 		lastOracleSettlementTimestamp: lastSettlementTimestamp,
 		managerAddress,
 		marketDetails,
-		migratedRepAttoRep,
+		migratedAttoRep,
 		parent,
 		questionOutcome: getReportingOutcomeKey(questionOutcome),
 		questionId: getQuestionIdHex(questionId),
@@ -366,7 +366,7 @@ async function loadSecurityPoolDetails(
 		securityPoolAddress,
 		shareTokenSupplyAttoShares,
 		systemState,
-		totalPoolHeldRepAttoRep,
+		totalPoolHeldAttoRep,
 		totalCoverageCommitmentAttoEth: poolAccountingSnapshot.totalCoverageCommitmentAttoEth,
 		truthAuctionAddress,
 		truthAuctionStartedAt,
@@ -502,15 +502,15 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldRepAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalCoverageCommitmentAttoEth', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
-		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.disputeStakedRepAttoRep ?? 0n),
+		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
 	])
 
 	const [repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth] = vaultData
-	const vaultRepBackingAttoRep = getVaultRepBackingAttoRepFromRepBackingUnits({
+	const vaultAttoRepBacking = getVaultRepBackingAttoRepFromRepBackingUnits({
 		repBackingUnits,
 		totalRepBackingUnits,
 		totalPoolHeldRepBalanceAttoRep,
@@ -518,10 +518,10 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 
 	return {
 		currentRetentionRate,
-		disputeStakedRepAttoRep: disputeStakedRepByVaultAttoRep,
+		disputeStakedAttoRep: disputeStakedRepByVaultAttoRep,
 		managerAddress,
 		totalRepBackingUnits,
-		vaultRepBackingAttoRep,
+		vaultAttoRepBacking,
 		repToken,
 		coverageCommitmentAttoEth,
 		securityPoolAddress,

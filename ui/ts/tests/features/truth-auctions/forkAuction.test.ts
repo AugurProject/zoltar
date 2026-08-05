@@ -39,15 +39,15 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		clearingPrice: 0n,
 		clearingTick: 0n,
 		bidAtClearingTickAttoEth: 0n,
-		ethRaiseCapAttoEth: 100n * 10n ** 18n,
-		ethRaisedAttoEth: 0n,
+		attoEthRaiseCap: 100n * 10n ** 18n,
+		attoEthRaised: 0n,
 		finalized: false,
 		hitCap: false,
-		maxRepBeingSoldAttoRep: 0n,
+		maxAttoRepBeingSold: 0n,
 		minBidSizeAttoEth: 1n * 10n ** 18n,
-		repPurchasableAtBidAttoRep: 0n,
+		attoRepPurchasableAtBid: 0n,
 		timeRemaining: 10n * 10n ** 18n,
-		totalRepPurchasedAttoRep: 0n,
+		totalAttoRepPurchased: 0n,
 		underfunded: false,
 		underfundedThreshold: undefined,
 		underfundedWinningAttoEth: 0n,
@@ -102,7 +102,7 @@ void describe('fork auction helpers', () => {
 		expect(
 			hasForkActivity({
 				forkOutcome: 'none',
-				migratedRepAttoRep: 0n,
+				migratedAttoRep: 0n,
 				systemState: 'operational',
 				truthAuctionStartedAt: 0n,
 			}),
@@ -111,7 +111,7 @@ void describe('fork auction helpers', () => {
 		expect(
 			hasForkActivity({
 				forkOutcome: 'yes',
-				migratedRepAttoRep: 0n,
+				migratedAttoRep: 0n,
 				systemState: 'operational',
 				truthAuctionStartedAt: 0n,
 			}),
@@ -120,7 +120,7 @@ void describe('fork auction helpers', () => {
 		expect(
 			hasForkActivity({
 				forkOutcome: 'none',
-				migratedRepAttoRep: 0n,
+				migratedAttoRep: 0n,
 				systemState: 'forkMigration',
 				truthAuctionStartedAt: 0n,
 			}),
@@ -132,7 +132,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: false,
 				forkOutcome: 'none',
-				migratedRepAttoRep: 0n,
+				migratedAttoRep: 0n,
 				systemState: 'operational',
 				truthAuction: undefined,
 				truthAuctionStartedAt: 0n,
@@ -143,7 +143,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: false,
 				forkOutcome: 'none',
-				migratedRepAttoRep: 1n,
+				migratedAttoRep: 1n,
 				systemState: 'forkMigration',
 				truthAuction: undefined,
 				truthAuctionStartedAt: 0n,
@@ -154,7 +154,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: false,
 				forkOutcome: 'none',
-				migratedRepAttoRep: 1n,
+				migratedAttoRep: 1n,
 				systemState: 'forkTruthAuction',
 				truthAuction: { finalized: false },
 				truthAuctionStartedAt: 1n,
@@ -165,7 +165,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: false,
 				forkOutcome: 'yes',
-				migratedRepAttoRep: 1n,
+				migratedAttoRep: 1n,
 				systemState: 'operational',
 				truthAuction: undefined,
 				truthAuctionStartedAt: 1n,
@@ -236,7 +236,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: false,
 				forkOutcome: 'none',
-				migratedRepAttoRep: 1n,
+				migratedAttoRep: 1n,
 				systemState: 'forkTruthAuction',
 				truthAuction: { finalized: true },
 				truthAuctionStartedAt: 2n,
@@ -247,7 +247,7 @@ void describe('fork auction helpers', () => {
 			getForkAuctionStageView({
 				claimingAvailable: true,
 				forkOutcome: 'yes',
-				migratedRepAttoRep: 0n,
+				migratedAttoRep: 0n,
 				systemState: 'forkMigration',
 				truthAuction: undefined,
 				truthAuctionStartedAt: 3n,
@@ -429,9 +429,9 @@ void describe('fork auction helpers', () => {
 				clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 				clearingTick: 10n,
 				bidAtClearingTickAttoEth: 4n * ethUnit,
-				ethRaiseCapAttoEth: 10n * ethUnit,
+				attoEthRaiseCap: 10n * ethUnit,
 				hitCap: true,
-				maxRepBeingSoldAttoRep: 100n * ethUnit,
+				maxAttoRepBeingSold: 100n * ethUnit,
 			}),
 			[
 				createTickSummary({ active: true, currentTotalBidAttoEth: 8n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
@@ -441,8 +441,8 @@ void describe('fork auction helpers', () => {
 		)
 
 		expect(progress).toEqual({
-			ethRaisedAttoEth: 10n * ethUnit,
-			repSoldAttoRep: 10n * ethUnit,
+			attoEthRaised: 10n * ethUnit,
+			attoRepSold: 10n * ethUnit,
 		})
 	})
 
@@ -450,16 +450,16 @@ void describe('fork auction helpers', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				ethRaiseCapAttoEth: 100n * ethUnit,
+				attoEthRaiseCap: 100n * ethUnit,
 				hitCap: false,
-				maxRepBeingSoldAttoRep: 4n * ethUnit,
+				maxAttoRepBeingSold: 4n * ethUnit,
 			}),
 			[createTickSummary({ active: true, currentTotalBidAttoEth: 16n * ethUnit, price: 5n * 10n ** 18n, tick: 12n })],
 		)
 
 		expect(progress).toEqual({
-			ethRaisedAttoEth: 16n * ethUnit,
-			repSoldAttoRep: 4n * ethUnit,
+			attoEthRaised: 16n * ethUnit,
+			attoRepSold: 4n * ethUnit,
 		})
 	})
 
@@ -467,16 +467,16 @@ void describe('fork auction helpers', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				ethRaiseCapAttoEth: 100n * ethUnit,
+				attoEthRaiseCap: 100n * ethUnit,
 				hitCap: false,
-				maxRepBeingSoldAttoRep: 10n * ethUnit,
+				maxAttoRepBeingSold: 10n * ethUnit,
 			}),
 			[createTickSummary({ active: true, currentTotalBidAttoEth: 11n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 0n })],
 		)
 
 		expect(progress).toEqual({
-			ethRaisedAttoEth: 0n,
-			repSoldAttoRep: 0n,
+			attoEthRaised: 0n,
+			attoRepSold: 0n,
 		})
 	})
 
@@ -484,10 +484,10 @@ void describe('fork auction helpers', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				ethRaisedAttoEth: 10n * ethUnit,
+				attoEthRaised: 10n * ethUnit,
 				finalized: true,
 				hitCap: false,
-				totalRepPurchasedAttoRep: 4n * ethUnit,
+				totalAttoRepPurchased: 4n * ethUnit,
 				underfunded: true,
 				underfundedWinningAttoEth: 4n * ethUnit,
 			}),
@@ -495,8 +495,8 @@ void describe('fork auction helpers', () => {
 		)
 
 		expect(progress).toEqual({
-			ethRaisedAttoEth: 4n * ethUnit,
-			repSoldAttoRep: 4n * ethUnit,
+			attoEthRaised: 4n * ethUnit,
+			attoRepSold: 4n * ethUnit,
 		})
 	})
 
@@ -504,10 +504,10 @@ void describe('fork auction helpers', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				ethRaisedAttoEth: 10n * ethUnit,
+				attoEthRaised: 10n * ethUnit,
 				finalized: true,
 				hitCap: false,
-				totalRepPurchasedAttoRep: 0n,
+				totalAttoRepPurchased: 0n,
 				underfunded: true,
 				underfundedWinningAttoEth: 0n,
 			}),
@@ -515,8 +515,8 @@ void describe('fork auction helpers', () => {
 		)
 
 		expect(progress).toEqual({
-			ethRaisedAttoEth: 0n,
-			repSoldAttoRep: 0n,
+			attoEthRaised: 0n,
+			attoRepSold: 0n,
 		})
 	})
 
@@ -533,8 +533,8 @@ void describe('fork auction helpers', () => {
 			bidAtClearingTickAttoEth: 2n * ONE_UNIT,
 			finalized: true,
 			hitCap: true,
-			maxRepBeingSoldAttoRep: 100n * ONE_UNIT,
-			totalRepPurchasedAttoRep: 10n * ONE_UNIT,
+			maxAttoRepBeingSold: 100n * ONE_UNIT,
+			totalAttoRepPurchased: 10n * ONE_UNIT,
 		})
 		const refundableBid = createBid({ bidIndex: 1n, tick: 9n })
 		const winningBid = createBid({ bidIndex: 2n, tick: 11n })
@@ -587,7 +587,7 @@ void describe('fork auction helpers', () => {
 			bidAtClearingTickAttoEth: ONE_UNIT + HALF_UNIT,
 			finalized: true,
 			hitCap: true,
-			totalRepPurchasedAttoRep: 4n * ONE_UNIT,
+			totalAttoRepPurchased: 4n * ONE_UNIT,
 		})
 		const partialBid = createBid({
 			activeCumulativeBidBeforeAttoEth: ONE_UNIT,
@@ -605,10 +605,10 @@ void describe('fork auction helpers', () => {
 
 	void test('estimates underfunded winning settlement amounts from the synthetic clearing price winner set', () => {
 		const underfundedAuction = createTruthAuction({
-			ethRaisedAttoEth: 4n * ONE_UNIT,
+			attoEthRaised: 4n * ONE_UNIT,
 			finalized: true,
-			maxRepBeingSoldAttoRep: 8n * ONE_UNIT,
-			totalRepPurchasedAttoRep: 8n * ONE_UNIT,
+			maxAttoRepBeingSold: 8n * ONE_UNIT,
+			totalAttoRepPurchased: 8n * ONE_UNIT,
 			underfunded: true,
 			underfundedThreshold: HALF_UNIT,
 			underfundedWinningAttoEth: 4n * ONE_UNIT,
@@ -628,10 +628,10 @@ void describe('fork auction helpers', () => {
 
 	void test('returns concrete selected claim estimates for underfunded winners when losing bids remain in the auction', () => {
 		const underfundedAuction = createTruthAuction({
-			ethRaisedAttoEth: 4n * ONE_UNIT,
+			attoEthRaised: 4n * ONE_UNIT,
 			finalized: true,
-			maxRepBeingSoldAttoRep: 8n * ONE_UNIT,
-			totalRepPurchasedAttoRep: 8n * ONE_UNIT,
+			maxAttoRepBeingSold: 8n * ONE_UNIT,
+			totalAttoRepPurchased: 8n * ONE_UNIT,
 			underfunded: true,
 			underfundedThreshold: HALF_UNIT,
 			underfundedWinningAttoEth: 4n * ONE_UNIT,
@@ -686,10 +686,10 @@ void describe('fork auction helpers', () => {
 	void test('carries underfunded pro-rata remainder across selected winning rows', () => {
 		const underfundedAuction = createTruthAuction({
 			clearingTick: 0n,
-			ethRaisedAttoEth: 3n * ONE_UNIT,
+			attoEthRaised: 3n * ONE_UNIT,
 			finalized: true,
-			maxRepBeingSoldAttoRep: 10n,
-			totalRepPurchasedAttoRep: 10n,
+			maxAttoRepBeingSold: 10n,
+			totalAttoRepPurchased: 10n,
 			underfunded: true,
 			underfundedThreshold: HALF_UNIT,
 			underfundedWinningAttoEth: 3n * ONE_UNIT,
@@ -716,10 +716,10 @@ void describe('fork auction helpers', () => {
 	void test('treats finalized underfunded auctions with no winning prefix as refundable, even at tick 0', () => {
 		const underfundedAuction = createTruthAuction({
 			clearingTick: 0n,
-			ethRaisedAttoEth: ONE_UNIT,
+			attoEthRaised: ONE_UNIT,
 			finalized: true,
-			maxRepBeingSoldAttoRep: 8n * ONE_UNIT,
-			totalRepPurchasedAttoRep: 0n,
+			maxAttoRepBeingSold: 8n * ONE_UNIT,
+			totalAttoRepPurchased: 0n,
 			underfunded: true,
 			underfundedThreshold: HALF_UNIT,
 			underfundedWinningAttoEth: 0n,
@@ -753,11 +753,11 @@ void describe('fork auction helpers', () => {
 			clearingPrice: getTruthAuctionPriceAtTick(10n),
 			clearingTick: 10n,
 			bidAtClearingTickAttoEth: ONE_UNIT,
-			ethRaisedAttoEth: 4n * ONE_UNIT,
+			attoEthRaised: 4n * ONE_UNIT,
 			finalized: true,
 			hitCap: true,
-			maxRepBeingSoldAttoRep: 4n * ONE_UNIT,
-			totalRepPurchasedAttoRep: 4n * ONE_UNIT,
+			maxAttoRepBeingSold: 4n * ONE_UNIT,
+			totalAttoRepPurchased: 4n * ONE_UNIT,
 		})
 		const excludedLowerTick = 9n
 
@@ -790,7 +790,7 @@ void describe('fork auction helpers', () => {
 			bidAtClearingTickAttoEth: ONE_UNIT + HALF_UNIT,
 			finalized: true,
 			hitCap: true,
-			totalRepPurchasedAttoRep: 4n * ONE_UNIT,
+			totalAttoRepPurchased: 4n * ONE_UNIT,
 		})
 		const settlementRows = getTruthAuctionSettlementBidRows({
 			accountAddress: walletAddress,
@@ -826,7 +826,7 @@ void describe('fork auction helpers', () => {
 			clearingTick: 10n,
 			finalized: true,
 			hitCap: true,
-			totalRepPurchasedAttoRep: 4n * ONE_UNIT,
+			totalAttoRepPurchased: 4n * ONE_UNIT,
 		})
 		const settlementRows = getTruthAuctionSettlementBidRows({
 			accountAddress: walletAddress,

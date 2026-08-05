@@ -38,7 +38,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		QuestionOutcome,
 		SystemState,
 		createChildUniverse,
-		getMigratedRepAttoRep,
+		getMigratedAttoRep,
 		getForkedEscrowChildRepByOutcomeAndVault,
 		getOwnForkRepBuckets,
 		getQuestionOutcome,
@@ -666,9 +666,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		// Verify the own-game fork left the parent pool fully initialized for migration
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		assert.ok(forkData.auctionableRepAtForkAttoRep > 0n, 'rep at fork should stay positive after the own-game fork')
-		assert.ok(forkData.auctionableRepAtForkAttoRep <= repBalanceInGenesisPool + forkThresholdAttoRep * 2n, 'rep at fork should stay bounded by the REP that actually participated in the own-game fork')
-		strictEqualTypeSafe(forkData.migratedRepAttoRep, 0n, 'migrated rep should be 0 so far')
+		assert.ok(forkData.auctionableAttoRepAtFork > 0n, 'rep at fork should stay positive after the own-game fork')
+		assert.ok(forkData.auctionableAttoRepAtFork <= repBalanceInGenesisPool + forkThresholdAttoRep * 2n, 'rep at fork should stay bounded by the REP that actually participated in the own-game fork')
+		strictEqualTypeSafe(forkData.migratedAttoRep, 0n, 'migrated rep should be 0 so far')
 		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 
 		// Step 2: Call migrateRepToZoltar separately for each outcome
@@ -738,8 +738,8 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		const vaultRepNeeded = vaultRepAttoRep < 2n * forkThresholdAttoRep ? 2n * forkThresholdAttoRep - vaultRepAttoRep : 0n
+		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		const vaultRepNeeded = vaultAttoRep < 2n * forkThresholdAttoRep ? 2n * forkThresholdAttoRep - vaultAttoRep : 0n
 		if (vaultRepNeeded > 0n) {
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRepToVault(client, securityPoolAddresses.securityPool, vaultRepNeeded)
@@ -759,7 +759,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		assert.ok(yesChildDenominator > 0n, 'own-fork child denominator should be initialized when vault REP at fork is zero')
 		strictEqualTypeSafe(yesChildVault.repBackingUnits, 0n, 'own-fork escalation claim should not credit child backingUnits')
 		const parentVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		assert.ok(parentVaultAfter.disputeStakedRepAttoRep < parentVaultBefore.disputeStakedRepAttoRep, 'unresolved escalation migration should clear parent vault escalation position')
+		assert.ok(parentVaultAfter.disputeStakedAttoRep < parentVaultBefore.disputeStakedAttoRep, 'unresolved escalation migration should clear parent vault escalation position')
 		if (ownForkRepBuckets.vaultRepAtForkAttoRep === 0n) {
 			assert.strictEqual(parentVaultAfter.repBackingUnits, 0n, 'all vault REP was in escalation so parent backingUnits should stay zero')
 		}
@@ -770,14 +770,14 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		const vaultRepNeeded = vaultRepAttoRep < 2n * forkThresholdAttoRep ? 2n * forkThresholdAttoRep - vaultRepAttoRep : 0n
+		let vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		const vaultRepNeeded = vaultAttoRep < 2n * forkThresholdAttoRep ? 2n * forkThresholdAttoRep - vaultAttoRep : 0n
 		if (vaultRepNeeded > 0n) {
 			await approveAndDepositRepToVault(client, vaultRepNeeded, questionId)
 			vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+			vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		}
-		const halfVaultRep = vaultRepAttoRep / 2n
+		const halfVaultRep = vaultAttoRep / 2n
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, halfVaultRep)
 		const vaultAfterFirstDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepRemaining = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterFirstDeposit.repBackingUnits)
@@ -876,14 +876,14 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		const vaultRepNeeded = vaultRepAttoRep < 4n * forkThresholdAttoRep ? 4n * forkThresholdAttoRep - vaultRepAttoRep : 0n
+		let vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		const vaultRepNeeded = vaultAttoRep < 4n * forkThresholdAttoRep ? 4n * forkThresholdAttoRep - vaultAttoRep : 0n
 		if (vaultRepNeeded > 0n) {
 			await approveAndDepositRepToVault(client, vaultRepNeeded, questionId)
 			vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+			vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		}
-		assert.ok(vaultRepAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the unresolved escalation deposit')
+		assert.ok(vaultAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the unresolved escalation deposit')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
@@ -897,9 +897,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const parentForkBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		const parentBackingUnitsDenominator = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 		const expectedMigratedPoolHeldRepBackingUnits = parentBackingUnitsDenominator === 0n ? 0n : (parentVaultBeforeMigration.repBackingUnits * parentForkBuckets.vaultRepAtForkAttoRep) / parentBackingUnitsDenominator
-		const migratedRepBefore = await getMigratedRepAttoRep(client, yesChildPool)
+		const migratedRepBefore = await getMigratedAttoRep(client, yesChildPool)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		const migratedRepAfter = await getMigratedRepAttoRep(client, yesChildPool)
+		const migratedRepAfter = await getMigratedAttoRep(client, yesChildPool)
 		const childEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
 		strictEqualTypeSafe(migratedRepAfter - migratedRepBefore, expectedMigratedPoolHeldRepBackingUnits, 'own-fork unresolved migration should count only pool-held vault REP backing as migrated REP')
 		strictEqualTypeSafe(childEscrow, 0n, 'optional vault migration should not create per-vault child escalation escrow')
@@ -910,8 +910,8 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		if (vaultRepAttoRep < 4n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 4n * forkThresholdAttoRep - vaultRepAttoRep, questionId)
+		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		if (vaultAttoRep < 4n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 4n * forkThresholdAttoRep - vaultAttoRep, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -988,7 +988,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const migratedEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.No, client.account.address)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(migratedEscrow, 0n, 'optional vault cleanup should not duplicate aggregate child backing')
-		strictEqualTypeSafe(parentVault.disputeStakedRepAttoRep, 0n, 'optional vault cleanup should clear remaining parent dispute-staked REP accounting after a direct claim')
+		strictEqualTypeSafe(parentVault.disputeStakedAttoRep, 0n, 'optional vault cleanup should clear remaining parent dispute-staked REP accounting after a direct claim')
 	})
 
 	test('own-fork claim plus unresolved migration partitions the source escrow without replaying the claimed side', async () => {
@@ -996,14 +996,14 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		const vaultRepNeeded = vaultRepAttoRep < 4n * forkThresholdAttoRep ? 4n * forkThresholdAttoRep - vaultRepAttoRep : 0n
+		let vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		const vaultRepNeeded = vaultAttoRep < 4n * forkThresholdAttoRep ? 4n * forkThresholdAttoRep - vaultAttoRep : 0n
 		if (vaultRepNeeded > 0n) {
 			await approveAndDepositRepToVault(client, vaultRepNeeded, questionId)
 			vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+			vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		}
-		assert.ok(vaultRepAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the controlled own-fork deposits')
+		assert.ok(vaultAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the controlled own-fork deposits')
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -1066,7 +1066,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		assert.ok(claimLog.args.sourceRepClaimedAttoRep > forkThresholdAttoRep, 'the winning claim should pay out more than principal when it consumes the losing-side escrow')
 		strictEqualTypeSafe(childYesEscrowState[3], childYesEscrow, 'the direct yes-side claim should leave its child escrow history fully claimed')
 		strictEqualTypeSafe(childNoEscrow, 0n, 'the remaining no-side deposit should remain represented only by aggregate carry backing')
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'mixed own-fork claim and unresolved migration should clear the parent vault escalation lock')
+		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'mixed own-fork claim and unresolved migration should clear the parent vault escalation lock')
 	})
 
 	test('optional own-fork vault cleanup allows arbitrary vault order without preparation', async () => {
@@ -1095,8 +1095,8 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const attackerParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 		strictEqualTypeSafe(clientEscrow, 0n, 'client cleanup should not create per-vault child escrow')
 		strictEqualTypeSafe(attackerEscrow, 0n, 'attacker cleanup should not create per-vault child escrow')
-		strictEqualTypeSafe(clientParentVault.disputeStakedRepAttoRep, 0n, 'client cleanup should clear its parent dispute-staked REP accounting')
-		strictEqualTypeSafe(attackerParentVault.disputeStakedRepAttoRep, 0n, 'attacker cleanup should clear its parent dispute-staked REP accounting')
+		strictEqualTypeSafe(clientParentVault.disputeStakedAttoRep, 0n, 'client cleanup should clear its parent dispute-staked REP accounting')
+		strictEqualTypeSafe(attackerParentVault.disputeStakedAttoRep, 0n, 'attacker cleanup should clear its parent dispute-staked REP accounting')
 	})
 
 	test('optional own-fork vault cleanup works for the invalid child branch without preparation', async () => {

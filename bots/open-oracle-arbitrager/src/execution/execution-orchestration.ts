@@ -72,9 +72,9 @@ export function lifecycleAllowanceMismatch(allowances: { token1: bigint; token2:
 	return undefined
 }
 
-export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedWethAttoEth: bigint; holderToken: bigint; holderWethAttoEth: bigint; willSettle: boolean }) {
+export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedAttoWeth: bigint; holderToken: bigint; holderAttoWeth: bigint; willSettle: boolean }) {
 	if (!parameters.currentReporter) return 'Position was replaced; exact returned assets require manual reconciliation'
-	if (!parameters.willSettle && (parameters.holderWethAttoEth <= parameters.expectedWethAttoEth || parameters.holderToken <= parameters.expectedToken)) {
+	if (!parameters.willSettle && (parameters.holderAttoWeth <= parameters.expectedAttoWeth || parameters.holderToken <= parameters.expectedToken)) {
 		return 'Position does not have its exact withdrawable OpenOracle balances'
 	}
 	return undefined

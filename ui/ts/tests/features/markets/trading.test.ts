@@ -212,7 +212,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n,
 			}),
 		).toBe('Connect a wallet before minting complete sets.')
@@ -226,7 +226,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n,
 			}),
 		).toBe('Select a pool before minting.')
@@ -240,7 +240,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: false,
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
@@ -256,7 +256,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: undefined,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n,
 			}),
 		).toBe('Loading mint capacity.')
@@ -270,7 +270,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: 10n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n,
 			}),
 		).toBe('No mint capacity remaining.')
@@ -284,7 +284,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				feeEligibleCoverageCommitmentAttoEth: 0n,
 			}),
 		).toBe('No mint capacity. No active coverage commitment.')
@@ -298,7 +298,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: 'abc',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a valid mint amount.')
@@ -312,7 +312,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '0',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a mint amount greater than zero.')
@@ -326,7 +326,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '0.3',
 				shareTokenSupplyAttoShares: 10n ** 18n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
 			}),
 		).toBe('Max mint capacity is 0.2 ETH.')
@@ -340,7 +340,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
@@ -356,7 +356,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
@@ -372,7 +372,7 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 				mintAmountInput: '0.5',
 				shareTokenSupplyAttoShares: 10n ** 18n,
-				totalPoolHeldRepAttoRep: 0n,
+				totalPoolHeldAttoRep: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBeUndefined()

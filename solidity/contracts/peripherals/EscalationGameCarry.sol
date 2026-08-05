@@ -111,10 +111,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function isForkCarryFundingComplete() public view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
-		uint256 requiredRepAttoRep;
+		uint256 requiredAttoRep;
 		uint256 requiredRepAtForkAttoRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			requiredRepAttoRep +=
+			requiredAttoRep +=
 				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) +
 				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
 			requiredRepAtForkAttoRep +=
@@ -130,11 +130,11 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 				requiredRepAtForkAttoRep - requiredRepAtForkAttoRep / Constants.MINIMUM_FORK_BURN_DIVISOR;
 			if (forkCarryInitialBackingAttoRep < minimumBackingAttoRep) return false;
 			if (forkCarryBackingExportedBeforeResumeAttoRep > forkCarryInitialBackingAttoRep) return false;
-			requiredRepAttoRep = _applyTruthAuctionRetention(
+			requiredAttoRep = _applyTruthAuctionRetention(
 				forkCarryInitialBackingAttoRep - forkCarryBackingExportedBeforeResumeAttoRep
 			);
 		}
-		return repToken.balanceOf(address(this)) >= requiredRepAttoRep;
+		return repToken.balanceOf(address(this)) >= requiredAttoRep;
 	}
 
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
@@ -242,9 +242,9 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		// Continuations receive aggregate backing rather than per-vault bundles.
 		// Keep that inherited backing auctionable even though no local deposit
 		// initialized the ordinary escrow-accounting registry.
-		if (totalDisputeStakedRepAttoRep == 0) {
-			forkCarryDisputeStakedRepAttoRep = forkCarryInitialBackingAttoRep;
-			totalDisputeStakedRepAttoRep = forkCarryInitialBackingAttoRep;
+		if (totalDisputeStakedAttoRep == 0) {
+			forkCarryDisputeStakedAttoRep = forkCarryInitialBackingAttoRep;
+			totalDisputeStakedAttoRep = forkCarryInitialBackingAttoRep;
 		}
 		forkCarrySnapshotRequiresForkedEscrow = totalCarryAttoRep > 0;
 		if (proofVerifier.hasReachedNonDecision(snapshotResolutionBalancesAttoRep, nonDecisionThresholdAttoRep)) {

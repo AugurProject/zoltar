@@ -77,7 +77,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: undefined,
 				selectedPool: {
 					forkOutcome: 'yes',
-					migratedRepAttoRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkMigration',
 					truthAuctionStartedAt: 0n,
 				},
@@ -89,7 +89,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRepAttoRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -103,7 +103,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: true,
 					forkOutcome: 'yes',
-					migratedRepAttoRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'operational',
 					truthAuction: {
 						finalized: true,
@@ -118,7 +118,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRepAttoRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -190,7 +190,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					hasForkActivity: true,
-					migratedRepAttoRep: 5n,
+					migratedAttoRep: 5n,
 					truthAuction: {
 						finalized: false,
 					},
@@ -227,7 +227,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRepAttoRep: 5n,
+					migratedAttoRep: 5n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -235,7 +235,7 @@ void describe('selected pool workflow lookup state', () => {
 				selectedPool: {
 					forkOutcome: 'yes',
 					hasForkActivity: true,
-					migratedRepAttoRep: 5n,
+					migratedAttoRep: 5n,
 					systemState: 'operational',
 					truthAuctionStartedAt: 10n,
 				},
@@ -249,7 +249,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'none',
-					migratedRepAttoRep: 0n,
+					migratedAttoRep: 0n,
 					systemState: 'operational',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 0n,
@@ -295,7 +295,7 @@ void describe('selected pool workflow lookup state', () => {
 					universeId: 1n,
 					viewerPoolHeldVaultRepBackingAttoRep: 0n,
 					viewerVaultExists: false,
-					viewerVaultDisputeStakedRepAttoRep: 0n,
+					viewerVaultDisputeStakedAttoRep: 0n,
 					viewerVaultRepBackingAttoRep: 0n,
 					activationTime: 1n,
 					bindingCapital: 1n,
@@ -352,7 +352,7 @@ void describe('selected pool workflow lookup state', () => {
 					universeId: 1n,
 					viewerPoolHeldVaultRepBackingAttoRep: 0n,
 					viewerVaultExists: false,
-					viewerVaultDisputeStakedRepAttoRep: 0n,
+					viewerVaultDisputeStakedAttoRep: 0n,
 					viewerVaultRepBackingAttoRep: 0n,
 					activationTime: 1n,
 					bindingCapital: 1n,

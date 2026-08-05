@@ -108,8 +108,8 @@ export function ZoltarMigrationSection({
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
 	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
 	const missingPreparationAmount = hasValidAmount && migrationAmount !== undefined ? getMissingPreparationAmount(migrationAmount, zoltarMigrationPreparedRepBalanceAttoRep) : 0n
-	const totalAvailableRepAttoRep = (zoltarMigrationPreparedRepBalanceAttoRep ?? 0n) + (zoltarForkRepBalanceAttoRep ?? 0n)
-	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalAvailableRepAttoRep
+	const totalAvailableAttoRep = (zoltarMigrationPreparedRepBalanceAttoRep ?? 0n) + (zoltarForkRepBalanceAttoRep ?? 0n)
+	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalAvailableAttoRep
 	const hasEnoughRep = hasValidAmount && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= missingPreparationAmount
 	const hasPreparedBalance = hasValidAmount && zoltarMigrationPreparedRepBalanceAttoRep !== undefined && zoltarMigrationPreparedRepBalanceAttoRep >= migrationAmount
 	const approvalRequirement = deriveTokenApprovalRequirement(missingPreparationAmount, zoltarForkApproval.value)
@@ -180,7 +180,7 @@ export function ZoltarMigrationSection({
 		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
-		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableRepAttoRep), formatCurrencyBalance(zoltarMigrationPreparedRepBalanceAttoRep ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))
+		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableAttoRep), formatCurrencyBalance(zoltarMigrationPreparedRepBalanceAttoRep ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()

@@ -13,8 +13,8 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 	event AuctionStarted(
 		uint256 startTimestamp,
 		uint256 endTimestamp,
-		uint256 ethRaiseCapAttoEth,
-		uint256 maxRepBeingSoldAttoRep,
+		uint256 attoEthRaiseCap,
+		uint256 maxAttoRepBeingSold,
 		uint256 minBidSizeAttoEth
 	);
 	/// @notice Stable per-tick bid identity and the resulting FIFO cumulative ETH position. ETH values use attoETH.
@@ -31,7 +31,7 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 	event AuctionFinalized(
 		int256 indexed clearingTick,
 		uint256 grossAcceptedAttoEth,
-		uint256 repSoldAttoRep,
+		uint256 attoRepSold,
 		uint256 bidAtClearingTickAttoEth,
 		bool funded
 	);
@@ -43,7 +43,7 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 		uint256 indexed bidIndex,
 		uint256 originalBidAmountAttoEth,
 		uint256 bidUsedAttoEth,
-		uint256 repFilledAttoRep,
+		uint256 attoRepFilled,
 		uint256 refundAttoEth,
 		BidSettlementStatus status
 	);
@@ -86,20 +86,20 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 
 	function owner() external view returns (address);
 
-	function maxRepBeingSoldAttoRep() external view returns (uint256);
-	function ethRaiseCapAttoEth() external view returns (uint256);
+	function maxAttoRepBeingSold() external view returns (uint256);
+	function attoEthRaiseCap() external view returns (uint256);
 	function pendingEthRefundsAttoEth(address bidder) external view returns (uint256);
 
 	function finalized() external view returns (bool);
 	function clearingTick() external view returns (int256);
 	function ethFilledAtClearingAttoEth() external view returns (uint256);
-	function ethRaisedAttoEth() external view returns (uint256);
-	function totalRepPurchasedAttoRep() external view returns (uint256);
+	function attoEthRaised() external view returns (uint256);
+	function totalAttoRepPurchased() external view returns (uint256);
 
 	function auctionStarted() external view returns (uint256);
 	function minBidSizeAttoEth() external view returns (uint256);
 
-	function startAuction(uint256 ethRaiseCapAttoEth, uint256 maxRepBeingSoldAttoRep) external;
+	function startAuction(uint256 attoEthRaiseCap, uint256 maxAttoRepBeingSold) external;
 
 	function submitBid(int256 tick) external payable;
 
@@ -115,7 +115,7 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 		address withdrawFor,
 		TickIndex[] calldata tickIndices,
 		uint256 proRataTotal
-	) external returns (uint256 totalFilledRepAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation);
+	) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation);
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 

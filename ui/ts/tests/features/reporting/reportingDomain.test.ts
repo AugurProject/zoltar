@@ -25,10 +25,10 @@ import {
 } from '../../../features/reporting/lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails, ReportingOutcomeKey } from '../../../types/contracts.js'
 
-const ATTO_REP_PER_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 
 function rep(value: bigint) {
-	return value * ATTO_REP_PER_REP
+	return value * ATTO_REP
 }
 
 function createMarketDetails(): MarketDetails {
@@ -76,10 +76,10 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 1n * ATTO_REP_PER_REP,
-		viewerVaultRepBackingAttoRep: 11n * ATTO_REP_PER_REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -99,10 +99,10 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 0n,
-		viewerVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
+		viewerVaultDisputeStakedAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -143,10 +143,10 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 1n * ATTO_REP_PER_REP,
-		viewerVaultRepBackingAttoRep: 11n * ATTO_REP_PER_REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 	}
 
 	return {

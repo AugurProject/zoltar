@@ -192,27 +192,27 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	},
 	{
 		name: 'ChildRepSplit',
-		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,uint256 childPoolRepSplitAttoRep,uint256 pendingChildRepAttoRep',
+		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,uint256 childPoolRepSplitAttoRep,uint256 pendingChildAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	},
 	{
 		name: 'ChildDisputeStakedRepMaterialized',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 repAmountAttoRep,uint256 resultingDisputeStakedRepBalanceAttoRep',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 attoRepAmount,uint256 resultingDisputeStakedRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
 		name: 'PoolHeldRepSweptToChild',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 repAmountAttoRep,uint256 resultingChildPoolHeldRepBalanceAttoRep',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 attoRepAmount,uint256 resultingChildPoolHeldRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
 		name: 'EscalationMigrationEntitlementInitialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] currentRepByOutcomeAttoRep,uint256 totalCurrentRepAttoRep',
+		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] currentRepByOutcomeAttoRep,uint256 totalCurrentAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	},
 	{
 		name: 'EscalationMigrationEntitlementMaterialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256 indexed childOutcomeIndex,ISecurityPool child,uint256 childRepAttoRep',
+		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256 indexed childOutcomeIndex,ISecurityPool child,uint256 childAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	},
 	{ name: 'TheoreticalSupplySet', parameters: 'uint256 totalTheoreticalSupplyAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
@@ -240,12 +240,12 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	{ name: 'SystemStateSet', parameters: 'SystemState systemState', sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol' },
 	{
 		name: 'VaultEscrowUpdated',
-		parameters: 'address indexed vault,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedRepAttoRep',
+		parameters: 'address indexed vault,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
 		name: 'ForkedEscrowRecorded',
-		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalTotalAttoRep,uint256 childRepTotalAttoRep,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedRepAttoRep,uint256 outcomeBalanceAttoRep',
+		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalTotalAttoRep,uint256 childRepTotalAttoRep,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedAttoRep,uint256 outcomeBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
@@ -318,7 +318,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 			{ argument: 'sourceGame', offset: '0x44' },
 			{ argument: 'totalPoolHeldRepAtForkAttoRep', offset: '0x64' },
 			{ argument: 'disputeStakedRepAtForkAttoRep', offset: '0x84' },
-			{ argument: 'resultingLockedRepAttoRep', offset: '0xa4' },
+			{ argument: 'resultingLockedAttoRep', offset: '0xa4' },
 		],
 		calldataLength: '0xc4',
 		selector: '0x408d33da',
@@ -698,7 +698,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
 		readAbiFingerprint: '09ad16859e7cc7f00a27a03e5fcd02ec6abb509d724ce92ee855f89fdb743119',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalCoverageCommitmentAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebtAttoEth`, `vaultBadDebtAttoEth`, and `systemState`. Bad-debt getters are cumulative audit totals; active coverage commitment excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `attoRepToBackingUnitsRoundUp`, `backingUnitsToAttoRep`, `getTotalPoolHeldRepAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalCoverageCommitmentAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebtAttoEth`, `vaultBadDebtAttoEth`, and `systemState`. Bad-debt getters are cumulative audit totals; active coverage commitment excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `attoRepToBackingUnitsRoundUp`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
 			'Price-sensitive withdrawal, coverage-commitment, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -712,7 +712,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'attoRepToBackingUnits' },
 			{ name: 'attoRepToBackingUnitsRoundUp' },
 			{ name: 'backingUnitsToAttoRep' },
-			{ name: 'getTotalPoolHeldRepAttoRep' },
+			{ name: 'getTotalPoolHeldAttoRep' },
 			{ name: 'totalAccruedFeesAttoEth' },
 			{ name: 'getPoolAccountingSnapshot' },
 			{ name: 'getVaultFeeRemainder' },
@@ -760,7 +760,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`RepBurned` and ERC-20 `Transfer`; child REP also emits `Burn`',
 			},
 			{
-				call: '`depositRepToVault(repAmountAttoRep)`',
+				call: '`depositRepToVault(attoRepAmount)`',
 				caller: 'Vault owner',
 				effect: 'Transfers REP into the pool and credits proportional REP backing units.',
 				declarations: [{ name: 'depositRepToVault' }],
@@ -863,7 +863,7 @@ const contractReferences: ContractReference[] = [
 				signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
 			},
 			{
-				call: '`withdrawRepFromVault(vault, repAmountAttoRep)`',
+				call: '`withdrawRepFromVault(vault, attoRepAmount)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum, and transfers the resulting withdrawable REP to `vault`.',
 				declarations: [{ name: 'withdrawRepFromVault' }],
@@ -1018,10 +1018,10 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
 		readAbiFingerprint: '082be6acbff6fabaa8fa5095520eba0eee9592a06e5aebcf188acb0d5ab5a7c4',
 		readSurface:
-			'Use `zoltar`, `forkData`, `getMigratedRepAttoRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
+			'Use `zoltar`, `forkData`, `getMigratedAttoRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
 		readDeclarations: [
 			{ name: 'forkData' },
-			{ name: 'getMigratedRepAttoRep' },
+			{ name: 'getMigratedAttoRep' },
 			{ name: 'getForkActivationTime' },
 			{ name: 'isEscalationDepositClaimedDirectly' },
 			{ name: 'getEscalationDepositId' },
@@ -1166,7 +1166,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
 		readAbiFingerprint: 'b8cd990d54c5264a4fd6f231ec0099abbb82a1e9371eef8fd760c59cef08a5c2',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedRepAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'disputeStakedRepByVaultAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
@@ -1207,7 +1207,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'forkElapsedAtStart', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkResumedAt', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'nodes', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'totalDisputeStakedRepAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'totalDisputeStakedAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'truthAuctionRepBeforeAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'truthAuctionRepRemainingAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'cumulativeClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
@@ -1433,7 +1433,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`StagedOperationQueued` immediately followed by `StagedOperationDisputeStakedRepSnapshotted`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
-				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialWethAttoEth)` with report funding',
+				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)` with report funding',
 				caller: 'Anyone when no fresh price or report is pending',
 				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation, then refunds any positive excess ETH through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [{ name: 'requestPrice' }],
@@ -1595,7 +1595,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
 		readAbiFingerprint: '123d0aeae2b419804e4217a211d197aa9f52faabc0be53a5956298e3004504e3',
 		readSurface:
-			'Auction summary getters are `maxRepBeingSoldAttoRep`, `ethRaiseCapAttoEth`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `ethRaisedAttoEth`, `totalRepPurchasedAttoRep`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
+			'Auction summary getters are `maxAttoRepBeingSold`, `attoEthRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `attoEthRaised`, `totalAttoRepPurchased`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
 		readDeclarations: [
 			{ name: 'computeClearing' },
 			{ name: 'previewFinalization' },
@@ -1610,13 +1610,13 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getBidderBidPage' },
 		],
 		readStorageDeclarations: [
-			{ name: 'maxRepBeingSoldAttoRep' },
-			{ name: 'ethRaiseCapAttoEth' },
+			{ name: 'maxAttoRepBeingSold' },
+			{ name: 'attoEthRaiseCap' },
 			{ name: 'finalized' },
 			{ name: 'clearingTick' },
 			{ name: 'ethFilledAtClearingAttoEth' },
-			{ name: 'ethRaisedAttoEth' },
-			{ name: 'totalRepPurchasedAttoRep' },
+			{ name: 'attoEthRaised' },
+			{ name: 'totalAttoRepPurchased' },
 			{ name: 'auctionStarted' },
 			{ name: 'minBidSizeAttoEth' },
 			{ name: 'owner' },
@@ -1629,7 +1629,7 @@ const contractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
 			{
-				call: '`startAuction(ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)`',
+				call: '`startAuction(attoEthRaiseCap, maxAttoRepBeingSold)`',
 				caller: 'Auction owner (`SecurityPoolForker`) only',
 				effect: 'Starts the one-week auction and fixes its two caps and minimum bid.',
 				declarations: [{ name: 'startAuction' }],
@@ -2229,7 +2229,7 @@ function assertDeclarationCheckerRegression(): void {
 			address sourceGame,
 			uint256 totalPoolHeldRepAtForkAttoRep,
 			uint256 disputeStakedRepAtForkAttoRep,
-			uint256 resultingLockedRepAttoRep
+			uint256 resultingLockedAttoRep
 		) external payable {}
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
@@ -2239,7 +2239,7 @@ function assertDeclarationCheckerRegression(): void {
 			mstore(add(pointer, 0x44), sourceGame)
 			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
 			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
-			mstore(add(pointer, 0xa4), resultingLockedRepAttoRep)
+			mstore(add(pointer, 0xa4), resultingLockedAttoRep)
 			delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)
 		}
 	`
@@ -2247,9 +2247,9 @@ function assertDeclarationCheckerRegression(): void {
 	if (assemblyDelegateCallMetadata === undefined) throw new Error('Expected assembly delegate-call metadata')
 	assert.doesNotThrow(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture, assemblyDelegateCallMetadata))
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0x408d33da', '0x408d33db'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /hard-coded selector for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0xa4), resultingLockedRepAttoRep', '0xa4), otherRep'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata argument resultingLockedRepAttoRep for emitForkSnapshotEvents changed/)
+	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0xa4), resultingLockedAttoRep', '0xa4), otherRep'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata argument resultingLockedAttoRep for emitForkSnapshotEvents changed/)
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('pointer, 0xc4', 'pointer, 0xa4'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata length or target for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('uint256 resultingLockedRepAttoRep', 'address resultingLockedRepAttoRep'), assemblyDelegateCallMetadata), /entrypoint signatures for emitForkSnapshotEvents changed/)
+	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('uint256 resultingLockedAttoRep', 'address resultingLockedAttoRep'), assemblyDelegateCallMetadata), /entrypoint signatures for emitForkSnapshotEvents changed/)
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('external payable', 'external'), assemblyDelegateCallMetadata), /emitForkSnapshotEvents must remain payable/)
 	assert.deepEqual(getPublicStateChangingDeclarationNames('function mutate(uint256 value) external returns (uint256) { return value; }\nfunction inspect() public view returns (uint256) { return 1; }\nreceive() external payable {}'), ['mutate', 'receive'])
 	assert.notEqual(computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external payable {}')), computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external {}')))

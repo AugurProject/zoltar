@@ -5,15 +5,15 @@ import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 const MIN_COVERAGE_COMMITMENT_ATTO_ETH = 1n * 10n ** 18n
 const MIN_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 
-function isVaultLiquidatable(lastPrice: bigint | undefined, coverageCommitmentAttoEth: bigint | undefined, vaultRepBackingAttoRep: bigint | undefined, disputeStakedRepAttoRep: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (lastPrice === undefined || coverageCommitmentAttoEth === undefined || vaultRepBackingAttoRep === undefined || statoblastSecurityMultiplierBps === undefined) return false
-	const effectiveDisputeStakedRepAttoRep = disputeStakedRepAttoRep ?? 0n
+function isVaultLiquidatable(lastPrice: bigint | undefined, coverageCommitmentAttoEth: bigint | undefined, vaultAttoRepBacking: bigint | undefined, disputeStakedAttoRep: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+	if (lastPrice === undefined || coverageCommitmentAttoEth === undefined || vaultAttoRepBacking === undefined || statoblastSecurityMultiplierBps === undefined) return false
+	const effectiveDisputeStakedAttoRep = disputeStakedAttoRep ?? 0n
 	const valueScale = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
-	const poolHealthy = (vaultRepBackingAttoRep + effectiveDisputeStakedRepAttoRep) * valueScale >= coverageCommitmentAttoEth * lastPrice * statoblastSecurityMultiplierBps
+	const poolHealthy = (vaultAttoRepBacking + effectiveDisputeStakedAttoRep) * valueScale >= coverageCommitmentAttoEth * lastPrice * statoblastSecurityMultiplierBps
 	const configuredMigrationMultiplier = LIQUIDATION_BPS_DENOMINATOR + (statoblastSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
 	const liquidationReserveMultiplier = LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
 	const migrationMultiplier = configuredMigrationMultiplier < liquidationReserveMultiplier ? liquidationReserveMultiplier : configuredMigrationMultiplier
-	const migrationHealthy = coverageCommitmentAttoEth === 0n || vaultRepBackingAttoRep * valueScale > coverageCommitmentAttoEth * lastPrice * migrationMultiplier
+	const migrationHealthy = coverageCommitmentAttoEth === 0n || vaultAttoRepBacking * valueScale > coverageCommitmentAttoEth * lastPrice * migrationMultiplier
 	return !poolHealthy || !migrationHealthy
 }
 
@@ -21,23 +21,23 @@ function getPartialLiquidationTransfer(coverageCommitmentToTransferAttoEth: bigi
 	const quotedRep = getLiquidationVaultRepBackingToTransfer(coverageCommitmentToTransferAttoEth, repPerEthPrice)
 	const { repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep } = targetVaultSummary
 	if (repBackingUnits === undefined || totalRepBackingUnits === undefined || totalPoolHeldRepBalanceAttoRep === undefined) {
-		if (quotedRep >= targetVaultSummary.vaultRepBackingAttoRep) return { remainingRepAttoRep: 0n, vaultRepBackingToTransferAttoRep: targetVaultSummary.vaultRepBackingAttoRep }
-		return { remainingRepAttoRep: targetVaultSummary.vaultRepBackingAttoRep - quotedRep, vaultRepBackingToTransferAttoRep: quotedRep }
+		if (quotedRep >= targetVaultSummary.vaultAttoRepBacking) return { remainingAttoRep: 0n, vaultAttoRepBackingToTransfer: targetVaultSummary.vaultAttoRepBacking }
+		return { remainingAttoRep: targetVaultSummary.vaultAttoRepBacking - quotedRep, vaultAttoRepBackingToTransfer: quotedRep }
 	}
 	const backingUnitsToTransfer = totalRepBackingUnits === 0n || totalPoolHeldRepBalanceAttoRep === 0n ? quotedRep * LIQUIDATION_PRICE_PRECISION : (quotedRep * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
-	if (backingUnitsToTransfer >= repBackingUnits) return { remainingRepAttoRep: 0n, vaultRepBackingToTransferAttoRep: targetVaultSummary.vaultRepBackingAttoRep }
+	if (backingUnitsToTransfer >= repBackingUnits) return { remainingAttoRep: 0n, vaultAttoRepBackingToTransfer: targetVaultSummary.vaultAttoRepBacking }
 	const remainingBackingUnits = repBackingUnits - backingUnitsToTransfer
 	return {
-		remainingRepAttoRep: totalRepBackingUnits === 0n ? remainingBackingUnits / LIQUIDATION_PRICE_PRECISION : (remainingBackingUnits * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
-		vaultRepBackingToTransferAttoRep: totalRepBackingUnits === 0n ? backingUnitsToTransfer / LIQUIDATION_PRICE_PRECISION : (backingUnitsToTransfer * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
+		remainingAttoRep: totalRepBackingUnits === 0n ? remainingBackingUnits / LIQUIDATION_PRICE_PRECISION : (remainingBackingUnits * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
+		vaultAttoRepBackingToTransfer: totalRepBackingUnits === 0n ? backingUnitsToTransfer / LIQUIDATION_PRICE_PRECISION : (backingUnitsToTransfer * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
 	}
 }
 
 function getAwardableLiquidationRep(targetVaultSummary: SecurityPoolVaultSummary, reserveMinimumRep: boolean) {
 	const { repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep } = targetVaultSummary
 	if (repBackingUnits === undefined || totalRepBackingUnits === undefined || totalPoolHeldRepBalanceAttoRep === undefined) {
-		if (!reserveMinimumRep) return targetVaultSummary.vaultRepBackingAttoRep
-		return targetVaultSummary.vaultRepBackingAttoRep > MIN_REP_DEPOSIT_ATTO_REP ? targetVaultSummary.vaultRepBackingAttoRep - MIN_REP_DEPOSIT_ATTO_REP : 0n
+		if (!reserveMinimumRep) return targetVaultSummary.vaultAttoRepBacking
+		return targetVaultSummary.vaultAttoRepBacking > MIN_REP_DEPOSIT_ATTO_REP ? targetVaultSummary.vaultAttoRepBacking - MIN_REP_DEPOSIT_ATTO_REP : 0n
 	}
 	let reserveBackingUnits = 0n
 	if (reserveMinimumRep) {
@@ -52,8 +52,8 @@ function getFundedLiquidationAmounts(requestedCommitmentTransferAttoEth: bigint,
 	const targetCoverageCommitmentAttoEth = targetVaultSummary.coverageCommitmentAttoEth
 	const resolveResidualAsBadDebt = requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth
 	if (!resolveResidualAsBadDebt && targetCoverageCommitmentAttoEth <= MIN_COVERAGE_COMMITMENT_ATTO_ETH) return { badDebtAttoEth: 0n, coverageCommitmentToTransferAttoEth: 0n }
-	const awardableRepAttoRep = getAwardableLiquidationRep(targetVaultSummary, !resolveResidualAsBadDebt)
-	const maximumFundedCoverageCommitmentAttoEth = getMaximumFundedCoverageCommitmentAttoEth(awardableRepAttoRep, repPerEthPrice)
+	const awardableAttoRep = getAwardableLiquidationRep(targetVaultSummary, !resolveResidualAsBadDebt)
+	const maximumFundedCoverageCommitmentAttoEth = getMaximumFundedCoverageCommitmentAttoEth(awardableAttoRep, repPerEthPrice)
 	let requestedCoverageCommitmentTransferAttoEth = requestedCommitmentTransferAttoEth < targetCoverageCommitmentAttoEth ? requestedCommitmentTransferAttoEth : targetCoverageCommitmentAttoEth
 	const remainingRequestedCoverageCommitmentAttoEth = targetCoverageCommitmentAttoEth - requestedCoverageCommitmentTransferAttoEth
 	if (!resolveResidualAsBadDebt && remainingRequestedCoverageCommitmentAttoEth > 0n && remainingRequestedCoverageCommitmentAttoEth < MIN_COVERAGE_COMMITMENT_ATTO_ETH) requestedCoverageCommitmentTransferAttoEth = targetCoverageCommitmentAttoEth - MIN_COVERAGE_COMMITMENT_ATTO_ETH
@@ -90,37 +90,37 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 export function getMaxLiquidationAmount({ repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary }: { repPerEthPrice: bigint | undefined; statoblastSecurityMultiplierBps: bigint | undefined; targetVaultSummary: SecurityPoolVaultSummary | undefined }) {
 	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || targetVaultSummary === undefined) return undefined
 	if (repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return 0n
-	const targetRepDeposit = targetVaultSummary.vaultRepBackingAttoRep
+	const targetRepDeposit = targetVaultSummary.vaultAttoRepBacking
 	const targetCoverageCommitmentAttoEth = targetVaultSummary.coverageCommitmentAttoEth
 	if (targetCoverageCommitmentAttoEth === 0n) return 0n
-	if (!isVaultLiquidatable(repPerEthPrice, targetCoverageCommitmentAttoEth, targetRepDeposit, targetVaultSummary.disputeStakedRepAttoRep, statoblastSecurityMultiplierBps)) return 0n
+	if (!isVaultLiquidatable(repPerEthPrice, targetCoverageCommitmentAttoEth, targetRepDeposit, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 0n
 	return targetCoverageCommitmentAttoEth
 }
 
 type LiquidationSimulation = {
 	callerAfter: {
-		disputeStakedRepAttoRep: bigint
-		vaultRepBackingAttoRep: bigint
+		disputeStakedAttoRep: bigint
+		vaultAttoRepBacking: bigint
 		coverageCommitmentAttoEth: bigint
 	}
 	callerBefore: {
-		disputeStakedRepAttoRep: bigint
-		vaultRepBackingAttoRep: bigint
+		disputeStakedAttoRep: bigint
+		vaultAttoRepBacking: bigint
 		coverageCommitmentAttoEth: bigint
 	}
 	coverageCommitmentToTransferAttoEth: bigint
 	badDebtAttoEth: bigint
 	grossRepAwardAttoRep: bigint
-	vaultRepBackingToTransferAttoRep: bigint
+	vaultAttoRepBackingToTransfer: bigint
 	targetAccruedFeesRetained: bigint
 	targetAfter: {
-		disputeStakedRepAttoRep: bigint
-		vaultRepBackingAttoRep: bigint
+		disputeStakedAttoRep: bigint
+		vaultAttoRepBacking: bigint
 		coverageCommitmentAttoEth: bigint
 	}
 	targetBefore: {
-		disputeStakedRepAttoRep: bigint
-		vaultRepBackingAttoRep: bigint
+		disputeStakedAttoRep: bigint
+		vaultAttoRepBacking: bigint
 		coverageCommitmentAttoEth: bigint
 	}
 }
@@ -138,11 +138,11 @@ export function simulateLiquidation({
 	statoblastSecurityMultiplierBps: bigint
 	targetVaultSummary: SecurityPoolVaultSummary
 }): LiquidationSimulation {
-	const callerRepDeposit = callerVaultSummary?.vaultRepBackingAttoRep ?? 0n
-	const callerDisputeStakedRepAttoRep = callerVaultSummary?.disputeStakedRepAttoRep ?? 0n
+	const callerRepDeposit = callerVaultSummary?.vaultAttoRepBacking ?? 0n
+	const callerDisputeStakedAttoRep = callerVaultSummary?.disputeStakedAttoRep ?? 0n
 	const callerCoverageCommitmentAttoEth = callerVaultSummary?.coverageCommitmentAttoEth ?? 0n
-	const targetRepDeposit = targetVaultSummary.vaultRepBackingAttoRep
-	const targetDisputeStakedRepAttoRep = targetVaultSummary.disputeStakedRepAttoRep
+	const targetRepDeposit = targetVaultSummary.vaultAttoRepBacking
+	const targetDisputeStakedAttoRep = targetVaultSummary.disputeStakedAttoRep
 	const targetCoverageCommitmentAttoEth = targetVaultSummary.coverageCommitmentAttoEth
 	const maxCoverageCommitmentToTransferAttoEth =
 		getMaxLiquidationAmount({
@@ -152,35 +152,35 @@ export function simulateLiquidation({
 		}) ?? targetCoverageCommitmentAttoEth
 	const { badDebtAttoEth, coverageCommitmentToTransferAttoEth } = getFundedLiquidationAmounts(coverageCommitmentTransferAttoEth < maxCoverageCommitmentToTransferAttoEth ? coverageCommitmentTransferAttoEth : maxCoverageCommitmentToTransferAttoEth, targetVaultSummary, repPerEthPrice, callerCoverageCommitmentAttoEth)
 	const grossRepAwardAttoRep = getLiquidationVaultRepBackingToTransfer(coverageCommitmentToTransferAttoEth, repPerEthPrice)
-	const vaultRepBackingToTransferAttoRep = getPartialLiquidationTransfer(coverageCommitmentToTransferAttoEth, targetVaultSummary, repPerEthPrice).vaultRepBackingToTransferAttoRep
-	const targetAfterRepDeposit = targetRepDeposit - vaultRepBackingToTransferAttoRep
+	const vaultAttoRepBackingToTransfer = getPartialLiquidationTransfer(coverageCommitmentToTransferAttoEth, targetVaultSummary, repPerEthPrice).vaultAttoRepBackingToTransfer
+	const targetAfterRepDeposit = targetRepDeposit - vaultAttoRepBackingToTransfer
 	const remainingTargetCoverageCommitmentAttoEth = targetCoverageCommitmentAttoEth - coverageCommitmentToTransferAttoEth - badDebtAttoEth
-	const callerAfterRepDeposit = callerRepDeposit + vaultRepBackingToTransferAttoRep
+	const callerAfterRepDeposit = callerRepDeposit + vaultAttoRepBackingToTransfer
 	const resultingCallerCoverageCommitmentAttoEth = callerCoverageCommitmentAttoEth + coverageCommitmentToTransferAttoEth
 	return {
 		callerAfter: {
-			disputeStakedRepAttoRep: callerDisputeStakedRepAttoRep,
-			vaultRepBackingAttoRep: callerAfterRepDeposit,
+			disputeStakedAttoRep: callerDisputeStakedAttoRep,
+			vaultAttoRepBacking: callerAfterRepDeposit,
 			coverageCommitmentAttoEth: resultingCallerCoverageCommitmentAttoEth,
 		},
 		callerBefore: {
-			disputeStakedRepAttoRep: callerDisputeStakedRepAttoRep,
-			vaultRepBackingAttoRep: callerRepDeposit,
+			disputeStakedAttoRep: callerDisputeStakedAttoRep,
+			vaultAttoRepBacking: callerRepDeposit,
 			coverageCommitmentAttoEth: callerCoverageCommitmentAttoEth,
 		},
 		badDebtAttoEth,
 		coverageCommitmentToTransferAttoEth,
 		grossRepAwardAttoRep,
-		vaultRepBackingToTransferAttoRep,
+		vaultAttoRepBackingToTransfer,
 		targetAccruedFeesRetained: targetVaultSummary.claimableFeesAttoEth,
 		targetAfter: {
-			disputeStakedRepAttoRep: targetDisputeStakedRepAttoRep,
-			vaultRepBackingAttoRep: targetAfterRepDeposit,
+			disputeStakedAttoRep: targetDisputeStakedAttoRep,
+			vaultAttoRepBacking: targetAfterRepDeposit,
 			coverageCommitmentAttoEth: remainingTargetCoverageCommitmentAttoEth,
 		},
 		targetBefore: {
-			disputeStakedRepAttoRep: targetDisputeStakedRepAttoRep,
-			vaultRepBackingAttoRep: targetRepDeposit,
+			disputeStakedAttoRep: targetDisputeStakedAttoRep,
+			vaultAttoRepBacking: targetRepDeposit,
 			coverageCommitmentAttoEth: targetCoverageCommitmentAttoEth,
 		},
 	}
@@ -205,7 +205,7 @@ export function getDeterministicLiquidationFailureReason({
 	if (coverageCommitmentTransferAttoEth <= 0n) return 'Enter a liquidation amount greater than zero.'
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	if (targetVaultSummary.coverageCommitmentAttoEth === 0n) return 'This vault has no active coverage commitment to liquidate.'
-	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.coverageCommitmentAttoEth, targetVaultSummary.vaultRepBackingAttoRep, targetVaultSummary.disputeStakedRepAttoRep, statoblastSecurityMultiplierBps)) {
+	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.coverageCommitmentAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) {
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
 	}
 	const targetMaxCoverageCommitmentToTransferAttoEth = maxCoverageCommitmentToTransferAttoEth === undefined || maxCoverageCommitmentToTransferAttoEth > targetVaultSummary.coverageCommitmentAttoEth ? targetVaultSummary.coverageCommitmentAttoEth : maxCoverageCommitmentToTransferAttoEth
@@ -213,10 +213,10 @@ export function getDeterministicLiquidationFailureReason({
 	const { badDebtAttoEth, coverageCommitmentToTransferAttoEth } =
 		repPerEthPrice === undefined ? { badDebtAttoEth: 0n, coverageCommitmentToTransferAttoEth: requestedCommitmentTransferAttoEth } : getFundedLiquidationAmounts(requestedCommitmentTransferAttoEth, targetVaultSummary, repPerEthPrice, callerVaultSummary?.coverageCommitmentAttoEth ?? 0n)
 	if (coverageCommitmentToTransferAttoEth <= 0n && badDebtAttoEth <= 0n) return liquidationCopy.executableCoverageCommitmentUnavailable
-	const vaultRepBackingToTransferAttoRep = repPerEthPrice === undefined ? undefined : getPartialLiquidationTransfer(coverageCommitmentToTransferAttoEth, targetVaultSummary, repPerEthPrice).vaultRepBackingToTransferAttoRep
+	const vaultAttoRepBackingToTransfer = repPerEthPrice === undefined ? undefined : getPartialLiquidationTransfer(coverageCommitmentToTransferAttoEth, targetVaultSummary, repPerEthPrice).vaultAttoRepBackingToTransfer
 	const remainingTargetCoverageCommitmentAttoEth = targetVaultSummary.coverageCommitmentAttoEth - coverageCommitmentToTransferAttoEth - badDebtAttoEth
-	const targetAfterRepDeposit = vaultRepBackingToTransferAttoRep === undefined ? undefined : targetVaultSummary.vaultRepBackingAttoRep - vaultRepBackingToTransferAttoRep
-	const callerAfterRepDeposit = (callerVaultSummary?.vaultRepBackingAttoRep ?? 0n) + (vaultRepBackingToTransferAttoRep ?? 0n)
+	const targetAfterRepDeposit = vaultAttoRepBackingToTransfer === undefined ? undefined : targetVaultSummary.vaultAttoRepBacking - vaultAttoRepBackingToTransfer
+	const callerAfterRepDeposit = (callerVaultSummary?.vaultAttoRepBacking ?? 0n) + (vaultAttoRepBackingToTransfer ?? 0n)
 	const resultingCallerCoverageCommitmentAttoEth = (callerVaultSummary?.coverageCommitmentAttoEth ?? 0n) + coverageCommitmentToTransferAttoEth
 	if (remainingTargetCoverageCommitmentAttoEth !== 0n && targetAfterRepDeposit !== undefined && targetAfterRepDeposit < MIN_REP_DEPOSIT_ATTO_REP) return 'The target vault would fall below the minimum REP backing after liquidation.'
 	if (remainingTargetCoverageCommitmentAttoEth !== 0n && remainingTargetCoverageCommitmentAttoEth < MIN_COVERAGE_COMMITMENT_ATTO_ETH) return 'The target vault would fall below the minimum coverage commitment after liquidation.'
@@ -242,7 +242,7 @@ export function getLiquidationFailureReason({
 		repPerEthPrice !== undefined &&
 		statoblastSecurityMultiplierBps !== undefined &&
 		targetVaultSummary !== undefined &&
-		!isVaultLiquidatable(repPerEthPrice, targetVaultSummary.coverageCommitmentAttoEth, targetVaultSummary.vaultRepBackingAttoRep, targetVaultSummary.disputeStakedRepAttoRep, statoblastSecurityMultiplierBps)
+		!isVaultLiquidatable(repPerEthPrice, targetVaultSummary.coverageCommitmentAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)
 	) {
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
 	}
@@ -273,8 +273,8 @@ export function getLiquidationFailureReason({
 		statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.coverageCommitmentAttoEth, simulation.callerAfter.vaultRepBackingAttoRep, simulation.callerAfter.disputeStakedRepAttoRep, statoblastSecurityMultiplierBps)) {
-		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.coverageCommitmentAttoEth, simulation.callerBefore.vaultRepBackingAttoRep, callerVaultSummary?.disputeStakedRepAttoRep, statoblastSecurityMultiplierBps)) return 'Your vault would remain liquidatable after this liquidation.'
+	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.coverageCommitmentAttoEth, simulation.callerAfter.vaultAttoRepBacking, simulation.callerAfter.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) {
+		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.coverageCommitmentAttoEth, simulation.callerBefore.vaultAttoRepBacking, callerVaultSummary?.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 'Your vault would remain liquidatable after this liquidation.'
 		return 'Your vault would become liquidatable after this liquidation.'
 	}
 	return undefined

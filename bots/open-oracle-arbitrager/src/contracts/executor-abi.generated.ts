@@ -30,7 +30,7 @@ export const openOracleArbitrageExecutorAbi = [
 			{
 				indexed: false,
 				internalType: 'uint256',
-				name: 'hedgeAmountWethAttoEth',
+				name: 'hedgeAmountAttoWeth',
 				type: 'uint256',
 			},
 			{

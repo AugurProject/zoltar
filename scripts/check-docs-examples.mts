@@ -1290,8 +1290,8 @@ function checkExactRepCapEquality(): void {
 	const ethAtTick = 1n * precision
 	const priceAtTick = precision / 10n
 	const repDemand = (ethAtTick * precision) / priceAtTick
-	const maxRepBeingSoldAttoRep = 10n * precision
-	assert.ok(repDemand >= maxRepBeingSoldAttoRep, 'demand exactly equal to the REP cap should select funded clearing')
+	const maxAttoRepBeingSold = 10n * precision
+	assert.ok(repDemand >= maxAttoRepBeingSold, 'demand exactly equal to the REP cap should select funded clearing')
 }
 
 function escapeRegExp(value: string): string {
@@ -1362,11 +1362,11 @@ assert.match(auctionDesignHtml, /stores the lowest tick whose price reaches that
 assert.match(auctionDesignHtml, /assigns the REP cap by\s+differencing cumulative floor allocations at fixed bid positions/i, 'canonical clearing copy should describe deterministic cumulative floor allocation')
 assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
-assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningAttoEth \* PRICE_PRECISION \/ maxRepBeingSoldAttoRep\)/i, 'auction design should not derive the reserve from winning ETH')
-assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈ethRaiseCapAttoEth \* PRICE_PRECISION \/ maxRepBeingSoldAttoRep⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
+assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningAttoEth \* PRICE_PRECISION \/ maxAttoRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
+assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈attoEthRaiseCap \* PRICE_PRECISION \/ maxAttoRepBeingSold⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
 assert.match(auctionDesignHtml, /activates with legitimate migration settlement collateral plus retained bid[\s\S]*rejects caller contribution ETH/i, 'auction design should document value-free weak-demand activation')
 assert.match(auctionDesignHtml, /forced ETH remains unaccounted surplus/i, 'auction design should exclude forced ETH from child collateral')
-assert.match(auctionDesignHtml, /Qualifying bidders collectively purchase[\s\S]*maxRepBeingSoldAttoRep/i, 'auction design should assign the complete REP cap when demand qualifies')
+assert.match(auctionDesignHtml, /Qualifying bidders collectively purchase[\s\S]*maxAttoRepBeingSold/i, 'auction design should assign the complete REP cap when demand qualifies')
 assert.match(auctionDesignHtml, /common effective price[\s\S]*threshold is not an execution-price floor/i, 'auction design should distinguish the reserve boundary from the weak-demand execution price')
 assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by retained ETH at the reserve tick/i, 'auction design should not describe the underfunded eligibility boundary as an execution price')
 assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling tick|tick rounds up[\s\S]*exact integer fills can be slightly lower/i, 'auction worked examples should not attribute proportional REP allocation to the reserve tick price')
@@ -1631,7 +1631,7 @@ assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-ti
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+settlement collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableRepAtForkAttoRep; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \\cdot migrationRepDenominatorAtForkAttoRep \/ parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits \? migrationRepDenominatorAtForkAttoRep - priorMigratedRepAttoRep : provisionalMigratedRepDeltaAttoRep"/i,
+	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \\cdot migrationRepDenominatorAtForkAttoRep \/ parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits \? migrationRepDenominatorAtForkAttoRep - priorMigratedAttoRep : provisionalMigratedRepDeltaAttoRep"/i,
 	'whitepaper should document the fork-specific migrated REP denominator, provisional Solidity floor, and final REP-backing-unit reconciliation',
 )
 assert.match(
@@ -1646,7 +1646,7 @@ assert.match(
 )
 assert.match(
 	statoblastHtml,
-	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDeltaAttoRep<\/mi>[\s\S]*<mi>migrationRepDenominatorAtForkAttoRep<\/mi>[\s\S]*<mi>priorMigratedRepAttoRep<\/mi>[\s\S]*<mi>cumulativeMigratedRepBackingUnits<\/mi>[\s\S]*<mi>parentTotalRepBackingUnits<\/mi>[\s\S]*<mi>provisionalMigratedRepDeltaAttoRep<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
+	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDeltaAttoRep<\/mi>[\s\S]*<mi>migrationRepDenominatorAtForkAttoRep<\/mi>[\s\S]*<mi>priorMigratedAttoRep<\/mi>[\s\S]*<mi>cumulativeMigratedRepBackingUnits<\/mi>[\s\S]*<mi>parentTotalRepBackingUnits<\/mi>[\s\S]*<mi>provisionalMigratedRepDeltaAttoRep<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
 	'whitepaper visible migration equation should render the final REP-backing-unit reconciliation branch',
 )
 assert.match(diagramSpecsSource, /"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*cumulative routed REP target[\s\S]*cumulative ceiling target/i, 'proportional migration diagram should show provisional REP flooring, final reconciliation, and cumulative collateral routing')
@@ -1654,7 +1654,7 @@ assert.match(statoblastHtml, /data-source="settlementCollateralShortfallAttoEth 
 assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
 	statoblastHtml,
-	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableRepAtForkAttoRep; cumulativeSettlementCollateralTargetAttoEthAfterMigration = ⌈parentSettlementCollateralAtForkAttoEth \\cdot cumulativeRepTransferredAfterMigrationAttoRep \/ migrationRepDenominatorAtForkAttoRep⌉/i,
+	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; cumulativeSettlementCollateralTargetAttoEthAfterMigration = ⌈parentSettlementCollateralAtForkAttoEth \\cdot cumulativeRepTransferredAfterMigrationAttoRep \/ migrationRepDenominatorAtForkAttoRep⌉/i,
 	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
 )
 assert.doesNotMatch(
@@ -1668,7 +1668,7 @@ assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned am
 assert.match(statoblastHtml, /truth-auctions\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
 assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
 assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
-assert.doesNotMatch(statoblastHtml, /totalRepPurchasedAttoRep = underfundedWinningAttoEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
+assert.doesNotMatch(statoblastHtml, /totalAttoRepPurchased = underfundedWinningAttoEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
 assert.match(statoblastHtml, /value-free finalization activates the child[\s\S]*Nonzero\s+finalizer ETH is rejected/i, 'whitepaper should document bounded value-free settlement')
 assert.match(statoblastHtml, /forced[\s\S]*ETH remains unaccounted surplus/i, 'whitepaper should exclude forced ETH from child collateral')
 assert.doesNotMatch(statoblastHtml, /retained ETH at the reserve tick/i, 'whitepaper should not describe the eligibility tick as the execution price')

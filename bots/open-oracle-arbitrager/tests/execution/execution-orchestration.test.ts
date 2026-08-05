@@ -224,9 +224,9 @@ describe('funded execution orchestration', () => {
 			lifecycleWithdrawalMismatch({
 				currentReporter: false,
 				expectedToken: 10n,
-				expectedWethAttoEth: 20n,
+				expectedAttoWeth: 20n,
 				holderToken: 10_000n,
-				holderWethAttoEth: 20_000n,
+				holderAttoWeth: 20_000n,
 				willSettle: false,
 			}),
 		).toBe('Position was replaced; exact returned assets require manual reconciliation')

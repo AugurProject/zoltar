@@ -39,7 +39,7 @@ export type PoolObservation = {
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
 	totalCoverageCommitmentAttoEth: bigint
-	totalRepAttoRep: bigint
+	totalAttoRep: bigint
 	truncatedVaults: boolean
 	universeId: bigint
 	vaults: VaultPosition[]
@@ -65,7 +65,7 @@ export type StagedOperationObservation = {
 	snapshotTotalRepBackingUnits: bigint
 	snapshotTargetCoverageCommitmentAttoEth: bigint
 	snapshotTargetBackingUnits: bigint
-	snapshotTotalPoolHeldRepAttoRep: bigint
+	snapshotTotalPoolHeldAttoRep: bigint
 	targetVault: Address
 	validForSeconds: bigint
 }
@@ -209,13 +209,13 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 }
 
 function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint) {
-	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultRepBackingAttoRep, vault.coverageCommitmentAttoEth, multiplierBps, price)
+	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.coverageCommitmentAttoEth, multiplierBps, price)
 	return {
 		address: vault.address,
 		coverageCommitmentDisplay: formatDecimalAmount(vault.coverageCommitmentAttoEth),
 		healthBps: healthBps?.toString(),
 		backingUnits: vault.backingUnits.toString(),
-		vaultRepBacking: formatDecimalAmount(vault.vaultRepBackingAttoRep),
+		vaultRepBacking: formatDecimalAmount(vault.vaultAttoRepBacking),
 		claimableFeesEth: formatDecimalAmount(vault.claimableFeesAttoEth),
 	}
 }
@@ -225,7 +225,7 @@ function candidateView(candidate: LiquidationCandidate) {
 		bonusValueEth: formatDecimalAmount(candidate.bonusValueAttoEth),
 		coverageCommitmentToTransferEth: formatDecimalAmount(candidate.coverageCommitmentToTransferAttoEth),
 		priceDistanceBps: candidate.priceDistanceBps.toString(),
-		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultRepBackingToTransferAttoRep),
+		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultAttoRepBackingToTransfer),
 		resultingHealthBps: candidate.resultingHealthBps.toString(),
 		target: candidate.target.address,
 		topUpRep: formatDecimalAmount(candidate.topUpAttoRep),
@@ -235,7 +235,7 @@ function candidateView(candidate: LiquidationCandidate) {
 export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
 	const configurations: readonly CentralizedMarketSettings[] = marketConfigurations === undefined ? [] : 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
 	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
-	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultRepBackingAttoRep, 0n)
+	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
 	const assumedCoverageCommitmentAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.coverageCommitmentAttoEth, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
 	const rootConfiguration = configurations[0]
@@ -402,7 +402,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				securityPoolForker: pool.securityPoolForker,
 				systemState: pool.systemState.toString(),
 				totalCoverageCommitmentEth: formatDecimalAmount(pool.totalCoverageCommitmentAttoEth),
-				totalPoolHeldRep: formatDecimalAmount(pool.totalRepAttoRep),
+				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
 				truncatedVaults: pool.truncatedVaults,
 				universeId: pool.universeId.toString(),
 				vaults: pool.vaults.map(vault => vaultView(vault)),

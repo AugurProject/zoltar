@@ -401,7 +401,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		returns (
 			uint256 repBackingUnits,
 			uint256 coverageCommitmentAttoEth,
-			uint256 disputeStakedRepAttoRep,
+			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}
@@ -541,7 +541,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		returns (
 			uint256 repBackingUnits,
 			uint256 coverageCommitmentAttoEth,
-			uint256 disputeStakedRepAttoRep,
+			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}

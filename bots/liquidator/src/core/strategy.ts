@@ -15,7 +15,7 @@ export type VaultPosition = {
 	address: Address
 	coverageCommitmentAttoEth: bigint
 	backingUnits: bigint
-	vaultRepBackingAttoRep: bigint
+	vaultAttoRepBacking: bigint
 	claimableFeesAttoEth: bigint
 }
 
@@ -26,7 +26,7 @@ export type PoolRiskContext = {
 	minLiquidationPriceDistanceBps: bigint
 	multiplierBps: bigint
 	price: bigint
-	totalRepAttoRep: bigint
+	totalAttoRep: bigint
 }
 
 export type LiquidationCandidate = {
@@ -34,7 +34,7 @@ export type LiquidationCandidate = {
 	coverageCommitmentToTransferAttoEth: bigint
 	pool: PoolRiskContext
 	priceDistanceBps: bigint
-	vaultRepBackingToTransferAttoRep: bigint
+	vaultAttoRepBackingToTransfer: bigint
 	resultingHealthBps: bigint
 	target: VaultPosition
 	topUpAttoRep: bigint
@@ -46,14 +46,14 @@ function ceilDiv(numerator: bigint, denominator: bigint) {
 	return (numerator - 1n) / denominator + 1n
 }
 
-export function repForBackingUnits(backingUnits: bigint, totalRepAttoRep: bigint, denominator: bigint) {
+export function repForBackingUnits(backingUnits: bigint, totalAttoRep: bigint, denominator: bigint) {
 	if (backingUnits === 0n || denominator === 0n) return 0n
-	return (backingUnits * totalRepAttoRep) / denominator
+	return (backingUnits * totalAttoRep) / denominator
 }
 
-export function backingUnitsForRep(vaultRepBackingAttoRep: bigint, totalRepAttoRep: bigint, denominator: bigint) {
-	if (denominator === 0n || totalRepAttoRep === 0n) return vaultRepBackingAttoRep * PRICE_PRECISION
-	return (vaultRepBackingAttoRep * denominator) / totalRepAttoRep
+export function backingUnitsForRep(vaultAttoRepBacking: bigint, totalAttoRep: bigint, denominator: bigint) {
+	if (denominator === 0n || totalAttoRep === 0n) return vaultAttoRepBacking * PRICE_PRECISION
+	return (vaultAttoRepBacking * denominator) / totalAttoRep
 }
 
 export function requiredRepForCoverageCommitment(coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint, healthBps = BPS_DENOMINATOR) {
@@ -61,11 +61,11 @@ export function requiredRepForCoverageCommitment(coverageCommitmentAttoEth: bigi
 	return ceilDiv(coverageCommitmentAttoEth * multiplierBps * price * healthBps, PRICE_PRECISION * BPS_DENOMINATOR * BPS_DENOMINATOR)
 }
 
-export function vaultHealthBps(vaultRepBackingAttoRep: bigint, coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint) {
+export function vaultHealthBps(vaultAttoRepBacking: bigint, coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint) {
 	if (coverageCommitmentAttoEth === 0n) return undefined
 	const requiredNumerator = coverageCommitmentAttoEth * multiplierBps * price
 	if (requiredNumerator === 0n) return undefined
-	return (vaultRepBackingAttoRep * PRICE_PRECISION * BPS_DENOMINATOR * BPS_DENOMINATOR) / requiredNumerator
+	return (vaultAttoRepBacking * PRICE_PRECISION * BPS_DENOMINATOR * BPS_DENOMINATOR) / requiredNumerator
 }
 
 export function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint) {
@@ -75,22 +75,22 @@ export function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint
 	return ((price - thresholdPrice) * BPS_DENOMINATOR) / price
 }
 
-export function isUnsafeVault(vaultRepBackingAttoRep: bigint, coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint) {
-	return coverageCommitmentAttoEth > 0n && vaultRepBackingAttoRep * PRICE_PRECISION * BPS_DENOMINATOR < coverageCommitmentAttoEth * multiplierBps * price
+export function isUnsafeVault(vaultAttoRepBacking: bigint, coverageCommitmentAttoEth: bigint, multiplierBps: bigint, price: bigint) {
+	return coverageCommitmentAttoEth > 0n && vaultAttoRepBacking * PRICE_PRECISION * BPS_DENOMINATOR < coverageCommitmentAttoEth * multiplierBps * price
 }
 
 export function calculateLiquidationTransfer(parameters: {
 	currentTotalRepBackingUnits: bigint
 	currentTargetBackingUnits: bigint
-	currentPoolHeldRepBalanceAttoRep: bigint
+	currentPoolHeldAttoRepBalance: bigint
 	price: bigint
 	requestedCommitmentTransferAttoEth: bigint
 	snapshotTotalRepBackingUnits: bigint
 	snapshotTargetCoverageCommitmentAttoEth: bigint
 	snapshotTargetBackingUnits: bigint
-	snapshotTotalPoolHeldRepAttoRep: bigint
+	snapshotTotalPoolHeldAttoRep: bigint
 }) {
-	const snapshotTargetVaultRepBackingAttoRep = parameters.snapshotTotalRepBackingUnits === 0n ? parameters.snapshotTargetBackingUnits / PRICE_PRECISION : (parameters.snapshotTargetBackingUnits * parameters.snapshotTotalPoolHeldRepAttoRep) / parameters.snapshotTotalRepBackingUnits
+	const snapshotTargetVaultRepBackingAttoRep = parameters.snapshotTotalRepBackingUnits === 0n ? parameters.snapshotTargetBackingUnits / PRICE_PRECISION : (parameters.snapshotTargetBackingUnits * parameters.snapshotTotalPoolHeldAttoRep) / parameters.snapshotTotalRepBackingUnits
 	let maximumCoverageCommitmentTransferAttoEth = 0n
 	if (snapshotTargetVaultRepBackingAttoRep > MIN_REP_DEPOSIT_ATTO_REP) {
 		maximumCoverageCommitmentTransferAttoEth = ((snapshotTargetVaultRepBackingAttoRep - MIN_REP_DEPOSIT_ATTO_REP) * PRICE_PRECISION * BPS_DENOMINATOR) / (parameters.price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
@@ -100,52 +100,52 @@ export function calculateLiquidationTransfer(parameters: {
 		maximumCoverageCommitmentTransferAttoEth = parameters.snapshotTargetCoverageCommitmentAttoEth > MIN_COVERAGE_COMMITMENT_ATTO_ETH ? parameters.snapshotTargetCoverageCommitmentAttoEth - MIN_COVERAGE_COMMITMENT_ATTO_ETH : parameters.snapshotTargetCoverageCommitmentAttoEth
 	}
 	const coverageCommitmentToTransferAttoEth = parameters.requestedCommitmentTransferAttoEth > maximumCoverageCommitmentTransferAttoEth ? maximumCoverageCommitmentTransferAttoEth : parameters.requestedCommitmentTransferAttoEth
-	if (coverageCommitmentToTransferAttoEth === 0n) return { coverageCommitmentToTransferAttoEth: 0n, backingUnitsToTransfer: 0n, vaultRepBackingToTransferAttoRep: 0n }
+	if (coverageCommitmentToTransferAttoEth === 0n) return { coverageCommitmentToTransferAttoEth: 0n, backingUnitsToTransfer: 0n, vaultAttoRepBackingToTransfer: 0n }
 	const vaultRepBackingToTransferNumerator = coverageCommitmentToTransferAttoEth * parameters.price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)
 	const vaultRepBackingToTransferDenominator = PRICE_PRECISION * BPS_DENOMINATOR
-	let vaultRepBackingToTransferAttoRep = ceilDiv(vaultRepBackingToTransferNumerator, vaultRepBackingToTransferDenominator)
-	let backingUnitsToTransfer = backingUnitsForRep(vaultRepBackingToTransferAttoRep, parameters.currentPoolHeldRepBalanceAttoRep, parameters.currentTotalRepBackingUnits)
+	let vaultAttoRepBackingToTransfer = ceilDiv(vaultRepBackingToTransferNumerator, vaultRepBackingToTransferDenominator)
+	let backingUnitsToTransfer = backingUnitsForRep(vaultAttoRepBackingToTransfer, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
 	if (coverageCommitmentToTransferAttoEth === parameters.snapshotTargetCoverageCommitmentAttoEth) {
-		const remainingRepAttoRep = parameters.currentTotalRepBackingUnits === 0n || backingUnitsToTransfer >= parameters.currentTargetBackingUnits ? 0n : repForBackingUnits(parameters.currentTargetBackingUnits - backingUnitsToTransfer, parameters.currentPoolHeldRepBalanceAttoRep, parameters.currentTotalRepBackingUnits)
-		if (backingUnitsToTransfer >= parameters.currentTargetBackingUnits || remainingRepAttoRep < MIN_REP_DEPOSIT_ATTO_REP) {
-			vaultRepBackingToTransferAttoRep = parameters.currentTotalRepBackingUnits === 0n ? 0n : repForBackingUnits(parameters.currentTargetBackingUnits, parameters.currentPoolHeldRepBalanceAttoRep, parameters.currentTotalRepBackingUnits)
+		const remainingAttoRep = parameters.currentTotalRepBackingUnits === 0n || backingUnitsToTransfer >= parameters.currentTargetBackingUnits ? 0n : repForBackingUnits(parameters.currentTargetBackingUnits - backingUnitsToTransfer, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
+		if (backingUnitsToTransfer >= parameters.currentTargetBackingUnits || remainingAttoRep < MIN_REP_DEPOSIT_ATTO_REP) {
+			vaultAttoRepBackingToTransfer = parameters.currentTotalRepBackingUnits === 0n ? 0n : repForBackingUnits(parameters.currentTargetBackingUnits, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
 			backingUnitsToTransfer = parameters.currentTargetBackingUnits
 		}
 	}
-	return { coverageCommitmentToTransferAttoEth, backingUnitsToTransfer, vaultRepBackingToTransferAttoRep }
+	return { coverageCommitmentToTransferAttoEth, backingUnitsToTransfer, vaultAttoRepBackingToTransfer }
 }
 
 export function conservativeLiquidationRep(candidate: Pick<LiquidationCandidate, 'coverageCommitmentToTransferAttoEth' | 'target'>, price: bigint) {
-	const nominalRepAttoRep = ceilDiv(candidate.coverageCommitmentToTransferAttoEth * price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), PRICE_PRECISION * BPS_DENOMINATOR)
-	return candidate.coverageCommitmentToTransferAttoEth === candidate.target.coverageCommitmentAttoEth && candidate.target.vaultRepBackingAttoRep > nominalRepAttoRep ? candidate.target.vaultRepBackingAttoRep : nominalRepAttoRep
+	const nominalAttoRep = ceilDiv(candidate.coverageCommitmentToTransferAttoEth * price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), PRICE_PRECISION * BPS_DENOMINATOR)
+	return candidate.coverageCommitmentToTransferAttoEth === candidate.target.coverageCommitmentAttoEth && candidate.target.vaultAttoRepBacking > nominalAttoRep ? candidate.target.vaultAttoRepBacking : nominalAttoRep
 }
 
 export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, caller: VaultPosition, strategy: StrategySettings): LiquidationCandidate | undefined {
-	if (pool.price === 0n || !isUnsafeVault(target.vaultRepBackingAttoRep, target.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)) return undefined
-	const priceDistanceBps = liquidationPriceDistanceBps(target.vaultRepBackingAttoRep, target.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)
+	if (pool.price === 0n || !isUnsafeVault(target.vaultAttoRepBacking, target.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)) return undefined
+	const priceDistanceBps = liquidationPriceDistanceBps(target.vaultAttoRepBacking, target.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)
 	if (priceDistanceBps < pool.minLiquidationPriceDistanceBps) return undefined
 	const transfer = calculateLiquidationTransfer({
 		currentTotalRepBackingUnits: pool.denominator,
 		currentTargetBackingUnits: target.backingUnits,
-		currentPoolHeldRepBalanceAttoRep: pool.totalRepAttoRep,
+		currentPoolHeldAttoRepBalance: pool.totalAttoRep,
 		price: pool.price,
 		requestedCommitmentTransferAttoEth: strategy.maximumLiquidationCoverageCommitmentAttoEth,
 		snapshotTotalRepBackingUnits: pool.denominator,
 		snapshotTargetCoverageCommitmentAttoEth: target.coverageCommitmentAttoEth,
 		snapshotTargetBackingUnits: target.backingUnits,
-		snapshotTotalPoolHeldRepAttoRep: pool.totalRepAttoRep,
+		snapshotTotalPoolHeldAttoRep: pool.totalAttoRep,
 	})
-	if (transfer.coverageCommitmentToTransferAttoEth < strategy.minimumLiquidationCoverageCommitmentAttoEth) return undefined
-	if (!isUnsafeVault(transfer.vaultRepBackingToTransferAttoRep, transfer.coverageCommitmentToTransferAttoEth, pool.multiplierBps, pool.price)) {
+	if (transfer.coverageCommitmentToTransferAttoEth < strategy.minimumLiquidationCoverageCommitmentEth) return undefined
+	if (!isUnsafeVault(transfer.vaultAttoRepBackingToTransfer, transfer.coverageCommitmentToTransferAttoEth, pool.multiplierBps, pool.price)) {
 		return undefined
 	}
 	const resultingCoverageCommitmentAttoEth = caller.coverageCommitmentAttoEth + transfer.coverageCommitmentToTransferAttoEth
-	const healthRequiredRepAttoRep = requiredRepForCoverageCommitment(resultingCoverageCommitmentAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)
-	const requiredResultingRepAttoRep = healthRequiredRepAttoRep > MIN_REP_DEPOSIT_ATTO_REP ? healthRequiredRepAttoRep : MIN_REP_DEPOSIT_ATTO_REP
-	const resultingRepBeforeTopUpAttoRep = caller.vaultRepBackingAttoRep + transfer.vaultRepBackingToTransferAttoRep
-	const topUpAttoRep = requiredResultingRepAttoRep > resultingRepBeforeTopUpAttoRep ? requiredResultingRepAttoRep - resultingRepBeforeTopUpAttoRep : 0n
-	if (resultingRepBeforeTopUpAttoRep + topUpAttoRep > strategy.maximumRepPerPoolAttoRep) return undefined
-	const repBackingAwardValueAttoEth = (transfer.vaultRepBackingToTransferAttoRep * PRICE_PRECISION) / pool.price
+	const healthRequiredAttoRep = requiredRepForCoverageCommitment(resultingCoverageCommitmentAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)
+	const requiredResultingAttoRep = healthRequiredAttoRep > MIN_REP_DEPOSIT_ATTO_REP ? healthRequiredAttoRep : MIN_REP_DEPOSIT_ATTO_REP
+	const resultingRepBeforeTopUpAttoRep = caller.vaultAttoRepBacking + transfer.vaultAttoRepBackingToTransfer
+	const topUpAttoRep = requiredResultingAttoRep > resultingRepBeforeTopUpAttoRep ? requiredResultingAttoRep - resultingRepBeforeTopUpAttoRep : 0n
+	if (resultingRepBeforeTopUpAttoRep + topUpAttoRep > strategy.maximumAttoRepPerPool) return undefined
+	const repBackingAwardValueAttoEth = (transfer.vaultAttoRepBackingToTransfer * PRICE_PRECISION) / pool.price
 	const bonusValueAttoEth = repBackingAwardValueAttoEth > transfer.coverageCommitmentToTransferAttoEth ? repBackingAwardValueAttoEth - transfer.coverageCommitmentToTransferAttoEth : 0n
 	if (bonusValueAttoEth < strategy.minimumRewardValueAttoEth) return undefined
 	const resultingHealthBps = vaultHealthBps(resultingRepBeforeTopUpAttoRep + topUpAttoRep, resultingCoverageCommitmentAttoEth, pool.multiplierBps, pool.price) ?? strategy.vaultTargetHealthBps
@@ -154,7 +154,7 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		coverageCommitmentToTransferAttoEth: transfer.coverageCommitmentToTransferAttoEth,
 		pool,
 		priceDistanceBps,
-		vaultRepBackingToTransferAttoRep: transfer.vaultRepBackingToTransferAttoRep,
+		vaultAttoRepBackingToTransfer: transfer.vaultAttoRepBackingToTransfer,
 		resultingHealthBps,
 		target,
 		topUpAttoRep,
@@ -175,12 +175,12 @@ export function selectAllowedCandidate(candidates: readonly LiquidationCandidate
 }
 
 export function surplusRepForWithdrawal(caller: VaultPosition, pool: Pick<PoolRiskContext, 'multiplierBps' | 'price'>, strategy: Pick<StrategySettings, 'minimumRepWithdrawalAttoRep' | 'vaultTargetHealthBps' | 'vaultWithdrawHealthBps'>) {
-	if (caller.vaultRepBackingAttoRep === 0n) return 0n
-	const retainedRepAttoRep = requiredRepForCoverageCommitment(caller.coverageCommitmentAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)
+	if (caller.vaultAttoRepBacking === 0n) return 0n
+	const retainedAttoRep = requiredRepForCoverageCommitment(caller.coverageCommitmentAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps)
 	if (caller.coverageCommitmentAttoEth > 0n) {
-		const health = vaultHealthBps(caller.vaultRepBackingAttoRep, caller.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)
+		const health = vaultHealthBps(caller.vaultAttoRepBacking, caller.coverageCommitmentAttoEth, pool.multiplierBps, pool.price)
 		if (health === undefined || health < strategy.vaultWithdrawHealthBps) return 0n
 	}
-	const surplusAttoRep = caller.vaultRepBackingAttoRep > retainedRepAttoRep ? caller.vaultRepBackingAttoRep - retainedRepAttoRep : 0n
+	const surplusAttoRep = caller.vaultAttoRepBacking > retainedAttoRep ? caller.vaultAttoRepBacking - retainedAttoRep : 0n
 	return surplusAttoRep >= strategy.minimumRepWithdrawalAttoRep ? surplusAttoRep : 0n
 }

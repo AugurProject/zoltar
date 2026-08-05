@@ -927,15 +927,15 @@ describe('Open Oracle helpers', () => {
 			args: [],
 		})
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
-		const requestedInitialWethAttoEth = minimumToken1ReportAttoEth * 3n
+		const requestedInitialAttoWeth = minimumToken1ReportAttoEth * 3n
 
-		await requestOraclePrice(uiWriteClient, managerAddress, 10n ** 18n, requestedInitialWethAttoEth)
+		await requestOraclePrice(uiWriteClient, managerAddress, 10n ** 18n, requestedInitialAttoWeth)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
-		expect(reportDetails.exactToken1Report).toBe(requestedInitialWethAttoEth)
-		expect(reportDetails.currentAmount1).toBe(requestedInitialWethAttoEth)
-		expect(reportDetails.currentAmount2).toBe(requestedInitialWethAttoEth)
+		expect(reportDetails.exactToken1Report).toBe(requestedInitialAttoWeth)
+		expect(reportDetails.currentAmount1).toBe(requestedInitialAttoWeth)
+		expect(reportDetails.currentAmount2).toBe(requestedInitialAttoWeth)
 	})
 
 	test('requestOraclePrice derives stale cached price refresh amounts with coordinator 1e18 precision', async () => {
@@ -1024,13 +1024,13 @@ describe('Open Oracle helpers', () => {
 		expect(funding.initialReportAmount2).toBe(quotedAmount2 * 2n)
 		expect(funding.proposedRepPerEthPrice).toBe((quotedAmount2 * 10n ** 18n) / minimumToken1ReportAttoEth)
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
-		expect(funding.maximumInitialWethAttoEth).toBe(minimumToken1ReportAttoEth * 2n)
+		expect(funding.maximumInitialAttoWeth).toBe(minimumToken1ReportAttoEth * 2n)
 		expect(funding.wethShortfallAttoEth).toBe(minimumToken1ReportAttoEth * 2n - currentWethBalanceAttoEth)
 	})
 
 	test('loadCoordinatorInitialReportFundingRequirement funds a caller-selected WETH amount above the buffered minimum', async () => {
 		const minimumToken1ReportAttoEth = 100n
-		const requestedInitialWethAttoEth = 250n
+		const requestedInitialAttoWeth = 250n
 		const proposedRepPerEthPrice = 2n * 10n ** 18n
 		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const mockClient = createConnectedReadClient()
@@ -1044,13 +1044,13 @@ describe('Open Oracle helpers', () => {
 			throw new Error(`Unexpected read ${functionName} for ${address}`)
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialWethAttoEth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
-		expect(funding.requestedInitialWethAttoEth).toBe(requestedInitialWethAttoEth)
-		expect(funding.maximumInitialWethAttoEth).toBe(requestedInitialWethAttoEth)
+		expect(funding.requestedInitialAttoWeth).toBe(requestedInitialAttoWeth)
+		expect(funding.maximumInitialAttoWeth).toBe(requestedInitialAttoWeth)
 		expect(funding.initialReportAmount2).toBe(500n)
-		expect(funding.wethShortfallAttoEth).toBe(requestedInitialWethAttoEth)
+		expect(funding.wethShortfallAttoEth).toBe(requestedInitialAttoWeth)
 	})
 
 	test('requestOraclePrice rejects an unavailable first-report REP quote instead of assuming a price', async () => {

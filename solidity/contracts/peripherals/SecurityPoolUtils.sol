@@ -72,14 +72,14 @@ library SecurityPoolUtils {
 		uint256 targetCoverageCommitmentAttoEth,
 		uint256 requestedCommitmentTransferAttoEth,
 		uint256 repEthPrice,
-		uint256 currentPoolHeldRepBalanceAttoRep,
+		uint256 currentPoolHeldAttoRepBalance,
 		uint256 currentTotalRepBackingUnits
 	)
 		external
 		pure
 		returns (
 			uint256 coverageCommitmentToTransferAttoEth,
-			uint256 vaultRepBackingToTransferAttoRep,
+			uint256 vaultAttoRepBackingToTransfer,
 			uint256 backingUnitsToTransfer
 		)
 	{
@@ -88,16 +88,16 @@ library SecurityPoolUtils {
 		bool resolveResidualAsBadDebt = requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth;
 		if (!resolveResidualAsBadDebt && targetCoverageCommitmentAttoEth <= MIN_COVERAGE_COMMITMENT_ATTO_ETH)
 			return (0, 0, 0);
-		uint256 minimumRemainingRepAttoRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT_ATTO_REP;
+		uint256 minimumRemainingAttoRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT_ATTO_REP;
 		uint256 reservedBackingUnits;
-		if (minimumRemainingRepAttoRep != 0) {
-			if (currentTotalRepBackingUnits == 0 || currentPoolHeldRepBalanceAttoRep == 0) {
-				reservedBackingUnits = minimumRemainingRepAttoRep * PRICE_PRECISION;
+		if (minimumRemainingAttoRep != 0) {
+			if (currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0) {
+				reservedBackingUnits = minimumRemainingAttoRep * PRICE_PRECISION;
 			} else {
 				reservedBackingUnits = Math.mulDiv(
-					minimumRemainingRepAttoRep,
+					minimumRemainingAttoRep,
 					currentTotalRepBackingUnits,
-					currentPoolHeldRepBalanceAttoRep,
+					currentPoolHeldAttoRepBalance,
 					Math.Rounding.Ceil
 				);
 			}
@@ -107,7 +107,7 @@ library SecurityPoolUtils {
 		uint256 transferableVaultRepBackingAttoRep =
 			currentTotalRepBackingUnits == 0
 				? transferableBackingUnits / PRICE_PRECISION
-				: Math.mulDiv(transferableBackingUnits, currentPoolHeldRepBalanceAttoRep, currentTotalRepBackingUnits);
+				: Math.mulDiv(transferableBackingUnits, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
 		uint256 maximumFundedCoverageCommitmentAttoEth = Math.mulDiv(
 			transferableVaultRepBackingAttoRep,
 			PRICE_PRECISION * BPS_DENOMINATOR,
@@ -134,20 +134,20 @@ library SecurityPoolUtils {
 		backingUnitsToTransfer = _getLiquidationBackingUnitsAward(
 			coverageCommitmentToTransferAttoEth,
 			repEthPrice,
-			currentPoolHeldRepBalanceAttoRep,
+			currentPoolHeldAttoRepBalance,
 			currentTotalRepBackingUnits
 		);
 		require(backingUnitsToTransfer <= transferableBackingUnits, 'Award unfunded');
-		vaultRepBackingToTransferAttoRep =
+		vaultAttoRepBackingToTransfer =
 			currentTotalRepBackingUnits == 0
 				? backingUnitsToTransfer / PRICE_PRECISION
-				: Math.mulDiv(backingUnitsToTransfer, currentPoolHeldRepBalanceAttoRep, currentTotalRepBackingUnits);
+				: Math.mulDiv(backingUnitsToTransfer, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
 	}
 
 	function _getLiquidationBackingUnitsAward(
 		uint256 coverageCommitmentToTransferAttoEth,
 		uint256 repEthPrice,
-		uint256 currentPoolHeldRepBalanceAttoRep,
+		uint256 currentPoolHeldAttoRepBalance,
 		uint256 currentTotalRepBackingUnits
 	) private pure returns (uint256 backingUnitsToTransfer) {
 		uint256 grossRepAwardAttoRep = Math.mulDiv(
@@ -157,12 +157,12 @@ library SecurityPoolUtils {
 			Math.Rounding.Ceil
 		);
 		backingUnitsToTransfer =
-			currentTotalRepBackingUnits == 0 || currentPoolHeldRepBalanceAttoRep == 0
+			currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0
 				? grossRepAwardAttoRep * PRICE_PRECISION
 				: Math.mulDiv(
 					grossRepAwardAttoRep,
 					currentTotalRepBackingUnits,
-					currentPoolHeldRepBalanceAttoRep,
+					currentPoolHeldAttoRepBalance,
 					Math.Rounding.Ceil
 				);
 	}
@@ -171,14 +171,14 @@ library SecurityPoolUtils {
 	/// @dev The migration-safety branch intentionally excludes dispute-staked REP.
 	function isVaultHealthy(
 		uint256 poolHeldVaultRepBackingAttoRep,
-		uint256 disputeStakedRepAttoRep,
+		uint256 disputeStakedAttoRep,
 		uint256 coverageCommitmentAttoEth,
 		uint256 repEthPrice,
 		uint256 poolSecurityMultiplierBps
 	) external pure returns (bool) {
 		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
 		if (
-			(poolHeldVaultRepBackingAttoRep + disputeStakedRepAttoRep) * valueScale <
+			(poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale <
 			coverageCommitmentAttoEth * poolSecurityMultiplierBps * repEthPrice
 		) return false;
 		if (coverageCommitmentAttoEth == 0) return true;
@@ -193,7 +193,7 @@ library SecurityPoolUtils {
 
 	function isLiquidationBeyondMinPriceDistance(
 		uint256 poolHeldVaultRepBackingAttoRep,
-		uint256 disputeStakedRepAttoRep,
+		uint256 disputeStakedAttoRep,
 		uint256 coverageCommitmentAttoEth,
 		uint256 poolSecurityMultiplierBps,
 		uint256 currentPrice,
@@ -202,7 +202,7 @@ library SecurityPoolUtils {
 		return
 			_isLiquidationBeyondMinPriceDistance(
 				poolHeldVaultRepBackingAttoRep,
-				disputeStakedRepAttoRep,
+				disputeStakedAttoRep,
 				coverageCommitmentAttoEth,
 				poolSecurityMultiplierBps,
 				currentPrice,
@@ -212,7 +212,7 @@ library SecurityPoolUtils {
 
 	function _isLiquidationBeyondMinPriceDistance(
 		uint256 poolHeldVaultRepBackingAttoRep,
-		uint256 disputeStakedRepAttoRep,
+		uint256 disputeStakedAttoRep,
 		uint256 coverageCommitmentAttoEth,
 		uint256 poolSecurityMultiplierBps,
 		uint256 currentPrice,
@@ -222,7 +222,7 @@ library SecurityPoolUtils {
 		if (coverageCommitmentAttoEth == 0 || currentPrice == 0) return false;
 		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
 		uint256 associatedRepThreshold =
-			((poolHeldVaultRepBackingAttoRep + disputeStakedRepAttoRep) * valueScale) /
+			((poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) /
 				(coverageCommitmentAttoEth * poolSecurityMultiplierBps);
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
 		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;

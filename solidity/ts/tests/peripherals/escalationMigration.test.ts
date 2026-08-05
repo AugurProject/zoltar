@@ -355,10 +355,10 @@ describe('Peripherals: escalation migration', () => {
 			args: [QuestionOutcome.Yes],
 		})
 
-		strictEqualTypeSafe(parentVaultBeforeMigration.disputeStakedRepAttoRep, unresolvedDeposit, 'parent dispute-staked REP should equal the unresolved principal before migration')
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'atomic unresolved migration should clear parent dispute-staked REP accounting')
-		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'the aggregate-funded child should not create a per-vault escalation lock')
-		strictEqualTypeSafe(childForkData.migratedRepAttoRep, childForkDataBeforeMigration.migratedRepAttoRep, 'unresolved migration should not change child migrated REP accounting')
+		strictEqualTypeSafe(parentVaultBeforeMigration.disputeStakedAttoRep, unresolvedDeposit, 'parent dispute-staked REP should equal the unresolved principal before migration')
+		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'atomic unresolved migration should clear parent dispute-staked REP accounting')
+		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedAttoRep, 0n, 'the aggregate-funded child should not create a per-vault escalation lock')
+		strictEqualTypeSafe(childForkData.migratedAttoRep, childForkDataBeforeMigration.migratedAttoRep, 'unresolved migration should not change child migrated REP accounting')
 		strictEqualTypeSafe(childEscalationBalanceAfterMigration, childEscalationBalanceBeforeMigration, 'vault materialization should reuse the aggregate backing placed in the selected child at creation')
 		strictEqualTypeSafe(childForkSnapshotInitialized, true, 'the child continuation game should inherit the fork carry snapshot')
 		strictEqualTypeSafe(childDepositsAfterMigration.length, 0, 'the child continuation game should not replay parent unresolved deposits as fresh local deposits')
@@ -408,7 +408,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'aggregate migration should clear all parent unresolved escrow')
+		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'aggregate migration should clear all parent unresolved escrow')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should rely on its aggregate carry snapshot rather than per-vault escrow')
 	})
 
@@ -470,7 +470,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(parentVault.disputeStakedRepAttoRep, parentVaultBefore.disputeStakedRepAttoRep, 'expired migration must leave unresolved parent dispute-staked REP accounting untouched')
+		strictEqualTypeSafe(parentVault.disputeStakedAttoRep, parentVaultBefore.disputeStakedAttoRep, 'expired migration must leave unresolved parent dispute-staked REP accounting untouched')
 		strictEqualTypeSafe(parentVault.repBackingUnits, parentVaultBefore.repBackingUnits, 'expired migration must leave parent backingUnits untouched')
 	})
 
@@ -504,7 +504,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /execution reverted|Reverted without a reason/i)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(parentVault.disputeStakedRepAttoRep, parentVaultBefore.disputeStakedRepAttoRep, 'the inactive vault remains untouched after expiry')
+		strictEqualTypeSafe(parentVault.disputeStakedAttoRep, parentVaultBefore.disputeStakedAttoRep, 'the inactive vault remains untouched after expiry')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should not materialize an expired vault')
 	})
 
@@ -573,10 +573,10 @@ describe('Peripherals: escalation migration', () => {
 		const childPoolExists = await contractExists(client, yesSecurityPool.securityPool)
 		const childVaultAfterMigration = childPoolExists ? await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address) : undefined
 
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'zero child allocation should clear the parent unresolved REP lock as dust')
+		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'zero child allocation should clear the parent unresolved REP lock as dust')
 		assert.deepStrictEqual(parentDepositsAfterMigration, parentYesDepositsBeforeMigration, 'the immutable parent proof commitment should retain every yes deposit leaf')
 		assert.deepStrictEqual(parentNoDepositsAfterMigration, parentNoDepositsBeforeMigration, 'the immutable parent proof commitment should retain every no deposit leaf')
-		strictEqualTypeSafe(childVaultAfterMigration?.disputeStakedRepAttoRep ?? 0n, 0n, 'zero child allocation should not create child escrow')
+		strictEqualTypeSafe(childVaultAfterMigration?.disputeStakedAttoRep ?? 0n, 0n, 'zero child allocation should not create child escrow')
 	})
 
 	test('non-own fork claims rely on the continuation snapshot without replaying local deposits or vault escrow', async () => {
@@ -740,8 +740,8 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		if (vaultRepAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultRepAttoRep, questionId)
+		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		if (vaultAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultAttoRep, questionId)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
@@ -791,7 +791,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentVaultAfterExport = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVaultAfterExport.repBackingUnits, 0n, 'the parent vault should have no remaining REP backing after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.coverageCommitmentAttoEth, 0n, 'the parent vault should have no remaining coverage commitment after migration')
-		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedRepAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
+		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
 		const activeParentVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
 		const activeParentVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeParentVaultCount)
 		strictEqualTypeSafe(
@@ -961,9 +961,9 @@ describe('Peripherals: escalation migration', () => {
 		const childEscrowPrincipal = childYesEscrowPrincipal + childNoEscrowPrincipal
 		const childEscrowChildRep = childYesEscrowChildRep + childNoEscrowChildRep
 
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'an underfunded child branch should still clear the parent unresolved REP lock after the migration succeeds')
+		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'an underfunded child branch should still clear the parent unresolved REP lock after the migration succeeds')
 		strictEqualTypeSafe(childPoolExists, true, 'an underfunded child branch should deploy the child pool')
-		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'underfunding should not create scaled vault escrow')
+		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedAttoRep, 0n, 'underfunding should not create scaled vault escrow')
 		strictEqualTypeSafe(invalidOutcomeState.balanceAttoRep, parentInvalidOutcomeState.balanceAttoRep, 'the child invalid balance should stay aligned with the parent snapshot')
 		strictEqualTypeSafe(yesOutcomeState.balanceAttoRep, parentYesOutcomeState.balanceAttoRep, 'the child yes balance should preserve the parent snapshot even when child REP backing is smaller')
 		strictEqualTypeSafe(noOutcomeState.balanceAttoRep, parentNoOutcomeState.balanceAttoRep, 'the child no balance should stay aligned with the parent snapshot')
@@ -1100,7 +1100,7 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.advanceTime(DAY)
 		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtResume, 'child continuation cost should advance without the other vault')
 		const attackerParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
-		assert.ok(attackerParentVault.disputeStakedRepAttoRep > 0n, 'the inactive vault should remain untouched in the parent')
+		assert.ok(attackerParentVault.disputeStakedAttoRep > 0n, 'the inactive vault should remain untouched in the parent')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, attackerClient.account.address), 0n, 'the active vault should not migrate another vault into its child')
 	})
 
@@ -1133,7 +1133,7 @@ describe('Peripherals: escalation migration', () => {
 		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const losingParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, losingClient.account.address)
-		assert.ok(losingParentVault.disputeStakedRepAttoRep > 0n, 'the losing vault should remain unmigrated in the parent')
+		assert.ok(losingParentVault.disputeStakedAttoRep > 0n, 'the losing vault should remain unmigrated in the parent')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesPool.securityPool, QuestionOutcome.No, losingClient.account.address), 0n, 'the selected child must not authorize the non-migrating losing vault')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -1278,8 +1278,8 @@ describe('Peripherals: escalation migration', () => {
 		const firstYesDeposit = forkThresholdAttoRep / 3n
 		const secondYesDeposit = forkThresholdAttoRep - firstYesDeposit
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-		if (vaultRepAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultRepAttoRep, questionId)
+		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+		if (vaultAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultAttoRep, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
@@ -1422,7 +1422,7 @@ describe('Peripherals: escalation migration', () => {
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childVaultAfterFirstMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)).currentCarryTotalAttoRep, recursiveDeposit, 'the child continuation snapshot should carry the unresolved yes-side total before the second fork')
-		strictEqualTypeSafe(childVaultAfterFirstMigration.disputeStakedRepAttoRep, 0n, 'recursive carry should remain aggregate-backed instead of seeding child vault escrow')
+		strictEqualTypeSafe(childVaultAfterFirstMigration.disputeStakedAttoRep, 0n, 'recursive carry should remain aggregate-backed instead of seeding child vault escrow')
 
 		const secondForkQuestionData = {
 			...questionData,
@@ -1463,8 +1463,8 @@ describe('Peripherals: escalation migration', () => {
 		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
 		const grandchildOutcomeState = await getEscalationGameOutcomeState(client, grandchildEscalationGame, QuestionOutcome.Yes)
 
-		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedRepAttoRep, 0n, 'the second migration should clear the carried lock from the child continuation vault')
-		strictEqualTypeSafe(grandchildVault.disputeStakedRepAttoRep, 0n, 'the grandchild should keep recursive carry in aggregate state rather than vault escrow')
+		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedAttoRep, 0n, 'the second migration should clear the carried lock from the child continuation vault')
+		strictEqualTypeSafe(grandchildVault.disputeStakedAttoRep, 0n, 'the grandchild should keep recursive carry in aggregate state rather than vault escrow')
 		strictEqualTypeSafe(grandchildOutcomeState.currentCarryTotalAttoRep, recursiveDeposit, 'the recursive continuation migration should preserve the carried unresolved total by snapshot')
 	})
 
@@ -1609,7 +1609,7 @@ describe('Peripherals: escalation migration', () => {
 		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, statoblastSecurityMultiplierBps)
 		const grandchildVault = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
 		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
-		strictEqualTypeSafe(grandchildVault.disputeStakedRepAttoRep, 0n, 'recursive inherited carry should not create grandchild vault escrow')
+		strictEqualTypeSafe(grandchildVault.disputeStakedAttoRep, 0n, 'recursive inherited carry should not create grandchild vault escrow')
 		assert.ok((await getEscalationGameOutcomeState(client, grandchildEscalationGame, QuestionOutcome.Yes)).currentCarryTotalAttoRep > 0n, 'the grandchild aggregate snapshot should retain inherited carry')
 	})
 
@@ -1708,7 +1708,7 @@ describe('Peripherals: escalation migration', () => {
 		const clientVaultBeforeSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex])
 		const clientVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(clientVaultAfterSettlement.disputeStakedRepAttoRep, 0n, 'permissionless settlement should clear the owners lock')
+		strictEqualTypeSafe(clientVaultAfterSettlement.disputeStakedAttoRep, 0n, 'permissionless settlement should clear the owners lock')
 		strictEqualTypeSafe(clientVaultAfterSettlement.repBackingUnits >= clientVaultBeforeSettlement.repBackingUnits, true, 'permissionless settlement should preserve or increase the owners vault claim')
 	})
 })

@@ -423,7 +423,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										reportId: evaluated.opportunity.reportId,
 									})
 									if (evaluated.candidate !== undefined) {
-										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsWethAttoEth : evaluated.candidate.quote.hedgeCostWethAttoEth
+										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsAttoWeth : evaluated.candidate.quote.hedgeCostAttoWeth
 										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
 										const primaryRep = evaluated.candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
 										evaluated.opportunity.centralizedPriceDeviationBps = state.centralizedMarket === undefined ? undefined : centralizedPriceDeviationBps(dexPriceRepPerEth, state.centralizedMarket, evaluated.candidate.report.game.token2)?.toString()
@@ -513,7 +513,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						)
 						state.lastPollAt = new Date().toISOString()
 						state.opportunities = opportunities
-						const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWethAttoEth)
+						const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitAttoWeth)
 						if (selected !== undefined && wallet !== undefined) {
 							selected.opportunity.decision = 'selected'
 							try {

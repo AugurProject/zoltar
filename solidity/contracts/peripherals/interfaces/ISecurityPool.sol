@@ -172,9 +172,9 @@ interface ISecurityPool {
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
 	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
 
-	function attoRepToBackingUnits(uint256 repAmountAttoRep) external view returns (uint256);
+	function attoRepToBackingUnits(uint256 attoRepAmount) external view returns (uint256);
 	function backingUnitsToAttoRep(uint256 repBackingUnits) external view returns (uint256);
-	function getTotalPoolHeldRepAttoRep() external view returns (uint256);
+	function getTotalPoolHeldAttoRep() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
@@ -186,8 +186,8 @@ interface ISecurityPool {
 	function updateVaultFees(address vault) external;
 	function redeemFees(address vault) external;
 
-	function withdrawRepFromVault(address vault, uint256 repAmountAttoRep) external;
-	function depositRepToVault(uint256 repAmountAttoRep) external;
+	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external;
+	function depositRepToVault(uint256 attoRepAmount) external;
 	function redeemRepFromVault(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
 	function performLiquidation(
@@ -196,7 +196,7 @@ interface ISecurityPool {
 		uint256 requestedCommitmentTransferAttoEth,
 		uint256 snapshotTargetBackingUnits,
 		uint256 snapshotTargetCoverageCommitmentAttoEth,
-		uint256 snapshotTotalPoolHeldRepAttoRep,
+		uint256 snapshotTotalPoolHeldAttoRep,
 		uint256 snapshotTotalRepBackingUnits
 	) external;
 	function executeCoverageCommitmentUpdate(address callerVault, uint256 amountAttoEth) external;

@@ -416,7 +416,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPools: [
 						createSelectedPool({
 							statoblastSecurityMultiplierBps: 20_000n,
-							totalPoolHeldRepAttoRep: 10_000n * 10n ** 18n,
+							totalPoolHeldAttoRep: 10_000n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
@@ -606,7 +606,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							disputeStakedRepAttoRep: 0n,
+							disputeStakedAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
@@ -646,8 +646,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							disputeStakedRepAttoRep: 0n,
-							vaultRepBackingAttoRep: 0n,
+							disputeStakedAttoRep: 0n,
+							vaultAttoRepBacking: 0n,
 							coverageCommitmentAttoEth: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
@@ -783,8 +783,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							disputeStakedRepAttoRep: 1n,
-							vaultRepBackingAttoRep: 0n,
+							disputeStakedAttoRep: 1n,
+							vaultAttoRepBacking: 0n,
 							coverageCommitmentAttoEth: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
@@ -817,7 +817,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: selectedPoolAddress,
 					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRepAttoRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+					securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
 					selectedPoolView: 'reporting',
 				})}
 				showHeader={false}

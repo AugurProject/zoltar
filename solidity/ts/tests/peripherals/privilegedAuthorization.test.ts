@@ -1,7 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldRepAttoRep, getTotalCoverageCommitmentAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCoverageCommitmentAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
@@ -129,7 +129,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 			ethBalanceAttoEth: await getETHBalance(client, securityPool),
 			ownerVault: await getSecurityVault(client, securityPool, client.account.address),
 			backingUnitsDenominator: await getTotalRepBackingUnits(client, securityPool),
-			poolHeldRepBalanceAttoRep: await getTotalPoolHeldRepAttoRep(client, securityPool),
+			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
 			retentionRate: await getCurrentRetentionRate(client, securityPool),
 			totalCoverageCommitmentAttoEth: await getTotalCoverageCommitmentAttoEth(client, securityPool),
 		})
@@ -221,7 +221,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 		const readSnapshot = async () => ({
 			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
 			totalRepBackingUnits: await getTotalRepBackingUnits(client, securityPool),
-			poolHeldRepBalanceAttoRep: await getTotalPoolHeldRepAttoRep(client, securityPool),
+			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
 			totalCoverageCommitmentAttoEth: await getTotalCoverageCommitmentAttoEth(client, securityPool),
 			vault: await getSecurityVault(client, securityPool, attacker.account.address),
 		})
@@ -271,7 +271,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 			totalEscrow: await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
-				functionName: 'totalDisputeStakedRepAttoRep',
+				functionName: 'totalDisputeStakedAttoRep',
 				args: [],
 			}),
 		})

@@ -253,14 +253,14 @@
 				</figure>
 				<p>Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.</p>
 				<div class="equation" id="eq-statoblast-rep-eth-price">
-					<math display="block" aria-label="REP per ETH price equals the floor of REP amount in attoREP times price precision divided by ETH amount in attoETH" data-source="repPerEthPrice = \left\lfloor repAmountAttoRep \cdot pricePrecision / ethAmountAttoEth \right\rfloor">
+					<math display="block" aria-label="REP per ETH price equals the floor of REP amount in attoREP times price precision divided by ETH amount in attoETH" data-source="repPerEthPrice = \left\lfloor attoRepAmount \cdot pricePrecision / ethAmountAttoEth \right\rfloor">
 						<mrow>
 							<mi>repPerEthPrice</mi>
 							<mo>=</mo>
 							<mo>&#x230A;</mo>
 							<mfrac>
 								<mrow>
-									<mi>repAmountAttoRep</mi>
+									<mi>attoRepAmount</mi>
 									<mo>&#x22C5;</mo>
 									<mi>pricePrecision</mi>
 								</mrow>
@@ -308,12 +308,12 @@
 					<p class="diagram-caption"><span class="figure-label">Pool Accounting</span>REP backing units and fee accounting use separate proportional ledgers: REP backing units track vault REP backing, which is not automatically withdrawable REP, while the fee index tracks decayed ETH settlement collateral owed to vaults.</p>
 				</figure>
 				<div class="equation" id="eq-statoblast-rep-backing-units-conversion">
-					<math display="block" aria-label="REP deposits mint amount times price precision backing units when the backing ledger or pool-held REP balance is empty, otherwise the floor of amount times total backing units divided by pool-held REP; converting backing units to REP returns zero for an empty backing ledger and otherwise floors the proportional conversion" data-source="attoRepToBackingUnits(repAmountAttoRep) = repAmountAttoRep * PRICE_PRECISION if totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0, otherwise \left\lfloor repAmountAttoRep * totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep \right\rfloor; backingUnitsToAttoRep(repBackingUnits) = 0 if totalRepBackingUnits = 0, otherwise \left\lfloor repBackingUnits * totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits \right\rfloor">
+					<math display="block" aria-label="REP deposits mint amount times price precision backing units when the backing ledger or pool-held REP balance is empty, otherwise the floor of amount times total backing units divided by pool-held REP; converting backing units to REP returns zero for an empty backing ledger and otherwise floors the proportional conversion" data-source="attoRepToBackingUnits(attoRepAmount) = attoRepAmount * PRICE_PRECISION if totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0, otherwise \left\lfloor attoRepAmount * totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep \right\rfloor; backingUnitsToAttoRep(repBackingUnits) = 0 if totalRepBackingUnits = 0, otherwise \left\lfloor repBackingUnits * totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits \right\rfloor">
 						<mtable>
 							<mtr
-								><mtd><mi>attoRepToBackingUnits</mi><mo>(</mo><mi>repAmountAttoRep</mi><mo>)</mo></mtd
+								><mtd><mi>attoRepToBackingUnits</mi><mo>(</mo><mi>attoRepAmount</mi><mo>)</mo></mtd
 								><mtd><mo>=</mo></mtd
-								><mtd><mi>repAmountAttoRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mtd
+								><mtd><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mtd
 								><mtd><mtext>if the ledger or pool-held REP balance is empty</mtext></mtd></mtr
 							>
 							<mtr
@@ -321,7 +321,7 @@
 								><mtd
 									><mo>&#x230A;</mo
 									><mfrac
-										><mrow><mi>repAmountAttoRep</mi><mo>&#x22C5;</mo><mi>totalRepBackingUnits</mi></mrow
+										><mrow><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>totalRepBackingUnits</mi></mrow
 										><mi>totalPoolHeldRepBalanceAttoRep</mi></mfrac
 									><mo>&#x230B;</mo></mtd
 								><mtd><mtext>otherwise</mtext></mtd></mtr
@@ -785,8 +785,8 @@
 				<h3>Migration-powered REP</h3>
 				<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
 				<div class="equation" id="eq-statoblast-migration-powered-rep">
-					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredRepAttoRep = vaultTotalAssociatedRepAttoRep - vaultEscalationGameRepAttoRep">
-						<mrow><mi>vaultMigrationPoweredRepAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedRepAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameRepAttoRep</mi></mrow>
+					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredAttoRep = vaultTotalAssociatedAttoRep - vaultEscalationGameAttoRep">
+						<mrow><mi>vaultMigrationPoweredAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameAttoRep</mi></mrow>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Migration-powered REP</span>Escalation claims are excluded.</p>
 				</div>
@@ -914,7 +914,7 @@
 					<p class="diagram-caption"><span class="figure-label">Proportional Migration</span>Vault migration normally floors each REP-backing-unit-based REP delta. When cumulative migrated backing units reach the parent total, the final migration reconciles the remaining REP delta into the selected child, and cumulative routed REP sets its settlement-collateral target.</p>
 				</figure>
 				<div class="equation" id="eq-statoblast-fork-migration-proportion">
-					<math display="block" aria-label="migration REP denominator in attoREP at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; the provisional migrated REP delta in attoREP equals the floor of vault REP backing units times the migration REP denominator in attoREP divided by the parent total REP backing units; when cumulative migrated backing units equal the parent total, the final migration routes all remaining attoREP in the fork bucket into the selected child" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableRepAtForkAttoRep; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \cdot migrationRepDenominatorAtForkAttoRep / parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits ? migrationRepDenominatorAtForkAttoRep - priorMigratedRepAttoRep : provisionalMigratedRepDeltaAttoRep">
+					<math display="block" aria-label="migration REP denominator in attoREP at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; the provisional migrated REP delta in attoREP equals the floor of vault REP backing units times the migration REP denominator in attoREP divided by the parent total REP backing units; when cumulative migrated backing units equal the parent total, the final migration routes all remaining attoREP in the fork bucket into the selected child" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \cdot migrationRepDenominatorAtForkAttoRep / parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits ? migrationRepDenominatorAtForkAttoRep - priorMigratedAttoRep : provisionalMigratedRepDeltaAttoRep">
 						<mtable columnalign="right center left" rowspacing="0.8em">
 							<mtr>
 								<mtd>
@@ -938,7 +938,7 @@
 											</mtr>
 											<mtr>
 												<mtd>
-													<mi>auctionableRepAtForkAttoRep</mi>
+													<mi>auctionableAttoRepAtFork</mi>
 												</mtd>
 												<mtd>
 													<mtext>otherwise</mtext>
@@ -987,7 +987,7 @@
 													<mrow>
 														<mi>migrationRepDenominatorAtForkAttoRep</mi>
 														<mo>&#x2212;</mo>
-														<mi>priorMigratedRepAttoRep</mi>
+														<mi>priorMigratedAttoRep</mi>
 													</mrow>
 												</mtd>
 												<mtd>
@@ -1015,7 +1015,7 @@
 				</div>
 				<p>The equation above gives the provisional REP-backing-unit proportion. The forker also tracks cumulative migrated parent REP backing units independently for every child. When that cumulative value reaches the complete parent denominator, the final migration routes every REP unit left in the fork bucket into the selected child. Both external and own-fork transfers use one fixed, fee-exclusive fork snapshot plus cumulative ceiling accounting, so complete REP-backing-unit migration transfers the complete REP and settlement-collateral snapshots without manufacturing an auction shortfall from individual REP rounding. An external fork is already known when <code>activateForkMode</code> checkpoints and records that snapshot. The own-fork snapshot uses this order: <code>activateForkMode</code> changes the pool state and checkpoints through the pre-fork fee horizon; the proxy creates the universe fork; a fork-time checkpoint covers the newly exposed question-end-to-fork interval at the retained operational rate; then <code>settlementCollateralAtForkAttoEth</code> records the resulting fee-exclusive settlement collateral in the fork-neutral snapshot shared by both paths. Truth-auction repair subtracts the child's actual cumulative routed settlement collateral from that snapshot to set the settlement-collateral shortfall as its ETH raise target; actual repair still depends on auction demand, clearing, and tick-level integer rounding. Before either migration path clears the parent coverage commitment, it also checkpoints the vault's earned fees. Each ETH transfer subtracts from parent settlement collateral and is limited to the pool balance above <code>totalAccruedFeesAttoEth()</code>, keeping both the unallocated reserve and assigned claimable vault fees funded in the parent.</p>
 				<div class="equation" id="eq-statoblast-fork-collateral-ceiling">
-					<math display="block" aria-label="cumulative settlement collateral target in attoETH after migration equals ceiling of parent settlement collateral in attoETH at fork times cumulative REP in attoREP transferred after migration divided by the migration REP denominator in attoREP at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; requested settlement collateral delta in attoETH equals the cumulative target minus cumulative settlement collateral already transferred; actual settlement collateral delta in attoETH is the minimum of requested delta and current parent settlement collateral" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableRepAtForkAttoRep; cumulativeSettlementCollateralTargetAttoEthAfterMigration = ⌈parentSettlementCollateralAtForkAttoEth \cdot cumulativeRepTransferredAfterMigrationAttoRep / migrationRepDenominatorAtForkAttoRep⌉; requestedSettlementCollateralDeltaAttoEth = cumulativeSettlementCollateralTargetAttoEthAfterMigration - cumulativeSettlementCollateralAlreadyTransferredAttoEth; actualSettlementCollateralDeltaAttoEth = min(requestedSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth)">
+					<math display="block" aria-label="cumulative settlement collateral target in attoETH after migration equals ceiling of parent settlement collateral in attoETH at fork times cumulative REP in attoREP transferred after migration divided by the migration REP denominator in attoREP at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; requested settlement collateral delta in attoETH equals the cumulative target minus cumulative settlement collateral already transferred; actual settlement collateral delta in attoETH is the minimum of requested delta and current parent settlement collateral" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; cumulativeSettlementCollateralTargetAttoEthAfterMigration = ⌈parentSettlementCollateralAtForkAttoEth \cdot cumulativeRepTransferredAfterMigrationAttoRep / migrationRepDenominatorAtForkAttoRep⌉; requestedSettlementCollateralDeltaAttoEth = cumulativeSettlementCollateralTargetAttoEthAfterMigration - cumulativeSettlementCollateralAlreadyTransferredAttoEth; actualSettlementCollateralDeltaAttoEth = min(requestedSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth)">
 						<mtable>
 							<mtr>
 								<mtd>
@@ -1060,7 +1060,7 @@
 					<p class="diagram-caption"><span class="figure-label">Own-Fork REP Buckets</span>In an own fork, the drained escalation-game REP pays the fork haircut and the remainder becomes aggregate child backing. Ordinary pool-held REP forms the vault bucket without a haircut.</p>
 				</figure>
 				<div class="equation" id="eq-statoblast-own-fork-rep-buckets">
-					<math display="block" aria-label="fork haircut in attoREP equals fork threshold in attoREP divided by fork burn divisor, escalation child REP in attoREP equals dispute-staked REP minus the haircut, vault REP in attoREP equals auctionable REP minus escalation child REP, and selected child escalation backing in attoREP equals escalation child REP" data-source="forkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋; escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep; vaultRepAtForkAttoRep = auctionableRepAtForkAttoRep - escalationChildRepAtForkAttoRep; selectedChildEscalationBackingAttoRep = escalationChildRepAtForkAttoRep">
+					<math display="block" aria-label="fork haircut in attoREP equals fork threshold in attoREP divided by fork burn divisor, escalation child REP in attoREP equals dispute-staked REP minus the haircut, vault REP in attoREP equals auctionable REP minus escalation child REP, and selected child escalation backing in attoREP equals escalation child REP" data-source="forkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋; escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep; vaultRepAtForkAttoRep = auctionableAttoRepAtFork - escalationChildRepAtForkAttoRep; selectedChildEscalationBackingAttoRep = escalationChildRepAtForkAttoRep">
 						<mtable>
 							<mtr>
 								<mtd><mi>forkHaircutAttoRep</mi></mtd>
@@ -1091,7 +1091,7 @@
 									<mo>=</mo>
 								</mtd>
 								<mtd>
-									<mi>auctionableRepAtForkAttoRep</mi>
+									<mi>auctionableAttoRepAtFork</mi>
 									<mo>-</mo>
 									<mi>escalationChildRepAtForkAttoRep</mi>
 								</mtd>
@@ -1239,18 +1239,18 @@
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 bidder incentives</a>, <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent demand</a>, <a href="../reference/security-model.html#assumption-a12">A12 efficient REP conversion</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../reference/security-model.html#assumption-a20">A20 bid-data availability</a>, <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>, and <a href="../reference/security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.</p>
 				<p class="lede">After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap.</p>
 
-				<p>The repair target is the contract’s direct statement of the collateral gap: <code>parentSettlementCollateralAtForkAttoEth</code> minus <code>forkSettlementCollateralReceivedAttoEth</code>, floored at zero. The received counter records actual cumulative-ceiling transfers after the parent’s available-collateral cap, so nominal migrated REP cannot overstate child funding. The auction start gate is tied to the parent pool’s fork timestamp plus the eight-week migration window, not to any child-universe fork time. If migrated REP has reached the pool-auctionable baseline, or if that baseline is zero, the child pool can finalize this phase without running the division path or selling REP. For an own fork that baseline is <code>vaultRepAtForkAttoRep</code>; for an external fork it is <code>auctionableRepAtForkAttoRep</code>.</p>
+				<p>The repair target is the contract’s direct statement of the collateral gap: <code>parentSettlementCollateralAtForkAttoEth</code> minus <code>forkSettlementCollateralReceivedAttoEth</code>, floored at zero. The received counter records actual cumulative-ceiling transfers after the parent’s available-collateral cap, so nominal migrated REP cannot overstate child funding. The auction start gate is tied to the parent pool’s fork timestamp plus the eight-week migration window, not to any child-universe fork time. If migrated REP has reached the pool-auctionable baseline, or if that baseline is zero, the child pool can finalize this phase without running the division path or selling REP. For an own fork that baseline is <code>vaultRepAtForkAttoRep</code>; for an external fork it is <code>auctionableAttoRepAtFork</code>.</p>
 				<p>The REP sale cap is deliberately not just “all remaining REP.” The forker computes the auctionable pool-held REP baseline, subtracts a tiny floor-rounded haircut tied to the REP that already migrated, and gives the auction that maximum inventory. The baseline combines the pool-held REP bucket and unresolved dispute-staked REP. Sold REP is allocated between them proportionally with integer floors; the game applies its allocation as the retention and curve rebase described in <a href="../explanation/truth-auctions.html#escalation-rep-haircut">Dispute-staked REP Participates in Repair</a>.</p>
 				<div class="equation" id="eq-statoblast-auction-rep-sale-cap">
-					<math display="block" aria-label="combined auctionable REP in attoREP equals pool auctionable REP at fork in attoREP plus unresolved dispute-staked REP in attoREP, migrated REP haircut in attoREP equals migrated REP in attoREP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least combined auctionable REP; combined auctionable REP minus one attoREP when the haircut is zero and an escalation game exists; otherwise combined auctionable REP minus migrated REP haircut" data-source="combinedAuctionableRepAttoRep = poolAuctionableRepAtForkAttoRep + unresolvedDisputeStakedRepAttoRep; migratedRepHaircutAttoRep = migratedRepAttoRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxRepBeingSoldAttoRep = migratedRepHaircutAttoRep &gt;= combinedAuctionableRepAttoRep ? 0 : migratedRepHaircutAttoRep == 0 and escalationGameExists ? combinedAuctionableRepAttoRep - 1 : combinedAuctionableRepAttoRep - migratedRepHaircutAttoRep">
+					<math display="block" aria-label="combined auctionable REP in attoREP equals pool auctionable REP at fork in attoREP plus unresolved dispute-staked REP in attoREP, migrated REP haircut in attoREP equals migrated REP in attoREP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least combined auctionable REP; combined auctionable REP minus one attoREP when the haircut is zero and an escalation game exists; otherwise combined auctionable REP minus migrated REP haircut" data-source="combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + unresolvedDisputeStakedAttoRep; migratedRepHaircutAttoRep = migratedAttoRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxAttoRepBeingSold = migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep ? 0 : migratedRepHaircutAttoRep == 0 and escalationGameExists ? combinedAuctionableAttoRep - 1 : combinedAuctionableAttoRep - migratedRepHaircutAttoRep">
 						<mtable>
 							<mtr>
-								<mtd><mi>combinedAuctionableRepAttoRep</mi></mtd>
+								<mtd><mi>combinedAuctionableAttoRep</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mi>poolAuctionableRepAtForkAttoRep</mi>
 									<mo>+</mo>
-									<mi>unresolvedDisputeStakedRepAttoRep</mi>
+									<mi>unresolvedDisputeStakedAttoRep</mi>
 								</mtd>
 							</mtr>
 							<mtr>
@@ -1262,14 +1262,14 @@
 								</mtd>
 								<mtd>
 									<mfrac>
-										<mi>migratedRepAttoRep</mi>
+										<mi>migratedAttoRep</mi>
 										<mi>MAX_AUCTION_VAULT_HAIRCUT_DIVISOR</mi>
 									</mfrac>
 								</mtd>
 							</mtr>
 							<mtr>
 								<mtd>
-									<mi>maxRepBeingSoldAttoRep</mi>
+									<mi>maxAttoRepBeingSold</mi>
 								</mtd>
 								<mtd>
 									<mo>=</mo>
@@ -1281,12 +1281,12 @@
 												<mn>0</mn>
 											</mtd>
 											<mtd>
-												<mtext>if migratedRepHaircutAttoRep &gt;= combinedAuctionableRepAttoRep</mtext>
+												<mtext>if migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep</mtext>
 											</mtd>
 										</mtr>
 										<mtr>
 											<mtd>
-												<mi>combinedAuctionableRepAttoRep</mi>
+												<mi>combinedAuctionableAttoRep</mi>
 												<mo>-</mo>
 												<mn>1</mn>
 											</mtd>
@@ -1296,7 +1296,7 @@
 										</mtr>
 										<mtr>
 											<mtd>
-												<mi>combinedAuctionableRepAttoRep</mi>
+												<mi>combinedAuctionableAttoRep</mi>
 												<mo>-</mo>
 												<mi>migratedRepHaircutAttoRep</mi>
 											</mtd>

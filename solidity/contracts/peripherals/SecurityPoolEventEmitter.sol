@@ -110,7 +110,7 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		address sourceGame,
 		uint256 totalPoolHeldRepAtForkAttoRep,
 		uint256 disputeStakedRepAtForkAttoRep,
-		uint256 resultingLockedRepAttoRep
+		uint256 resultingLockedAttoRep
 	) external payable {
 		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
 		if (data.unresolvedEscalationAtFork) {
@@ -121,7 +121,7 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 			migrationProxy,
 			totalPoolHeldRepAtForkAttoRep,
 			disputeStakedRepAtForkAttoRep,
-			resultingLockedRepAttoRep
+			resultingLockedAttoRep
 		);
 		emit SecurityPoolForkSnapshot(
 			parent,
@@ -130,7 +130,7 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 			data.unresolvedEscalationAtFork,
 			data.settlementCollateralAtForkAttoEth,
 			totalPoolHeldRepAtForkAttoRep,
-			data.auctionableRepAtForkAttoRep,
+			data.auctionableAttoRepAtFork,
 			data.escalationSourceRepAtForkAttoRep,
 			data.escalationChildRepAtForkAttoRep,
 			data.escalationStartBondAtForkAttoRep,

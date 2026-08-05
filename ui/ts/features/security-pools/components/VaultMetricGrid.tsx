@@ -16,7 +16,7 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 	)
 }
 
-export function VaultMetricGrid({ className = '', layout = 'grid', disputeStakedRepAttoRep, priceValidUntilTimestamp, vaultRepBackingAttoRep, coverageCommitmentAttoEth }: VaultMetricGridProps) {
+export function VaultMetricGrid({ className = '', layout = 'grid', disputeStakedAttoRep, priceValidUntilTimestamp, vaultAttoRepBacking, coverageCommitmentAttoEth }: VaultMetricGridProps) {
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
@@ -24,12 +24,12 @@ export function VaultMetricGrid({ className = '', layout = 'grid', disputeStaked
 					<VaultPrimaryMetric className='vault-preview-coverage-commitment' label={commonCopy.coverageCommitmentAttoEth} value={coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 				</div>
 				<div className='vault-preview-side-metrics'>
-					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultRepBackingAttoRep} suffix={commonCopy.rep} />
+					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 				<div className='vault-preview-meta'>
-					{disputeStakedRepAttoRep === undefined ? null : (
-						<MetricField label={commonCopy.disputeStakedRepAttoRep}>
-							<CurrencyValue value={disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+					{disputeStakedAttoRep === undefined ? null : (
+						<MetricField label={commonCopy.disputeStakedAttoRep}>
+							<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					)}
 					{priceValidUntilTimestamp === undefined ? null : (
@@ -46,14 +46,14 @@ export function VaultMetricGrid({ className = '', layout = 'grid', disputeStaked
 			<div className='vault-detail-hero'>
 				<VaultPrimaryMetric className='vault-detail-hero-primary' label={commonCopy.coverageCommitmentAttoEth} value={coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 				<div className='vault-detail-hero-secondary'>
-					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultRepBackingAttoRep} suffix={commonCopy.rep} />
+					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
 				<p className='detail'>{securityPoolCopy.vaultCoverageDetail}</p>
-				{disputeStakedRepAttoRep === undefined ? undefined : (
-					<MetricField label={commonCopy.disputeStakedRepAttoRep}>
-						<CurrencyValue value={disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+				{disputeStakedAttoRep === undefined ? undefined : (
+					<MetricField label={commonCopy.disputeStakedAttoRep}>
+						<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				)}
 				{priceValidUntilTimestamp === undefined ? undefined : (

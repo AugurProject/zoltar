@@ -45,7 +45,7 @@ export type StrategySettings = {
 export type MutableStrategy = {
 	maxSpotTwapTicks: bigint
 	minimumProfitBps: bigint
-	minimumProfitWethAttoEth: bigint
+	minimumProfitAttoWeth: bigint
 	minimumRemainingBlocks: bigint
 	minimumRemainingSeconds: bigint
 	pollMilliseconds: number
@@ -274,7 +274,7 @@ export function strategySettings(strategy: MutableStrategy): StrategySettings {
 	return {
 		maxSpotTwapTicks: strategy.maxSpotTwapTicks.toString(),
 		minimumProfitBps: strategy.minimumProfitBps.toString(),
-		minimumProfitWeth: decimalWeth(strategy.minimumProfitWethAttoEth),
+		minimumProfitWeth: decimalWeth(strategy.minimumProfitAttoWeth),
 		minimumRemainingBlocks: strategy.minimumRemainingBlocks.toString(),
 		minimumRemainingSeconds: strategy.minimumRemainingSeconds.toString(),
 		pollMilliseconds: strategy.pollMilliseconds,
@@ -315,8 +315,8 @@ export function updateStrategyFromRequest(strategy: MutableStrategy, value: unkn
 	}
 	const expected = allowed.size
 	if (Object.keys(record).length !== expected) throw new Error('Every strategy setting is required')
-	const minimumProfitWethAttoEth = parseDecimalWeth(requiredDecimal(record, 'minimumProfitWeth'))
-	if (minimumProfitWethAttoEth > 1_000n * 10n ** 18n) throw new Error('Minimum profit must not exceed 1000 WETH')
+	const minimumProfitAttoWeth = parseDecimalWeth(requiredDecimal(record, 'minimumProfitWeth'))
+	if (minimumProfitAttoWeth > 1_000n * 10n ** 18n) throw new Error('Minimum profit must not exceed 1000 WETH')
 	const maxSpotTwapTicks = requiredBigInt(record, 'maxSpotTwapTicks', 0n, 100_000n)
 	const minimumProfitBps = requiredBigInt(record, 'minimumProfitBps', 0n, 100_000n)
 	const minimumRemainingBlocks = requiredBigInt(record, 'minimumRemainingBlocks', 1n, 1_000n)
@@ -325,7 +325,7 @@ export function updateStrategyFromRequest(strategy: MutableStrategy, value: unkn
 	const twapSeconds = requiredInteger(record, 'twapSeconds', 60, 86_400)
 	strategy.maxSpotTwapTicks = maxSpotTwapTicks
 	strategy.minimumProfitBps = minimumProfitBps
-	strategy.minimumProfitWethAttoEth = minimumProfitWethAttoEth
+	strategy.minimumProfitAttoWeth = minimumProfitAttoWeth
 	strategy.minimumRemainingBlocks = minimumRemainingBlocks
 	strategy.minimumRemainingSeconds = minimumRemainingSeconds
 	strategy.pollMilliseconds = pollMilliseconds
@@ -535,18 +535,18 @@ export function operatorSnapshot(
 	connectivity: ConnectivitySettings,
 	fixed: OperatorSnapshotFixedState,
 	riskLimits: RiskLimits = {
-		lifecycleGasReserveWethAttoEth: 10n ** 16n,
+		lifecycleGasReserveAttoWeth: 10n ** 16n,
 		maxConcurrentPositions: 1,
-		maxDailyGasSpendWethAttoEth: 5n * 10n ** 16n,
-		maxPositionNotionalWethAttoEth: 5n * 10n ** 18n,
-		maxTotalLockedWethAttoEth: 10n * 10n ** 18n,
+		maxDailyGasSpendAttoWeth: 5n * 10n ** 16n,
+		maxPositionNotionalAttoWeth: 5n * 10n ** 18n,
+		maxTotalLockedAttoWeth: 10n * 10n ** 18n,
 	},
 ): OperatorSnapshot {
 	const totals = positionTotals(state.positions)
 	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
-	const lockedWethAttoEth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
+	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(Number(BigInt(state.blockTimestamp) * 1_000n))
-	const dailyGasSpentWethAttoEth = utcDayGasSpentWeth(state.positions, riskNow)
+	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
@@ -583,18 +583,18 @@ export function operatorSnapshot(
 		reportPaths: state.reportPaths,
 		risk: {
 			limits: {
-				lifecycleGasReserveWeth: decimalWeth(riskLimits.lifecycleGasReserveWethAttoEth),
+				lifecycleGasReserveWeth: decimalWeth(riskLimits.lifecycleGasReserveAttoWeth),
 				maxConcurrentPositions: riskLimits.maxConcurrentPositions,
-				maxDailyGasSpendWeth: decimalWeth(riskLimits.maxDailyGasSpendWethAttoEth),
-				maxPositionNotionalWeth: decimalWeth(riskLimits.maxPositionNotionalWethAttoEth),
-				maxTotalLockedWeth: decimalWeth(riskLimits.maxTotalLockedWethAttoEth),
+				maxDailyGasSpendWeth: decimalWeth(riskLimits.maxDailyGasSpendAttoWeth),
+				maxPositionNotionalWeth: decimalWeth(riskLimits.maxPositionNotionalAttoWeth),
+				maxTotalLockedWeth: decimalWeth(riskLimits.maxTotalLockedAttoWeth),
 			},
 			usage: {
-				dailyGasSpentWeth: decimalWeth(dailyGasSpentWethAttoEth),
-				lockedWeth: decimalWeth(lockedWethAttoEth),
+				dailyGasSpentWeth: decimalWeth(dailyGasSpentAttoWeth),
+				lockedWeth: decimalWeth(lockedAttoWeth),
 				openPositions: openPositions.length,
-				remainingDailyGasWeth: decimalWeth(dailyGasSpentWethAttoEth >= riskLimits.maxDailyGasSpendWethAttoEth ? 0n : riskLimits.maxDailyGasSpendWethAttoEth - dailyGasSpentWethAttoEth),
-				remainingLockedWeth: decimalWeth(lockedWethAttoEth >= riskLimits.maxTotalLockedWethAttoEth ? 0n : riskLimits.maxTotalLockedWethAttoEth - lockedWethAttoEth),
+				remainingDailyGasWeth: decimalWeth(dailyGasSpentAttoWeth >= riskLimits.maxDailyGasSpendAttoWeth ? 0n : riskLimits.maxDailyGasSpendAttoWeth - dailyGasSpentAttoWeth),
+				remainingLockedWeth: decimalWeth(lockedAttoWeth >= riskLimits.maxTotalLockedAttoWeth ? 0n : riskLimits.maxTotalLockedAttoWeth - lockedAttoWeth),
 			},
 		},
 		connectivity,

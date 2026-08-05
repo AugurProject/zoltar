@@ -77,7 +77,7 @@ export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: Ac
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalDisputeStakedRepAttoRep',
+			functionName: 'totalDisputeStakedAttoRep',
 			address: escalationGame,
 			args: [],
 		}),

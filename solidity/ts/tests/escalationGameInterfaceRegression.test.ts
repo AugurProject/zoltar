@@ -119,9 +119,9 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'nextNodeId', slot: '428', offset: 0, type: 'uint256' },
 			{ label: 'nodes', slot: '429', offset: 0, type: 'mapping(uint256 => struct Node)' },
 			{ label: 'escalationClaimBundles', slot: '430', offset: 0, type: 'mapping(address => struct EscalationClaimBundle)' },
-			{ label: 'totalDisputeStakedRepAttoRep', slot: '431', offset: 0, type: 'uint256' },
+			{ label: 'totalDisputeStakedAttoRep', slot: '431', offset: 0, type: 'uint256' },
 			{ label: 'unresolvedRepByVaultAttoRep', slot: '432', offset: 0, type: 'mapping(address => uint256)' },
-			{ label: 'totalLocalUnresolvedRepAttoRep', slot: '433', offset: 0, type: 'uint256' },
+			{ label: 'totalLocalUnresolvedAttoRep', slot: '433', offset: 0, type: 'uint256' },
 			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '434', offset: 0, type: 'mapping(address => uint256[3])' },
 			{ label: 'localUnresolvedTotalsExportedByVault', slot: '435', offset: 0, type: 'mapping(address => bool)' },
 			{
@@ -133,7 +133,7 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '437', offset: 0, type: 'bool' },
 			{ label: 'winnerHaircutPaidByFork', slot: '437', offset: 1, type: 'bool' },
 			{ label: 'forkCarryInitialBackingAttoRep', slot: '438', offset: 0, type: 'uint256' },
-			{ label: 'forkCarryDisputeStakedRepAttoRep', slot: '439', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryDisputeStakedAttoRep', slot: '439', offset: 0, type: 'uint256' },
 			{ label: 'forkCarrySourceGame', slot: '440', offset: 0, type: 'address' },
 			{ label: 'forkCarryRootClaimSourceGame', slot: '441', offset: 0, type: 'address' },
 			{ label: 'cumulativeClaimRetention', slot: '442', offset: 0, type: 'uint256' },
@@ -180,7 +180,7 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct ForkedEscrowState'), [
 		{ label: 'sourcePrincipalAttoRep', slot: '0', offset: 0, type: 'uint256' },
 		{ label: 'sourcePrincipalClaimedAttoRep', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'childRepAttoRep', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'childAttoRep', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'childRepClaimedAttoRep', slot: '3', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])

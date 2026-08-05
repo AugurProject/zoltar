@@ -63,8 +63,8 @@ export function SecurityPoolSummaryMetrics({
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>
 				{showTotalBacking ? (
-					<MetricField label={securityPoolCopy.totalPoolHeldRepAttoRep}>
-						<CurrencyValue value={pool.totalPoolHeldRepAttoRep} suffix={commonCopy.rep} />
+					<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>
+						<CurrencyValue value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
@@ -92,9 +92,9 @@ export function SecurityPoolSummaryMetrics({
 					</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldRepAttoRep}</span>
+					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldAttoRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
-						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalPoolHeldRepAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</strong>
 				</div>
 			</div>

@@ -51,13 +51,13 @@ function ceilDiv(dividend: bigint, divisor: bigint) {
 	return (dividend + divisor - 1n) / divisor
 }
 
-function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], maxRepBeingSoldAttoRep: bigint) {
-	if (maxRepBeingSoldAttoRep <= 0n) return 0n
+function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], maxAttoRepBeingSold: bigint) {
+	if (maxAttoRepBeingSold <= 0n) return 0n
 
 	let winningAttoEth = 0n
 	for (const tickSummary of tickSummaries) {
 		const candidateWinningAttoEth = winningAttoEth + tickSummary.currentTotalBidAttoEth
-		const thresholdPrice = ceilDiv(candidateWinningAttoEth * TRUTH_AUCTION_PRICE_PRECISION, maxRepBeingSoldAttoRep)
+		const thresholdPrice = ceilDiv(candidateWinningAttoEth * TRUTH_AUCTION_PRICE_PRECISION, maxAttoRepBeingSold)
 		if (thresholdPrice > tickSummary.price) break
 		winningAttoEth = candidateWinningAttoEth
 	}
@@ -254,7 +254,7 @@ export function getTruthAuctionBidSettlementEstimate(bid: TruthAuctionBidView, t
 			}
 		}
 
-		if (truthAuction.underfundedWinningAttoEth === undefined || truthAuction.underfundedWinningAttoEth === 0n || truthAuction.totalRepPurchasedAttoRep === 0n) {
+		if (truthAuction.underfundedWinningAttoEth === undefined || truthAuction.underfundedWinningAttoEth === 0n || truthAuction.totalAttoRepPurchased === 0n) {
 			return {
 				purchasedRepAmountAttoRep: 0n,
 				refundedBidAmountAttoEth: 0n,
@@ -263,7 +263,7 @@ export function getTruthAuctionBidSettlementEstimate(bid: TruthAuctionBidView, t
 		}
 
 		return {
-			purchasedRepAmountAttoRep: (bid.bidAmountAttoEth * truthAuction.totalRepPurchasedAttoRep) / truthAuction.underfundedWinningAttoEth,
+			purchasedRepAmountAttoRep: (bid.bidAmountAttoEth * truthAuction.totalAttoRepPurchased) / truthAuction.underfundedWinningAttoEth,
 			refundedBidAmountAttoEth: 0n,
 			usedBidAmountAttoEth: bid.bidAmountAttoEth,
 		}
@@ -374,16 +374,16 @@ export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetric
 	if (truthAuction === undefined) return undefined
 	if (truthAuction.finalized) {
 		return {
-			ethRaisedAttoEth: truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.ethRaisedAttoEth,
-			repSoldAttoRep: truthAuction.totalRepPurchasedAttoRep,
+			attoEthRaised: truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised,
+			attoRepSold: truthAuction.totalAttoRepPurchased,
 		}
 	}
 
 	const activeTickSummaries = sortTruthAuctionTickSummariesDescending(tickSummaries).filter(tickSummary => tickSummary.currentTotalBidAttoEth > 0n)
 	if (activeTickSummaries.length === 0) {
 		return {
-			ethRaisedAttoEth: truthAuction.ethRaisedAttoEth,
-			repSoldAttoRep: truthAuction.totalRepPurchasedAttoRep,
+			attoEthRaised: truthAuction.attoEthRaised,
+			attoRepSold: truthAuction.totalAttoRepPurchased,
 		}
 	}
 
@@ -391,13 +391,13 @@ export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetric
 	let provisionalRepSoldAttoRep = 0n
 
 	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
-		const underfundedWinningAttoEth = findUnderfundedWinningAttoEth(activeTickSummaries, truthAuction.maxRepBeingSoldAttoRep)
+		const underfundedWinningAttoEth = findUnderfundedWinningAttoEth(activeTickSummaries, truthAuction.maxAttoRepBeingSold)
 		if (underfundedWinningAttoEth > 0n) {
 			provisionalEthRaisedAttoEth = underfundedWinningAttoEth
-			provisionalRepSoldAttoRep = truthAuction.maxRepBeingSoldAttoRep
+			provisionalRepSoldAttoRep = truthAuction.maxAttoRepBeingSold
 		}
 	} else {
-		let remainingCap = truthAuction.ethRaiseCapAttoEth
+		let remainingCap = truthAuction.attoEthRaiseCap
 		for (const tickSummary of activeTickSummaries) {
 			if (remainingCap <= 0n) break
 
@@ -414,12 +414,12 @@ export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetric
 		}
 	}
 
-	const ethRaisedAttoEth = provisionalEthRaisedAttoEth > truthAuction.ethRaiseCapAttoEth ? truthAuction.ethRaiseCapAttoEth : provisionalEthRaisedAttoEth
-	const repSoldAttoRep = provisionalRepSoldAttoRep > truthAuction.maxRepBeingSoldAttoRep ? truthAuction.maxRepBeingSoldAttoRep : provisionalRepSoldAttoRep
+	const attoEthRaised = provisionalEthRaisedAttoEth > truthAuction.attoEthRaiseCap ? truthAuction.attoEthRaiseCap : provisionalEthRaisedAttoEth
+	const attoRepSold = provisionalRepSoldAttoRep > truthAuction.maxAttoRepBeingSold ? truthAuction.maxAttoRepBeingSold : provisionalRepSoldAttoRep
 
 	return {
-		ethRaisedAttoEth,
-		repSoldAttoRep,
+		attoEthRaised,
+		attoRepSold,
 	}
 }
 

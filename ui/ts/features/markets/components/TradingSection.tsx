@@ -118,7 +118,7 @@ export function TradingSection({
 		isOnActiveAppChain,
 		mintAmountInput: tradingForm.completeSetAmount,
 		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
-		totalPoolHeldRepAttoRep: selectedPool?.totalPoolHeldRepAttoRep,
+		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
@@ -160,7 +160,7 @@ export function TradingSection({
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveCoverageCommitment(selectedPool?.totalPoolHeldRepAttoRep, selectedPool?.feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
+					if (hasRepBackedPoolWithNoActiveCoverageCommitment(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}
@@ -371,7 +371,7 @@ export function TradingSection({
 							<CurrencyValue value={selectedPool.feeEligibleCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={tradingCopy.repBacking}>
-							<CurrencyValue value={selectedPool.totalPoolHeldRepAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={selectedPool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</MetricGrid>
 				)}

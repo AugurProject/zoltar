@@ -52,7 +52,7 @@ let strategy = {
 	maximumGasCostEth: '0.02',
 	maximumLiquidationCoverageCommitmentEth: '25',
 	maximumOracleRequestCostEth: '0.02',
-	maximumRepPerPoolRep: '10000',
+	maximumPerPoolRep: '10000',
 	maximumTotalDeployedRep: '25000',
 	minimumLiquidationCoverageCommitmentEth: '1',
 	minimumRepWithdrawalRep: '10',
@@ -63,7 +63,7 @@ let strategy = {
 	vaultTargetHealthBps: 12500,
 	vaultTopUpHealthBps: 11000,
 	vaultWithdrawHealthBps: 15000,
-	walletRepReserveRep: '100',
+	walletReserveRep: '100',
 }
 
 function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {

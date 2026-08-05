@@ -52,7 +52,7 @@ export function hedgeExecutionFromLogs(logs: readonly { address: Address; data: 
 				contribution1: decoded.args.contribution1,
 				contribution2: decoded.args.contribution2,
 				hedgeAmountToken2: decoded.args.hedgeAmountToken2,
-				hedgeAmountWethAttoEth: decoded.args.hedgeAmountWethAttoEth,
+				hedgeAmountAttoWeth: decoded.args.hedgeAmountAttoWeth,
 				reportId: decoded.args.reportId,
 			}
 		} catch (error) {
@@ -224,9 +224,9 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
 					internalAllowanceToken: requiredBigint(rawAllowanceToken, 'OpenOracle token internal allowance'),
-					internalAllowanceWethAttoEth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
+					internalAllowanceAttoWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
 					holderToken: requiredBigint(rawHolderToken, 'OpenOracle token holder balance'),
-					holderWethAttoEth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
+					holderAttoWeth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
 					tokenDecimals: requiredBigint(rawTokenDecimals, 'Position token decimals'),
 				},
 			}

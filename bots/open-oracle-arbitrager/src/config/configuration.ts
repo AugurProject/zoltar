@@ -108,7 +108,7 @@ export function mutableStrategy(config: MutableStrategy): MutableStrategy {
 	return {
 		maxSpotTwapTicks: config.maxSpotTwapTicks,
 		minimumProfitBps: config.minimumProfitBps,
-		minimumProfitWethAttoEth: config.minimumProfitWethAttoEth,
+		minimumProfitAttoWeth: config.minimumProfitAttoWeth,
 		minimumRemainingBlocks: config.minimumRemainingBlocks,
 		minimumRemainingSeconds: config.minimumRemainingSeconds,
 		pollMilliseconds: config.pollMilliseconds,
@@ -119,7 +119,7 @@ export function mutableStrategy(config: MutableStrategy): MutableStrategy {
 export function applyStrategy(target: MutableStrategy, source: MutableStrategy) {
 	target.maxSpotTwapTicks = source.maxSpotTwapTicks
 	target.minimumProfitBps = source.minimumProfitBps
-	target.minimumProfitWethAttoEth = source.minimumProfitWethAttoEth
+	target.minimumProfitAttoWeth = source.minimumProfitAttoWeth
 	target.minimumRemainingBlocks = source.minimumRemainingBlocks
 	target.minimumRemainingSeconds = source.minimumRemainingSeconds
 	target.pollMilliseconds = source.pollMilliseconds

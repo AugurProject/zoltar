@@ -15,7 +15,7 @@ const formattedAtomicStringField = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep
 const humanDecimalUnderAtomicKey = /["'][A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*["']\s*:\s*["'](?:0|[1-9]\d*)(?:\.\d+)?["']/
 const humanDecimalUnderAtomicProperty = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\s*:\s*["'](?:0|[1-9]\d*)(?:\.\d+)?["']/
 const humanControlWithAtomicKey = /data-example-(?:input|output|value)=["'][^"']*(?:AttoEth|AttoRep|AttoShares)[^"']*["']/
-const ambiguousRepStateTerminology = /\b(?:unlocked[^\n]{0,32}REP|REP[^\n]{0,32}unlocked|unlocked (?:vault|position|balances|state)|viewerVaultAvailableDisputeStakedRepAttoRep|loadingAvailableVaultRep|repPlacedAtRisk|availableVaultRepAfterReport|_migrateVaultUnlockedState)\b/i
+const ambiguousRepStateTerminology = /\b(?:unlocked[^\n]{0,32}REP|REP[^\n]{0,32}unlocked|unlocked (?:vault|position|balances|state)|viewerVaultAvailableDisputeStakedAttoRep|loadingAvailableVaultRep|repPlacedAtRisk|availableVaultRepAfterReport|_migrateVaultUnlockedState)\b/i
 const repeatedAtomicSuffix = /(?:AttoEth|AttoRep|AttoShares){2}/
 const ambiguousAtomicScaleConstant = /\b(?:ONE_ETH|ONE_REP|ETH|REP)\s*=\s*10n\s*\*\*\s*18n\b/
 const atomicIdentifierWithHumanUnit = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)\s+(?:ETH|REP|shares)\b/
@@ -26,7 +26,7 @@ const ambiguousParentEscalationTerminology = /\b(?:parent[- ]locks?|parent escal
 const ambiguousLiquidationBackingTerminology = /\b(?:target-assigned rescue collateral|seize the rescue deposit)\b/i
 const ambiguousPoolHeldRepTerminology = /(?<!-)\bpool REP\b/i
 const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) collateral\b/i
-const uiEscrowAccountingAlias = /\b(?:escalationEscrowedRepAttoRep|connectedWalletEscrowedRepAttoRep)\b/
+const uiEscrowAccountingAlias = /\b(?:escalationEscrowedAttoRep|connectedWalletEscrowedAttoRep)\b/
 const uiDirectRepTruthAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
 const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],

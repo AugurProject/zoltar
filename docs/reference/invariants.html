@@ -1334,7 +1334,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Cumulative parent ETH transferred to children never exceeds the fork collateral snapshot and is derived from cumulative migrated REP, not per-call rounding.</div>
-							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>⌈fork collateral × R / denominator⌉</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtForkAttoRep</code> for an own fork and <code>auctionableRepAtForkAttoRep</code> otherwise.</p>
+							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>⌈fork collateral × R / denominator⌉</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtForkAttoRep</code> for an own fork and <code>auctionableAttoRepAtFork</code> otherwise.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1441,8 +1441,8 @@
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalDisputeStakedRepAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedRepAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the truth auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
-							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, the total is 22 REP, represented as <code>22 × 10^18</code> attoREP in <code>totalDisputeStakedRepAttoRep</code>, before the auction. A 75% retention records <code>⌊22 × 75%⌋ = 16</code> total effective REP and <code>⌊12 × 75%⌋ = 9</code> aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
+							<div class="invariant-property"><code>totalDisputeStakedAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the truth auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
+							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, the total is 22 REP, represented as <code>22 × 10^18</code> attoREP in <code>totalDisputeStakedAttoRep</code>, before the auction. A 75% retention records <code>⌊22 × 75%⌋ = 16</code> total effective REP and <code>⌊12 × 75%⌋ = 9</code> aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1466,7 +1466,7 @@
 						<summary><code>ESC-02</code><span class="invariant-title">Local unresolved REP reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalLocalUnresolvedRepAttoRep</code> equals the sum of unresolved local deposits, and each vault-local counter is its exact component.</div>
+							<div class="invariant-property"><code>totalLocalUnresolvedAttoRep</code> equals the sum of unresolved local deposits, and each vault-local counter is its exact component.</div>
 							<p class="invariant-example"><strong>Example:</strong> If Alice has 3 unresolved REP and Bob has 5, their counters are 3 and 5 and the global local-unresolved total is 8.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1680,7 +1680,7 @@
 						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be swept until effective unresolved principal is zero for every outcome and <code>totalDisputeStakedRepAttoRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition.</div>
+							<div class="invariant-property">Residual REP cannot be swept until effective unresolved principal is zero for every outcome and <code>totalDisputeStakedAttoRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2181,7 +2181,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								In underfunded clearing, qualifying ETH is retained bid ETH offered at or above the cap-implied qualification threshold. The threshold is not an execution-price floor. Qualifying bidders collectively receive
-								<code>maxRepBeingSoldAttoRep</code> in proportion to that ETH at the aggregate effective price <code>underfundedWinningAttoEth / maxRepBeingSoldAttoRep</code>. Per-bid cumulative floors then assign indivisible attoETH and attoREP, so a dust winner can round to zero REP without changing the aggregate price. With no qualifying ETH, every bid refunds.
+								<code>maxAttoRepBeingSold</code> in proportion to that ETH at the aggregate effective price <code>underfundedWinningAttoEth / maxAttoRepBeingSold</code>. Per-bid cumulative floors then assign indivisible attoETH and attoREP, so a dust winner can round to zero REP without changing the aggregate price. With no qualifying ETH, every bid refunds.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If Alice supplies 60% and Bob 40% of qualifying ETH, they receive 60% and 40% of the complete REP sale cap subject to deterministic attoREP rounding.</p>
 							<dl class="invariant-metadata">

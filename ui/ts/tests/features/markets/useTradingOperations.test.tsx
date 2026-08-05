@@ -179,7 +179,7 @@ describe('useTradingOperations', () => {
 				settlementCollateralAttoEth: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
@@ -225,7 +225,7 @@ describe('useTradingOperations', () => {
 				settlementCollateralAttoEth: 0n,
 				feeEligibleCoverageCommitmentAttoEth: 0n,
 				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
@@ -278,7 +278,7 @@ describe('useTradingOperations', () => {
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: firstMintShareAmount,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			})),
 			loadTradingDetails: mock(async () =>
@@ -370,7 +370,7 @@ describe('useTradingOperations', () => {
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			})),
 			loadTradingDetails,
@@ -452,7 +452,7 @@ describe('useTradingOperations', () => {
 			settlementCollateralAttoEth: bigint
 			feeEligibleCoverageCommitmentAttoEth: bigint
 			shareTokenSupplyAttoShares: bigint
-			totalPoolHeldRepAttoRep: bigint
+			totalPoolHeldAttoRep: bigint
 			totalCoverageCommitmentAttoEth: bigint
 		}>()
 		const detailsA = createTradingDetails({ universeId: 1n })
@@ -548,7 +548,7 @@ describe('useTradingOperations', () => {
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
 				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
-				totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			})
 			await createPromise
@@ -577,7 +577,7 @@ describe('useTradingOperations', () => {
 			settlementCollateralAttoEth: 1n * 10n ** 18n,
 			feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 			shareTokenSupplyAttoShares: 1n * 10n ** 18n,
-			totalPoolHeldRepAttoRep: 20n * 10n ** 18n,
+			totalPoolHeldAttoRep: 20n * 10n ** 18n,
 			totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 		}))
 		const loadTradingDetails = mock(async () => createTradingDetails())

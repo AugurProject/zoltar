@@ -81,7 +81,7 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 						{ name: 'validForSeconds', type: 'uint256' },
 						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
 						{ name: 'snapshotTargetCoverageCommitmentAttoEth', type: 'uint256' },
-						{ name: 'snapshotTotalPoolHeldRepAttoRep', type: 'uint256' },
+						{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
 						{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
 						{ name: 'isPendingSlot', type: 'bool' },
 					],
@@ -141,35 +141,35 @@ describe('liquidator execution safety', () => {
 	test('enforces per-pool and aggregate REP exposure for maintenance deposits', () => {
 		expect(() =>
 			assertRepLimits({
-				currentPoolRepAttoRep: 90n,
-				currentTotalRepAttoRep: 150n,
+				currentPoolAttoRep: 90n,
+				currentTotalAttoRep: 150n,
 				depositAmountAttoRep: 11n,
-				maximumPoolRepAttoRep: 100n,
-				maximumTotalRepAttoRep: 1_000n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumRepPerPoolAttoRep')
+		).toThrow('maximumAttoRepPerPool')
 		expect(() =>
 			assertRepLimits({
-				currentPoolRepAttoRep: 50n,
-				currentTotalRepAttoRep: 195n,
+				currentPoolAttoRep: 50n,
+				currentTotalAttoRep: 195n,
 				depositAmountAttoRep: 6n,
-				maximumPoolRepAttoRep: 100n,
-				maximumTotalRepAttoRep: 200n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 200n,
 			}),
-		).toThrow('maximumTotalDeployedRepAttoRep')
+		).toThrow('maximumTotalDeployedRep')
 	})
 
 	test('counts REP acquired by liquidation toward both exposure limits', () => {
 		expect(() =>
 			assertRepLimits({
 				acquiredAmountAttoRep: 20n,
-				currentPoolRepAttoRep: 70n,
-				currentTotalRepAttoRep: 100n,
+				currentPoolAttoRep: 70n,
+				currentTotalAttoRep: 100n,
 				depositAmountAttoRep: 11n,
-				maximumPoolRepAttoRep: 100n,
-				maximumTotalRepAttoRep: 1_000n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumRepPerPoolAttoRep')
+		).toThrow('maximumAttoRepPerPool')
 	})
 
 	test('keeps fee redemption available when price-dependent maintenance is blocked', () => {
@@ -179,7 +179,7 @@ describe('liquidator execution safety', () => {
 				address: wallet,
 				coverageCommitmentAttoEth: 10n,
 				backingUnits: 0n,
-				vaultRepBackingAttoRep: 0n,
+				vaultAttoRepBacking: 0n,
 				claimableFeesAttoEth: 2n,
 			},
 			isPriceValid: false,
@@ -205,7 +205,7 @@ describe('liquidator execution safety', () => {
 				address: wallet,
 				coverageCommitmentAttoEth: 0n,
 				backingUnits: 0n,
-				vaultRepBackingAttoRep: 0n,
+				vaultAttoRepBacking: 0n,
 				claimableFeesAttoEth: 0n,
 			},
 			isPriceValid: false,
@@ -228,7 +228,7 @@ describe('liquidator execution safety', () => {
 		expect(
 			conservativeStaleTopUp({
 				callerCoverageCommitmentAttoEth: 0n,
-				callerRepAttoRep: 0n,
+				callerAttoRep: 0n,
 				coverageCommitmentToTransferAttoEth: 10n * 10n ** 18n,
 				fallbackPrice: 0n,
 				minimumTopUp: 100n * 10n ** 18n,
@@ -248,7 +248,7 @@ describe('liquidator execution safety', () => {
 					address: getAddress('0x0000000000000000000000000000000000000030'),
 					coverageCommitmentAttoEth: 1n,
 					backingUnits: 10n,
-					vaultRepBackingAttoRep: 10n,
+					vaultAttoRepBacking: 10n,
 					claimableFeesAttoEth: 0n,
 				},
 			}),
@@ -305,7 +305,7 @@ describe('liquidator execution safety', () => {
 						snapshotTotalRepBackingUnits: 1n,
 						snapshotTargetCoverageCommitmentAttoEth: 1n,
 						snapshotTargetBackingUnits: 1n,
-						snapshotTotalPoolHeldRepAttoRep: 1n,
+						snapshotTotalPoolHeldAttoRep: 1n,
 						targetVault: getAddress('0x0000000000000000000000000000000000000030'),
 						validForSeconds: 60n,
 					},

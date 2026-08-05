@@ -52,14 +52,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	uint256 private root;
 	uint256 private nextId = 1;
 
-	uint256 public maxRepBeingSoldAttoRep;
-	uint256 public ethRaiseCapAttoEth;
+	uint256 public maxAttoRepBeingSold;
+	uint256 public attoEthRaiseCap;
 
 	bool public finalized;
 	int256 public clearingTick;
 	uint256 public ethFilledAtClearingAttoEth;
-	uint256 public ethRaisedAttoEth;
-	uint256 public totalRepPurchasedAttoRep;
+	uint256 public attoEthRaised;
+	uint256 public totalAttoRepPurchased;
 
 	uint256 public auctionStarted;
 	uint256 public minBidSizeAttoEth;
@@ -89,31 +89,31 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		_;
 	}
 
-	function startAuction(uint256 _ethRaiseCapAttoEth, uint256 _maxRepBeingSoldAttoRep) public {
+	function startAuction(uint256 _attoEthRaiseCap, uint256 _maxAttoRepBeingSold) public {
 		require(owner == msg.sender, 'Only the auction owner can start the auction');
 		require(auctionStarted == 0, 'Auction has already been started');
 		require(
-			_ethRaiseCapAttoEth > 0 && _maxRepBeingSoldAttoRep > 0,
+			_attoEthRaiseCap > 0 && _maxAttoRepBeingSold > 0,
 			'Auction ETH raise cap and REP sale cap must both be positive'
 		);
 
-		maxRepBeingSoldAttoRep = _maxRepBeingSoldAttoRep;
-		ethRaiseCapAttoEth = _ethRaiseCapAttoEth;
+		maxAttoRepBeingSold = _maxAttoRepBeingSold;
+		attoEthRaiseCap = _attoEthRaiseCap;
 		underfundedThreshold = Math.mulDiv(
-			_ethRaiseCapAttoEth,
+			_attoEthRaiseCap,
 			PRICE_PRECISION,
-			_maxRepBeingSoldAttoRep,
+			_maxAttoRepBeingSold,
 			Math.Rounding.Ceil
 		);
 		auctionStarted = block.timestamp;
-		minBidSizeAttoEth = _ethRaiseCapAttoEth / MIN_BID_SIZE_DIVISOR;
+		minBidSizeAttoEth = _attoEthRaiseCap / MIN_BID_SIZE_DIVISOR;
 		if (minBidSizeAttoEth < 1) minBidSizeAttoEth = 1;
 
 		emit AuctionStarted(
 			auctionStarted,
 			auctionStarted + AUCTION_TIME,
-			_ethRaiseCapAttoEth,
-			_maxRepBeingSoldAttoRep,
+			_attoEthRaiseCap,
+			_maxAttoRepBeingSold,
 			minBidSizeAttoEth
 		);
 	}
@@ -151,15 +151,15 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		finalized = true;
 		clearingTick = finalClearingTick;
 		ethFilledAtClearingAttoEth = bidAtClearingTickAttoEth;
-		ethRaisedAttoEth = accumulatedBidAttoEth;
+		attoEthRaised = accumulatedBidAttoEth;
 		underfunded = !hitCap;
 		underfundedWinningAttoEth = finalUnderfundedWinningAttoEth;
-		totalRepPurchasedAttoRep = finalRepPurchasedAttoRep;
+		totalAttoRepPurchased = finalRepPurchasedAttoRep;
 
 		emit AuctionFinalized(
 			clearingTick,
 			raisedAttoEthToSend,
-			totalRepPurchasedAttoRep,
+			totalAttoRepPurchased,
 			ethFilledAtClearingAttoEth,
 			hitCap
 		);
@@ -201,7 +201,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		// Qualifying bidders collectively buy the complete REP sale cap for the ETH
 		// they submitted, so every winner receives the same effective ETH/REP price.
 		// Bids below the reserve remain refundable.
-		if (accumulatedBidAttoEth == 0 || maxRepBeingSoldAttoRep == 0) return (0, 0, 0, 0);
+		if (accumulatedBidAttoEth == 0 || maxAttoRepBeingSold == 0) return (0, 0, 0, 0);
 		finalClearingTick = _priceToCeilingTick(underfundedThreshold);
 		uint256 clearingPrice = tickToPrice(finalClearingTick);
 		if (clearingPrice < underfundedThreshold) return (finalClearingTick, 0, 0, 0);
@@ -209,7 +209,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		finalUnderfundedWinningAttoEth =
 			_getActiveBidAttoEthAboveTick(root, finalClearingTick) + _getBidAttoEthAtTick(root, finalClearingTick);
 		if (finalUnderfundedWinningAttoEth == 0) return (finalClearingTick, 0, 0, 0);
-		finalRepPurchasedAttoRep = maxRepBeingSoldAttoRep;
+		finalRepPurchasedAttoRep = maxAttoRepBeingSold;
 		return (
 			finalClearingTick,
 			finalUnderfundedWinningAttoEth,
@@ -230,7 +230,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		address withdrawFor,
 		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices,
 		uint256 proRataTotal
-	) external returns (uint256 totalFilledRepAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation) {
+	) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation) {
 		require(finalized, 'Auction must be finalized before withdrawing bids');
 		// The owner is expected to be the coordinating forker contract for truth auctions,
 		// not the bidder directly. That contract calls this and then accounts the returned
@@ -251,17 +251,17 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			uint256 cumulativeWinningBidBeforeAttoEth =
 				_getActiveBidAttoEthAboveTick(root, tick) + activeCumulativeBidBeforeAttoEth;
 			uint256 bidUsedAttoEth;
-			uint256 repFilledAttoRep;
+			uint256 attoRepFilled;
 			uint256 refundAttoEth;
 			BidSettlementStatus status;
 
 			if (underfunded) {
 				if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
 					bidUsedAttoEth = bid.bidAmountAttoEth;
-					repFilledAttoRep = _allocateFromCumulativePosition(
+					attoRepFilled = _allocateFromCumulativePosition(
 						cumulativeWinningBidBeforeAttoEth,
 						bid.bidAmountAttoEth,
-						totalRepPurchasedAttoRep,
+						totalAttoRepPurchased,
 						underfundedWinningAttoEth
 					);
 					status = BidSettlementStatus.Winning;
@@ -275,7 +275,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 					status = BidSettlementStatus.Losing;
 				} else if (tick > clearingTick) {
 					bidUsedAttoEth = bid.bidAmountAttoEth;
-					repFilledAttoRep = _allocateFromCumulativePosition(
+					attoRepFilled = _allocateFromCumulativePosition(
 						cumulativeWinningBidBeforeAttoEth,
 						bid.bidAmountAttoEth,
 						PRICE_PRECISION,
@@ -293,7 +293,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 						bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
 					}
 					if (bidUsedAttoEth > bid.bidAmountAttoEth) bidUsedAttoEth = bid.bidAmountAttoEth;
-					repFilledAttoRep = _allocateFromCumulativePosition(
+					attoRepFilled = _allocateFromCumulativePosition(
 						cumulativeWinningBidBeforeAttoEth,
 						bidUsedAttoEth,
 						PRICE_PRECISION,
@@ -309,12 +309,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 					}
 				}
 			}
-			totalFilledRepAttoRep += repFilledAttoRep;
+			totalFilledAttoRep += attoRepFilled;
 			totalProRataAllocation += _allocateFromCumulativePosition(
 				cumulativeWinningBidBeforeAttoEth,
 				bidUsedAttoEth,
 				proRataTotal,
-				ethRaisedAttoEth
+				attoEthRaised
 			);
 			totalRefundAttoEth += refundAttoEth;
 			bid.claimed = true;
@@ -324,7 +324,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 				index,
 				bid.bidAmountAttoEth,
 				bidUsedAttoEth,
-				repFilledAttoRep,
+				attoRepFilled,
 				refundAttoEth,
 				status
 			);
@@ -494,11 +494,11 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	// Internal/private functions below
 
 	function _wouldClear(uint256 candidateBidAttoEth, int256 tick) internal view returns (bool) {
-		if (candidateBidAttoEth >= ethRaiseCapAttoEth) return true;
+		if (candidateBidAttoEth >= attoEthRaiseCap) return true;
 		uint256 price = tickToPrice(tick);
 		if (price == 0) return false;
-		uint256 candidateRepAttoRep = (candidateBidAttoEth * PRICE_PRECISION) / price;
-		return candidateRepAttoRep >= maxRepBeingSoldAttoRep;
+		uint256 candidateAttoRep = (candidateBidAttoEth * PRICE_PRECISION) / price;
+		return candidateAttoRep >= maxAttoRepBeingSold;
 	}
 
 	function _isClearingTick(int256 tick) private view returns (bool) {
@@ -666,21 +666,21 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		uint256 bidToTakeAttoEth = price == 0 ? 0 : node.totalBidAttoEth;
 		if (accumulatedBidAttoEth > 0) {
 			uint256 repIfRepricedAttoRep = price == 0 ? 0 : (accumulatedBidAttoEth * PRICE_PRECISION) / price;
-			if (repIfRepricedAttoRep > maxRepBeingSoldAttoRep)
+			if (repIfRepricedAttoRep > maxAttoRepBeingSold)
 				return (true, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
 		}
 
-		if (accumulatedBidAttoEth >= ethRaiseCapAttoEth)
+		if (accumulatedBidAttoEth >= attoEthRaiseCap)
 			return (true, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
-		uint256 remainingCap = ethRaiseCapAttoEth - accumulatedBidAttoEth;
+		uint256 remainingCap = attoEthRaiseCap - accumulatedBidAttoEth;
 		if (bidToTakeAttoEth > remainingCap) bidToTakeAttoEth = remainingCap;
 		uint256 newAccumulatedBidAttoEth = accumulatedBidAttoEth + bidToTakeAttoEth;
 
-		uint256 totalRepAttoRep = price == 0 ? 0 : (newAccumulatedBidAttoEth * PRICE_PRECISION) / price;
+		uint256 totalAttoRep = price == 0 ? 0 : (newAccumulatedBidAttoEth * PRICE_PRECISION) / price;
 
-		if (totalRepAttoRep >= maxRepBeingSoldAttoRep) {
+		if (totalAttoRep >= maxAttoRepBeingSold) {
 			// partial fill
-			uint256 maximumBidAtThisPriceAttoEth = (maxRepBeingSoldAttoRep * price) / PRICE_PRECISION;
+			uint256 maximumBidAtThisPriceAttoEth = (maxAttoRepBeingSold * price) / PRICE_PRECISION;
 			uint256 bidUsedAtTickAttoEth = 0;
 			if (maximumBidAtThisPriceAttoEth > accumulatedBidAttoEth)
 				bidUsedAtTickAttoEth = maximumBidAtThisPriceAttoEth - accumulatedBidAttoEth;
@@ -688,7 +688,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			return (true, node.tick, accumulatedBidAttoEth + bidUsedAtTickAttoEth, bidUsedAtTickAttoEth);
 		}
 
-		if (newAccumulatedBidAttoEth >= ethRaiseCapAttoEth)
+		if (newAccumulatedBidAttoEth >= attoEthRaiseCap)
 			return (true, node.tick, newAccumulatedBidAttoEth, bidToTakeAttoEth);
 
 		accumulatedBidAttoEth = newAccumulatedBidAttoEth;

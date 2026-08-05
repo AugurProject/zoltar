@@ -64,7 +64,7 @@ function settings(approvedUniverses = ['101']) {
 			maximumGasCostEth: '0.02',
 			maximumLiquidationCoverageCommitmentEth: '25',
 			maximumOracleRequestCostEth: '0.02',
-			maximumRepPerPoolRep: '10000',
+			maximumPerPoolRep: '10000',
 			maximumTotalDeployedRep: '25000',
 			minimumLiquidationCoverageCommitmentEth: '1',
 			minimumRepWithdrawalRep: '10',
@@ -75,7 +75,7 @@ function settings(approvedUniverses = ['101']) {
 			vaultTargetHealthBps: 12_500,
 			vaultTopUpHealthBps: 11_000,
 			vaultWithdrawHealthBps: 15_000,
-			walletRepReserveRep: '100',
+			walletReserveRep: '100',
 		},
 		submission: {
 			minimumBundleRelaySuccesses: 1,
@@ -86,7 +86,7 @@ function settings(approvedUniverses = ['101']) {
 	})
 }
 
-function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultRepAttoRep?: bigint }): PoolObservation {
+function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultAttoRep?: bigint }): PoolObservation {
 	return {
 		activeVaultCount: 0n,
 		address: getAddress(parameters.address),
@@ -94,8 +94,8 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		botVault: {
 			address: wallet,
 			coverageCommitmentAttoEth: 0n,
-			backingUnits: parameters.vaultRepAttoRep ?? 0n,
-			vaultRepBackingAttoRep: parameters.vaultRepAttoRep ?? 0n,
+			backingUnits: parameters.vaultAttoRep ?? 0n,
+			vaultAttoRepBacking: parameters.vaultAttoRep ?? 0n,
 			claimableFeesAttoEth: 0n,
 		},
 		candidates: [],
@@ -123,7 +123,7 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		stagedOperations: [],
 		systemState: parameters.systemState ?? 0n,
 		totalCoverageCommitmentAttoEth: 0n,
-		totalRepAttoRep: 0n,
+		totalAttoRep: 0n,
 		truncatedVaults: false,
 		universeId: parameters.universeId,
 		vaults: [],
@@ -136,7 +136,7 @@ const parent = pool({
 	selected: true,
 	systemState: 1n,
 	universeId: 0n,
-	vaultRepAttoRep: 20n,
+	vaultAttoRep: 20n,
 })
 
 const approvedChild = pool({
@@ -359,7 +359,7 @@ describe('fork migration strategy', () => {
 					snapshotTotalRepBackingUnits: 1n,
 					snapshotTargetCoverageCommitmentAttoEth: 1n,
 					snapshotTargetBackingUnits: 1n,
-					snapshotTotalPoolHeldRepAttoRep: 1n,
+					snapshotTotalPoolHeldAttoRep: 1n,
 					targetVault: getAddress('0x0000000000000000000000000000000000000099'),
 					validForSeconds: 240n,
 				},

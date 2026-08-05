@@ -42,14 +42,14 @@ export async function observeConstantProductMarkets(settings: CentralizedMarketS
 			const asset = assetId.toLowerCase()
 			const wrapped = weth.toLowerCase()
 			if (!((token0 === asset && token1 === wrapped) || (token0 === wrapped && token1 === asset))) throw new Error('pair does not contain the configured REP and WETH assets')
-			const reserveRepAttoRep = token0 === asset ? pair.reserve0 : pair.reserve1
-			const reserveWethAttoEth = token0 === wrapped ? pair.reserve0 : pair.reserve1
-			if (reserveRepAttoRep <= 0n || reserveWethAttoEth <= 0n) throw new Error('pair has empty reserves')
+			const reserveAttoRep = token0 === asset ? pair.reserve0 : pair.reserve1
+			const reserveAttoWeth = token0 === wrapped ? pair.reserve0 : pair.reserve1
+			if (reserveAttoRep <= 0n || reserveAttoWeth <= 0n) throw new Error('pair has empty reserves')
 			const probeAttoEth = consensus.dexProbeDepthAttoEth
-			if (probeAttoEth <= 0n || probeAttoEth >= reserveWethAttoEth) throw new Error('DEX probe depth is outside pair reserves')
-			const repAtSpotAttoRep = (reserveRepAttoRep * probeAttoEth) / reserveWethAttoEth
-			const repBoughtAttoRep = amountOut(probeAttoEth, reserveWethAttoEth, reserveRepAttoRep, source.feeBps)
-			const ethReceivedAttoEth = amountOut(repAtSpotAttoRep, reserveRepAttoRep, reserveWethAttoEth, source.feeBps)
+			if (probeAttoEth <= 0n || probeAttoEth >= reserveAttoWeth) throw new Error('DEX probe depth is outside pair reserves')
+			const repAtSpotAttoRep = (reserveAttoRep * probeAttoEth) / reserveAttoWeth
+			const repBoughtAttoRep = amountOut(probeAttoEth, reserveAttoWeth, reserveAttoRep, source.feeBps)
+			const ethReceivedAttoEth = amountOut(repAtSpotAttoRep, reserveAttoRep, reserveAttoWeth, source.feeBps)
 			if (repAtSpotAttoRep <= 0n || repBoughtAttoRep <= 0n || ethReceivedAttoEth <= 0n) throw new Error('DEX probe produced an empty quote')
 			const askPriceRepPerEth = (repBoughtAttoRep * UNIT) / probeAttoEth
 			const bidPriceRepPerEth = (repAtSpotAttoRep * UNIT) / ethReceivedAttoEth

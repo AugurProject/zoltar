@@ -28,10 +28,10 @@ const getQuestionOutcomeAbi = [
 ] satisfies Abi
 
 type SecurityPoolForkerForkData = {
-	auctionableRepAtForkAttoRep: bigint
+	auctionableAttoRepAtFork: bigint
 	truthAuction: Address
 	truthAuctionStarted: bigint
-	migratedRepAttoRep: bigint
+	migratedAttoRep: bigint
 	auctionedCoverageCommitmentAttoEth: bigint
 	escalationElapsedAtFork: bigint
 	escalationStartBondAtForkAttoRep: bigint
@@ -165,11 +165,11 @@ export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, secur
 		}),
 	)
 
-export const getMigratedRepAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getMigratedAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getMigratedRepAttoRep',
+			functionName: 'getMigratedAttoRep',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
 		}),
@@ -221,10 +221,10 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		'Security pool fork data',
 	)
 	return {
-		auctionableRepAtForkAttoRep: requireBigInt(data[0], 'Security pool fork data auctionable REP'),
+		auctionableAttoRepAtFork: requireBigInt(data[0], 'Security pool fork data auctionable REP'),
 		truthAuction: requireAddress(data[1], 'Security pool fork data truth auction'),
 		truthAuctionStarted: requireBigInt(data[2], 'Security pool fork data truth auction started'),
-		migratedRepAttoRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
+		migratedAttoRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
 		auctionedCoverageCommitmentAttoEth: requireBigInt(data[4], 'Security pool fork data auctioned coverage commitment'),
 		escalationElapsedAtFork: requireBigInt(data[5], 'Security pool fork data escalation elapsed'),
 		escalationStartBondAtForkAttoRep: requireBigInt(data[6], 'Security pool fork data escalation start bond'),

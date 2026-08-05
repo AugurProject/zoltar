@@ -16,7 +16,7 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
-const ATTO_REP_PER_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -71,7 +71,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		parentWithdrawalEnabled: false,
 		viewerPoolHeldVaultRepBackingAttoRep: 8n,
 		viewerVaultExists: true,
-		viewerVaultDisputeStakedRepAttoRep: 2n,
+		viewerVaultDisputeStakedAttoRep: 2n,
 		viewerVaultRepBackingAttoRep: 10n,
 		...overrides,
 	}
@@ -236,7 +236,7 @@ describe('useReportingOperations', () => {
 		const latestDetails: ReportingDetails = {
 			settlementCollateralAttoEth: 1n,
 			currentTime: 150n,
-			forkThresholdAttoRep: 40n * ATTO_REP_PER_REP,
+			forkThresholdAttoRep: 40n * ATTO_REP,
 			marketDetails: {
 				answerUnit: '',
 				createdAt: 1n,
@@ -252,19 +252,19 @@ describe('useReportingOperations', () => {
 				startTime: 1n,
 				title: 'Will this resolve?',
 			},
-			nonDecisionThresholdAttoRep: 20n * ATTO_REP_PER_REP,
+			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			questionOutcome: 'none',
 			securityPoolAddress,
-			startBondAttoRep: 1n * ATTO_REP_PER_REP,
+			startBondAttoRep: 1n * ATTO_REP,
 			status: 'not-started',
 			systemState: 'operational',
 			universeId: 1n,
 			settlementState: 'locked',
 			parentWithdrawalEnabled: false,
-			viewerPoolHeldVaultRepBackingAttoRep: 8n * ATTO_REP_PER_REP,
+			viewerPoolHeldVaultRepBackingAttoRep: 8n * ATTO_REP,
 			viewerVaultExists: true,
-			viewerVaultDisputeStakedRepAttoRep: 0n,
-			viewerVaultRepBackingAttoRep: 8n * ATTO_REP_PER_REP,
+			viewerVaultDisputeStakedAttoRep: 0n,
+			viewerVaultRepBackingAttoRep: 8n * ATTO_REP,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)
 		const reportOutcomeInSecurityPool = mock(async () => {

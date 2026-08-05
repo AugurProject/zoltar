@@ -30,7 +30,7 @@ const FORK_AUCTION_STAGE_ORDER: Record<ForkAuctionStageView, number> = {
 type ForkAuctionStageSource = {
 	claimingAvailable?: boolean
 	forkOutcome: ForkOutcomeKey
-	migratedRepAttoRep: bigint
+	migratedAttoRep: bigint
 	systemState: SecurityPoolSystemState
 	truthAuction?: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 	truthAuctionStartedAt: bigint
@@ -76,7 +76,7 @@ export function getForkAuctionStageView(source: ForkAuctionStageSource): ForkAuc
 	if (source.systemState === 'forkTruthAuction') return 'auction'
 	if (source.claimingAvailable === true) return 'settlement'
 	if (source.systemState === 'operational' && hasForkActivity(source)) return 'settlement'
-	if (source.systemState === 'poolForked' || source.systemState === 'forkMigration' || source.migratedRepAttoRep > 0n) return 'migration'
+	if (source.systemState === 'poolForked' || source.systemState === 'forkMigration' || source.migratedAttoRep > 0n) return 'migration'
 	return 'initiate'
 }
 

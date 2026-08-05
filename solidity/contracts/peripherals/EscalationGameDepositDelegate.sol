@@ -36,7 +36,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event VaultEscrowUpdated(
 		address indexed vault,
 		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedRepAttoRep
+		uint256 totalDisputeStakedAttoRep
 	);
 
 	event TruthAuctionHaircutApplied(
@@ -52,14 +52,14 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 sourcePrincipalTotalAttoRep,
 		uint256 childRepTotalAttoRep,
 		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedRepAttoRep,
+		uint256 totalDisputeStakedAttoRep,
 		uint256 outcomeBalanceAttoRep
 	);
 
 	function recordDeposit(
 		address depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 expectedCumulativeRepAmountAttoRep
 	) external returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
@@ -68,19 +68,19 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			outcome,
 			outcomeIndex,
 			selectedOutcomeState.balanceAttoRep,
-			repAmountAttoRep,
+			attoRepAmount,
 			expectedCumulativeRepAmountAttoRep
 		);
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
-		_increaseEscrowedRepForBundle(depositor, repAmountAttoRep, true);
-		unresolvedRepByVaultAttoRep[depositor] += repAmountAttoRep;
-		totalLocalUnresolvedRepAttoRep += repAmountAttoRep;
-		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += repAmountAttoRep;
+		_increaseEscrowedRepForBundle(depositor, attoRepAmount, true);
+		unresolvedRepByVaultAttoRep[depositor] += attoRepAmount;
+		totalLocalUnresolvedAttoRep += attoRepAmount;
+		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += attoRepAmount;
 
 		selectedOutcomeState.deposits.push(
 			Deposit({
 				depositor: depositor,
-				amountAttoRep: repAmountAttoRep,
+				amountAttoRep: attoRepAmount,
 				cumulativeAmountAttoRep: expectedCumulativeRepAmountAttoRep
 			})
 		);
@@ -96,31 +96,31 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		node.parentNodeId = selectedOutcomeState.localHeadNodeId;
 		node.depositor = depositor;
 		node.outcome = outcome;
-		node.amountAttoRep = repAmountAttoRep;
+		node.amountAttoRep = attoRepAmount;
 		node.parentDepositIndex = parentDepositIndex;
 		node.cumulativeAmountAttoRep = expectedCumulativeRepAmountAttoRep;
 		node.carryLeafIndex = selectedOutcomeState.currentLeafCount;
 		selectedOutcomeState.localNodeIds.push(nodeId);
 		selectedOutcomeState.localHeadNodeId = nodeId;
-		selectedOutcomeState.localUnresolvedTotalAttoRep += repAmountAttoRep;
+		selectedOutcomeState.localUnresolvedTotalAttoRep += attoRepAmount;
 		_appendCarryLeaf(selectedOutcomeState, nodeId);
 
 		emit LocalDepositAppended(
 			nodeId,
 			outcome,
 			depositor,
-			repAmountAttoRep,
+			attoRepAmount,
 			parentDepositIndex,
 			expectedCumulativeRepAmountAttoRep
 		);
 		emit DepositOnOutcome(
 			depositor,
 			outcome,
-			repAmountAttoRep,
+			attoRepAmount,
 			depositIndex,
 			expectedCumulativeRepAmountAttoRep,
 			_claimEscrowedRepByVault(depositor),
-			totalDisputeStakedRepAttoRep
+			totalDisputeStakedAttoRep
 		);
 		if (IEscalationGameDepositContext(address(this)).hasReachedNonDecision()) {
 			nonDecisionState = NonDecisionState.Local;
@@ -140,18 +140,18 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0) return;
 		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
 		state.sourcePrincipalAttoRep += sourcePrincipalAttoRep;
-		uint256 effectiveChildRepAttoRep = _applyTruthAuctionRetention(childRepAmountAttoRep);
-		state.childRepAttoRep += childRepAmountAttoRep;
+		uint256 effectiveChildAttoRep = _applyTruthAuctionRetention(childRepAmountAttoRep);
+		state.childAttoRep += childRepAmountAttoRep;
 		// The carry commitment owns inherited payout identity. This record tracks
 		// only child-local escrow attributed to the immutable depositor.
-		_increaseEscrowedRepForBundle(depositor, effectiveChildRepAttoRep, false);
+		_increaseEscrowedRepForBundle(depositor, effectiveChildAttoRep, false);
 		emit ForkedEscrowRecorded(
 			depositor,
 			outcome,
 			state.sourcePrincipalAttoRep,
-			state.childRepAttoRep,
+			state.childAttoRep,
 			_claimEscrowedRepByVault(depositor),
-			totalDisputeStakedRepAttoRep,
+			totalDisputeStakedAttoRep,
 			outcomeState[uint8(outcome)].balanceAttoRep
 		);
 	}
@@ -160,7 +160,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint8 outcomeIndex,
 		uint256 currentBalanceAttoRep,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 expectedCumulativeRepAmountAttoRep
 	) private view {
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
@@ -170,11 +170,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			'Question resolved'
 		);
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
-		require(repAmountAttoRep > 0, 'Deposit zero');
-		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + repAmountAttoRep, 'Preview mismatch');
+		require(attoRepAmount > 0, 'Deposit zero');
+		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + attoRepAmount, 'Preview mismatch');
 		require(expectedCumulativeRepAmountAttoRep <= nonDecisionThresholdAttoRep, 'Deposit exceeds room');
 		require(
-			repAmountAttoRep >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep,
+			attoRepAmount >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep,
 			'Below start bond'
 		);
 
@@ -237,8 +237,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 normalizationShift = 255 - Math.log2(nextRetention);
 		cumulativeClaimRetention = nextRetention << normalizationShift;
 		cumulativeClaimRetentionExponent += ratioShift + normalizationShift;
-		totalDisputeStakedRepAttoRep = (totalDisputeStakedRepAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
-		forkCarryDisputeStakedRepAttoRep = (forkCarryDisputeStakedRepAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
+		totalDisputeStakedAttoRep = (totalDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
+		forkCarryDisputeStakedAttoRep = (forkCarryDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			outcomeState[outcomeIndex].balanceAttoRep =
 				(outcomeState[outcomeIndex].balanceAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
@@ -254,13 +254,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(forkContinuation, 'No fork mode');
 		require(forkResumedAt == 0, 'Fork resumed');
 		require(game.isForkCarryFundingComplete(), 'Fork carry underfunded');
-		if (forkCarryDisputeStakedRepAttoRep == 0 && forkCarrySnapshotRequiresForkedEscrow) {
+		if (forkCarryDisputeStakedAttoRep == 0 && forkCarrySnapshotRequiresForkedEscrow) {
 			for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-				forkCarryDisputeStakedRepAttoRep += _applyTruthAuctionRetention(
+				forkCarryDisputeStakedAttoRep += _applyTruthAuctionRetention(
 					outcomeState[outcomeIndex].inheritedUnresolvedTotalAttoRep
 				);
 			}
-			totalDisputeStakedRepAttoRep += forkCarryDisputeStakedRepAttoRep;
+			totalDisputeStakedAttoRep += forkCarryDisputeStakedAttoRep;
 		}
 		forkResumedAt = block.timestamp;
 		emit ForkContinuationResumed(block.timestamp);
@@ -271,8 +271,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
 		require(escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
 		escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits -= claimUnits;
-		totalDisputeStakedRepAttoRep -= amountAttoRep;
-		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedRepAttoRep);
+		totalDisputeStakedAttoRep -= amountAttoRep;
+		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
 
 	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) external {
@@ -283,7 +283,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		);
 		unresolvedRepByVaultAttoRep[bundleId] -= amountAttoRep;
 		localUnresolvedPrincipalByVaultAndOutcome[bundleId][outcomeIndex] -= amountAttoRep;
-		totalLocalUnresolvedRepAttoRep -= amountAttoRep;
+		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 
 	function creditClaimOwners(address bundleId, uint256 amountAttoRep) external {
@@ -299,11 +299,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 burnAmountAttoRep
 	) external {
 		uint256 backingConsumed = amountAttoRep + (winnerHaircutPaidByFork ? 0 : burnAmountAttoRep);
-		require(totalDisputeStakedRepAttoRep >= backingConsumed, 'Escrow low');
+		require(totalDisputeStakedAttoRep >= backingConsumed, 'Escrow low');
 		uint256 inheritedBackingConsumed =
-			backingConsumed < forkCarryDisputeStakedRepAttoRep ? backingConsumed : forkCarryDisputeStakedRepAttoRep;
-		forkCarryDisputeStakedRepAttoRep -= inheritedBackingConsumed;
-		totalDisputeStakedRepAttoRep -= backingConsumed;
+			backingConsumed < forkCarryDisputeStakedAttoRep ? backingConsumed : forkCarryDisputeStakedAttoRep;
+		forkCarryDisputeStakedAttoRep -= inheritedBackingConsumed;
+		totalDisputeStakedAttoRep -= backingConsumed;
 		if (amountAttoRep == 0) return;
 		IERC20(IEscalationGameDepositContext(address(this)).repToken()).safeTransfer(bundleId, amountAttoRep);
 	}

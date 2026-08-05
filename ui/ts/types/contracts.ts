@@ -178,10 +178,10 @@ export type SecurityPoolCreationResult = {
 
 export type SecurityVaultDetails = {
 	currentRetentionRate: bigint
-	disputeStakedRepAttoRep: bigint
+	disputeStakedAttoRep: bigint
 	managerAddress: Address
 	totalRepBackingUnits: bigint
-	vaultRepBackingAttoRep: bigint
+	vaultAttoRepBacking: bigint
 	repToken: Address
 	coverageCommitmentAttoEth: bigint
 	securityPoolAddress: Address
@@ -310,7 +310,7 @@ export type ListedSecurityPool = {
 	lastOracleSettlementTimestamp: bigint
 	managerAddress: Address
 	marketDetails: MarketDetails
-	migratedRepAttoRep: bigint
+	migratedAttoRep: bigint
 	parent: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
@@ -318,7 +318,7 @@ export type ListedSecurityPool = {
 	securityPoolAddress: Address
 	shareTokenSupplyAttoShares: bigint
 	systemState: SecurityPoolSystemState
-	totalPoolHeldRepAttoRep: bigint
+	totalPoolHeldAttoRep: bigint
 	totalCoverageCommitmentAttoEth: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
@@ -341,10 +341,10 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 }
 
 export type SecurityPoolVaultSummary = {
-	disputeStakedRepAttoRep: bigint
+	disputeStakedAttoRep: bigint
 	repBackingUnits?: bigint
 	totalRepBackingUnits?: bigint
-	vaultRepBackingAttoRep: bigint
+	vaultAttoRepBacking: bigint
 	coverageCommitmentAttoEth: bigint
 	totalPoolHeldRepBalanceAttoRep?: bigint
 	claimableFeesAttoEth: bigint
@@ -424,7 +424,7 @@ export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-requir
 type EscalationMigrationEntitlementStatus = {
 	initialized: boolean
 	materializedByOutcome: Record<ReportingOutcomeKey, boolean>
-	totalCurrentRepAttoRep: bigint
+	totalCurrentAttoRep: bigint
 }
 
 type ReportingDetailsBase = {
@@ -444,7 +444,7 @@ type ReportingDetailsBase = {
 	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerEscalationMigrationEntitlement?: EscalationMigrationEntitlementStatus | undefined
 	viewerVaultExists: boolean
-	viewerVaultDisputeStakedRepAttoRep: bigint | undefined
+	viewerVaultDisputeStakedAttoRep: bigint | undefined
 	viewerVaultRepBackingAttoRep: bigint | undefined
 }
 
@@ -479,15 +479,15 @@ export type TruthAuctionMetrics = {
 	clearingPrice: bigint | undefined
 	clearingTick: bigint | undefined
 	bidAtClearingTickAttoEth: bigint
-	ethRaiseCapAttoEth: bigint
-	ethRaisedAttoEth: bigint
+	attoEthRaiseCap: bigint
+	attoEthRaised: bigint
 	finalized: boolean
 	hitCap: boolean
-	maxRepBeingSoldAttoRep: bigint
+	maxAttoRepBeingSold: bigint
 	minBidSizeAttoEth: bigint
-	repPurchasableAtBidAttoRep: bigint | undefined
+	attoRepPurchasableAtBid: bigint | undefined
 	timeRemaining: bigint | undefined
-	totalRepPurchasedAttoRep: bigint
+	totalAttoRepPurchased: bigint
 	underfunded: boolean
 	underfundedThreshold: bigint | undefined
 	underfundedWinningAttoEth: bigint
@@ -544,12 +544,12 @@ export type ForkAuctionDetails = {
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	marketDetails: MarketDetails
-	migratedRepAttoRep: bigint
+	migratedAttoRep: bigint
 	migrationEndsAt: bigint | undefined
 	parentSecurityPoolAddress: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	ownForkRepBuckets?: OwnForkRepBuckets | undefined
-	auctionableRepAtForkAttoRep: bigint
+	auctionableAttoRepAtFork: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
 	truthAuction: TruthAuctionMetrics | undefined

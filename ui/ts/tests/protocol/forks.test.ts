@@ -256,7 +256,7 @@ describe('forks protocol client', () => {
 
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)
 
-		expect(details.auctionableRepAtForkAttoRep).toBe(30n)
+		expect(details.auctionableAttoRepAtFork).toBe(30n)
 		expect(details.ownForkRepBuckets).toEqual({
 			vaultRepAtForkAttoRep: 12n,
 			escalationChildRepPerSelectedOutcomeAttoRep: 9n,

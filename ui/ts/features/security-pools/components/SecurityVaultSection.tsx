@@ -88,13 +88,13 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{commonCopy.poolHeldVaultRepBackingAttoRep}</span>
 						<strong>
-							<CurrencyValue value={securityVaultDetails.vaultRepBackingAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={securityVaultDetails.vaultAttoRepBacking} suffix={commonCopy.rep} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>{commonCopy.disputeStakedRepAttoRep}</span>
+						<span>{commonCopy.disputeStakedAttoRep}</span>
 						<strong>
-							<CurrencyValue value={securityVaultDetails.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={securityVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
 						</strong>
 					</div>
 				</div>
@@ -104,8 +104,8 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const gridContent = (
 		<VaultMetricGrid
 			layout='grid'
-			disputeStakedRepAttoRep={securityVaultDetails.disputeStakedRepAttoRep}
-			vaultRepBackingAttoRep={securityVaultDetails.vaultRepBackingAttoRep}
+			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
+			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}
 			repPerEthPrice={repPerEthPrice}
 			repPerEthSource={repPerEthSource}
 			repPerEthSourceUrl={repPerEthSourceUrl}
@@ -295,7 +295,7 @@ export function SecurityVaultSection({
 	securityVaultResult,
 	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
-	selectedPoolTotalPoolHeldRepAttoRep,
+	selectedPoolTotalPoolHeldAttoRep,
 	selectedPoolTotalCoverageCommitmentAttoEth,
 	showHeader = true,
 	showLookupSection = true,
@@ -345,36 +345,36 @@ export function SecurityVaultSection({
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
 	const withdrawableRepAmountAttoRep = getSecurityVaultWithdrawableRepAmount({
-		disputeStakedRepAttoRep: currentSelectedVaultDetails?.disputeStakedRepAttoRep,
-		vaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultRepBackingAttoRep,
+		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
+		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		coverageCommitmentAttoEth: currentSelectedVaultDetails?.coverageCommitmentAttoEth,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
-		totalPoolHeldRepAttoRep: selectedPoolTotalPoolHeldRepAttoRep,
+		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
 		totalCoverageCommitmentAttoEth: selectedPoolTotalCoverageCommitmentAttoEth,
 	})
-	const maximumWithdrawableRepAttoRep = (() => {
-		if (currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.disputeStakedRepAttoRep > 0n) return 0n
+	const maximumWithdrawableAttoRep = (() => {
+		if (currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n) return 0n
 		if (hasValidOraclePrice) return withdrawableRepAmountAttoRep
-		return currentSelectedVaultDetails?.vaultRepBackingAttoRep
+		return currentSelectedVaultDetails?.vaultAttoRepBacking
 	})()
 	const maxCoverageCommitmentAttoEthAmount = getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
 		currentCoverageCommitmentAttoEth: currentSelectedVaultDetails?.coverageCommitmentAttoEth,
-		disputeStakedRepAttoRep: currentSelectedVaultDetails?.disputeStakedRepAttoRep,
-		vaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultRepBackingAttoRep,
+		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
+		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
-		totalPoolHeldRepAttoRep: selectedPoolTotalPoolHeldRepAttoRep,
+		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
 		totalCoverageCommitmentAttoEth: selectedPoolTotalCoverageCommitmentAttoEth,
 	})
-	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails?.vaultRepBackingAttoRep, depositAmount)
+	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount)
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.claimableFeesAttoEth > 0n
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n
 	const hasPositiveDepositAmount = depositAmount !== undefined && depositAmount > 0n
 	const hasPositiveWithdrawAmount = withdrawAmount !== undefined && withdrawAmount > 0n
-	const redeemableRepAmountAttoRep = currentSelectedVaultDetails?.vaultRepBackingAttoRep
-	const hasWithdrawableRep = maximumWithdrawableRepAttoRep !== undefined && maximumWithdrawableRepAttoRep > 0n
+	const redeemableRepAmountAttoRep = currentSelectedVaultDetails?.vaultAttoRepBacking
+	const hasWithdrawableRep = maximumWithdrawableAttoRep !== undefined && maximumWithdrawableAttoRep > 0n
 	const depositRepToVaultEnabled = poolState?.actions.depositRepToVault.enabled ?? true
 	const queueWithdrawRepEnabled = poolState?.actions.queueWithdrawRep.enabled ?? true
 	const redeemRepFromVaultEnabled = poolState?.actions.redeemRepFromVault.enabled === true
@@ -392,8 +392,8 @@ export function SecurityVaultSection({
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultEnabled : queueWithdrawRepEnabled
 	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? securityPoolCopy.redeemRepFromVault : securityPoolCopy.withdrawRep
 	const repExitAmountLabel = (() => {
-		if (effectiveRepExitMode === 'redeem') return securityPoolCopy.redeemableRepAttoRep
-		if (hasValidOraclePrice) return securityPoolCopy.withdrawableRepAttoRep
+		if (effectiveRepExitMode === 'redeem') return securityPoolCopy.redeemableAttoRep
+		if (hasValidOraclePrice) return securityPoolCopy.withdrawableAttoRep
 		return securityPoolCopy.repAvailableToQueue
 	})()
 	const setCoverageCommitmentFunding = resolveOracleOperationEthFunding({
@@ -420,15 +420,15 @@ export function SecurityVaultSection({
 	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
 		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
-		disputeStakedRepAttoRep: currentSelectedVaultDetails?.disputeStakedRepAttoRep,
+		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		requiredCostAttoEth: withdrawRepFunding?.costAttoEth,
 		stagedOperationTimeoutMinutes,
 		withdrawAmount,
-		withdrawableRepAmountAttoRep: maximumWithdrawableRepAttoRep,
+		withdrawableRepAmountAttoRep: maximumWithdrawableAttoRep,
 		walletBalanceAttoEth: accountState.ethBalanceAttoEth,
 	})
 	const redeemRepFromVaultGuardMessage = getVaultRedeemRepGuardMessage({
-		disputeStakedRepAttoRep: currentSelectedVaultDetails?.disputeStakedRepAttoRep,
+		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		redeemableRepAmountAttoRep,
 	})
 	const repExitGuardMessage = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultGuardMessage : withdrawRepGuardMessage
@@ -705,14 +705,14 @@ export function SecurityVaultSection({
 
 										return <CurrencyValue value={redeemableRepAmountAttoRep} suffix={commonCopy.rep} />
 									}
-									if (maximumWithdrawableRepAttoRep === undefined) return '—'
+									if (maximumWithdrawableAttoRep === undefined) return '—'
 
-									return <CurrencyValue value={maximumWithdrawableRepAttoRep} suffix={commonCopy.rep} />
+									return <CurrencyValue value={maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
 								})()}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
-								<MetricField label={commonCopy.disputeStakedRepAttoRep}>
-									<CurrencyValue value={currentSelectedVaultDetails.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+								<MetricField label={commonCopy.disputeStakedAttoRep}>
+									<CurrencyValue value={currentSelectedVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
 								</MetricField>
 							) : (
 								<MetricField label={securityPoolCopy.priceValidUntil}>{oraclePriceValidUntilTimestamp === undefined ? commonCopy.unavailable : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
@@ -727,10 +727,10 @@ export function SecurityVaultSection({
 										className='quiet field-inline-action'
 										type='button'
 										onClick={() => {
-											if (maximumWithdrawableRepAttoRep === undefined) return
-											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableRepAttoRep) })
+											if (maximumWithdrawableAttoRep === undefined) return
+											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
 										}}
-										disabled={maximumWithdrawableRepAttoRep === undefined || !poolCollateralActionsEnabled}
+										disabled={maximumWithdrawableAttoRep === undefined || !poolCollateralActionsEnabled}
 									>
 										{commonCopy.max}
 									</button>
@@ -955,18 +955,18 @@ export function SecurityVaultSection({
 			</SectionBlock>
 
 			<SectionBlock title={repExitActionLabel} variant='embedded'>
-				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmountAttoRep : maximumWithdrawableRepAttoRep) === undefined ? (
+				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmountAttoRep : maximumWithdrawableAttoRep) === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
-							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmountAttoRep : maximumWithdrawableRepAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmountAttoRep : maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						{(() => {
 							if (effectiveRepExitMode === 'redeem')
 								return (
-									<MetricField className='entity-metric' label={commonCopy.disputeStakedRepAttoRep}>
-										<CurrencyValue value={currentSelectedVaultDetails?.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
+									<MetricField className='entity-metric' label={commonCopy.disputeStakedAttoRep}>
+										<CurrencyValue value={currentSelectedVaultDetails?.disputeStakedAttoRep} suffix={commonCopy.rep} />
 									</MetricField>
 								)
 							if (oraclePriceValidUntilTimestamp === undefined) return undefined
@@ -988,10 +988,10 @@ export function SecurityVaultSection({
 								className='quiet field-inline-action'
 								type='button'
 								onClick={() => {
-									if (maximumWithdrawableRepAttoRep === undefined) return
-									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableRepAttoRep) })
+									if (maximumWithdrawableAttoRep === undefined) return
+									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
 								}}
-								disabled={maximumWithdrawableRepAttoRep === undefined || !poolCollateralActionsEnabled}
+								disabled={maximumWithdrawableAttoRep === undefined || !poolCollateralActionsEnabled}
 							>
 								{commonCopy.max}
 							</button>
@@ -1012,7 +1012,7 @@ export function SecurityVaultSection({
 						}}
 					/>
 				</div>
-				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.disputeStakedRepAttoRep !== undefined && currentSelectedVaultDetails.disputeStakedRepAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
+				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.disputeStakedAttoRep !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
 			</SectionBlock>
 
 			<ErrorNotice message={securityVaultError} />

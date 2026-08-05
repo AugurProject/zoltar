@@ -502,12 +502,12 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
+		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
 		const requestPriceWithMinimumAbi = [
 			{
 				inputs: [
 					{ name: 'proposedRepPerEthPrice', type: 'uint256' },
-					{ name: 'requestedInitialWethAttoEth', type: 'uint256' },
+					{ name: 'requestedInitialAttoWeth', type: 'uint256' },
 				],
 				name: 'requestPrice',
 				outputs: [],
@@ -516,7 +516,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			},
 		] as const
 
-		await wrapWeth(client, requestedInitialWethAttoEth)
+		await wrapWeth(client, requestedInitialAttoWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 
@@ -524,7 +524,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: requestPriceWithMinimumAbi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, requestedInitialWethAttoEth],
+			args: [proposedRepPerEthPrice, requestedInitialAttoWeth],
 			value: await getRequestPriceCostAttoEth(client, priceOracle),
 		})
 		await client.waitForTransactionReceipt({ hash })
@@ -532,28 +532,28 @@ describe('Price Oracle Refund Security Tests', () => {
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		const reportStatus = await getOpenOracleReportStatus(client, reportId)
-		assert.strictEqual(reportMeta.exactToken1Report, requestedInitialWethAttoEth, 'OpenOracle should require the larger caller-selected initial WETH amount')
-		assert.strictEqual(reportMeta.escalationHalt, requestedInitialWethAttoEth * 10n, 'the escalation halt should scale from the actual initial WETH amount')
-		assert.strictEqual(reportStatus.currentAmount1, requestedInitialWethAttoEth, 'the initial report should contain the caller-selected WETH amount')
-		assert.strictEqual(reportStatus.currentAmount2, requestedInitialWethAttoEth, 'the coordinator should derive matching REP from the selected WETH amount and proposed price')
+		assert.strictEqual(reportMeta.exactToken1Report, requestedInitialAttoWeth, 'OpenOracle should require the larger caller-selected initial WETH amount')
+		assert.strictEqual(reportMeta.escalationHalt, requestedInitialAttoWeth * 10n, 'the escalation halt should scale from the actual initial WETH amount')
+		assert.strictEqual(reportStatus.currentAmount1, requestedInitialAttoWeth, 'the initial report should contain the caller-selected WETH amount')
+		assert.strictEqual(reportStatus.currentAmount2, requestedInitialAttoWeth, 'the coordinator should derive matching REP from the selected WETH amount and proposed price')
 	})
 
 	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
-		await wrapWeth(client, requestedInitialWethAttoEth)
+		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
+		await wrapWeth(client, requestedInitialAttoWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 		const wethBalanceAttoEthBeforeRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		const repBalanceBeforeRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		await requestPriceWithValue(client, priceOracle, await getRequestPriceCostAttoEth(client, priceOracle), proposedRepPerEthPrice, requestedInitialWethAttoEth)
+		await requestPriceWithValue(client, priceOracle, await getRequestPriceCostAttoEth(client, priceOracle), proposedRepPerEthPrice, requestedInitialAttoWeth)
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		const reportStatus = await getOpenOracleReportStatus(client, reportId)
 		assert.strictEqual(reportStatus.currentReporter, priceOracle, 'the coordinator should own the initial reporter position until settlement')
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceAttoEthBeforeRequest - requestedInitialWethAttoEth, 'the pending report should hold the sponsored WETH')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest - requestedInitialWethAttoEth, 'the pending report should hold the sponsored REP')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceAttoEthBeforeRequest - requestedInitialAttoWeth, 'the pending report should hold the sponsored WETH')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest - requestedInitialAttoWeth, 'the pending report should hold the sponsored REP')
 
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await openOracleSettle(client, reportId)
@@ -590,14 +590,14 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(coordinatorRepSurplus, donatedRep, 'the coordinator should hold the unsolicited REP outside OpenOracle')
 
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
-		await wrapWeth(client, requestedInitialWethAttoEth)
+		const requestedInitialAttoWeth = calculateOracleMinimumWethReportAttoEth() * 2n
+		await wrapWeth(client, requestedInitialAttoWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 		const sponsorWethBeforeRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		const sponsorRepBeforeRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		await requestPriceWithValue(client, priceOracle, await getRequestPriceCostAttoEth(client, priceOracle), proposedRepPerEthPrice, requestedInitialWethAttoEth)
+		await requestPriceWithValue(client, priceOracle, await getRequestPriceCostAttoEth(client, priceOracle), proposedRepPerEthPrice, requestedInitialAttoWeth)
 		const reportId = await getPendingReportId(client, priceOracle)
 		const openOracleWethBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS)
 		const openOracleRepBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN))
@@ -1587,14 +1587,14 @@ describe('Price Oracle Refund Security Tests', () => {
 		const depositStateBefore = {
 			poolRep: await getERC20Balance(client, repToken, securityPool),
 			vault: await getSecurityVault(client, securityPool, underfundedVaultClient.account.address),
-			vaultRepAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
+			vaultAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
 		}
 		await assert.rejects(depositRepToVault(underfundedVaultClient, securityPool, depositAmount), /Vault REP below minimum/)
 		assert.deepStrictEqual(
 			{
 				poolRep: await getERC20Balance(client, repToken, securityPool),
 				vault: await getSecurityVault(client, securityPool, underfundedVaultClient.account.address),
-				vaultRepAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
+				vaultAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
 			},
 			depositStateBefore,
 			'minimum-REP rejection must roll back the token transfer and vault accounting',
@@ -1634,7 +1634,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [],
 			}),
 			vault: await getSecurityVault(client, securityPool, client.account.address),
-			vaultRepAttoRep: await getERC20Balance(client, repToken, client.account.address),
+			vaultAttoRep: await getERC20Balance(client, repToken, client.account.address),
 		})
 
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)

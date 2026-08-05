@@ -112,10 +112,10 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 10n,
-		disputeStakedRepAttoRep: 0n,
+		disputeStakedAttoRep: 0n,
 		managerAddress: zeroAddress,
 		totalRepBackingUnits: 1n,
-		vaultRepBackingAttoRep: 5n * 10n ** 18n,
+		vaultAttoRepBacking: 5n * 10n ** 18n,
 		repToken: zeroAddress,
 		coverageCommitmentAttoEth: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
@@ -152,8 +152,8 @@ export function createOracleManagerDetails(overrides: Partial<OracleManagerDetai
 
 export function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
-		disputeStakedRepAttoRep: 1n * 10n ** 18n,
-		vaultRepBackingAttoRep: 5n * 10n ** 18n,
+		disputeStakedAttoRep: 1n * 10n ** 18n,
+		vaultAttoRepBacking: 5n * 10n ** 18n,
 		coverageCommitmentAttoEth: 2n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
 		vaultAddress: zeroAddress,
@@ -208,7 +208,7 @@ export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteConten
 export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	const forkAuctionDetails: ForkAuctionDetails = {
 		auctionedCoverageCommitmentAttoEth: 0n,
-		auctionableRepAtForkAttoRep: 0n,
+		auctionableAttoRepAtFork: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
@@ -216,7 +216,7 @@ export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> 
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
 		marketDetails: createMarketDetails(),
-		migratedRepAttoRep: 0n,
+		migratedAttoRep: 0n,
 		migrationEndsAt: undefined,
 		parentSecurityPoolAddress: zeroAddress,
 		questionOutcome: 'none',
@@ -266,7 +266,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRepAttoRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionId: '0x01',
 		questionOutcome: 'none',
@@ -274,7 +274,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		securityPoolAddress: zeroAddress,
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalPoolHeldRepAttoRep: 0n,
+		totalPoolHeldAttoRep: 0n,
 		totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,

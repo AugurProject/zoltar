@@ -116,14 +116,14 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		}
 		throw new Error('Executor hedge event does not match the durable position')
 	}
-	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountWethAttoEth)
+	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountAttoWeth)
 	const confirmedPosition = {
 		...position,
 		actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
 		entryTransactionHash: executorReceipt.transactionHash,
 		gasExpenditures,
 		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
-		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWethAttoEth),
+		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
 		hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
 		status: 'open' as const,
 	} satisfies PositionRecord
@@ -375,14 +375,14 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		}
 	}
 	if (!('amount1' in execution)) throw new Error('Lifecycle executor event does not match the durable position')
-	const expectedWethAttoEth = parseDecimalWeth(position.lockedWeth)
+	const expectedAttoWeth = parseDecimalWeth(position.lockedWeth)
 	const expectedToken = parseUnits(position.lockedToken, tokenDecimals)
 	if (
 		execution.account.toLowerCase() !== position.account.toLowerCase() ||
 		execution.reportId.toString() !== position.reportId ||
 		execution.token1.toLowerCase() !== config.network.weth.toLowerCase() ||
 		execution.token2.toLowerCase() !== position.token.toLowerCase() ||
-		execution.amount1 !== expectedWethAttoEth ||
+		execution.amount1 !== expectedAttoWeth ||
 		execution.amount2 !== expectedToken
 	) {
 		throw new Error('Lifecycle executor event does not match the durable position')

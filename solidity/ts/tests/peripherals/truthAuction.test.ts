@@ -60,7 +60,7 @@ describe('Peripherals: truth auction', () => {
 		claimAuctionProceeds,
 		createChildUniverse,
 		finalizeTruthAuction,
-		getMigratedRepAttoRep,
+		getMigratedAttoRep,
 		getOwnForkRepBuckets,
 		getQuestionOutcome,
 		getSecurityPoolForkerForkData,
@@ -202,7 +202,7 @@ describe('Peripherals: truth auction', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
-		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 		const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
@@ -318,7 +318,7 @@ describe('Peripherals: truth auction', () => {
 			const recordedEscalationBacking = await client.readContract({
 				address: childEscalationGame,
 				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'totalDisputeStakedRepAttoRep',
+				functionName: 'totalDisputeStakedAttoRep',
 			})
 			strictEqualTypeSafe(childEscalationBalance, parentRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep, 'the child game should physically hold the external-fork escalation bucket before resume')
 			strictEqualTypeSafe(recordedEscalationBacking, childEscalationBalance, 'pre-resume escrow accounting must expose all physically backed dispute-staked REP to the truth auction')
@@ -332,9 +332,9 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'the OI shortfall should require a truth auction')
-			const migratedRepAttoRep = await getMigratedRepAttoRep(client, yesSecurityPool.securityPool)
-			const combinedAuctionableRep = parentForkData.auctionableRepAtForkAttoRep + childEscalationBalance
-			const expectedAuctionCap = combinedAuctionableRep - migratedRepAttoRep / 1_000_000n
+			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
+			const combinedAuctionableRep = parentForkData.auctionableAttoRepAtFork + childEscalationBalance
+			const expectedAuctionCap = combinedAuctionableRep - migratedAttoRep / 1_000_000n
 			strictEqualTypeSafe(await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction), expectedAuctionCap, 'the auction cap should include external-fork escalation backing before resume')
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, expectedAuctionCap / 2n, await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction))
@@ -363,7 +363,7 @@ describe('Peripherals: truth auction', () => {
 				strictEqualTypeSafe(outcomeBalancesAfterAuction[outcomeIndex], (outcomeBalancesBeforeAuction[outcomeIndex] * repRemainingAfterHaircut) / repBeforeHaircut, 'external-fork outcome balances should rebase by the auction retention ratio')
 			}
 			const vaultAfterAuction = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(vaultAfterAuction.disputeStakedRepAttoRep, (vaultBeforeAuction.disputeStakedRepAttoRep * repRemainingAfterHaircut) / repBeforeHaircut, 'the carried escalation claim should retain the same auction fraction as its backing')
+			strictEqualTypeSafe(vaultAfterAuction.disputeStakedAttoRep, (vaultBeforeAuction.disputeStakedAttoRep * repRemainingAfterHaircut) / repBeforeHaircut, 'the carried escalation claim should retain the same auction fraction as its backing')
 			const forkResumedAt = await client.readContract({
 				address: childEscalationGame,
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -539,7 +539,7 @@ describe('Peripherals: truth auction', () => {
 
 			const childBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool)
 			const auctionCap = await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction)
-			strictEqualTypeSafe(childBalance, parentForkData.auctionableRepAtForkAttoRep, 'truth auction should fund the child with its complete accounting REP baseline')
+			strictEqualTypeSafe(childBalance, parentForkData.auctionableAttoRepAtFork, 'truth auction should fund the child with its complete accounting REP baseline')
 			assert.ok(auctionCap <= childBalance, 'truth auction cap should not exceed the child REP balance')
 		})
 
@@ -725,8 +725,8 @@ describe('Peripherals: truth auction', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-			const migratedRepAttoRep = await getMigratedRepAttoRep(client, yesSecurityPool.securityPool)
-			assert.ok((parentSettlementCollateralAtForkAttoEth * migratedRepAttoRep) % parentForkData.auctionableRepAtForkAttoRep > 0n, 'the migration ratio must require collateral rounding')
+			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
+			assert.ok((parentSettlementCollateralAtForkAttoEth * migratedAttoRep) % parentForkData.auctionableAttoRepAtFork > 0n, 'the migration ratio must require collateral rounding')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -782,9 +782,9 @@ describe('Peripherals: truth auction', () => {
 				.find(log => log.eventName === 'SecurityPoolForkSnapshot')
 			if (forkSnapshotLog === undefined) throw new Error('missing SecurityPoolForkSnapshot log')
 			assert.strictEqual(forkSnapshotLog.args.parentPool, securityPoolAddresses.securityPool, 'fork snapshot should identify the parent pool')
-			assert.strictEqual(forkSnapshotLog.args.auctionableRepAtForkAttoRep, forkData.auctionableRepAtForkAttoRep, 'fork snapshot should expose the updated auctionable REP')
+			assert.strictEqual(forkSnapshotLog.args.auctionableAttoRepAtFork, forkData.auctionableAttoRepAtFork, 'fork snapshot should expose the updated auctionable REP')
 			assert.strictEqual(forkSnapshotLog.args.ownFork, false, 'fork snapshot should identify external fork mode')
-			strictEqualTypeSafe(await getMigratedRepAttoRep(client, yesSecurityPool.securityPool), forkData.auctionableRepAtForkAttoRep, 'all parent REP should already be represented by migrated vault backingUnits in this fast path')
+			strictEqualTypeSafe(await getMigratedAttoRep(client, yesSecurityPool.securityPool), forkData.auctionableAttoRepAtFork, 'all parent REP should already be represented by migrated vault backingUnits in this fast path')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -802,27 +802,27 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			let vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
-			const requiredVaultRepAttoRep = 4n * forkThresholdAttoRep
-			if (vaultRepAttoRep < requiredVaultRepAttoRep) {
-				await approveAndDepositRepToVault(client, requiredVaultRepAttoRep - vaultRepAttoRep, questionId)
+			let vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+			const requiredVaultAttoRep = 4n * forkThresholdAttoRep
+			if (vaultAttoRep < requiredVaultAttoRep) {
+				await approveAndDepositRepToVault(client, requiredVaultAttoRep - vaultAttoRep, questionId)
 				vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-				vaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
+				vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 			}
-			assert.ok(vaultRepAttoRep >= requiredVaultRepAttoRep, 'test setup needs pool-held vault REP backing plus dispute-staked REP')
+			assert.ok(vaultAttoRep >= requiredVaultAttoRep, 'test setup needs pool-held vault REP backing plus dispute-staked REP')
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
-			assert.ok(parentForkData.auctionableRepAtForkAttoRep > ownForkRepBuckets.vaultRepAtForkAttoRep, 'own fork should include dispute-staked REP outside the pool auction basis')
+			assert.ok(parentForkData.auctionableAttoRepAtFork > ownForkRepBuckets.vaultRepAtForkAttoRep, 'own fork should include dispute-staked REP outside the pool auction basis')
 			assert.ok(ownForkRepBuckets.vaultRepAtForkAttoRep > 0n, 'test setup should leave vault REP available to migrate')
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
-			strictEqualTypeSafe(await getMigratedRepAttoRep(client, yesSecurityPool.securityPool), ownForkRepBuckets.vaultRepAtForkAttoRep, 'all vault REP should be migrated into the child pool')
+			strictEqualTypeSafe(await getMigratedAttoRep(client, yesSecurityPool.securityPool), ownForkRepBuckets.vaultRepAtForkAttoRep, 'all vault REP should be migrated into the child pool')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -901,7 +901,7 @@ describe('Peripherals: truth auction', () => {
 			assert.ok(curveElapsedBeforeFinalize > 3n * DAY, 'the deadline regression requires more than one minimum response period of pre-haircut curve time')
 			const outcomeBalancesBeforeFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep' })
 			const originalVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const escalationClaimBeforeFinalize = originalVaultBeforeFinalize.disputeStakedRepAttoRep
+			const escalationClaimBeforeFinalize = originalVaultBeforeFinalize.disputeStakedAttoRep
 			const childBalanceBeforeFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			const originalClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.repBackingUnits)
 			assert.ok(originalClaimBeforeFinalize > 0n, 'the migrated vault should retain positive pool-held child REP backing before finalization')
@@ -933,7 +933,7 @@ describe('Peripherals: truth auction', () => {
 			assert.ok(disputeStakedRepBeforeAuctionAttoRep > 0n, 'the test auction should sell inherited escalation backing')
 			assert.ok(disputeStakedRepRemainingAfterAuctionAttoRep < disputeStakedRepBeforeAuctionAttoRep, 'the test auction should apply a nonzero escalation haircut')
 			const expectedEscalationClaim = (escalationClaimBeforeFinalize * disputeStakedRepRemainingAfterAuctionAttoRep) / disputeStakedRepBeforeAuctionAttoRep
-			strictEqualTypeSafe(originalVaultAfterFinalize.disputeStakedRepAttoRep, expectedEscalationClaim, 'the truth auction should apply the same proportional REP retention to the escalation claim')
+			strictEqualTypeSafe(originalVaultAfterFinalize.disputeStakedAttoRep, expectedEscalationClaim, 'the truth auction should apply the same proportional REP retention to the escalation claim')
 			if (disputeStakedRepBeforeAuctionAttoRep > 0n) {
 				const outcomeBalancesAfterFinalize = await client.readContract({ address: childEscalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep' })
 				for (let outcomeIndex = 0; outcomeIndex < outcomeBalancesAfterFinalize.length; outcomeIndex += 1) {
@@ -999,7 +999,7 @@ describe('Peripherals: truth auction', () => {
 			} else {
 				strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should either run a truth auction or finalize immediately')
 			}
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
 
 			const clientVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
@@ -1015,7 +1015,7 @@ describe('Peripherals: truth auction', () => {
 			const childBalanceBeforeFinalRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			await redeemRepFromVault(client, yesSecurityPool.securityPool, client.account.address)
 			assert.ok((await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)) <= childBalanceBeforeFinalRedeem, 'redeeming the remaining migrated holder should not increase the child REP balance')
-			assert.ok(totalRepPurchasedAttoRep >= 0n, 'auction accounting should remain readable after both migrated holders redeem')
+			assert.ok(totalAttoRepPurchased >= 0n, 'auction accounting should remain readable after both migrated holders redeem')
 		})
 
 		test('repro: migrateRepToZoltar shares migration balance across parent pools before child creation', async () => {
@@ -1060,8 +1060,8 @@ describe('Peripherals: truth auction', () => {
 			const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
 			const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
 
-			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableRepAtForkAttoRep, 'the first child pool should receive only the REP migrated from the first parent pool')
-			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableRepAtForkAttoRep, 'the second child pool should receive only the REP migrated from the second parent pool')
+			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableAttoRepAtFork, 'the first child pool should receive only the REP migrated from the first parent pool')
+			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableAttoRepAtFork, 'the second child pool should receive only the REP migrated from the second parent pool')
 		})
 
 		test('migration proxies deploy lazily at their predicted CREATE2 addresses', async () => {
@@ -1161,17 +1161,17 @@ describe('Peripherals: truth auction', () => {
 
 			assert.ok(await contractExists(client, migrationProxyAddress), 'proxy should exist after fork initiation')
 			strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), 0n, 'proxy should not keep parent REP after locking it into Zoltar')
-			strictEqualTypeSafe(await getMigrationRepBalanceAttoRep(client, genesisUniverse, migrationProxyAddress), forkData.auctionableRepAtForkAttoRep, 'proxy migration ledger should equal the parent pool-held REP tracked at fork time')
+			strictEqualTypeSafe(await getMigrationRepBalanceAttoRep(client, genesisUniverse, migrationProxyAddress), forkData.auctionableAttoRepAtFork, 'proxy migration ledger should equal the parent pool-held REP tracked at fork time')
 			assert.ok(!(await contractExists(client, yesChildRepToken)), 'child REP token should not exist before migration splitting deploys it')
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			assert.ok(await contractExists(client, yesChildRepToken), 'migration splitting should deploy the child REP token')
-			strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, migrationProxyAddress), forkData.auctionableRepAtForkAttoRep, 'proxy should temporarily hold the split child REP before the child pool exists')
+			strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, migrationProxyAddress), forkData.auctionableAttoRepAtFork, 'proxy should temporarily hold the split child REP before the child pool exists')
 
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverseId, questionId, statoblastSecurityMultiplierBps).securityPool
 			strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, migrationProxyAddress), 0n, 'proxy should sweep child REP away once the child pool exists')
-			strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, yesSecurityPool), forkData.auctionableRepAtForkAttoRep, 'child pool should receive the full split REP after the proxy sweep')
+			strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, yesSecurityPool), forkData.auctionableAttoRepAtFork, 'child pool should receive the full split REP after the proxy sweep')
 		})
 
 		test('migrateRepToZoltar keeps child-universe REP isolated when both parent pools pre-create the same child outcome', async () => {
@@ -1216,8 +1216,8 @@ describe('Peripherals: truth auction', () => {
 			const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
 			const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
 
-			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableRepAtForkAttoRep, 'the first pre-created child pool should receive only the first parent pool-held REP')
-			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableRepAtForkAttoRep, 'the second pre-created child pool should receive only the second parent pool-held REP')
+			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableAttoRepAtFork, 'the first pre-created child pool should receive only the first parent pool-held REP')
+			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableAttoRepAtFork, 'the second pre-created child pool should receive only the second parent pool-held REP')
 			strictEqualTypeSafe(await getERC20Balance(client, childRepToken, getInfraContractAddresses().securityPoolForker), 0n, 'forker should not retain child REP after both pre-created child pools are funded')
 		})
 
@@ -1262,8 +1262,8 @@ describe('Peripherals: truth auction', () => {
 			const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
 			const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
 
-			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableRepAtForkAttoRep, 'the first child pool balance should remain unchanged after the second pool migrates later')
-			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableRepAtForkAttoRep, 'the second child pool should still receive only its own migrated REP even after the first pool already migrated')
+			strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.auctionableAttoRepAtFork, 'the first child pool balance should remain unchanged after the second pool migrates later')
+			strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.auctionableAttoRepAtFork, 'the second child pool should still receive only its own migrated REP even after the first pool already migrated')
 		})
 
 		test('redeemRepFromVault should stay blocked until the own-fork child pool becomes operational', async () => {
@@ -1314,7 +1314,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 
@@ -1378,7 +1378,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction should start')
 
 			// Get auction parameters
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 
 			// Participant bids: buy 1/4 of repAtFork for the full ethToBuy
@@ -1431,7 +1431,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
@@ -1443,8 +1443,8 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
-			strictEqualTypeSafe(totalRepPurchasedAttoRep > 0n, true, 'setup should leave a finalized auction with purchased REP')
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			strictEqualTypeSafe(totalAttoRepPurchased > 0n, true, 'setup should leave a finalized auction with purchased REP')
 
 			const vaultCountBeforeClaim = await getVaultCount(client, yesSecurityPool.securityPool)
 			const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
@@ -1564,7 +1564,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(winningVaultBAfterRedeem.repBackingUnits, 0n, 'redeeming purchased auction REP should empty the second participants vault backingUnits')
 		})
 
-		test('claimAuctionProceeds handles a zero-REP finalized refund path when totalRepPurchasedAttoRep is zero', async () => {
+		test('claimAuctionProceeds handles a zero-REP finalized refund path when totalAttoRepPurchased is zero', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
@@ -1589,7 +1589,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
@@ -1678,7 +1678,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			strictEqualTypeSafe(await getMigratedRepAttoRep(client, yesSecurityPool.securityPool), 0n, 'test requires a child with no migrated vault REP')
+			strictEqualTypeSafe(await getMigratedAttoRep(client, yesSecurityPool.securityPool), 0n, 'test requires a child with no migrated vault REP')
 			const auctionCap = await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction)
 			const minBidSizeAttoEth = await getMinBidSizeAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
@@ -1995,7 +1995,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const winningTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
@@ -2020,7 +2020,7 @@ describe('Peripherals: truth auction', () => {
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepBeforeLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repBackingUnits)
-			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldRepAttoRep', args: [] })
+			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', args: [] })
 			const denominatorBeforeLiquidation = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
 			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION * 10_000n) / (targetVaultBeforeLiquidation.coverageCommitmentAttoEth * statoblastSecurityMultiplierBps)
 			const forcedPrice = (liquidationThresholdPrice + 1n) * 2n
@@ -2078,11 +2078,11 @@ describe('Peripherals: truth auction', () => {
 
 			const childCollateralAfterLiquidation = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
 			const childCoverageCommitmentAttoEthAfterLiquidation = await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool)
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
 			const forkDataBeforeClaim = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth > 0n, true, 'coverage commitment')
-			strictEqualTypeSafe(totalRepPurchasedAttoRep > 0n, true, 'test setup should leave finalized auction REP for the bidder to claim')
+			strictEqualTypeSafe(totalAttoRepPurchased > 0n, true, 'test setup should leave finalized auction REP for the bidder to claim')
 
 			await claimAuctionProceeds(settlementCaller, yesSecurityPool.securityPool, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
 
@@ -2092,7 +2092,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation, 'claim timing should not change child collateral totals after liquidation')
 			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool), childCoverageCommitmentAttoEthAfterLiquidation, 'coverage commitment')
-			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalRepPurchasedAttoRep, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
+			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalAttoRepPurchased, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
 			strictEqualTypeSafe(targetVaultAfterClaim.coverageCommitmentAttoEth - targetVaultAfterLiquidation.coverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.repBackingUnits, liquidatorVaultAfterLiquidation.repBackingUnits, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.coverageCommitmentAttoEth, liquidatorVaultAfterLiquidation.coverageCommitmentAttoEth, 'coverage commitment')
@@ -2164,7 +2164,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const parentCoverageCommitmentAttoEthAtFork = await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
@@ -2173,13 +2173,13 @@ describe('Peripherals: truth auction', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
 			const expectedAuctionedCoverageCommitmentAttoEth = parentCoverageCommitmentAttoEthAtFork - migratedVaultBeforeClaim.coverageCommitmentAttoEth
 			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			const migratedVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const expectedCoverageCommitmentAttoEthAfterClaim = migratedVaultBeforeClaim.coverageCommitmentAttoEth + (forkData.auctionedCoverageCommitmentAttoEth * totalRepPurchasedAttoRep) / totalRepPurchasedAttoRep
+			const expectedCoverageCommitmentAttoEthAfterClaim = migratedVaultBeforeClaim.coverageCommitmentAttoEth + (forkData.auctionedCoverageCommitmentAttoEth * totalAttoRepPurchased) / totalAttoRepPurchased
 
 			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth > 0n, true, 'coverage commitment')
 			strictEqualTypeSafe(migratedVaultAfterClaim.coverageCommitmentAttoEth, expectedCoverageCommitmentAttoEthAfterClaim, 'coverage commitment')
@@ -2239,7 +2239,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 
@@ -2280,7 +2280,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const firstBidEth = expectedEthToBuy / 2n
 			const secondBidEth = expectedEthToBuy - firstBidEth
@@ -2331,7 +2331,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtForkAttoRep
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const firstAuctionTick = await participateAuction(firstBidder, yesSecurityPool.truthAuction, repAtFork / 6n, expectedEthToBuy / 3n)
 			const secondAuctionTick = await participateAuction(secondBidder, yesSecurityPool.truthAuction, repAtFork / 3n, expectedEthToBuy - expectedEthToBuy / 3n)
@@ -2384,12 +2384,12 @@ describe('Peripherals: truth auction', () => {
 
 			const zeroRepVault = addressString(TEST_ADDRESSES[1])
 			const positiveRepVault = addressString(TEST_ADDRESSES[2])
-			const credit = async (vault: typeof zeroRepVault, repAmountAttoRep: bigint, coverageCommitmentAttoEthAmount: bigint) => {
+			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, coverageCommitmentAttoEthAmount: bigint) => {
 				const hash = await client.writeContract({
 					address: forkerAddress,
 					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
 					functionName: 'creditAuctionProceeds',
-					args: [poolAddress, vault, repAmountAttoRep, coverageCommitmentAttoEthAmount],
+					args: [poolAddress, vault, attoRepAmount, coverageCommitmentAttoEthAmount],
 				})
 				await client.waitForTransactionReceipt({ hash })
 			}

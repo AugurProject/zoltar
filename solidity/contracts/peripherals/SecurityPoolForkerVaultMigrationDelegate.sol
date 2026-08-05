@@ -59,9 +59,9 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		uint256 parentTotalCoverageCommitmentAttoEth = securityPool.parent().totalCoverageCommitmentAttoEth();
 		uint256 unmigratedCoverageCommitmentAttoEth =
 			parentTotalCoverageCommitmentAttoEth - data.migratedCoverageCommitmentAttoEth;
-		uint256 totalRepPurchasedAttoRep = data.truthAuction.totalRepPurchasedAttoRep();
+		uint256 totalAttoRepPurchased = data.truthAuction.totalAttoRepPurchased();
 		data.auctionedCoverageCommitmentAttoEth =
-			totalRepPurchasedAttoRep == 0 ? 0 : unmigratedCoverageCommitmentAttoEth;
+			totalAttoRepPurchased == 0 ? 0 : unmigratedCoverageCommitmentAttoEth;
 		securityPool.setPoolFinancials(
 			settlementCollateralAttoEth,
 			parentTotalCoverageCommitmentAttoEth,

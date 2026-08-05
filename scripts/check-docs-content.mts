@@ -440,10 +440,10 @@ assert.doesNotMatch(whitepaper, /comments in <code>SecurityPool<\/code> acknowle
 assert.match(openOracleIntegration, /<code>480 seconds \(8 minutes\)<\/code>/)
 assert.match(openOracleIntegration, /the configured OpenOracle <code>timeType<\/code> uses seconds/)
 assert.match(openOracleIntegration, /snapshot base fee of <code>69,594,403 attoETH per gas<\/code>/)
-assert.match(whitepaper, /repPerEthPrice = \\left\\lfloor repAmountAttoRep \\cdot pricePrecision \/ ethAmountAttoEth \\right\\rfloor/)
-assert.match(whitepaper, /attoRepToBackingUnits\(repAmountAttoRep\)[\s\S]{0,500}totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0[\s\S]{0,500}\\left\\lfloor[\s\S]{0,500}backingUnitsToAttoRep\(repBackingUnits\) = 0 if totalRepBackingUnits = 0/)
+assert.match(whitepaper, /repPerEthPrice = \\left\\lfloor attoRepAmount \\cdot pricePrecision \/ ethAmountAttoEth \\right\\rfloor/)
+assert.match(whitepaper, /attoRepToBackingUnits\(attoRepAmount\)[\s\S]{0,500}totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0[\s\S]{0,500}\\left\\lfloor[\s\S]{0,500}backingUnitsToAttoRep\(repBackingUnits\) = 0 if totalRepBackingUnits = 0/)
 assert.match(liquidationDesign, /The equations below are the canonical integer definitions/)
-assert.match(liquidationDesign, /associatedRepAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice/)
+assert.match(liquidationDesign, /associatedAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice/)
 assert.match(liquidationDesign, /coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice/)
 assert.doesNotMatch(whitepaper, /id="eq-statoblast-(?:coverage-commitment-backing|liquidation-condition|migration-security)"/)
 assert.match(whitepaper, /<h2>11\. Parameter Sources<\/h2>/)
@@ -485,7 +485,7 @@ assert.match(liquidatorReadme, /5%-bonus vault REP backing award,[\s\S]*represen
 assert.doesNotMatch(whitepaper, /id="fig-statoblast-unresolved-migration"|Unresolved Escalation Continuation Trace/)
 assert.match(
 	whitepaper,
-	/forkHaircutAttoRep = ⌊forkThresholdAttoRep \/ forkBurnDivisor⌋; escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep; vaultRepAtForkAttoRep = auctionableRepAtForkAttoRep - escalationChildRepAtForkAttoRep; selectedChildEscalationBackingAttoRep = escalationChildRepAtForkAttoRep/,
+	/forkHaircutAttoRep = ⌊forkThresholdAttoRep \/ forkBurnDivisor⌋; escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep; vaultRepAtForkAttoRep = auctionableAttoRepAtFork - escalationChildRepAtForkAttoRep; selectedChildEscalationBackingAttoRep = escalationChildRepAtForkAttoRep/,
 )
 assert.match(whitepaper, /Each\s+selected grandchild receives that same canonical snapshot and full remaining[\s\S]{0,80}backing once; winning proofs remain their own authorization/)
 assert.match(whitepaper, /external-fork example, source REP converts to child REP[\s\S]{0,80}one-for-one[\s\S]{0,520}<code>20 REP<\/code>/)
@@ -541,7 +541,7 @@ assert.match(protocolTerms, /'coverage commitment': 'The attoETH-denominated mar
 assert.match(protocolTerms, /splitMigrationRep: splitMigrationRepDefinition/)
 assert.match(protocolTerms, /'split migration rep': splitMigrationRepDefinition/)
 assert.match(protocolTerms, /It is an eligibility threshold, not an execution-price floor\./)
-assert.doesNotMatch(protocolTerms, /floor\(maxRepBeingSoldAttoRep times underfundedWinningAttoEth divided by ethRaiseCapAttoEth\)/)
+assert.doesNotMatch(protocolTerms, /floor\(maxAttoRepBeingSold times underfundedWinningAttoEth divided by attoEthRaiseCap\)/)
 assert.match(protocolTerms, /repPerEthPrice: repEthPriceDefinition/)
 assert.match(protocolTerms, /'rep\/eth price': repEthPriceDefinition/)
 for (const [firstAlias, secondAlias, definitionName] of [

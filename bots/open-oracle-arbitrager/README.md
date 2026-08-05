@@ -586,7 +586,7 @@ locked through later dispute rounds.
   price.
 - The full adverse movement permitted by the signed hedge limit
   (`runtime.maxHedgeSlippageBps`).
-- The larger of `runtime.riskLimits.lifecycleGasReserveWethAttoEth` and
+- The larger of `runtime.riskLimits.lifecycleGasReserveAttoWeth` and
   `(callbackGasLimit + 900,000) × gas price`. Public and private delivery use the
   same single atomic lifecycle call.
 

@@ -389,7 +389,7 @@ describe('Escalation Game Test Suite', () => {
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
-				functionName: 'totalDisputeStakedRepAttoRep',
+				functionName: 'totalDisputeStakedAttoRep',
 				args: [],
 			}),
 			'Total escrowed REP',
@@ -486,8 +486,8 @@ describe('Escalation Game Test Suite', () => {
 			}),
 		)
 
-	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedRepAttoRep: bigint) => {
-		assert.strictEqual(await readTotalEscrowedRep(escalationGameAddress), expectedTotalEscrowedRepAttoRep, 'total escrowed REP should match scenario accounting')
+	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedAttoRep: bigint) => {
+		assert.strictEqual(await readTotalEscrowedRep(escalationGameAddress), expectedTotalEscrowedAttoRep, 'total escrowed REP should match scenario accounting')
 	}
 
 	type LocalAccountingDeposit = {
@@ -2243,11 +2243,11 @@ describe('Escalation Game Test Suite', () => {
 		const yesState = await readOutcomeState(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(depositLog.args.depositor, vault, 'deposit log should identify the depositing vault')
 		assert.strictEqual(depositLog.args.outcome, BigInt(QuestionOutcome.Yes), 'deposit log should identify the outcome')
-		assert.strictEqual(depositLog.args.repAmountAttoRep, amount, 'deposit log should expose the requested amount')
+		assert.strictEqual(depositLog.args.attoRepAmount, amount, 'deposit log should expose the requested amount')
 		assert.strictEqual(depositLog.args.depositIndex, 0n, 'deposit log should expose the new deposit index')
 		assert.strictEqual(depositLog.args.cumulativeRepAmountAttoRep, yesState.balanceAttoRep, 'deposit log should expose the updated outcome balance')
-		assert.strictEqual(depositLog.args.resultingVaultDisputeStakedRepAttoRep, vaultEscrow, 'deposit log should expose the updated vault escrow')
-		assert.strictEqual(depositLog.args.resultingTotalDisputeStakedRepAttoRep, totalEscrow, 'deposit log should expose the updated total escrow')
+		assert.strictEqual(depositLog.args.resultingVaultDisputeStakedAttoRep, vaultEscrow, 'deposit log should expose the updated vault escrow')
+		assert.strictEqual(depositLog.args.resultingTotalDisputeStakedAttoRep, totalEscrow, 'deposit log should expose the updated total escrow')
 	})
 
 	test('aggregate-backed winner payout is sent to the authenticated wallet', async () => {
@@ -2345,7 +2345,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(escrowRecordedLog.args.sourcePrincipalTotalAttoRep, reportBond, 'forked escrow log should expose the new source principal total')
 		assert.strictEqual(escrowRecordedLog.args.childRepTotalAttoRep, reportBond, 'forked escrow log should expose the new child REP total')
 		assert.strictEqual(escrowRecordedLog.args.disputeStakedRepByVaultAttoRep, vaultEscrow, 'forked escrow log should expose the updated vault escrow')
-		assert.strictEqual(escrowRecordedLog.args.totalDisputeStakedRepAttoRep, totalEscrow, 'forked escrow log should expose the updated total escrow')
+		assert.strictEqual(escrowRecordedLog.args.totalDisputeStakedAttoRep, totalEscrow, 'forked escrow log should expose the updated total escrow')
 		assert.strictEqual(escrowRecordedLog.args.outcomeBalanceAttoRep, yesState.balanceAttoRep, 'forked escrow log should expose the updated outcome balance')
 
 		const exportHash = await writeContractAndWait(client, async () =>
@@ -2376,7 +2376,7 @@ describe('Escalation Game Test Suite', () => {
 		const totalEscrowAfterExport = await readTotalEscrowedRep(child.escalationGameAddress)
 		assert.strictEqual(vaultEscrowLog.args.vault, client.account.address, 'vault escrow log should identify the vault')
 		assert.strictEqual(vaultEscrowLog.args.disputeStakedRepByVaultAttoRep, vaultEscrowAfterExport, 'vault escrow log should expose the updated vault escrow')
-		assert.strictEqual(vaultEscrowLog.args.totalDisputeStakedRepAttoRep, totalEscrowAfterExport, 'vault escrow log should expose the updated total escrow')
+		assert.strictEqual(vaultEscrowLog.args.totalDisputeStakedAttoRep, totalEscrowAfterExport, 'vault escrow log should expose the updated total escrow')
 	})
 
 	test('fork carry funding completeness requires aggregate REP backing at a one-to-one ratio', async () => {

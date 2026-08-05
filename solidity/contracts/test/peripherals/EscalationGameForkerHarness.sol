@@ -39,24 +39,24 @@ contract EscalationGameForkerHarness {
 		);
 		uint256 totalSourcePrincipal = _sumOutcomeAmounts(sourcePrincipalByOutcomeAttoRep);
 		if (totalSourcePrincipal == 0) return (sourcePrincipalByOutcomeAttoRep, currentRepByOutcomeAttoRep);
-		uint256 totalCurrentRepAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);
-		uint256 allocatedChildRepAttoRep;
-		uint256 allocatedCurrentRepAttoRep;
+		uint256 totalCurrentAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);
+		uint256 allocatedChildAttoRep;
+		uint256 allocatedCurrentAttoRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			uint256 outcomeSourcePrincipal = sourcePrincipalByOutcomeAttoRep[outcomeIndex];
-			uint256 outcomeCurrentRepAttoRep = currentRepByOutcomeAttoRep[outcomeIndex];
-			if (outcomeSourcePrincipal == 0 && outcomeCurrentRepAttoRep == 0) continue;
-			allocatedCurrentRepAttoRep += outcomeCurrentRepAttoRep;
-			uint256 outcomeChildRepAttoRep =
-				allocatedCurrentRepAttoRep == totalCurrentRepAttoRep
-					? totalCurrentRepAttoRep - allocatedChildRepAttoRep
-					: (outcomeCurrentRepAttoRep * totalCurrentRepAttoRep) / totalCurrentRepAttoRep;
-			allocatedChildRepAttoRep += outcomeChildRepAttoRep;
+			uint256 outcomeCurrentAttoRep = currentRepByOutcomeAttoRep[outcomeIndex];
+			if (outcomeSourcePrincipal == 0 && outcomeCurrentAttoRep == 0) continue;
+			allocatedCurrentAttoRep += outcomeCurrentAttoRep;
+			uint256 outcomeChildAttoRep =
+				allocatedCurrentAttoRep == totalCurrentAttoRep
+					? totalCurrentAttoRep - allocatedChildAttoRep
+					: (outcomeCurrentAttoRep * totalCurrentAttoRep) / totalCurrentAttoRep;
+			allocatedChildAttoRep += outcomeChildAttoRep;
 			childEscalationGame.recordForkedEscrowForOutcome(
 				vault,
 				BinaryOutcomes.BinaryOutcome(outcomeIndex),
 				outcomeSourcePrincipal,
-				outcomeChildRepAttoRep
+				outcomeChildAttoRep
 			);
 		}
 	}

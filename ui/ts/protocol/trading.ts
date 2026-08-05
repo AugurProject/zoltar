@@ -12,11 +12,11 @@ type SecurityPoolMintCapacity = {
 	settlementCollateralAttoEth: bigint
 	feeEligibleCoverageCommitmentAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
-	totalPoolHeldRepAttoRep: bigint
+	totalPoolHeldAttoRep: bigint
 	totalCoverageCommitmentAttoEth: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldRepAttoRep] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -31,7 +31,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalPoolHeldRepAttoRep',
+			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -40,7 +40,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		feeEligibleCoverageCommitmentAttoEth: poolAccountingSnapshot.feeEligibleCoverageCommitmentAttoEth,
 		shareTokenSupplyAttoShares,
-		totalPoolHeldRepAttoRep,
+		totalPoolHeldAttoRep,
 		totalCoverageCommitmentAttoEth: poolAccountingSnapshot.totalCoverageCommitmentAttoEth,
 	}
 }

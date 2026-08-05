@@ -63,8 +63,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
-		disputeStakedRepAttoRep: 0n,
-		vaultRepBackingAttoRep: 5n * 10n ** 18n,
+		disputeStakedAttoRep: 0n,
+		vaultAttoRepBacking: 5n * 10n ** 18n,
 		coverageCommitmentAttoEth: 2n * 10n ** 18n,
 		claimableFeesAttoEth: 0n,
 		vaultAddress: zeroAddress,
@@ -85,7 +85,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		lastOracleSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRepAttoRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
@@ -93,7 +93,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		securityPoolAddress: zeroAddress,
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalPoolHeldRepAttoRep: 5n * 10n ** 18n,
+		totalPoolHeldAttoRep: 5n * 10n ** 18n,
 		totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
@@ -686,7 +686,7 @@ describe('LiquidationModal', () => {
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -704,7 +704,7 @@ describe('LiquidationModal', () => {
 				wethShortfallAttoEth: 0n,
 			},
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
@@ -735,12 +735,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 2_000n * 10n ** 18n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
@@ -768,7 +768,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
@@ -922,12 +922,12 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 20n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
 						coverageCommitmentAttoEth: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 12n * 10n ** 18n,
+						vaultAttoRepBacking: 12n * 10n ** 18n,
 						coverageCommitmentAttoEth: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
@@ -1004,12 +1004,12 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={securityPoolLiquidationError}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 20n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
 						coverageCommitmentAttoEth: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 12n * 10n ** 18n,
+						vaultAttoRepBacking: 12n * 10n ** 18n,
 						coverageCommitmentAttoEth: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
@@ -1049,7 +1049,7 @@ describe('LiquidationModal', () => {
 				amountChanges.push(value)
 			},
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 73n * 10n ** 18n,
+				vaultAttoRepBacking: 73n * 10n ** 18n,
 				coverageCommitmentAttoEth: 50n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
@@ -1082,7 +1082,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 1000n * 10n ** 18n,
+				vaultAttoRepBacking: 1000n * 10n ** 18n,
 				coverageCommitmentAttoEth: 14n * 10n ** 17n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
@@ -1101,7 +1101,7 @@ describe('LiquidationModal', () => {
 	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1113,7 +1113,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
@@ -1129,7 +1129,7 @@ describe('LiquidationModal', () => {
 	test('shows target-safe before post-liquidation REP floor warnings for a safe near-floor target vault', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1142,7 +1142,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 11n * 10n ** 18n,
+				vaultAttoRepBacking: 11n * 10n ** 18n,
 				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
@@ -1158,7 +1158,7 @@ describe('LiquidationModal', () => {
 	test('allows full-close liquidation when the target only holds the minimum REP deposit', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1171,7 +1171,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 10n * 10n ** 18n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
 				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
@@ -1187,7 +1187,7 @@ describe('LiquidationModal', () => {
 	test('allows full-close liquidation when the computed REP penalty exceeds the target vault balance', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1200,7 +1200,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 10n * 10n ** 18n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
 				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
@@ -1216,7 +1216,7 @@ describe('LiquidationModal', () => {
 	test('does not offer a positive Max or REP transfer preview for a safe target vault', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1229,7 +1229,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
@@ -1249,7 +1249,7 @@ describe('LiquidationModal', () => {
 	test('allows an atomic bonus-priced liquidation', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1262,7 +1262,7 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 130n * 10n ** 18n,
 			}),
 		})
@@ -1281,12 +1281,12 @@ describe('LiquidationModal', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			repBackingUnits: 100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH,
 			totalRepBackingUnits,
-			vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 			coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferAttoEth: 1n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: 1n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1297,7 +1297,7 @@ describe('LiquidationModal', () => {
 		const exactRepMoved = (backingUnitsMoved * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
 
 		expect(exactRepMoved).toBe(quotedRep)
-		expect(simulation.vaultRepBackingToTransferAttoRep).toBe(exactRepMoved)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe(exactRepMoved)
 	})
 
 	test('matches the contract partial reserve when the REP backing units rate is non-integral', () => {
@@ -1307,34 +1307,34 @@ describe('LiquidationModal', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			repBackingUnits,
 			totalRepBackingUnits,
-			vaultRepBackingAttoRep: 20n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 20n * ATTO_ETH_PER_ETH,
 			coverageCommitmentAttoEth: 20n * ATTO_ETH_PER_ETH,
 			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferAttoEth: 10n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
 		const reserveBackingUnits = (10n * ATTO_ETH_PER_ETH * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
-		const awardableRepAttoRep = ((repBackingUnits - reserveBackingUnits) * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
-		const expectedCoverageCommitmentTransferAttoEth = (awardableRepAttoRep * ATTO_ETH_PER_ETH * 10_000n) / (ATTO_ETH_PER_ETH * 10_500n)
+		const awardableAttoRep = ((repBackingUnits - reserveBackingUnits) * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
+		const expectedCoverageCommitmentTransferAttoEth = (awardableAttoRep * ATTO_ETH_PER_ETH * 10_000n) / (ATTO_ETH_PER_ETH * 10_500n)
 
-		expect(awardableRepAttoRep).toBe(10n * ATTO_ETH_PER_ETH - 1n)
+		expect(awardableAttoRep).toBe(10n * ATTO_ETH_PER_ETH - 1n)
 		expect(simulation.coverageCommitmentToTransferAttoEth).toBe(expectedCoverageCommitmentTransferAttoEth)
 		expect(simulation.badDebtAttoEth).toBe(0n)
 	})
 
 	test('caps coverage commitment at the fully funded award and previews residual bad debt at the minimum multiplier', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			disputeStakedRepAttoRep: 900n * ATTO_ETH_PER_ETH,
-			vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+			disputeStakedAttoRep: 900n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 			coverageCommitmentAttoEth: 900n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 1000n * ATTO_ETH_PER_ETH }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 1000n * ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferAttoEth: 900n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: 2n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 10_002n,
@@ -1343,18 +1343,18 @@ describe('LiquidationModal', () => {
 		const expectedCoverageCommitmentTransferAttoEth = (100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH * 10_000n) / (2n * ATTO_ETH_PER_ETH * 10_500n)
 
 		expect(simulation.coverageCommitmentToTransferAttoEth).toBe(expectedCoverageCommitmentTransferAttoEth)
-		expect(simulation.vaultRepBackingToTransferAttoRep).toBe(100n * ATTO_ETH_PER_ETH - 1n)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe(100n * ATTO_ETH_PER_ETH - 1n)
 		expect(simulation.badDebtAttoEth).toBe(900n * ATTO_ETH_PER_ETH - expectedCoverageCommitmentTransferAttoEth)
-		expect(simulation.targetAfter.disputeStakedRepAttoRep).toBe(900n * ATTO_ETH_PER_ETH)
+		expect(simulation.targetAfter.disputeStakedAttoRep).toBe(900n * ATTO_ETH_PER_ETH)
 		expect(simulation.targetAfter.coverageCommitmentAttoEth).toBe(0n)
 	})
 
 	test('coverage commitment', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 			coverageCommitmentAttoEth: ATTO_ETH_PER_ETH / 2n,
 		})
-		const callerVaultSummary = createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH, coverageCommitmentAttoEth: 0n })
+		const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, coverageCommitmentAttoEth: 0n })
 		const partial = simulateLiquidation({
 			callerVaultSummary,
 			coverageCommitmentTransferAttoEth: ATTO_ETH_PER_ETH / 4n,
@@ -1380,32 +1380,32 @@ describe('LiquidationModal', () => {
 
 	test('leaves dispute-staked REP with the target during liquidation', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			disputeStakedRepAttoRep: 11n * ATTO_ETH_PER_ETH,
-			vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+			disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 			coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferAttoEth: 50n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
 
-		expect(simulation.vaultRepBackingToTransferAttoRep).toBe((105n * ATTO_ETH_PER_ETH) / 2n)
-		expect(simulation.targetAfter.disputeStakedRepAttoRep).toBe(11n * ATTO_ETH_PER_ETH)
-		expect(simulation.callerAfter.disputeStakedRepAttoRep).toBe(0n)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe((105n * ATTO_ETH_PER_ETH) / 2n)
+		expect(simulation.targetAfter.disputeStakedAttoRep).toBe(11n * ATTO_ETH_PER_ETH)
+		expect(simulation.callerAfter.disputeStakedAttoRep).toBe(0n)
 	})
 
 	test('renders the full pool-held vault REP backing award and retained fees', async () => {
 		const renderedComponent = await renderLiquidationModal({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				disputeStakedRepAttoRep: 11n * ATTO_ETH_PER_ETH,
-				vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+				disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 				claimableFeesAttoEth: 7n * ATTO_ETH_PER_ETH,
 			}),
@@ -1419,13 +1419,13 @@ describe('LiquidationModal', () => {
 
 	test('does not credit target dispute-staked REP against the pool-held vault REP backing award', async () => {
 		const renderedComponent = await renderLiquidationModal({
-			callerVaultSummary: createTargetVaultSummary({ vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ATTO_ETH_PER_ETH }),
 			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				disputeStakedRepAttoRep: 300n * ATTO_ETH_PER_ETH,
-				vaultRepBackingAttoRep: 300n * ATTO_ETH_PER_ETH,
+				disputeStakedAttoRep: 300n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 300n * ATTO_ETH_PER_ETH,
 				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 			}),
 		})
@@ -1508,12 +1508,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 20n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
 				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 30n * 10n ** 18n,
+				vaultAttoRepBacking: 30n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
@@ -1542,12 +1542,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 20n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 30n * 10n ** 18n,
+				vaultAttoRepBacking: 30n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
@@ -1563,8 +1563,8 @@ describe('LiquidationModal', () => {
 	test('does not use target dispute-staked REP to make the caller appear healthy', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				disputeStakedRepAttoRep: 0n,
-				vaultRepBackingAttoRep: 23n * ATTO_ETH_PER_ETH,
+				disputeStakedAttoRep: 0n,
+				vaultAttoRepBacking: 23n * ATTO_ETH_PER_ETH,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
@@ -1572,8 +1572,8 @@ describe('LiquidationModal', () => {
 			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				disputeStakedRepAttoRep: 100n * ATTO_ETH_PER_ETH,
-				vaultRepBackingAttoRep: 100n * ATTO_ETH_PER_ETH,
+				disputeStakedAttoRep: 100n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
@@ -1623,12 +1623,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 5n * 10n ** 18n,
+				vaultAttoRepBacking: 5n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
@@ -1657,12 +1657,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 5n * 10n ** 18n,
+				vaultAttoRepBacking: 5n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
@@ -1690,12 +1690,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 2n * 10n ** 18n,
 				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				claimableFeesAttoEth: 25n * 10n ** 16n,
 			}),
@@ -1726,12 +1726,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 2_000n * 10n ** 18n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 		})
@@ -1754,12 +1754,12 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 2_000n * 10n ** 18n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
 				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				vaultRepBackingAttoRep: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
 				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 		})
@@ -1810,12 +1810,12 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 30_000n * 10n ** 18n,
+						vaultAttoRepBacking: 30_000n * 10n ** 18n,
 						coverageCommitmentAttoEth: 1_000n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						vaultRepBackingAttoRep: 1840n * 10n ** 18n,
+						vaultAttoRepBacking: 1840n * 10n ** 18n,
 						coverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
@@ -1895,8 +1895,8 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				disputeStakedRepAttoRep: 4n * 10n ** 18n,
-				vaultRepBackingAttoRep: 16n * 10n ** 18n,
+				disputeStakedAttoRep: 4n * 10n ** 18n,
+				vaultAttoRepBacking: 16n * 10n ** 18n,
 				coverageCommitmentAttoEth: 10n * 10n ** 18n,
 			}),
 		})

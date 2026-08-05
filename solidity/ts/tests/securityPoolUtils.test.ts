@@ -85,12 +85,12 @@ describe('SecurityPoolUtils', () => {
 		const coverageCommitmentAttoEth = 100n * 10n ** 18n
 		const poolMultiplierBps = 20_000n
 		const minDistanceBps = 1_000n
-		const isBeyondDistance = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedRepAttoRep: bigint, price: bigint) =>
+		const isBeyondDistance = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedAttoRep: bigint, price: bigint) =>
 			await client.readContract({
 				abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
 				address: securityPoolUtilsAddress,
 				functionName: 'isLiquidationBeyondMinPriceDistance',
-				args: [poolHeldVaultRepBackingAttoRep, disputeStakedRepAttoRep, coverageCommitmentAttoEth, poolMultiplierBps, price, minDistanceBps],
+				args: [poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, coverageCommitmentAttoEth, poolMultiplierBps, price, minDistanceBps],
 			})
 
 		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 11n) / 10n), false, 'associated-REP boundary should enforce the configured distance')
@@ -105,12 +105,12 @@ describe('SecurityPoolUtils', () => {
 
 	test('minimum-multiplier health reserves the complete liquidation award in pool-held vault REP backing', async () => {
 		const coverageCommitmentAttoEth = 100n * PRICE_PRECISION
-		const isHealthy = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedRepAttoRep: bigint) =>
+		const isHealthy = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedAttoRep: bigint) =>
 			await client.readContract({
 				abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
 				address: securityPoolUtilsAddress,
 				functionName: 'isVaultHealthy',
-				args: [poolHeldVaultRepBackingAttoRep, disputeStakedRepAttoRep, coverageCommitmentAttoEth, PRICE_PRECISION, 10_002n],
+				args: [poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, coverageCommitmentAttoEth, PRICE_PRECISION, 10_002n],
 			})
 
 		strictEqualTypeSafe(await isHealthy(100n * PRICE_PRECISION + 10n ** 16n, 100n * PRICE_PRECISION), false, 'the 10,001-BPS halfway reserve must not admit a vault that cannot fund its 105% award')

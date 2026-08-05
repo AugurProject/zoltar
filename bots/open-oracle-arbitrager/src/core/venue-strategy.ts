@@ -6,8 +6,8 @@ const UNISWAP_V2_FEE_FACTOR = 997n
 export type Venue = 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4'
 
 export type VenueQuote = {
-	gasCostWethAttoEth: bigint
-	quotedWethAttoEth: bigint
+	gasCostAttoWeth: bigint
+	quotedAttoWeth: bigint
 	venue: Venue
 }
 
@@ -25,8 +25,8 @@ export function constantProductExactOutput(amountOut: bigint, reserveIn: bigint,
 export function selectBestVenueQuote(direction: ArbitrageDirection, quotes: readonly VenueQuote[]) {
 	return quotes.reduce<VenueQuote | undefined>((best, quote) => {
 		if (best === undefined) return quote
-		const quoteCost = direction === 'sell-rep' ? quote.gasCostWethAttoEth - quote.quotedWethAttoEth : quote.gasCostWethAttoEth + quote.quotedWethAttoEth
-		const bestCost = direction === 'sell-rep' ? best.gasCostWethAttoEth - best.quotedWethAttoEth : best.gasCostWethAttoEth + best.quotedWethAttoEth
+		const quoteCost = direction === 'sell-rep' ? quote.gasCostAttoWeth - quote.quotedAttoWeth : quote.gasCostAttoWeth + quote.quotedAttoWeth
+		const bestCost = direction === 'sell-rep' ? best.gasCostAttoWeth - best.quotedAttoWeth : best.gasCostAttoWeth + best.quotedAttoWeth
 		return quoteCost < bestCost ? quote : best
 	}, undefined)
 }

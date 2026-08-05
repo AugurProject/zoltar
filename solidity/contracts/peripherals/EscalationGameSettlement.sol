@@ -136,9 +136,9 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function sweepResidualRepToSecurityPool() external {
 		require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		require(_totalUnresolvedPrincipal() == 0, 'Principal remains');
-		totalDisputeStakedRepAttoRep -= forkCarryDisputeStakedRepAttoRep;
-		forkCarryDisputeStakedRepAttoRep = 0;
-		require(totalDisputeStakedRepAttoRep == 0, 'Escrowed REP remains');
+		totalDisputeStakedAttoRep -= forkCarryDisputeStakedAttoRep;
+		forkCarryDisputeStakedAttoRep = 0;
+		require(totalDisputeStakedAttoRep == 0, 'Escrowed REP remains');
 		uint256 amountAttoRep = repToken.balanceOf(address(this));
 		require(amountAttoRep > 0, 'No sweepable REP');
 		_safeTransferRep(address(securityPool), amountAttoRep);

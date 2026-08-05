@@ -207,7 +207,7 @@ describe('openOracle protocol client', () => {
 							snapshotTotalRepBackingUnits: 0n,
 							snapshotTargetCoverageCommitmentAttoEth: 0n,
 							snapshotTargetBackingUnits: 0n,
-							snapshotTotalPoolHeldRepAttoRep: 0n,
+							snapshotTotalPoolHeldAttoRep: 0n,
 							targetVault: vaultAddress,
 							validForSeconds: 60n,
 						})),
@@ -222,7 +222,7 @@ describe('openOracle protocol client', () => {
 						snapshotTotalRepBackingUnits: 0n,
 						snapshotTargetCoverageCommitmentAttoEth: 0n,
 						snapshotTargetBackingUnits: 0n,
-						snapshotTotalPoolHeldRepAttoRep: 0n,
+						snapshotTotalPoolHeldAttoRep: 0n,
 						targetVault: alternateSecurityPoolAddress,
 						validForSeconds: 60n,
 					}

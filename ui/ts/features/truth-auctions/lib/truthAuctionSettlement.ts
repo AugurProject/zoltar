@@ -95,14 +95,14 @@ export function getTruthAuctionSettlementSelectionEstimate({
 	let estimatedRefundedAttoEth = 0n
 	let estimatedVaultRepBackingAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
-	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningAttoEth > 0n && truthAuction.totalRepPurchasedAttoRep > 0n
+	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningAttoEth > 0n && truthAuction.totalAttoRepPurchased > 0n
 	let underfundedRemainder = 0n
 
 	for (const row of selectedRows) {
 		const estimate = getTruthAuctionBidSettlementEstimate(row.bid, truthAuction)
 		estimatedRefundedAttoEth += estimate.refundedBidAmountAttoEth
 		if (shouldCarryUnderfundedRemainder && row.disposition.canPrefillSettle) {
-			const numerator = row.bid.bidAmountAttoEth * truthAuction.totalRepPurchasedAttoRep + underfundedRemainder
+			const numerator = row.bid.bidAmountAttoEth * truthAuction.totalAttoRepPurchased + underfundedRemainder
 			estimatedVaultRepBackingAttoRep += numerator / truthAuction.underfundedWinningAttoEth
 			underfundedRemainder = numerator % truthAuction.underfundedWinningAttoEth
 		} else {
@@ -112,10 +112,10 @@ export function getTruthAuctionSettlementSelectionEstimate({
 
 	let estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined = 0n
 	if (estimatedVaultRepBackingAttoRep > 0n) {
-		if (truthAuction === undefined || truthAuction.totalRepPurchasedAttoRep === 0n || auctionedCoverageCommitmentAttoEth === undefined) {
+		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionedCoverageCommitmentAttoEth === undefined) {
 			estimatedAssignedCoverageCommitmentAttoEth = undefined
 		} else {
-			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedVaultRepBackingAttoRep) / truthAuction.totalRepPurchasedAttoRep
+			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
 		}
 	}
 

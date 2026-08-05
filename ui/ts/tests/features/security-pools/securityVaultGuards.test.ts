@@ -57,7 +57,7 @@ describe('security vault guards', () => {
 	test('coverage commitment', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
-				disputeStakedRepAttoRep: 1n,
+				disputeStakedAttoRep: 1n,
 				requiredCostAttoEth: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n,

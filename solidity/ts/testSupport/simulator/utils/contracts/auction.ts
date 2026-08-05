@@ -53,13 +53,13 @@ function mapAuctionBidView(bid: unknown): AuctionBidView {
 	}
 }
 
-export const startAuction = async (client: WriteClient, auctionAddress: Address, ethRaiseCapAttoEth: bigint, maxRepBeingSoldAttoRep: bigint) =>
+export const startAuction = async (client: WriteClient, auctionAddress: Address, attoEthRaiseCap: bigint, maxAttoRepBeingSold: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'startAuction',
 			address: auctionAddress,
-			args: [ethRaiseCapAttoEth, maxRepBeingSoldAttoRep],
+			args: [attoEthRaiseCap, maxAttoRepBeingSold],
 		}),
 	)
 
@@ -135,7 +135,7 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 		'Auction withdraw simulation',
 	)
 	return {
-		totalFilledRepAttoRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
+		totalFilledAttoRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
 		totalRefundAttoEth: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
 		totalProRataAllocation: requireBigInt(result[2], 'Auction withdraw simulation pro-rata allocation'),
 	}
@@ -188,7 +188,7 @@ export const getMaxRepBeingSoldAttoRep = async (client: ReadClient, auctionAddre
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'maxRepBeingSoldAttoRep',
+			functionName: 'maxAttoRepBeingSold',
 			address: auctionAddress,
 			args: [],
 		}),
@@ -199,7 +199,7 @@ export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: 
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'ethRaiseCapAttoEth',
+			functionName: 'attoEthRaiseCap',
 			address: auctionAddress,
 			args: [],
 		}),
@@ -210,7 +210,7 @@ export const getEthRaisedAttoEth = async (client: ReadClient, auctionAddress: Ad
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'ethRaisedAttoEth',
+			functionName: 'attoEthRaised',
 			address: auctionAddress,
 			args: [],
 		}),
@@ -221,7 +221,7 @@ export const getTotalRepPurchasedAttoRep = async (client: ReadClient, auctionAdd
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'totalRepPurchasedAttoRep',
+			functionName: 'totalAttoRepPurchased',
 			address: auctionAddress,
 			args: [],
 		}),

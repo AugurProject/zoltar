@@ -61,8 +61,8 @@ struct StagedOperation {
 	uint256 validForSeconds;
 	uint256 snapshotTargetBackingUnits;
 	uint256 snapshotTargetCoverageCommitmentAttoEth;
-	uint256 snapshotTargetDisputeStakedRepAttoRep;
-	uint256 snapshotTotalPoolHeldRepAttoRep;
+	uint256 snapshotTargetDisputeStakedAttoRep;
+	uint256 snapshotTotalPoolHeldAttoRep;
 	uint256 snapshotTotalRepBackingUnits;
 }
 
@@ -135,13 +135,13 @@ contract OpenOraclePriceCoordinator {
 		uint256 validForSeconds,
 		uint256 snapshotTargetBackingUnits,
 		uint256 snapshotTargetCoverageCommitmentAttoEth,
-		uint256 snapshotTotalPoolHeldRepAttoRep,
+		uint256 snapshotTotalPoolHeldAttoRep,
 		uint256 snapshotTotalRepBackingUnits,
 		bool isPendingSlot
 	);
 	event StagedOperationDisputeStakedRepSnapshotted(
 		uint256 indexed operationId,
-		uint256 snapshotTargetDisputeStakedRepAttoRep
+		uint256 snapshotTargetDisputeStakedAttoRep
 	);
 	event ExecutedStagedOperation(
 		uint256 indexed operationId,
@@ -330,11 +330,11 @@ contract OpenOraclePriceCoordinator {
 			);
 	}
 
-	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialWethAttoEth) public payable {
+	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) public payable {
 		uint256 costAttoEth = getRequestPriceCostAttoEth();
 		require(msg.value >= costAttoEth, 'Oracle bounty too small');
 		require(!isPriceValid(), 'Oracle price already fresh');
-		_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialWethAttoEth);
+		_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 
 		uint256 excess = msg.value - costAttoEth;
 		if (excess > 0) {
@@ -347,14 +347,14 @@ contract OpenOraclePriceCoordinator {
 		address sponsor,
 		uint256 costAttoEth,
 		uint256 proposedRepPerEthPrice,
-		uint256 requestedInitialWethAttoEth
+		uint256 requestedInitialAttoWeth
 	) private {
 		require(pendingReportId == 0, 'Oracle request already pending');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEth();
 		uint256 initialWethReportAttoEth =
-			requestedInitialWethAttoEth > minimumWethReportAttoEth
-				? requestedInitialWethAttoEth
+			requestedInitialAttoWeth > minimumWethReportAttoEth
+				? requestedInitialAttoWeth
 				: minimumWethReportAttoEth;
 		uint256 initialRepReportAttoRep = Math.mulDiv(
 			initialWethReportAttoEth,
@@ -559,7 +559,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 operationAmountAttoRepOrAttoEth,
 		uint256 validForSeconds,
 		uint256 proposedRepPerEthPrice,
-		uint256 requestedInitialWethAttoEth
+		uint256 requestedInitialAttoWeth
 	) public payable {
 		if (operation != OperationType.SetCoverageCommitment) {
 			require(operationAmountAttoRepOrAttoEth > 0, 'Staged operation amount must be non-zero');
@@ -599,9 +599,9 @@ contract OpenOraclePriceCoordinator {
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCoverageCommitmentAttoEth, , ) = securityPool
 			.securityVaults(targetVault);
-		uint256 snapshotTotalPoolHeldRepAttoRep = securityPool.getTotalPoolHeldRepAttoRep();
+		uint256 snapshotTotalPoolHeldAttoRep = securityPool.getTotalPoolHeldAttoRep();
 		uint256 snapshotTotalRepBackingUnits = securityPool.totalRepBackingUnits();
-		uint256 snapshotTargetDisputeStakedRepAttoRep =
+		uint256 snapshotTargetDisputeStakedAttoRep =
 			operation == OperationType.Liquidation && address(securityPool.escalationGame()) != address(0x0)
 				? securityPool.escalationGame().disputeStakedRepByVaultAttoRep(targetVault)
 				: 0;
@@ -614,8 +614,8 @@ contract OpenOraclePriceCoordinator {
 			validForSeconds: validForSeconds,
 			snapshotTargetBackingUnits: snapshotTargetBackingUnits,
 			snapshotTargetCoverageCommitmentAttoEth: snapshotTargetCoverageCommitmentAttoEth,
-			snapshotTargetDisputeStakedRepAttoRep: snapshotTargetDisputeStakedRepAttoRep,
-			snapshotTotalPoolHeldRepAttoRep: snapshotTotalPoolHeldRepAttoRep,
+			snapshotTargetDisputeStakedAttoRep: snapshotTargetDisputeStakedAttoRep,
+			snapshotTotalPoolHeldAttoRep: snapshotTotalPoolHeldAttoRep,
 			snapshotTotalRepBackingUnits: snapshotTotalRepBackingUnits
 		});
 		_trackActiveStagedOperation(operationId);
@@ -634,7 +634,7 @@ contract OpenOraclePriceCoordinator {
 				uint256 costAttoEth = getRequestPriceCostAttoEth();
 				require(msg.value >= costAttoEth, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += costAttoEth;
-				_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialWethAttoEth);
+				_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 			}
 		}
 
@@ -743,7 +743,7 @@ contract OpenOraclePriceCoordinator {
 				stagedOperation.operationAmountAttoRepOrAttoEth,
 				stagedOperation.snapshotTargetBackingUnits,
 				stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
-				stagedOperation.snapshotTotalPoolHeldRepAttoRep,
+				stagedOperation.snapshotTotalPoolHeldAttoRep,
 				stagedOperation.snapshotTotalRepBackingUnits
 			)
 		{
@@ -808,13 +808,13 @@ contract OpenOraclePriceCoordinator {
 			stagedOperation.validForSeconds,
 			stagedOperation.snapshotTargetBackingUnits,
 			stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
-			stagedOperation.snapshotTotalPoolHeldRepAttoRep,
+			stagedOperation.snapshotTotalPoolHeldAttoRep,
 			stagedOperation.snapshotTotalRepBackingUnits,
 			isPendingSlot
 		);
 		emit StagedOperationDisputeStakedRepSnapshotted(
 			operationId,
-			stagedOperation.snapshotTargetDisputeStakedRepAttoRep
+			stagedOperation.snapshotTargetDisputeStakedAttoRep
 		);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationQueued, pendingReportId, operationId);
 	}
@@ -842,11 +842,11 @@ contract OpenOraclePriceCoordinator {
 
 	function _previewWithdrawRep(
 		address vault,
-		uint256 repAmountAttoRep
+		uint256 attoRepAmount
 	) private view returns (uint256 withdrawBackingUnits, uint256 withdrawRepAmountAttoRep) {
-		if (repAmountAttoRep == 0) return (0, 0);
+		if (attoRepAmount == 0) return (0, 0);
 		(uint256 vaultBackingUnits, , , ) = securityPool.securityVaults(vault);
-		uint256 backingUnitsToWithdraw = securityPool.attoRepToBackingUnits(repAmountAttoRep);
+		uint256 backingUnitsToWithdraw = securityPool.attoRepToBackingUnits(attoRepAmount);
 		uint256 minimumRemainingBackingUnits = securityPool.attoRepToBackingUnits(
 			SecurityPoolUtils.MIN_REP_DEPOSIT_ATTO_REP
 		);
@@ -870,7 +870,7 @@ contract OpenOraclePriceCoordinator {
 			return stagedOperation.snapshotTargetBackingUnits / PRICE_PRECISION;
 		}
 		return
-			(stagedOperation.snapshotTargetBackingUnits * stagedOperation.snapshotTotalPoolHeldRepAttoRep) /
+			(stagedOperation.snapshotTargetBackingUnits * stagedOperation.snapshotTotalPoolHeldAttoRep) /
 			stagedOperation.snapshotTotalRepBackingUnits;
 	}
 
@@ -878,7 +878,7 @@ contract OpenOraclePriceCoordinator {
 		return
 			SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(
 				_getSnapshotVaultRep(stagedOperation),
-				stagedOperation.snapshotTargetDisputeStakedRepAttoRep,
+				stagedOperation.snapshotTargetDisputeStakedAttoRep,
 				stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
 				securityPool.statoblastSecurityMultiplierBps(),
 				lastPrice,

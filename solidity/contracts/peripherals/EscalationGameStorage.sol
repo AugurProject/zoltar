@@ -23,16 +23,16 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	mapping(uint256 => Node) public nodes;
 	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
-	uint256 public totalDisputeStakedRepAttoRep;
+	uint256 public totalDisputeStakedAttoRep;
 	mapping(address => uint256) internal unresolvedRepByVaultAttoRep;
-	uint256 internal totalLocalUnresolvedRepAttoRep;
+	uint256 internal totalLocalUnresolvedAttoRep;
 	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool internal winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
-	uint256 internal forkCarryDisputeStakedRepAttoRep;
+	uint256 internal forkCarryDisputeStakedAttoRep;
 	address internal forkCarrySourceGame;
 	address internal forkCarryRootClaimSourceGame;
 	// A normalized binary floating-point checkpoint. The effective retention is
@@ -53,7 +53,7 @@ abstract contract EscalationGameStorage {
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep, bool) internal {
 		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
 		escalationClaimBundles[bundleId].disputeStakedRepClaimUnits += claimUnits;
-		totalDisputeStakedRepAttoRep += amountAttoRep;
+		totalDisputeStakedAttoRep += amountAttoRep;
 	}
 
 	function _applyTruthAuctionRetention(uint256 amountAttoRep) internal view returns (uint256) {

@@ -105,9 +105,9 @@ export type OutcomeSelectionListProps = {
 export type VaultMetricGridProps = {
 	className?: string
 	layout?: 'grid' | 'preview'
-	disputeStakedRepAttoRep?: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
-	vaultRepBackingAttoRep: bigint | undefined
+	vaultAttoRepBacking: bigint | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	coverageCommitmentAttoEth: bigint | undefined
 	claimableFeesAttoEth: bigint | undefined
@@ -379,7 +379,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
-	selectedPoolTotalPoolHeldRepAttoRep?: bigint | undefined
+	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
 	selectedPoolTotalCoverageCommitmentAttoEth?: bigint | undefined
 	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean

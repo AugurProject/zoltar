@@ -21,17 +21,17 @@ export type RawBalances = {
 	ethAttoEth: bigint
 	repAttoRep: bigint
 	tokens: Map<string, bigint>
-	wethAttoEth: bigint
+	attoWeth: bigint
 }
 
 export type ExecutionCandidate = {
-	capitalAtRiskWethAttoEth: bigint
+	capitalAtRiskAttoWeth: bigint
 	hedgeFee: (typeof STANDARD_UNISWAP_FEES)[number]
 	hedgePool: Address
 	hedgeVenue: Venue
 	opportunity: OpportunitySnapshot
 	pool: Pool
-	projectedGasCostWethAttoEth: bigint
+	projectedGasCostAttoWeth: bigint
 	quote: ArbitrageQuote
 	report: OpenOracleStatePreimage
 	marketConsensus?: MarketConsensusEstimate | undefined

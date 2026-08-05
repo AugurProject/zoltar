@@ -9,7 +9,7 @@ import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRe
 import type { RepPriceFailure } from '../../types.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
-const ATTO_REP_PER_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const REP_PRICE_CACHE_TTL_MILLISECONDS = 30_000
 
 type PriceSource = 'v4' | 'v3' | 'mock'
@@ -117,7 +117,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ATTO_REP_PER_REP)])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ATTO_REP)])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {

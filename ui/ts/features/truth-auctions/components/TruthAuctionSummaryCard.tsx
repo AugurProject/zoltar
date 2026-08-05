@@ -13,9 +13,9 @@ type TruthAuctionSummaryCardProps = {
 	displayedEthRaisedAttoEth: bigint
 	displayedRepSoldAttoRep: bigint
 	endsDisplay: ComponentChildren
-	ethRaiseCapAttoEth: bigint
+	attoEthRaiseCap: bigint
 	ethRaisedProgress: number
-	maxRepBeingSoldAttoRep: bigint
+	maxAttoRepBeingSold: bigint
 	minBidSizeAttoEth: bigint
 	repSoldProgress: number
 	startedDisplay: ComponentChildren
@@ -29,9 +29,9 @@ export function TruthAuctionSummaryCard({
 	displayedEthRaisedAttoEth,
 	displayedRepSoldAttoRep,
 	endsDisplay,
-	ethRaiseCapAttoEth,
+	attoEthRaiseCap,
 	ethRaisedProgress,
-	maxRepBeingSoldAttoRep,
+	maxAttoRepBeingSold,
 	minBidSizeAttoEth,
 	repSoldProgress,
 	startedDisplay,
@@ -43,9 +43,9 @@ export function TruthAuctionSummaryCard({
 				<div className='fork-workflow-summary-primary truth-auction-summary-primary'>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>{forkAuctionCopy.ethRaisedAttoEth}</span>
+							<span>{forkAuctionCopy.attoEthRaised}</span>
 							<strong>
-								<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={ethRaiseCapAttoEth} suffix={commonCopy.eth} />
+								<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={attoEthRaiseCap} suffix={commonCopy.eth} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>
@@ -54,9 +54,9 @@ export function TruthAuctionSummaryCard({
 					</div>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>{forkAuctionCopy.repSoldAttoRep}</span>
+							<span>{forkAuctionCopy.attoRepSold}</span>
 							<strong>
-								<CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> / <CurrencyValue value={maxRepBeingSoldAttoRep} suffix={commonCopy.rep} />
+								<CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> / <CurrencyValue value={maxAttoRepBeingSold} suffix={commonCopy.rep} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>

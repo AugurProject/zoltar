@@ -28,7 +28,7 @@ const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 		name: 'getEscalationMigrationEntitlementStatus',
 		outputs: [
 			{ name: 'initialized', type: 'bool' },
-			{ name: 'totalCurrentRepAttoRep', type: 'uint256' },
+			{ name: 'totalCurrentAttoRep', type: 'uint256' },
 			{ name: 'materializedByOutcome', type: 'bool[3]' },
 		],
 		stateMutability: 'view',
@@ -631,7 +631,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 			viewerPoolHeldVaultRepBackingAttoRep: undefined,
 			viewerEscalationMigrationEntitlement: undefined,
 			viewerVaultExists: false,
-			viewerVaultDisputeStakedRepAttoRep: undefined,
+			viewerVaultDisputeStakedAttoRep: undefined,
 			viewerVaultRepBackingAttoRep: undefined,
 		}
 	const [viewerVaultTuple, escalationMigrationEntitlementTuple] = await Promise.all([
@@ -667,7 +667,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		address: securityPoolAddress,
 		args: [],
 	})
-	const viewerVaultDisputeStakedRepAttoRep = sameAddress(escalationGameAddress, zeroAddress)
+	const viewerVaultDisputeStakedAttoRep = sameAddress(escalationGameAddress, zeroAddress)
 		? 0n
 		: await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -675,7 +675,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				address: escalationGameAddress,
 				args: [accountAddress],
 			})
-	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerCoverageCommitmentAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedRepAttoRep !== 0n
+	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerCoverageCommitmentAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
 	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
 	return {
 		viewerPoolHeldVaultRepBackingAttoRep,
@@ -686,10 +686,10 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				yes: materializedByOutcome[1],
 				no: materializedByOutcome[2],
 			},
-			totalCurrentRepAttoRep: entitlementTotalCurrentRep,
+			totalCurrentAttoRep: entitlementTotalCurrentRep,
 		},
 		viewerVaultExists,
-		viewerVaultDisputeStakedRepAttoRep,
+		viewerVaultDisputeStakedAttoRep,
 		viewerVaultRepBackingAttoRep,
 	}
 }

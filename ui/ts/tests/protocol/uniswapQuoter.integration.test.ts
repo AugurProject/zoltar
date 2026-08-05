@@ -19,7 +19,7 @@ const client = createPublicClient({
 })
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
-const ATTO_REP_PER_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const describe = process.env['RUN_MAINNET_INTEGRATION_TESTS'] === '1' ? baseDescribe : baseDescribe.skip
 
 void describe('Uniswap V4 Quoter — integration', () => {
@@ -45,7 +45,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 	// If REP V4 pools are ever created, these tests will start returning prices instead.
 	void describe('REP/ETH — no V4 pool exists yet', () => {
 		void test('quoteRepForEth throws because no V4 REP pool exists', async () => {
-			await expect(quoteRepForEth(client, ATTO_REP_PER_REP)).rejects.toThrow()
+			await expect(quoteRepForEth(client, ATTO_REP)).rejects.toThrow()
 		})
 
 		void test('quoteEthForRep throws because no V4 REP pool exists', async () => {
@@ -59,14 +59,14 @@ void describe('Uniswap V4 Quoter — integration', () => {
 				{ fee: 3000, tickSpacing: 60 },
 				{ fee: 10000, tickSpacing: 200 },
 			]) {
-				await expect(quoteTokenForEth(client, REP_ADDRESS, ATTO_REP_PER_REP, poolConfig)).rejects.toThrow()
+				await expect(quoteTokenForEth(client, REP_ADDRESS, ATTO_REP, poolConfig)).rejects.toThrow()
 			}
 		})
 	})
 
 	void describe('REP/USDC — no V4 pool exists yet', () => {
 		void test('quoteExactInput(REP→USDC) throws because no V4 REP pool exists', async () => {
-			await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP_PER_REP)).rejects.toThrow()
+			await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP)).rejects.toThrow()
 		})
 
 		void test('quoteEthForToken(USDC via REP) throws for all standard fee tiers', async () => {
@@ -76,7 +76,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 				{ fee: 3000, tickSpacing: 60 },
 				{ fee: 10000, tickSpacing: 200 },
 			]) {
-				await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP_PER_REP, poolConfig)).rejects.toThrow()
+				await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP, poolConfig)).rejects.toThrow()
 			}
 		})
 	})
@@ -84,7 +84,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 	// REP/WETH V3 1% pool is the live source used as fallback when V4 is unavailable
 	void describe('REP/ETH — Uniswap V3 (1% pool)', () => {
 		void test('quoteRepForEthV3 returns a plausible REP price in ETH', async () => {
-			const ethOut = await quoteRepForEthV3(client, ATTO_REP_PER_REP)
+			const ethOut = await quoteRepForEthV3(client, ATTO_REP)
 			// At time of writing REP is roughly $0.40 and ETH ~$2 191 → ~0.00018 ETH per REP
 			// Assert a wide range to avoid brittleness
 			expect(ethOut).toBeGreaterThan(10n ** 12n) // > 0.000001 ETH

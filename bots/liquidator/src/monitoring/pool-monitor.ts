@@ -29,7 +29,7 @@ function emptyVault(address: Address): VaultPosition {
 		address,
 		coverageCommitmentAttoEth: 0n,
 		backingUnits: 0n,
-		vaultRepBackingAttoRep: 0n,
+		vaultAttoRepBacking: 0n,
 		claimableFeesAttoEth: 0n,
 	}
 }
@@ -89,7 +89,7 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
 	return universes
 }
 
-async function loadVault(client: ReadClient, pool: Address, vault: Address, totalRepAttoRep: bigint, denominator: bigint): Promise<VaultPosition> {
+async function loadVault(client: ReadClient, pool: Address, vault: Address, totalAttoRep: bigint, denominator: bigint): Promise<VaultPosition> {
 	const raw = await client.readContract({
 		abi: securityPoolAbi,
 		address: pool,
@@ -101,7 +101,7 @@ async function loadVault(client: ReadClient, pool: Address, vault: Address, tota
 		address: vault,
 		coverageCommitmentAttoEth,
 		backingUnits: repBackingUnits,
-		vaultRepBackingAttoRep: repForBackingUnits(repBackingUnits, totalRepAttoRep, denominator),
+		vaultAttoRepBacking: repForBackingUnits(repBackingUnits, totalAttoRep, denominator),
 		claimableFeesAttoEth,
 	}
 }
@@ -158,7 +158,7 @@ async function loadPool(
 		securityPoolForker,
 		systemState,
 		totalCoverageCommitmentAttoEth,
-		totalRepAttoRep,
+		totalAttoRep,
 	] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getActiveVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'settlementCollateralAttoEth' }),
@@ -176,7 +176,7 @@ async function loadPool(
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalCoverageCommitmentAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getTotalPoolHeldRepAttoRep' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getTotalPoolHeldAttoRep' }),
 	])
 	const [forkData, forkActivationTime] = await Promise.all([
 		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'forkData' }),
@@ -205,14 +205,14 @@ async function loadPool(
 				snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
 				snapshotTargetCoverageCommitmentAttoEth: operation.snapshotTargetCoverageCommitmentAttoEth,
 				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits,
-				snapshotTotalPoolHeldRepAttoRep: operation.snapshotTotalPoolHeldRepAttoRep,
+				snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
 				targetVault: getAddress(operation.targetVault),
 				validForSeconds: operation.validForSeconds,
 			})
 		}
 	}
-	const vaults = await Promise.all(addresses.map(async vault => await loadVault(client, address, vault, totalRepAttoRep, denominator)))
-	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, wallet, totalRepAttoRep, denominator)))
+	const vaults = await Promise.all(addresses.map(async vault => await loadVault(client, address, vault, totalAttoRep, denominator)))
+	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, wallet, totalAttoRep, denominator)))
 	const selected = settings.selectedPools.some(pool => sameAddress(pool, address))
 	const approvedUniverse = settings.approvedUniverses.includes(deployment.universeId)
 	const riskContext = {
@@ -222,7 +222,7 @@ async function loadPool(
 		minLiquidationPriceDistanceBps,
 		multiplierBps: deployment.statoblastSecurityMultiplierBps,
 		price: candidateScreeningPrice(lastPrice, settings.strategy.fallbackRepPerEthPrice),
-		totalRepAttoRep,
+		totalAttoRep,
 	}
 	const candidates = !isPoolExecutionEligible({ approvedUniverse, selected, systemState })
 		? []
@@ -265,7 +265,7 @@ async function loadPool(
 		stagedOperations,
 		systemState,
 		totalCoverageCommitmentAttoEth,
-		totalRepAttoRep,
+		totalAttoRep,
 		truncatedVaults: truncated,
 		universeId: deployment.universeId,
 		vaults,

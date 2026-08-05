@@ -40,12 +40,12 @@ function getCollateralizationPercent(qualifyingRepBackingAttoRep: bigint | undef
 	return (qualifyingRepBackingAttoRep * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (coverageCommitmentAttoEth * repPerEthPrice)
 }
 
-export function getPoolCollateralizationPercent(totalPoolHeldRepAttoRep: bigint | undefined, totalCoverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(totalPoolHeldRepAttoRep, totalCoverageCommitmentAttoEth, repPerEthPrice)
+export function getPoolCollateralizationPercent(totalPoolHeldAttoRep: bigint | undefined, totalCoverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(totalPoolHeldAttoRep, totalCoverageCommitmentAttoEth, repPerEthPrice)
 }
 
-export function getVaultCollateralizationPercent(vaultRepBackingAttoRep: bigint | undefined, coverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(vaultRepBackingAttoRep, coverageCommitmentAttoEth, repPerEthPrice)
+export function getVaultCollateralizationPercent(vaultAttoRepBacking: bigint | undefined, coverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(vaultAttoRepBacking, coverageCommitmentAttoEth, repPerEthPrice)
 }
 
 export function getCollateralizationTone(collateralizationPercent: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined): CollateralizationTone | undefined {
@@ -68,8 +68,8 @@ export function getCollateralizationDisplayState(coverageCommitmentAttoEth: bigi
 	return collateralizationPercent === undefined ? 'unavailable' : 'value'
 }
 
-export function hasRepBackedPoolWithNoActiveCoverageCommitment(totalPoolHeldRepAttoRep: bigint | undefined, feeEligibleCoverageCommitmentAttoEth: bigint | undefined) {
-	return (totalPoolHeldRepAttoRep ?? 0n) > 0n && (feeEligibleCoverageCommitmentAttoEth ?? 0n) === 0n
+export function hasRepBackedPoolWithNoActiveCoverageCommitment(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCoverageCommitmentAttoEth: bigint | undefined) {
+	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleCoverageCommitmentAttoEth ?? 0n) === 0n
 }
 
 export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
@@ -164,7 +164,7 @@ export function getTradingMintGuardMessage({
 	isOnActiveAppChain,
 	mintAmountInput,
 	shareTokenSupplyAttoShares,
-	totalPoolHeldRepAttoRep,
+	totalPoolHeldAttoRep,
 }: {
 	accountAddress: Address | undefined
 	settlementCollateralAttoEth: bigint | undefined
@@ -174,7 +174,7 @@ export function getTradingMintGuardMessage({
 	isOnActiveAppChain: boolean
 	mintAmountInput: string
 	shareTokenSupplyAttoShares: bigint | undefined
-	totalPoolHeldRepAttoRep: bigint | undefined
+	totalPoolHeldAttoRep: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
@@ -187,7 +187,7 @@ export function getTradingMintGuardMessage({
 	const remainingCapacity = getRemainingMintCapacity(feeEligibleCoverageCommitmentAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
-		if (hasRepBackedPoolWithNoActiveCoverageCommitment(totalPoolHeldRepAttoRep, feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
+		if (hasRepBackedPoolWithNoActiveCoverageCommitment(totalPoolHeldAttoRep, feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
 
 		return 'No mint capacity remaining.'
 	}

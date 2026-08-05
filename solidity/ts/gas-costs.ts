@@ -213,7 +213,7 @@ const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
 	const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 	const forkData = await getSecurityPoolForkerForkData(alice, context.addresses.securityPool)
-	const ethRaiseCapAttoEth = openInterestAmount - (openInterestAmount * forkData.migratedRepAttoRep) / forkData.auctionableRepAtForkAttoRep
+	const attoEthRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedAttoRep) / forkData.auctionableAttoRepAtFork
 	if (migrateOpenInterestShares) {
 		const winningChildTarget = [QuestionOutcome.Yes]
 		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, winningChildTarget))
@@ -221,16 +221,16 @@ const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
 		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.No, winningChildTarget))
 	}
 	await anvil.advanceTime(8n * 7n * DAY + DAY)
-	return { context, yesPool, ethRaiseCapAttoEth }
+	return { context, yesPool, attoEthRaiseCap }
 }
 
 const prepareYesChildFinalized = async (migrateOpenInterestShares = false) => {
-	const { context, yesPool, ethRaiseCapAttoEth } = await prepareYesChildForAuction(migrateOpenInterestShares)
+	const { context, yesPool, attoEthRaiseCap } = await prepareYesChildForAuction(migrateOpenInterestShares)
 	await confirmTx(alice, startTruthAuction(alice, yesPool.securityPool))
-	await confirmTx(dave, submitBid(dave, yesPool.truthAuction, 0n, ethRaiseCapAttoEth))
+	await confirmTx(dave, submitBid(dave, yesPool.truthAuction, 0n, attoEthRaiseCap))
 	await anvil.advanceTime(8n * DAY)
 	await confirmTx(alice, finalizeTruthAuction(alice, yesPool.securityPool))
-	return { context, yesPool, ethRaiseCapAttoEth }
+	return { context, yesPool, attoEthRaiseCap }
 }
 
 const prepareDirectOpenOracleInitialReport = async () => {
@@ -660,7 +660,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const prepared = await prepareYesChildForAuction()
 			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			return await waitForGas(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.ethRaiseCapAttoEth))
+			return await waitForGas(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
 		},
 	},
 	{
@@ -669,7 +669,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const prepared = await prepareYesChildForAuction()
 			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.ethRaiseCapAttoEth))
+			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
 			await confirmTx(bob, submitBid(bob, prepared.yesPool.truthAuction, -100n, 1n * 10n ** 18n))
 			return await waitForGas(bob, refundLosingBids(bob, prepared.yesPool.truthAuction, [{ tick: -100n, bidIndex: 0n }]))
 		},
@@ -680,7 +680,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const prepared = await prepareYesChildForAuction()
 			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.ethRaiseCapAttoEth))
+			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
 			await anvil.advanceTime(8n * DAY)
 			return await waitForGas(alice, finalizeTruthAuction(alice, prepared.yesPool.securityPool))
 		},

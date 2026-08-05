@@ -61,7 +61,7 @@ import {
 	getSystemState,
 	getTotalAccruedFees,
 	getTotalClaimableVaultFeesAttoEth,
-	getTotalPoolHeldRepAttoRep,
+	getTotalPoolHeldAttoRep,
 	getTotalCoverageCommitmentAttoEth,
 	getVaultCount,
 	getVaults,
@@ -88,7 +88,7 @@ type EscrowAccountingSnapshot = {
 	escalationGameTokenBalance: bigint
 	disputeStakedRepByVaultAttoRep: readonly bigint[]
 	poolVaultLocks: readonly bigint[]
-	totalDisputeStakedRepAttoRep: bigint
+	totalDisputeStakedAttoRep: bigint
 }
 
 const assertEscrowAccountingSnapshot = (snapshot: EscrowAccountingSnapshot, label: string, { tokenBacking = 'exact', vaultBacking = 'exact' }: { tokenBacking?: 'at-least' | 'exact' | 'none'; vaultBacking?: 'at-most' | 'exact' } = {}) => {
@@ -97,10 +97,10 @@ const assertEscrowAccountingSnapshot = (snapshot: EscrowAccountingSnapshot, labe
 		strictEqualTypeSafe(escrowedRep, ensureDefined(snapshot.poolVaultLocks[index], `${label}: pool vault lock ${index.toString()} is missing`), `${label}: pool and escalation-game vault locks should match for actor ${index.toString()}`)
 	}
 	const totalVaultEscrow = snapshot.disputeStakedRepByVaultAttoRep.reduce((sum, amount) => sum + amount, 0n)
-	if (vaultBacking === 'exact') strictEqualTypeSafe(totalVaultEscrow, snapshot.totalDisputeStakedRepAttoRep, `${label}: per-vault escalation escrow should sum to the game total`)
-	if (vaultBacking === 'at-most') assert.ok(totalVaultEscrow <= snapshot.totalDisputeStakedRepAttoRep, `${label}: local per-vault escrow should not exceed aggregate continuation backing`)
-	if (tokenBacking === 'exact') strictEqualTypeSafe(snapshot.escalationGameTokenBalance, snapshot.totalDisputeStakedRepAttoRep, `${label}: escalation-game token backing should equal recorded escrow`)
-	if (tokenBacking === 'at-least') assert.ok(snapshot.escalationGameTokenBalance >= snapshot.totalDisputeStakedRepAttoRep, `${label}: prefunded escalation-game token balance should cover recorded escrow`)
+	if (vaultBacking === 'exact') strictEqualTypeSafe(totalVaultEscrow, snapshot.totalDisputeStakedAttoRep, `${label}: per-vault escalation escrow should sum to the game total`)
+	if (vaultBacking === 'at-most') assert.ok(totalVaultEscrow <= snapshot.totalDisputeStakedAttoRep, `${label}: local per-vault escrow should not exceed aggregate continuation backing`)
+	if (tokenBacking === 'exact') strictEqualTypeSafe(snapshot.escalationGameTokenBalance, snapshot.totalDisputeStakedAttoRep, `${label}: escalation-game token backing should equal recorded escrow`)
+	if (tokenBacking === 'at-least') assert.ok(snapshot.escalationGameTokenBalance >= snapshot.totalDisputeStakedAttoRep, `${label}: prefunded escalation-game token balance should cover recorded escrow`)
 }
 
 const assertEscrowMigrationConservation = ({ childSourcePrincipal, parentRemainingPrincipal, sourcePrincipalAtFork }: { childSourcePrincipal: bigint; parentRemainingPrincipal: bigint; sourcePrincipalAtFork: bigint }, label: string) => {
@@ -116,7 +116,7 @@ type HarnessContext = {
 const readPoolAccountingSnapshot = async (snapshotClient: WriteClient, securityPool: Address) => ({
 	systemState: await getSystemState(snapshotClient, securityPool),
 	ethBalanceAttoEth: await getETHBalance(snapshotClient, securityPool),
-	poolHeldRepBalanceAttoRep: await getTotalPoolHeldRepAttoRep(snapshotClient, securityPool),
+	poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(snapshotClient, securityPool),
 	settlementCollateralAttoEth: await getSettlementCollateralAttoEth(snapshotClient, securityPool),
 	totalRepBackingUnits: await getTotalRepBackingUnits(snapshotClient, securityPool),
 	totalCoverageCommitmentAttoEth: await getTotalCoverageCommitmentAttoEth(snapshotClient, securityPool),
@@ -182,7 +182,7 @@ describe('Peripherals invariant harness', () => {
 
 	const assertSecurityPoolEscrowAccounting = async ({ actors, escalationGame, label, repToken, securityPool }: { actors: readonly WriteClient[]; escalationGame: Address; label: string; repToken: Address; securityPool: Address }) => {
 		if (!(await contractExists(client, escalationGame))) return
-		const [disputeStakedRepByVaultAttoRep, poolVaults, totalDisputeStakedRepAttoRep, escalationGameTokenBalance, systemState, forkContinuation] = await Promise.all([
+		const [disputeStakedRepByVaultAttoRep, poolVaults, totalDisputeStakedAttoRep, escalationGameTokenBalance, systemState, forkContinuation] = await Promise.all([
 			Promise.all(actors.map(actor => getEscrowedRepByVault(client, escalationGame, actor.account.address))),
 			Promise.all(actors.map(actor => getSecurityVault(client, securityPool, actor.account.address))),
 			getTotalEscrowedRep(client, escalationGame),
@@ -197,8 +197,8 @@ describe('Peripherals invariant harness', () => {
 			{
 				escalationGameTokenBalance,
 				disputeStakedRepByVaultAttoRep,
-				poolVaultLocks: poolVaults.map(vault => vault.disputeStakedRepAttoRep),
-				totalDisputeStakedRepAttoRep,
+				poolVaultLocks: poolVaults.map(vault => vault.disputeStakedAttoRep),
+				totalDisputeStakedAttoRep,
 			},
 			label,
 			{ tokenBacking, vaultBacking: forkContinuation ? 'at-most' : 'exact' },
@@ -255,7 +255,7 @@ describe('Peripherals invariant harness', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
-		const repAtFork = (await getSecurityPoolForkerForkData(client, context.securityPool)).auctionableRepAtForkAttoRep
+		const repAtFork = (await getSecurityPoolForkerForkData(client, context.securityPool)).auctionableAttoRepAtFork
 		const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 		const losingBidder = createClient(3)
 		const winningBidder = createClient(4)
@@ -297,7 +297,7 @@ describe('Peripherals invariant harness', () => {
 			escalationGameTokenBalance: 30n,
 			disputeStakedRepByVaultAttoRep: [10n, 20n],
 			poolVaultLocks: [10n, 20n],
-			totalDisputeStakedRepAttoRep: 30n,
+			totalDisputeStakedAttoRep: 30n,
 		} as const
 		assertEscrowAccountingSnapshot(balancedSnapshot, 'balanced mutation fixture')
 		expect(() => assertEscrowAccountingSnapshot({ ...balancedSnapshot, escalationGameTokenBalance: 29n }, 'dropped backing mutation')).toThrow(/token backing should equal recorded escrow/)
@@ -334,7 +334,7 @@ describe('Peripherals invariant harness', () => {
 				const historicalVaultData = await Promise.all(historicalVaults.map(vault => getSecurityVault(client, securityPool, vault)))
 				const totalCoverageCommitmentAttoEthFromVaults = vaults.reduce((sum, vault) => sum + vault.coverageCommitmentAttoEth, 0n)
 				const totalBackingUnitsFromVaults = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
-				const totalRepAttoRep = await getTotalPoolHeldRepAttoRep(client, securityPool)
+				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
 				const totalClaims = (await Promise.all(vaults.map(vault => backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)))).reduce((sum, claim) => sum + claim, 0n)
 				const collateral = await getSettlementCollateralAttoEth(client, securityPool)
 				const ethBalanceAttoEth = await getETHBalance(client, securityPool)
@@ -346,7 +346,7 @@ describe('Peripherals invariant harness', () => {
 				})
 				const expectedActiveVaults = historicalVaults.filter((_, index) => {
 					const vault = ensureDefined(historicalVaultData[index], `${label}: historical vault data ${index.toString()} is missing`)
-					return vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedRepAttoRep > 0n
+					return vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n
 				})
 				const aggregateClaimableFeesAttoEth = historicalVaultData.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
 				const uncheckpointedCoverageCommitmentAttoEth = historicalVaultData.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.coverageCommitmentAttoEth), 0n)
@@ -356,14 +356,14 @@ describe('Peripherals invariant harness', () => {
 				strictEqualTypeSafe(BigInt(historicalVaults.length), historicalVaultCount, `${label}: historical vault count should match its page`)
 				assert.strictEqual(new Set(historicalVaults).size, historicalVaults.length, `${label}: historical vault page should not duplicate actors`)
 				assert.deepStrictEqual(new Set(activeVaults), new Set(expectedActiveVaults), `${label}: active vaults should be exactly the historical vaults with live economic state`)
-				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalRepAttoRep, `${label}: recorded REP should equal the token balance`)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalAttoRep, `${label}: recorded REP should equal the token balance`)
 				strictEqualTypeSafe(totalCoverageCommitmentAttoEthFromVaults, await getTotalCoverageCommitmentAttoEth(client, securityPool), `${label}: aggregate coverageCommitmentAttoEth should equal the sum of vault coverageCommitmentsAttoEth`)
 				strictEqualTypeSafe(totalBackingUnitsFromVaults, await getTotalRepBackingUnits(client, securityPool), `${label}: backingUnits denominator should equal active vault backingUnits`)
 				strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: aggregate claimable vault fees should equal the pool claimable-fee ledger`)
 				strictEqualTypeSafe(totalCoverageCommitmentAttoEthFromVaults, accountingSnapshot.feeEligibleCoverageCommitmentAttoEth, `${label}: operational vault coverageCommitmentsAttoEth should equal the fee-eligible coverageCommitmentAttoEth ledger`)
 				strictEqualTypeSafe(uncheckpointedCoverageCommitmentAttoEth, accountingSnapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, `${label}: uncheckpointed coverageCommitmentAttoEth should equal vault coverageCommitmentsAttoEth behind the global fee index`)
-				assert.ok(totalClaims <= totalRepAttoRep, `${label}: rounded vault claims must not exceed pool-held REP`)
-				assert.ok(totalRepAttoRep - totalClaims <= activeVaultCount, `${label}: aggregate REP rounding dust should be bounded by active vault count`)
+				assert.ok(totalClaims <= totalAttoRep, `${label}: rounded vault claims must not exceed pool-held REP`)
+				assert.ok(totalAttoRep - totalClaims <= activeVaultCount, `${label}: aggregate REP rounding dust should be bounded by active vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
 				assert.ok((await getTotalCoverageCommitmentAttoEth(client, securityPool)) >= collateral, `${label}: open interest must remain backed by aggregate coverageCommitmentAttoEth`)
 			}
@@ -487,8 +487,8 @@ describe('Peripherals invariant harness', () => {
 				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstPoolAddresses.escalationGame, label: `${action.name}, parent escalation`, repToken: parentRepToken, securityPool: firstPoolAddresses.securityPool })
 				await assertParentSupplyAccounting(action.name)
 			}
-			const actorAEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).disputeStakedRepAttoRep
-			const actorBEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).disputeStakedRepAttoRep
+			const actorAEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).disputeStakedAttoRep
+			const actorBEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).disputeStakedAttoRep
 			assert.ok(actorAEscrowAtFork > 0n, 'actor A should have unresolved escrow before the fork')
 			assert.ok(actorBEscrowAtFork > 0n, 'actor B should have unresolved escrow before the fork')
 			const parentYesDepositsAtFork = await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -552,8 +552,8 @@ describe('Peripherals invariant harness', () => {
 				await runAction(action.name, action.execute)
 				strictEqualTypeSafe(await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse), parentSupplyAfterLocking, `${action.name}: child migration must not burn parent REP again`)
 				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS)), burnBalanceAfterLocking, `${action.name}: child migration must not move parent REP after locking`)
-				assert.ok((await getERC20Balance(client, yesRepToken, firstYesPool)) <= (await getSecurityPoolForkerForkData(client, firstPoolAddresses.securityPool)).auctionableRepAtForkAttoRep, `${action.name}: first child pool mint must stay backed by its fork balance`)
-				assert.ok((await getERC20Balance(client, yesRepToken, secondYesPool)) <= (await getSecurityPoolForkerForkData(client, secondPoolAddresses.securityPool)).auctionableRepAtForkAttoRep, `${action.name}: second child pool mint must stay backed by its fork balance`)
+				assert.ok((await getERC20Balance(client, yesRepToken, firstYesPool)) <= (await getSecurityPoolForkerForkData(client, firstPoolAddresses.securityPool)).auctionableAttoRepAtFork, `${action.name}: first child pool mint must stay backed by its fork balance`)
+				assert.ok((await getERC20Balance(client, yesRepToken, secondYesPool)) <= (await getSecurityPoolForkerForkData(client, secondPoolAddresses.securityPool)).auctionableAttoRepAtFork, `${action.name}: second child pool mint must stay backed by its fork balance`)
 				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstPoolAddresses.escalationGame, label: `${action.name}, parent escalation`, repToken: parentRepToken, securityPool: firstPoolAddresses.securityPool })
 				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstYesPoolAddresses.escalationGame, label: `${action.name}, child escalation`, repToken: yesRepToken, securityPool: firstYesPool })
 			}
@@ -567,10 +567,10 @@ describe('Peripherals invariant harness', () => {
 					assert.ok((await getSecurityVault(client, childPool, vaultClient.account.address)).repBackingUnits > 0n, 'migrated child vault should receive backingUnits')
 				}
 			}
-			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).disputeStakedRepAttoRep, 0n, 'actor A parent escrow entitlement should be consumed exactly once')
-			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).disputeStakedRepAttoRep, 0n, 'actor B parent escrow entitlement should be consumed exactly once')
-			const actorAChildEscrow = (await getSecurityVault(client, firstYesPool, actorA.account.address)).disputeStakedRepAttoRep
-			const actorBChildEscrow = (await getSecurityVault(client, firstYesPool, actorB.account.address)).disputeStakedRepAttoRep
+			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).disputeStakedAttoRep, 0n, 'actor A parent escrow entitlement should be consumed exactly once')
+			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).disputeStakedAttoRep, 0n, 'actor B parent escrow entitlement should be consumed exactly once')
+			const actorAChildEscrow = (await getSecurityVault(client, firstYesPool, actorA.account.address)).disputeStakedAttoRep
+			const actorBChildEscrow = (await getSecurityVault(client, firstYesPool, actorB.account.address)).disputeStakedAttoRep
 			strictEqualTypeSafe(actorAChildEscrow, 0n, 'actor A should not need a per-vault child escrow lock')
 			strictEqualTypeSafe(actorBChildEscrow, 0n, 'actor B should not need a per-vault child escrow lock')
 			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
@@ -659,7 +659,7 @@ describe('Peripherals invariant harness', () => {
 				const historicalVaultData = await Promise.all(historicalVaults.map(vault => getSecurityVault(client, securityPool, vault)))
 				const aggregateCoverageCommitmentAttoEth = vaults.reduce((sum, vault) => sum + vault.coverageCommitmentAttoEth, 0n)
 				const aggregateBackingUnits = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
-				const totalRepAttoRep = await getTotalPoolHeldRepAttoRep(client, securityPool)
+				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
 				const roundedClaims = (await Promise.all(vaults.map(vault => backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)))).reduce((sum, claim) => sum + claim, 0n)
 				const collateral = await getSettlementCollateralAttoEth(client, securityPool)
 				const systemState = await getSystemState(client, securityPool)
@@ -672,7 +672,7 @@ describe('Peripherals invariant harness', () => {
 				})
 				const expectedActiveVaults = historicalVaults.filter((_, index) => {
 					const vault = ensureDefined(historicalVaultData[index], `${label}: historical vault data ${index.toString()} is missing`)
-					return vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedRepAttoRep > 0n
+					return vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n
 				})
 				const aggregateClaimableFeesAttoEth = historicalVaultData.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
 				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active vault page should match count`)
@@ -690,9 +690,9 @@ describe('Peripherals invariant harness', () => {
 				if (systemState === SystemState.PoolForked) assert.ok(aggregateBackingUnits <= backingUnitsDenominator, `${label}: consumed fork entitlements cannot exceed the frozen backingUnits snapshot`)
 				else strictEqualTypeSafe(aggregateBackingUnits, backingUnitsDenominator, `${label}: backingUnits should reconcile`)
 				strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: aggregate claimable vault fees should equal the pool claimable-fee ledger`)
-				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalRepAttoRep, `${label}: REP balance should reconcile`)
-				assert.ok(roundedClaims <= totalRepAttoRep, `${label}: rounded claims cannot exceed pool-held REP`)
-				assert.ok(totalRepAttoRep - roundedClaims <= activeVaultCount, `${label}: REP rounding dust should be bounded`)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalAttoRep, `${label}: REP balance should reconcile`)
+				assert.ok(roundedClaims <= totalAttoRep, `${label}: rounded claims cannot exceed pool-held REP`)
+				assert.ok(totalAttoRep - roundedClaims <= activeVaultCount, `${label}: REP rounding dust should be bounded`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
 				assert.ok(totalCoverageCommitmentAttoEth >= collateral, `${label}: open interest should remain coverageCommitmentAttoEth-backed`)
 			}
@@ -837,7 +837,7 @@ describe('Peripherals invariant harness', () => {
 					enabled: () => completed.has('refresh first-pool reporting price'),
 					execute: async () => {
 						await depositToEscalationGame(actorA, firstPool.securityPool, QuestionOutcome.Yes, 10n * 10n ** 18n)
-						actorAFirstEscrowSourceAtFork = (await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).disputeStakedRepAttoRep
+						actorAFirstEscrowSourceAtFork = (await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).disputeStakedAttoRep
 					},
 				},
 				{
@@ -950,8 +950,8 @@ describe('Peripherals invariant harness', () => {
 			const firstYesPool = firstYesPoolAddresses.securityPool
 			assert.ok((await getSecurityVault(client, firstYesPool, client.account.address)).repBackingUnits > 0n, 'creator backingUnits should migrate to own-fork child')
 			const actorAChildVault = await getSecurityVault(client, firstYesPool, actorA.account.address)
-			strictEqualTypeSafe(actorAChildVault.disputeStakedRepAttoRep, 0n, 'actor A should not need a per-vault own-fork child escrow lock')
-			strictEqualTypeSafe((await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).disputeStakedRepAttoRep, 0n, 'actor A source escrow should be consumed from the parent exactly once')
+			strictEqualTypeSafe(actorAChildVault.disputeStakedAttoRep, 0n, 'actor A should not need a per-vault own-fork child escrow lock')
+			strictEqualTypeSafe((await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).disputeStakedAttoRep, 0n, 'actor A source escrow should be consumed from the parent exactly once')
 			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
 			const actorAChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
 			strictEqualTypeSafe(actorAChildSourcePrincipal, 0n, 'handler should retain actor A principal in aggregate carry')
@@ -1045,11 +1045,11 @@ describe('Peripherals invariant harness', () => {
 		await startTruthAuction(client, yesAddresses.securityPool)
 
 		if ((await getSystemState(client, yesAddresses.securityPool)) === SystemState.ForkTruthAuction) {
-			const ethRaiseCapAttoEth = await getEthRaiseCapAttoEth(client, yesAddresses.truthAuction)
-			if (ethRaiseCapAttoEth > 0n) {
+			const attoEthRaiseCap = await getEthRaiseCapAttoEth(client, yesAddresses.truthAuction)
+			if (attoEthRaiseCap > 0n) {
 				const parentForkData = await getSecurityPoolForkerForkData(client, context.securityPool)
-				const repAtFork = path === 'own' ? (await getOwnForkRepBuckets(client, context.securityPool)).vaultRepAtForkAttoRep : parentForkData.auctionableRepAtForkAttoRep
-				await participateAuction(createClient(3), yesAddresses.truthAuction, repAtFork / 4n, ethRaiseCapAttoEth)
+				const repAtFork = path === 'own' ? (await getOwnForkRepBuckets(client, context.securityPool)).vaultRepAtForkAttoRep : parentForkData.auctionableAttoRepAtFork
+				await participateAuction(createClient(3), yesAddresses.truthAuction, repAtFork / 4n, attoEthRaiseCap)
 			}
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalizeTruthAuction(client, yesAddresses.securityPool)
@@ -1146,8 +1146,8 @@ describe('Peripherals invariant harness', () => {
 		await migrateVaultWithUnresolvedEscalation(client, context.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const forkData = await getSecurityPoolForkerForkData(client, context.securityPool)
-		assert.ok(forkData.auctionableRepAtForkAttoRep > 0n, 'forked pool should retain migration REP for branch settlement')
-		assert.ok(forkData.migratedRepAttoRep <= forkData.auctionableRepAtForkAttoRep, 'migrated REP should never exceed the branch migration balance')
+		assert.ok(forkData.auctionableAttoRepAtFork > 0n, 'forked pool should retain migration REP for branch settlement')
+		assert.ok(forkData.migratedAttoRep <= forkData.auctionableAttoRepAtFork, 'migrated REP should never exceed the branch migration balance')
 		const yesUniverseId = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, statoblastSecurityMultiplierBps).securityPool
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool), SystemState.ForkMigration, 'yes child should be in fork migration')
@@ -1174,7 +1174,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'parent should enter forked state')
 		assert.equal(migrationProxyRepBalance, 0n, 'forking should burn the parent REP that leaves the parent pool')
 		strictEqualTypeSafe(parentSupplyBeforeFork - parentSupplyAfterFork, burnAddressBalanceAfterFork - burnAddressBalanceBeforeFork, 'burned parent REP should equal the parent theoretical supply decrease')
-		assert.ok(forkData.auctionableRepAtForkAttoRep > 0n, 'own-fork migration balance should include non-burned parent REP')
+		assert.ok(forkData.auctionableAttoRepAtFork > 0n, 'own-fork migration balance should include non-burned parent REP')
 	})
 
 	test('coverage commitment', async () => {
@@ -1226,9 +1226,9 @@ describe('Peripherals invariant harness', () => {
 		await mockWindow.advanceTime(AUCTION_TIME + DAY)
 		await finalizeTruthAuction(client, childPool)
 
-		const [activatedChildAccounting, activatedChildForkData, totalRepPurchasedAttoRep] = await Promise.all([readAccounting(childPool), getSecurityPoolForkerForkData(client, childPool), getTotalRepPurchasedAttoRep(client, childAddresses.truthAuction)])
+		const [activatedChildAccounting, activatedChildForkData, totalAttoRepPurchased] = await Promise.all([readAccounting(childPool), getSecurityPoolForkerForkData(client, childPool), getTotalRepPurchasedAttoRep(client, childAddresses.truthAuction)])
 		strictEqualTypeSafe(await getSystemState(client, childPool), SystemState.Operational, 'zero-demand finalization should activate the child')
-		strictEqualTypeSafe(totalRepPurchasedAttoRep, 0n, 'zero-demand finalization should purchase no REP')
+		strictEqualTypeSafe(totalAttoRepPurchased, 0n, 'zero-demand finalization should purchase no REP')
 		strictEqualTypeSafe(activatedChildForkData.auctionedCoverageCommitmentAttoEth, 0n, 'coverage commitment')
 		strictEqualTypeSafe(activatedChildAccounting.totalCoverageCommitmentAttoEth, operationalAccounting.totalCoverageCommitmentAttoEth, 'coverage commitment')
 		strictEqualTypeSafe(activatedChildAccounting.feeEligibleCoverageCommitmentAttoEth, coverageCommitmentAttoEth, 'coverage commitment')
@@ -1314,7 +1314,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(refundFirst.winningVault.feeIndex, claimFirst.winningVault.feeIndex, 'winning vault fee accounting should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.winningRep, claimFirst.winningRep, 'winning REP claim should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.forkData.auctionedCoverageCommitmentAttoEth, claimFirst.forkData.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-		strictEqualTypeSafe(refundFirst.forkData.migratedRepAttoRep, claimFirst.forkData.migratedRepAttoRep, 'migrated REP should not depend on claim order')
+		strictEqualTypeSafe(refundFirst.forkData.migratedAttoRep, claimFirst.forkData.migratedAttoRep, 'migrated REP should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.ethBalanceAttoEth, claimFirst.ethBalanceAttoEth, 'child pool ETH balance should not depend on claim order')
 		assert.deepStrictEqual(refundFirst.parentAccounting, parentAccountingBeforeClaims, 'refund-first child auction claims must not mutate parent-pool accounting')
 		assert.deepStrictEqual(claimFirst.parentAccounting, parentAccountingBeforeClaims, 'claim-first child auction claims must not mutate parent-pool accounting')
@@ -1528,7 +1528,7 @@ describe('Peripherals invariant harness', () => {
 		const expectedActiveVaults: Address[] = []
 		for (const vaultAddress of historicalVaults) {
 			const vault = await getSecurityVault(client, context.securityPool, vaultAddress)
-			if (vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedRepAttoRep > 0n) {
+			if (vault.repBackingUnits > 0n || vault.coverageCommitmentAttoEth > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n) {
 				expectedActiveVaults.push(vaultAddress)
 			}
 		}
@@ -1567,7 +1567,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(winningVaultAfterClaim.repBackingUnits, 0n, 'the claimed vault should have no parent backingUnits')
 		strictEqualTypeSafe(winningVaultAfterClaim.coverageCommitmentAttoEth, 0n, 'coverage commitment')
 		strictEqualTypeSafe(winningVaultAfterClaim.claimableFeesAttoEth, 0n, 'the claimed vault should have no parent claimable fees')
-		strictEqualTypeSafe(winningVaultAfterClaim.disputeStakedRepAttoRep, 0n, 'the direct claim should consume the vault final escalation escrow')
+		strictEqualTypeSafe(winningVaultAfterClaim.disputeStakedAttoRep, 0n, 'the direct claim should consume the vault final escalation escrow')
 
 		const activeAfterDirectClaim = Array.from(await getActiveVaults(client, context.securityPool, 0n, (await getActiveVaultCount(client, context.securityPool)) + 1n))
 		const historicalVaults = Array.from(await getVaults(client, context.securityPool, 0n, (await getVaultCount(client, context.securityPool)) + 1n))
@@ -1604,7 +1604,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(await getEthRaisedAttoEth(client, underfundedAuctionAddress), lowPriceBid, 'underfunded accounting should record the submitted ETH')
 
 		const underfundedResult = await simulateWithdrawBids(client, underfundedAuctionAddress, underfundedBidder.account.address, [{ tick: lowPriceTick, bidIndex: 0n }])
-		strictEqualTypeSafe(underfundedResult.totalFilledRepAttoRep, underfundedExpectedRep, 'the only underfunded winner should fill the complete REP sale cap')
+		strictEqualTypeSafe(underfundedResult.totalFilledAttoRep, underfundedExpectedRep, 'the only underfunded winner should fill the complete REP sale cap')
 		strictEqualTypeSafe(underfundedResult.totalRefundAttoEth, 0n, 'low-price underfunded winner should not receive an ETH refund')
 
 		const refundAuctionOwner = createClient(3)
@@ -1629,9 +1629,9 @@ describe('Peripherals invariant harness', () => {
 		const winningResult = await simulateWithdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
 		const expectedWinningRep = await getTotalRepPurchasedAttoRep(client, refundAuctionAddress)
 		const acceptedWinningEth = await getEthRaisedAttoEth(client, refundAuctionAddress)
-		strictEqualTypeSafe(refundOnlyResult.totalFilledRepAttoRep, 0n, 'refund-only low-price bid should not fill REP')
+		strictEqualTypeSafe(refundOnlyResult.totalFilledAttoRep, 0n, 'refund-only low-price bid should not fill REP')
 		strictEqualTypeSafe(refundOnlyResult.totalRefundAttoEth, refundOnlyBid, 'refund-only low-price bid should receive all ETH back')
-		strictEqualTypeSafe(winningResult.totalFilledRepAttoRep, expectedWinningRep, 'winning bid should fill the finalized REP allocation')
+		strictEqualTypeSafe(winningResult.totalFilledAttoRep, expectedWinningRep, 'winning bid should fill the finalized REP allocation')
 		assert.ok(expectedWinningRep > 0n && expectedWinningRep <= 10n * 10n ** 18n, 'winning REP must remain positive and capped')
 		strictEqualTypeSafe(winningResult.totalRefundAttoEth, winningBid - acceptedWinningEth, 'winning bid should refund ETH above the finalized allocation')
 

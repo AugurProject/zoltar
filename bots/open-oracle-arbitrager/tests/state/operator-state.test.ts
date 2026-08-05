@@ -31,7 +31,7 @@ function strategy(): MutableStrategy {
 	return {
 		maxSpotTwapTicks: 100n,
 		minimumProfitBps: 100n,
-		minimumProfitWethAttoEth: 10n ** 16n,
+		minimumProfitAttoWeth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
 		pollMilliseconds: 12_000,
@@ -59,7 +59,7 @@ describe('operator strategy settings', () => {
 	test('validates and applies every runtime-adjustable setting', () => {
 		const current = strategy()
 		expect(updateStrategyFromRequest(current, settings())).toEqual(settings())
-		expect(current.minimumProfitWethAttoEth).toBe(25n * 10n ** 15n)
+		expect(current.minimumProfitAttoWeth).toBe(25n * 10n ** 15n)
 		expect(current.maxSpotTwapTicks).toBe(75n)
 	})
 

@@ -26,10 +26,10 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 10n,
-		disputeStakedRepAttoRep: 3n * 10n ** 18n,
+		disputeStakedAttoRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
 		totalRepBackingUnits: 1n,
-		vaultRepBackingAttoRep: 12n * 10n ** 18n,
+		vaultAttoRepBacking: 12n * 10n ** 18n,
 		repToken: zeroAddress,
 		coverageCommitmentAttoEth: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
@@ -149,7 +149,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
 				coverageCommitmentAttoEth={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedRepAttoRep: 3n * 10n ** 18n })}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
 				variant='embedded'
@@ -169,7 +169,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
 				coverageCommitmentAttoEth={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n })}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
 				variant='embedded'
@@ -231,8 +231,8 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						disputeStakedRepAttoRep: 0n,
-						vaultRepBackingAttoRep: 0n,
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
 						coverageCommitmentAttoEth: 0n,
 						claimableFeesAttoEth: 1n * 10n ** 18n,
 					}),
@@ -457,7 +457,7 @@ describe('SecurityVaultSection', () => {
 					accountState: createAccountState({ address: undefined }),
 					modalFirst: true,
 					poolState: createEndedPoolState(),
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
 				})}
 			/>,
 		)
@@ -520,8 +520,8 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						disputeStakedRepAttoRep: 0n,
-						vaultRepBackingAttoRep: 0n,
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
 						coverageCommitmentAttoEth: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
@@ -543,8 +543,8 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						disputeStakedRepAttoRep: 0n,
-						vaultRepBackingAttoRep: 0n,
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
 						coverageCommitmentAttoEth: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
@@ -582,7 +582,7 @@ describe('SecurityVaultSection', () => {
 					},
 					oracleManagerDetails: createOracleManagerDetails(),
 					securityVaultDetails: createSecurityVaultDetails({
-						vaultRepBackingAttoRep: 6n * 10n ** 18n,
+						vaultAttoRepBacking: 6n * 10n ** 18n,
 						coverageCommitmentAttoEth: 0n,
 					}),
 				})}
@@ -660,7 +660,7 @@ describe('SecurityVaultSection', () => {
 						isPriceValid: false,
 						requestPriceCostAttoEth: 1n,
 					},
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
@@ -681,8 +681,8 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					securityVaultDetails: createSecurityVaultDetails({
-						disputeStakedRepAttoRep: 3n * 10n ** 18n,
-						vaultRepBackingAttoRep: 20n * 10n ** 18n,
+						disputeStakedAttoRep: 3n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
 					}),
 					securityVaultForm: {
 						depositAmount: '',
@@ -709,7 +709,7 @@ describe('SecurityVaultSection', () => {
 							priceValidUntilTimestamp: 10n,
 							requestPriceCostAttoEth: 1n * 10n ** 18n,
 						}),
-						securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
@@ -738,8 +738,8 @@ describe('SecurityVaultSection', () => {
 							requestPriceCostAttoEth: 1n * 10n ** 18n,
 						}),
 						securityVaultDetails: createSecurityVaultDetails({
-							disputeStakedRepAttoRep: 0n,
-							vaultRepBackingAttoRep: 13n * 10n ** 18n,
+							disputeStakedAttoRep: 0n,
+							vaultAttoRepBacking: 13n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
@@ -842,7 +842,7 @@ describe('SecurityVaultSection', () => {
 					oracleManagerDetails: createOracleManagerDetails(),
 					poolState: createEndedPoolState(),
 					securityVaultDetails: createSecurityVaultDetails({
-						disputeStakedRepAttoRep: 0n,
+						disputeStakedAttoRep: 0n,
 					}),
 					securityVaultForm: {
 						depositAmount: '1',

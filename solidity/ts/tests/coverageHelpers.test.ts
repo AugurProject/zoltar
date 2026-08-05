@@ -41,7 +41,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const SCALAR_DECIMALS = 18n
-const ATTO_REP_PER_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const MAX_INT256 = 2n ** 255n - 1n
 const MIN_INT256 = -(2n ** 255n)
 const MAX_UINT256 = 2n ** 256n - 1n
@@ -1550,7 +1550,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 						functionName: 'deployEscalationGame',
-						args: [ATTO_REP_PER_REP, 2n * ATTO_REP_PER_REP],
+						args: [ATTO_REP, 2n * ATTO_REP],
 					}),
 					gas: 10_000_000n,
 				}),
@@ -1564,7 +1564,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployStartedGame',
-				args: [escalationGameFactoryAddress, ATTO_REP_PER_REP, 2n * ATTO_REP_PER_REP],
+				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 			}),
 		)
 		await transact(
@@ -1572,7 +1572,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployForkedGame',
-				args: [escalationGameFactoryAddress, ATTO_REP_PER_REP, 2n * ATTO_REP_PER_REP, 0n],
+				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n],
 			}),
 		)
 		await assert.rejects(
@@ -1581,7 +1581,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				encodeFunctionData({
 					abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 					functionName: 'deployStartedGame',
-					args: [escalationGameFactoryAddress, ATTO_REP_PER_REP, 2n * ATTO_REP_PER_REP],
+					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 				}),
 			),
 			/Escalation game deployment failed/,

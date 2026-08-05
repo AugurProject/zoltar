@@ -22,7 +22,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		ISecurityPool indexed parent,
 		uint256 indexed outcomeIndex,
 		uint256 childPoolRepSplitAttoRep,
-		uint256 pendingChildRepAttoRep
+		uint256 pendingChildAttoRep
 	);
 	event ClaimForkedEscalationDepositsToWallet(
 		ISecurityPool indexed parent,
@@ -110,7 +110,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 				child.setTotalRepBackingUnits(childDenominator);
 			} else if (forkDataByPool[parent].ownFork) {
 				child.setTotalRepBackingUnits(
-					forkDataByPool[parent].auctionableRepAtForkAttoRep * SecurityPoolUtils.PRICE_PRECISION
+					forkDataByPool[parent].auctionableAttoRepAtFork * SecurityPoolUtils.PRICE_PRECISION
 				);
 			} else {
 				child.setTotalRepBackingUnits(parent.totalRepBackingUnits());
@@ -161,17 +161,17 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 	function _sweepChildRepToPool(ISecurityPool parent, uint256 outcomeIndex) internal {
 		ISecurityPool child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) return;
-		uint256 pendingChildRepAttoRep = pendingChildRepByPoolAndOutcome[parent][outcomeIndex];
-		if (pendingChildRepAttoRep == 0) return;
+		uint256 pendingChildAttoRep = pendingChildRepByPoolAndOutcome[parent][outcomeIndex];
+		if (pendingChildAttoRep == 0) return;
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[parent];
 		require(address(migrationProxy) != address(0x0), 'Proxy missing');
 		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] = 0;
-		migrationProxy.sweepChildRep(address(child), child.repToken(), pendingChildRepAttoRep);
+		migrationProxy.sweepChildRep(address(child), child.repToken(), pendingChildAttoRep);
 		emit PoolHeldRepSweptToChild(
 			parent,
 			child,
 			outcomeIndex,
-			pendingChildRepAttoRep,
+			pendingChildAttoRep,
 			child.repToken().balanceOf(address(child))
 		);
 	}
@@ -185,7 +185,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		parent.updateSettlementCollateral();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
 		uint256 vaultRepAtForkAttoRep =
-			parentForkData.ownFork ? parentForkData.vaultRepAtForkAttoRep : parentForkData.auctionableRepAtForkAttoRep;
+			parentForkData.ownFork ? parentForkData.vaultRepAtForkAttoRep : parentForkData.auctionableAttoRepAtFork;
 		uint256 parentSettlementCollateralAtForkAttoEth = parentForkData.settlementCollateralAtForkAttoEth;
 		if (vaultRepAtForkAttoRep == 0 || parentSettlementCollateralAtForkAttoEth == 0) return;
 		uint256 nextRepTransferredAttoRep =
@@ -210,12 +210,12 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 	function _ensureMigratedVaultRepBacked(
 		ISecurityPool parent,
 		ISecurityPool child,
-		uint256 requiredMigratedRepAttoRep
+		uint256 requiredMigratedAttoRep
 	) internal {
-		if (requiredMigratedRepAttoRep == 0) return;
+		if (requiredMigratedAttoRep == 0) return;
 		uint256 outcomeIndex = forkDataByPool[child].outcomeIndex;
-		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredMigratedRepAttoRep);
-		require(child.repToken().balanceOf(address(child)) >= requiredMigratedRepAttoRep, 'Child REP short');
+		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredMigratedAttoRep);
+		require(child.repToken().balanceOf(address(child)) >= requiredMigratedAttoRep, 'Child REP short');
 	}
 
 	function _ensureChildPoolRepSplit(
@@ -242,13 +242,13 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		ISecurityPool parent,
 		ISecurityPool child,
 		address vault
-	) internal returns (uint256 migratedRepAttoRep) {
+	) internal returns (uint256 migratedAttoRep) {
 		uint256 settlementCollateralTransferredAttoEthBefore = forkDataByPool[parent]
 			.settlementCollateralTransferredAttoEth;
 		uint256 parentRepAtForkAttoRep =
 			forkDataByPool[parent].ownFork
 				? forkDataByPool[parent].vaultRepAtForkAttoRep
-				: forkDataByPool[parent].auctionableRepAtForkAttoRep;
+				: forkDataByPool[parent].auctionableAttoRepAtFork;
 		child.updateVaultFees(vault);
 		// Checkpoint the parent entitlement in the same routine that clears the
 		// coverage commitment, so future migration entry points cannot strand reserve fees.
@@ -270,14 +270,14 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		if (parentBackingUnitsDenominator > 0 && parentRepAtForkAttoRep > 0 && parentRepBackingUnits > 0) {
 			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
 			childForkData.migratedRepBackingUnits += parentRepBackingUnits;
-			migratedRepAttoRep =
+			migratedAttoRep =
 				childForkData.migratedRepBackingUnits == parentBackingUnitsDenominator
-					? parentRepAtForkAttoRep - childForkData.migratedRepAttoRep
+					? parentRepAtForkAttoRep - childForkData.migratedAttoRep
 					: (parentRepBackingUnits * parentRepAtForkAttoRep) / parentBackingUnitsDenominator;
-			uint256 nextMigratedRepAttoRep = childForkData.migratedRepAttoRep + migratedRepAttoRep;
-			_ensureMigratedVaultRepBacked(parent, child, nextMigratedRepAttoRep);
-			childForkData.migratedRepAttoRep = nextMigratedRepAttoRep;
-			_transferForkMigratedCollateralToChild(parent, child, migratedRepAttoRep);
+			uint256 nextMigratedAttoRep = childForkData.migratedAttoRep + migratedAttoRep;
+			_ensureMigratedVaultRepBacked(parent, child, nextMigratedAttoRep);
+			childForkData.migratedAttoRep = nextMigratedAttoRep;
+			_transferForkMigratedCollateralToChild(parent, child, migratedAttoRep);
 		}
 
 		child.configureVault(
@@ -296,8 +296,8 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			child,
 			vault,
 			forkDataByPool[child].outcomeIndex,
-			migratedRepAttoRep,
-			forkDataByPool[child].migratedRepAttoRep,
+			migratedAttoRep,
+			forkDataByPool[child].migratedAttoRep,
 			resultingParentBackingUnits,
 			resultingParentCoverageCommitmentAttoEth,
 			resultingChildBackingUnits,

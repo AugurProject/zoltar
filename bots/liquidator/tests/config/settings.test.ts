@@ -59,7 +59,7 @@ const settings = {
 		maximumGasCostEth: '0.02',
 		maximumLiquidationCoverageCommitmentEth: '25',
 		maximumOracleRequestCostEth: '0.02',
-		maximumRepPerPoolRep: '10000',
+		maximumPerPoolRep: '10000',
 		maximumTotalDeployedRep: '25000',
 		minimumLiquidationCoverageCommitmentEth: '1',
 		minimumRepWithdrawalRep: '10',
@@ -70,7 +70,7 @@ const settings = {
 		vaultTargetHealthBps: 12500,
 		vaultTopUpHealthBps: 11000,
 		vaultWithdrawHealthBps: 15000,
-		walletRepReserveRep: '100',
+		walletReserveRep: '100',
 	},
 	submission: {
 		minimumBundleRelaySuccesses: 1,
@@ -84,12 +84,12 @@ describe('liquidator settings', () => {
 	test('round trips the operator configuration without losing decimal precision', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)
-		expect(parsed.strategy.maximumRepPerPoolAttoRep).toBe(10_000n * 10n ** 18n)
-		expect(parsed.strategy.minimumLiquidationCoverageCommitmentAttoEth).toBe(10n ** 18n)
-		expect(parsed.strategy.walletRepReserveAttoRep).toBe(100n * 10n ** 18n)
+		expect(parsed.strategy.maximumAttoRepPerPool).toBe(10_000n * 10n ** 18n)
+		expect(parsed.strategy.minimumLiquidationCoverageCommitmentEth).toBe(10n ** 18n)
+		expect(parsed.strategy.walletAttoRepReserve).toBe(100n * 10n ** 18n)
 		const serialized = serializedSettings(parsed)
 		expect(serialized.strategy.maximumGasCostEth).toBe('0.02')
-		expect(serialized.strategy.maximumRepPerPoolRep).toBe('10000')
+		expect(serialized.strategy.maximumPerPoolRep).toBe('10000')
 		expect(JSON.stringify(serialized.strategy)).toBe(JSON.stringify(settings.strategy))
 		expect(serialized.connectivity).toEqual({
 			publicRpcUrls: ['https://public.example/'],

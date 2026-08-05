@@ -325,8 +325,8 @@ export async function quoteEthForToken(client: ReadClient, token: Address, amoun
 }
 
 // Convenience: REP → ETH using the default pool config
-export async function quoteRepForEth(client: ReadClient, repAmountAttoRep: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, repAmountAttoRep)
+export async function quoteRepForEth(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
+	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
 }
 
 // Convenience: ETH → REP using the default pool config
@@ -443,9 +443,9 @@ export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address
 	return result.amountOut
 }
 
-// Returns how much WETH (= ETH) you receive for `repAmountAttoRep` REP via Uniswap V3 (1% pool).
-export async function quoteRepForEthV3(client: ReadClient, repAmountAttoRep: bigint): Promise<bigint> {
-	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, repAmountAttoRep)
+// Returns how much WETH (= ETH) you receive for `attoRepAmount` REP via Uniswap V3 (1% pool).
+export async function quoteRepForEthV3(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
+	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────
@@ -453,6 +453,6 @@ export async function quoteRepForEthV3(client: ReadClient, repAmountAttoRep: big
 // Pool ID: 0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
-export async function quoteRepForUsdcV4WithSource(client: ReadClient, repAmountAttoRep: bigint) {
-	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), repAmountAttoRep, [REP_USDC_V4_POOL])
+export async function quoteRepForUsdcV4WithSource(client: ReadClient, attoRepAmount: bigint) {
+	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), attoRepAmount, [REP_USDC_V4_POOL])
 }

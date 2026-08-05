@@ -22,18 +22,18 @@ interface IEscalationGameEvents {
 	event DepositOnOutcome(
 		address indexed depositor,
 		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 depositIndex,
 		uint256 cumulativeRepAmountAttoRep,
-		uint256 resultingVaultDisputeStakedRepAttoRep,
-		uint256 resultingTotalDisputeStakedRepAttoRep
+		uint256 resultingVaultDisputeStakedAttoRep,
+		uint256 resultingTotalDisputeStakedAttoRep
 	);
 	/// @notice One replayable carry leaf. `nodeId` is the stable source node identity; REP values use attoREP.
 	event LocalDepositAppended(
 		uint256 indexed nodeId,
 		BinaryOutcomes.BinaryOutcome indexed outcome,
 		address indexed depositor,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 parentDepositIndex,
 		uint256 cumulativeRepAmountAttoRep
 	);
@@ -56,7 +56,7 @@ interface IEscalationGameEvents {
 		uint256 indexed sourceNodeId,
 		address indexed depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		CarryConsumptionReason reason,
 		uint256 resultingUnresolvedTotalAttoRep,
 		bytes32 resultingNullifierRoot,

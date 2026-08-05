@@ -158,13 +158,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const { auctionableRepAtForkAttoRep, truthAuctionStartedAt, migratedRepAttoRep, auctionedCoverageCommitmentAttoEth, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
+	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCoverageCommitmentAttoEth, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtForkAttoRep, escalationChildRepPerSelectedOutcomeAttoRep, escrowSourceRepAtForkAttoRep] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
 		forkOutcome,
-		migratedRepAttoRep,
+		migratedAttoRep,
 		systemState,
 		truthAuctionStartedAt,
 	})
@@ -181,7 +181,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
-		const [computeClearingResult, ethRaiseCapAttoEth, ethRaisedAttoEth, finalized, maxRepBeingSoldAttoRep, minBidSizeAttoEth, totalRepPurchasedAttoRep, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
+		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
@@ -190,13 +190,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'ethRaiseCapAttoEth',
+				functionName: 'attoEthRaiseCap',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'ethRaisedAttoEth',
+				functionName: 'attoEthRaised',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -208,7 +208,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'maxRepBeingSoldAttoRep',
+				functionName: 'maxAttoRepBeingSold',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -220,7 +220,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'totalRepPurchasedAttoRep',
+				functionName: 'totalAttoRepPurchased',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -269,15 +269,15 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			clearingPrice,
 			clearingTick,
 			bidAtClearingTickAttoEth,
-			ethRaiseCapAttoEth,
-			ethRaisedAttoEth,
+			attoEthRaiseCap,
+			attoEthRaised,
 			finalized,
 			hitCap,
-			maxRepBeingSoldAttoRep,
+			maxAttoRepBeingSold,
 			minBidSizeAttoEth,
-			repPurchasableAtBidAttoRep: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCapAttoEth * 10n ** 18n) / clearingPrice,
+			attoRepPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (attoEthRaiseCap * 10n ** 18n) / clearingPrice,
 			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
-			totalRepPurchasedAttoRep,
+			totalAttoRepPurchased,
 			underfunded,
 			underfundedThreshold: underfunded ? underfundedThreshold : undefined,
 			underfundedWinningAttoEth,
@@ -292,7 +292,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		forkOwnSecurityPool,
 		hasForkActivity,
 		marketDetails,
-		migratedRepAttoRep,
+		migratedAttoRep,
 		migrationEndsAt,
 		parentSecurityPoolAddress,
 		questionOutcome: getReportingOutcomeKey(questionOutcome),
@@ -305,7 +305,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 					},
 				}
 			: {}),
-		auctionableRepAtForkAttoRep: ownForkMigrationOwnFork ? ownForkMigrationAuctionableRepAtFork : auctionableRepAtForkAttoRep,
+		auctionableAttoRepAtFork: ownForkMigrationOwnFork ? ownForkMigrationAuctionableRepAtFork : auctionableAttoRepAtFork,
 		securityPoolAddress,
 		systemState,
 		truthAuction,

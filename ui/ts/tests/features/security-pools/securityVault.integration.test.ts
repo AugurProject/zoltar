@@ -81,7 +81,7 @@ describe('Security vault integration', () => {
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {
 		const initialVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		if (initialVaultDetails === undefined) throw new Error('Expected security vault details to load')
-		expect(initialVaultDetails.vaultRepBackingAttoRep).toBe(0n)
+		expect(initialVaultDetails.vaultAttoRepBacking).toBe(0n)
 
 		const startPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
 		const approvalResult = await approveErc20(uiWriteClient, initialVaultDetails.repToken, securityPoolAddress, depositAmount, 'approveRep')
@@ -109,7 +109,7 @@ describe('Security vault integration', () => {
 		if (updatedVaultDetails === undefined) throw new Error('Expected updated security vault details to load')
 		expect(updatedVaultDetails.vaultAddress).toBe(walletAddress)
 		expect(updatedVaultDetails.securityPoolAddress).toBe(securityPoolAddress)
-		expect(updatedVaultDetails.vaultRepBackingAttoRep).toBe(depositAmount)
+		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {

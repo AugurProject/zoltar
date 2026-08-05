@@ -475,13 +475,13 @@ async function validateSeededSecurityPool({ expectedVaults, poolLabel, readClien
 	}
 
 	if (seededPool.vaultCount !== expectedVaultCount) throw new Error(`Expected ${poolLabel} to have ${expectedVaultCount.toString()} seeded vaults`)
-	if (seededPool.totalPoolHeldRepAttoRep !== expectedRepDeposit) throw new Error(`Expected ${poolLabel} to have ${expectedRepDeposit.toString()} seeded REP`)
+	if (seededPool.totalPoolHeldAttoRep !== expectedRepDeposit) throw new Error(`Expected ${poolLabel} to have ${expectedRepDeposit.toString()} seeded REP`)
 	if (seededPool.totalCoverageCommitmentAttoEth !== expectedCoverageCommitmentAttoEth) throw new Error(`Expected ${poolLabel} to have ${expectedCoverageCommitmentAttoEth.toString()} seeded coverage commitment`)
 
 	for (const expectedVault of expectedVaults) {
 		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === expectedVault.accountAddress)
 		if (vault === undefined) throw new Error(`Expected ${poolLabel} to include seeded vault ${expectedVault.accountAddress}`)
-		if (vault.vaultRepBackingAttoRep !== expectedVault.vaultRepBackingDepositAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.vaultRepBackingDepositAttoRep.toString()} seeded REP`)
+		if (vault.vaultAttoRepBacking !== expectedVault.vaultRepBackingDepositAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.vaultRepBackingDepositAttoRep.toString()} seeded REP`)
 		if (vault.coverageCommitmentAttoEth !== expectedVault.coverageCommitmentAttoEth) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.coverageCommitmentAttoEth.toString()} seeded coverage commitment`)
 	}
 }
@@ -725,7 +725,7 @@ async function seedSecurityPool({
 		await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
 		await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep)
 		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
-		if (seededVault.vaultRepBackingAttoRep !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultRepBackingAttoRep.toString()}`)
+		if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
 	}
 
@@ -907,7 +907,7 @@ async function seedSecurityPoolX2Scenario({
 			await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
 			await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep)
 			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
-			if (seededVault.vaultRepBackingAttoRep !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultRepBackingAttoRep.toString()}`)
+			if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)
 		}
 

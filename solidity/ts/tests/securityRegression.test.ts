@@ -20,7 +20,7 @@ import {
 } from '../testSupport/simulator/utils/contracts/peripherals'
 import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getRepToken, getSecurityVault, getTotalCoverageCommitmentAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
-import { createChildUniverse, getMigratedRepAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -215,11 +215,11 @@ describe('security regression coverage', () => {
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
-		const migratedRepAttoRep = await getMigratedRepAttoRep(client, yesChild.securityPool)
+		const migratedAttoRep = await getMigratedAttoRep(client, yesChild.securityPool)
 		const childPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
-		assert.ok(migratedRepAttoRep > 0n, 'vault migration should credit migrated REP')
-		assert.ok(childPoolRepBalance >= migratedRepAttoRep, 'child pool-held REP must back migrated vault accounting')
-		assert.ok(migratedRepAttoRep < vaultRepAtForkAttoRep, 'single-vault migration should leave remaining branch REP unsplit')
+		assert.ok(migratedAttoRep > 0n, 'vault migration should credit migrated REP')
+		assert.ok(childPoolRepBalance >= migratedAttoRep, 'child pool-held REP must back migrated vault accounting')
+		assert.ok(migratedAttoRep < vaultRepAtForkAttoRep, 'single-vault migration should leave remaining branch REP unsplit')
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		const toppedUpChildPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)

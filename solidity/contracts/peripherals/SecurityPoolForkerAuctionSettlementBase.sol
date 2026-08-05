@@ -25,7 +25,7 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		SecurityPoolForkerForkData storage data,
 		uint256 amountAttoRep,
 		uint256 newCoverageCommitmentAttoEth,
-		uint256 totalRepPurchasedAttoRep
+		uint256 totalAttoRepPurchased
 	) internal {
 		if (amountAttoRep == 0 && newCoverageCommitmentAttoEth == 0) return;
 		uint256 auctionRepBackingUnitsPerAttoRep = data.auctionRepBackingUnitsPerAttoRep;
@@ -33,7 +33,7 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		uint256 auctionRepBackingUnits = amountAttoRep * auctionRepBackingUnitsPerAttoRep;
 		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
 		require(
-			nextClaimedAuctionRepBackingUnits <= totalRepPurchasedAttoRep * auctionRepBackingUnitsPerAttoRep,
+			nextClaimedAuctionRepBackingUnits <= totalAttoRepPurchased * auctionRepBackingUnitsPerAttoRep,
 			'REP'
 		);
 		uint256 nextClaimedAuctionedCoverageCommitmentAttoEth =

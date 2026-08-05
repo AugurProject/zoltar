@@ -101,7 +101,7 @@ struct CarriedDepositProof {
 struct ForkedEscrowState {
 	uint256 sourcePrincipalAttoRep;
 	uint256 sourcePrincipalClaimedAttoRep;
-	uint256 childRepAttoRep;
+	uint256 childAttoRep;
 	uint256 childRepClaimedAttoRep;
 }
 

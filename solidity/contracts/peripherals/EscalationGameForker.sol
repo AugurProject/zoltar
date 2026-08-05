@@ -17,14 +17,14 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		address indexed vault,
 		uint256[3] sourcePrincipalByOutcomeAttoRep,
 		uint256[3] currentRepByOutcomeAttoRep,
-		uint256 totalCurrentRepAttoRep
+		uint256 totalCurrentAttoRep
 	);
 	event EscalationMigrationEntitlementMaterialized(
 		ISecurityPool indexed parent,
 		address indexed vault,
 		uint256 indexed childOutcomeIndex,
 		ISecurityPool child,
-		uint256 childRepAttoRep
+		uint256 childAttoRep
 	);
 
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
@@ -158,7 +158,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			vault,
 			childOutcomeIndex,
 			child,
-			entitlement.totalCurrentRepAttoRep
+			entitlement.totalCurrentAttoRep
 		);
 	}
 
@@ -177,14 +177,14 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		parent.configureVault(vault, parentRepBackingUnits, parentCoverageCommitmentAttoEth, parentFeeIndex);
 		entitlement.sourcePrincipalByOutcomeAttoRep = sourcePrincipalByOutcomeAttoRep;
 		entitlement.currentRepByOutcomeAttoRep = currentRepByOutcomeAttoRep;
-		entitlement.totalCurrentRepAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);
+		entitlement.totalCurrentAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);
 		entitlement.initialized = true;
 		emit EscalationMigrationEntitlementInitialized(
 			parent,
 			vault,
 			sourcePrincipalByOutcomeAttoRep,
 			currentRepByOutcomeAttoRep,
-			entitlement.totalCurrentRepAttoRep
+			entitlement.totalCurrentAttoRep
 		);
 	}
 

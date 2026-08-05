@@ -34,8 +34,8 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 					<VaultMetricGrid
 						className='workflow-vault-grid'
 						layout='preview'
-						disputeStakedRepAttoRep={vault.disputeStakedRepAttoRep}
-						vaultRepBackingAttoRep={vault.vaultRepBackingAttoRep}
+						disputeStakedAttoRep={vault.disputeStakedAttoRep}
+						vaultAttoRepBacking={vault.vaultAttoRepBacking}
 						repPerEthPrice={repPerEthPrice}
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}

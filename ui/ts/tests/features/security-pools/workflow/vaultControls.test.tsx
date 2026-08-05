@@ -144,14 +144,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldRepAttoRep: 20_000n * 10n ** 18n,
+							totalPoolHeldAttoRep: 20_000n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
-							vaultRepBackingAttoRep: 20_000n * 10n ** 18n,
+							vaultAttoRepBacking: 20_000n * 10n ** 18n,
 							coverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
@@ -195,7 +195,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalPoolHeldAttoRep: 9n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
@@ -205,7 +205,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						},
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
-							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
 							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
@@ -253,14 +253,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalPoolHeldAttoRep: 9n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
 						accountState: createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
 							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
@@ -306,14 +306,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalPoolHeldAttoRep: 9n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
 						accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
 							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
@@ -358,14 +358,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalPoolHeldAttoRep: 9n * 10n ** 18n,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
 						accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
 							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,

@@ -55,7 +55,7 @@ export type ForkReplay = {
 	unresolvedEscalation: boolean
 	settlementCollateralAtForkAttoEth: bigint
 	totalPoolHeldRepAtForkAttoRep: bigint
-	auctionableRepAtForkAttoRep: bigint
+	auctionableAttoRepAtFork: bigint
 	escalationSourceRepAtForkAttoRep: bigint
 	escalationChildRepAtForkAttoRep: bigint
 	escalationStartBondAtForkAttoRep: bigint
@@ -88,7 +88,7 @@ export type AuctionBidReplay = {
 	bidAmountAttoEth: bigint
 	cumulativeBidAtTickAttoEth: bigint
 	bidUsedAttoEth?: bigint
-	repFilledAttoRep?: bigint
+	attoRepFilled?: bigint
 	refundAttoEth?: bigint
 	status?: bigint
 }
@@ -112,7 +112,7 @@ export type AuctionLifecycleReplay = {
 	endTimestamp?: bigint
 	clearingTick?: bigint
 	grossAcceptedAttoEth?: bigint
-	repSoldAttoRep?: bigint
+	attoRepSold?: bigint
 	funded?: boolean
 }
 
@@ -125,8 +125,8 @@ export type CoordinatorOperationReplay = {
 	validForSeconds: bigint
 	snapshotTargetBackingUnits: bigint
 	snapshotTargetCoverageCommitmentAttoEth: bigint
-	snapshotTargetDisputeStakedRepAttoRep: bigint
-	snapshotTotalPoolHeldRepAttoRep: bigint
+	snapshotTargetDisputeStakedAttoRep: bigint
+	snapshotTotalPoolHeldAttoRep: bigint
 	snapshotTotalRepBackingUnits: bigint
 	isPendingSlot: boolean
 	status: 'Queued' | 'Succeeded' | 'Failed' | 'Recovered'
@@ -137,7 +137,7 @@ export type DisputeStakedRepDepositReplay = {
 	nodeId: bigint
 	depositor: Address
 	outcome: bigint
-	repAmountAttoRep: bigint
+	attoRepAmount: bigint
 	parentDepositIndex: bigint
 	cumulativeRepAmountAttoRep: bigint
 	carryLeafIndex: bigint
@@ -194,7 +194,7 @@ export type EscalationConsumptionReplay = {
 	sourceNodeId: bigint
 	depositor: Address
 	outcome: bigint
-	repAmountAttoRep: bigint
+	attoRepAmount: bigint
 	reason: bigint
 	resultingUnresolvedTotalAttoRep: bigint
 	resultingNullifierRoot: Hex
@@ -214,7 +214,7 @@ export type EscalationClaimReplay = {
 export type ForkedEscrowReplay = {
 	sourcePrincipalAttoRep: bigint
 	sourcePrincipalClaimedAttoRep: bigint
-	childRepAttoRep: bigint
+	childAttoRep: bigint
 	childRepClaimedAttoRep: bigint
 }
 
@@ -490,7 +490,7 @@ function getEmptyNullifierRoot() {
 }
 
 function hashCarryLeaf(deposit: DisputeStakedRepDepositReplay) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [deposit.depositor, deposit.outcome, deposit.repAmountAttoRep, deposit.parentDepositIndex, deposit.cumulativeRepAmountAttoRep, deposit.nodeId]))
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [deposit.depositor, deposit.outcome, deposit.attoRepAmount, deposit.parentDepositIndex, deposit.cumulativeRepAmountAttoRep, deposit.nodeId]))
 }
 
 function bagCarryPeaks(peaks: readonly Hex[], leafCount: bigint) {
@@ -890,7 +890,7 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 			unresolvedEscalation,
 			settlementCollateralAtForkAttoEth: requireBigInt(log.args, 'settlementCollateralAtForkAttoEth'),
 			totalPoolHeldRepAtForkAttoRep: requireBigInt(log.args, 'totalPoolHeldRepAtForkAttoRep'),
-			auctionableRepAtForkAttoRep: requireBigInt(log.args, 'auctionableRepAtForkAttoRep'),
+			auctionableAttoRepAtFork: requireBigInt(log.args, 'auctionableAttoRepAtFork'),
 			escalationSourceRepAtForkAttoRep: requireBigInt(log.args, 'escalationSourceRepAtForkAttoRep'),
 			escalationChildRepAtForkAttoRep: requireBigInt(log.args, 'escalationChildRepAtForkAttoRep'),
 			escalationStartBondAtForkAttoRep: requireBigInt(log.args, 'escalationStartBondAtForkAttoRep'),
@@ -962,8 +962,8 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const repRemaining = requireBigInt(log.args, 'repRemaining')
 		if (repBefore <= 0n || repRemaining <= 0n || repRemaining >= repBefore) throw new Error('truth-auction haircut ratio is invalid')
 		state.escalationHaircuts.set(log.emitter, { repBefore, repRemaining })
-		const totalDisputeStakedRepAttoRep = state.escalationTotalEscrowedRep.get(log.emitter)
-		if (totalDisputeStakedRepAttoRep !== undefined) state.escalationTotalEscrowedRep.set(log.emitter, (totalDisputeStakedRepAttoRep * repRemaining) / repBefore)
+		const totalDisputeStakedAttoRep = state.escalationTotalEscrowedRep.get(log.emitter)
+		if (totalDisputeStakedAttoRep !== undefined) state.escalationTotalEscrowedRep.set(log.emitter, (totalDisputeStakedAttoRep * repRemaining) / repBefore)
 		const outcomeBalances = state.escalationResolutionBalances.get(log.emitter)
 		if (outcomeBalances !== undefined) {
 			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) outcomeBalances[outcomeIndex] = (outcomeBalances[outcomeIndex] * repRemaining) / repBefore
@@ -1076,7 +1076,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			nodeId: requireBigInt(log.args, 'nodeId'),
 			depositor: requireAddress(log.args, 'depositor'),
 			outcome,
-			repAmountAttoRep: requireBigInt(log.args, 'repAmountAttoRep'),
+			attoRepAmount: requireBigInt(log.args, 'attoRepAmount'),
 			parentDepositIndex: requireBigInt(log.args, 'parentDepositIndex'),
 			cumulativeRepAmountAttoRep: requireBigInt(log.args, 'cumulativeRepAmountAttoRep'),
 			carryLeafIndex: state.escalationLeafCounts.get(log.emitter)?.[Number(outcome)] ?? 0n,
@@ -1086,10 +1086,10 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const unresolvedByVault = getOrCreateNestedMap(state.escalationLocalUnresolvedByVault, log.emitter)
 		const vaultTotals = unresolvedByVault.get(deposit.depositor) ?? [0n, 0n, 0n]
 		const outcomeIndex = Number(outcome)
-		vaultTotals[outcomeIndex] += deposit.repAmountAttoRep
+		vaultTotals[outcomeIndex] += deposit.attoRepAmount
 		unresolvedByVault.set(deposit.depositor, vaultTotals)
 		const unresolvedTotals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
-		unresolvedTotals[outcomeIndex] += deposit.repAmountAttoRep
+		unresolvedTotals[outcomeIndex] += deposit.attoRepAmount
 		state.escalationUnresolvedTotals.set(log.emitter, unresolvedTotals)
 		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
 		resolutionBalancesAttoRep[outcomeIndex] = deposit.cumulativeRepAmountAttoRep
@@ -1105,17 +1105,17 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			bundles.set(deposit.depositor, bundle)
 		}
 		const haircut = state.escalationHaircuts.get(log.emitter)
-		if (haircut === undefined) bundle.claimRepUnits += deposit.repAmountAttoRep
+		if (haircut === undefined) bundle.claimRepUnits += deposit.attoRepAmount
 		else {
-			const numerator = deposit.repAmountAttoRep * haircut.repBefore
+			const numerator = deposit.attoRepAmount * haircut.repBefore
 			bundle.claimRepUnits += (numerator + haircut.repRemaining - 1n) / haircut.repRemaining
 		}
 		return
 	}
 	if (log.eventName === 'DepositOnOutcome') {
 		const depositor = requireAddress(log.args, 'depositor')
-		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'resultingVaultDisputeStakedRepAttoRep'))
-		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'resultingTotalDisputeStakedRepAttoRep'))
+		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'resultingVaultDisputeStakedAttoRep'))
+		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'resultingTotalDisputeStakedAttoRep'))
 		return
 	}
 	if (log.eventName === 'CarryDepositConsumed') {
@@ -1134,13 +1134,13 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const sourceNodeId = requireBigInt(log.args, 'sourceNodeId')
 		const reason = requireBigInt(log.args, 'reason')
 		const depositor = requireAddress(log.args, 'depositor')
-		const repAmountAttoRep = requireBigInt(log.args, 'repAmountAttoRep')
+		const attoRepAmount = requireBigInt(log.args, 'attoRepAmount')
 		const consumption: EscalationConsumptionReplay = {
 			parentDepositIndex,
 			sourceNodeId,
 			depositor,
 			outcome,
-			repAmountAttoRep,
+			attoRepAmount,
 			reason,
 			resultingUnresolvedTotalAttoRep: totals[index],
 			resultingNullifierRoot: requireHex(log.args, 'resultingNullifierRoot'),
@@ -1154,8 +1154,8 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			const unresolvedByVault = state.escalationLocalUnresolvedByVault.get(log.emitter)
 			const vaultTotals = unresolvedByVault?.get(depositor)
 			if (vaultTotals !== undefined) {
-				if (vaultTotals[index] < repAmountAttoRep) throw new Error('vault unresolved REP cannot become negative')
-				vaultTotals[index] -= repAmountAttoRep
+				if (vaultTotals[index] < attoRepAmount) throw new Error('vault unresolved REP cannot become negative')
+				vaultTotals[index] -= attoRepAmount
 			}
 			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
 			if (leaves !== undefined) {
@@ -1192,7 +1192,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'VaultEscrowUpdated') {
 		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(requireAddress(log.args, 'vault'), requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
-		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedRepAttoRep'))
+		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
 		return
 	}
 	if (log.eventName === 'VaultUnresolvedTotalsExported') {
@@ -1213,11 +1213,11 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		getOrCreateNestedMap(state.escalationForkedEscrow, log.emitter).set(`${depositor}:${outcome.toString()}`, {
 			sourcePrincipalAttoRep: requireBigInt(log.args, 'sourcePrincipalTotalAttoRep'),
 			sourcePrincipalClaimedAttoRep: 0n,
-			childRepAttoRep: requireBigInt(log.args, 'childRepTotalAttoRep'),
+			childAttoRep: requireBigInt(log.args, 'childRepTotalAttoRep'),
 			childRepClaimedAttoRep: 0n,
 		})
 		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
-		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedRepAttoRep'))
+		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
 		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
 		resolutionBalancesAttoRep[Number(outcome)] = requireBigInt(log.args, 'outcomeBalanceAttoRep')
 		state.escalationResolutionBalances.set(log.emitter, resolutionBalancesAttoRep)
@@ -1248,7 +1248,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			const escrow = state.escalationForkedEscrow.get(log.emitter)?.get(`${vault}:${outcomeIndex.toString()}`)
 			if (escrow === undefined) throw new Error('forked escrow export references unknown escrow')
 			escrow.sourcePrincipalClaimedAttoRep = escrow.sourcePrincipalAttoRep
-			escrow.childRepClaimedAttoRep = escrow.childRepAttoRep
+			escrow.childRepClaimedAttoRep = escrow.childAttoRep
 		}
 		return
 	}
@@ -1269,7 +1269,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 		const auction = state.auctions.get(log.emitter) ?? {}
 		auction.clearingTick = requireBigInt(log.args, 'clearingTick')
 		auction.grossAcceptedAttoEth = requireBigInt(log.args, 'grossAcceptedAttoEth')
-		auction.repSoldAttoRep = requireBigInt(log.args, 'repSoldAttoRep')
+		auction.attoRepSold = requireBigInt(log.args, 'attoRepSold')
 		auction.funded = requireBoolean(log.args, 'funded')
 		state.auctions.set(log.emitter, auction)
 		return
@@ -1296,7 +1296,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 	const bid = bids.get(key)
 	if (bid === undefined) throw new Error(`BidSettled references unknown bid ${key}`)
 	bid.bidUsedAttoEth = requireBigInt(log.args, 'bidUsedAttoEth')
-	bid.repFilledAttoRep = requireBigInt(log.args, 'repFilledAttoRep')
+	bid.attoRepFilled = requireBigInt(log.args, 'attoRepFilled')
 	bid.refundAttoEth = requireBigInt(log.args, 'refundAttoEth')
 	bid.status = requireBigInt(log.args, 'status')
 }
@@ -1419,8 +1419,8 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),
 			snapshotTargetCoverageCommitmentAttoEth: requireBigInt(log.args, 'snapshotTargetCoverageCommitmentAttoEth'),
-			snapshotTargetDisputeStakedRepAttoRep: 0n,
-			snapshotTotalPoolHeldRepAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldRepAttoRep'),
+			snapshotTargetDisputeStakedAttoRep: 0n,
+			snapshotTotalPoolHeldAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldAttoRep'),
 			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),
 			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
 			status: 'Queued',
@@ -1432,7 +1432,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		if (queued === undefined) throw new Error('coordinator dispute-staked REP snapshot was not queued')
 		operations.set(operationId, {
 			...queued,
-			snapshotTargetDisputeStakedRepAttoRep: requireBigInt(log.args, 'snapshotTargetDisputeStakedRepAttoRep'),
+			snapshotTargetDisputeStakedAttoRep: requireBigInt(log.args, 'snapshotTargetDisputeStakedAttoRep'),
 		})
 		return
 	}

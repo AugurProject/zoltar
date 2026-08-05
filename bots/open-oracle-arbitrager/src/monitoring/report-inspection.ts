@@ -6,8 +6,8 @@ import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-polic
 import { decimalSignedEth, decimalWeth, type OpportunitySnapshot } from '#state/operator-state'
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { requireCanonicalBlock, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { projectedLifecycleGasReserveWethAttoEth } from '#core/safety-controls'
-import { calculateNextAmount1, deriveTokenToSwap, executorFunding, fundedCapitalAtRiskWethAttoEth, hedgeWethLimitAttoEth, meetsProfitThreshold, spotTwapDeviationWithinLimit, type ArbitrageQuote } from '#core/strategy'
+import { projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
+import { calculateNextAmount1, deriveTokenToSwap, executorFunding, fundedCapitalAtRiskAttoWeth, hedgeWethLimitAttoEth, meetsProfitThreshold, spotTwapDeviationWithinLimit, type ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
 import type { EvaluatedOpportunity, Pool, RawBalances, ReadClient, WriteClient } from '#core/operator-types'
 import { evaluate, quoteInput } from '#monitoring/opportunity-evaluation'
@@ -68,7 +68,7 @@ export async function inspectReport(
 		const evaluation = await evaluate(client, config, report, pool, gasPrice, { hash: blockHash, number: blockNumber, observedAt: Number(blockTimestamp) * 1_000 })
 		dexObservations.push(...evaluation.observations)
 		if (evaluation.candidate === undefined) continue
-		if (best === undefined || evaluation.candidate.quote.netProfitWethAttoEth > best.quote.netProfitWethAttoEth) best = { ...evaluation.candidate, pool }
+		if (best === undefined || evaluation.candidate.quote.netProfitAttoWeth > best.quote.netProfitAttoWeth) best = { ...evaluation.candidate, pool }
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
@@ -84,13 +84,13 @@ export async function inspectReport(
 		recordDecision('Skipped report', 'Replacement ratio selected a different swap direction')
 		return
 	}
-	const hedgeLimitQuote = best.quote.direction === 'sell-rep' ? best.quote.grossProceedsWethAttoEth : best.quote.hedgeCostWethAttoEth
+	const hedgeLimitQuote = best.quote.direction === 'sell-rep' ? best.quote.grossProceedsAttoWeth : best.quote.hedgeCostAttoWeth
 	const hedgeLimit = hedgeWethLimitAttoEth(best.quote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
 	const funding = executorFunding(game, newAmount1, replacementAmount2, best.quote.direction === 'buy-rep' ? hedgeLimit : 0n)
 	const tokenBalance = balances?.tokens.get(game.token2.toLowerCase())
-	const hasRequiredInventory = balances === undefined || tokenBalance === undefined ? undefined : balances.wethAttoEth >= funding.token1 && tokenBalance >= funding.token2
-	const capitalAtRiskWethAttoEth = fundedCapitalAtRiskWethAttoEth(funding, best.quote.hedgeAmountAttoRep, hedgeLimitQuote, hedgeLimit)
-	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitWethAttoEth, config.minimumProfitBps)
+	const hasRequiredInventory = balances === undefined || tokenBalance === undefined ? undefined : balances.attoWeth >= funding.token1 && tokenBalance >= funding.token2
+	const capitalAtRiskAttoWeth = fundedCapitalAtRiskAttoWeth(funding, best.quote.hedgeAmountAttoRep, hedgeLimitQuote, hedgeLimit)
+	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitAttoWeth, config.minimumProfitBps)
 	const decision = opportunityDecision({
 		account: wallet?.account.address,
 		currentReporter: game.currentReporter,
@@ -100,15 +100,15 @@ export async function inspectReport(
 		paused,
 		profitable,
 	})
-	const executableReferenceWeth = best.quote.direction === 'sell-rep' ? best.quote.grossProceedsWethAttoEth : best.quote.hedgeCostWethAttoEth
+	const executableReferenceWeth = best.quote.direction === 'sell-rep' ? best.quote.grossProceedsAttoWeth : best.quote.hedgeCostAttoWeth
 	const executablePriceRepPerEth = executableReferenceWeth === 0n ? 0n : (best.quote.hedgeAmountAttoRep * 10n ** 18n) / executableReferenceWeth
-	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.hedgeFee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWethAttoEth)}`, `decision=${decision}`].join(' '))
+	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.hedgeFee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitAttoWeth)}`, `decision=${decision}`].join(' '))
 	const opportunity = {
 		centralizedPriceDeviationBps: undefined,
 		decision,
 		direction: best.quote.direction,
-		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitWethAttoEth),
-		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitWethAttoEth),
+		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitAttoWeth),
+		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitAttoWeth),
 		executablePriceRepPerEth: decimalSignedEth(executablePriceRepPerEth),
 		hasRequiredInventory,
 		pool: best.hedgePool,
@@ -122,12 +122,12 @@ export async function inspectReport(
 		venue: best.venue,
 		windowUnit: timeType ? 'seconds' : 'blocks',
 	} satisfies OpportunitySnapshot
-	const projectedLifecycleGas = projectedLifecycleGasReserveWethAttoEth({
+	const projectedLifecycleGas = projectedLifecycleGasReserveAttoWeth({
 		callbackGasLimit: BigInt(game.callbackGasLimit),
-		configuredReserveWethAttoEth: config.riskLimits.lifecycleGasReserveWethAttoEth,
+		configuredReserveAttoWeth: config.riskLimits.lifecycleGasReserveAttoWeth,
 		gasPrice,
 		submissionMode: config.submission.mode,
 	})
-	const candidate = decision === 'eligible' ? { capitalAtRiskWethAttoEth, hedgeFee: best.hedgeFee, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostWethAttoEth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
+	const candidate = decision === 'eligible' ? { capitalAtRiskAttoWeth, hedgeFee: best.hedgeFee, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostAttoWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
 	return { candidate, dexObservations, opportunity }
 }

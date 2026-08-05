@@ -343,9 +343,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			const parentPools = poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
-				const vaultRows: Array<{ vaultAddress: Address; vaultRepBackingAttoRep: bigint; coverageCommitmentAttoEth: bigint }> = vaultAddresses.map(vaultAddress => ({
+				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; coverageCommitmentAttoEth: bigint }> = vaultAddresses.map(vaultAddress => ({
 					vaultAddress,
-					vaultRepBackingAttoRep: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
+					vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 					coverageCommitmentAttoEth: coverageCommitmentAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				}))
 				return {
@@ -356,7 +356,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					questionOutcome: 'none',
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
-					totalPoolHeldRepAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.vaultRepBackingAttoRep, 0n),
+					totalPoolHeldAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.vaultAttoRepBacking, 0n),
 					totalCoverageCommitmentAttoEth: vaultRows.reduce<bigint>((sum, row) => sum + row.coverageCommitmentAttoEth, 0n),
 					vaults: vaultRows,
 				} as never
@@ -369,7 +369,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					questionOutcome: 'yes',
 					securityPoolAddress: yesChildPoolAddress,
 					systemState: 'forkTruthAuction',
-					totalPoolHeldRepAttoRep: 0n,
+					totalPoolHeldAttoRep: 0n,
 					totalCoverageCommitmentAttoEth: 0n,
 					vaultCount: 0n,
 					vaults: [],
@@ -384,7 +384,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadForkAuctionDetails += 1
 			return {
 				currentTime: SIMULATION_INITIAL_TIMESTAMP,
-				migratedRepAttoRep: 1n,
+				migratedAttoRep: 1n,
 				securityPoolAddress: primaryPoolAddress,
 				systemState: 'forkTruthAuction',
 				truthAuction: {
@@ -452,10 +452,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
 				currentRetentionRate: 0n,
-				disputeStakedRepAttoRep: 0n,
+				disputeStakedAttoRep: 0n,
 				managerAddress: getManagerForPool(securityPoolAddress),
 				totalRepBackingUnits: 0n,
-				vaultRepBackingAttoRep: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
+				vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				repToken: profile.genesisRepTokenAddress,
 				coverageCommitmentAttoEth: coverageCommitmentAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				securityPoolAddress,

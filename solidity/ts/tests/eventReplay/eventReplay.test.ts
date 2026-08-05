@@ -73,7 +73,7 @@ const securityPoolForkSnapshotEvent = {
 		{ name: 'unresolvedEscalation', type: 'bool', indexed: false },
 		{ name: 'settlementCollateralAtForkAttoEth', type: 'uint256', indexed: false },
 		{ name: 'totalPoolHeldRepAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'auctionableRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'auctionableAttoRepAtFork', type: 'uint256', indexed: false },
 		{ name: 'escalationSourceRepAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'escalationChildRepAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'escalationStartBondAtForkAttoRep', type: 'uint256', indexed: false },
@@ -464,7 +464,7 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
 					snapshotTargetCoverageCommitmentAttoEth: 12n,
-					snapshotTotalPoolHeldRepAttoRep: 13n,
+					snapshotTotalPoolHeldAttoRep: 13n,
 					snapshotTotalRepBackingUnits: 14n,
 					isPendingSlot: true,
 				},
@@ -501,13 +501,13 @@ describe('event-only replay', () => {
 				emitter: firstGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 0,
-				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmountAttoRep: 10n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, attoRepAmount: 10n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 10n },
 			}),
 			createReplayLog({
 				emitter: secondGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor: secondVault, repAmountAttoRep: 20n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 20n },
+				args: { nodeId: 1n, outcome: 1n, depositor: secondVault, attoRepAmount: 20n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 20n },
 			}),
 			createReplayLog({
 				emitter: firstCoordinator,
@@ -523,7 +523,7 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetCoverageCommitmentAttoEth: 6n,
-					snapshotTotalPoolHeldRepAttoRep: 7n,
+					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
 				},
@@ -542,7 +542,7 @@ describe('event-only replay', () => {
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
 					snapshotTargetCoverageCommitmentAttoEth: 10n,
-					snapshotTotalPoolHeldRepAttoRep: 11n,
+					snapshotTotalPoolHeldAttoRep: 11n,
 					snapshotTotalRepBackingUnits: 12n,
 					isPendingSlot: false,
 				},
@@ -566,25 +566,25 @@ describe('event-only replay', () => {
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 0,
-				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmountAttoRep: 100n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 100n },
+				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, attoRepAmount: 100n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmountAttoRep: 50n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 50n },
+				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, attoRepAmount: 50n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 50n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'DepositOnOutcome',
 				logIndex: 2,
-				args: { depositor: firstVault, outcome: 1n, repAmountAttoRep: 100n, depositIndex: 0n, cumulativeRepAmountAttoRep: 100n, resultingVaultDisputeStakedRepAttoRep: 100n, resultingTotalDisputeStakedRepAttoRep: 100n },
+				args: { depositor: firstVault, outcome: 1n, attoRepAmount: 100n, depositIndex: 0n, cumulativeRepAmountAttoRep: 100n, resultingVaultDisputeStakedAttoRep: 100n, resultingTotalDisputeStakedAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'DepositOnOutcome',
 				logIndex: 3,
-				args: { depositor: secondVault, outcome: 2n, repAmountAttoRep: 50n, depositIndex: 0n, cumulativeRepAmountAttoRep: 50n, resultingVaultDisputeStakedRepAttoRep: 50n, resultingTotalDisputeStakedRepAttoRep: 150n },
+				args: { depositor: secondVault, outcome: 2n, attoRepAmount: 50n, depositIndex: 0n, cumulativeRepAmountAttoRep: 50n, resultingVaultDisputeStakedAttoRep: 50n, resultingTotalDisputeStakedAttoRep: 150n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -596,7 +596,7 @@ describe('event-only replay', () => {
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 5,
-				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, repAmountAttoRep: 1n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 1n },
+				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, attoRepAmount: 1n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 1n },
 			}),
 		]
 
@@ -631,7 +631,7 @@ describe('event-only replay', () => {
 				emitter: parentGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor, attoRepAmount: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
 			}),
 			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
 			createReplayLog({
@@ -652,7 +652,7 @@ describe('event-only replay', () => {
 				emitter: childGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 4,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 5n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 15n },
+				args: { nodeId: 1n, outcome: 1n, depositor, attoRepAmount: 5n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 15n },
 			}),
 			createReplayLog({
 				emitter: childGame,
@@ -663,7 +663,7 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor,
 					outcome: 1n,
-					repAmountAttoRep: 5n,
+					attoRepAmount: 5n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 10n,
 					resultingNullifierRoot: zeroHash,
@@ -788,9 +788,9 @@ describe('event-only replay', () => {
 				emitter: parentGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor, attoRepAmount: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
 			}),
-			createReplayLog({ emitter: forker, eventName: 'DisputeStakedRepDrainedAtFork', logIndex: 2, args: { parentPool, sourceGame: parentGame, repAmountAttoRep: 10n } }),
+			createReplayLog({ emitter: forker, eventName: 'DisputeStakedRepDrainedAtFork', logIndex: 2, args: { parentPool, sourceGame: parentGame, attoRepAmount: 10n } }),
 			createReplayLog({
 				emitter: forker,
 				eventName: 'SecurityPoolForkSnapshot',
@@ -802,7 +802,7 @@ describe('event-only replay', () => {
 					unresolvedEscalation: true,
 					settlementCollateralAtForkAttoEth: 0n,
 					totalPoolHeldRepAtForkAttoRep: 0n,
-					auctionableRepAtForkAttoRep: 0n,
+					auctionableAttoRepAtFork: 0n,
 					escalationSourceRepAtForkAttoRep: 10n,
 					escalationChildRepAtForkAttoRep: 0n,
 					escalationStartBondAtForkAttoRep: 1n,
@@ -820,7 +820,7 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor,
 					outcome: 1n,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: zeroHash,
@@ -947,7 +947,7 @@ describe('event-only replay', () => {
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor: vault, repAmountAttoRep: 10n, parentDepositIndex: 5n, cumulativeRepAmountAttoRep: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor: vault, attoRepAmount: 10n, parentDepositIndex: 5n, cumulativeRepAmountAttoRep: 10n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -956,11 +956,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: vault,
 					outcome: 1n,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					depositIndex: 0n,
 					cumulativeRepAmountAttoRep: 10n,
-					resultingVaultDisputeStakedRepAttoRep: 10n,
-					resultingTotalDisputeStakedRepAttoRep: 10n,
+					resultingVaultDisputeStakedAttoRep: 10n,
+					resultingTotalDisputeStakedAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -972,7 +972,7 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor: vault,
 					outcome: 1n,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: rootA,
@@ -993,7 +993,7 @@ describe('event-only replay', () => {
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'ForkedEscrowRecorded',
@@ -1004,7 +1004,7 @@ describe('event-only replay', () => {
 					sourcePrincipalTotalAttoRep: 20n,
 					childRepTotalAttoRep: 15n,
 					disputeStakedRepByVaultAttoRep: 15n,
-					totalDisputeStakedRepAttoRep: 15n,
+					totalDisputeStakedAttoRep: 15n,
 					outcomeBalanceAttoRep: 20n,
 				},
 			}),
@@ -1014,7 +1014,7 @@ describe('event-only replay', () => {
 				logIndex: 7,
 				args: { depositor: vault, outcome: 2n, sourcePrincipalClaimedAttoRep: 10n, childRepClaimedAttoRep: 8n },
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 8, args: { vault, disputeStakedRepByVaultAttoRep: 7n, totalDisputeStakedRepAttoRep: 7n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 8, args: { vault, disputeStakedRepByVaultAttoRep: 7n, totalDisputeStakedAttoRep: 7n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'ForkedEscrowExported',
@@ -1028,12 +1028,12 @@ describe('event-only replay', () => {
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 11,
-				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmountAttoRep: 4n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 4n },
+				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, attoRepAmount: 4n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 4n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -1042,11 +1042,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: secondVault,
 					outcome: 2n,
-					repAmountAttoRep: 4n,
+					attoRepAmount: 4n,
 					depositIndex: 0n,
 					cumulativeRepAmountAttoRep: 4n,
-					resultingVaultDisputeStakedRepAttoRep: 4n,
-					resultingTotalDisputeStakedRepAttoRep: 4n,
+					resultingVaultDisputeStakedAttoRep: 4n,
+					resultingTotalDisputeStakedAttoRep: 4n,
 				},
 			}),
 			createReplayLog({
@@ -1061,7 +1061,7 @@ describe('event-only replay', () => {
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
 			createReplayLog({ emitter: game, eventName: 'ResidualRepSweptToSecurityPool', logIndex: 15, args: { amountAttoRep: 2n } }),
 		]
 
@@ -1210,7 +1210,7 @@ describe('event-only replay', () => {
 					nodeId: 1n,
 					outcome: 1n,
 					depositor: migrator,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					parentDepositIndex: 0n,
 					cumulativeRepAmountAttoRep: 10n,
 				},
@@ -1222,11 +1222,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: migrator,
 					outcome: 1n,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					depositIndex: 0n,
 					cumulativeRepAmountAttoRep: 10n,
-					resultingVaultDisputeStakedRepAttoRep: 10n,
-					resultingTotalDisputeStakedRepAttoRep: 10n,
+					resultingVaultDisputeStakedAttoRep: 10n,
+					resultingTotalDisputeStakedAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -1238,7 +1238,7 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor: migrator,
 					outcome: 1n,
-					repAmountAttoRep: 10n,
+					attoRepAmount: 10n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: rootC,
@@ -1255,7 +1255,7 @@ describe('event-only replay', () => {
 				emitter: auction,
 				eventName: 'AuctionFinalized',
 				logIndex: 11,
-				args: { clearingTick: -1n, grossAcceptedAttoEth: 5n, repSoldAttoRep: 8n, bidAtClearingTickAttoEth: 5n, funded: true },
+				args: { clearingTick: -1n, grossAcceptedAttoEth: 5n, attoRepSold: 8n, bidAtClearingTickAttoEth: 5n, funded: true },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -1271,7 +1271,7 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetCoverageCommitmentAttoEth: 6n,
-					snapshotTotalPoolHeldRepAttoRep: 7n,
+					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
 				},
@@ -1433,8 +1433,8 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[6], 'queued backingUnits snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetCoverageCommitmentAttoEth, storedOperation[7], 'coverage commitment')
-		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedRepAttoRep, storedOperation[8], 'queued dispute-staked REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalPoolHeldRepAttoRep, storedOperation[9], 'queued REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, storedOperation[8], 'queued dispute-staked REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalPoolHeldAttoRep, storedOperation[9], 'queued REP snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[10], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
@@ -1823,7 +1823,7 @@ describe('event-only replay', () => {
 	})
 
 	test('external forks emit one canonical pool snapshot after REP is locked', async () => {
-		const totalPoolHeldRepAtForkAttoRep = await fixture.getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
+		const totalPoolHeldRepAtForkAttoRep = await fixture.getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
 		const settlementCollateralAtForkAttoEth = await fixture.getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 		const transactionHash = await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay fork source')
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
@@ -1846,7 +1846,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(snapshotLog.args.migrationProxy, expectedMigrationProxy, 'migration proxy snapshot mismatch')
 		strictEqualTypeSafe(snapshotLog.args.settlementCollateralAtForkAttoEth, settlementCollateralAtForkAttoEth, 'fork collateral snapshot mismatch')
 		strictEqualTypeSafe(snapshotLog.args.totalPoolHeldRepAtForkAttoRep, totalPoolHeldRepAtForkAttoRep, 'fork REP snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.auctionableRepAtForkAttoRep, totalPoolHeldRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
+		strictEqualTypeSafe(snapshotLog.args.auctionableAttoRepAtFork, totalPoolHeldRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
 		strictEqualTypeSafe(snapshotLog.args.ownFork, false, 'external fork should not be marked as own fork')
 		strictEqualTypeSafe(snapshotLog.args.unresolvedEscalation, false, 'test fork should not report unresolved escalation')
 	})

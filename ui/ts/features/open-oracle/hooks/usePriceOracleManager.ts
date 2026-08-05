@@ -36,7 +36,7 @@ export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProducti
 	executeOracleManagerStagedOperation: (client: TWriteClient, managerAddress: Address, operationId: bigint) => Promise<OpenOracleActionResult>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<CoordinatorInitialReportFunding>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<OracleManagerDetails>
-	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialWethAttoEth: bigint, reviewedRequestValueAttoEth: bigint) => Promise<OpenOracleActionResult>
+	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, reviewedRequestValueAttoEth: bigint) => Promise<OpenOracleActionResult>
 }
 
 const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencies = {
@@ -45,7 +45,7 @@ const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencie
 	executeOracleManagerStagedOperation: async (client, managerAddress, operationId) => await executeOracleManagerStagedOperation(client, managerAddress, operationId),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
-	requestOraclePrice: async (client, managerAddress, proposedRepPerEthPrice, requestedInitialWethAttoEth, reviewedRequestValueAttoEth) => await requestOraclePrice(client, managerAddress, proposedRepPerEthPrice, requestedInitialWethAttoEth, reviewedRequestValueAttoEth),
+	requestOraclePrice: async (client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth) => await requestOraclePrice(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth),
 }
 
 function usePriceOracleManagerWithDependencies<TWriteClient>(

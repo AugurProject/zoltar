@@ -35,7 +35,7 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		external
 		returns (
 			uint256 coverageCommitmentToTransferAttoEth,
-			uint256 vaultRepBackingToTransferAttoRep,
+			uint256 vaultAttoRepBackingToTransfer,
 			uint256 badDebtAttoEth
 		)
 	{
@@ -50,12 +50,12 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			'Target commitment changed'
 		);
 		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(snapshotTargetBackingUnits);
-		uint256 targetDisputeStakedRepAttoRep =
+		uint256 targetDisputeStakedAttoRep =
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(targetVault);
 		require(
 			!SecurityPoolUtils.isVaultHealthy(
 				targetVaultRepBackingAttoRep,
-				targetDisputeStakedRepAttoRep,
+				targetDisputeStakedAttoRep,
 				snapshotTargetCoverageCommitmentAttoEth,
 				repEthPrice,
 				statoblastSecurityMultiplierBps
@@ -65,14 +65,14 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		uint256 backingUnitsToTransfer;
 		(
 			coverageCommitmentToTransferAttoEth,
-			vaultRepBackingToTransferAttoRep,
+			vaultAttoRepBackingToTransfer,
 			backingUnitsToTransfer
 		) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
 				securityVaults[targetVault].repBackingUnits,
 				snapshotTargetCoverageCommitmentAttoEth,
 				requestedCommitmentTransferAttoEth,
 				repEthPrice,
-				pool.getTotalPoolHeldRepAttoRep(),
+				pool.getTotalPoolHeldAttoRep(),
 				totalRepBackingUnits
 			);
 		if (
@@ -85,7 +85,7 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 				'Commitment request low'
 			);
 			coverageCommitmentToTransferAttoEth = 0;
-			vaultRepBackingToTransferAttoRep = 0;
+			vaultAttoRepBackingToTransfer = 0;
 			backingUnitsToTransfer = 0;
 		}
 		if (requestedCommitmentTransferAttoEth >= snapshotTargetCoverageCommitmentAttoEth) {
@@ -112,13 +112,13 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			badDebtAttoEth;
 		securityVaults[targetVault].repBackingUnits -= backingUnitsToTransfer;
 		if (coverageCommitmentToTransferAttoEth == 0)
-			return (coverageCommitmentToTransferAttoEth, vaultRepBackingToTransferAttoRep, badDebtAttoEth);
+			return (coverageCommitmentToTransferAttoEth, vaultAttoRepBackingToTransfer, badDebtAttoEth);
 		securityVaults[callerVault].coverageCommitmentAttoEth += coverageCommitmentToTransferAttoEth;
 		securityVaults[callerVault].repBackingUnits += backingUnitsToTransfer;
-		uint256 callerDisputeStakedRepAttoRep;
+		uint256 callerDisputeStakedAttoRep;
 		if (address(escalationGame) != address(0x0)) {
 			try escalationGame.disputeStakedRepByVaultAttoRep(callerVault) returns (uint256 claimRep) {
-				callerDisputeStakedRepAttoRep = claimRep;
+				callerDisputeStakedAttoRep = claimRep;
 			} catch {
 				revert('Claim balance failed');
 			}
@@ -126,7 +126,7 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		require(
 			SecurityPoolUtils.isVaultHealthy(
 				pool.backingUnitsToAttoRep(securityVaults[callerVault].repBackingUnits),
-				callerDisputeStakedRepAttoRep,
+				callerDisputeStakedAttoRep,
 				securityVaults[callerVault].coverageCommitmentAttoEth,
 				repEthPrice,
 				statoblastSecurityMultiplierBps

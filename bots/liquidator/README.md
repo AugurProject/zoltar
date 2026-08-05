@@ -225,14 +225,14 @@ the total-source quorum.
 
 Amounts use 18-decimal ETH or REP units in the operator JSON.
 
-- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentAttoEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
+- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
 - `minimumRewardValueEth` filters the fixed-bonus value before gas.
 - `maximumGasCostEth` caps the padded EIP-1559 gas limit actually signed for
   every automated action.
 - `maximumOracleRequestCostEth` caps fresh-price bounty funding.
-- `maximumRepPerPoolRep` and `maximumTotalDeployedRep` bound liquidation
+- `maximumPerPoolRep` and `maximumTotalDeployedRep` bound liquidation
   acquisitions and every automatic maintenance deposit.
-- `walletRepReserveRep` remains outside pools.
+- `walletReserveRep` remains outside pools.
 - `vaultTopUpHealthBps` triggers maintenance.
 - `vaultTargetHealthBps` is the post-deposit and post-liquidation target.
 - `vaultWithdrawHealthBps` must exceed the target and gates surplus withdrawals.

@@ -15,7 +15,7 @@ interface ISecurityPoolForkerEvents {
 		bool unresolvedEscalation,
 		uint256 settlementCollateralAtForkAttoEth,
 		uint256 totalPoolHeldRepAtForkAttoRep,
-		uint256 auctionableRepAtForkAttoRep,
+		uint256 auctionableAttoRepAtFork,
 		uint256 escalationSourceRepAtForkAttoRep,
 		uint256 escalationChildRepAtForkAttoRep,
 		uint256 escalationStartBondAtForkAttoRep,
@@ -27,7 +27,7 @@ interface ISecurityPoolForkerEvents {
 	event DisputeStakedRepDrainedAtFork(
 		ISecurityPool indexed parentPool,
 		address indexed sourceGame,
-		uint256 repAmountAttoRep
+		uint256 attoRepAmount
 	);
 	/// @notice Parent-universe REP locked under the per-pool migration proxy.
 	event ParentRepLocked(
@@ -35,7 +35,7 @@ interface ISecurityPoolForkerEvents {
 		address indexed migrationProxy,
 		uint256 poolHeldRepAmountAttoRep,
 		uint256 disputeStakedRepAmountAttoRep,
-		uint256 resultingLockedRepAttoRep
+		uint256 resultingLockedAttoRep
 	);
 	/// @notice Final parent/child vault and collateral state after one vault migration. REP fields use attoREP,
 	/// settlement-collateral fields use attoETH, REP attribution fields use REP backing units, and coverage commitments use
@@ -64,7 +64,7 @@ interface ISecurityPoolForkerEvents {
 		ISecurityPool indexed childPool,
 		address indexed childGame,
 		uint256 outcomeIndex,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 resultingDisputeStakedRepBalanceAttoRep
 	);
 	/// @notice Child REP moved into its pool, including the resulting pool token balance.
@@ -72,7 +72,7 @@ interface ISecurityPoolForkerEvents {
 		ISecurityPool indexed parentPool,
 		ISecurityPool indexed childPool,
 		uint256 indexed outcomeIndex,
-		uint256 repAmountAttoRep,
+		uint256 attoRepAmount,
 		uint256 resultingChildPoolHeldRepBalanceAttoRep
 	);
 }
@@ -96,7 +96,7 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		view
 		returns (
 			bool ownFork,
-			uint256 auctionableRepAtForkAttoRep,
+			uint256 auctionableAttoRepAtFork,
 			uint256 vaultRepAtForkAttoRep,
 			uint256 escalationChildRepPerSelectedOutcomeAttoRep,
 			uint256 escrowSourceRepAtForkAttoRep
@@ -113,7 +113,7 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 	function getEscalationMigrationEntitlementStatus(
 		ISecurityPool securityPool,
 		address vault
-	) external view returns (bool initialized, uint256 totalCurrentRepAttoRep, bool[3] memory materializedByOutcome);
+	) external view returns (bool initialized, uint256 totalCurrentAttoRep, bool[3] memory materializedByOutcome);
 	function claimForkedEscalationDeposits(
 		ISecurityPool securityPool,
 		address vault,

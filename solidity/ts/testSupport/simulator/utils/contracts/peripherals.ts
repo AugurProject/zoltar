@@ -69,7 +69,7 @@ const getDefaultInitialReportPrice = async (client: ReadClient, priceOracleManag
 	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
-const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, proposedRepPerEthPrice: bigint, requestedInitialWethAttoEth = 0n) => {
+const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		getCoordinatorMinimumToken1Report(client, priceOracleManagerAndOperatorQueuer),
 		client.readContract({
@@ -81,23 +81,23 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 	])
 	const reputationTokenAddress = requireAddress(rawReputationTokenAddress, 'Oracle coordinator reputation token')
 	const bufferedMinimumToken1Report = minimumToken1ReportAttoEth * 2n
-	const maximumInitialWethAttoEth = requestedInitialWethAttoEth > bufferedMinimumToken1Report ? requestedInitialWethAttoEth : bufferedMinimumToken1Report
-	const maximumAmount2 = (maximumInitialWethAttoEth * proposedRepPerEthPrice + PRICE_PRECISION - 1n) / PRICE_PRECISION
+	const maximumInitialAttoWeth = requestedInitialAttoWeth > bufferedMinimumToken1Report ? requestedInitialAttoWeth : bufferedMinimumToken1Report
+	const maximumAmount2 = (maximumInitialAttoWeth * proposedRepPerEthPrice + PRICE_PRECISION - 1n) / PRICE_PRECISION
 	const wethBalanceAttoEth: bigint = await client.readContract({
 		abi: ERC20_APPROVE_ABI,
 		functionName: 'balanceOf',
 		address: WETH_ADDRESS,
 		args: [client.account.address],
 	})
-	if (wethBalanceAttoEth < maximumInitialWethAttoEth) {
-		await wrapWeth(client, maximumInitialWethAttoEth - wethBalanceAttoEth)
+	if (wethBalanceAttoEth < maximumInitialAttoWeth) {
+		await wrapWeth(client, maximumInitialAttoWeth - wethBalanceAttoEth)
 	}
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
 			address: WETH_ADDRESS,
-			args: [priceOracleManagerAndOperatorQueuer, maximumInitialWethAttoEth],
+			args: [priceOracleManagerAndOperatorQueuer, maximumInitialAttoWeth],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
@@ -110,7 +110,7 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
-	return { maximumAmount2, maximumInitialWethAttoEth, minimumToken1ReportAttoEth, proposedRepPerEthPrice, requestedInitialWethAttoEth }
+	return { maximumAmount2, maximumInitialAttoWeth, minimumToken1ReportAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth }
 }
 
 export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
@@ -125,18 +125,18 @@ export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async
 	validForSeconds: bigint,
 	proposedRepPerEthPrice: bigint,
 	value: bigint,
-	requestedInitialWethAttoEth = 0n,
+	requestedInitialAttoWeth = 0n,
 ) => {
 	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
 	if (shouldRequestPrice) {
-		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialWethAttoEth)
+		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialAttoWeth)
 	}
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialWethAttoEth],
+			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -169,15 +169,15 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 	return await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, costAttoEth, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
 }
 
-export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialWethAttoEth = 0n) => {
+export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) => {
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
-	await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, resolvedInitialReportPrice, requestedInitialWethAttoEth)
+	await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [resolvedInitialReportPrice, requestedInitialWethAttoEth],
+			args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -492,7 +492,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: Ad
 export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: Address) =>
 	await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'ethRaiseCapAttoEth',
+		functionName: 'attoEthRaiseCap',
 		address: auctionAddress,
 		args: [],
 	})

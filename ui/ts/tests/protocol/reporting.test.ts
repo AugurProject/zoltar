@@ -117,12 +117,12 @@ describe('reporting protocol client', () => {
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.viewerVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
-		expect(details.viewerVaultDisputeStakedRepAttoRep).toBe(escrowedRep)
+		expect(details.viewerVaultDisputeStakedAttoRep).toBe(escrowedRep)
 		expect(details.viewerPoolHeldVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
 		expect(details.viewerEscalationMigrationEntitlement).toEqual({
 			initialized: true,
 			materializedByOutcome: { invalid: false, yes: true, no: false },
-			totalCurrentRepAttoRep: escrowedRep,
+			totalCurrentAttoRep: escrowedRep,
 		})
 		const yesSide = details.sides.find(side => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')

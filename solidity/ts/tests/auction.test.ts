@@ -62,7 +62,7 @@ const NODE_STRUCT_SLOT_COUNT = 8n
 const MAX_DISTINCT_TICK_COUNT = MAX_TICK - MIN_TICK + 1n
 const FINALIZE_GAS_LIMIT = 20_000_000n
 
-function computeModeledClearing(bids: readonly { tick: bigint; amount: bigint }[], maxRepBeingSoldAttoRep: bigint, ethRaiseCapAttoEth: bigint) {
+function computeModeledClearing(bids: readonly { tick: bigint; amount: bigint }[], maxAttoRepBeingSold: bigint, attoEthRaiseCap: bigint) {
 	const sorted = [...bids].sort((a, b) => {
 		if (b.tick > a.tick) return 1
 		if (b.tick < a.tick) return -1
@@ -71,7 +71,7 @@ function computeModeledClearing(bids: readonly { tick: bigint; amount: bigint }[
 	let accumulatedBidAttoEth = 0n
 	let lastValidTick = 0n
 	let lastValidEth = 0n
-	const reservePrice = (ethRaiseCapAttoEth * PRICE_PRECISION + maxRepBeingSoldAttoRep - 1n) / maxRepBeingSoldAttoRep
+	const reservePrice = (attoEthRaiseCap * PRICE_PRECISION + maxAttoRepBeingSold - 1n) / maxAttoRepBeingSold
 	for (const bid of sorted) {
 		const price = tickToPrice(bid.tick)
 		if (price < reservePrice) continue
@@ -79,21 +79,21 @@ function computeModeledClearing(bids: readonly { tick: bigint; amount: bigint }[
 
 		if (accumulatedBidAttoEth > 0n) {
 			const repricedRep = (accumulatedBidAttoEth * PRICE_PRECISION) / price
-			if (repricedRep > maxRepBeingSoldAttoRep) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
+			if (repricedRep > maxAttoRepBeingSold) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
 		}
-		if (accumulatedBidAttoEth >= ethRaiseCapAttoEth) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
+		if (accumulatedBidAttoEth >= attoEthRaiseCap) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
 
-		const remainingCap = ethRaiseCapAttoEth - accumulatedBidAttoEth
+		const remainingCap = attoEthRaiseCap - accumulatedBidAttoEth
 		if (ethToTake > remainingCap) ethToTake = remainingCap
 		const newAccumulatedEth = accumulatedBidAttoEth + ethToTake
-		const totalRepAttoRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
-		if (totalRepAttoRep >= maxRepBeingSoldAttoRep) {
-			const maxEthAtThisPrice = (maxRepBeingSoldAttoRep * price) / PRICE_PRECISION
+		const totalAttoRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
+		if (totalAttoRep >= maxAttoRepBeingSold) {
+			const maxEthAtThisPrice = (maxAttoRepBeingSold * price) / PRICE_PRECISION
 			let ethUsedAtClearing = maxEthAtThisPrice > accumulatedBidAttoEth ? maxEthAtThisPrice - accumulatedBidAttoEth : 0n
 			if (ethUsedAtClearing > ethToTake) ethUsedAtClearing = ethToTake
 			return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: accumulatedBidAttoEth + ethUsedAtClearing }
 		}
-		if (newAccumulatedEth >= ethRaiseCapAttoEth) return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: newAccumulatedEth }
+		if (newAccumulatedEth >= attoEthRaiseCap) return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: newAccumulatedEth }
 
 		accumulatedBidAttoEth = newAccumulatedEth
 		lastValidTick = bid.tick
@@ -205,12 +205,12 @@ describe('Auction', () => {
 		})
 	}
 
-	function assertWithdrawal(amounts: { totalFilledRepAttoRep: bigint; totalRefundAttoEth: bigint }, expectedFilledRepAttoRep: bigint, expectedRefund: bigint, tolerance?: bigint) {
+	function assertWithdrawal(amounts: { totalFilledAttoRep: bigint; totalRefundAttoEth: bigint }, expectedFilledAttoRep: bigint, expectedRefund: bigint, tolerance?: bigint) {
 		if (tolerance !== undefined) {
-			approximatelyEqual(amounts.totalFilledRepAttoRep, expectedFilledRepAttoRep, tolerance, 'filledRep mismatch')
+			approximatelyEqual(amounts.totalFilledAttoRep, expectedFilledAttoRep, tolerance, 'filledRep mismatch')
 			approximatelyEqual(amounts.totalRefundAttoEth, expectedRefund, tolerance, 'ethRefund mismatch')
 		} else {
-			strictEqualTypeSafe(amounts.totalFilledRepAttoRep, expectedFilledRepAttoRep, 'filledRep mismatch')
+			strictEqualTypeSafe(amounts.totalFilledAttoRep, expectedFilledAttoRep, 'filledRep mismatch')
 			strictEqualTypeSafe(amounts.totalRefundAttoEth, expectedRefund, 'ethRefund mismatch')
 		}
 	}
@@ -226,16 +226,16 @@ describe('Auction', () => {
 		approximatelyEqual(await getETHBalance(client, auctionAddress), 0n, tolerance, 'contract not empty')
 	}
 
-	async function setupStandardAuction(client: WriteClient, auctionAddress: Address, ethRaiseCapAttoEth: bigint = DEFAULT_ETH_RAISE_CAP, maxRepBeingSoldAttoRep: bigint = DEFAULT_MAX_REP): Promise<void> {
-		await startAuction(client, auctionAddress, ethRaiseCapAttoEth * ATTOETH_PER_ETH, maxRepBeingSoldAttoRep * ATTOETH_PER_ETH)
+	async function setupStandardAuction(client: WriteClient, auctionAddress: Address, attoEthRaiseCap: bigint = DEFAULT_ETH_RAISE_CAP, maxAttoRepBeingSold: bigint = DEFAULT_MAX_REP): Promise<void> {
+		await startAuction(client, auctionAddress, attoEthRaiseCap * ATTOETH_PER_ETH, maxAttoRepBeingSold * ATTOETH_PER_ETH)
 	}
 
-	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: Address, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRepAttoRep: bigint; totalRefundAttoEth: bigint }> {
+	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: Address, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledAttoRep: bigint; totalRefundAttoEth: bigint }> {
 		const clearingPrice = tickToPrice(clearingTick)
 		const clearing = await computeClearing(auctionCreator, auctionAddress)
 		assert.ok(clearing.hitCap, 'expected finalized auction with clearing price')
 		strictEqualTypeSafe(clearing.foundTick, clearingTick, 'clearing tick mismatch')
-		let totalFilledRepAttoRep = 0n
+		let totalFilledAttoRep = 0n
 		let totalRefundAttoEth = 0n
 
 		for (const bid of bids) {
@@ -243,7 +243,7 @@ describe('Auction', () => {
 
 			if (bid.tick < clearingTick) {
 				// Losing bid: full refund, no REP
-				assert.strictEqual(amounts.totalFilledRepAttoRep, 0n, `Bid ${bid.bidIndex} (losing): should get 0 REP`)
+				assert.strictEqual(amounts.totalFilledAttoRep, 0n, `Bid ${bid.bidIndex} (losing): should get 0 REP`)
 				approximatelyEqual(amounts.totalRefundAttoEth, bid.bidSize, tolerance, `Bid ${bid.bidIndex} (losing): full ETH refund`)
 				totalRefundAttoEth += amounts.totalRefundAttoEth
 			} else if (bid.tick === clearingTick) {
@@ -251,24 +251,24 @@ describe('Auction', () => {
 				const bidView = ensureDefined((await getBidPageAtTick(auctionCreator, auctionAddress, bid.tick, bid.bidIndex, 1n))[0], `Bid ${bid.bidIndex} (clearing): missing bid view`)
 				strictEqualTypeSafe(bidView.bidAmountAttoEth, bid.bidSize, `Bid ${bid.bidIndex} (clearing): bid size mismatch`)
 				const ethUsed = computeClearingTickEthUsed(bid.bidSize, bidView.activeCumulativeBidBeforeAttoEth, clearing.bidAtClearingTickAttoEth)
-				const expectedFilledRepAttoRep = clearingPrice === 0n ? 0n : (ethUsed * ATTOETH_PER_ETH) / clearingPrice
-				if (ethUsed > 0n) assert.ok(amounts.totalFilledRepAttoRep >= expectedFilledRepAttoRep, `Bid ${bid.bidIndex} (clearing): filled REP below expected fill`)
-				assert.ok(amounts.totalFilledRepAttoRep <= expectedFilledRepAttoRep + 1n, `Bid ${bid.bidIndex} (clearing): filled REP <= fill plus carried dust`)
+				const expectedFilledAttoRep = clearingPrice === 0n ? 0n : (ethUsed * ATTOETH_PER_ETH) / clearingPrice
+				if (ethUsed > 0n) assert.ok(amounts.totalFilledAttoRep >= expectedFilledAttoRep, `Bid ${bid.bidIndex} (clearing): filled REP below expected fill`)
+				assert.ok(amounts.totalFilledAttoRep <= expectedFilledAttoRep + 1n, `Bid ${bid.bidIndex} (clearing): filled REP <= fill plus carried dust`)
 				const expectedRefund = bid.bidSize - ethUsed
 				approximatelyEqual(amounts.totalRefundAttoEth, expectedRefund, tolerance, `Bid ${bid.bidIndex} (clearing): correct ETH refund`)
-				totalFilledRepAttoRep += amounts.totalFilledRepAttoRep
+				totalFilledAttoRep += amounts.totalFilledAttoRep
 				totalRefundAttoEth += amounts.totalRefundAttoEth
 			} else {
 				// Winning bid: full REP demand, no ETH refund
-				const expectedFilledRepAttoRep = (bid.bidSize * ATTOETH_PER_ETH) / clearingPrice
-				assert.ok(amounts.totalFilledRepAttoRep >= expectedFilledRepAttoRep, `Bid ${bid.bidIndex} (winning): REP fill`)
-				assert.ok(amounts.totalFilledRepAttoRep <= expectedFilledRepAttoRep + 1n, `Bid ${bid.bidIndex} (winning): REP fill plus carried dust`)
+				const expectedFilledAttoRep = (bid.bidSize * ATTOETH_PER_ETH) / clearingPrice
+				assert.ok(amounts.totalFilledAttoRep >= expectedFilledAttoRep, `Bid ${bid.bidIndex} (winning): REP fill`)
+				assert.ok(amounts.totalFilledAttoRep <= expectedFilledAttoRep + 1n, `Bid ${bid.bidIndex} (winning): REP fill plus carried dust`)
 				assert.strictEqual(amounts.totalRefundAttoEth, 0n, `Bid ${bid.bidIndex} (winning): no ETH refund`)
-				totalFilledRepAttoRep += amounts.totalFilledRepAttoRep
+				totalFilledAttoRep += amounts.totalFilledAttoRep
 			}
 			await withdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
 		}
-		return { totalFilledRepAttoRep, totalRefundAttoEth }
+		return { totalFilledAttoRep, totalRefundAttoEth }
 	}
 
 	function assertClearingTickInRange(tick: bigint): void {
@@ -389,12 +389,12 @@ describe('Auction', () => {
 		return height
 	}
 
-	const buildSyntheticWorstCaseFinalizeStateDiff = (height: bigint, bidAmount: bigint, maxRepBeingSoldAttoRep: bigint = 1n, ethRaiseCapAttoEth: bigint = height * bidAmount + bidAmount) => {
+	const buildSyntheticWorstCaseFinalizeStateDiff = (height: bigint, bidAmount: bigint, maxAttoRepBeingSold: bigint = 1n, attoEthRaiseCap: bigint = height * bidAmount + bidAmount) => {
 		const stateDiff: Record<string, bigint> = {
 			[formatStorageSlot(AUCTION_ROOT_SLOT)]: 1n,
 			[formatStorageSlot(AUCTION_NEXT_ID_SLOT)]: height + 1n,
-			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: maxRepBeingSoldAttoRep,
-			[formatStorageSlot(AUCTION_ETH_RAISE_CAP_SLOT)]: ethRaiseCapAttoEth,
+			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: maxAttoRepBeingSold,
+			[formatStorageSlot(AUCTION_ETH_RAISE_CAP_SLOT)]: attoEthRaiseCap,
 		}
 
 		for (let nodeId = 1n; nodeId <= height; nodeId++) {
@@ -441,15 +441,15 @@ describe('Auction', () => {
 		const localAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(ownerClient.account.address)
 		const bidAmount = 1n * ATTOETH_PER_ETH
 		const totalEth = height * bidAmount
-		const maxRepBeingSoldAttoRep = totalEth + 1n
-		const ethRaiseCapAttoEth = totalEth + bidAmount
-		await startAuction(ownerClient, localAuctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+		const maxAttoRepBeingSold = totalEth + 1n
+		const attoEthRaiseCap = totalEth + bidAmount
+		await startAuction(ownerClient, localAuctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 
 		await mockWindow.addStateOverrides({
 			[localAuctionAddress]: {
 				balance: totalEth,
-				stateDiff: buildSyntheticWorstCaseFinalizeStateDiff(height, bidAmount, maxRepBeingSoldAttoRep, ethRaiseCapAttoEth),
+				stateDiff: buildSyntheticWorstCaseFinalizeStateDiff(height, bidAmount, maxAttoRepBeingSold, attoEthRaiseCap),
 			},
 		})
 
@@ -579,17 +579,17 @@ describe('Auction', () => {
 		})
 
 		test('multiple bids', async () => {
-			const maxRepBeingSoldAttoRep = DEFAULT_MAX_REP * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			const startBalance = await getETHBalance(client, client.account.address)
 			await setupStandardAuction(client, auctionAddress)
 
 			const bids = [
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION / 4n },
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION / 2n },
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION },
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION * 2n },
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION * 3n },
-				{ bidSize: maxRepBeingSoldAttoRep / 5n, priceRepEth: PRICE_PRECISION * 4n },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION / 4n },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION / 2n },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 2n },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 3n },
+				{ bidSize: maxAttoRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 4n },
 			]
 
 			for (const bid of bids) {
@@ -614,15 +614,15 @@ describe('Auction', () => {
 		})
 
 		test('multiple users bids', async () => {
-			const maxRepBeingSoldAttoRep = DEFAULT_MAX_REP * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
 			const bids = [
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION / 4n), address: TEST_ADDRESSES[0], bidIndex: 0n },
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION / 4n), address: TEST_ADDRESSES[1], bidIndex: 1n },
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION), address: TEST_ADDRESSES[2], bidIndex: 0n },
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION), address: TEST_ADDRESSES[3], bidIndex: 1n },
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION * 4n), address: TEST_ADDRESSES[4], bidIndex: 0n },
-				{ bidSize: (2n * maxRepBeingSoldAttoRep) / 7n, tick: priceToClosestTick(PRICE_PRECISION * 4n), address: TEST_ADDRESSES[5], bidIndex: 1n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION / 4n), address: TEST_ADDRESSES[0], bidIndex: 0n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION / 4n), address: TEST_ADDRESSES[1], bidIndex: 1n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION), address: TEST_ADDRESSES[2], bidIndex: 0n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION), address: TEST_ADDRESSES[3], bidIndex: 1n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION * 4n), address: TEST_ADDRESSES[4], bidIndex: 0n },
+				{ bidSize: (2n * maxAttoRepBeingSold) / 7n, tick: priceToClosestTick(PRICE_PRECISION * 4n), address: TEST_ADDRESSES[5], bidIndex: 1n },
 			]
 
 			for (const bid of bids) {
@@ -630,12 +630,12 @@ describe('Auction', () => {
 				await submitBid(bidClient, auctionAddress, bid.tick, bid.bidSize)
 			}
 
-			//const expectedClearing = computeClearingTypeScript(bids, maxRepBeingSoldAttoRep, DEFAULT_MAX_REP * ATTOETH_PER_ETH )
+			//const expectedClearing = computeClearingTypeScript(bids, maxAttoRepBeingSold, DEFAULT_MAX_REP * ATTOETH_PER_ETH )
 
 			const clearing = await computeClearing(client, auctionAddress)
 			const completelyFilling = bids.filter(x => x.tick > clearing.foundTick)
 			const completelyFillingRep = completelyFilling.reduce((a, b) => a + (b.bidSize * PRICE_PRECISION) / tickToPrice(clearing.foundTick), 0n)
-			assert.ok(completelyFillingRep < maxRepBeingSoldAttoRep, 'selling too much rep with that tick')
+			assert.ok(completelyFillingRep < maxAttoRepBeingSold, 'selling too much rep with that tick')
 
 			//assertExpectedClearing(clearing, expectedClearing.clearingTick)
 
@@ -653,11 +653,11 @@ describe('Auction', () => {
 			for (const [userAddress, userBids] of bidsByUser) {
 				const fairPayoutBids = userBids.map(b => ({ tick: b.tick, bidSize: b.bidSize, bidIndex: b.bidIndex }))
 				const result = await assertFairPayoutForUser(client, auctionAddress, addressString(userAddress), fairPayoutBids, clearing.foundTick)
-				grandTotalFilled += result.totalFilledRepAttoRep
+				grandTotalFilled += result.totalFilledAttoRep
 			}
 
 			// Total filled REP across all users should not exceed the amount sold
-			assert.ok(grandTotalFilled <= maxRepBeingSoldAttoRep, 'total filled REP exceeds maxRepBeingSoldAttoRep')
+			assert.ok(grandTotalFilled <= maxAttoRepBeingSold, 'total filled REP exceeds maxAttoRepBeingSold')
 		})
 
 		test('computeClearing selects the lower price tick when only lower-price cumulative demand exhausts supply', async () => {
@@ -704,7 +704,7 @@ describe('Auction', () => {
 			const aliceResult = await assertFairPayoutForUser(client, auctionAddress, alice.account.address, aliceBids, clearingTick)
 			const bobResult = await assertFairPayoutForUser(client, auctionAddress, bob.account.address, bobBids, clearingTick)
 
-			const totalFilled = aliceResult.totalFilledRepAttoRep + bobResult.totalFilledRepAttoRep
+			const totalFilled = aliceResult.totalFilledAttoRep + bobResult.totalFilledAttoRep
 			const maxRep = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			assert.ok(totalFilled <= maxRep, 'total filled exceeds maxRep')
 		})
@@ -724,37 +724,37 @@ describe('Auction', () => {
 
 			await finalizeAndVerify(client, auctionAddress)
 
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
-			strictEqualTypeSafe(totalRepPurchasedAttoRep, 1n, 'aggregate auction accounting should purchase one attoREP')
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, auctionAddress)
+			strictEqualTypeSafe(totalAttoRepPurchased, 1n, 'aggregate auction accounting should purchase one attoREP')
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
 
 			const aliceWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
-			strictEqualTypeSafe(aliceWithdrawal.totalFilledRepAttoRep, 0n, 'the higher-tick dust bid should round down at the start of the winning prefix')
+			strictEqualTypeSafe(aliceWithdrawal.totalFilledAttoRep, 0n, 'the higher-tick dust bid should round down at the start of the winning prefix')
 			strictEqualTypeSafe(aliceWithdrawal.totalRefundAttoEth, 0n, 'winning dust-sized withdrawal should not refund ETH')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
 
 			const bobWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
-			strictEqualTypeSafe(bobWithdrawal.totalFilledRepAttoRep, 1n, 'the lower winning tick should receive the deterministic cross-tick rounding unit')
+			strictEqualTypeSafe(bobWithdrawal.totalFilledAttoRep, 1n, 'the lower winning tick should receive the deterministic cross-tick rounding unit')
 			strictEqualTypeSafe(bobWithdrawal.totalRefundAttoEth, 0n, 'winning dust-sized withdrawal should not refund ETH')
-			strictEqualTypeSafe(aliceWithdrawal.totalFilledRepAttoRep + bobWithdrawal.totalFilledRepAttoRep, totalRepPurchasedAttoRep, 'all finalized REP should be claimable across sequential withdrawals')
+			strictEqualTypeSafe(aliceWithdrawal.totalFilledAttoRep + bobWithdrawal.totalFilledAttoRep, totalAttoRepPurchased, 'all finalized REP should be claimable across sequential withdrawals')
 
 			await mockWindow.anvilRevert(settlementSnapshot)
 
 			const bobFirstWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
-			strictEqualTypeSafe(bobFirstWithdrawal.totalFilledRepAttoRep, bobWithdrawal.totalFilledRepAttoRep, 'Bob allocation should not depend on withdrawing before Alice')
+			strictEqualTypeSafe(bobFirstWithdrawal.totalFilledAttoRep, bobWithdrawal.totalFilledAttoRep, 'Bob allocation should not depend on withdrawing before Alice')
 			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
 			const aliceSecondWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
-			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledRepAttoRep, aliceWithdrawal.totalFilledRepAttoRep, 'Alice allocation should not depend on withdrawing after Bob')
+			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledAttoRep, aliceWithdrawal.totalFilledAttoRep, 'Alice allocation should not depend on withdrawing after Bob')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
-			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledRepAttoRep + bobFirstWithdrawal.totalFilledRepAttoRep, totalRepPurchasedAttoRep, 'reverse-order withdrawals should reconcile to finalized REP')
+			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledAttoRep + bobFirstWithdrawal.totalFilledAttoRep, totalAttoRepPurchased, 'reverse-order withdrawals should reconcile to finalized REP')
 		})
 
 		test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
-			const ethRaiseCapAttoEth = 10n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 10n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 			const alice = createTestClient(0)
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			const sameTick = 0n
 			const bid1Amount = 7n * 10n ** 18n
 			const bid2Amount = 7n * 10n ** 18n
@@ -763,7 +763,7 @@ describe('Auction', () => {
 			await submitBidAndVerifyLock(alice, auctionAddress, sameTick, bid2Amount)
 
 			const raisecap = await getEthRaiseCapAttoEth(client, auctionAddress)
-			strictEqual18Decimal(raisecap, ethRaiseCapAttoEth, 'raisecap for eth is same')
+			strictEqual18Decimal(raisecap, attoEthRaiseCap, 'raisecap for eth is same')
 			await finalizeAndVerify(client, auctionAddress)
 
 			const aliceBids = [
@@ -775,9 +775,9 @@ describe('Auction', () => {
 		})
 
 		test('combined refundLosingBids and withdrawBids for same user with mixed winning/losing bids', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 50n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 50n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 
@@ -803,7 +803,7 @@ describe('Auction', () => {
 
 			await refundLosingBids(alice, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
 
-			// Compute expected ethRaisedAttoEth after refund (matches what finalize will use)
+			// Compute expected attoEthRaised after refund (matches what finalize will use)
 			const clearingAfterRefund = await computeClearing(client, auctionAddress)
 			const expectedEthRaised = clearingAfterRefund.accumulatedBidAttoEth
 
@@ -828,10 +828,10 @@ describe('Auction', () => {
 
 		test('partial fill calculations ignore cleared earlier bids at the same tick', async () => {
 			const raiseCap = 100n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 100n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 100n * ATTOETH_PER_ETH
 			const sameTick = 0n
 			const bidAmount = 60n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, raiseCap, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, raiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			await submitBid(alice, auctionAddress, sameTick, bidAmount)
@@ -868,7 +868,7 @@ describe('Auction', () => {
 			const secondBidWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 1n }])
 			const expectedSecondBidRep = bidAmount
 
-			strictEqualTypeSafe(secondBidWithdrawal.totalFilledRepAttoRep, expectedSecondBidRep, 'the second active bid should receive its full fill after an earlier bid is cleared from the tick')
+			strictEqualTypeSafe(secondBidWithdrawal.totalFilledAttoRep, expectedSecondBidRep, 'the second active bid should receive its full fill after an earlier bid is cleared from the tick')
 			strictEqualTypeSafe(secondBidWithdrawal.totalRefundAttoEth, 0n, 'the fully filled second active bid should not receive an ETH refund')
 		})
 
@@ -949,9 +949,9 @@ describe('Auction', () => {
 		})
 
 		test('should correctly handle underfunded auctions', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 100n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const price = PRICE_PRECISION
 			const alice = createTestClient(0)
@@ -966,9 +966,9 @@ describe('Auction', () => {
 		})
 
 		test('underfunded auction with no bids keeps the cap-implied reserve and purchases nothing', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 100n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
 			strictEqualTypeSafe(previewEthToSend, 0n, 'no-bid preview should send no ETH')
 			strictEqualTypeSafe(previewRepPurchased, 0n, 'no-bid preview should purchase no REP')
@@ -1010,10 +1010,10 @@ describe('Auction', () => {
 		})
 
 		test('accepted positive-price bids below the cap-implied reserve are refunded', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
 			const bidAmount = 1n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const aliceBalanceBeforeWithdraw = await getETHBalance(client, alice.account.address)
@@ -1041,7 +1041,7 @@ describe('Auction', () => {
 			assert.ok(underfundedThreshold > 1n, 'the reserve should be derived from both auction caps')
 
 			const refundPreview = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: LOWEST_POSITIVE_PRICE_TICK, bidIndex: 0n }])
-			strictEqualTypeSafe(refundPreview.totalFilledRepAttoRep, 0n, 'below-reserve bids should allocate no REP')
+			strictEqualTypeSafe(refundPreview.totalFilledAttoRep, 0n, 'below-reserve bids should allocate no REP')
 			strictEqualTypeSafe(refundPreview.totalRefundAttoEth, bidAmount, 'below-reserve bids should refund all ETH')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: LOWEST_POSITIVE_PRICE_TICK, bidIndex: 0n }])
 			const aliceBalanceAfterWithdraw = await getETHBalance(client, alice.account.address)
@@ -1050,9 +1050,9 @@ describe('Auction', () => {
 		})
 
 		test('underfunded auction sells the complete REP cap at one weak-demand price', async () => {
-			const ethRaiseCapAttoEth = 20n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 20n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -1072,7 +1072,7 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
 			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
 			const expectedWinningEth = aliceEth + bobEth
-			const expectedRepPurchased = maxRepBeingSoldAttoRep
+			const expectedRepPurchased = maxAttoRepBeingSold
 			strictEqualTypeSafe(previewEthToSend, expectedWinningEth, 'underfunded preview should return qualifying ETH')
 			strictEqualTypeSafe(previewRepPurchased, expectedRepPurchased, 'underfunded preview should sell the complete REP cap')
 
@@ -1080,30 +1080,30 @@ describe('Auction', () => {
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
-			const totalRepAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
-			strictEqualTypeSafe(totalRepAttoRep, previewRepPurchased, 'finalization should use the previewed REP amount')
-			strictEqualTypeSafe(totalRepAttoRep, maxRepBeingSoldAttoRep, 'underfunded qualifying demand should buy the complete REP cap')
-			const expectedBobRep = (bobEth * totalRepAttoRep) / (aliceEth + bobEth)
-			const expectedAliceRep = totalRepAttoRep - expectedBobRep
+			const totalAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
+			strictEqualTypeSafe(totalAttoRep, previewRepPurchased, 'finalization should use the previewed REP amount')
+			strictEqualTypeSafe(totalAttoRep, maxAttoRepBeingSold, 'underfunded qualifying demand should buy the complete REP cap')
+			const expectedBobRep = (bobEth * totalAttoRep) / (aliceEth + bobEth)
+			const expectedAliceRep = totalAttoRep - expectedBobRep
 
 			const aliceBids = [{ tick: aliceTick, bidIndex: 0n }]
 			const aliceResult = await simulateWithdrawBids(client, auctionAddress, alice.account.address, aliceBids)
-			strictEqualTypeSafe(aliceResult.totalFilledRepAttoRep, expectedAliceRep, 'alice should receive her uniform-price REP share')
+			strictEqualTypeSafe(aliceResult.totalFilledAttoRep, expectedAliceRep, 'alice should receive her uniform-price REP share')
 			strictEqualTypeSafe(aliceResult.totalRefundAttoEth, 0n, 'alice no ETH refund')
 			await withdrawBids(client, auctionAddress, alice.account.address, aliceBids)
 
 			const bobBids = [{ tick: bobTick, bidIndex: 0n }]
 			const bobResult = await simulateWithdrawBids(client, auctionAddress, bob.account.address, bobBids)
-			strictEqualTypeSafe(bobResult.totalFilledRepAttoRep, expectedBobRep, 'bob should receive the remaining uniform-price REP share')
+			strictEqualTypeSafe(bobResult.totalFilledAttoRep, expectedBobRep, 'bob should receive the remaining uniform-price REP share')
 			strictEqualTypeSafe(bobResult.totalRefundAttoEth, 0n, 'bob no ETH refund')
 			await withdrawBids(client, auctionAddress, bob.account.address, bobBids)
 			await assertContractEmpty(client, auctionAddress)
 		})
 
 		test('below-reserve demand cannot reach the REP cap through the funded clearing path', async () => {
-			const ethRaiseCapAttoEth = 1_000n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 4n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1_000n * 10n ** 18n
+			const maxAttoRepBeingSold = 4n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -1124,12 +1124,12 @@ describe('Auction', () => {
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, auctionAddress), 0n, 'below-reserve demand must not purchase any REP')
 
 			const aliceResult = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: winningTick, bidIndex: 0n }])
-			strictEqualTypeSafe(aliceResult.totalFilledRepAttoRep, 0n, 'the higher below-reserve bid should receive no REP')
+			strictEqualTypeSafe(aliceResult.totalFilledAttoRep, 0n, 'the higher below-reserve bid should receive no REP')
 			strictEqualTypeSafe(aliceResult.totalRefundAttoEth, aliceEth, 'the higher below-reserve bid should be refunded in full')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: winningTick, bidIndex: 0n }])
 
 			const bobResult = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: excludedTick, bidIndex: 0n }])
-			strictEqualTypeSafe(bobResult.totalFilledRepAttoRep, 0n, 'the lower below-reserve bid should receive no REP')
+			strictEqualTypeSafe(bobResult.totalFilledAttoRep, 0n, 'the lower below-reserve bid should receive no REP')
 			strictEqualTypeSafe(bobResult.totalRefundAttoEth, bobEth, 'the lower below-reserve bid should be refunded in full')
 			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: excludedTick, bidIndex: 0n }])
 
@@ -1137,9 +1137,9 @@ describe('Auction', () => {
 		})
 
 		test('underfunded same-tick withdrawals reconcile reserve-price rounding across separate calls', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 100n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -1158,7 +1158,7 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const expectedTotalRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
-			strictEqualTypeSafe(expectedTotalRep, maxRepBeingSoldAttoRep, 'underfunded demand should purchase the complete REP cap')
+			strictEqualTypeSafe(expectedTotalRep, maxAttoRepBeingSold, 'underfunded demand should purchase the complete REP cap')
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
 			const winningBids = [
@@ -1171,8 +1171,8 @@ describe('Auction', () => {
 			for (const [withdrawFor, bidIndex] of winningBids) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 				strictEqualTypeSafe(result.totalRefundAttoEth, 0n, 'winning same-tick bid should not receive an ETH refund')
-				forwardRepByBid[Number(bidIndex)] = result.totalFilledRepAttoRep
-				withdrawnRep += result.totalFilledRepAttoRep
+				forwardRepByBid[Number(bidIndex)] = result.totalFilledAttoRep
+				withdrawnRep += result.totalFilledAttoRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 			}
 
@@ -1183,8 +1183,8 @@ describe('Auction', () => {
 			let reverseWithdrawnRep = 0n
 			for (const [withdrawFor, bidIndex] of [...winningBids].reverse()) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
-				strictEqualTypeSafe(result.totalFilledRepAttoRep, forwardRepByBid[Number(bidIndex)], 'underfunded REP allocation should not depend on withdrawal order')
-				reverseWithdrawnRep += result.totalFilledRepAttoRep
+				strictEqualTypeSafe(result.totalFilledAttoRep, forwardRepByBid[Number(bidIndex)], 'underfunded REP allocation should not depend on withdrawal order')
+				reverseWithdrawnRep += result.totalFilledAttoRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 			}
 			strictEqualTypeSafe(reverseWithdrawnRep, expectedTotalRep, 'reverse-order underfunded withdrawals should reconcile to the finalized REP cap')
@@ -1211,7 +1211,7 @@ describe('Auction', () => {
 			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
 			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
 
-			strictEqualTypeSafe(aliceForward.totalFilledRepAttoRep + bobForward.totalFilledRepAttoRep, expectedTotalRep, 'forward withdrawals should reconcile to proportional REP purchased')
+			strictEqualTypeSafe(aliceForward.totalFilledAttoRep + bobForward.totalFilledAttoRep, expectedTotalRep, 'forward withdrawals should reconcile to proportional REP purchased')
 
 			await mockWindow.anvilRevert(settlementSnapshot)
 			const bobReverse = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
@@ -1219,9 +1219,9 @@ describe('Auction', () => {
 			const aliceReverse = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
 
-			strictEqualTypeSafe(bobReverse.totalFilledRepAttoRep, bobForward.totalFilledRepAttoRep, 'lower-tick allocation should not depend on withdrawing first')
-			strictEqualTypeSafe(aliceReverse.totalFilledRepAttoRep, aliceForward.totalFilledRepAttoRep, 'higher-tick allocation should not depend on withdrawing second')
-			strictEqualTypeSafe(aliceReverse.totalFilledRepAttoRep + bobReverse.totalFilledRepAttoRep, expectedTotalRep, 'reverse withdrawals should reconcile to proportional REP purchased')
+			strictEqualTypeSafe(bobReverse.totalFilledAttoRep, bobForward.totalFilledAttoRep, 'lower-tick allocation should not depend on withdrawing first')
+			strictEqualTypeSafe(aliceReverse.totalFilledAttoRep, aliceForward.totalFilledAttoRep, 'higher-tick allocation should not depend on withdrawing second')
+			strictEqualTypeSafe(aliceReverse.totalFilledAttoRep + bobReverse.totalFilledAttoRep, expectedTotalRep, 'reverse withdrawals should reconcile to proportional REP purchased')
 		})
 
 		test('companion allocation remains claimable when a winning bid rounds to zero REP', async () => {
@@ -1238,11 +1238,11 @@ describe('Auction', () => {
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
 			const aliceForward = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
-			strictEqualTypeSafe(aliceForward.totalFilledRepAttoRep, 0n, 'the first winning bid should exercise zero REP rounding')
+			strictEqualTypeSafe(aliceForward.totalFilledAttoRep, 0n, 'the first winning bid should exercise zero REP rounding')
 			strictEqualTypeSafe(aliceForward.totalProRataAllocation, 1n, 'zero REP rounding must not discard the bid positional companion allocation')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
 			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
-			strictEqualTypeSafe(bobForward.totalFilledRepAttoRep, 1n, 'the final winning bid should receive the REP rounding unit')
+			strictEqualTypeSafe(bobForward.totalFilledAttoRep, 1n, 'the final winning bid should receive the REP rounding unit')
 			strictEqualTypeSafe(bobForward.totalProRataAllocation, 2n, 'the final winning bid should receive the remaining companion allocation')
 
 			await mockWindow.anvilRevert(settlementSnapshot)
@@ -1277,38 +1277,38 @@ describe('Auction', () => {
 			const highResult = await simulateWithdrawBids(client, auctionAddress, highBidder.account.address, [{ tick: highTick, bidIndex: 0n }])
 			const mediumResult = await simulateWithdrawBids(client, auctionAddress, mediumBidder.account.address, [{ tick: mediumTick, bidIndex: 0n }])
 			const lowResult = await simulateWithdrawBids(client, auctionAddress, lowBidder.account.address, [{ tick: lowTick, bidIndex: 0n }])
-			strictEqualTypeSafe(highResult.totalFilledRepAttoRep + mediumResult.totalFilledRepAttoRep, 2n, 'the valid winning prefix should reconcile to the complete REP cap')
+			strictEqualTypeSafe(highResult.totalFilledAttoRep + mediumResult.totalFilledAttoRep, 2n, 'the valid winning prefix should reconcile to the complete REP cap')
 			strictEqualTypeSafe(highResult.totalRefundAttoEth + mediumResult.totalRefundAttoEth, 0n, 'the qualifying high-and-medium bids should retain their ETH')
-			strictEqualTypeSafe(lowResult.totalFilledRepAttoRep, 0n, 'the below-reserve low bid should receive no REP')
+			strictEqualTypeSafe(lowResult.totalFilledAttoRep, 0n, 'the below-reserve low bid should receive no REP')
 			strictEqualTypeSafe(lowResult.totalRefundAttoEth, 1n, 'the below-reserve low bid should refund in full')
 		})
 
 		test('underfunded auctions treat bids exactly at the threshold price as winners', async () => {
-			const ethRaiseCapAttoEth = 1_000n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 100n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1_000n * 10n ** 18n
+			const maxAttoRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
-			const thresholdPrice = (ethRaiseCapAttoEth * PRICE_PRECISION) / maxRepBeingSoldAttoRep
+			const thresholdPrice = (attoEthRaiseCap * PRICE_PRECISION) / maxAttoRepBeingSold
 			const thresholdTick = tickAtOrAbovePrice(thresholdPrice)
-			const aliceEth = ethRaiseCapAttoEth / 2n
+			const aliceEth = attoEthRaiseCap / 2n
 
 			await submitBid(alice, auctionAddress, thresholdTick, aliceEth)
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
-			const totalRepAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
-			strictEqualTypeSafe(totalRepAttoRep, maxRepBeingSoldAttoRep, 'reserve-price demand below the ETH cap should buy the complete REP cap')
+			const totalAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
+			strictEqualTypeSafe(totalAttoRep, maxAttoRepBeingSold, 'reserve-price demand below the ETH cap should buy the complete REP cap')
 
 			const withdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: thresholdTick, bidIndex: 0n }])
 			strictEqualTypeSafe(withdrawal.totalRefundAttoEth, 0n, 'threshold-clearing winner should not receive an ETH refund')
-			strictEqualTypeSafe(withdrawal.totalFilledRepAttoRep, totalRepAttoRep, 'reserve-price winner should receive the complete REP cap')
+			strictEqualTypeSafe(withdrawal.totalFilledAttoRep, totalAttoRep, 'reserve-price winner should receive the complete REP cap')
 		})
 
 		test('underfunded winning prefixes can end at tick 0', async () => {
-			const ethRaiseCapAttoEth = 4n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 4n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 4n * 10n ** 18n
+			const maxAttoRepBeingSold = 4n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -1329,9 +1329,9 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			strictEqualTypeSafe(await getClearingTick(client, auctionAddress), boundaryWinningTick, 'the winning prefix boundary should be tick 0')
-			const totalRepPurchasedAttoRep = await getTotalRepPurchasedAttoRep(client, auctionAddress)
-			strictEqualTypeSafe(totalRepPurchasedAttoRep, maxRepBeingSoldAttoRep, 'the underfunded winning prefix should receive the complete REP cap')
-			strictEqualTypeSafe(await getEthRaisedAttoEth(client, auctionAddress), 3n * bidAmount, 'ethRaisedAttoEth should continue to track submitted ETH')
+			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, auctionAddress)
+			strictEqualTypeSafe(totalAttoRepPurchased, maxAttoRepBeingSold, 'the underfunded winning prefix should receive the complete REP cap')
+			strictEqualTypeSafe(await getEthRaisedAttoEth(client, auctionAddress), 3n * bidAmount, 'attoEthRaised should continue to track submitted ETH')
 
 			let totalWinningRep = 0n
 			for (const [withdrawFor, tick] of [
@@ -1341,20 +1341,20 @@ describe('Auction', () => {
 			] as const) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick, bidIndex: 0n }])
 				strictEqualTypeSafe(result.totalRefundAttoEth, 0n, 'winning-prefix bids should not receive ETH refunds')
-				assert.ok(result.totalFilledRepAttoRep > 0n, 'winning-prefix bids should receive REP')
-				totalWinningRep += result.totalFilledRepAttoRep
+				assert.ok(result.totalFilledAttoRep > 0n, 'winning-prefix bids should receive REP')
+				totalWinningRep += result.totalFilledAttoRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick, bidIndex: 0n }])
 			}
 
-			strictEqualTypeSafe(totalWinningRep, totalRepPurchasedAttoRep, 'winning-prefix withdrawals should reconcile to the complete REP cap')
+			strictEqualTypeSafe(totalWinningRep, totalAttoRepPurchased, 'winning-prefix withdrawals should reconcile to the complete REP cap')
 
 			await assertContractEmpty(client, auctionAddress)
 		})
 
 		test('auction time limit prevents bids after expiration', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 
@@ -1407,20 +1407,20 @@ describe('Auction', () => {
 			}
 			assert.strictEqual(firstSettlement.args.bidIndex, 0n)
 			assert.strictEqual(firstSettlement.args.bidUsedAttoEth, bidAmount)
-			assert.strictEqual(firstSettlement.args.repFilledAttoRep, bidAmount)
+			assert.strictEqual(firstSettlement.args.attoRepFilled, bidAmount)
 			assert.strictEqual(firstSettlement.args.refundAttoEth, 0n)
 			assert.strictEqual(firstSettlement.args.status, 0n)
 			assert.strictEqual(secondSettlement.args.bidIndex, 1n)
 			assert.strictEqual(secondSettlement.args.bidUsedAttoEth, 3n * ATTOETH_PER_ETH)
-			assert.strictEqual(secondSettlement.args.repFilledAttoRep, 3n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.attoRepFilled, 3n * ATTOETH_PER_ETH)
 			assert.strictEqual(secondSettlement.args.refundAttoEth, 4n * ATTOETH_PER_ETH)
 			assert.strictEqual(secondSettlement.args.status, 1n)
 		})
 
 		test('minimum bid size enforcement', async () => {
-			const ethRaiseCapAttoEth = 50000n
-			const maxRepBeingSoldAttoRep = 1n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 50000n
+			const maxAttoRepBeingSold = 1n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const minBid = await getMinBidSizeAttoEth(client, auctionAddress)
 			strictEqualTypeSafe(minBid, 1n, 'minBidSizeAttoEth should be 1')
@@ -1431,9 +1431,9 @@ describe('Auction', () => {
 		})
 
 		test('submitBid accepts the lowest positive-price tick and maximum tick', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			assert.strictEqual(tickToPrice(LOWEST_POSITIVE_PRICE_TICK - 1n), 0n, 'test setup should sit just above the zero-price boundary')
 			assert.strictEqual(tickToPrice(LOWEST_POSITIVE_PRICE_TICK), 1n, 'test setup should use the lowest positive-price tick')
@@ -1457,9 +1457,9 @@ describe('Auction', () => {
 		})
 
 		test('submitBid rejects zero-price ticks', async () => {
-			const ethRaiseCapAttoEth = 1000n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 1n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1000n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 1n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			const zeroPriceTick = LOWEST_POSITIVE_PRICE_TICK - 1n
 			const bidAmount = 1n * ATTOETH_PER_ETH
 
@@ -1470,8 +1470,8 @@ describe('Auction', () => {
 		})
 
 		test('submitBid invalid states: before auction start and after finalize', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 			const tick = tickForPrice(PRICE_PRECISION)
 			const bidAmount = 1n * 10n ** 18n
 
@@ -1479,8 +1479,8 @@ describe('Auction', () => {
 			await deployUniformPriceDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
 			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), /Auction must be started before accepting bids/)
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
-			await submitBid(client, auctionAddress, tick, ethRaiseCapAttoEth)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
+			await submitBid(client, auctionAddress, tick, attoEthRaiseCap)
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction should be finalized before post-finalization assertions')
@@ -1489,11 +1489,11 @@ describe('Auction', () => {
 		})
 
 		test('withdrawBids reverts before finalize', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 			const tick = tickForPrice(PRICE_PRECISION)
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			await submitBid(client, auctionAddress, tick, 1n * 10n ** 18n)
 
 			await assert.rejects(async () => await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }]), /Auction must be finalized before withdrawing bids/)
@@ -1502,9 +1502,9 @@ describe('Auction', () => {
 
 	describe('Enumeration Views', () => {
 		test('getTickPage returns one historical tick per unique tick and tracks same-tick submission counts', async () => {
-			const ethRaiseCapAttoEth = 1_000n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 1_000n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1_000n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 1_000n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const firstTick = 0n
 			const secondTick = 10_000n
@@ -1535,9 +1535,9 @@ describe('Auction', () => {
 		})
 
 		test('a fully refunded tick remains enumerable with zero active ETH', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const losingTick = -20_000n
 			const winningTick = 0n
@@ -1559,9 +1559,9 @@ describe('Auction', () => {
 		})
 
 		test('a bid submitted after a fully refunded tick is recreated remains withdrawable', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const firstBidder = createTestClient(1)
 			const secondBidder = createTestClient(2)
@@ -1584,9 +1584,9 @@ describe('Auction', () => {
 		})
 
 		test('refund-prefix positions remain correct across repeated tick deletion and recreation', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const firstBidder = createTestClient(1)
 			const secondBidder = createTestClient(2)
@@ -1620,9 +1620,9 @@ describe('Auction', () => {
 		})
 
 		test('active tick pages stay sorted by descending tick and exclude refunded-away historical levels', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const lowTick = -20_000n
 			const middleTick = 0n
@@ -1641,9 +1641,9 @@ describe('Auction', () => {
 		})
 
 		test('getTickSummary returns historical summaries even after a tick is fully refunded away', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const losingTick = -20_000n
 			const winningTick = 0n
@@ -1660,9 +1660,9 @@ describe('Auction', () => {
 		})
 
 		test('getBidPageAtTick returns bid indices, cumulative ETH, and refund state while preserving refunded bid amounts', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const losingTick = -20_000n
 			const winningTick = 0n
@@ -1696,9 +1696,9 @@ describe('Auction', () => {
 		})
 
 		test('bid views expose active cumulative ETH before each bid after same-tick predecessor refunds', async () => {
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const losingTick = -20_000n
 			const winningTick = 0n
@@ -1721,9 +1721,9 @@ describe('Auction', () => {
 		})
 
 		test('getBidderBidPage returns bidder bids in submission order across ticks', async () => {
-			const ethRaiseCapAttoEth = 1_000n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 1_000n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1_000n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 1_000n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -1750,9 +1750,9 @@ describe('Auction', () => {
 		})
 
 		test('post-finalization withdrawals mark bids claimed without marking them refunded', async () => {
-			const ethRaiseCapAttoEth = 20n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 20n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const winningTick = 0n
 			const winningBid = 12n * ATTOETH_PER_ETH
@@ -1774,9 +1774,9 @@ describe('Auction', () => {
 		})
 
 		test('enumeration views handle empty pages and allow oversized limits', async () => {
-			const ethRaiseCapAttoEth = 20n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 20n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const tick = 0n
 			await submitBid(client, auctionAddress, tick, 2n * ATTOETH_PER_ETH)
@@ -1805,8 +1805,8 @@ describe('Auction', () => {
 				tick: bigint
 			}
 
-			const ethRaiseCapAttoEth = 10n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 10n * ATTOETH_PER_ETH
+			const attoEthRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 10n * ATTOETH_PER_ETH
 			const lowTick = -20_000n
 			const middleTick = 0n
 			const highTick = 20_000n
@@ -1816,7 +1816,7 @@ describe('Auction', () => {
 			const modeledBids: ModeledBid[] = []
 			const historicalTicks: bigint[] = []
 			let forcedSurplus = 0n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const addModeledBid = async (bidder: WriteClient, tick: bigint, amount: bigint) => {
 				const bidIndex = BigInt(modeledBids.filter(bid => bid.tick === tick).length)
@@ -1882,8 +1882,8 @@ describe('Auction', () => {
 
 				const modeledClearing = computeModeledClearing(
 					modeledBids.filter(bid => !bid.claimed).map(bid => ({ amount: bid.amount, tick: bid.tick })),
-					maxRepBeingSoldAttoRep,
-					ethRaiseCapAttoEth,
+					maxAttoRepBeingSold,
+					attoEthRaiseCap,
 				)
 				const actualClearing = await computeClearing(client, auctionAddress)
 				strictEqualTypeSafe(actualClearing.hitCap, modeledClearing.hitCap, `${label}: clearing cap result should match the model`)
@@ -1923,7 +1923,7 @@ describe('Auction', () => {
 			}
 			const aggregateRefundLiability = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalRefundAttoEth, 0n)
 			const aggregateUsedEth = simulatedSettlements.reduce((sum, entry) => sum + entry.bid.amount - entry.settlement.totalRefundAttoEth, 0n)
-			const aggregateFilledRep = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalFilledRepAttoRep, 0n)
+			const aggregateFilledRep = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalFilledAttoRep, 0n)
 			strictEqualTypeSafe(aggregateUsedEth, await getEthRaisedAttoEth(client, auctionAddress), 'aggregate bid ETH used should equal finalized ETH raised')
 			strictEqualTypeSafe(aggregateFilledRep, await getTotalRepPurchasedAttoRep(client, auctionAddress), 'aggregate filled REP should equal finalized REP purchased')
 			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + aggregateRefundLiability, 'post-finalization ETH should equal unsettled refunds plus forced surplus')
@@ -1941,9 +1941,9 @@ describe('Auction', () => {
 
 	describe('Clearing & Pro-Rata', () => {
 		test('both caps enforced: ETH cap binds and limits REP sold', async () => {
-			const ethRaiseCapAttoEth = 50n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 100n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 50n * 10n ** 18n
+			const maxAttoRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const price = 2n * 10n ** 18n
 			const tick = tickForPrice(price)
@@ -1957,16 +1957,16 @@ describe('Auction', () => {
 			const afterFinalizeAuctionEth = await getETHBalance(client, auctionAddress)
 			const clearingTick = await getClearingTick(client, auctionAddress)
 			const clearingPrice = tickToPrice(clearingTick)
-			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, ethRaiseCapAttoEth, 1000n, 'Auction sent about the cap to owner')
+			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, attoEthRaiseCap, 1000n, 'Auction sent about the cap to owner')
 
 			const clearing = await computeClearing(client, auctionAddress)
-			const expectedFilledRepAttoRep = (clearing.accumulatedBidAttoEth * PRICE_PRECISION) / clearingPrice
+			const expectedFilledAttoRep = (clearing.accumulatedBidAttoEth * PRICE_PRECISION) / clearingPrice
 
 			const clearing2 = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearing2.foundTick, tick, 'tick matches the bid')
 
 			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
-			approximatelyEqual(amounts.totalFilledRepAttoRep, expectedFilledRepAttoRep, 1000n, 'filled rep should match ETH cap')
+			approximatelyEqual(amounts.totalFilledAttoRep, expectedFilledAttoRep, 1000n, 'filled rep should match ETH cap')
 			approximatelyEqual(amounts.totalRefundAttoEth, afterFinalizeAuctionEth, 1000n, 'simulated refund should match remaining contract balance')
 
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
@@ -1974,11 +1974,11 @@ describe('Auction', () => {
 		})
 
 		test('multiple bids at same tick from same bidder (FIFO pro-rata) - clearing suite', async () => {
-			const ethRaiseCapAttoEth = 10n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 10n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 			const alice = createTestClient(0)
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const sameTick = 0n
 			const bid1Amount = 7n * 10n ** 18n
@@ -1998,10 +1998,10 @@ describe('Auction', () => {
 		})
 
 		test('non-sequential withdrawal of same-tick bids yields correct allocation', async () => {
-			const ethRaiseCapAttoEth = 10n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 10n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			const sameTick = 0n
 			const bid1 = 7n * 10n ** 18n
@@ -2025,8 +2025,8 @@ describe('Auction', () => {
 	describe('Withdrawals & Refunds', () => {
 		type RefundTestCase = {
 			name: string
-			ethRaiseCapAttoEth: bigint
-			maxRepBeingSoldAttoRep: bigint
+			attoEthRaiseCap: bigint
+			maxAttoRepBeingSold: bigint
 			alicePrice: bigint
 			aliceAmount: bigint
 			bobPrice: bigint
@@ -2039,8 +2039,8 @@ describe('Auction', () => {
 		const refundCases: RefundTestCase[] = [
 			{
 				name: 'allows refund for bid below clearing',
-				ethRaiseCapAttoEth: 10n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 10n * 10n ** 18n,
+				attoEthRaiseCap: 10n * 10n ** 18n,
+				maxAttoRepBeingSold: 10n * 10n ** 18n,
 				alicePrice: ATTOETH_PER_ETH / 2n,
 				aliceAmount: 10n * 10n ** 18n,
 				bobPrice: ATTOETH_PER_ETH,
@@ -2052,8 +2052,8 @@ describe('Auction', () => {
 			},
 			{
 				name: 'rejects refund for bid at clearing tick',
-				ethRaiseCapAttoEth: 10n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 10n * 10n ** 18n, // increase so Alice alone does not hit cap
+				attoEthRaiseCap: 10n * 10n ** 18n,
+				maxAttoRepBeingSold: 10n * 10n ** 18n, // increase so Alice alone does not hit cap
 				alicePrice: ATTOETH_PER_ETH,
 				aliceAmount: 4n * 10n ** 18n, // 4 ETH at price 1 → 4 REP
 				bobPrice: 2n * ATTOETH_PER_ETH,
@@ -2065,8 +2065,8 @@ describe('Auction', () => {
 			},
 			{
 				name: 'rejects refund for bid above clearing',
-				ethRaiseCapAttoEth: 10n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 10n * 10n ** 18n,
+				attoEthRaiseCap: 10n * 10n ** 18n,
+				maxAttoRepBeingSold: 10n * 10n ** 18n,
 				alicePrice: ATTOETH_PER_ETH,
 				aliceAmount: 4n * 10n ** 18n,
 				bobPrice: 2n * ATTOETH_PER_ETH,
@@ -2079,7 +2079,7 @@ describe('Auction', () => {
 		] as const
 
 		test.each(refundCases)('refundLosingBids: $name', async (c: RefundTestCase) => {
-			await startAuction(client, auctionAddress, c.ethRaiseCapAttoEth, c.maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, c.attoEthRaiseCap, c.maxAttoRepBeingSold)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
@@ -2116,17 +2116,17 @@ describe('Auction', () => {
 
 	describe('Auction Management', () => {
 		test('startAuction validation', async () => {
-			const ethRaiseCapAttoEth = 100n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
+			const attoEthRaiseCap = 100n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
 
 			const attacker = createTestClient(1)
-			await assert.rejects(async () => await startAuction(attacker, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep), /Only the auction owner can start the auction/)
-			await assert.rejects(async () => await startAuction(client, auctionAddress, 0n, maxRepBeingSoldAttoRep), /Auction ETH raise cap and REP sale cap must both be positive/)
-			await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCapAttoEth, 0n), /Auction ETH raise cap and REP sale cap must both be positive/)
+			await assert.rejects(async () => await startAuction(attacker, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold), /Only the auction owner can start the auction/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, 0n, maxAttoRepBeingSold), /Auction ETH raise cap and REP sale cap must both be positive/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, attoEthRaiseCap, 0n), /Auction ETH raise cap and REP sale cap must both be positive/)
 
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
-			await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep), /Auction has already been started/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold), /Auction has already been started/)
 		})
 
 		test('finalization and withdrawal guards reject repeats, wrong beneficiaries, missing indices, and claimed bids', async () => {
@@ -2531,7 +2531,7 @@ describe('Auction', () => {
 	})
 
 	describe('Edge Cases & Boundary Conditions', () => {
-		function computeExpectedClearing(bids: Array<{ tick: bigint; amount: bigint }>, maxRepBeingSoldAttoRep: bigint, ethRaiseCapAttoEth: bigint): { hitCap: boolean; foundTick: bigint; accumulatedBidAttoEth: bigint } {
+		function computeExpectedClearing(bids: Array<{ tick: bigint; amount: bigint }>, maxAttoRepBeingSold: bigint, attoEthRaiseCap: bigint): { hitCap: boolean; foundTick: bigint; accumulatedBidAttoEth: bigint } {
 			const sorted = [...bids].sort((a, b) => {
 				if (b.tick > a.tick) return 1
 				if (b.tick < a.tick) return -1
@@ -2540,7 +2540,7 @@ describe('Auction', () => {
 			let accumulatedBidAttoEth = 0n
 			let lastValidTick = 0n
 			let lastValidEth = 0n
-			const reservePrice = (ethRaiseCapAttoEth * PRICE_PRECISION + maxRepBeingSoldAttoRep - 1n) / maxRepBeingSoldAttoRep
+			const reservePrice = (attoEthRaiseCap * PRICE_PRECISION + maxAttoRepBeingSold - 1n) / maxAttoRepBeingSold
 			for (const bid of sorted) {
 				const price = tickToPrice(bid.tick)
 				if (price < reservePrice) continue
@@ -2549,25 +2549,25 @@ describe('Auction', () => {
 
 				if (accumulatedBidAttoEth > 0n) {
 					const repricedRep = (accumulatedBidAttoEth * PRICE_PRECISION) / price
-					if (repricedRep > maxRepBeingSoldAttoRep) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
+					if (repricedRep > maxAttoRepBeingSold) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
 				}
 
-				if (accumulatedBidAttoEth >= ethRaiseCapAttoEth) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
+				if (accumulatedBidAttoEth >= attoEthRaiseCap) return { hitCap: true, foundTick: lastValidTick, accumulatedBidAttoEth: lastValidEth }
 
-				const remainingCap = ethRaiseCapAttoEth - accumulatedBidAttoEth
+				const remainingCap = attoEthRaiseCap - accumulatedBidAttoEth
 				if (ethToTake > remainingCap) ethToTake = remainingCap
 				const newAccumulatedEth = accumulatedBidAttoEth + ethToTake
-				const totalRepAttoRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
+				const totalAttoRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
 
-				if (totalRepAttoRep >= maxRepBeingSoldAttoRep) {
-					const maxEthAtThisPrice = (maxRepBeingSoldAttoRep * price) / PRICE_PRECISION
+				if (totalAttoRep >= maxAttoRepBeingSold) {
+					const maxEthAtThisPrice = (maxAttoRepBeingSold * price) / PRICE_PRECISION
 					let ethUsedAtClearing = 0n
 					if (maxEthAtThisPrice > accumulatedBidAttoEth) ethUsedAtClearing = maxEthAtThisPrice - accumulatedBidAttoEth
 					if (ethUsedAtClearing > ethToTake) ethUsedAtClearing = ethToTake
 					return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: accumulatedBidAttoEth + ethUsedAtClearing }
 				}
 
-				if (newAccumulatedEth >= ethRaiseCapAttoEth) return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: newAccumulatedEth }
+				if (newAccumulatedEth >= attoEthRaiseCap) return { hitCap: true, foundTick: bid.tick, accumulatedBidAttoEth: newAccumulatedEth }
 
 				accumulatedBidAttoEth = newAccumulatedEth
 				lastValidTick = bid.tick
@@ -2578,27 +2578,27 @@ describe('Auction', () => {
 
 		type EdgeCaseTest = {
 			name: string
-			ethRaiseCapAttoEth: bigint
-			maxRepBeingSoldAttoRep: bigint
+			attoEthRaiseCap: bigint
+			maxAttoRepBeingSold: bigint
 			bids: Array<{ tick: bigint; amount: bigint }>
 		}
 		const edgeCaseTests: EdgeCaseTest[] = [
 			{
-				name: 'single bid exactly hits ethRaiseCapAttoEth',
-				ethRaiseCapAttoEth: 100n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 1000n * 10n ** 18n,
+				name: 'single bid exactly hits attoEthRaiseCap',
+				attoEthRaiseCap: 100n * 10n ** 18n,
+				maxAttoRepBeingSold: 1000n * 10n ** 18n,
 				bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
 			},
 			{
 				name: 'single bid exceeds both caps (limited by ETH cap)',
-				ethRaiseCapAttoEth: 30n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 100n * 10n ** 18n,
+				attoEthRaiseCap: 30n * 10n ** 18n,
+				maxAttoRepBeingSold: 100n * 10n ** 18n,
 				bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
 			},
 			{
-				name: 'multiple bids precisely fill ethRaiseCapAttoEth at clearing',
-				ethRaiseCapAttoEth: 100n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 1000n * 10n ** 18n,
+				name: 'multiple bids precisely fill attoEthRaiseCap at clearing',
+				attoEthRaiseCap: 100n * 10n ** 18n,
+				maxAttoRepBeingSold: 1000n * 10n ** 18n,
 				bids: [
 					{ tick: 20000n, amount: 40n * 10n ** 18n },
 					{ tick: 10000n, amount: 35n * 10n ** 18n },
@@ -2607,8 +2607,8 @@ describe('Auction', () => {
 			},
 			{
 				name: 'multiple bids hit REP cap at high tick',
-				ethRaiseCapAttoEth: 1000n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 100n * 10n ** 18n,
+				attoEthRaiseCap: 1000n * 10n ** 18n,
+				maxAttoRepBeingSold: 100n * 10n ** 18n,
 				bids: [
 					{ tick: 20000n, amount: 40n * 10n ** 18n },
 					{ tick: 10000n, amount: 35n * 10n ** 18n },
@@ -2617,8 +2617,8 @@ describe('Auction', () => {
 			},
 			{
 				name: 'bids at MIN_TICK boundary',
-				ethRaiseCapAttoEth: 100n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 1000n * 10n ** 18n,
+				attoEthRaiseCap: 100n * 10n ** 18n,
+				maxAttoRepBeingSold: 1000n * 10n ** 18n,
 				// Use moderately negative ticks to avoid overflow in tickToPrice
 				bids: [
 					{ tick: -20000n, amount: 50n * 10n ** 18n },
@@ -2627,8 +2627,8 @@ describe('Auction', () => {
 			},
 			{
 				name: 'bids at MAX_TICK boundary',
-				ethRaiseCapAttoEth: 100n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 1000n * 10n ** 18n,
+				attoEthRaiseCap: 100n * 10n ** 18n,
+				maxAttoRepBeingSold: 1000n * 10n ** 18n,
 				// Use moderately high positive ticks to avoid overflow
 				bids: [
 					{ tick: 20000n, amount: 50n * 10n ** 18n },
@@ -2637,20 +2637,20 @@ describe('Auction', () => {
 			},
 			{
 				name: 'underfunded auction',
-				ethRaiseCapAttoEth: 1000n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 1000n * 10n ** 18n,
+				attoEthRaiseCap: 1000n * 10n ** 18n,
+				maxAttoRepBeingSold: 1000n * 10n ** 18n,
 				bids: [{ tick: 0n, amount: 1n * 10n ** 18n }],
 			},
 			{
 				name: 'many small bids',
-				ethRaiseCapAttoEth: 10n * 10n ** 18n,
-				maxRepBeingSoldAttoRep: 10n * 10n ** 18n,
+				attoEthRaiseCap: 10n * 10n ** 18n,
+				maxAttoRepBeingSold: 10n * 10n ** 18n,
 				bids: Array.from({ length: 10 }, () => ({ tick: 0n, amount: 1n * 10n ** 18n })),
 			},
 		] as const
 
 		test.each(edgeCaseTests)('covers various edge cases: $name', async (c: EdgeCaseTest) => {
-			await startAuction(client, auctionAddress, c.ethRaiseCapAttoEth, c.maxRepBeingSoldAttoRep)
+			await startAuction(client, auctionAddress, c.attoEthRaiseCap, c.maxAttoRepBeingSold)
 
 			// Build fair payout bids with correct per-tick indices
 			const tickIndexCount = new Map<bigint, number>()
@@ -2664,7 +2664,7 @@ describe('Auction', () => {
 				await submitBid(client, auctionAddress, bid.tick, bid.amount)
 			}
 
-			const expected = computeExpectedClearing(c.bids, c.maxRepBeingSoldAttoRep, c.ethRaiseCapAttoEth)
+			const expected = computeExpectedClearing(c.bids, c.maxAttoRepBeingSold, c.attoEthRaiseCap)
 			const clearing = await computeClearing(client, auctionAddress)
 
 			assert.strictEqual(clearing.hitCap, expected.hitCap, `${c.name}: hitCap mismatch`)
@@ -2691,9 +2691,9 @@ describe('Auction', () => {
 	describe('Withdrawals after finalization require owner', () => {
 		test('losing bidder cannot withdraw after finalization - only owner can call withdrawBids', async () => {
 			// Setup auction with enough capacity
-			const ethRaiseCapAttoEth = 10n * 10n ** 18n
-			const maxRepBeingSoldAttoRep = 10n * 10n ** 18n
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 10n * 10n ** 18n
+			const maxAttoRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
 			// Losing bidder (not owner)
 			const alice = createTestClient(1)
@@ -2747,9 +2747,9 @@ describe('Auction', () => {
 
 	describe('Zero-price bid boundary', () => {
 		test('underfunded auction rejects a zero-price bid and refunds a lowest-positive bid below reserve', async () => {
-			const ethRaiseCapAttoEth = 1000n * ATTOETH_PER_ETH
-			const maxRepBeingSoldAttoRep = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)
+			const attoEthRaiseCap = 1000n * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			const zeroPriceTick = LOWEST_POSITIVE_PRICE_TICK - 1n
 			const lowPositiveTick = LOWEST_POSITIVE_PRICE_TICK
 			const bidAmount = 1n * ATTOETH_PER_ETH
@@ -2767,7 +2767,7 @@ describe('Auction', () => {
 			const expectedRepPurchased = 0n
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, auctionAddress), expectedRepPurchased, 'lowest positive-price demand below reserve should not purchase REP')
 			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: lowPositiveTick, bidIndex: 0n }])
-			assert.strictEqual(amounts.totalFilledRepAttoRep, expectedRepPurchased, 'lowest positive-price bidder should receive no REP below reserve')
+			assert.strictEqual(amounts.totalFilledAttoRep, expectedRepPurchased, 'lowest positive-price bidder should receive no REP below reserve')
 			assert.strictEqual(amounts.totalRefundAttoEth, bidAmount, 'lowest positive-price bidder should receive a full refund below reserve')
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: lowPositiveTick, bidIndex: 0n }])
 			await assertContractEmpty(client, auctionAddress)

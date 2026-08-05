@@ -55,7 +55,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 				parentWithdrawalEnabled: false,
 				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
-				viewerVaultDisputeStakedRepAttoRep: 0n,
+				viewerVaultDisputeStakedAttoRep: 0n,
 				viewerVaultRepBackingAttoRep: 10n,
 			},
 			reportingForm: {
@@ -171,7 +171,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 								parentWithdrawalEnabled: false,
 								viewerPoolHeldVaultRepBackingAttoRep: 10n,
 								viewerVaultExists: true,
-								viewerVaultDisputeStakedRepAttoRep: 0n,
+								viewerVaultDisputeStakedAttoRep: 0n,
 								viewerVaultRepBackingAttoRep: 10n,
 							},
 						}),

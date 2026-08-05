@@ -17,7 +17,7 @@ const fixture = {
 	cheapRepAmount: 2_227_204_424_255_513_151_233n,
 	expensiveRepAmount: 2_015_089_717_183_559_517_782n,
 	feePercentage: 10_000n,
-	gasCostWethAttoEth: 0n,
+	gasCostAttoWeth: 0n,
 	midReportRep: 2_121_147_070_719_536_334_508n,
 	poolFee: 10_000n,
 	protocolFee: 100_000n,
@@ -86,15 +86,15 @@ function verifyRecordedEconomics() {
 		token1: fixture.weth,
 		token2: fixture.rep,
 	}
-	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostWethAttoEth)
-	assert.equal(sell.hedgeCostWethAttoEth, 826_252_634_985_023_076n)
-	assert.equal(sell.profitBeforeGasWethAttoEth, -255_235_735_754_674_523n)
+	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth)
+	assert.equal(sell.hedgeCostAttoWeth, 826_252_634_985_023_076n)
+	assert.equal(sell.profitBeforeGasAttoWeth, -255_235_735_754_674_523n)
 
-	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostWethAttoEth)
+	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth)
 	assert.equal(buy.hedgeAmountAttoRep, 2_037_255_704_072_578_672_476n)
-	assert.equal(buy.profitBeforeGasWethAttoEth, -626_254_311_426_940_506n)
-	assert(sell.profitBeforeGasWethAttoEth < 0n)
-	assert(buy.profitBeforeGasWethAttoEth < 0n)
+	assert.equal(buy.profitBeforeGasAttoWeth, -626_254_311_426_940_506n)
+	assert(sell.profitBeforeGasAttoWeth < 0n)
+	assert(buy.profitBeforeGasAttoWeth < 0n)
 
 	return { buy, minimumWeth, sell }
 }
@@ -110,15 +110,15 @@ async function verifyDocumentedFixture() {
 	const expected: Record<string, bigint> = {
 		baseFeeAttoEthPerGas: fixture.baseFeeAttoEthPerGas,
 		blockNumber: fixture.blockNumber,
-		buyProfitWethAttoEth: buy.profitBeforeGasWethAttoEth,
+		buyProfitAttoWeth: buy.profitBeforeGasAttoWeth,
 		buyReportAttoRep: fixture.expensiveRepAmount,
-		gasCostWethAttoEth: fixture.gasCostWethAttoEth,
+		gasCostAttoWeth: fixture.gasCostAttoWeth,
 		midReportAttoRep: fixture.midReportRep,
 		minimumWethReportAttoEth: minimumWeth,
 		protocolFee: fixture.protocolFee,
 		reportDeviationBps: fixture.reportDeviationBps,
 		reporterFee: fixture.feePercentage,
-		sellProfitWethAttoEth: sell.profitBeforeGasWethAttoEth,
+		sellProfitAttoWeth: sell.profitBeforeGasAttoWeth,
 		sellReportAttoRep: fixture.cheapRepAmount,
 		uniswapPoolFee: fixture.poolFee,
 	}
@@ -133,17 +133,17 @@ async function verifyDocumentedFixture() {
 		blockNumber: fixture.blockNumber.toLocaleString('en-US'),
 		buyDeviation: `−${deviation}`,
 		buyExecution: `Exact-output quote through the ${poolFee} REP/WETH pool`,
-		buyProfitWeth: `${formatWad(buy.profitBeforeGasWethAttoEth)} WETH`,
+		buyProfitWeth: `${formatWad(buy.profitBeforeGasAttoWeth)} WETH`,
 		buyReportRep: `${formatWad(fixture.expensiveRepAmount)} REP`,
 		deviationMagnitude: deviation,
-		gasCostWeth: `${fixture.gasCostWethAttoEth.toString()} WETH`,
+		gasCostWeth: `${fixture.gasCostAttoWeth.toString()} WETH`,
 		midReportRep: `${formatWad(fixture.midReportRep)} REP`,
 		minimumWethReport: `${formatWad(minimumWeth)} WETH`,
 		protocolFee: formatPercent(fixture.protocolFee, 10_000_000n),
 		reporterFee: formatPercent(fixture.feePercentage, 10_000_000n),
 		sellDeviation: `+${deviation}`,
 		sellExecution: `Exact-input quote through the ${poolFee} REP/WETH pool`,
-		sellProfitWeth: `${formatWad(sell.profitBeforeGasWethAttoEth)} WETH`,
+		sellProfitWeth: `${formatWad(sell.profitBeforeGasAttoWeth)} WETH`,
 		sellReportRep: `${formatWad(fixture.cheapRepAmount)} REP`,
 		uniswapPoolFee: poolFee,
 	}

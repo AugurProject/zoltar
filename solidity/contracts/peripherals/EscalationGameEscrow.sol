@@ -38,7 +38,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		returns (
 			uint256 sourcePrincipalAttoRep,
 			uint256 sourcePrincipalClaimedAttoRep,
-			uint256 childRepAttoRep,
+			uint256 childAttoRep,
 			uint256 childRepClaimedAttoRep
 		)
 	{
@@ -47,7 +47,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return (
 			state.sourcePrincipalAttoRep,
 			state.sourcePrincipalClaimedAttoRep,
-			_applyTruthAuctionRetention(state.childRepAttoRep),
+			_applyTruthAuctionRetention(state.childAttoRep),
 			_applyTruthAuctionRetention(state.childRepClaimedAttoRep)
 		);
 	}
@@ -134,17 +134,17 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[vault][outcomeIndex];
 			uint256 sourcePrincipalAttoRep = state.sourcePrincipalAttoRep;
-			uint256 childRepAttoRep = state.childRepAttoRep;
+			uint256 childAttoRep = state.childAttoRep;
 			uint256 remainingSourcePrincipalAttoRep = sourcePrincipalAttoRep - state.sourcePrincipalClaimedAttoRep;
-			uint256 remainingChildRepAttoRep = _applyTruthAuctionRetention(
-				childRepAttoRep - state.childRepClaimedAttoRep
+			uint256 remainingChildAttoRep = _applyTruthAuctionRetention(
+				childAttoRep - state.childRepClaimedAttoRep
 			);
-			if (remainingSourcePrincipalAttoRep == 0 && remainingChildRepAttoRep == 0) continue;
+			if (remainingSourcePrincipalAttoRep == 0 && remainingChildAttoRep == 0) continue;
 			sourcePrincipalByOutcomeAttoRep[outcomeIndex] = remainingSourcePrincipalAttoRep;
-			childRepByOutcomeAttoRep[outcomeIndex] = remainingChildRepAttoRep;
+			childRepByOutcomeAttoRep[outcomeIndex] = remainingChildAttoRep;
 			state.sourcePrincipalClaimedAttoRep = sourcePrincipalAttoRep;
-			state.childRepClaimedAttoRep = childRepAttoRep;
-			totalChildRepToTransferAttoRep += remainingChildRepAttoRep;
+			state.childRepClaimedAttoRep = childAttoRep;
+			totalChildRepToTransferAttoRep += remainingChildAttoRep;
 			exported = true;
 		}
 		if (exported) {
@@ -163,8 +163,8 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			if (winnerHaircutPaidByFork && forkResumedAt == 0) {
 				unchecked {
 					forkCarryBackingExportedBeforeResumeAttoRep += totalChildRepToTransferAttoRep;
-					forkCarryDisputeStakedRepAttoRep -= totalChildRepToTransferAttoRep;
-					totalDisputeStakedRepAttoRep -= totalChildRepToTransferAttoRep;
+					forkCarryDisputeStakedAttoRep -= totalChildRepToTransferAttoRep;
+					totalDisputeStakedAttoRep -= totalChildRepToTransferAttoRep;
 				}
 			}
 			_safeTransferRep(repReceiver, totalChildRepToTransferAttoRep);

@@ -21,7 +21,7 @@ type SecurityVault = {
 	coverageCommitmentAttoEth: bigint
 	claimableFeesAttoEth: bigint
 	feeIndex: bigint
-	disputeStakedRepAttoRep: bigint
+	disputeStakedAttoRep: bigint
 }
 
 function requireSystemState(value: unknown): SystemState {
@@ -197,7 +197,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		}),
 		'Security pool escalation game',
 	)
-	const disputeStakedRepAttoRep =
+	const disputeStakedAttoRep =
 		escalationGameAddress === '0x0000000000000000000000000000000000000000'
 			? 0n
 			: requireBigInt(
@@ -209,7 +209,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 					}),
 					'Dispute-staked REP by vault',
 				)
-	return { repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedRepAttoRep }
+	return { repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
@@ -382,11 +382,11 @@ export const getRepToken = async (client: ReadClient, securityPoolAddress: Addre
 		'REP token address',
 	)
 
-export const getTotalPoolHeldRepAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalPoolHeldRepAttoRep',
+			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		}),

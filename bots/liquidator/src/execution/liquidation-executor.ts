@@ -260,26 +260,26 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 	)
 }
 
-export function assertRepLimits(parameters: { acquiredAmountAttoRep?: bigint | undefined; currentPoolRepAttoRep: bigint; currentTotalRepAttoRep: bigint; depositAmountAttoRep: bigint; maximumPoolRepAttoRep: bigint; maximumTotalRepAttoRep: bigint }) {
+export function assertRepLimits(parameters: { acquiredAmountAttoRep?: bigint | undefined; currentPoolAttoRep: bigint; currentTotalAttoRep: bigint; depositAmountAttoRep: bigint; maximumPoolAttoRep: bigint; maximumTotalAttoRep: bigint }) {
 	const acquiredAmountAttoRep = parameters.acquiredAmountAttoRep ?? 0n
-	if (parameters.currentPoolRepAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumPoolRepAttoRep) {
-		throw new Error('REP deployment would exceed strategy.maximumRepPerPoolAttoRep')
+	if (parameters.currentPoolAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumPoolAttoRep) {
+		throw new Error('REP deployment would exceed strategy.maximumAttoRepPerPool')
 	}
-	if (parameters.currentTotalRepAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumTotalRepAttoRep) {
-		throw new Error('REP deployment would exceed strategy.maximumTotalDeployedRepAttoRep')
+	if (parameters.currentTotalAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumTotalAttoRep) {
+		throw new Error('REP deployment would exceed strategy.maximumTotalDeployedRep')
 	}
 }
 
 export function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmountAttoRep: bigint, acquiredAmountAttoRep = 0n) {
-	const poolReservedRepAttoRep = reservedLiquidationRep(pool, settings)
-	const totalDeployedRepAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultRepBackingAttoRep + reservedLiquidationRep(observedPool, settings), 0n)
+	const poolReservedAttoRep = reservedLiquidationRep(pool, settings)
+	const totalDeployedAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultAttoRepBacking + reservedLiquidationRep(observedPool, settings), 0n)
 	assertRepLimits({
 		acquiredAmountAttoRep,
-		currentPoolRepAttoRep: pool.botVault.vaultRepBackingAttoRep + poolReservedRepAttoRep,
-		currentTotalRepAttoRep: totalDeployedRepAttoRep,
+		currentPoolAttoRep: pool.botVault.vaultAttoRepBacking + poolReservedAttoRep,
+		currentTotalAttoRep: totalDeployedAttoRep,
 		depositAmountAttoRep,
-		maximumPoolRepAttoRep: settings.strategy.maximumRepPerPoolAttoRep,
-		maximumTotalRepAttoRep: settings.strategy.maximumTotalDeployedRepAttoRep,
+		maximumPoolAttoRep: settings.strategy.maximumAttoRepPerPool,
+		maximumTotalAttoRep: settings.strategy.maximumTotalDeployedRep,
 	})
 }
 
@@ -288,10 +288,10 @@ function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSetting
 	const bufferedPrice = (referencePrice * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 	return pool.stagedOperations.reduce((total, operation) => {
 		if (operation.operation !== 0n || operation.initiatorVault.toLowerCase() !== pool.botVault.address.toLowerCase()) return total
-		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldRepAttoRep) / operation.snapshotTotalRepBackingUnits
-		const estimatedRepAttoRep = (operation.operationAmountAttoRepOrAttoEth * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
-		if (operation.isPendingSettlement || operation.operationAmountAttoRepOrAttoEth === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedRepAttoRep > snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
-		return total + (estimatedRepAttoRep < snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
+		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldAttoRep) / operation.snapshotTotalRepBackingUnits
+		const estimatedAttoRep = (operation.operationAmountAttoRepOrAttoEth * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
+		if (operation.isPendingSettlement || operation.operationAmountAttoRepOrAttoEth === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedAttoRep > snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
+		return total + (estimatedAttoRep < snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
 	}, 0n)
 }
 
@@ -307,7 +307,7 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (walletBalance < amountAttoRep + settings.strategy.walletRepReserveAttoRep) {
+	if (walletBalance < amountAttoRep + settings.strategy.walletAttoRepReserve) {
 		throw new Error('Wallet REP reserve would be breached by the required pool deposit')
 	}
 	await ensureAllowance(wallet, settings, state, pool.repToken, pool.address, amountAttoRep, 'deposit', priceStillAllowed)
@@ -330,12 +330,12 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 	)
 }
 
-export function conservativeStaleTopUp(parameters: { callerCoverageCommitmentAttoEth: bigint; callerRepAttoRep: bigint; coverageCommitmentToTransferAttoEth: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {
+export function conservativeStaleTopUp(parameters: { callerCoverageCommitmentAttoEth: bigint; callerAttoRep: bigint; coverageCommitmentToTransferAttoEth: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {
 	const referencePrice = parameters.referencePrice > 0n ? parameters.referencePrice : parameters.fallbackPrice
 	if (referencePrice === 0n) throw new Error('Stale unseeded oracle requires strategy.fallbackRepPerEthPrice')
 	const bufferedPrice = (referencePrice * parameters.safetyBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
-	const requiredRepAttoRep = requiredRepForCoverageCommitment(parameters.callerCoverageCommitmentAttoEth + parameters.coverageCommitmentToTransferAttoEth, parameters.multiplierBps, bufferedPrice, parameters.targetHealthBps)
-	const conservativeTopUp = requiredRepAttoRep > parameters.callerRepAttoRep ? requiredRepAttoRep - parameters.callerRepAttoRep : 0n
+	const requiredAttoRep = requiredRepForCoverageCommitment(parameters.callerCoverageCommitmentAttoEth + parameters.coverageCommitmentToTransferAttoEth, parameters.multiplierBps, bufferedPrice, parameters.targetHealthBps)
+	const conservativeTopUp = requiredAttoRep > parameters.callerAttoRep ? requiredAttoRep - parameters.callerAttoRep : 0n
 	return conservativeTopUp > parameters.minimumTopUp ? conservativeTopUp : parameters.minimumTopUp
 }
 
@@ -345,7 +345,7 @@ export function assertStaleLiquidationExposureBound(candidate: Pick<LiquidationC
 	}
 }
 
-async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, reservedTopUpRepAttoRep: bigint, priceStillAllowed: () => boolean | Promise<boolean>) {
+async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, reservedTopUpAttoRep: bigint, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (pool.requestPriceCostAttoEth > settings.strategy.maximumOracleRequestCostAttoEth) {
 		throw new Error('Oracle request cost exceeds strategy.maximumOracleRequestCostAttoEth')
 	}
@@ -353,24 +353,24 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 	if (proposedPrice === 0n) {
 		throw new Error('Stale unseeded oracle requires strategy.fallbackRepPerEthPrice')
 	}
-	const initialWethAttoEth = pool.minimumToken1ReportAttoEth + pool.minimumToken1ReportAttoEth / 50n + 1n
-	const initialRepAttoRep = (initialWethAttoEth * proposedPrice + 10n ** 18n - 1n) / 10n ** 18n
-	const currentRepAttoRep = await wallet.readContract({
+	const initialAttoWeth = pool.minimumToken1ReportAttoEth + pool.minimumToken1ReportAttoEth / 50n + 1n
+	const initialAttoRep = (initialAttoWeth * proposedPrice + 10n ** 18n - 1n) / 10n ** 18n
+	const currentAttoRep = await wallet.readContract({
 		abi: erc20Abi,
 		address: pool.repToken,
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (currentRepAttoRep < initialRepAttoRep + reservedTopUpRepAttoRep + settings.strategy.walletRepReserveAttoRep) {
+	if (currentAttoRep < initialAttoRep + reservedTopUpAttoRep + settings.strategy.walletAttoRepReserve) {
 		throw new Error('Oracle initial report would breach the wallet REP reserve')
 	}
-	const currentWethAttoEth = await wallet.readContract({
+	const currentAttoWeth = await wallet.readContract({
 		abi: erc20Abi,
 		address: settings.deployment.weth,
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (currentWethAttoEth < initialWethAttoEth) {
+	if (currentAttoWeth < initialAttoWeth) {
 		await submitCall(
 			wallet,
 			settings,
@@ -381,19 +381,19 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 				label: 'Wrap ETH for oracle initial report',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 				to: settings.deployment.weth,
-				value: initialWethAttoEth - currentWethAttoEth,
+				value: initialAttoWeth - currentAttoWeth,
 			},
 			'liquidation',
 		)
 	}
-	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialRepAttoRep, 'liquidation', priceStillAllowed)
+	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialAttoRep, 'liquidation', priceStillAllowed)
 	const wethAllowanceAttoEth = await wallet.readContract({
 		abi: erc20Abi,
 		address: settings.deployment.weth,
 		args: [wallet.account.address, pool.manager],
 		functionName: 'allowance',
 	})
-	if (wethAllowanceAttoEth < initialWethAttoEth) {
+	if (wethAllowanceAttoEth < initialAttoWeth) {
 		await submitCall(
 			wallet,
 			settings,
@@ -401,7 +401,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			{
 				data: encodeFunctionData({
 					abi: erc20Abi,
-					args: [pool.manager, initialWethAttoEth],
+					args: [pool.manager, initialAttoWeth],
 					functionName: 'approve',
 				}),
 				gas: 80_000n,
@@ -412,16 +412,16 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			'liquidation',
 		)
 	}
-	return { initialWethAttoEth, proposedPrice }
+	return { initialAttoWeth, proposedPrice }
 }
 
 export async function executeLiquidation(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, candidate: LiquidationCandidate, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!pool.isPriceValid) assertStaleLiquidationExposureBound(candidate)
-	const topUpRepAttoRep = pool.isPriceValid
+	const topUpAttoRep = pool.isPriceValid
 		? candidate.topUpAttoRep
 		: conservativeStaleTopUp({
 				callerCoverageCommitmentAttoEth: pool.botVault.coverageCommitmentAttoEth,
-				callerRepAttoRep: pool.botVault.vaultRepBackingAttoRep,
+				callerAttoRep: pool.botVault.vaultAttoRepBacking,
 				coverageCommitmentToTransferAttoEth: candidate.coverageCommitmentToTransferAttoEth,
 				fallbackPrice: settings.strategy.fallbackRepPerEthPrice,
 				minimumTopUp: candidate.topUpAttoRep,
@@ -432,13 +432,13 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 			})
 	const acquisitionPrice = pool.isPriceValid ? candidate.pool.price : (candidate.pool.price * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 	const acquiredRepCeiling = conservativeLiquidationRep(candidate, acquisitionPrice)
-	assertRepExposureLimits(settings, state, pool, topUpRepAttoRep, acquiredRepCeiling)
-	await depositRepToVault(wallet, settings, state, pool, topUpRepAttoRep, priceStillAllowed)
+	assertRepExposureLimits(settings, state, pool, topUpAttoRep, acquiredRepCeiling)
+	await depositRepToVault(wallet, settings, state, pool, topUpAttoRep, priceStillAllowed)
 	const usesExistingPendingReport = !pool.isPriceValid && pool.pendingReportId > 0n
 	if (usesExistingPendingReport && pool.pendingReportSponsor.toLowerCase() !== wallet.account.address.toLowerCase()) {
 		throw new Error('A different sponsor owns the pool pending price report')
 	}
-	const oracleFunding = pool.isPriceValid || usesExistingPendingReport ? { initialWethAttoEth: 0n, proposedPrice: 0n } : await fundStaleOracle(wallet, settings, state, pool, 0n, priceStillAllowed)
+	const oracleFunding = pool.isPriceValid || usesExistingPendingReport ? { initialAttoWeth: 0n, proposedPrice: 0n } : await fundStaleOracle(wallet, settings, state, pool, 0n, priceStillAllowed)
 	await submitCall(
 		wallet,
 		settings,
@@ -446,7 +446,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		{
 			data: encodeFunctionData({
 				abi: coordinatorAbi,
-				args: [0, candidate.target.address, candidate.coverageCommitmentToTransferAttoEth, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialWethAttoEth],
+				args: [0, candidate.target.address, candidate.coverageCommitmentToTransferAttoEth, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialAttoWeth],
 				functionName: 'requestPriceIfNeededAndStageOperation',
 			}),
 			gas: pool.isPriceValid ? 1_000_000n : 2_000_000n,
@@ -469,10 +469,10 @@ export function planVaultMaintenance(
 	priceDependentMaintenanceAllowed: boolean,
 ): VaultMaintenancePlan {
 	if (priceDependentMaintenanceAllowed && pool.lastPrice > 0n) {
-		const health = vaultHealthBps(pool.botVault.vaultRepBackingAttoRep, pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice)
+		const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice)
 		if (pool.botVault.coverageCommitmentAttoEth > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
-			const targetRepAttoRep = requiredRepForCoverageCommitment(pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps)
-			return { amountAttoRep: targetRepAttoRep > pool.botVault.vaultRepBackingAttoRep ? targetRepAttoRep - pool.botVault.vaultRepBackingAttoRep : 0n, kind: 'deposit' }
+			const targetAttoRep = requiredRepForCoverageCommitment(pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps)
+			return { amountAttoRep: targetAttoRep > pool.botVault.vaultAttoRepBacking ? targetAttoRep - pool.botVault.vaultAttoRepBacking : 0n, kind: 'deposit' }
 		}
 		if (strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === walletAddress.toLowerCase()) {
 			const surplusAttoRep = surplusRepForWithdrawal(pool.botVault, { multiplierBps: pool.multiplierBps, price: pool.lastPrice }, strategy)
@@ -543,6 +543,6 @@ export function dryRunCandidate(state: RuntimeState, candidate: LiquidationCandi
 }
 
 export function isVaultHealthyEnoughForExecution(pool: PoolObservation) {
-	const health = vaultHealthBps(pool.botVault.vaultRepBackingAttoRep, pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice)
+	const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice)
 	return health === undefined || health >= BPS_DENOMINATOR
 }
