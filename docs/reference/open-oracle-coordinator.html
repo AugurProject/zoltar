@@ -14,7 +14,8 @@
 				<p>Normative state, event, and parameter boundaries for <code>OpenOraclePriceCoordinator</code>. Cache freshness, report lifecycle, and staged-operation queue are orthogonal observable dimensions; current deployment values remain release-specific.</p>
 			</header>
 			<section id="states">
-				<h2>Coordinator state dimensions</h2>
+				<h2>Durable coordinator predicates and outcomes</h2>
+				<p>Report processing outcomes are events, not durable report states. Cache freshness, pending-report presence, and active-operation count are independent observations; a callback or recovery call can change more than one dimension in the same transaction.</p>
 				<table>
 					<thead>
 						<tr>
@@ -30,39 +31,29 @@
 							<td>Immediate operation execution is eligible.</td>
 						</tr>
 						<tr>
-							<td>Stale without report</td>
+							<td>Stale cache with no pending report</td>
 							<td>Pending report ID, request cost, active operation ID</td>
 							<td><code>PriceRequested</code> starts a report.</td>
 						</tr>
 						<tr>
 							<td>Pending report</td>
-							<td>Pending report ID and pending operation slot</td>
-							<td>Additional operations may join the pending callback batch when sponsored by the pending reporter.</td>
+							<td><code>pendingReportId != 0</code></td>
+							<td>Only <code>pendingReportSponsor</code> may queue additional operations until callback or recovery clears the pending fields.</td>
 						</tr>
 						<tr>
-							<td>Settled callback</td>
-							<td>OpenOracle report state and coordinator pending IDs</td>
-							<td>Execute, recover, or replace according to callback result.</td>
-						</tr>
-						<tr>
-							<td>Rejected report</td>
-							<td><code>PriceReportRejected</code>, no pending report, active operations may remain</td>
-							<td>Request a replacement price or execute an eligible active operation.</td>
-						</tr>
-						<tr>
-							<td>Recovery candidate</td>
+							<td>Recovery eligibility</td>
 							<td>Nonzero pending report whose OpenOracle settlement timestamp is nonzero</td>
-							<td><code>recoverSettledPendingReport()</code> withdraws coordinator balances and consumes the pending slot once.</td>
+							<td>Precondition for one successful <code>recoverSettledPendingReport()</code> call; it is not a state produced by that call.</td>
 						</tr>
 						<tr>
-							<td>Active staged operations</td>
+							<td>One or more active staged operations</td>
 							<td><code>getActiveStagedOperationCount()</code> and paged active IDs</td>
-							<td>Execute each eligible operation while its fresh-price and expiry guards pass.</td>
+							<td>Each execution consumes one operation; a callback consumes only its bounded batch, so the count may remain positive.</td>
 						</tr>
 						<tr>
-							<td>Empty operation queue</td>
+							<td>Zero active staged operations</td>
 							<td>Active count and pending settlement count are zero</td>
-							<td>New staging starts a fresh pending-report or immediate-execution path.</td>
+							<td>New staging may execute immediately with a fresh cache or create/join a pending report when the cache is stale.</td>
 						</tr>
 					</tbody>
 				</table>

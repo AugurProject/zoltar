@@ -1,24 +1,44 @@
 {
-	"schemaVersion": 2,
+	"schemaVersion": 3,
 	"scope": "complete-coordinator-state-and-public-ABI-index",
 	"source": "solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol",
-	"dimensions": {
+	"observablePredicates": {
 		"cache": ["fresh-cache", "stale-cache"],
-		"report": ["no-report", "pending-report", "settled-callback", "rejected-report", "recovery-candidate"],
-		"operations": ["empty-operation-queue", "active-staged-operations"]
+		"report": ["no-pending-report", "pending-report"],
+		"operations": ["zero-active-operations", "one-or-more-active-operations"],
+		"recoveryEligibility": "pendingReportId != 0 && OpenOracle storedGame(pendingReportId).settlementTimestamp != 0"
 	},
-	"transitions": [
-		{ "dimension": "cache", "from": "fresh-cache", "trigger": "requestPriceIfNeededAndStageOperation", "to": "fresh-cache" },
-		{ "dimension": "report", "from": "no-report", "trigger": "requestPriceIfNeededAndStageOperation", "to": "pending-report" },
-		{ "dimension": "report", "from": "no-report", "trigger": "requestPrice", "to": "pending-report" },
-		{ "dimension": "report", "from": "pending-report", "trigger": "openOracleCallback:accepted", "to": "settled-callback" },
-		{ "dimension": "report", "from": "pending-report", "trigger": "openOracleCallback:rejected", "to": "rejected-report" },
-		{ "dimension": "report", "from": "pending-report", "trigger": "recoverSettledPendingReport", "to": "recovery-candidate" },
-		{ "dimension": "report", "from": "rejected-report", "trigger": "requestPrice", "to": "pending-report" },
-		{ "dimension": "report", "from": "recovery-candidate", "trigger": "recoverSettledPendingReport", "to": "no-report" },
-		{ "dimension": "operations", "from": "empty-operation-queue", "trigger": "requestPriceIfNeededAndStageOperation", "to": "active-staged-operations" },
-		{ "dimension": "operations", "from": "active-staged-operations", "trigger": "executeStagedOperation", "to": "empty-operation-queue" },
-		{ "dimension": "operations", "from": "active-staged-operations", "trigger": "openOracleCallback:accepted", "to": "active-staged-operations" }
+	"outcomes": [
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["fresh-cache"],
+			"outcomes": ["StagedOperationQueued", "ExecutedStagedOperation", "no pending report is created", "the staged operation is consumed; active count returns to its prior value"]
+		},
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["stale-cache", "no-pending-report", "caller supplies request bounty"],
+			"outcomes": ["StagedOperationQueued", "PriceRequested", "pending report exists", "operation is in the pending callback batch"]
+		},
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["stale-cache", "pending-report", "msg.sender == pendingReportSponsor"],
+			"outcomes": ["StagedOperationQueued", "operation joins the pending settlement list or remains active according to the bounded batch rules", "pending report remains pending"]
+		},
+		{
+			"trigger": "openOracleCallback",
+			"preconditions": ["pending-report"],
+			"outcomes": ["pending report fields are cleared before report validation", "PriceReported or PriceReportRejected", "accepted callback updates the cache and executes only the bounded pending batch", "rejected callback leaves active operations for later execution or replacement"]
+		},
+		{
+			"trigger": "recoverSettledPendingReport",
+			"preconditions": ["recoveryEligibility"],
+			"outcomes": ["PendingReportRecovered", "PendingOperationRecoveryConsumed when a pending slot exists", "pending report fields are cleared", "the single call consumes the pending operation; there is no intermediate recovery state"]
+		},
+		{
+			"trigger": "executeStagedOperation",
+			"preconditions": ["fresh-cache", "operation exists"],
+			"outcomes": ["ExecutedStagedOperation", "exactly one operation is consumed", "active count becomes prior count minus one"]
+		}
 	],
 	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "PendingOperationRecoveryConsumed", "StagedOperationQueued", "StagedOperationDisputeStakedRepSnapshotted", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
 	"checkpointReasons": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" },
