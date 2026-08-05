@@ -285,7 +285,7 @@ assert.deepEqual(
 )
 
 const duplicateBlocks: DuplicateBlockMap = new Map()
-const generatedDocumentationFiles = new Set(['docs/assets/js/chartRuntime.js', 'docs/assets/js/docsData.js', 'docs/reference/contracts.html'])
+const generatedDocumentationFiles = new Set(['docs/assets/js/chartRuntime.js', 'docs/assets/js/docsData.js', 'docs/assets/js/docsSearchData.js', 'docs/reference/contracts.html'])
 
 const docsGlob = new Bun.Glob('docs/**/*.{html,js}')
 const paths = ['README.md']
@@ -361,7 +361,7 @@ const architectureSectionMatch = whitepaper.match(/<section\s+class="paper-secti
 assert.notEqual(architectureSectionMatch, null, 'Statoblast whitepaper must contain its Architecture section')
 const architectureSection = architectureSectionMatch?.[0] ?? ''
 const zoltarWhitepaper = (await Bun.file('docs/explanation/zoltar.html').text()).replaceAll(/\s+/g, ' ')
-const openOracleIntegration = (await Bun.file('docs/explanation/open-oracle.html').text()).replaceAll(/\s+/g, ' ')
+const openOracleIntegration = (await Bun.file('docs/explanation/open-oracle-appendix.html').text()).replaceAll(/\s+/g, ' ')
 const liquidationDesign = (await Bun.file('docs/explanation/liquidations.html').text()).replaceAll(/\s+/g, ' ')
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
 const operatorReference = htmlToDocumentationText(await Bun.file('docs/reference/operator-guardrails.html').text())
@@ -447,16 +447,16 @@ assert.match(liquidationDesign, /associatedAttoRep \* pricePrecision \* BPS_DENO
 assert.match(liquidationDesign, /coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice/)
 assert.doesNotMatch(whitepaper, /id="eq-statoblast-(?:coverage-commitment-backing|liquidation-condition|migration-security)"/)
 assert.match(whitepaper, /<h2>11\. Parameter Sources<\/h2>/)
-assert.match(whitepaper, /open-oracle\.html#parameters/)
+assert.match(whitepaper, /open-oracle-coordinator\.html#parameters/)
 assert.match(whitepaper, /truth-auctions\.html#lifecycle/)
 assert.match(whitepaper, /liquidations\.html#punitive-liquidation/)
 assert.doesNotMatch(whitepaper, /PRICE_VALID_FOR_SECONDS = 5 minutes/)
 assert.doesNotMatch(whitepaper, /<code>480 seconds \(8 minutes\)<\/code>/)
 assert.doesNotMatch(whitepaper, /id="auction-clearing-example"|id="underfunded-auction-example"/)
-assert.match(operatorReference, /open-oracle\.html#parameters/)
+assert.match(operatorReference, /open-oracle-coordinator\.html#parameters/)
 assert.match(operatorReference, /truth-auctions\.html#clearing/)
-assert.match(operatorReference, /open-oracle\.html#intentional-economic-tradeoffs/)
-assert.match(operatorReference, /open-oracle\.html#attack-model/)
+assert.match(operatorReference, /open-oracle-appendix\.html#intentional-economic-tradeoffs/)
+assert.match(operatorReference, /open-oracle-appendix\.html#attack-model/)
 assert.doesNotMatch(operatorReference, /qualification threshold is `ceil|rounded cumulative allocations|cap-implied qualification threshold|multiplier `115`|one through six attoETH/)
 assert.match(whitepaper, /Every selected continuation receives the complete parent game snapshot\.[\s\S]{0,420}complete game REP[\s\S]{0,160}post-haircut game REP/)
 assert.match(operatorReference, /Canonical continuation snapshot\tFork initialization stores the complete parent `Invalid`\/`Yes`\/`No` balances, carry totals, peaks, leaf counts, and nullifier roots once\./)

@@ -11,6 +11,7 @@
 		<main>
 			<header>
 				<h1>Truth Auction</h1>
+				<p><strong>Mental model:</strong> child collateral is already repaired, reaches a cap-bound auction result, or reaches an underfunded auction result; compare accepted ETH with the repair cap separately from the clearing flag.</p>
 				<p>When Zoltar forks, Statoblast evaluates each resulting child universe after migration. If a child pool lacks the ETH needed to fully collateralize its open interest, Statoblast initiates a truth auction for that pool. The fork may have been triggered either by a direct Zoltar fork or by the Statoblast Escalation Game.</p>
 
 				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, migrated REP backing units and coverage commitments, and converted child-universe REP backing that actually move into it.</p>
@@ -394,6 +395,15 @@
 						<div><span>Refunds</span><output data-example-output="refunds">1.00 ETH</output></div>
 					</div>
 				</details>
+			</section>
+			<section id="three-auction-outcomes">
+				<h2>Three outcomes to keep separate</h2>
+				<ul>
+					<li>No auction is required when migrated REP already repairs the child pool.</li>
+					<li>A <code>funded</code> auction means a clearing cap bound, not necessarily full ETH repair: compare accepted ETH with the repair cap. An escalation-allocation haircut can still apply when purchased REP is allocated to positive dispute-staked REP.</li>
+					<li>An underfunded auction clears qualifying demand at or above the reserve threshold and refunds lower bids; it records the ETH shortfall, may apply the conditional escalation-allocation haircut, and cannot create missing ETH or duplicate REP.</li>
+				</ul>
+				<p>The explanation establishes the economic guarantees; the <a href="../how-to/run-truth-auction.html">auction how-to</a> contains exact operator calls, bidder submission, settlement, and refunds.</p>
 			</section>
 		</main>
 		<script src="../assets/js/protocolTerms.js"></script>

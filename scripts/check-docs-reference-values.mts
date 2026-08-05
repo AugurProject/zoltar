@@ -10,7 +10,7 @@ const auctionDesign = normalizeHtmlSource(await readFile('docs/explanation/truth
 const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-game.html', 'utf8'))
 const invariantsHtml = normalizeHtmlSource(await readFile('docs/reference/invariants.html', 'utf8'))
 const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liquidations.html', 'utf8'))
-const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanation/open-oracle.html', 'utf8'))
+const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanation/open-oracle-appendix.html', 'utf8'))
 const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/explanation/zoltar.html', 'utf8'))
 const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanation/statoblast.html', 'utf8'))
 const contractArchitecture = normalizeHtmlSource(await readFile('docs/explanation/contract-architecture.html', 'utf8'))
@@ -20,9 +20,21 @@ const chartRuntime = await readFile('docs/assets/js/chartRuntime.js', 'utf8')
 const ambiguousVaultActorAlias = new RegExp(String.raw`\b(?:REP ${'vaults'}|vault ${'users'})\b`, 'i')
 const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
 const forkMigrationGuide = normalizeHtmlSource(await readFile('docs/how-to/migrate-fork.html', 'utf8'))
+const forkMigrationTutorial = normalizeHtmlSource(await readFile('docs/tutorials/fork-migration.html', 'utf8'))
+const oracleTutorial = normalizeHtmlSource(await readFile('docs/tutorials/oracle-operation.html', 'utf8'))
+const disputedTutorial = normalizeHtmlSource(await readFile('docs/tutorials/disputed-market.html', 'utf8'))
+const openOracleSchema = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
+const openOracleCoordinatorReference = await readFile('docs/reference/open-oracle-coordinator.html', 'utf8')
+const contractArtifacts = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8')) as {
+	contracts: Record<string, Record<string, { abi: Array<{ type?: string; name?: string; stateMutability?: string; inputs?: Array<{ type: string; indexed?: boolean }>; outputs?: Array<{ type: string }> }> }>>
+}
+const coordinatorAbi = contractArtifacts.contracts['contracts/peripherals/OpenOraclePriceCoordinator.sol']?.['OpenOraclePriceCoordinator']?.abi ?? []
 const liquidationGuide = normalizeHtmlSource(await readFile('docs/how-to/liquidate-vault.html', 'utf8'))
 const oracleRecoveryGuide = normalizeHtmlSource(await readFile('docs/how-to/recover-oracle-operation.html', 'utf8'))
 const escalationGuide = normalizeHtmlSource(await readFile('docs/how-to/resolve-escalation.html', 'utf8'))
+const operateSecurityPoolGuide = normalizeHtmlSource(await readFile('docs/how-to/operate-security-pool.html', 'utf8'))
+const indexerGuide = normalizeHtmlSource(await readFile('docs/how-to/build-event-indexer.html', 'utf8'))
+const prepareReleaseGuide = await readFile('docs/how-to/prepare-release.html', 'utf8')
 const truthAuctionGuide = normalizeHtmlSource(await readFile('docs/how-to/run-truth-auction.html', 'utf8'))
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 const securityModel = await readFile('docs/reference/security-model.html', 'utf8')
@@ -455,8 +467,8 @@ function assertEventStreamSemantics(): void {
 	assert.match(whitepaperStatoblast, /cumulative migrated backing units equal the parent total[\s\S]*final migration routes the exact remaining REP delta into the selected child/)
 	assert.match(normalizedDiagramSpecs, /cumulative migrated backing units reach the parent total[\s\S]*remaining REP delta into the selected child[\s\S]*Parent-wide cumulative REP sets the collateral ceiling[\s\S]*selected child receives only its new per-call delta/)
 	assert.doesNotMatch(`${auctionDesign}\n${whitepaperStatoblast}\n${openOracleIntegration}\n${forkAuctionCopy}`, /free[^\n]{0,24}REP|live child owner|child-pool owners/i)
-	assert.match(openOracleIntegration, /snapshotTargetVaultRepBackingAttoRep \+ snapshotDisputeStakedAttoRep/)
-	assert.match(openOracleIntegration, /<mi>snapshotTargetVaultRepBackingAttoRep<\/mi>[\s\S]*<mi>snapshotDisputeStakedAttoRep<\/mi>/)
+	assert.match(liquidationHtml, /snapshotTargetVaultRepBackingAttoRep \+ snapshotDisputeStakedAttoRep/)
+	assert.match(liquidationHtml, /<mi>snapshotTargetVaultRepBackingAttoRep<\/mi>[\s\S]*<mi>snapshotDisputeStakedAttoRep<\/mi>/)
 	assert.match(whitepaperStatoblast, /migrationRepDenominatorAtForkAttoRep[\s\S]*parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep/)
 	assert.match(whitepaperStatoblast, /<mi>migrationRepDenominatorAtForkAttoRep<\/mi>[\s\S]*<mi>parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep<\/mi>/)
 	assert.match(zoltarWhitepaper, /uncreditedForkHaircutAttoRep[\s\S]*forkInitiatorMigrationBalanceAttoRep/)
@@ -523,7 +535,7 @@ function assertCoordinatorRecoveryBranch(): void {
 	]) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
-	assert.match(whitepaperStatoblast, /open-oracle\.html#statoblast-integration/, 'whitepaper should route recovery details to the OpenOracle integration')
+	assert.match(whitepaperStatoblast, /open-oracle-appendix\.html#statoblast-integration/, 'whitepaper should route detailed OpenOracle recovery material to the appendix')
 }
 
 function assertCoordinatorSettlementEconomics(): void {
@@ -675,7 +687,8 @@ function assertLifecycleReferences(): void {
 function assertOperationalGuideSemantics(): void {
 	assert.match(forkMigrationGuide, /fork activation automatically materialized the parent's deterministic pool migration proxy[\s\S]*Create a missing Statoblast child pool[\s\S]*pool-local eight-week migration window/)
 	assert.doesNotMatch(forkMigrationGuide, /Create a missing Statoblast child pool or pool migration proxy/)
-	assert.match(forkMigrationGuide, /Zoltar child universe or split raw Zoltar migration REP[\s\S]*No Statoblast eight-week pool deadline/)
+	assert.match(forkMigrationGuide, /Raw Zoltar REP held by a user[\s\S]*addRepToMigrationBalance[\s\S]*splitMigrationRep/)
+	assert.match(forkMigrationGuide, /migrateRepToZoltar\(pool, outcomeIndices\)[\s\S]*deadline-bound to the pool-local migration window/)
 	assert.match(invariantsHtml, /FORK-05[\s\S]*pool-local boundary does not limit <code>Zoltar\.deployChild<\/code>, <code>addRepToMigrationBalance<\/code>, or <code>splitMigrationRep<\/code>/)
 	assert.match(securityPoolForkerVaultMigrationBase, /forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	for (const zoltarOperation of ['deployChild', 'addRepToMigrationBalance', 'splitMigrationRep']) {
@@ -695,11 +708,47 @@ function assertOperationalGuideSemantics(): void {
 	assert.match(auctionDesign, /If all required REP migrated or no repair ETH is required[\s\S]*activates the child immediately without <code>AuctionStarted<\/code>[\s\S]*Otherwise[\s\S]*<code>AuctionStarted<\/code>[\s\S]*one-week bidding window/)
 	assert.doesNotMatch(auctionDesign, /forker then starts the underlying auction/)
 	assert.equal(auctionDesign.match(/forkResumedAt \+ 3 days/g)?.length ?? 0, 1, 'truth-auction explanation must state the canonical post-resume deadline once')
+	assert.match(liquidationGuide, /requestPriceIfNeededAndStageOperation\(Liquidation[\s\S]*ExecutedStagedOperation/)
+	assert.match(liquidationGuide, /target backing units or target coverage commitment changes[\s\S]*does not use those totals as stale guards/)
+	assert.match(operateSecurityPoolGuide, /requestPriceIfNeededAndStageOperation\(SetCoverageCommitment/)
+	assert.match(operateSecurityPoolGuide, /RepDepositedToVault[\s\S]*RepRedeemedFromVault/)
+	assert.match(escalationGuide, /depositToEscalationGame\(outcome, maximumDepositAttoRep\)[\s\S]*withdrawFromEscalationGame\(outcome, depositIndexes\)[\s\S]*forkZoltarWithOwnEscalationGame/)
+	assert.doesNotMatch(escalationGuide, /insufficient approval/i)
+	assert.match(indexerGuide, /transaction_hash[\s\S]*primary key \(chain_id, block_hash, transaction_hash, log_index\)/)
+	assert.match(indexerGuide, /Handle <code>removed<\/code> logs before deduplication[\s\S]*versioned state snapshot/)
+	assert.match(forkMigrationGuide, /shareToken\.migrate\(fromId, targetOutcomeIndexes\)[\s\S]*existing child/)
+	assert.match(forkMigrationGuide, /REP already locked in the security-pool migration proxy:[\s\S]*migrateRepToZoltar\(pool, outcomeIndices\)/)
+	assert.match(forkMigrationTutorial, /advances beyond the pool-local migration window[\s\S]*does not provide a resettable vault-migration write[\s\S]*migration how-to/)
+	assert.match(oracleRecoveryGuide, /Fresh price[\s\S]*First stale operation[\s\S]*Report already pending[\s\S]*Rejected report/)
+	assert.match(oracleTutorial, /StagedOperationQueued[\s\S]*StagedOperationDisputeStakedRepSnapshotted[\s\S]*PriceRequested/)
+	assert.match(disputedTutorial, /withdrawForkedEscalationDeposits\(outcome, proofs\)[\s\S]*withdrawFromEscalationGame\(outcome, depositIndexes\)/)
+	assert.match(openOracleSchema, /"schemaVersion": 1[\s\S]*OpenOraclePriceCoordinator\.sol[\s\S]*"stale-no-report"[\s\S]*"SecurityPoolSet"[\s\S]*"CoordinatorStateCheckpoint"[\s\S]*"checkpointReasons"[\s\S]*"openOracleCallback"/)
+	assert.doesNotMatch(readme, /open-oracle\.html#/, 'README must not retain fragments moved to the OpenOracle appendix')
+	assert.match(readme, /open-oracle-appendix\.html#/, 'README must route detailed OpenOracle fragments to the appendix')
+	const coordinatorSchema = JSON.parse(openOracleSchema) as {
+		states?: string[]
+		transitions?: Array<{ from?: string; trigger?: string; to?: string }>
+		functions?: Record<string, string>
+		eventSignatures?: Record<string, string>
+	}
+	assert.deepEqual(coordinatorSchema.states, ['fresh-cache', 'stale-no-report', 'pending-report', 'settled-callback', 'rejected-report', 'recovery-candidate', 'active-staged-operations', 'empty-operation-queue'])
+	assert.ok(coordinatorSchema.transitions?.every(transition => Boolean(transition.from && transition.trigger && transition.to)))
+	assert.equal(coordinatorSchema.functions?.['storedGame'], undefined)
+	for (const functionName of ['MAX_PENDING_SETTLEMENT_OPERATIONS', 'executeStagedOperation', 'getActiveStagedOperations', 'openOracleCallback', 'requestPrice', 'requestPriceIfNeededAndStageOperation', 'stagedOperations', 'weth']) {
+		assert.ok(coordinatorSchema.functions?.[functionName], `coordinator schema is missing ${functionName}`)
+	}
+	const abiFunctions = Object.fromEntries(coordinatorAbi.filter(item => item.type === 'function' && item.name !== undefined && item.stateMutability !== undefined).map(item => [item.name as string, item.stateMutability as string] as const))
+	assert.deepEqual(coordinatorSchema.functions, abiFunctions, 'coordinator function inventory must match the compiled ABI')
+	const abiEvents = coordinatorAbi
+		.filter(item => item.type === 'event' && item.name !== undefined)
+		.map(item => item.name as string)
+		.toSorted()
+	assert.deepEqual(Object.keys(coordinatorSchema.eventSignatures ?? {}).toSorted(), abiEvents, 'coordinator event inventory must match the compiled ABI')
+	assert.match(priceCoordinator, /event PriceRequested\([\s\S]*event StagedOperationQueued\([\s\S]*event StagedOperationDisputeStakedRepSnapshotted\(/)
+	assert.match(openOracleCoordinatorReference, /PRICE_VALID_FOR_SECONDS = 5 minutes[\s\S]*MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes[\s\S]*OPEN_INTEREST_DIVIDER = 100/)
+	assert.match(prepareReleaseGuide, /bun run ui:build:prod:current\s+git diff --check/)
 
-	assert.match(
-		escalationGuide,
-		/configured <code>SecurityPoolForker<\/code> applies a haircut only when purchased REP removes a positive escalation allocation[\s\S]*Incomplete aggregate backing reverts the entire finalization[\s\S]*retry finalization[\s\S]*already operational but still has its awaiting-continuation flag/,
-	)
+	assert.match(escalationGuide, /configured <code>SecurityPoolForker<\/code> applies a haircut only when purchased REP removes a positive escalation allocation[\s\S]*Incomplete aggregate backing reverts finalization[\s\S]*retry[\s\S]*child is operational and still awaiting continuation/)
 	assert.match(escalationGameDepositDelegate, /function applyTruthAuctionHaircut\([\s\S]*require\(msg\.sender == IEscalationGameSecurityPoolContext\(poolAddress\)\.securityPoolForker\(\), 'Only forker'\)/)
 	assert.match(securityPoolForker, /if \(disputeStakedRepBeforeAttoRep == 0 \|\| repPurchasedAttoRep == 0\) return 0;[\s\S]*if \(disputeStakedRepSoldAttoRep == 0\) return 0;[\s\S]*applyTruthAuctionHaircut/)
 	assert.match(securityPoolForker, /_applyEscalationTruthAuctionHaircut\([\s\S]*_finalizeEscalationStateAfterAuction\(/)
@@ -1077,7 +1126,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*caller must accept any positive unused-ETH refund[\s\S]*rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report/)
 	assert.match(contractInteractionReference, /requestPrice\(proposedRepPerEthPrice, requestedInitialAttoWeth\)[\s\S]*caller must accept any positive excess-ETH refund[\s\S]*Callback rejection rolls back the report and initial position/)
 	assert.match(openOracleIntegration, /id="refund-callback"[\s\S]*Both public request paths refund only a positive unused or excess ETH\s+amount[\s\S]*If it rejects the refund, the entire transaction\s+reverts/)
-	assert.match(operatorReference, /Immediate execution[\s\S]*canonical refund warning[\s\S]*open-oracle\.html#refund-callback/)
+	assert.match(operatorReference, /Immediate execution[\s\S]*canonical refund warning[\s\S]*open-oracle-appendix\.html#refund-callback/)
 	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)/)
 	assert.match(contractInteractionReference, /recoverSettledPendingReport\(\)[\s\S]*stored OpenOracle `storedGame\(reportId\)\.settlementTimestamp` is nonzero/)
 	assert.match(operatorReference, /Recovery path[\s\S]*requires both a pending report and a nonzero `storedGame\(reportId\)\.settlementTimestamp`/)

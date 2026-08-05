@@ -29,8 +29,12 @@
 			</section>
 			<section id="observe-completion">
 				<h2>Compare immediate and staged paths</h2>
-				<p>Open a price-sensitive vault action without submitting it. With the fixture's fresh price, the operation can execute immediately after staging; it does not need another report. If the price expires later, the same operation requires report funding or waits beside a pending report. Keep the exercise read-only so the deterministic checkpoint remains valid.</p>
+				<p>Preview a price-sensitive vault action first. With the fixture's fresh price, it can execute immediately after staging and does not need another report. Keep this deterministic scenario read-only; use <a href="../how-to/liquidate-vault.html">the operational how-to</a> when a deployment exposes a wallet action that creates the staged operation.</p>
 				<p><strong>Checkpoint:</strong> a fresh cached price changes the execution path but not the downstream pool safety checks.</p>
+			</section>
+			<section id="stage-and-recover">
+				<h2>Trace recovery branches</h2>
+				<p>Use the staged-operations view to inspect the empty pending state and compare the production event sequence: <code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, and <code>PriceRequested</code> on the stale-price path. The dispute snapshot event is emitted for every queued operation; its value is zero when no dispute-staked REP is present. No resettable operation-creation control is present in this fixture, so compare expired or rejected branches in <a href="../how-to/recover-oracle-operation.html">the recovery how-to</a>.</p>
 			</section>
 			<section id="finish">
 				<h2>What you learned</h2>

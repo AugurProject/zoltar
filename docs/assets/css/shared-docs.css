@@ -632,6 +632,16 @@ body.doc-openoracle table {
 	border-collapse: collapse;
 	font-size: 0.95rem;
 }
+body.doc-openoracle pre.code-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.doc-openoracle pre.code-scroll:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
 body.doc-openoracle .table-scroll {
 	margin-top: 0.75rem;
 	overflow-x: auto;

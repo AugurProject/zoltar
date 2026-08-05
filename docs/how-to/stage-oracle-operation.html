@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Stage and recover an oracle-backed operation · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Stage and recover an oracle-backed operation</h1>
+				<p>Follow the procedure below when a liquidation, withdrawal, or coverage change needs a fresh REP/ETH price.</p>
+			</header>
+			<section id="preflight">
+				<h2>Preflight</h2>
+				<p>Read <code>isPriceValid()</code>, <code>lastPrice()</code>, <code>lastSettlementTimestamp()</code>, <code>getRequestPriceCostAttoEth()</code>, <code>getSettlementCallbackGasLimit()</code>, <code>getActiveStagedOperationCount()</code>, <code>getPendingSettlementOperationCount()</code>, <code>pendingReportId()</code>, <code>pendingReportSponsor()</code>, the target vault state, and the current pool lifecycle. Record the release, chain, block, coordinator, target, caller, and operation kind before submitting.</p>
+				<ul>
+					<li><code>validForSeconds</code> must be in <code>1..MAX_OPERATION_VALID_FOR_SECONDS</code>; the operation expires after <code>queuedAt + settlementTime + validForSeconds</code>.</li>
+					<li>Liquidation and withdrawal amounts must be positive. A coverage update may be zero, but it must still satisfy its pool guard.</li>
+					<li>A liquidation targets another vault. A withdrawal or coverage update targets the caller's own vault. The local escalation must not already be resolved.</li>
+					<li>When a report is pending, only <code>pendingReportSponsor()</code> may queue another operation. The callback auto-executes at most <code>MAX_PENDING_SETTLEMENT_OPERATIONS()</code> operations; later active operations require manual execution.</li>
+				</ul>
+			</section>
+			<section id="stage">
+				<h2>Stage the operation</h2>
+				<p>Call <code>requestPriceIfNeededAndStageOperation(operation, targetVault, operationAmountAttoRepOrAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth)</code> with <code>msg.value</code> covering <code>getRequestPriceCostAttoEth()</code> only when the call opens a new report. The coordinator pulls the selected initial WETH and derived REP position from the sponsor with ERC-20 <code>transferFrom</code>; approve those WETH and REP amounts to the coordinator separately. Read <code>minimumToken1ReportAttoEth()</code> and the current base fee before choosing <code>requestedInitialAttoWeth</code>; the coordinator selects the greater required WETH amount and derives the REP side with ceiling division.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Branch</th>
+							<th>Caller and value</th>
+							<th>Expected result</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Fresh cache</td>
+							<td>Valid operation caller; no oracle bounty.</td>
+							<td><code>StagedOperationQueued</code>, then <code>ExecutedStagedOperation</code> if the pool guard succeeds. A failed downstream guard consumes the operation with <code>success == false</code>.</td>
+						</tr>
+						<tr>
+							<td>First stale request</td>
+							<td>Any valid operation caller; request bounty plus initial report position.</td>
+							<td><code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, and <code>PriceRequested</code>. The caller becomes <code>pendingReportSponsor</code>.</td>
+						</tr>
+						<tr>
+							<td>Pending report</td>
+							<td>Only the existing sponsor; no additional join bounty.</td>
+							<td>The operation joins the bounded pending list. If the list is full, it remains active outside the callback batch and must be executed manually after a fresh price.</td>
+						</tr>
+						<tr>
+							<td>Rejected report</td>
+							<td>After callback rejection, re-read price and pending state before retrying.</td>
+							<td><code>PriceReportRejected</code>; queued operations remain subject to expiry and require a replacement request or manual execution when eligible.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+			<section id="verify">
+				<h2>Verify and recover</h2>
+				<p>Require <code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, <code>PriceRequested</code>, or <code>ExecutedStagedOperation</code> according to the branch. A settled report whose callback did not clear the pending slot is recovered with permissionless <code>recoverSettledPendingReport()</code>; verify <code>PendingReportRecovered</code> and any <code>PendingOperationRecoveryConsumed</code> event. A callback rejection emits <code>PriceReportRejected</code>; call <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)</code> only after re-reading price validity, the pending sponsor, and active operation state. If the callback batch is full, execute each remaining operation separately with <code>executeStagedOperation(operationId)</code> while the price is fresh and before its expiry.</p>
+			</section>
+			<section id="completion">
+				<h2>Completion checklist</h2>
+				<ul>
+					<li>Operation ID and branch event recorded.</li>
+					<li>Cached price, pending IDs, and operation activity reconciled.</li>
+					<li>Target state, balances, and accounting checkpoint match the receipt.</li>
+					<li>Failed or consumed operations are not replayed without a fresh preflight.</li>
+				</ul>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

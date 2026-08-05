@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Why Statoblast uses OpenOracle · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Why Statoblast uses OpenOracle</h1>
+				<p>OpenOracle supplies a fresh REP/ETH price for solvency-sensitive operations. It does not decide market truth; escalation and Zoltar remain responsible for truth and branching.</p>
+			</header>
+			<section id="economic-purpose">
+				<h2>Economic purpose</h2>
+				<p>A cached price is convenient but expires. A stale price cannot safely authorize a withdrawal, coverage change, or liquidation, so the coordinator stages the operation behind a new report. Report size, duration, liquidity, and correction incentives trade off cost against the ability to keep a price current.</p>
+			</section>
+			<section id="security-intuition">
+				<h2>Security intuition</h2>
+				<p>Settlement makes a report usable; disputes can replace it before the settlement deadline; correction and callback recovery keep the coordinator from treating an incomplete operation as successful. The coordinator applies pool-specific checks both before requesting a report and after callback.</p>
+			</section>
+			<section id="alternatives-and-boundaries">
+				<h2>Boundaries and alternatives</h2>
+				<p>Using a stale cached price would reduce latency but expose pool solvency to old market information. Sharing one global operation queue would simplify deployment but couple unrelated pools. Per-pool coordinators preserve local pending state and freshness decisions.</p>
+				<p>Exact states, fields, limits, events, and deployment values are in the <a href="../reference/open-oracle-coordinator.html">OpenOracle coordinator reference</a>. Operator calls and recovery branches are in <a href="../how-to/stage-oracle-operation.html">Stage and recover an oracle-backed operation</a> and <a href="../how-to/recover-oracle-operation.html">Recover an oracle-assisted operation</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

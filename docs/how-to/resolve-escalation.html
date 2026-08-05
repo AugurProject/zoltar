@@ -11,27 +11,36 @@
 		<main>
 			<header>
 				<h1>Advance an escalation game</h1>
-				<p>Submit deposits and advance public transitions without confusing local settlement with fork continuation.</p>
+				<p>Move one escalation game from an active round to local settlement or fork continuation, with exact state checks at every transition.</p>
 			</header>
 			<section id="identify-the-game">
 				<h2>Identify the game</h2>
-				<p>Verify the pool, question, universe, active game address, round, tentative answer, deposit target, deadline, and whether the game is an ordinary game or a child continuation.</p>
+				<p>Verify the pool, question, universe, active game address, round, tentative answer, deposit target, deadline, and whether the game is ordinary or a child continuation. Read <code>systemState()</code>, <code>escalationGame()</code>, and the game state from the deployed interface in the <a href="../reference/contracts.html">contract reference</a>. Snapshot the block before calculating a deposit.</p>
 			</section>
 			<section id="prepare-a-deposit">
 				<h2>Prepare a deposit</h2>
-				<p>Choose an eligible outcome and calculate the accepted REP amount from current state. Confirm approval, balance, recipient compatibility, deadline inclusion margin, and the economic risk of the claim. Do not submit from a stale round snapshot.</p>
+				<p>Choose an eligible outcome and calculate the accepted REP amount from current state. Read <code>securityVaults(msg.sender)</code>, <code>getPoolAccountingSnapshot()</code>, <code>priceOracleManagerAndOperatorQueuer().isPriceValid()</code>, and the game's round/deadline. The pool entrypoint is <code>depositToEscalationGame(outcome, maximumDepositAttoRep)</code>; it escrows the caller vault's pool-held REP backing, not a wallet transfer, so no REP approval is required. Coverage-bearing pools require a fresh price and post-deposit coverage checks must pass.</p>
 			</section>
 			<section id="advance-the-round">
 				<h2>Advance the round</h2>
-				<p>Submit the deposit, verify the deposit event and resulting round values, then wait for or execute the next public transition once its deadline and threshold conditions are satisfied. Keep independent evidence for the underlying answer.</p>
+				<p>Submit the deposit and require the <code>DepositToEscalationGame</code> event, updated side/round, and deadline in the receipt. The game reaches a local result through its own time and state rules; the pool's claim action is <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>, while an own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the round again because another participant may have advanced it. Record the claim and independent evidence for the underlying answer.</p>
 			</section>
 			<section id="settle-or-fork">
 				<h2>Settle or enter fork handling</h2>
 				<p>If the game selects a local winner, settle it and verify claim accounting before withdrawal. If it reaches non-decision, activate the pool fork path and verify the Zoltar fork relationship. Do not treat a paused child continuation as an ordinary unsettled parent game.</p>
 			</section>
-			<section id="continue-after-a-fork">
-				<h2>Continue after a fork</h2>
-				<p>For child continuations, verify the parent snapshot and carry proof, then finalize any required truth auction. The configured <code>SecurityPoolForker</code> applies a haircut only when purchased REP removes a positive escalation allocation, while the game is paused. Finalization then activates the pool and immediately attempts continuation resumption. Incomplete aggregate backing reverts the entire finalization; reconcile the missing backing and retry finalization rather than calling a separate recovery transition. Use permissionless <code>resumeForkedEscalationGame()</code> only for a pool that is already operational but still has its awaiting-continuation flag. See the <a href="../reference/merkle-mountain-range.html">proof reference</a> and <a href="../explanation/escalation-game.html">architecture explanation</a>.</p>
+			<section id="settle-locally">
+				<h2>Settle a locally resolved game</h2>
+				<p>Confirm the game has a settled local outcome and is not awaiting a fork continuation. Call <code>withdrawFromEscalationGame(outcome, depositIndexes)</code> for one vault's deposits, then verify the withdrawal event, claim balances, and pool state. A transaction that only advances a timer is not settlement. For an own-fork continuation, the forker path is <code>forkZoltarWithOwnEscalationGame(pool)</code> rather than local withdrawal.</p>
+			</section>
+			<section id="continue-in-child">
+				<h2>Continue in a child universe</h2>
+				<p>For a forked pool, verify the child pool, parent snapshot, carry proof, and <code>awaitingForkContinuation()</code>. Materialize the required child state, follow <a href="./run-truth-auction.html">truth-auction repair</a>, and finalize any required auction. The configured <code>SecurityPoolForker</code> applies a haircut only when purchased REP removes a positive escalation allocation, while the game is paused. Incomplete aggregate backing reverts finalization; reconcile the missing backing and retry.</p>
+				<p>When the child is operational and still awaiting continuation, call permissionless <code>resumeForkedEscalationGame()</code>. Reconcile <code>ForkContinuationResumed</code> and the resulting game state. See the <a href="../reference/merkle-mountain-range.html">proof reference</a> and <a href="../explanation/escalation-game.html">architecture explanation</a>.</p>
+			</section>
+			<section id="common-failures">
+				<h2>Common failures and safe retry</h2>
+				<p>Expired deadline, insufficient vault-backed REP, stale price for a coverage-bearing pool, post-deposit coverage failure, wrong outcome, already-advanced round, and child-not-operational are state errors: inspect and recalculate. A mined successful deposit is not safe to replay just because the UI did not refresh; use the receipt and event identity first.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

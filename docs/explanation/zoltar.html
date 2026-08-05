@@ -15,6 +15,7 @@
 					<p class="paper-status">Draft</p>
 				</div>
 				<h1>Zoltar White Paper</h1>
+				<p><strong>Mental model:</strong> Zoltar makes explicit universe branches and REP splits; applications decide their own collateral, payouts, and local disputes.</p>
 			</header>
 
 			<section class="paper-section" id="abstract">
@@ -467,6 +468,11 @@
 					</table>
 				</div>
 				<p>This distinction matters because malformed answers are rejected, while <code>Invalid</code> remains a valid branch and a valid final outcome.</p>
+			</section>
+			<section id="branch-example" class="paper-section">
+				<h2>A branch-tree example</h2>
+				<p>A genesis universe contains a binary question. A fork creates a Yes child and a No child; a holder can split REP across both children, and an application can later choose which child pool to materialize. The split is an explicit accounting transition, not a claim that both answers are simultaneously true or that application collateral is duplicated.</p>
+				<p>Zoltar determines universe identity, REP balances, and fork relationships. It does not determine which child has durable economic value, market payouts, application-specific collateral migration, or local dispute outcomes. Those boundaries are why applications such as Statoblast must define their own migration and repair rules.</p>
 			</section>
 		</main>
 

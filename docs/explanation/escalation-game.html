@@ -11,6 +11,7 @@
 		<main>
 			<header>
 				<h1>EscalationGame Architecture</h1>
+				<p><strong>Mental model:</strong> claims become conflicting deposits, deadlines change with the game, and the result is local settlement or fork continuation.</p>
 				<p><code>EscalationGame</code> is split so storage ownership, settlement accounting, and proof math do not blur together inside one contract body. The point of the split is not stylistic. Contributors need to know which module is allowed to mutate live game state, which module is only reconstructing proof-derived values, and which invariants a refactor must preserve.</p>
 				<p>The main boundary starts with one shared storage layout. The inherited game stack owns most counters, escrow, carry state, and settlement effects. Size-sensitive mutation paths run through layout-compatible <code>EscalationGameDepositDelegate</code> and <code>EscalationGameClaimDelegate</code> modules using <code>delegatecall</code>, so those writes still land in the game. The external <code>EscalationGameProofVerifier</code> owns storage-free proof and logarithm helpers. That separation keeps verification math reusable and testable without giving it authority to consume deposits, advance nullifiers, or move accounting totals.</p>
 				<p>Refactors usually hit four pressure points: storage ownership, accounting invariants, interface drift, and bytecode headroom. Those are the places where the contract split has to stay explicit or the architecture stops buying clarity.</p>
@@ -267,6 +268,11 @@
 						</tr>
 					</tbody>
 				</table>
+			</section>
+			<section id="one-game-lifecycle">
+				<h2>One-game lifecycle recap</h2>
+				<p>One escalation game follows this loop: a claim is opened, conflicting deposits grow the response threshold, the deadline changes as deposits arrive, and the game either settles locally or reaches a fork continuation. The deposit delegate records deposits, the claim delegate records claims and withdrawals, settlement decides the local result, and the forker installs child continuation state. Shared storage makes those transitions one game even though bytecode is split across modules.</p>
+				<p>The external verifier supplies evidence about the underlying question; it does not own the game’s accounting. The module split and external verifier keep the transition surface small enough for deployment limits, but they also make interface snapshots and delegate-call boundaries release-critical implementation facts.</p>
 			</section>
 		</main>
 		<script src="../assets/js/protocolTerms.js"></script>

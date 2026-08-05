@@ -17,14 +17,25 @@
 				<h2>Freeze the candidate</h2>
 				<ol>
 					<li>Choose the exact commit and create a release-candidate tag.</li>
-					<li>Install from the lockfile in a clean checkout with <code>bun install --frozen-lockfile</code>.</li>
+					<li>Install from the lockfile and initialize generated contract dependencies in a clean checkout with <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
 					<li>Record Bun, Solidity compiler, Foundry, and operating-system versions.</li>
 					<li>Confirm the worktree is clean before producing artifacts.</li>
 				</ol>
 			</section>
 			<section id="run-release-validation">
 				<h2>Run release validation</h2>
-				<p>Run the full TypeScript, contract, UI, documentation, generated-artifact, formatting, lint, dead-code, and test checks required by the repository. Treat a skipped check as a release decision that needs a written scope-based reason, not as a silent omission.</p>
+				<p>Run the commands below separately and stop on the first failure. Record output and a scope-based reason for every skipped category.</p>
+				<pre><code>bun run ensure-contract-artifacts
+bun run tsc
+bun run check:shared-dependencies
+bun run test:run -- --bail=1
+bun run format:check
+bun run check
+bun run knip
+bun run check:generated-clean
+bun run ui:build:prod:current
+git diff --check</code></pre>
+				<p>Expected results are a zero exit status, no generated diff, a passing production build, and test output tied to the frozen commit.</p>
 			</section>
 			<section id="record-provenance">
 				<h2>Record provenance</h2>
@@ -33,6 +44,18 @@
 					<li>Record artifact hashes, bytecode hashes, compiler settings, deterministic addresses, constructor arguments, and external-token addresses.</li>
 					<li>Publish the final commit, tag, manifest, validation results, and known limitations together.</li>
 				</ol>
+				<pre><code>commit:
+tag:
+chain_id:
+manifest_path:
+manifest_sha256:
+bun_version:
+solidity_version:
+artifact_hashes:
+runtime_bytecode_hashes:
+constructor_arguments:
+validation_results:
+known_limitations:</code></pre>
 			</section>
 			<section id="review-immutable-parameters">
 				<h2>Review immutable parameters</h2>
@@ -40,7 +63,7 @@
 			</section>
 			<section id="release-gate">
 				<h2>Release gate</h2>
-				<p>Proceed only when independent reviewers can reproduce the artifacts and match the intended deployment configuration. After deployment, continue with <a href="./verify-deployment.html">deployment verification</a>.</p>
+				<p>No-go conditions are a dirty worktree, mismatched lockfile, failed or unexplained check, stale generated output, changed immutable parameter, artifact mismatch, or unreproducible clean-room build. Have a second machine or clean checkout reproduce the hashes before tagging. After deployment, continue with <a href="./verify-deployment.html">deployment verification</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

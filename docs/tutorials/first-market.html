@@ -15,7 +15,7 @@
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>Build and serve the UI, then open <code>http://localhost:12345/?simulate=1&amp;simScenario=security-pool#/security-pools?securityPoolsView=browse</code>. Wait until the simulation banner names the <strong>Security pool</strong> scenario. Simulation uses local fixture state and does not send transactions or require an external wallet.</p>
+				<p>Build and serve the UI, then open <code>http://localhost:12345/?simulate=1&amp;simScenario=security-pool#/security-pools?securityPoolsView=browse</code>. Wait until the simulation banner names the <strong>Security pool</strong> scenario. Simulation executes resettable transactions against local fixture state; it does not send them to an external chain or require an external wallet.</p>
 				<pre><code>bun run ui:build
 bun run ui:serve</code></pre>
 			</section>
@@ -33,6 +33,11 @@ bun run ui:serve</code></pre>
 				<h2>Inspect complete-set capacity</h2>
 				<p>Open the pool's trading view and locate the complete-set collateral, share supply, and remaining mint capacity. A creation mints one share for every outcome together; redemption consumes a complete outcome set. Keep this pass read-only so the expected fixture checkpoints remain stable.</p>
 				<p><strong>Checkpoint:</strong> mint capacity is derived from fee-eligible coverage commitment rather than from the displayed REP balance alone.</p>
+			</section>
+			<section id="make-a-resettable-change">
+				<h2>Mint one resettable complete set</h2>
+				<p>Use the preselected <strong>Simulation QA account</strong>, choose the smallest enabled amount, and submit <strong>Mint complete sets</strong>. Confirm the <code>CompleteSetCreated</code> event, the ETH decrease, and one additional share for every outcome. If the action is unavailable, record the disabled-state reason and continue with the production call <code>createCompleteSet()</code> in the reference.</p>
+				<p>Reset by refreshing the simulation URL or restarting the UI server. The expected post-reset checkpoint is the original seeded vault and share supply.</p>
 			</section>
 			<section id="follow-resolution">
 				<h2>Inspect the reporting boundary</h2>

@@ -12,6 +12,7 @@
 			<header>
 				<p><a href="../documentation.html">Documentation index</a></p>
 				<h1>Contract Interaction Map</h1>
+				<p><strong>Mental model:</strong> actors enter through pools, oracle coordination, Zoltar universes, and child repair; custody boundaries explain the call graph.</p>
 				<p>This map connects the primary deployed Zoltar registry and Statoblast market contracts. It emphasizes contract-to-contract calls and asset movement, not every public user entrypoint. Factory-only deployment workers, delegate modules, event emitters, and compatibility contracts are summarized separately so the runtime path stays legible.</p>
 				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">the Statoblast whitepaper</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
@@ -219,6 +220,11 @@
 						<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>
 					</li>
 				</ul>
+			</section>
+			<section id="actors-and-boundaries">
+				<h2>Actors, custody, and one operation</h2>
+				<p>The architecture is easiest to follow from the outside in: a market creator configures a pool, traders hold claims and shares, vault holders provide REP backing, liquidators respond to unhealthy vaults, auction bidders repair child collateral, keepers advance permissionless transitions, and indexers reconstruct the resulting events. Pools own the pool-held assets and authoritative lifecycle state; the oracle coordinator stages price-sensitive operations; Zoltar owns universes, questions, REP, and forks. These custody boundaries explain why a call can cross contracts without transferring every liability.</p>
+				<p>For a complete-set mint, the trader calls the pool, the pool moves ETH and mints one share per outcome, and the event stream records the resulting supply and accounting checkpoints. The deployment graph above is the complete primary interaction graph for this release; supporting factories, delegates, emitters, and compatibility contracts remain summarized in their supporting inventory. Addresses and generated edge lists are deployment facts, while these custody boundaries are the stable architectural model.</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>

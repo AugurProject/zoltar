@@ -11,11 +11,79 @@
 		<main>
 			<header>
 				<h1>Recover an oracle-assisted operation</h1>
-				<p>Choose the recovery branch from observable coordinator state. A low-level OpenOracle callback failure, a coordinator price rejection, a failed staged operation, and a queued overflow operation have different calls and events.</p>
+				<p>Choose the recovery branch from observable coordinator state. A low-level callback failure, price rejection, consumed staged operation, and queued overflow operation have different calls and events.</p>
 			</header>
+			<section id="decision-table">
+				<h2>Choose the branch</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Observed state</th>
+							<th>Action</th>
+							<th>Completion evidence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Settled OpenOracle report, coordinator still has a pending ID</td>
+							<td>Call <code>recoverSettledPendingReport()</code>, then inspect the pending list and active operation slots again.</td>
+							<td><code>PendingReportRecovered</code>; the current slot is consumed, while remaining queued operations need a later valid-price path.</td>
+						</tr>
+						<tr>
+							<td><code>PriceReportRejected</code></td>
+							<td>Call <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)</code> only when <code>isPriceValid()</code> is false.</td>
+							<td><code>PriceRequested</code> or a valid cached price.</td>
+						</tr>
+						<tr>
+							<td>Staged operation reports failure</td>
+							<td>Re-read and stage a new operation with current parameters.</td>
+							<td>New operation ID and branch event.</td>
+						</tr>
+						<tr>
+							<td>Active operation outside the callback batch</td>
+							<td>Call <code>executeStagedOperation(operationId)</code> while price and timeout remain valid.</td>
+							<td><code>ExecutedStagedOperation</code> and changed target state.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+			<section id="funding-branches">
+				<h2>Distinguish funding branches</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>State</th>
+							<th>Caller and value</th>
+							<th>Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Fresh price</td>
+							<td>Operation caller; no report bounty</td>
+							<td>Immediate execution.</td>
+						</tr>
+						<tr>
+							<td>First stale operation</td>
+							<td>Operation caller; coordinator bounty plus WETH/REP initial position and approvals</td>
+							<td>Operation queued and <code>PriceRequested</code>.</td>
+						</tr>
+						<tr>
+							<td>Report already pending</td>
+							<td>Existing report sponsor; no second bounty or report funding</td>
+							<td>Operation joins the pending settlement batch.</td>
+						</tr>
+						<tr>
+							<td>Rejected report with queued operations</td>
+							<td>Caller funds a separate <code>requestPrice(...)</code></td>
+							<td>Replacement report can execute queued work after valid settlement.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
 			<section id="identify-the-operation">
 				<h2>Record authoritative state</h2>
-				<p>Record the coordinator, operation identifier, requester, operation kind, parameters, pending report identifier, pending settlement slot, price-validity state, expiry, and the OpenOracle report's settlement timestamp. Do not infer the branch from the settlement transaction alone.</p>
+				<p>Record the coordinator, operation identifier, requester, operation kind, parameters, pending report identifier, pending settlement slot, <code>isPriceValid()</code>, expiry, and the OpenOracle report's settlement timestamp from one block. Do not infer the branch from the settlement transaction alone.</p>
 			</section>
 			<section id="low-level-callback-failure">
 				<h2>Recover a low-level callback failure</h2>
@@ -29,17 +97,18 @@
 				<h2>Handle the operation result</h2>
 				<ul>
 					<li>If <code>ExecutedStagedOperation</code> reports failure, that operation was consumed. Revalidate current pool and vault state, then stage a new operation with new parameters if the action remains valid.</li>
+					<li>For a new coverage, withdrawal, or liquidation operation, stage it with <code>requestPriceIfNeededAndStageOperation(operation, targetVault, operationAmountAttoRepOrAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth)</code>; stale-price branches also require the coordinator's ETH bounty and WETH/REP approvals.</li>
 					<li>If the operation was outside the bounded callback batch and remains active while the cached price is fresh, anyone may call <code>executeStagedOperation(operationId)</code>.</li>
 					<li>If an active overflow operation outlives the price or its timeout, obtain a later valid price or stop; there is no generic retry, clear, completion, or supersede entrypoint.</li>
 				</ul>
 			</section>
 			<section id="execute-and-reconcile">
 				<h2>Execute and reconcile</h2>
-				<p>Preview the branch-specific call against the current block, submit it with an inclusion margin, and reconcile <code>CoordinatorStateCheckpoint</code>, the branch event, staged-operation activity, cached price state, pool accounting, and token balances. A consumed failure is evidence, not a retryable instance.</p>
+				<p>Preview the branch-specific call against the current block, submit it with an inclusion margin, and reconcile <code>CoordinatorStateCheckpoint</code>, the branch event, staged-operation activity, cached price state, pool accounting, and token balances. Recovery is permissionless where the ABI permits it, but a consumed failure is evidence, not a retryable instance.</p>
 			</section>
 			<section id="prevent-retry-loops">
 				<h2>Prevent retry loops</h2>
-				<p>Indexers should key recovery attempts by operation and resulting state, not settlement transaction alone. Alert on repeated rejection without a state change. The canonical branch semantics are in <a href="../explanation/open-oracle.html#callback-rejection-and-recovery">callback rejection and recovery</a>; the exact calls and events are in the <a href="../reference/contracts.html#openoraclepricecoordinator">coordinator reference</a>.</p>
+				<p>Indexers should key recovery attempts by operation and resulting state, not settlement transaction alone. Alert on repeated rejection without a state change. The canonical branch semantics are in <a href="../explanation/open-oracle-appendix.html#callback-rejection-and-recovery">callback rejection and recovery</a>; the exact calls and events are in the <a href="../reference/contracts.html#openoraclepricecoordinator">coordinator reference</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

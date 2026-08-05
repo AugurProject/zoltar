@@ -21,6 +21,18 @@
 				<h2>Choose the branch</h2>
 				<p>Evaluate outcome evidence independently and choose the intended child universe. Record the exact child identifier. Migration expresses branch support and can have irreversible economic consequences; do not infer the branch from display order or an unverified interface.</p>
 			</section>
+			<section id="decision-tree">
+				<h2>Choose the procedure from the asset</h2>
+				<ul>
+					<li>Raw Zoltar REP held by a user: approve Genesis REP when required, call <code>addRepToMigrationBalance(universeId, amountAttoRep)</code>, then <code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code>.</li>
+					<li>REP already locked in the security-pool migration proxy: call <code>migrateRepToZoltar(pool, outcomeIndices)</code>.</li>
+					<li>Ordinary vault: the vault owner calls <code>migrateVault(pool, outcomeIndex)</code> within the pool-local migration window.</li>
+					<li>Unresolved escalation: the vault owner calls <code>migrateVaultWithUnresolvedEscalation(pool, vault, childOutcomeIndex)</code>; entitlement initialization is lazy inside this call.</li>
+					<li>Direct escalation deposits: the vault owner calls <code>claimForkedEscalationDeposits(pool, vault, outcome, depositIndexes)</code>.</li>
+					<li>Missing child: ordinary vault and unresolved-escalation migration lazily create the destination on first use; an explicit <code>createChildUniverse(pool, outcomeIndex)</code> call is optional, while multi-target share migration still requires an existing destination before its deadline.</li>
+					<li>Shares: the share holder calls <code>shareToken.migrate(fromId, targetOutcomeIndexes)</code>; an existing child can materialize after the pool window, while creating a missing destination remains deadline-gated.</li>
+				</ul>
+			</section>
 			<section id="migrate-each-position">
 				<h2>Migrate each position</h2>
 				<table>
@@ -38,9 +50,9 @@
 							<td>Confirm the deterministic child identifier, parent pool, and deployed code.</td>
 						</tr>
 						<tr>
-							<td>Deploy a Zoltar child universe or split raw Zoltar migration REP</td>
-							<td>No Statoblast eight-week pool deadline; follow Zoltar fork identity, outcome, and balance rules.</td>
-							<td>Verify the child universe and REP token derived from the fork question and selected outcome.</td>
+							<td>Split raw Zoltar migration REP</td>
+							<td>Direct Zoltar migration uses its forked-universe balance rules; the security-pool wrapper <code>migrateRepToZoltar(pool, outcomeIndices)</code> remains deadline-bound to the pool-local migration window.</td>
+							<td>Verify whether REP was burned into a user migration balance or split from the pool proxy, then verify child REP.</td>
 						</tr>
 						<tr>
 							<td>Migrate REP backing units and associated pool-held vault REP backing</td>
@@ -68,7 +80,11 @@
 			</section>
 			<section id="reconcile-the-child">
 				<h2>Reconcile the child</h2>
-				<p>Compare migrated REP, collateral, open interest, REP backing units, coverage commitment, shares, and carried escalation totals with the parent deltas. Expect collateral to follow migration rather than appear in full in every child.</p>
+				<p>Compare migrated REP, collateral, open interest, REP backing units, coverage commitment, shares, and carried escalation totals with the parent deltas. Use <code>VaultMigrationCheckpoint</code>, <code>PoolHeldRepSweptToChild</code>, and child-game events as the evidence. Expect collateral to follow migration rather than appear in full in every child.</p>
+			</section>
+			<section id="safe-retry">
+				<h2>Retry safely</h2>
+				<p>Migration calls are state-dependent. After a reverted or dropped transaction, inspect the child, source entitlement, and claimed/materialized flags again. Retry only the missing procedure; never replay a successful migration based on a stale UI balance. Choices that select a child or consume a claim are irreversible at the protocol layer.</p>
 			</section>
 			<section id="complete-child-recovery">
 				<h2>Complete child recovery</h2>
