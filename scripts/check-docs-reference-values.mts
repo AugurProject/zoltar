@@ -867,6 +867,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractArchitecture, /Vault owners and liquidators stage withdrawals/, 'contract architecture must name vault owners as coordinator callers')
 	assert.match(normalizedDiagramSpecs, /Security vaults \+ ETH shares/, 'whole-system diagram must label the accounting containers as security vaults')
 	assert.match(chartRuntime, /Security vaults \+ ETH shares/, 'generated chart runtime must retain the security-vault system label')
+	assert.match(normalizedDiagramSpecs, /"fig-statoblast-pool-accounting"[\s\S]*Vault REP backing[\s\S]*Settlement collateral[\s\S]*"d": "M 634 234 H 716"[\s\S]*"x": "716"[\s\S]*"width": "190"[\s\S]*coverage commitment/, 'pool-accounting labels and fee node must fit their diagram geometry')
 	for (const representation of [whitepaperStatoblast, contractArchitecture, diagramSpecs, chartRuntime]) assert.doesNotMatch(representation, ambiguousVaultActorAlias, 'documentation must not use vault containers as actors')
 	assert.match(liquidationHtml, /data-source="associatedRepAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice"/)
 	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)

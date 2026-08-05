@@ -540,8 +540,8 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
-		expect(reportOutcomeSection.textContent?.includes('Total side stake')).toBe(true)
-		expect(reportOutcomeSection.textContent?.includes('Your side stake')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Total side dispute-staked REP')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Your side dispute-staked REP')).toBe(true)
 		expect(firstSide.compareDocumentPosition(amountInput) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
@@ -926,7 +926,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
+		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 

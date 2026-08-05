@@ -29,6 +29,7 @@ const ambiguousPoolHeldRepTerminology = /(?<!-)\bpool REP\b/i
 const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) collateral\b/i
 const uiEscrowAccountingAlias = /\b(?:escalationEscrowedRepAttoRep|connectedWalletEscrowedRepAttoRep)\b/
 const uiDirectRepTruthAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
+const uiLegacyDisputeStakeCopy = /\b(?:Total side stake|Your side stake|Total stake|Your stake|current stakes|escrow attributed to this vault)\b/i
 const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],
 	['solidity/contracts/peripherals/EscalationGameCalculations.sol', /\battritionCost\b/],
@@ -94,6 +95,7 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 	if ((path.startsWith('docs/') || path.startsWith('ui/ts/copy/')) && ambiguousSettlementCollateralTerminology.test(source)) failures.push(`${path}: uses generic open-interest or parent collateral instead of settlement collateral`)
 	if (path.startsWith('ui/ts/') && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
 	if (path.startsWith('ui/ts/') && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
+	if (path.startsWith('ui/ts/') && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)
 	if (pathSpecificForbidden.get(path)?.test(source)) failures.push(`${path}: contains an atomic or command identifier without canonical naming`)
 }
 
