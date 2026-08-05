@@ -3640,8 +3640,19 @@ body.paper-zoltar .footer-note {
 		max-height: none;
 	}
 
-	.plot-figure-expanded .plot-chart-pan-cue {
-		display: none;
+	body.paper-statoblast #fig-statoblast-proportional-migration > .plot-chart {
+		display: block;
+		width: 100% !important;
+		max-width: 100% !important;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: thin;
+	}
+
+	body.paper-statoblast #fig-statoblast-proportional-migration > .plot-chart > svg {
+		width: 42rem !important;
+		min-width: 42rem !important;
+		max-width: none !important;
 	}
 
 	body.paper-statoblast .architecture-map-heading,
