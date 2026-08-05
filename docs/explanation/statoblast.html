@@ -18,7 +18,7 @@
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets REP vaults provide underwriting, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
 				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
 				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
 				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>
@@ -30,10 +30,10 @@
 					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 				</div>
 				<p>The stack has two protocol identities. <code>Zoltar</code> is the base truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur Statoblast</code> is the application layer that adds market collateral, underwriting, local disputes, migration, and collateral repair. For the base oracle layer, see <a href="./zoltar.html">zoltar.html</a>.</p>
-				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders and REP vaults use it, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery.</p>
+				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery.</p>
 				<ol>
 					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
-					<li>REP vaults fund underwriting capacity and users mint ETH-backed complete sets.</li>
+					<li>Vault owners fund security vaults with REP backing, and users mint ETH-backed complete sets.</li>
 					<li>After question end, disputes first try to resolve locally through the escalation game.</li>
 					<li>If local resolution reaches non-decision, Statoblast can trigger a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution. In either case, a separate pool-fork activation snapshots the parent before child-pool migration begins.</li>
 					<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
@@ -136,7 +136,7 @@
 								<div class="architecture-arrow" aria-hidden="true">→</div>
 								<div class="architecture-component architecture-component-primary">
 									<code>SecurityPool</code>
-									<p>Owns its ETH collateral, REP vault accounting, coverage commitments, fees, lifecycle status, and the pointer to its escalation game.</p>
+									<p>Owns its settlement collateral, security-vault REP backing accounting, coverage commitments, fees, lifecycle status, and the pointer to its escalation game.</p>
 								</div>
 								<div class="architecture-arrow" aria-hidden="true">↔</div>
 								<div class="architecture-component">
@@ -162,7 +162,7 @@
 								<div class="architecture-component">
 									<strong>Stage guarded operations</strong>
 									<code>OpenOraclePriceCoordinator</code>
-									<p>Owns cached price and staged-operation state. A vault or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
+									<p>Owns cached price and staged-operation state. A vault owner or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
 								</div>
 								<div class="architecture-component">
 									<strong>Report REP/ETH price</strong>
@@ -248,7 +248,7 @@
 				<p>Pool-related addresses are deterministic and their lineage identity commits to the origin's immutable <code>initialReportPriorityFeeAttoEthPerGas</code>. Origins configured with different priority fees therefore cannot share a pool or share-token namespace, while children inherit their origin's configuration. The <a href="../reference/operator-guardrails.html#security-pool-guardrails">Operator Reference</a> owns the exact address and registry-key derivations.</p>
 				<p>An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.</p>
 				<figure class="diagram" id="fig-statoblast-asset-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-asset-flow" data-plot-width="960" data-plot-height="430" role="img" aria-label="ETH, REP, shares, and fee flow"><span class="plot-chart-fallback">Users send ETH to the security pool, which mints shares. A redemption request goes to the pool; the pool burns the relevant shares and pays ETH. Vaults send REP and receive fees; fork repair can sell child REP for ETH.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-asset-flow" data-plot-width="960" data-plot-height="430" role="img" aria-label="ETH, REP, shares, and fee flow"><span class="plot-chart-fallback">Users send ETH to the security pool, which mints shares. A redemption request goes to the pool; the pool burns the relevant shares and pays ETH. Vault owners send REP and receive fees; fork repair can sell child REP for ETH.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Asset Flow</span>The pool is the accounting hub: ETH backs complete sets, REP backs underwriting, fees accrue to vaults, and child REP can be monetized to repair child collateral after a fork.</p>
 				</figure>
 				<p>Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.</p>
@@ -747,14 +747,14 @@
 							</tr>
 							<tr>
 								<td><code>claimForkedEscalationDeposits</code></td>
-								<td>A non-decision fork exists and the vault claims winning parent deposits for a selected outcome.</td>
+								<td>A non-decision fork exists and the vault owner claims winning parent deposits for a selected outcome.</td>
 								<td>Winning parent deposit indexes; own-fork claims pay the ordinary winning reward in child REP to the committed depositor. The escalation's own fork has already removed the winner haircut from aggregate backing, so the claim does not burn it again.</td>
 							</tr>
 							<tr>
 								<td><code>migrateVaultWithUnresolvedEscalation</code></td>
 								<td>Optional cleanup after an own or external fork captured unresolved parent escalation-deposit accounting before the game finalized.</td>
 								<td>
-									The affected vault invokes the wrapper for its own unresolved parent escalation-deposit totals. See the
+									The affected vault owner invokes the wrapper for their security vault's unresolved parent escalation-deposit totals. See the
 									<a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">operator cleanup reference</a>
 									for ordering, scope, and proof independence.
 								</td>
@@ -768,7 +768,7 @@
 					</table>
 				</div>
 				<p>The pool removes REP backing units and escrows REP when the user deposits into the local game. Settlement does not re-mint those REP backing units: a winner receives the ordinary winning payout as wallet REP, while a losing settlement clears escrow without a payout. An own-fork direct claim uses the same winning reward math and releases pre-funded child REP from the selected child's aggregate backing to the immutable depositor committed in the claim leaf, using the retention and rounding rule documented in the <a href="../explanation/escalation-game.html#claim-ownership">escalation architecture</a>. It is not a claim-time conversion and does not mint child-REP backing units. Own-fork direct claims must still be submitted before the parent migration window closes.</p>
-				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault. For a direct claim, that named vault must be the deposit's committed depositor; its authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on the named vault's own unresolved parent dispute-staked REP accounting.</p>
+				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault-owner address. For a direct claim, that vault owner must be the deposit's committed depositor; their authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on that owner's security vault and its unresolved parent dispute-staked REP accounting.</p>
 				<p>External Zoltar forks interrupt the escalation game. This is called continuation. The canonical continuation lifecycle lives in <a href="#migration">Forks and Migration</a>. This section only distinguishes the settlement entry points and their caller permissions.</p>
 				<p>Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
 			</section>
@@ -850,7 +850,7 @@
 					</li>
 				</ul>
 				<p id="branch-capital-reproduction-risk">REP migration and share migration intentionally reproduce a source position into every selected child branch. A share source remains as a transfer-locked entitlement after first use, and each child balance is colored by a distinct universe, so this is not a same-universe double claim. Integrations must nevertheless keep branch balance sheets separate: summing child REP or shares as though all branches were simultaneously redeemable in one economic universe overstates capital.</p>
-				<p>The migration API is not a single generic “fork migrator” role. Child creation is permissionless, <code>migrateVault</code> always acts on the caller’s own vault, and the unresolved-escalation and own-fork-claim entry points require the affected vault as caller. This matters for off-chain automation because a keeper can help with liveness, but it cannot migrate another vault's accounting or claim another vault's dispute-staked REP.</p>
+				<p>The migration API is not a single generic “fork migrator” role. Child creation is permissionless, <code>migrateVault</code> always acts on the caller’s own security vault, and the unresolved-escalation and own-fork-claim entry points require the affected vault owner as caller. This matters for off-chain automation because a keeper can help with liveness, but it cannot migrate another owner's security-vault accounting or claim another depositor's dispute-staked REP.</p>
 				<h3>Fork Migration Contract Trace</h3>
 				<div class="table-wrap">
 					<table class="wide-table">

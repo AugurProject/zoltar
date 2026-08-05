@@ -1496,7 +1496,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - losingEthBeforeClaim, losingEth, 'losing auction participant should receive their ETH back')
 			strictEqualTypeSafe(await getETHBalance(client, winningBidder.account.address), winningEthBeforeClaim, 'winning auction participant should not receive an ETH refund for a filled bid')
 			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'losing auction participant should not receive vault backingUnits')
-			strictEqualTypeSafe(losingRepClaim, 0n, 'losing auction participant should not receive a REP vault claim')
+			strictEqualTypeSafe(losingRepClaim, 0n, 'losing auction participant should not receive vault REP backing')
 			strictEqualTypeSafe(winningVaultBeforeClaim.repBackingUnits, 0n, 'winning auction participant should start without child-pool vault backingUnits')
 			assert.ok(winningRepClaim >= minimumWinningRepAtLimit, 'winning auction participant should receive a vault REP claim at least as good as their limit order')
 

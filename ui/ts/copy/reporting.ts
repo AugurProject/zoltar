@@ -1,4 +1,4 @@
-export const timeoutResolutionDetail = 'Escalation ended by timeout. The winner is computed from the current stakes.'
+export const timeoutResolutionDetail = 'Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals.'
 export const escalationMetrics = 'Escalation Metrics'
 export const loadingEscalationDeposits = 'Loading escalation deposits.'
 export const reportingWorkflow = 'Reporting Workflow'
@@ -78,8 +78,8 @@ export const formatSettleAllDepositsLabel = (sideLabel: string) => `Settle all $
 export const formatSettleSelectedDepositsLabel = (sideLabel: string) => `Settle selected ${sideLabel} deposits`
 export const formatSettlingDepositsPendingLabel = (sideLabel: string) => `Settling ${sideLabel} deposits…`
 export const startBondAttoRep = 'Start bond'
-export const totalSideStake = 'Total side stake'
-export const yourSideStake = 'Your side stake'
+export const totalSideDisputeStakedRep = 'Total side dispute-staked REP'
+export const yourSideDisputeStakedRep = 'Your side dispute-staked REP'
 export const triggeringZoltarFork = 'Triggering universe fork…'
 export const loadingEscalationDepositsDetail = 'Loading escalation deposits…'
 export const availablePoolHeldVaultRepBackingForReporting = 'Pool-held vault REP backing available for reporting:'

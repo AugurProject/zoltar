@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
-const sourceFilesResult = Bun.spawnSync(['rg', '--files'], { stdout: 'pipe' })
-if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate source files for unit terminology validation')
+const sourceFilesResult = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], { stdout: 'pipe' })
+if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repository files for unit terminology validation')
 
 const protectedVendorPath = 'solidity/contracts/peripherals/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
@@ -22,12 +22,16 @@ const atomicIdentifierWithHumanUnit = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|Atto
 const atomicIdentifierAssignedHumanAmount = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)(?:<\/code>)?\s*(?:=|:|is|of)\s*(?:<code>)?\d+(?:\.\d+)?\s*(?:ETH|REP|shares)\b/i
 const bigintDeclaration = /\b([A-Za-z_$][A-Za-z0-9_$]*)\??:\s*bigint\b/g
 const ambiguousVaultBackingTerminology = /\bvault[ -]collateral\b/i
+const ambiguousVaultActorTerminology = /\b(?:REP vaults|vault users)\b/i
+const vaultContainerActingAsCaller = /\bvault(?:s)? (?:stages?|claims?|invokes?|calls?|can (?:lock|report)|as caller)\b/i
+const unsuffixedAtomicEthEquationSymbol = /(?:data-source="[^"]*|<mi>)(?:rawEthBalance|explicitSurplus)(?!AttoEth)\b/
 const ambiguousParentEscalationTerminology = /\b(?:parent[- ]locks?|parent escalation[- ]locks?|unresolved[- ]locks?|escalation[- ]lock accounting)\b/i
 const ambiguousLiquidationBackingTerminology = /\b(?:target-assigned rescue collateral|seize the rescue deposit)\b/i
 const ambiguousPoolHeldRepTerminology = /(?<!-)\bpool REP\b/i
 const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) collateral\b/i
 const uiEscrowAccountingAlias = /\b(?:escalationEscrowedAttoRep|connectedWalletEscrowedAttoRep)\b/
 const uiDirectRepTruthAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
+const uiLegacyDisputeStakeCopy = /\b(?:Total side stake|Your side stake|Total stake|Your stake|current stakes|escrow attributed to this vault)\b/i
 const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],
 	['solidity/contracts/peripherals/EscalationGameCalculations.sol', /\battritionCost\b/],
@@ -64,6 +68,8 @@ if (findUnsuffixedAtomicEthBigintIdentifier('type Unsafe = { wethRefund: bigint 
 if (findUnsuffixedAtomicEthBigintIdentifier('type Safe = { wethRefundAttoEth: bigint; priceRepPerEth: bigint }') !== undefined) throw new Error('Unit terminology checker rejected canonical attoETH or REP-per-ETH declarations')
 if (!missingAtomicSuffixIdentifiers.test('const initialWeth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an inferred unsuffixed atomic WETH value')
 if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new Error('Unit terminology checker negative fixture did not detect an ambiguous atomic scale constant')
+if (!vaultContainerActingAsCaller.test('the vault invokes migration')) throw new Error('Unit terminology checker negative fixture did not detect a vault container acting as a caller')
+if (!unsuffixedAtomicEthEquationSymbol.test('<math data-source="rawEthBalance = settlementCollateralAttoEth"><mi>rawEthBalance</mi></math>')) throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed attoETH equation symbol')
 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {
@@ -86,12 +92,16 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 		if (unsuffixedAtomicEthIdentifier !== undefined) failures.push(`${path}: atomic ETH/WETH bigint identifier ${unsuffixedAtomicEthIdentifier} lacks an AttoEth suffix`)
 	}
 	if (path !== terminologyCheckPath && ambiguousVaultBackingTerminology.test(source)) failures.push(`${path}: uses vault collateral where REP backing or settlement collateral is required`)
+	if (path !== terminologyCheckPath && ambiguousVaultActorTerminology.test(source)) failures.push(`${path}: uses a vault container as an actor instead of naming the vault owner`)
+	if (path.startsWith('docs/') && vaultContainerActingAsCaller.test(source)) failures.push(`${path}: presents a vault accounting container as a caller`)
+	if (path.startsWith('docs/') && unsuffixedAtomicEthEquationSymbol.test(source)) failures.push(`${path}: contains an unsuffixed atomic ETH symbol in a documentation equation`)
 	if (path !== terminologyCheckPath && ambiguousParentEscalationTerminology.test(source)) failures.push(`${path}: uses an ambiguous parent escalation-lock alias`)
 	if (path !== terminologyCheckPath && ambiguousLiquidationBackingTerminology.test(source)) failures.push(`${path}: describes target-assigned REP backing as rescue collateral or seizure`)
 	if (path !== terminologyCheckPath && ambiguousPoolHeldRepTerminology.test(source)) failures.push(`${path}: uses pool REP instead of pool-held REP`)
 	if ((path.startsWith('docs/') || path.startsWith('ui/ts/copy/')) && ambiguousSettlementCollateralTerminology.test(source)) failures.push(`${path}: uses generic open-interest or parent collateral instead of settlement collateral`)
 	if (path.startsWith('ui/ts/') && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
 	if (path.startsWith('ui/ts/') && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
+	if (path.startsWith('ui/ts/') && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)
 	if (pathSpecificForbidden.get(path)?.test(source)) failures.push(`${path}: contains an atomic or command identifier without canonical naming`)
 }
 

@@ -508,11 +508,11 @@ export function ReportingSection({
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>{reportingCopy.totalSideStake}</span>
+								<span className='panel-label'>{reportingCopy.totalSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>{reportingCopy.yourSideStake}</span>
+								<span className='panel-label'>{reportingCopy.yourSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 								<span aria-hidden='true' className='escalation-sides-legend-marker' />

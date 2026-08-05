@@ -243,7 +243,7 @@ describe('Peripherals: escalation migration', () => {
 		assert.deepStrictEqual(await readChildStateGuard(), stateBefore, 'inactive claim path must preserve the activated child, deposits, REP, and parent vault')
 	})
 
-	test('own-fork claims reject another vaults deposit and roll back consumption, child deployment, and REP state', async () => {
+	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1190,7 +1190,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(await getTotalTheoreticalSupplyAttoRep(client, childRepToken), theoreticalSupplyBeforeClaim, 'settlement must not burn a second haircut after the own-question fork paid it')
 	})
 
-	test('multiple migrated winners settle in reverse order without using another vaults logical entitlement', async () => {
+	test("multiple migrated winners settle in reverse order without using another vault owner's logical entitlement", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1693,7 +1693,7 @@ describe('Peripherals: escalation migration', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question not finalized|Question open/)
 	})
 
-	test('third parties can permissionlessly settle another vaults resolved escalation deposits', async () => {
+	test("third parties can permissionlessly settle another vault owner's resolved escalation deposits", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
