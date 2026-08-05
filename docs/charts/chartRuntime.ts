@@ -12,7 +12,8 @@ import {
 	quantitativeChartAxisLabels,
 	quantitativeChartIds,
 } from './chartModels'
-import { hasDiagramOverflow, resolveChartEnvelopeWidth, updateDiagramControl } from './diagramControl'
+import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
+import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -338,8 +339,10 @@ function copyDataAttributes(element: Element | undefined, attributes: Record<str
 
 function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const data = diagramData(spec)
+	const rectangleLayers = layerDiagramRectangles(data.rectangles)
+	const orderedRectangles = [...rectangleLayers.background, ...rectangleLayers.foreground]
 	const lineMarks = data.lines.map(item =>
-		line(item.points, {
+		line(item.hasArrow ? fitArrowEndpointOutsideRectangles(item.points, data.rectangles, Math.max(5, item.strokeWidth * 2)) : item.points, {
 			...(item.className === undefined ? {} : { className: item.className }),
 			curve: 'linear',
 			...(item.hasArrow ? { markerEnd: 'arrow' } : {}),
@@ -350,16 +353,17 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 			y: 'y',
 		}),
 	)
-	const rectangleMarks = data.rectangles.map(item =>
-		rect([item], {
-			...(item.className === undefined ? {} : { className: item.className }),
-			rx: item.rx,
-			x1: 'x',
-			x2: datum => datum.x + datum.width,
-			y1: 'y',
-			y2: datum => datum.y + datum.height,
-		}),
-	)
+	const rectangleMarks = (rectangles: DiagramRect[]) =>
+		rectangles.map(item =>
+			rect([item], {
+				...(item.className === undefined ? {} : { className: item.className }),
+				rx: item.rx,
+				x1: 'x',
+				x2: datum => datum.x + datum.width,
+				y1: 'y',
+				y2: datum => datum.y + datum.height,
+			}),
+		)
 	const dotMarks = data.dots.map(item =>
 		dot([item], {
 			...(item.className === undefined ? {} : { className: item.className }),
@@ -385,7 +389,7 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 		ariaLabel: spec.ariaLabel,
 		height: spec.height,
 		margin: 0,
-		marks: [...lineMarks, ...rectangleMarks, ...dotMarks, ...textMarks],
+		marks: [...rectangleMarks(rectangleLayers.background), ...lineMarks, ...rectangleMarks(rectangleLayers.foreground), ...dotMarks, ...textMarks],
 		style: {
 			background: 'transparent',
 			color: 'currentColor',
@@ -398,7 +402,7 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const rectangleElements = Array.from(chart.querySelectorAll<SVGRectElement>('g[aria-label="rect"] > rect'))
 	const lineElements = Array.from(chart.querySelectorAll<SVGPathElement>('g[aria-label="line"] > path'))
 	const textElements = Array.from(chart.querySelectorAll<SVGTextElement>('g[aria-label="text"] > text'))
-	data.rectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
+	orderedRectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
 	data.lines.forEach((item, index) => copyDataAttributes(lineElements[index], item.attributes))
 	data.texts.forEach((item, index) => copyDataAttributes(textElements[index], item.attributes))
 	return chart
@@ -1328,12 +1332,84 @@ function updateDiagramToolbar(overflowEnvelope: HTMLElement): void {
 	const button = toolbar?.querySelector<HTMLButtonElement>('button')
 	const cue = toolbar?.querySelector<HTMLElement>('.plot-chart-pan-cue')
 	if (toolbar === null || toolbar === undefined || button === null || button === undefined || cue === null || cue === undefined) return
-	const needsControl = fullSizeDiagramOverflows(overflowEnvelope)
+	const isExpanded = overflowEnvelope.classList.contains('plot-figure-expanded')
+	const needsControl = isExpanded || fullSizeDiagramOverflows(overflowEnvelope)
 	toolbar.hidden = !needsControl
 	if (!needsControl) return
-	const isFit = overflowEnvelope.classList.contains('plot-figure-fit')
-	updateDiagramControl(button, cue, isFit)
+	updateDiagramControl(button, cue, isExpanded)
 }
+
+type ExpandedDiagram = {
+	attributes: DiagramAttributeState
+	background: DiagramBackgroundState[]
+	button: HTMLButtonElement
+	envelope: HTMLElement
+	restoreFocus: HTMLElement | undefined
+}
+
+let expandedDiagram: ExpandedDiagram | undefined
+
+function setDiagramExpanded(overflowEnvelope: HTMLElement, button: HTMLButtonElement, expanded: boolean): void {
+	if (expanded && expandedDiagram !== undefined && expandedDiagram.envelope !== overflowEnvelope) {
+		setDiagramExpanded(expandedDiagram.envelope, expandedDiagram.button, false)
+	}
+	overflowEnvelope.classList.toggle('plot-figure-expanded', expanded)
+	document.body.classList.toggle('docs-diagram-expanded', expanded)
+	if (expanded) {
+		const background = isolateDiagramBackground(overflowEnvelope)
+		expandedDiagram = {
+			attributes: expandDiagramAttributes(overflowEnvelope),
+			background,
+			button,
+			envelope: overflowEnvelope,
+			restoreFocus: document.activeElement instanceof HTMLElement ? document.activeElement : undefined,
+		}
+		button.focus()
+	} else {
+		if (expandedDiagram?.envelope === overflowEnvelope) {
+			const { attributes, background, restoreFocus } = expandedDiagram
+			restoreDiagramBackground(background)
+			expandedDiagram = undefined
+			restoreDiagramAttributes(overflowEnvelope, attributes)
+			window.dispatchEvent(new Event('resize'))
+			restoreFocus?.focus()
+		}
+	}
+	updateDiagramToolbar(overflowEnvelope)
+	dispatchChartLayout()
+}
+
+document.addEventListener('keydown', event => {
+	if (expandedDiagram === undefined) return
+	if (event.key === 'Escape') {
+		event.preventDefault()
+		setDiagramExpanded(expandedDiagram.envelope, expandedDiagram.button, false)
+		return
+	}
+	if (event.key !== 'Tab') return
+	const focusable = Array.from(expandedDiagram.envelope.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(element => !element.hidden)
+	if (focusable.length === 0) {
+		event.preventDefault()
+		expandedDiagram.envelope.focus()
+		return
+	}
+	const activeElement = document.activeElement
+	const currentIndex = activeElement instanceof HTMLElement ? focusable.indexOf(activeElement) : -1
+	let nextIndex: number
+	if (event.shiftKey) {
+		nextIndex = currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1
+	} else {
+		nextIndex = currentIndex === focusable.length - 1 ? 0 : currentIndex + 1
+	}
+	event.preventDefault()
+	focusable[nextIndex]?.focus()
+})
+
+window.addEventListener('resize', () => {
+	requestAnimationFrame(() => {
+		if (expandedDiagram !== undefined) enforceDiagramBackground(expandedDiagram.background)
+	})
+})
 
 function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 	let toolbar = overflowEnvelope.querySelector<HTMLElement>(':scope > .plot-chart-toolbar')
@@ -1344,15 +1420,15 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 		toolbar.setAttribute('aria-label', 'Diagram display')
 		const button = document.createElement('button')
 		button.type = 'button'
+		if (overflowEnvelope.id.length === 0) overflowEnvelope.id = `plot-diagram-${document.querySelectorAll('.plot-chart-toolbar').length + 1}`
+		button.setAttribute('aria-controls', overflowEnvelope.id)
 		const cue = document.createElement('span')
 		cue.className = 'plot-chart-pan-cue'
 		toolbar.append(button, cue)
 		overflowEnvelope.prepend(toolbar)
 		overflowEnvelope.classList.add('plot-figure-fit')
 		button.addEventListener('click', () => {
-			overflowEnvelope.classList.toggle('plot-figure-fit')
-			updateDiagramToolbar(overflowEnvelope)
-			dispatchChartLayout()
+			setDiagramExpanded(overflowEnvelope, button, !overflowEnvelope.classList.contains('plot-figure-expanded'))
 		})
 	}
 	updateDiagramToolbar(overflowEnvelope)
@@ -1412,7 +1488,7 @@ function renderMount(mount: HTMLElement): void {
 	overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-diagram', !isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)
-	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Scrollable figure: ${spec.ariaLabel}`)
+	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Responsive diagram: ${spec.ariaLabel}`)
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)
