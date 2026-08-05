@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
-import { calculateOracleMinimumWethReport, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracleInitialReport'
+import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracleInitialReport'
 import { evaluateBuyRep, evaluateSellRep } from '#core/strategy'
 
 const fixture = {
-	baseFeeWeiPerGas: 118_491_126n,
+	baseFeeAttoEthPerGas: 118_491_126n,
 	blockHash: '0x4aa49d2760cffd97612684d3306b8be38ce4daf7604ad0f9cbeb975159fde73e',
 	blockNumber: 25_600_852n,
 	blockTimestamp: 1_784_875_091n,
@@ -17,7 +17,7 @@ const fixture = {
 	cheapRepAmount: 2_227_204_424_255_513_151_233n,
 	expensiveRepAmount: 2_015_089_717_183_559_517_782n,
 	feePercentage: 10_000n,
-	gasCostWeth: 0n,
+	gasCostAttoWeth: 0n,
 	midReportRep: 2_121_147_070_719_536_334_508n,
 	poolFee: 10_000n,
 	protocolFee: 100_000n,
@@ -43,10 +43,10 @@ const gasStressExpectations = [
 	[200n, 16_961_538_461_538_461_540n],
 ] as const
 
-function minimumReport(baseFeeWeiPerGas: bigint) {
-	return calculateOracleMinimumWethReport({
+function minimumReport(baseFeeAttoEthPerGas: bigint) {
+	return calculateOracleMinimumWethReportAttoEth({
 		...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-		baseFeeWeiPerGas,
+		baseFeeAttoEthPerGas,
 	})
 }
 
@@ -66,7 +66,7 @@ function formatPercent(numerator: bigint, denominator: bigint): string {
 }
 
 function verifyRecordedEconomics() {
-	const minimumWeth = minimumReport(fixture.baseFeeWeiPerGas)
+	const minimumWeth = minimumReport(fixture.baseFeeAttoEthPerGas)
 	assert.equal(minimumWeth, 817_262_744_792_307_693n)
 	assert.equal((fixture.midReportRep * (10_000n + fixture.reportDeviationBps)) / 10_000n, fixture.cheapRepAmount)
 	assert.equal((fixture.midReportRep * (10_000n - fixture.reportDeviationBps)) / 10_000n, fixture.expensiveRepAmount)
@@ -86,15 +86,15 @@ function verifyRecordedEconomics() {
 		token1: fixture.weth,
 		token2: fixture.rep,
 	}
-	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostWeth)
-	assert.equal(sell.hedgeCostWeth, 826_252_634_985_023_076n)
-	assert.equal(sell.profitBeforeGasWeth, -255_235_735_754_674_523n)
+	const sell = evaluateSellRep({ ...commonGame, currentAmount2: fixture.cheapRepAmount }, fixture.sellRep.outputs[0], fixture.gasCostAttoWeth)
+	assert.equal(sell.hedgeCostAttoWeth, 826_252_634_985_023_076n)
+	assert.equal(sell.profitBeforeGasAttoWeth, -255_235_735_754_674_523n)
 
-	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostWeth)
-	assert.equal(buy.hedgeAmountRep, 2_037_255_704_072_578_672_476n)
-	assert.equal(buy.profitBeforeGasWeth, -626_254_311_426_940_506n)
-	assert(sell.profitBeforeGasWeth < 0n)
-	assert(buy.profitBeforeGasWeth < 0n)
+	const buy = evaluateBuyRep({ ...commonGame, currentAmount2: fixture.expensiveRepAmount }, fixture.buyRep.outputs[0], fixture.gasCostAttoWeth)
+	assert.equal(buy.hedgeAmountAttoRep, 2_037_255_704_072_578_672_476n)
+	assert.equal(buy.profitBeforeGasAttoWeth, -626_254_311_426_940_506n)
+	assert(sell.profitBeforeGasAttoWeth < 0n)
+	assert(buy.profitBeforeGasAttoWeth < 0n)
 
 	return { buy, minimumWeth, sell }
 }
@@ -108,18 +108,18 @@ async function verifyDocumentedFixture() {
 	const table = window.document.getElementById('open-oracle-market-fixture-inputs')
 	assert(table !== null, 'Arbitrager market fixture must expose the OpenOracle fixture inputs')
 	const expected: Record<string, bigint> = {
-		baseFeeWeiPerGas: fixture.baseFeeWeiPerGas,
+		baseFeeAttoEthPerGas: fixture.baseFeeAttoEthPerGas,
 		blockNumber: fixture.blockNumber,
-		buyProfitWeth: buy.profitBeforeGasWeth,
-		buyReportRep: fixture.expensiveRepAmount,
-		gasCostWeth: fixture.gasCostWeth,
-		midReportRep: fixture.midReportRep,
-		minimumWethReport: minimumWeth,
+		buyProfitAttoWeth: buy.profitBeforeGasAttoWeth,
+		buyReportAttoRep: fixture.expensiveRepAmount,
+		gasCostAttoWeth: fixture.gasCostAttoWeth,
+		midReportAttoRep: fixture.midReportRep,
+		minimumWethReportAttoEth: minimumWeth,
 		protocolFee: fixture.protocolFee,
 		reportDeviationBps: fixture.reportDeviationBps,
 		reporterFee: fixture.feePercentage,
-		sellProfitWeth: sell.profitBeforeGasWeth,
-		sellReportRep: fixture.cheapRepAmount,
+		sellProfitAttoWeth: sell.profitBeforeGasAttoWeth,
+		sellReportAttoRep: fixture.cheapRepAmount,
 		uniswapPoolFee: fixture.poolFee,
 	}
 	for (const [name, value] of Object.entries(expected)) {
@@ -133,17 +133,17 @@ async function verifyDocumentedFixture() {
 		blockNumber: fixture.blockNumber.toLocaleString('en-US'),
 		buyDeviation: `−${deviation}`,
 		buyExecution: `Exact-output quote through the ${poolFee} REP/WETH pool`,
-		buyProfitWeth: `${formatWad(buy.profitBeforeGasWeth)} WETH`,
+		buyProfitWeth: `${formatWad(buy.profitBeforeGasAttoWeth)} WETH`,
 		buyReportRep: `${formatWad(fixture.expensiveRepAmount)} REP`,
 		deviationMagnitude: deviation,
-		gasCostWeth: `${fixture.gasCostWeth.toString()} WETH`,
+		gasCostWeth: `${fixture.gasCostAttoWeth.toString()} WETH`,
 		midReportRep: `${formatWad(fixture.midReportRep)} REP`,
 		minimumWethReport: `${formatWad(minimumWeth)} WETH`,
 		protocolFee: formatPercent(fixture.protocolFee, 10_000_000n),
 		reporterFee: formatPercent(fixture.feePercentage, 10_000_000n),
 		sellDeviation: `+${deviation}`,
 		sellExecution: `Exact-input quote through the ${poolFee} REP/WETH pool`,
-		sellProfitWeth: `${formatWad(sell.profitBeforeGasWeth)} WETH`,
+		sellProfitWeth: `${formatWad(sell.profitBeforeGasAttoWeth)} WETH`,
 		sellReportRep: `${formatWad(fixture.cheapRepAmount)} REP`,
 		uniswapPoolFee: poolFee,
 	}
@@ -193,7 +193,7 @@ async function verifyArchiveReplay(url: string) {
 	assert.equal(requiredHexField(block, 'hash').toLowerCase(), fixture.blockHash)
 	assert.equal(BigInt(requiredHexField(block, 'number')), fixture.blockNumber)
 	assert.equal(BigInt(requiredHexField(block, 'timestamp')), fixture.blockTimestamp)
-	assert.equal(BigInt(requiredHexField(block, 'baseFeePerGas')), fixture.baseFeeWeiPerGas)
+	assert.equal(BigInt(requiredHexField(block, 'baseFeePerGas')), fixture.baseFeeAttoEthPerGas)
 
 	for (const quote of [fixture.sellRep, fixture.buyRep]) {
 		const result = await rpcRequest(url, 'eth_call', [{ data: quote.callData, to: fixture.quoter }, blockTag])

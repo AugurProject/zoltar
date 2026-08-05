@@ -15,17 +15,17 @@ export type PoolObservation = {
 	approvedUniverse: boolean
 	botVault: VaultPosition
 	candidates: LiquidationCandidate[]
-	collateralEth: bigint
+	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	forkActivationTime: bigint
 	forkOutcomeIndex: bigint | undefined
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	isPriceValid: boolean
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	manager: Address
 	minLiquidationPriceDistanceBps: bigint
-	minimumToken1Report: bigint
+	minimumToken1ReportAttoEth: bigint
 	multiplierBps: bigint
 	parent: Address
 	parentUniverseId: bigint | undefined
@@ -33,13 +33,13 @@ export type PoolObservation = {
 	pendingReportSponsor: Address
 	questionId: bigint
 	repToken: Address
-	requestPriceCostEth: bigint
+	requestPriceCostAttoEth: bigint
 	selected: boolean
 	securityPoolForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
-	totalAllowanceEth: bigint
-	totalRep: bigint
+	totalCoverageCommitmentAttoEth: bigint
+	totalAttoRep: bigint
 	truncatedVaults: boolean
 	universeId: bigint
 	vaults: VaultPosition[]
@@ -56,16 +56,16 @@ export type UniverseObservation = {
 }
 
 export type StagedOperationObservation = {
-	amount: bigint
+	operationAmountAttoRepOrAttoEth: bigint
 	id: bigint
 	initiatorVault: Address
 	isPendingSettlement: boolean
 	operation: bigint
 	queuedAt: bigint
-	snapshotDenominator: bigint
-	snapshotTargetAllowance: bigint
-	snapshotTargetOwnership: bigint
-	snapshotTotalRep: bigint
+	snapshotTotalRepBackingUnits: bigint
+	snapshotTargetCoverageCommitmentAttoEth: bigint
+	snapshotTargetBackingUnits: bigint
+	snapshotTotalPoolHeldAttoRep: bigint
 	targetVault: Address
 	validForSeconds: bigint
 }
@@ -129,7 +129,7 @@ export type RuntimeState = {
 	status: 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
 	universes: UniverseObservation[]
 	wallet: Address | undefined
-	walletEth: bigint
+	walletAttoEth: bigint
 	walletRepByToken: Map<string, bigint>
 }
 
@@ -155,7 +155,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		status: paused ? 'paused' : 'starting',
 		universes: [],
 		wallet,
-		walletEth: 0n,
+		walletAttoEth: 0n,
 		walletRepByToken: new Map(),
 	}
 }
@@ -209,34 +209,34 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 }
 
 function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint) {
-	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.rep, vault.allowance, multiplierBps, price)
+	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.coverageCommitmentAttoEth, multiplierBps, price)
 	return {
 		address: vault.address,
-		allowanceEth: formatDecimalAmount(vault.allowance),
+		coverageCommitmentDisplay: formatDecimalAmount(vault.coverageCommitmentAttoEth),
 		healthBps: healthBps?.toString(),
-		ownership: vault.ownership.toString(),
-		rep: formatDecimalAmount(vault.rep),
-		unpaidEthFees: formatDecimalAmount(vault.unpaidEthFees),
+		backingUnits: vault.backingUnits.toString(),
+		vaultRepBacking: formatDecimalAmount(vault.vaultAttoRepBacking),
+		claimableFeesEth: formatDecimalAmount(vault.claimableFeesAttoEth),
 	}
 }
 
 function candidateView(candidate: LiquidationCandidate) {
 	return {
-		bonusValueEth: formatDecimalAmount(candidate.bonusValueEth),
-		debtToMoveEth: formatDecimalAmount(candidate.debtToMove),
+		bonusValueEth: formatDecimalAmount(candidate.bonusValueAttoEth),
+		coverageCommitmentToTransferEth: formatDecimalAmount(candidate.coverageCommitmentToTransferAttoEth),
 		priceDistanceBps: candidate.priceDistanceBps.toString(),
-		repToMove: formatDecimalAmount(candidate.repToMove),
+		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultAttoRepBackingToTransfer),
 		resultingHealthBps: candidate.resultingHealthBps.toString(),
 		target: candidate.target.address,
-		topUpRep: formatDecimalAmount(candidate.topUpRep),
+		topUpRep: formatDecimalAmount(candidate.topUpAttoRep),
 	}
 }
 
 export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
 	const configurations: readonly CentralizedMarketSettings[] = marketConfigurations === undefined ? [] : 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
 	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
-	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.rep, 0n)
-	const assumedDebt = state.pools.reduce((total, pool) => total + pool.botVault.allowance, 0n)
+	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
+	const assumedCoverageCommitmentAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.coverageCommitmentAttoEth, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
 	const rootConfiguration = configurations[0]
 	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
@@ -323,13 +323,13 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		metrics: {
 			approvedUniverseCount: [...universeMap.values()].filter(universe => universe.approved).length,
-			assumedDebtEth: formatDecimalAmount(assumedDebt),
+			assumedCoverageCommitmentEth: formatDecimalAmount(assumedCoverageCommitmentAttoEth),
 			candidateCount: state.pools.reduce((total, pool) => total + pool.candidates.length, 0),
 			deployedRep: formatDecimalAmount(deployedRep),
 			eligiblePoolCount: state.pools.filter(pool => pool.selected && pool.approvedUniverse && pool.systemState === 0n).length,
 			poolCount: state.pools.length,
 			selectedPoolCount: state.pools.filter(pool => pool.selected).length,
-			walletEth: formatDecimalAmount(state.walletEth),
+			walletEth: formatDecimalAmount(state.walletAttoEth),
 			walletRep: formatDecimalAmount(walletRep),
 		},
 		paused: state.paused,
@@ -353,7 +353,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				approvedUniverse: pool.approvedUniverse,
 				botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
 				candidates: pool.candidates.map(candidateView),
-				collateralEth: formatDecimalAmount(pool.collateralEth),
+				settlementCollateralEth: formatDecimalAmount(pool.settlementCollateralAttoEth),
 				centralizedPriceAllowed:
 					centralizedMarkets === undefined
 						? configurations.length === 0
@@ -377,7 +377,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				currentRetentionRate: pool.currentRetentionRate.toString(),
 				forkActivationTime: pool.forkActivationTime.toString(),
 				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
-				initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+				initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 				isPriceValid: pool.isPriceValid,
 				lastPrice: formatDecimalAmount(pool.lastPrice),
 				centralizedPriceDeviationBps:
@@ -389,7 +389,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
 				manager: pool.manager,
 				minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),
-				minimumToken1Report: formatDecimalAmount(pool.minimumToken1Report),
+				minimumToken1ReportEth: formatDecimalAmount(pool.minimumToken1ReportAttoEth),
 				multiplierBps: pool.multiplierBps.toString(),
 				parent: pool.parent,
 				parentUniverseId: pool.parentUniverseId?.toString(),
@@ -397,12 +397,12 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				pendingReportSponsor: pool.pendingReportSponsor,
 				questionId: pool.questionId.toString(),
 				repToken: pool.repToken,
-				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostEth),
+				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostAttoEth),
 				selected: pool.selected,
 				securityPoolForker: pool.securityPoolForker,
 				systemState: pool.systemState.toString(),
-				totalAllowanceEth: formatDecimalAmount(pool.totalAllowanceEth),
-				totalRep: formatDecimalAmount(pool.totalRep),
+				totalCoverageCommitmentEth: formatDecimalAmount(pool.totalCoverageCommitmentAttoEth),
+				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
 				truncatedVaults: pool.truncatedVaults,
 				universeId: pool.universeId.toString(),
 				vaults: pool.vaults.map(vault => vaultView(vault)),

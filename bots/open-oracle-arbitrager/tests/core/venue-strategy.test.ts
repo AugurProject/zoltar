@@ -10,18 +10,18 @@ describe('arbitrage venue strategy', () => {
 	test('selects the highest conservative post-gas sell quote', () => {
 		expect(
 			selectBestVenueQuote('sell-rep', [
-				{ gasCostWeth: 20n, quotedWeth: 1_000n, venue: 'uniswap-v3' },
-				{ gasCostWeth: 5n, quotedWeth: 990n, venue: 'uniswap-v2' },
+				{ gasCostAttoWeth: 20n, quotedAttoWeth: 1_000n, venue: 'uniswap-v3' },
+				{ gasCostAttoWeth: 5n, quotedAttoWeth: 990n, venue: 'uniswap-v2' },
 			]),
-		).toEqual({ gasCostWeth: 5n, quotedWeth: 990n, venue: 'uniswap-v2' })
+		).toEqual({ gasCostAttoWeth: 5n, quotedAttoWeth: 990n, venue: 'uniswap-v2' })
 	})
 
 	test('selects the lowest conservative post-gas buy quote', () => {
 		expect(
 			selectBestVenueQuote('buy-rep', [
-				{ gasCostWeth: 5n, quotedWeth: 900n, venue: 'uniswap-v3' },
-				{ gasCostWeth: 5n, quotedWeth: 910n, venue: 'uniswap-v2' },
+				{ gasCostAttoWeth: 5n, quotedAttoWeth: 900n, venue: 'uniswap-v3' },
+				{ gasCostAttoWeth: 5n, quotedAttoWeth: 910n, venue: 'uniswap-v2' },
 			]),
-		).toEqual({ gasCostWeth: 5n, quotedWeth: 900n, venue: 'uniswap-v3' })
+		).toEqual({ gasCostAttoWeth: 5n, quotedAttoWeth: 900n, venue: 'uniswap-v3' })
 	})
 })

@@ -28,7 +28,7 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>Binds the proof and payout to the original depositor. This ownership is immutable: liquidation moves only free REP and cannot acquire or split the committed escalation claim.</td>
+							<td>Binds the proof and payout to the original depositor. This ownership is immutable: liquidation moves only pool-held vault REP backing and cannot acquire or split the committed escalation claim.</td>
 						</tr>
 						<tr>
 							<td><code>outcome</code></td>
@@ -175,7 +175,7 @@
 							<td>The descendant carry snapshot after inherited snapshot initialization plus local carry appends and local carry-leaf removal. Inherited proof consumption is tracked by <code>currentNullifierRoot</code> and unresolved totals rather than by mutating these peak fields directly.</td>
 						</tr>
 						<tr>
-							<td><code>inheritedUnresolvedTotal</code> and <code>localUnresolvedTotal</code></td>
+							<td><code>inheritedUnresolvedTotalAttoRep</code> and <code>localUnresolvedTotalAttoRep</code></td>
 							<td>The principal totals the current carry state must still represent.</td>
 						</tr>
 						<tr>

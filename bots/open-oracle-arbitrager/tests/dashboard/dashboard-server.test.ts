@@ -15,7 +15,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const strategy: MutableStrategy = {
 		maxSpotTwapTicks: 100n,
 		minimumProfitBps: 100n,
-		minimumProfitWeth: 10n ** 16n,
+		minimumProfitAttoWeth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
 		pollMilliseconds: 12_000,
@@ -221,7 +221,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		method: 'PUT',
 	})
 	expect(update.status).toBe(200)
-	expect(strategy.minimumProfitWeth).toBe(25n * 10n ** 15n)
+	expect(strategy.minimumProfitAttoWeth).toBe(25n * 10n ** 15n)
 	const submissionUpdate = await fetch(`${origin}/api/submission`, {
 		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.example'] }),
 		headers: { 'content-type': 'application/json', origin },

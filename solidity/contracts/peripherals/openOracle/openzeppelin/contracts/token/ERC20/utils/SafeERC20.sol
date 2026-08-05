@@ -66,8 +66,8 @@ library SafeERC20 {
      * that has a non-zero temporary allowance (for that particular owner-spender) will result in unexpected behavior.
      */
     function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
-        uint256 oldAllowance = token.allowance(address(this), spender);
-        forceApprove(token, spender, oldAllowance + value);
+        uint256 previousAllowance = token.allowance(address(this), spender);
+        forceApprove(token, spender, previousAllowance + value);
     }
 
     /**

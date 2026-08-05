@@ -14,8 +14,8 @@ function createOverviewProps(): OverviewPanelsProps {
 		accountState: {
 			address: undefined,
 			chainId: undefined,
-			ethBalance: undefined,
-			wethBalance: undefined,
+			ethBalanceAttoEth: undefined,
+			wethBalanceAttoEth: undefined,
 		},
 		activeUniverseId: 0n,
 		isConnectingWallet: false,
@@ -49,7 +49,7 @@ function createOverviewProps(): OverviewPanelsProps {
 		universeHasForked: false,
 		universeLabel: 'Genesis',
 		universePresentation: undefined,
-		universeRepBalance: undefined,
+		universeRepBalanceAttoRep: undefined,
 		walletBootstrapComplete: true,
 	}
 }

@@ -98,11 +98,11 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				</div>
 				<div className='escalation-side-values'>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>{forkAuctionCopy.totalStake}</span>
+						<span className='metric-label'>{forkAuctionCopy.totalDisputeStakedRep}</span>
 						<CurrencyValue copyable={false} value={side.balance} suffix={commonCopy.rep} />
 					</div>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>{forkAuctionCopy.yourStake}</span>
+						<span className='metric-label'>{forkAuctionCopy.yourDisputeStakedRep}</span>
 						<CurrencyValue copyable={false} value={side.userStake} suffix={commonCopy.rep} />
 					</div>
 				</div>

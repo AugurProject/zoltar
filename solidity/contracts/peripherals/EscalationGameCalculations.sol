@@ -6,28 +6,28 @@ import { EscalationGameState } from './EscalationGameState.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCalculations is EscalationGameState {
-	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
+	// Attrition cost = startBondAttoRep * exp( ln(ratio) * t / T ) where ratio = nonDecisionThresholdAttoRep / startBondAttoRep.
 	// Uses fixed-point with SCALE=1e6. ln(ratio) is cached at start to avoid recomputing it on every read.
 	// Series iterate until convergence (max iterations: atanh=MAX_ATANH_ITERATIONS, exp=MAX_EXP_ITERATIONS). Guarantees:
-	// - f(0) = startBond, f(T) = nonDecisionThreshold
+	// - f(0) = startBondAttoRep, f(T) = nonDecisionThresholdAttoRep
 	// - f(t) monotonic increasing for t in (0,T)
-	// - f(t) <= nonDecisionThreshold
-	function computeIterativeAttritionCost(uint256 timeSinceStart) public view returns (uint256) {
+	// - f(t) <= nonDecisionThresholdAttoRep
+	function computeIterativeAttritionCostAttoRep(uint256 timeSinceStart) public view returns (uint256) {
 		return
-			proofVerifier.computeIterativeAttritionCost(
-				startBond,
-				nonDecisionThreshold,
+			proofVerifier.computeIterativeAttritionCostAttoRep(
+				startBondAttoRep,
+				nonDecisionThresholdAttoRep,
 				lnRatioScaled,
 				timeSinceStart,
 				ESCALATION_TIME_LENGTH
 			);
 	}
 
-	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
-		if (attritionCost <= startBond) return 0;
-		if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH;
+	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 attritionCostAttoRep) public view returns (uint256) {
+		if (attritionCostAttoRep <= startBondAttoRep) return 0;
+		if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
 
-		uint256 lnCostRatioScaled = proofVerifier.computeLnRatioScaled(startBond, attritionCost);
+		uint256 lnCostRatioScaled = proofVerifier.computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep);
 		return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled;
 	}
 
@@ -35,7 +35,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
-			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCost(getBindingCapital());
+			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
@@ -43,27 +43,30 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			uint256 minimumResponseEnd = forkResumedAt + activationDelay;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
-		return activationTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
+		return activationTime + computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
 	}
 
-	function totalCost() public view returns (uint256) {
+	function totalCostAttoRep() public view returns (uint256) {
 		if (forkContinuation && forkResumedAt == 0 && forkElapsedAtStart == 0) return 0;
-		if (forkContinuation && forkResumedAt == 0) return computeIterativeAttritionCost(forkElapsedAtStart);
+		if (forkContinuation && forkResumedAt == 0) return computeIterativeAttritionCostAttoRep(forkElapsedAtStart);
 		if (forkContinuation) {
 			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
 			if (forkElapsed == 0) return 0;
-			if (forkElapsed >= ESCALATION_TIME_LENGTH) return nonDecisionThreshold;
-			return computeIterativeAttritionCost(forkElapsed);
+			if (forkElapsed >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
+			return computeIterativeAttritionCostAttoRep(forkElapsed);
 		}
 		if (activationTime >= block.timestamp) return 0;
 		uint256 elapsedSinceActivation = block.timestamp - activationTime;
-		if (elapsedSinceActivation >= ESCALATION_TIME_LENGTH) return nonDecisionThreshold;
-		return computeIterativeAttritionCost(elapsedSinceActivation);
+		if (elapsedSinceActivation >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
+		return computeIterativeAttritionCostAttoRep(elapsedSinceActivation);
 	}
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome) {
-		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
-		outcome = proofVerifier.resolveQuestion([invalidBalance, yesBalance, noBalance], totalCost());
+		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
+		outcome = proofVerifier.resolveQuestion(
+			[invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep],
+			totalCostAttoRep()
+		);
 		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None && block.timestamp > getEscalationGameEndDate())
 			outcome = fixedQuestionOutcome;
 		return outcome;
@@ -75,8 +78,12 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
-		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
-		return proofVerifier.hasReachedNonDecision([invalidBalance, yesBalance, noBalance], nonDecisionThreshold);
+		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
+		return
+			proofVerifier.hasReachedNonDecision(
+				[invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep],
+				nonDecisionThresholdAttoRep
+			);
 	}
 
 	function canTriggerOwnFork() public view returns (bool) {
@@ -86,80 +93,80 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None;
 	}
 
-	function getBindingCapital() public view returns (uint256) {
-		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
-		return proofVerifier.medianBalance([invalidBalance, yesBalance, noBalance]);
+	function getBindingCapitalAttoRep() public view returns (uint256) {
+		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
+		return proofVerifier.medianBalanceAttoRep([invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep]);
 	}
 
-	function getOutcomeBalances() public view returns (uint256[3] memory balances) {
-		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
-		balances[0] = invalidBalance;
-		balances[1] = yesBalance;
-		balances[2] = noBalance;
+	function getOutcomeBalancesAttoRep() public view returns (uint256[3] memory balancesAttoRep) {
+		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
+		balancesAttoRep[0] = invalidBalanceAttoRep;
+		balancesAttoRep[1] = yesBalanceAttoRep;
+		balancesAttoRep[2] = noBalanceAttoRep;
 	}
 
 	function _getAcceptedDepositAmount(
 		uint256 outcomeIndex,
-		uint256 requestedAmount,
-		uint256 currentBalance,
-		uint256 room
-	) internal view returns (uint256 acceptedAmount, uint256 newBalance) {
-		uint256 invalidBalance = outcomeState[0].balance;
-		uint256 yesBalance = outcomeState[1].balance;
-		uint256 noBalance = outcomeState[2].balance;
+		uint256 requestedAmountAttoRep,
+		uint256 currentBalanceAttoRep,
+		uint256 roomAttoRep
+	) internal view returns (uint256 acceptedAmountAttoRep, uint256 newBalanceAttoRep) {
+		uint256 invalidBalanceAttoRep = outcomeState[0].balanceAttoRep;
+		uint256 yesBalanceAttoRep = outcomeState[1].balanceAttoRep;
+		uint256 noBalanceAttoRep = outcomeState[2].balanceAttoRep;
 		return
 			proofVerifier.computeAcceptedDepositAmount(
 				outcomeIndex,
-				requestedAmount,
-				currentBalance,
-				room,
-				startBond,
-				nonDecisionThreshold,
-				[invalidBalance, yesBalance, noBalance]
+				requestedAmountAttoRep,
+				currentBalanceAttoRep,
+				roomAttoRep,
+				startBondAttoRep,
+				nonDecisionThresholdAttoRep,
+				[invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep]
 			);
 	}
 
 	function _computeWinningWithdrawal(
 		uint8 outcomeIndex,
-		uint256 depositAmount,
-		uint256 cumulativeAmount
-	) internal view returns (uint256 amountToWithdraw, uint256 burnAmount) {
-		uint256 bindingCapitalAmount = getBindingCapital();
-		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
-		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
+		uint256 depositAmountAttoRep,
+		uint256 cumulativeAmountAttoRep
+	) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
+		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
+		uint256 actualForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
 		uint256 forkTime = securityPool.zoltar().getForkTime(securityPool.universeId());
 		if (forkTime > getEscalationGameEndDate()) {
-			actualForkThreshold = nonDecisionThreshold;
+			actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;
 		}
 		return
 			proofVerifier.computeWinningWithdrawal(
-				depositAmount,
-				cumulativeAmount,
-				bindingCapitalAmount,
-				winningOutcomeBalance,
-				actualForkThreshold,
-				nonDecisionThreshold
+				depositAmountAttoRep,
+				cumulativeAmountAttoRep,
+				bindingCapitalAttoRep,
+				winningOutcomeBalanceAttoRep,
+				actualForkThresholdAttoRep,
+				nonDecisionThresholdAttoRep
 			);
 	}
 
 	function _computeCarriedWinningWithdrawal(
 		uint8 outcomeIndex,
-		uint256 depositAmount,
-		uint256 cumulativeAmount,
+		uint256 depositAmountAttoRep,
+		uint256 cumulativeAmountAttoRep,
 		uint256 parentDepositIndex
-	) internal view returns (uint256 amountToWithdraw, uint256 burnAmount) {
-		depositAmount = _applyInheritedSourceRetention(depositAmount, parentDepositIndex);
-		cumulativeAmount = _applyInheritedSourceRetention(cumulativeAmount, parentDepositIndex);
-		return _computeWinningWithdrawal(outcomeIndex, depositAmount, cumulativeAmount);
+	) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		depositAmountAttoRep = _applyInheritedSourceRetention(depositAmountAttoRep, parentDepositIndex);
+		cumulativeAmountAttoRep = _applyInheritedSourceRetention(cumulativeAmountAttoRep, parentDepositIndex);
+		return _computeWinningWithdrawal(outcomeIndex, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}
 
 	function _getOutcomeBalances()
 		private
 		view
-		returns (uint256 invalidBalance, uint256 yesBalance, uint256 noBalance)
+		returns (uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep)
 	{
-		invalidBalance = outcomeState[0].balance;
-		yesBalance = outcomeState[1].balance;
-		noBalance = outcomeState[2].balance;
+		invalidBalanceAttoRep = outcomeState[0].balanceAttoRep;
+		yesBalanceAttoRep = outcomeState[1].balanceAttoRep;
+		noBalanceAttoRep = outcomeState[2].balanceAttoRep;
 	}
 }

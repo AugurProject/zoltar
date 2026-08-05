@@ -17,8 +17,8 @@ library SecurityPoolUtils {
 	uint256 constant RETENTION_RATE_DIP = (80 * PRICE_PRECISION) / 100; // 80% utilization
 
 	// smallest vaults
-	uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
-	uint256 constant MIN_REP_DEPOSIT = 10 ether; // 10 rep
+	uint256 constant MIN_COVERAGE_COMMITMENT_ATTO_ETH = 1 ether; // 1 eth
+	uint256 constant MIN_REP_DEPOSIT_ATTO_REP = 10 ether; // 10 rep
 
 	function _rpow(uint256 x, uint256 n, uint256 baseUnit) private pure returns (uint256 z) {
 		z = n % 2 != 0 ? x : baseUnit;
@@ -31,134 +31,179 @@ library SecurityPoolUtils {
 	}
 
 	function calculateFeeAccrual(
-		uint256 collateral,
+		uint256 settlementCollateralAttoEth,
 		uint256 retentionRate,
 		uint256 timeDelta,
 		uint256 indexRemainder,
-		uint256 eligibleAllowance,
+		uint256 feeEligibleCoverageCommitmentAttoEth,
 		uint256 feesOwedRemainder
 	)
 		external
 		pure
-		returns (uint256 feeIndexDelta, uint256 nextIndexRemainder, uint256 creditedFees, uint256 nextFeesOwedRemainder)
+		returns (
+			uint256 feeIndexDelta,
+			uint256 nextIndexRemainder,
+			uint256 creditedFeesAttoEth,
+			uint256 nextFeesOwedRemainder
+		)
 	{
-		uint256 nextCollateral = (collateral * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
-		uint256 scaledFeeDelta = (collateral - nextCollateral) * PRICE_PRECISION + indexRemainder;
-		feeIndexDelta = scaledFeeDelta / eligibleAllowance;
-		nextIndexRemainder = scaledFeeDelta % eligibleAllowance;
-		uint256 feesOwedDelta = feeIndexDelta * eligibleAllowance + feesOwedRemainder;
-		creditedFees = feesOwedDelta / PRICE_PRECISION;
+		uint256 resultingSettlementCollateralAttoEth =
+			(settlementCollateralAttoEth * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
+		uint256 scaledFeeDelta =
+			(settlementCollateralAttoEth - resultingSettlementCollateralAttoEth) * PRICE_PRECISION + indexRemainder;
+		feeIndexDelta = scaledFeeDelta / feeEligibleCoverageCommitmentAttoEth;
+		nextIndexRemainder = scaledFeeDelta % feeEligibleCoverageCommitmentAttoEth;
+		uint256 feesOwedDelta = feeIndexDelta * feeEligibleCoverageCommitmentAttoEth + feesOwedRemainder;
+		creditedFeesAttoEth = feesOwedDelta / PRICE_PRECISION;
 		nextFeesOwedRemainder = feesOwedDelta % PRICE_PRECISION;
 	}
 
 	function calculateVaultFee(
-		uint256 allowance,
+		uint256 coverageCommitmentAttoEth,
 		uint256 feeIndexDelta,
 		uint256 remainder
-	) external pure returns (uint256 fees, uint256 nextRemainder) {
-		uint256 numerator = allowance * feeIndexDelta + remainder;
+	) external pure returns (uint256 feesAttoEth, uint256 nextRemainder) {
+		uint256 numerator = coverageCommitmentAttoEth * feeIndexDelta + remainder;
 		return (numerator / PRICE_PRECISION, numerator % PRICE_PRECISION);
 	}
 
 	function calculateBundledLiquidationTransfer(
-		uint256 targetOwnership,
-		uint256 targetAllowance,
-		uint256 requestedDebt,
+		uint256 targetBackingUnits,
+		uint256 targetCoverageCommitmentAttoEth,
+		uint256 requestedCommitmentTransferAttoEth,
 		uint256 repEthPrice,
-		uint256 currentTotalRep,
-		uint256 currentDenominator
-	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
-		if (targetAllowance == 0 || requestedDebt == 0 || repEthPrice == 0) return (0, 0, 0);
-		bool resolveResidualAsBadDebt = requestedDebt >= targetAllowance;
-		if (!resolveResidualAsBadDebt && targetAllowance <= MIN_SECURITY_BOND_DEBT) return (0, 0, 0);
-		uint256 minimumRemainingRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT;
-		uint256 reserveOwnership;
-		if (minimumRemainingRep != 0) {
-			if (currentDenominator == 0 || currentTotalRep == 0) {
-				reserveOwnership = minimumRemainingRep * PRICE_PRECISION;
+		uint256 currentPoolHeldAttoRepBalance,
+		uint256 currentTotalRepBackingUnits
+	)
+		external
+		pure
+		returns (
+			uint256 coverageCommitmentToTransferAttoEth,
+			uint256 vaultAttoRepBackingToTransfer,
+			uint256 backingUnitsToTransfer
+		)
+	{
+		if (targetCoverageCommitmentAttoEth == 0 || requestedCommitmentTransferAttoEth == 0 || repEthPrice == 0)
+			return (0, 0, 0);
+		bool resolveResidualAsBadDebt = requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth;
+		if (!resolveResidualAsBadDebt && targetCoverageCommitmentAttoEth <= MIN_COVERAGE_COMMITMENT_ATTO_ETH)
+			return (0, 0, 0);
+		uint256 minimumRemainingAttoRep = resolveResidualAsBadDebt ? 0 : MIN_REP_DEPOSIT_ATTO_REP;
+		uint256 reservedBackingUnits;
+		if (minimumRemainingAttoRep != 0) {
+			if (currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0) {
+				reservedBackingUnits = minimumRemainingAttoRep * PRICE_PRECISION;
 			} else {
-				reserveOwnership = Math.mulDiv(
-					minimumRemainingRep,
-					currentDenominator,
-					currentTotalRep,
+				reservedBackingUnits = Math.mulDiv(
+					minimumRemainingAttoRep,
+					currentTotalRepBackingUnits,
+					currentPoolHeldAttoRepBalance,
 					Math.Rounding.Ceil
 				);
 			}
 		}
-		if (reserveOwnership >= targetOwnership) return (0, 0, 0);
-		uint256 awardableOwnership = targetOwnership - reserveOwnership;
-		uint256 awardableRep =
-			currentDenominator == 0
-				? awardableOwnership / PRICE_PRECISION
-				: Math.mulDiv(awardableOwnership, currentTotalRep, currentDenominator);
-		uint256 maxFundedDebt = Math.mulDiv(
-			awardableRep,
+		if (reservedBackingUnits >= targetBackingUnits) return (0, 0, 0);
+		uint256 transferableBackingUnits = targetBackingUnits - reservedBackingUnits;
+		uint256 transferableVaultRepBackingAttoRep =
+			currentTotalRepBackingUnits == 0
+				? transferableBackingUnits / PRICE_PRECISION
+				: Math.mulDiv(transferableBackingUnits, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
+		uint256 maximumFundedCoverageCommitmentAttoEth = Math.mulDiv(
+			transferableVaultRepBackingAttoRep,
 			PRICE_PRECISION * BPS_DENOMINATOR,
 			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)
 		);
-		uint256 requestedDebtToMove = requestedDebt > targetAllowance ? targetAllowance : requestedDebt;
-		uint256 requestedDebtRemaining = targetAllowance - requestedDebtToMove;
-		if (!resolveResidualAsBadDebt && requestedDebtRemaining > 0 && requestedDebtRemaining < MIN_SECURITY_BOND_DEBT)
-			requestedDebtToMove = targetAllowance - MIN_SECURITY_BOND_DEBT;
-		debtToMove = requestedDebtToMove < maxFundedDebt ? requestedDebtToMove : maxFundedDebt;
-		if (debtToMove == 0) return (0, 0, 0);
-		ownershipToMove = _getLiquidationOwnershipAward(debtToMove, repEthPrice, currentTotalRep, currentDenominator);
-		require(ownershipToMove <= awardableOwnership, 'Award unfunded');
-		repToMove =
-			currentDenominator == 0
-				? ownershipToMove / PRICE_PRECISION
-				: Math.mulDiv(ownershipToMove, currentTotalRep, currentDenominator);
+		uint256 requestedCoverageCommitmentTransferAttoEth =
+			requestedCommitmentTransferAttoEth > targetCoverageCommitmentAttoEth
+				? targetCoverageCommitmentAttoEth
+				: requestedCommitmentTransferAttoEth;
+		uint256 remainingRequestedCoverageCommitmentAttoEth =
+			targetCoverageCommitmentAttoEth - requestedCoverageCommitmentTransferAttoEth;
+		if (
+			!resolveResidualAsBadDebt &&
+			remainingRequestedCoverageCommitmentAttoEth > 0 &&
+			remainingRequestedCoverageCommitmentAttoEth < MIN_COVERAGE_COMMITMENT_ATTO_ETH
+		)
+			requestedCoverageCommitmentTransferAttoEth =
+				targetCoverageCommitmentAttoEth - MIN_COVERAGE_COMMITMENT_ATTO_ETH;
+		coverageCommitmentToTransferAttoEth =
+			requestedCoverageCommitmentTransferAttoEth < maximumFundedCoverageCommitmentAttoEth
+				? requestedCoverageCommitmentTransferAttoEth
+				: maximumFundedCoverageCommitmentAttoEth;
+		if (coverageCommitmentToTransferAttoEth == 0) return (0, 0, 0);
+		backingUnitsToTransfer = _getLiquidationBackingUnitsAward(
+			coverageCommitmentToTransferAttoEth,
+			repEthPrice,
+			currentPoolHeldAttoRepBalance,
+			currentTotalRepBackingUnits
+		);
+		require(backingUnitsToTransfer <= transferableBackingUnits, 'Award unfunded');
+		vaultAttoRepBackingToTransfer =
+			currentTotalRepBackingUnits == 0
+				? backingUnitsToTransfer / PRICE_PRECISION
+				: Math.mulDiv(backingUnitsToTransfer, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
 	}
 
-	function _getLiquidationOwnershipAward(
-		uint256 debtToMove,
+	function _getLiquidationBackingUnitsAward(
+		uint256 coverageCommitmentToTransferAttoEth,
 		uint256 repEthPrice,
-		uint256 currentTotalRep,
-		uint256 currentDenominator
-	) private pure returns (uint256 ownershipToMove) {
-		uint256 grossRepAward = Math.mulDiv(
-			debtToMove,
+		uint256 currentPoolHeldAttoRepBalance,
+		uint256 currentTotalRepBackingUnits
+	) private pure returns (uint256 backingUnitsToTransfer) {
+		uint256 grossRepAwardAttoRep = Math.mulDiv(
+			coverageCommitmentToTransferAttoEth,
 			repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS),
 			PRICE_PRECISION * BPS_DENOMINATOR,
 			Math.Rounding.Ceil
 		);
-		ownershipToMove =
-			currentDenominator == 0 || currentTotalRep == 0
-				? grossRepAward * PRICE_PRECISION
-				: Math.mulDiv(grossRepAward, currentDenominator, currentTotalRep, Math.Rounding.Ceil);
+		backingUnitsToTransfer =
+			currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0
+				? grossRepAwardAttoRep * PRICE_PRECISION
+				: Math.mulDiv(
+					grossRepAwardAttoRep,
+					currentTotalRepBackingUnits,
+					currentPoolHeldAttoRepBalance,
+					Math.Rounding.Ceil
+				);
 	}
 
+	/// @notice Tests vault health with pool-held vault REP backing and dispute-staked REP.
+	/// @dev The migration-safety branch intentionally excludes dispute-staked REP.
 	function isVaultHealthy(
-		uint256 freeRep,
-		uint256 escalationRep,
-		uint256 securityBondAllowance,
+		uint256 poolHeldVaultRepBackingAttoRep,
+		uint256 disputeStakedAttoRep,
+		uint256 coverageCommitmentAttoEth,
 		uint256 repEthPrice,
 		uint256 poolSecurityMultiplierBps
 	) external pure returns (bool) {
 		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
-		if ((freeRep + escalationRep) * valueScale < securityBondAllowance * poolSecurityMultiplierBps * repEthPrice)
-			return false;
-		if (securityBondAllowance == 0) return true;
+		if (
+			(poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale <
+			coverageCommitmentAttoEth * poolSecurityMultiplierBps * repEthPrice
+		) return false;
+		if (coverageCommitmentAttoEth == 0) return true;
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
 		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
 		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
 			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
-		return freeRep * valueScale > securityBondAllowance * migrationSecurityMultiplierBps * repEthPrice;
+		return
+			poolHeldVaultRepBackingAttoRep * valueScale >
+			coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repEthPrice;
 	}
 
 	function isLiquidationBeyondMinPriceDistance(
-		uint256 freeRep,
-		uint256 escalationRep,
-		uint256 securityBondAllowance,
+		uint256 poolHeldVaultRepBackingAttoRep,
+		uint256 disputeStakedAttoRep,
+		uint256 coverageCommitmentAttoEth,
 		uint256 poolSecurityMultiplierBps,
 		uint256 currentPrice,
 		uint256 minPriceDistanceBps
 	) external pure returns (bool) {
 		return
 			_isLiquidationBeyondMinPriceDistance(
-				freeRep,
-				escalationRep,
-				securityBondAllowance,
+				poolHeldVaultRepBackingAttoRep,
+				disputeStakedAttoRep,
+				coverageCommitmentAttoEth,
 				poolSecurityMultiplierBps,
 				currentPrice,
 				minPriceDistanceBps
@@ -166,23 +211,26 @@ library SecurityPoolUtils {
 	}
 
 	function _isLiquidationBeyondMinPriceDistance(
-		uint256 freeRep,
-		uint256 escalationRep,
-		uint256 securityBondAllowance,
+		uint256 poolHeldVaultRepBackingAttoRep,
+		uint256 disputeStakedAttoRep,
+		uint256 coverageCommitmentAttoEth,
 		uint256 poolSecurityMultiplierBps,
 		uint256 currentPrice,
 		uint256 minPriceDistanceBps
 	) internal pure returns (bool) {
 		if (minPriceDistanceBps == 0) return true;
-		if (securityBondAllowance == 0 || currentPrice == 0) return false;
+		if (coverageCommitmentAttoEth == 0 || currentPrice == 0) return false;
 		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
 		uint256 associatedRepThreshold =
-			((freeRep + escalationRep) * valueScale) / (securityBondAllowance * poolSecurityMultiplierBps);
+			((poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) /
+				(coverageCommitmentAttoEth * poolSecurityMultiplierBps);
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
 		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
 		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
 			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
-		uint256 migrationThreshold = (freeRep * valueScale) / (securityBondAllowance * migrationSecurityMultiplierBps);
+		uint256 migrationThreshold =
+			(poolHeldVaultRepBackingAttoRep * valueScale) /
+				(coverageCommitmentAttoEth * migrationSecurityMultiplierBps);
 		uint256 thresholdPrice =
 			associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold;
 		if (currentPrice <= thresholdPrice) return false;
@@ -192,11 +240,11 @@ library SecurityPoolUtils {
 	// Starts at MAX_RETENTION_RATE, decreases linearly until the 80% utilization dip,
 	// and then caps at MIN_RETENTION_RATE.
 	function calculateRetentionRate(
-		uint256 completeSetCollateralAmount,
-		uint256 securityBondAllowance
+		uint256 settlementCollateralAttoEth,
+		uint256 coverageCommitmentAttoEth
 	) external pure returns (uint256 z) {
-		if (securityBondAllowance == 0) return MAX_RETENTION_RATE;
-		uint256 utilization = (completeSetCollateralAmount * PRICE_PRECISION) / securityBondAllowance;
+		if (coverageCommitmentAttoEth == 0) return MAX_RETENTION_RATE;
+		uint256 utilization = (settlementCollateralAttoEth * PRICE_PRECISION) / coverageCommitmentAttoEth;
 		if (utilization <= RETENTION_RATE_DIP) {
 			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
 			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;

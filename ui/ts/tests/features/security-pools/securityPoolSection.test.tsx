@@ -18,8 +18,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -423,7 +423,7 @@ describe('SecurityPoolSection', () => {
 				createProps({
 					securityPoolResult: {
 						deployPoolHash: zeroHash,
-						initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+						initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 						questionId: '0x01',
 						securityPoolAddress: poolAddress,
 						statoblastSecurityMultiplierBps: 20_000n,
@@ -503,7 +503,7 @@ describe('SecurityPoolSection', () => {
 
 		const resultPool = {
 			deployPoolHash: zeroHash,
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x01',
 			securityPoolAddress: poolAddress,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -540,7 +540,7 @@ describe('SecurityPoolSection', () => {
 	test('uses carried market details when created market does not match loaded market details', async () => {
 		const resultPool = {
 			deployPoolHash: zeroHash,
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x99',
 			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000a3'),
 			statoblastSecurityMultiplierBps: 20_000n,

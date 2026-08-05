@@ -191,7 +191,7 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 	})
 }
 
-function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerReward = 0n) {
+function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerRewardAttoEth = 0n) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
@@ -204,9 +204,9 @@ function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly
 			{ name: 'amount1', type: 'uint256' },
 			{ name: 'token2', type: 'address' },
 			{ name: 'amount2', type: 'uint256' },
-			{ name: 'settlerReward', type: 'uint256' },
+			{ name: 'settlerRewardAttoEth', type: 'uint256' },
 		],
-		[10n ** 18n, token, 2n * 10n ** 18n, settlerReward],
+		[10n ** 18n, token, 2n * 10n ** 18n, settlerRewardAttoEth],
 	)
 	return receiptClients(
 		blockNumber,
@@ -572,7 +572,7 @@ describe('atomic lifecycle crash recovery', () => {
 				{ name: 'amount1', type: 'uint256' },
 				{ name: 'token2', type: 'address' },
 				{ name: 'amount2', type: 'uint256' },
-				{ name: 'settlerReward', type: 'uint256' },
+				{ name: 'settlerRewardAttoEth', type: 'uint256' },
 			],
 			[11n, token2, 22n, 3n],
 		)
@@ -581,7 +581,7 @@ describe('atomic lifecycle crash recovery', () => {
 			amount1: 11n,
 			amount2: 22n,
 			reportId: 7n,
-			settlerReward: 3n,
+			settlerRewardAttoEth: 3n,
 			token1,
 			token2,
 		})

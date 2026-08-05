@@ -722,7 +722,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			}),
 			reporterToken1: await getHeldBalance(callbackState.game.currentReporter, callbackState.game.token1),
 			reporterToken2: await getHeldBalance(callbackState.game.currentReporter, callbackState.game.token2),
-			settlerReward: await getHeldBalance(settler.account.address, ZERO_ADDRESS),
+			settlerRewardAttoEth: await getHeldBalance(settler.account.address, ZERO_ADDRESS),
 		}
 		await assertCustomError(() => openOracleSettle(settler, callbackReportId), 'InvalidGasLimit')
 		assert.deepStrictEqual(
@@ -747,14 +747,14 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 				}),
 				reporterToken1: await getHeldBalance(callbackState.game.currentReporter, callbackState.game.token1),
 				reporterToken2: await getHeldBalance(callbackState.game.currentReporter, callbackState.game.token2),
-				settlerReward: await getHeldBalance(settler.account.address, ZERO_ADDRESS),
+				settlerRewardAttoEth: await getHeldBalance(settler.account.address, ZERO_ADDRESS),
 			},
 			invalidGasStateBefore,
 			'invalid callback gas must roll back settlement hashes, prices, collateral credits, and rewards',
 		)
 	})
 
-	test('atomic report events reconstruct the exact on-chain state preimage', async () => {
+	test('attoETH and attoREP report events reconstruct the exact on-chain state preimage', async () => {
 		await prepareReporter(reporter)
 		const reportId = await createReport(reporter)
 		const eventState = await loadOpenOracleEventState(reporter, reportId)

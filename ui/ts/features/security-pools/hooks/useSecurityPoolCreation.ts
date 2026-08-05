@@ -70,15 +70,15 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 
 		const questionId = tryParseBigIntInput(marketId)
 		const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(statoblastSecurityMultiplierBpsInput)
-		const initialReportPriorityFeeWeiPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 9)
-		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeWeiPerGas === undefined || initialReportPriorityFeeWeiPerGas <= 0n) {
+		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 9)
+		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeAttoEthPerGas === undefined || initialReportPriorityFeeAttoEthPerGas <= 0n) {
 			duplicateOriginPoolExists.value = false
 			return
 		}
 
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
-				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas)
+				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
 			} catch (error) {
@@ -182,7 +182,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 						}
 						throw new Error('Security pools can only be deployed for binary markets')
 					}
-					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeWeiPerGas)) {
+					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)) {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
 							marketDetails.value = details
 						}

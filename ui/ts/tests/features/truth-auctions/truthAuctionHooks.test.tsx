@@ -59,12 +59,12 @@ function requireHarnessSetter<T>(setter: HarnessSetter<T> | undefined) {
 
 function createBid({ bidIndex, tick }: { bidIndex: bigint; tick: bigint }): TruthAuctionBidView {
 	return {
-		activeCumulativeEthBeforeBid: 0n,
+		activeCumulativeBidBeforeAttoEth: 0n,
 		bidIndex,
 		bidder: walletAddress,
 		claimed: false,
-		cumulativeEth: 1n,
-		ethAmount: 1n,
+		cumulativeBidAttoEth: 1n,
+		bidAmountAttoEth: 1n,
 		refunded: false,
 		tick,
 	}
@@ -163,7 +163,7 @@ describe('truth auction hooks', () => {
 					if (request.address === otherTruthAuctionAddress) return await nextTickCount.promise
 					return 1n
 				}
-				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalEth: 2n, price: 3n, submissionCount: 0n, tick: 4n }]
+				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalBidAttoEth: 2n, price: 3n, submissionCount: 0n, tick: 4n }]
 				if (request.functionName === 'getBidderBidCount') return 1n
 				if (request.functionName === 'getBidderBidPage') return [createBid({ bidIndex: 0n, tick: 4n })]
 				if (request.functionName === 'getBidCountAtTick') return 0n
@@ -276,7 +276,7 @@ describe('truth auction hooks', () => {
 					activeTickCountCalls += 1
 					return 1n
 				}
-				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalEth: 2n, price: 3n, submissionCount: 1n, tick: 4n }]
+				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalBidAttoEth: 2n, price: 3n, submissionCount: 1n, tick: 4n }]
 				if (request.functionName === 'getBidderBidCount') {
 					bidderBidCountCalls += 1
 					return 0n

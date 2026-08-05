@@ -217,7 +217,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						const desiredPools = parseDesiredPools(
 							Reflect.get(value, 'desiredPools') ??
 								settings.desiredPools.map(pool => ({
-									initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+									initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 									questionId: pool.questionId.toString(),
 									statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
 									universeId: pool.universeId.toString(),
@@ -326,7 +326,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}),
 			})
 		: undefined
-	await using dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -462,7 +462,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				}
 				state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
-					state.walletEth = await client.getBalance({ address: state.wallet })
+					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {
@@ -506,7 +506,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
 					if (selected !== undefined) {
-						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`
+						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.coverageCommitmentToTransferAttoEth.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)
 							lastDryRunKey = dryRunKey

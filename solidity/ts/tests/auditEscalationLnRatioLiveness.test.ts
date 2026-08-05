@@ -2,7 +2,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { usePeripheralsVaultAccountingFixture } from './peripherals/fixture'
-import { createCompleteSet, getCompleteSetCollateralAmount, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { OperationType } from '../testSupport/simulator/utils/contracts/peripherals'
 import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
@@ -12,17 +12,17 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 describe('Audit PoC: escalation logarithm precision liveness', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
 
-	const { assert, getQuestionOutcome, getSecurityPoolsEscalationGame, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, QuestionOutcome, redeemRep, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
+	const { assert, getQuestionOutcome, getSecurityPoolsEscalationGame, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, QuestionOutcome, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
-		const securityBondAllowance = 25n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance, reportedRepEthPrice)
+		const coverageCommitmentAttoEth = 25n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
-		assert.ok((await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
+		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
-		const nonDecisionThreshold = reportBond * 2n
-		const trackedSupply = 2n * nonDecisionThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const nonDecisionThresholdAttoRep = reportBond * 2n
+		const trackedSupply = 2n * nonDecisionThresholdAttoRep * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		await mockWindow.addStateOverrides({
 			[getZoltarAddress()]: {
@@ -65,6 +65,6 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
-		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 	})
 })

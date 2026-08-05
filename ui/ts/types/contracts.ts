@@ -40,7 +40,7 @@ export type ForkAuctionAction =
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
-export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setCoverageCommitment'
 export type StagedOracleOperation = {
 	amount: bigint
 	initiatorVault: Address
@@ -86,14 +86,14 @@ export type ZoltarChildUniverseSummary = {
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkBurnDivisor?: bigint
-	forkThreshold: bigint
+	forkThresholdAttoRep: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
 	parentUniverseId: bigint
 	reputationToken: Address
-	totalTheoreticalSupply: bigint
+	totalTheoreticalSupplyAttoRep: bigint
 	universeId: bigint
 	zoltarAddress?: Address
 }
@@ -137,19 +137,19 @@ export type ZoltarChildUniverseActionResult = ActionResult & {
 
 export type ZoltarMigrationActionResult = ActionResult & {
 	action: 'addRepToMigrationBalance' | 'splitMigrationRep'
-	amount: bigint
+	amountAttoRep: bigint
 	outcomeIndexes: bigint[]
 	universeId: bigint
 }
 
 export type LiquidationFundingPreview = {
-	currentRepBalance: bigint
-	currentWethBalance: bigint
-	initialReportRepRequired: bigint
-	initialReportWethRequired: bigint
-	queueOperationEthValue: bigint
-	totalWalletEthRequired: bigint
-	wethShortfall: bigint
+	currentRepBalanceAttoRep: bigint
+	currentWethBalanceAttoEth: bigint
+	initialReportRepRequiredAttoRep: bigint
+	initialReportWethRequiredAttoEth: bigint
+	queueOperationValueAttoEth: bigint
+	totalWalletEthRequiredAttoEth: bigint
+	wethShortfallAttoEth: bigint
 }
 
 export type MarketDetails = QuestionData & {
@@ -169,7 +169,7 @@ export type MarketDetailsPage = {
 
 export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	questionId: string
 	securityPoolAddress: Address
 	statoblastSecurityMultiplierBps: bigint
@@ -178,21 +178,21 @@ export type SecurityPoolCreationResult = {
 
 export type SecurityVaultDetails = {
 	currentRetentionRate: bigint
-	escalationEscrowedRep: bigint
+	disputeStakedAttoRep: bigint
 	managerAddress: Address
-	poolOwnershipDenominator: bigint
-	repDepositShare: bigint
+	totalRepBackingUnits: bigint
+	vaultAttoRepBacking: bigint
 	repToken: Address
-	securityBondAllowance: bigint
+	coverageCommitmentAttoEth: bigint
 	securityPoolAddress: Address
-	totalSecurityBondAllowance: bigint
-	unpaidEthFees: bigint
+	totalCoverageCommitmentAttoEth: bigint
+	claimableFeesAttoEth: bigint
 	universeId: bigint
 	vaultAddress: Address
 }
 
 export type SecurityVaultActionResult = ActionResult & {
-	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
+	action: 'approveRep' | 'depositRepToVault' | 'queueSetCoverageCommitmentAttoEth' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -212,8 +212,8 @@ export type OracleManagerDetails = {
 	pendingSettlementQueueCapacity: bigint
 	pendingReportId: bigint
 	priceValidUntilTimestamp: bigint | undefined
-	queuedOperationEthCost: bigint
-	requestPriceEthCost: bigint
+	queuedOperationCostAttoEth: bigint
+	requestPriceCostAttoEth: bigint
 	stagedOperations?: StagedOracleOperation[]
 	token1: Address | undefined
 	token2: Address | undefined
@@ -226,7 +226,7 @@ export type OpenOracleActionResult = ActionResult & {
 }
 
 export type OpenOracleWithdrawableBalances = {
-	eth: bigint
+	ethAttoEth: bigint
 	token1: bigint
 	token2: bigint
 }
@@ -267,7 +267,7 @@ export type OpenOracleReportDetails = {
 	exactToken1Report: bigint
 	escalationHalt: bigint
 	fee: bigint
-	settlerReward: bigint
+	settlerRewardAttoEth: bigint
 	token1: Address
 	token2: Address
 	settlementTime: bigint
@@ -299,27 +299,27 @@ export type OpenOracleReportDetails = {
 }
 
 export type ListedSecurityPool = {
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
-	feeEligibleSecurityBondAllowance: bigint
+	feeEligibleCoverageCommitmentAttoEth: bigint
 	hasForkActivity: boolean
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
 	managerAddress: Address
 	marketDetails: MarketDetails
-	migratedRep: bigint
+	migratedAttoRep: bigint
 	parent: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
 	statoblastSecurityMultiplierBps: bigint
 	securityPoolAddress: Address
-	shareTokenSupply: bigint
+	shareTokenSupplyAttoShares: bigint
 	systemState: SecurityPoolSystemState
-	totalRepDeposit: bigint
-	totalSecurityBondAllowance: bigint
+	totalPoolHeldAttoRep: bigint
+	totalCoverageCommitmentAttoEth: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	universeHasForked: boolean
@@ -341,20 +341,20 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 }
 
 export type SecurityPoolVaultSummary = {
-	escalationEscrowedRep: bigint
-	poolOwnership?: bigint
-	poolOwnershipDenominator?: bigint
-	repDepositShare: bigint
-	securityBondAllowance: bigint
-	totalRepBalance?: bigint
-	unpaidEthFees: bigint
+	disputeStakedAttoRep: bigint
+	repBackingUnits?: bigint
+	totalRepBackingUnits?: bigint
+	vaultAttoRepBacking: bigint
+	coverageCommitmentAttoEth: bigint
+	totalPoolHeldRepBalanceAttoRep?: bigint
+	claimableFeesAttoEth: bigint
 	vaultAddress: Address
 }
 
 type OwnForkRepBuckets = {
-	vaultRepAtFork: bigint
-	escalationChildRepPerSelectedOutcome: bigint
-	escrowSourceRepAtFork: bigint
+	vaultRepAtForkAttoRep: bigint
+	escalationChildRepPerSelectedOutcomeAttoRep: bigint
+	escrowSourceRepAtForkAttoRep: bigint
 }
 
 export type SecurityPoolOverviewActionResult = ActionResult & {
@@ -365,13 +365,13 @@ export type SecurityPoolOverviewActionResult = ActionResult & {
 }
 
 export type TradingShareBalances = {
-	invalid: bigint
-	no: bigint
-	yes: bigint
+	invalidAttoShares: bigint
+	noAttoShares: bigint
+	yesAttoShares: bigint
 }
 
 export type TradingDetails = {
-	maxRedeemableCompleteSets: bigint | undefined
+	maxRedeemableCompleteSetsAttoShares: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
 	universeId: bigint
 }
@@ -385,24 +385,24 @@ export type TradingActionResult = ActionResult & {
 }
 
 export type EscalationDeposit = {
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 	depositIndex: bigint
 	depositor: Address
 }
 
 export type ImportedEscalationDeposit = {
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 	depositor: Address
 	parentDepositIndex: bigint
 }
 
 export type CarriedDepositProof = {
 	depositor: Address
-	amount: bigint
+	amountAttoRep: bigint
 	parentDepositIndex: bigint
-	cumulativeAmount: bigint
+	cumulativeAmountAttoRep: bigint
 	sourceNodeId: bigint
 	leafIndex: bigint
 	merkleMountainRangeSiblings: Hex[]
@@ -424,28 +424,28 @@ export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-requir
 type EscalationMigrationEntitlementStatus = {
 	initialized: boolean
 	materializedByOutcome: Record<ReportingOutcomeKey, boolean>
-	totalCurrentRep: bigint
+	totalCurrentAttoRep: bigint
 }
 
 type ReportingDetailsBase = {
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentTime: bigint
-	forkThreshold: bigint
+	forkThresholdAttoRep: bigint
 	marketDetails: MarketDetails
-	nonDecisionThreshold: bigint
+	nonDecisionThresholdAttoRep: bigint
 	parentSecurityPoolAddress?: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
 	settlementState: ReportingSettlementState
-	startBond: bigint
+	startBondAttoRep: bigint
 	systemState: SecurityPoolSystemState
 	universeId: bigint
 	parentWithdrawalEnabled: boolean
-	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerEscalationMigrationEntitlement?: EscalationMigrationEntitlementStatus | undefined
 	viewerVaultExists: boolean
-	viewerVaultEscrowedRep: bigint | undefined
-	viewerVaultRepDepositShare: bigint | undefined
+	viewerVaultDisputeStakedAttoRep: bigint | undefined
+	viewerVaultRepBackingAttoRep: bigint | undefined
 }
 
 export type ActiveReportingDetails = ReportingDetailsBase & {
@@ -457,7 +457,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	hasReachedNonDecision: boolean
 	sides: EscalationSide[]
 	activationTime: bigint
-	totalCost: bigint
+	totalCostAttoRep: bigint
 }
 
 export type ReportingDetails =
@@ -474,29 +474,29 @@ export type ReportingActionResult = ActionResult & {
 }
 
 export type TruthAuctionMetrics = {
-	accumulatedEth: bigint
+	accumulatedBidAttoEth: bigint
 	auctionEndsAt: bigint | undefined
 	clearingPrice: bigint | undefined
 	clearingTick: bigint | undefined
-	ethAtClearingTick: bigint
-	ethRaiseCap: bigint
-	ethRaised: bigint
+	bidAtClearingTickAttoEth: bigint
+	attoEthRaiseCap: bigint
+	attoEthRaised: bigint
 	finalized: boolean
 	hitCap: boolean
-	maxRepBeingSold: bigint
-	minBidSize: bigint
-	repPurchasableAtBid: bigint | undefined
+	maxAttoRepBeingSold: bigint
+	minBidSizeAttoEth: bigint
+	attoRepPurchasableAtBid: bigint | undefined
 	timeRemaining: bigint | undefined
-	totalRepPurchased: bigint
+	totalAttoRepPurchased: bigint
 	underfunded: boolean
 	underfundedThreshold: bigint | undefined
-	underfundedWinningEth: bigint
+	underfundedWinningAttoEth: bigint
 }
 
 export type TruthAuctionTickSummary = {
 	tick: bigint
 	price: bigint
-	currentTotalEth: bigint
+	currentTotalBidAttoEth: bigint
 	submissionCount: bigint
 	active: boolean
 }
@@ -505,9 +505,9 @@ export type TruthAuctionBidView = {
 	tick: bigint
 	bidIndex: bigint
 	bidder: Address
-	ethAmount: bigint
-	cumulativeEth: bigint
-	activeCumulativeEthBeforeBid: bigint
+	bidAmountAttoEth: bigint
+	cumulativeBidAttoEth: bigint
+	activeCumulativeBidBeforeAttoEth: bigint
 	claimed: boolean
 	refunded: boolean
 }
@@ -536,20 +536,20 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
-	auctionedSecurityBondAllowance: bigint
+	auctionedCoverageCommitmentAttoEth: bigint
 	claimingAvailable: boolean
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentTime: bigint
 	hasForkActivity: boolean
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	marketDetails: MarketDetails
-	migratedRep: bigint
+	migratedAttoRep: bigint
 	migrationEndsAt: bigint | undefined
 	parentSecurityPoolAddress: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	ownForkRepBuckets?: OwnForkRepBuckets | undefined
-	auctionableRepAtFork: bigint
+	auctionableAttoRepAtFork: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
 	truthAuction: TruthAuctionMetrics | undefined

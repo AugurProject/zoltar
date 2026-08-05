@@ -29,8 +29,23 @@ const FEES = STANDARD_UNISWAP_FEES
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
 import { type PositionRecord } from '#state/position-store'
 import { bestSuccessful } from '#monitoring/resilience'
-import { positionRiskLimitMismatch, projectedLifecycleGasReserveWeth } from '#core/safety-controls'
-import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, fundedCapitalAtRiskWeth, hasFreshSubmissionWindow, hedgeWethLimit, isSelfReport, meetsProfitThreshold, spotTwapDeviationWithinLimit, type ArbitrageQuote } from '#core/strategy'
+import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
+import {
+	calculateFee,
+	calculateNextAmount1,
+	calculateTrackedNetProfitEth,
+	deriveTokenToSwap,
+	evaluateBuyRep,
+	evaluateSellRep,
+	executorFunding,
+	fundedCapitalAtRiskAttoWeth,
+	hasFreshSubmissionWindow,
+	hedgeWethLimitAttoEth,
+	isSelfReport,
+	meetsProfitThreshold,
+	spotTwapDeviationWithinLimit,
+	type ArbitrageQuote,
+} from '#core/strategy'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle, SubmissionFailure, type SubmissionTargetResult } from '#execution/transaction-submission'
 import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { Venue } from '#core/venue-strategy'
@@ -43,7 +58,7 @@ import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } fr
 export async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, pools: readonly Pool[], tokens: readonly Address[]) {
 	if (wallet === undefined) return undefined
 	const address = wallet.account.address
-	const [eth, weth, rep] = await Promise.all([
+	const [ethAttoEth, attoWeth, repAttoRep] = await Promise.all([
 		client.getBalance({ address }),
 		client.readContract({
 			address: config.network.weth,
@@ -66,23 +81,23 @@ export async function loadBalances(client: ReadClient, wallet: WriteClient | und
 			args: [address],
 		}),
 	)
-	const raw = { eth, rep, tokens: tokenBalances, weth }
-	let repValueWeth: bigint | undefined
-	if (rep === 0n) repValueWeth = 0n
+	const raw = { ethAttoEth, repAttoRep, tokens: tokenBalances, attoWeth }
+	let repValueAttoWeth: bigint | undefined
+	if (repAttoRep === 0n) repValueAttoWeth = 0n
 	else {
 		const best = await bestSuccessful(
-			pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase()).map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, rep, pool.fee)),
+			pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase()).map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, repAttoRep, pool.fee)),
 			value => value,
 			() => undefined,
 		)
-		repValueWeth = best
+		repValueAttoWeth = best
 	}
 	const snapshot: BalanceSnapshot = {
-		availableEth: decimalWeth(eth),
-		availableRep: decimalWeth(rep),
-		availableWeth: decimalWeth(weth),
-		repValueWeth: repValueWeth === undefined ? undefined : decimalWeth(repValueWeth),
-		totalValueWeth: repValueWeth === undefined ? undefined : decimalWeth(eth + weth + repValueWeth),
+		availableEth: decimalWeth(ethAttoEth),
+		availableRep: decimalWeth(repAttoRep),
+		availableWeth: decimalWeth(attoWeth),
+		repValueWeth: repValueAttoWeth === undefined ? undefined : decimalWeth(repValueAttoWeth),
+		totalValueWeth: repValueAttoWeth === undefined ? undefined : decimalWeth(ethAttoEth + attoWeth + repValueAttoWeth),
 	}
 	return { raw, snapshot }
 }
@@ -145,21 +160,21 @@ export async function executeDispute(
 	}
 	if (!spotTwapDeviationWithinLimit(refreshedPool.spotTick, refreshedPool.twapTick, config.maxSpotTwapTicks)) throw new Error('Selected pool failed the final spot/TWAP check')
 	const gasPrice = executionSnapshot.baseFeePerGas * 2n + 2n * 10n ** 9n
-	const lifecycleGasReserveWeth = projectedLifecycleGasReserveWeth({
+	const lifecycleGasReserveAttoWeth = projectedLifecycleGasReserveAttoWeth({
 		callbackGasLimit: BigInt(game.callbackGasLimit),
-		configuredReserveWeth: config.riskLimits.lifecycleGasReserveWeth,
+		configuredReserveAttoWeth: config.riskLimits.lifecycleGasReserveAttoWeth,
 		gasPrice,
 		submissionMode: config.submission.mode,
 	})
-	const entryGasCostWeth = gasPrice * 1_200_000n
+	const entryGasCostAttoWeth = gasPrice * 1_200_000n
 	const refreshedQuote = selectBestExecution(
-		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config)],
-		candidate => candidate.netProfitWeth,
+		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config)],
+		candidate => candidate.netProfitAttoWeth,
 	)
 	if (refreshedQuote === undefined) throw new Error('Canonical execution snapshot did not produce an arbitrage quote')
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
-	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
-	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountRep * 10n ** 18n) / referenceWeth
+	const referenceWeth = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsAttoWeth : refreshedQuote.hedgeCostAttoWeth
+	const refreshedDexPriceRepPerEth = referenceWeth === 0n ? 0n : (refreshedQuote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
 	const finalMarketPriceAllowsExecution = () =>
 		centralizedMarketConfigurationAllowsExecution(config.centralizedMarkets) &&
 		(marketConsensus === undefined
@@ -181,8 +196,8 @@ export async function executeDispute(
 	const newAmount2 = executionSnapshot.replacementAmount2
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Final replacement ratio does not derive the selected arbitrage direction')
-	const hedgeLimitQuote = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
-	const hedgeLimit = hedgeWethLimit(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
+	const hedgeLimitQuote = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsAttoWeth : refreshedQuote.hedgeCostAttoWeth
+	const hedgeLimit = hedgeWethLimitAttoEth(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
 	const funding = executorFunding(game, newAmount1, newAmount2, refreshedQuote.direction === 'buy-rep' ? hedgeLimit : 0n)
 	if (executionSnapshot.weth < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
 	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
@@ -208,8 +223,8 @@ export async function executeDispute(
 		expectedParentBlockHash: executionSnapshot.blockHash,
 		executionIntent: {
 			direction: refreshedQuote.direction,
-			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitWeth),
-			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
+			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitAttoWeth),
+			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasAttoWeth),
 			reportId,
 			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
 			requiredWeth: decimalWeth(funding.token1),
@@ -217,7 +232,7 @@ export async function executeDispute(
 			tokenSymbol: tokenMetadata.symbol,
 		},
 		hedgePool,
-		hedgeWethLimit: hedgeLimit,
+		hedgeWethLimitAttoEth: hedgeLimit,
 		newAmount1,
 		newAmount2,
 		openOracle: config.openOracle,
@@ -247,11 +262,11 @@ export async function executeDispute(
 		to: executor,
 	})
 	const signedTransactions = [{ kind: 'dispute' as const, signed: executionSigned, token: undefined, tokenSymbol: undefined }]
-	const capitalAtRiskWeth = fundedCapitalAtRiskWeth(funding, refreshedQuote.hedgeAmountRep, hedgeLimitQuote, hedgeLimit)
+	const capitalAtRiskAttoWeth = fundedCapitalAtRiskAttoWeth(funding, refreshedQuote.hedgeAmountAttoRep, hedgeLimitQuote, hedgeLimit)
 	let stagedPosition = {
 		account: account.address,
 		actualEntryGasCostEth: '0',
-		capitalAtRiskWeth: decimalWeth(capitalAtRiskWeth),
+		capitalAtRiskWeth: decimalWeth(capitalAtRiskAttoWeth),
 		closedAt: undefined,
 		direction: refreshedQuote.direction,
 		entrySubmissionBlockNumber: quoteBlockNumber.toString(),
@@ -264,9 +279,9 @@ export async function executeDispute(
 		expiredTransactionAttempts: [],
 		gasExpenditures: [],
 		historyOutbox: undefined,
-		hedgeAmountToken: formatTokenAmount(refreshedQuote.hedgeAmountRep, tokenMetadata.decimals),
+		hedgeAmountToken: formatTokenAmount(refreshedQuote.hedgeAmountAttoRep, tokenMetadata.decimals),
 		hedgeWeth: decimalWeth(hedgeLimitQuote),
-		hedgedProfitBeforeGasEth: decimalSignedEth(refreshedQuote.profitBeforeGasWeth),
+		hedgedProfitBeforeGasEth: decimalSignedEth(refreshedQuote.profitBeforeGasAttoWeth),
 		lifecycleGasCostEth: '0',
 		lifecycleReceiptRecovered: false,
 		lifecycleTargetBlockNumber: undefined,
@@ -298,12 +313,12 @@ export async function executeDispute(
 	let quorumConfirmedPosition: PositionRecord | undefined
 	if (config.submission.mode === 'public') {
 		await wallet.simulateContract(request)
-		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
-		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track, {
+		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitAttoWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
+		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitAttoWeth), kind: 'dispute', reportId }, isPaused, track, {
 			beforeSubmit: async () => {
 				if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 			},
-			persistPending: () => guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition)),
+			persistPending: () => guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: gasPrice * 1_200_000n + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition)),
 		})
 		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
@@ -371,7 +386,7 @@ export async function executeDispute(
 		receiptBlockNumber = receipt.blockNumber
 		executionHash = receipt.transactionHash
 		executionLogs = receipt.logs
-		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasWeth, actualGasCost))
+		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasAttoWeth, actualGasCost))
 		track(trackedActivity(tracked, 'confirmed', decimalWeth(actualGasCost), receipt.transactionHash, trackedNetProfitEth))
 	} else {
 		const serializedTransactions = signedTransactions.map(transaction => transaction.signed.serializedTransaction)
@@ -379,7 +394,7 @@ export async function executeDispute(
 		let tracked = signedTransactions.map(transaction => ({
 			...transaction.signed,
 			acceptedTargets: [] as readonly string[],
-			estimatedNetProfitEth: transaction.kind === 'dispute' ? decimalWeth(refreshedQuote.netProfitWeth) : undefined,
+			estimatedNetProfitEth: transaction.kind === 'dispute' ? decimalWeth(refreshedQuote.netProfitAttoWeth) : undefined,
 			failedTargets: [] as readonly SubmissionTargetResult[],
 			kind: transaction.kind,
 			mode: 'private' as const,
@@ -415,9 +430,9 @@ export async function executeDispute(
 			},
 		)
 		const totalGasUsed = relaySimulations.successful.reduce((maximum, result) => (result.simulation.totalGasUsed > maximum ? result.simulation.totalGasUsed : maximum), 0n)
-		const simulatedQuote = safetyAdjustedQuote(refreshedQuote, totalGasUsed * gasPrice, lifecycleGasReserveWeth, config)
-		const simulatedNetProfit = simulatedQuote.netProfitWeth
-		if (!meetsProfitThreshold(simulatedQuote, config.minimumProfitWeth, config.minimumProfitBps)) {
+		const simulatedQuote = safetyAdjustedQuote(refreshedQuote, totalGasUsed * gasPrice, lifecycleGasReserveAttoWeth, config)
+		const simulatedNetProfit = simulatedQuote.netProfitAttoWeth
+		if (!meetsProfitThreshold(simulatedQuote, config.minimumProfitAttoWeth, config.minimumProfitBps)) {
 			const error = new Error('Simulated bundle no longer meets the profit threshold')
 			for (const transaction of tracked) track(trackedActivity({ ...transaction, failedTargets: [{ error: error.message, target: 'local profitability check' }] }, 'submission-failed'))
 			throw error
@@ -444,7 +459,7 @@ export async function executeDispute(
 					if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 				},
 				() =>
-					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
+					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: totalGasUsed * gasPrice + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
 						journaledSubmission(
 							() => persistPosition(stagedPosition),
 							() =>
@@ -502,7 +517,7 @@ export async function executeDispute(
 		receiptBlockNumber = executorReceipt.blockNumber
 		executionHash = executorReceipt.transactionHash
 		executionLogs = executorReceipt.logs
-		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasWeth, actualGasCost))
+		const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasAttoWeth, actualGasCost))
 		for (const [index, transaction] of pending.entries()) {
 			const receipt = confirmedReceipts[index]
 			if (receipt === undefined) throw new Error('Bundle receipt order is incomplete')
@@ -513,7 +528,7 @@ export async function executeDispute(
 	if (confirmedPosition === undefined) {
 		const hedgeExecution = hedgeExecutionFromLogs(executionLogs, executor)
 		if (hedgeExecution.reportId !== report.helper.reportId) throw new Error('Executor hedge event report id does not match the submitted report')
-		const hedgedProfitBeforeGas = hedgedProfitBeforeGasWeth(refreshedQuote.direction, hedgeExecution.hedgeAmountWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee))
+		const hedgedProfitBeforeGas = hedgedProfitBeforeGasWeth(refreshedQuote.direction, hedgeExecution.hedgeAmountAttoWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee))
 		confirmedPosition = {
 			...stagedPosition,
 			actualEntryGasCostEth: decimalWeth(actualGasCost),
@@ -521,7 +536,7 @@ export async function executeDispute(
 			entryTransactionHashes: [executionHash],
 			gasExpenditures: entryGasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
-			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
+			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountAttoWeth),
 			hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
 			status: 'open',
 		}

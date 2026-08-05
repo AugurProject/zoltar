@@ -24,13 +24,13 @@
 					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit and claim delegates mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
-					<math display="block" aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal">
+					<math display="block" aria-label="current carry total in attoREP equals effective inherited unresolved total in attoREP plus local unresolved total in attoREP" data-source="currentCarryTotalAttoRep = effectiveInheritedUnresolvedTotalAttoRep + localUnresolvedTotalAttoRep">
 						<mrow>
-							<mi>currentCarryTotal</mi>
+							<mi>currentCarryTotalAttoRep</mi>
 							<mo>=</mo>
-							<mi>effectiveInheritedUnresolvedTotal</mi>
+							<mi>effectiveInheritedUnresolvedTotalAttoRep</mi>
 							<mo>+</mo>
-							<mi>localUnresolvedTotal</mi>
+							<mi>localUnresolvedTotalAttoRep</mi>
 						</mrow>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Carry Ownership Boundary</span>Effective inherited principal starts from the stored inherited unresolved total, which carried-proof consumption decrements, and subtracts cumulative principal claimed directly in the immediate parent. After final resolution it is also zero for every inherited losing outcome. Local losing deposits are not part of that shortcut and retain their normal local settlement path.</p>
@@ -121,19 +121,19 @@
 					<tbody>
 						<tr>
 							<td>Escrow totals</td>
-							<td><code>totalEscrowedRep</code> equals effective active REP locks after any auction retention. <code>escrowedRepByVault(vault)</code> returns only locally attributed escrow in that game. A continuation's inherited carry remains aggregate backing committed by its MMR; the leaf depositor remains the immutable payout owner, but receives no per-vault child health credit.</td>
+							<td><code>totalDisputeStakedAttoRep</code> equals effective active REP locks after any auction retention. <code>disputeStakedRepByVaultAttoRep(vault)</code> returns only locally attributed escrow in that game. A continuation's inherited carry remains aggregate backing committed by its MMR; the leaf depositor remains the immutable payout owner, but receives no per-vault child health credit.</td>
 						</tr>
 						<tr>
 							<td>Local unresolved totals</td>
-							<td><code>totalLocalUnresolvedRep</code> equals the sum of unresolved local deposits, and <code>unresolvedRepByVault[vault]</code> is that vault's local component.</td>
+							<td><code>totalLocalUnresolvedAttoRep</code> equals the sum of unresolved local deposits, and <code>unresolvedRepByVaultAttoRep[vault]</code> is that vault's local component.</td>
 						</tr>
 						<tr>
 							<td>Outcome carry</td>
-							<td>For each outcome, <code>currentCarryTotal == effectiveInheritedUnresolvedTotal + localUnresolvedTotal</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.</td>
+							<td>For each outcome, <code>currentCarryTotalAttoRep == effectiveInheritedUnresolvedTotalAttoRep + localUnresolvedTotalAttoRep</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.</td>
 						</tr>
 						<tr>
 							<td>Active local deposit</td>
-							<td>Before aggregate export, <code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active parent locks.</td>
+							<td>Before aggregate export, <code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active unresolved parent escalation-deposit accounting.</td>
 						</tr>
 						<tr>
 							<td>Local deposit consumption</td>
@@ -150,7 +150,7 @@
 						<tr>
 							<td>Continuation funding</td>
 							<td>
-								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../explanation/statoblast.html#migration">fork-migration derivation</a> and <a href="../reference/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
+								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool-held REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../explanation/statoblast.html#migration">fork-migration derivation</a> and <a href="../reference/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
 							</td>
 						</tr>
 						<tr>
@@ -163,10 +163,10 @@
 						</tr>
 					</tbody>
 				</table>
-				<p id="claim-ownership">Claims are non-transferable commitments rather than tokens or mutable ownership bundles. Each carry leaf commits the original depositor, outcome, amount, stable parent index, cumulative amount, and source node. A child stores only the immutable MMR peaks and leaf count, nullifier root, aggregate carry totals, and normalized retention checkpoint. It never copies per-claim or per-owner state from its parent. The fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2^64 - 1</code> leaves; it is not a 64-reporter or 64-portfolio cap. Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once. Liquidation does not inspect or move claims and therefore cannot omit, select, or acquire them. It transfers only the 5%-bonus free-REP award, while accrued fees and all escalation claims remain with the target. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand stored owner sets or impose descendant-copy work.</p>
+				<p id="claim-ownership">Claims are non-transferable commitments rather than tokens or mutable ownership bundles. Each carry leaf commits the original depositor, outcome, amount, stable parent index, cumulative amount, and source node. A child stores only the immutable MMR peaks and leaf count, nullifier root, aggregate carry totals, and normalized retention checkpoint. It never copies per-claim or per-owner state from its parent. The fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2^64 - 1</code> leaves; it is not a 64-reporter or 64-portfolio cap. Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once. Liquidation does not inspect or move claims and therefore cannot omit, select, or acquire them. It transfers only the 5%-bonus pool-held vault REP backing award, while accrued fees and all escalation claims remain with the target. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand stored owner sets or impose descendant-copy work.</p>
 				<p>Claim ownership is immutable. There are no owner slots, portfolio registries, global participant caps, or ownership transitions to exhaust.</p>
 				<p>Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use the root-source checkpoint. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Carry consumption allocates source-basis rounding by cumulative leaf prefixes—retained current prefix minus retained previous prefix—so every proof order telescopes to the aggregate checkpoint total without phantom residual principal. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth adds neither storage traversal nor a liquidation loop.</p>
-				<p>Local deposit consumption removes the raw claim shares corresponding to that deposit's effective original principal. With no local auction checkpoint this is the original principal; after a local haircut it is the ceiling of <code>originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining</code>. This inverse-retention conversion removes the exact storage-basis backing while leaving every other unconsumed deposit intact.</p>
+				<p>Local deposit consumption removes the raw claim units corresponding to that deposit's effective original principal. With no local auction checkpoint this is the original principal; after a local haircut it is the ceiling of <code>originalPrincipal × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep</code>. This inverse-retention conversion removes the exact storage-basis backing while leaving every other unconsumed deposit intact.</p>
 				<p>The game's fallback delegates retention-checkpoint calculations to the shared claim module. There are no owner, portfolio, or import selectors. Auction retention is also available through the game's ordinary public storage getters.</p>
 				<p>The highest-risk paths already have regression coverage. Scenario tests exercise consumed local carry leaves, constant-size unresolved-vault export, and lazy child materialization, while <code>escalationGameInterfaceRegression.test.ts</code> snapshots the inherited storage layout so refactors do not silently move live slots.</p>
 			</section>

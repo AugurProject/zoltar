@@ -52,7 +52,7 @@ describe('GenesisReputationToken', () => {
 		const theoreticalSupply = await client.readContract({
 			abi: GenesisReputationToken_GenesisReputationToken.abi,
 			address: tokenAddress,
-			functionName: 'getTotalTheoreticalSupply',
+			functionName: 'getTotalTheoreticalSupplyAttoRep',
 			args: [],
 		})
 		assert.strictEqual(totalSupply, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)

@@ -34,7 +34,7 @@ describe('useForkAuctionInteractionState', () => {
 		let setHarnessProps: ((update: (current: InteractionProps) => InteractionProps) => void) | undefined
 		const initialProps: InteractionProps = {
 			accountAddress: '0x0000000000000000000000000000000000000001',
-			connectedWalletEscrowedRep: undefined,
+			connectedWalletDisputeStakedAttoRep: undefined,
 			forkAuctionActiveAction: undefined,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,
@@ -81,7 +81,7 @@ describe('useForkAuctionInteractionState', () => {
 		let setHarnessProps: ((update: (current: InteractionProps) => InteractionProps) => void) | undefined
 		const initialProps: InteractionProps = {
 			accountAddress: '0x0000000000000000000000000000000000000001',
-			connectedWalletEscrowedRep: undefined,
+			connectedWalletDisputeStakedAttoRep: undefined,
 			forkAuctionActiveAction: undefined,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,

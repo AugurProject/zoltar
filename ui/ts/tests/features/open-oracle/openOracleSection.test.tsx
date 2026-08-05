@@ -104,8 +104,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 10n * 10n ** 18n,
-		wethBalance: 5n * 10n ** 18n,
+		ethBalanceAttoEth: 10n * 10n ** 18n,
+		wethBalanceAttoEth: 5n * 10n ** 18n,
 		...overrides,
 	}
 }
@@ -147,7 +147,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		reportTimestamp: 0n,
 		settlementTime: 86400n,
 		settlementTimestamp: 0n,
-		settlerReward: 10n ** 15n,
+		settlerRewardAttoEth: 10n ** 15n,
 		stateHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 		timeType: true,
 		token1: '0x2000000000000000000000000000000000000000',

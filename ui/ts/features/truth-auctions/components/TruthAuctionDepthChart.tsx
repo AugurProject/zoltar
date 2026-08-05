@@ -47,7 +47,7 @@ function buildDepthAreaPath(points: TruthAuctionDepthPoint[]) {
 	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
 	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const stepWidth = plotWidth / points.length
-	const maxDepth = points.reduce((currentMax, point) => (point.cumulativeEth > currentMax ? point.cumulativeEth : currentMax), 0n)
+	const maxDepth = points.reduce((currentMax, point) => (point.cumulativeBidAttoEth > currentMax ? point.cumulativeBidAttoEth : currentMax), 0n)
 	const toY = (value: bigint) => {
 		if (value <= 0n || maxDepth <= 0n) return baselineY
 		return baselineY - getDepthRatio(value, maxDepth) * plotHeight
@@ -57,7 +57,7 @@ function buildDepthAreaPath(points: TruthAuctionDepthPoint[]) {
 	for (const [index, point] of points.entries()) {
 		const xStart = CHART_PADDING.left + stepWidth * index
 		const xEnd = CHART_PADDING.left + stepWidth * (index + 1)
-		const y = toY(point.cumulativeEth)
+		const y = toY(point.cumulativeBidAttoEth)
 		path += ` L ${xStart} ${y} L ${xEnd} ${y}`
 	}
 	path += ` L ${CHART_PADDING.left + plotWidth} ${baselineY} Z`
@@ -72,7 +72,7 @@ function buildDepthLinePath(points: TruthAuctionDepthPoint[]) {
 	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
 	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const stepWidth = plotWidth / points.length
-	const maxDepth = points.reduce((currentMax, point) => (point.cumulativeEth > currentMax ? point.cumulativeEth : currentMax), 0n)
+	const maxDepth = points.reduce((currentMax, point) => (point.cumulativeBidAttoEth > currentMax ? point.cumulativeBidAttoEth : currentMax), 0n)
 	const toY = (value: bigint) => {
 		if (value <= 0n || maxDepth <= 0n) return baselineY
 		return baselineY - getDepthRatio(value, maxDepth) * plotHeight
@@ -82,12 +82,12 @@ function buildDepthLinePath(points: TruthAuctionDepthPoint[]) {
 	for (const [index, point] of points.entries()) {
 		const xStart = CHART_PADDING.left + stepWidth * index
 		const xEnd = CHART_PADDING.left + stepWidth * (index + 1)
-		const y = toY(point.cumulativeEth)
+		const y = toY(point.cumulativeBidAttoEth)
 		if (index === 0) path = `M ${xStart} ${y}`
 		path += ` L ${xEnd} ${y}`
 		if (index < points.length - 1) {
 			const nextPoint = points[index + 1]
-			if (nextPoint !== undefined) path += ` L ${xEnd} ${toY(nextPoint.cumulativeEth)}`
+			if (nextPoint !== undefined) path += ` L ${xEnd} ${toY(nextPoint.cumulativeBidAttoEth)}`
 		}
 	}
 
@@ -110,7 +110,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 	const lowestLoadedPrice = points[points.length - 1]?.price
 	const midpointIndex = points.length >= 3 ? Math.floor(points.length / 2) : undefined
 	const midpointPrice = midpointIndex === undefined ? undefined : points[midpointIndex]?.price
-	const maxLoadedDepth = points.reduce((currentMax, point) => (point.cumulativeEth > currentMax ? point.cumulativeEth : currentMax), 0n)
+	const maxLoadedDepth = points.reduce((currentMax, point) => (point.cumulativeBidAttoEth > currentMax ? point.cumulativeBidAttoEth : currentMax), 0n)
 	const midpointDepth = maxLoadedDepth >= 2n ? maxLoadedDepth / 2n : undefined
 	const getDepthYPosition = (value: bigint) => {
 		if (value <= 0n || maxLoadedDepth <= 0n) return baselineY

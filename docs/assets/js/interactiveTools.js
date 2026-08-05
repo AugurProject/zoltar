@@ -36,11 +36,11 @@ const presetDefinitions = {
 	'collateral-repair-example': [
 		{
 			label: 'Fully repaired',
-			values: { auctionRaised: '2.5', forkCollateralReceived: '47.5', parentCollateral: '50' },
+			values: { auctionRaised: '2.5', forkSettlementCollateralReceived: '47.5', parentSettlementCollateral: '50' },
 		},
 		{
 			label: 'Residual shortfall',
-			values: { auctionRaised: '5', forkCollateralReceived: '35', parentCollateral: '50' },
+			values: { auctionRaised: '5', forkSettlementCollateralReceived: '35', parentSettlementCollateral: '50' },
 		},
 	],
 	'initial-report-estimator-example': [
@@ -70,15 +70,15 @@ const presetDefinitions = {
 	'liquidation-health-example': [
 		{
 			label: 'Healthy vault',
-			values: { debt: '75', multiplier: '2', price: '5', rep: '1000' },
+			values: { coverageCommitment: '75', multiplier: '2', price: '5', rep: '1000' },
 		},
 		{
 			label: 'Liquidatable vault',
-			values: { debt: '75', multiplier: '2', price: '10', rep: '1000' },
+			values: { coverageCommitment: '75', multiplier: '2', price: '10', rep: '1000' },
 		},
 		{
 			label: 'Severe shortfall',
-			values: { debt: '150', multiplier: '3', price: '15', rep: '500' },
+			values: { coverageCommitment: '150', multiplier: '3', price: '15', rep: '500' },
 		},
 	],
 	'liquidation-path-example': [

@@ -5,48 +5,48 @@ function parseDecimalWeth(value: string) {
 }
 
 export type RiskLimits = {
-	lifecycleGasReserveWeth: bigint
+	lifecycleGasReserveAttoWeth: bigint
 	maxConcurrentPositions: number
-	maxDailyGasSpendWeth: bigint
-	maxPositionNotionalWeth: bigint
-	maxTotalLockedWeth: bigint
+	maxDailyGasSpendAttoWeth: bigint
+	maxPositionNotionalAttoWeth: bigint
+	maxTotalLockedAttoWeth: bigint
 }
 
 export const DEFAULT_RISK_LIMITS = {
-	lifecycleGasReserveWeth: 10n ** 16n,
+	lifecycleGasReserveAttoWeth: 10n ** 16n,
 	maxConcurrentPositions: 1,
-	maxDailyGasSpendWeth: 5n * 10n ** 16n,
-	maxPositionNotionalWeth: 5n * 10n ** 18n,
-	maxTotalLockedWeth: 10n * 10n ** 18n,
+	maxDailyGasSpendAttoWeth: 5n * 10n ** 16n,
+	maxPositionNotionalAttoWeth: 5n * 10n ** 18n,
+	maxTotalLockedAttoWeth: 10n * 10n ** 18n,
 } satisfies RiskLimits
 
 export function positionConsumesRisk(status: string) {
 	return status !== 'closed' && status !== 'expired-not-included'
 }
 
-export function adjustedNetProfitWeth(parameters: { entryGasCostWeth: bigint; hedgeSlippageReserveWeth: bigint; lifecycleGasReserveWeth: bigint; profitBeforeGasWeth: bigint }) {
-	return parameters.profitBeforeGasWeth - parameters.entryGasCostWeth - parameters.hedgeSlippageReserveWeth - parameters.lifecycleGasReserveWeth
+export function adjustedNetProfitWeth(parameters: { entryGasCostAttoWeth: bigint; hedgeSlippageReserveAttoWeth: bigint; lifecycleGasReserveAttoWeth: bigint; profitBeforeGasAttoWeth: bigint }) {
+	return parameters.profitBeforeGasAttoWeth - parameters.entryGasCostAttoWeth - parameters.hedgeSlippageReserveAttoWeth - parameters.lifecycleGasReserveAttoWeth
 }
 
-export function projectedLifecycleGasReserveWeth(parameters: { callbackGasLimit: bigint; configuredReserveWeth: bigint; gasPrice: bigint; submissionMode: 'private' | 'public' }) {
+export function projectedLifecycleGasReserveAttoWeth(parameters: { callbackGasLimit: bigint; configuredReserveAttoWeth: bigint; gasPrice: bigint; submissionMode: 'private' | 'public' }) {
 	const transactionPlanGas = parameters.callbackGasLimit + 900_000n
-	const projectedGasWeth = parameters.gasPrice * transactionPlanGas
-	return projectedGasWeth > parameters.configuredReserveWeth ? projectedGasWeth : parameters.configuredReserveWeth
+	const projectedGasAttoWeth = parameters.gasPrice * transactionPlanGas
+	return projectedGasAttoWeth > parameters.configuredReserveAttoWeth ? projectedGasAttoWeth : parameters.configuredReserveAttoWeth
 }
 
 export function riskLimitMismatch(
 	exposure: {
-		capitalAtRiskWeth: bigint
+		capitalAtRiskAttoWeth: bigint
 		concurrentPositions: number
-		dailyGasSpentWeth: bigint
-		projectedLockedWeth: bigint
+		dailyGasSpentAttoWeth: bigint
+		projectedLockedAttoWeth: bigint
 	},
 	limits: RiskLimits,
 ) {
 	if (exposure.concurrentPositions >= limits.maxConcurrentPositions) return 'Maximum concurrent position limit reached'
-	if (exposure.capitalAtRiskWeth > limits.maxPositionNotionalWeth) return 'Maximum position notional exceeded'
-	if (exposure.projectedLockedWeth > limits.maxTotalLockedWeth) return 'Maximum total locked capital exceeded'
-	if (exposure.dailyGasSpentWeth > limits.maxDailyGasSpendWeth) return 'Maximum UTC-day gas spend budget exceeded'
+	if (exposure.capitalAtRiskAttoWeth > limits.maxPositionNotionalAttoWeth) return 'Maximum position notional exceeded'
+	if (exposure.projectedLockedAttoWeth > limits.maxTotalLockedAttoWeth) return 'Maximum total locked capital exceeded'
+	if (exposure.dailyGasSpentAttoWeth > limits.maxDailyGasSpendAttoWeth) return 'Maximum UTC-day gas spend budget exceeded'
 	return undefined
 }
 
@@ -70,22 +70,22 @@ export function utcDayGasSpentWeth(positions: readonly Pick<RecordedRiskPosition
 
 export function positionRiskLimitMismatch(
 	parameters: {
-		capitalAtRiskWeth: bigint
+		capitalAtRiskAttoWeth: bigint
 		positions: readonly RecordedRiskPosition[]
-		projectedGasCostWeth: bigint
+		projectedGasCostAttoWeth: bigint
 	},
 	limits: RiskLimits,
 	now = new Date(),
 ) {
 	const openPositions = parameters.positions.filter(position => positionConsumesRisk(position.status))
-	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const dailyGasSpentWeth = utcDayGasSpentWeth(parameters.positions, now)
+	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
+	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(parameters.positions, now)
 	return riskLimitMismatch(
 		{
-			capitalAtRiskWeth: parameters.capitalAtRiskWeth,
+			capitalAtRiskAttoWeth: parameters.capitalAtRiskAttoWeth,
 			concurrentPositions: openPositions.length,
-			dailyGasSpentWeth: dailyGasSpentWeth + parameters.projectedGasCostWeth,
-			projectedLockedWeth: lockedWeth + parameters.capitalAtRiskWeth,
+			dailyGasSpentAttoWeth: dailyGasSpentAttoWeth + parameters.projectedGasCostAttoWeth,
+			projectedLockedAttoWeth: lockedAttoWeth + parameters.capitalAtRiskAttoWeth,
 		},
 		limits,
 	)

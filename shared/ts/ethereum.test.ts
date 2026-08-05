@@ -373,7 +373,7 @@ describe('shared ethereum compatibility layer', () => {
 				args: [7n, '0xaa'],
 			}),
 		)
-		expect(parseAbiItem('function withdrawDeposit((address depositor, uint256 amount) proof, uint8 outcome) nonpayable returns (uint256 amountToWithdraw)')).toEqual({
+		expect(parseAbiItem('function withdrawDeposit((address depositor, uint256 amount) proof, uint8 outcome) nonpayable returns (uint256 amountToWithdrawAttoRep)')).toEqual({
 			inputs: [
 				{
 					components: [
@@ -386,7 +386,7 @@ describe('shared ethereum compatibility layer', () => {
 				{ name: 'outcome', type: 'uint8' },
 			],
 			name: 'withdrawDeposit',
-			outputs: [{ name: 'amountToWithdraw', type: 'uint256' }],
+			outputs: [{ name: 'amountToWithdrawAttoRep', type: 'uint256' }],
 			stateMutability: 'nonpayable',
 			type: 'function',
 		})

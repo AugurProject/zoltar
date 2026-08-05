@@ -101,8 +101,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const latestEnvironmentRefreshKey = useRef(environmentRefreshKey)
 	latestAccountAddress.current = accountAddress
 	latestEnvironmentRefreshKey.current = environmentRefreshKey
-	const liquidationAmount = useSignal('0')
-	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
+	const coverageCommitmentTransferEthAmount = useSignal('0')
+	const maximumCoverageCommitmentTransferAttoEth = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
 	const liquidationTimeoutMinutes = useSignal(DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString())
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
@@ -210,27 +210,27 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 
 	const resolveLiquidationFundingPreview = async (managerAddress: Address, walletAddress: Address): Promise<LiquidationFundingPreview> => {
 		const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
-		const queueOperationEthValue = await dependencies.loadOracleManagerQueueOperationEthValue(writeClient, managerAddress)
-		if (queueOperationEthValue === 0n) {
+		const queueOperationValueAttoEth = await dependencies.loadOracleManagerQueueOperationEthValue(writeClient, managerAddress)
+		if (queueOperationValueAttoEth === 0n) {
 			return {
-				currentRepBalance: 0n,
-				currentWethBalance: 0n,
-				initialReportRepRequired: 0n,
-				initialReportWethRequired: 0n,
-				queueOperationEthValue,
-				totalWalletEthRequired: 0n,
-				wethShortfall: 0n,
+				currentRepBalanceAttoRep: 0n,
+				currentWethBalanceAttoEth: 0n,
+				initialReportRepRequiredAttoRep: 0n,
+				initialReportWethRequiredAttoEth: 0n,
+				queueOperationValueAttoEth,
+				totalWalletEthRequiredAttoEth: 0n,
+				wethShortfallAttoEth: 0n,
 			}
 		}
 		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
 		return {
-			currentRepBalance: fundingRequirement.currentRepBalance,
-			currentWethBalance: fundingRequirement.currentWethBalance,
-			initialReportRepRequired: fundingRequirement.initialReportAmount2,
-			initialReportWethRequired: fundingRequirement.maximumInitialWeth,
-			queueOperationEthValue,
-			totalWalletEthRequired: queueOperationEthValue + fundingRequirement.wethShortfall,
-			wethShortfall: fundingRequirement.wethShortfall,
+			currentRepBalanceAttoRep: fundingRequirement.currentRepBalanceAttoRep,
+			currentWethBalanceAttoEth: fundingRequirement.currentWethBalanceAttoEth,
+			initialReportRepRequiredAttoRep: fundingRequirement.initialReportAmount2,
+			initialReportWethRequiredAttoEth: fundingRequirement.maximumInitialAttoWeth,
+			queueOperationValueAttoEth,
+			totalWalletEthRequiredAttoEth: queueOperationValueAttoEth + fundingRequirement.wethShortfallAttoEth,
+			wethShortfallAttoEth: fundingRequirement.wethShortfallAttoEth,
 		}
 	}
 
@@ -289,7 +289,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationFundingPreviewLoadingKey.value = undefined
 		liquidationFundingPreviewResolvedKey.value = undefined
 		liquidationManagerAddress.value = managerAddress
-		liquidationMaxAmount.value = maxAmount
+		maximumCoverageCommitmentTransferAttoEth.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
 		liquidationTimeoutMinutes.value = DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString()
@@ -318,13 +318,17 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	}
 
 	const isLiquidationSnapshotCurrent = (snapshot: { amount: string; managerAddress: Address; securityPoolAddress: Address; targetVault: string; timeoutMinutes: string }) =>
-		liquidationAmount.value === snapshot.amount && liquidationManagerAddress.value === snapshot.managerAddress && liquidationSecurityPoolAddress.value === snapshot.securityPoolAddress && liquidationTargetVault.value === snapshot.targetVault && liquidationTimeoutMinutes.value === snapshot.timeoutMinutes
+		coverageCommitmentTransferEthAmount.value === snapshot.amount &&
+		liquidationManagerAddress.value === snapshot.managerAddress &&
+		liquidationSecurityPoolAddress.value === snapshot.securityPoolAddress &&
+		liquidationTargetVault.value === snapshot.targetVault &&
+		liquidationTimeoutMinutes.value === snapshot.timeoutMinutes
 
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewResult.value = undefined
 		const submittedLiquidation = {
-			amount: liquidationAmount.value,
+			amount: coverageCommitmentTransferEthAmount.value,
 			managerAddress,
 			securityPoolAddress,
 			targetVault: liquidationTargetVault.value,
@@ -382,10 +386,10 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						liquidationFundingPreview.value = fundingPreview
 						liquidationFundingPreviewResolvedKey.value = fundingPreviewKey
 					}
-					if (fundingPreview.currentRepBalance < fundingPreview.initialReportRepRequired) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.initialReportRepRequired - fundingPreview.currentRepBalance)} more REP in this wallet to fund the initial report.`)
-					const walletEthBalance = fundingPreview.totalWalletEthRequired === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
+					if (fundingPreview.currentRepBalanceAttoRep < fundingPreview.initialReportRepRequiredAttoRep) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.initialReportRepRequiredAttoRep - fundingPreview.currentRepBalanceAttoRep)} more REP in this wallet to fund the initial report.`)
+					const walletBalanceAttoEth = fundingPreview.totalWalletEthRequiredAttoEth === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					ensureFundingContextIsCurrent()
-					if (walletEthBalance !== undefined && walletEthBalance < fundingPreview.totalWalletEthRequired) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.totalWalletEthRequired - walletEthBalance)} more ETH in this wallet to fund the initial report and queue this liquidation.`)
+					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.totalWalletEthRequiredAttoEth - walletBalanceAttoEth)} more ETH in this wallet to fund the initial report and queue this liquidation.`)
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
 					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
@@ -425,8 +429,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const loadingCurrentLiquidationFundingPreview = currentLiquidationFundingPreviewRequestKey !== undefined && liquidationFundingPreviewLoadingKey.value === currentLiquidationFundingPreviewRequestKey && liquidationFundingPreviewLoad.isLoading.value
 
 	return {
-		liquidationAmount: liquidationAmount.value,
-		liquidationMaxAmount: liquidationMaxAmount.value,
+		coverageCommitmentTransferEthAmount: coverageCommitmentTransferEthAmount.value,
+		maximumCoverageCommitmentTransferAttoEth: maximumCoverageCommitmentTransferAttoEth.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,
 		liquidationFundingPreview: currentLiquidationFundingPreview,
 		liquidationFundingPreviewError: currentLiquidationFundingPreviewError,
@@ -457,7 +461,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		securityPoolPage: securityPoolPage.value,
 		securityPools: securityPools.value,
 		setLiquidationAmount: (value: string) => {
-			liquidationAmount.value = value
+			coverageCommitmentTransferEthAmount.value = value
 		},
 		setLiquidationTimeoutMinutes: (value: string) => {
 			liquidationTimeoutMinutes.value = value

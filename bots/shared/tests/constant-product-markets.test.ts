@@ -21,8 +21,8 @@ const settings: CentralizedMarketSettings = {
 	maximumDexDeviationBps: 1_000n,
 	maximumObservationAgeMilliseconds: 30_000,
 	maximumVenueDispersionBps: 500n,
-	minimumAskDepthEth: 0n,
-	minimumBidDepthEth: 0n,
+	minimumAskDepthAttoEth: 0n,
+	minimumBidDepthAttoEth: 0n,
 	minimumSourceCount: 2,
 	orderBookLimit: 20,
 	requestTimeoutMilliseconds: 5_000,
@@ -30,11 +30,11 @@ const settings: CentralizedMarketSettings = {
 	sources: [],
 	venueConsensus: {
 		allowSingleGroupFallback: false,
-		dexProbeDepthEth: UNIT,
+		dexProbeDepthAttoEth: UNIT,
 		dexSources: [{ feeBps: 30, pair: PAIR, sourceId: 'uniswap-v2' }],
 		maximumGroupDeviationBps: 500n,
-		minimumDexAskDepthEth: UNIT / 2n,
-		minimumDexBidDepthEth: UNIT / 2n,
+		minimumDexAskDepthAttoEth: UNIT / 2n,
+		minimumDexBidDepthAttoEth: UNIT / 2n,
 		minimumDexSourceCount: 1,
 		minimumSourceObservationCount: 1,
 		minimumSourceObservationSpanMilliseconds: 0,
@@ -51,7 +51,7 @@ describe('constant-product DEX observations', () => {
 		expect(result.reasons).toEqual([])
 		expect(result.observations).toHaveLength(1)
 		expect(result.observations[0]?.sourceId).toBe('uniswap-v2')
-		expect(result.observations[0]?.askDepthEth).toBe(UNIT)
+		expect(result.observations[0]?.askDepthAttoEth).toBe(UNIT)
 		expect(result.observations[0]?.observedAt).toBe(10_000)
 		expect(result.observations[0]?.observationId).toBe(`1:100:${BLOCK_HASH}`)
 	})

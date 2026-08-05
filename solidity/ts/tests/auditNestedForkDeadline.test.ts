@@ -9,7 +9,7 @@ describe('Nested fork migration deadline', () => {
 	const {
 		DAY,
 		approveToken,
-		approveAndDepositRep,
+		approveAndDepositRepToVault,
 		balanceOfShares,
 		createChildUniverse,
 		createCompleteSet,
@@ -18,7 +18,7 @@ describe('Nested fork migration deadline', () => {
 		forkUniverse,
 		genesisUniverse,
 		getChildUniverseId,
-		getCompleteSetCollateralAmount,
+		getSettlementCollateralAttoEth,
 		getETHBalance,
 		getRepTokenAddress,
 		getSecurityPoolAddresses,
@@ -53,10 +53,10 @@ describe('Nested fork migration deadline', () => {
 	})
 
 	test('a delayed canonical pool retains a complete outgoing migration window after an early universe fork', async () => {
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, repDeposit / 4n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
-		await approveAndDepositRep(passiveVault, repDeposit, questionId)
+		await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)
 
 		await triggerExternalForkForSecurityPool(client, 'nested deadline parent fork')
 		const parentFork = await getUniverseData(client, genesisUniverse)
@@ -92,7 +92,7 @@ describe('Nested fork migration deadline', () => {
 		await mockWindow.setTime(auctionDeadline)
 		await finalizeTruthAuction(client, childPool.securityPool)
 		assert.strictEqual(await getSystemState(client, childPool.securityPool), SystemState.Operational)
-		assert.ok((await getCompleteSetCollateralAmount(client, childPool.securityPool)) > 0n)
+		assert.ok((await getSettlementCollateralAttoEth(client, childPool.securityPool)) > 0n)
 		assert.ok((await mockWindow.getTime()) > expiredUniverseDeadline)
 
 		await initiateSecurityPoolFork(client, childPool.securityPool)

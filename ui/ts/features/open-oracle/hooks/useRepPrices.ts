@@ -8,14 +8,14 @@ import { isRecoverableQuoteError } from '../../../lib/errors.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../../../protocol/uniswapQuoter.js'
 import type { RepPriceFailure } from '../../types.js'
 
-const ONE_ETH = 10n ** 18n
-const ONE_REP = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const REP_PRICE_CACHE_TTL_MILLISECONDS = 30_000
 
 type PriceSource = 'v4' | 'v3' | 'mock'
 
 type RepPrices = {
-	repPerEthPrice: bigint | undefined // REP in wei-style token units received for 1 ETH
+	repPerEthPrice: bigint | undefined // REP in attoETH-style token units received for 1 ETH
 	repPerEthFailure: RepPriceFailure | undefined
 	repPerEthSource: PriceSource | undefined
 	repPerEthSourceUrl: string | undefined
@@ -82,12 +82,12 @@ export function resetRepPriceCacheForTesting() {
 async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
 	const repAddress = getRepAddress()
 	try {
-		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
+		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch (error) {
 		if (!isRecoverableQuoteError(error)) throw error
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
-		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
+		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
@@ -117,7 +117,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ATTO_REP)])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {

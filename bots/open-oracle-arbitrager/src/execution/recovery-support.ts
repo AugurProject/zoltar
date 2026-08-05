@@ -20,7 +20,7 @@ export function dateFromBlockTimestamp(timestamp: bigint) {
 export async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
 	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts)
 	return expenditures.map(expenditure => ({
-		costEth: decimalWeth(expenditure.costWei),
+		costEth: decimalWeth(expenditure.costAttoEth),
 		minedAt: expenditure.minedAt,
 		transactionHash: expenditure.transactionHash,
 	}))
@@ -52,7 +52,7 @@ export function hedgeExecutionFromLogs(logs: readonly { address: Address; data: 
 				contribution1: decoded.args.contribution1,
 				contribution2: decoded.args.contribution2,
 				hedgeAmountToken2: decoded.args.hedgeAmountToken2,
-				hedgeAmountWeth: decoded.args.hedgeAmountWeth,
+				hedgeAmountAttoWeth: decoded.args.hedgeAmountAttoWeth,
 				reportId: decoded.args.reportId,
 			}
 		} catch (error) {
@@ -73,7 +73,7 @@ export function lifecycleExecutionFromLogs(logs: readonly { address: Address; da
 				amount1: decoded.args.amount1,
 				amount2: decoded.args.amount2,
 				reportId: decoded.args.reportId,
-				settlerReward: decoded.args.settlerReward,
+				settlerRewardAttoEth: decoded.args.settlerRewardAttoEth,
 				token1: decoded.args.token1,
 				token2: decoded.args.token2,
 			}
@@ -164,7 +164,7 @@ export async function storedReport(client: ReadClient, openOracle: Address, id: 
 			settlementTime: requiredBigint(game[7], 'Stored OpenOracle settlementTime'),
 			escalationHalt: requiredBigint(game[8], 'Stored OpenOracle escalationHalt'),
 			protocolFeeRecipient: requiredRpcAddress(game[9], 'Stored OpenOracle protocolFeeRecipient'),
-			settlerReward: requiredBigint(game[10], 'Stored OpenOracle settlerReward'),
+			settlerRewardAttoEth: requiredBigint(game[10], 'Stored OpenOracle settlerRewardAttoEth'),
 			token2: requiredRpcAddress(game[11], 'Stored OpenOracle token2'),
 			numReports: requiredBigint(game[12], 'Stored OpenOracle numReports'),
 			disputeDelay: requiredBigint(game[13], 'Stored OpenOracle disputeDelay'),
@@ -224,9 +224,9 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
 					internalAllowanceToken: requiredBigint(rawAllowanceToken, 'OpenOracle token internal allowance'),
-					internalAllowanceWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
+					internalAllowanceAttoWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
 					holderToken: requiredBigint(rawHolderToken, 'OpenOracle token holder balance'),
-					holderWeth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
+					holderAttoWeth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
 					tokenDecimals: requiredBigint(rawTokenDecimals, 'Position token decimals'),
 				},
 			}

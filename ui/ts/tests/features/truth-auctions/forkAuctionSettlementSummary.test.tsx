@@ -64,8 +64,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -111,42 +111,42 @@ function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): F
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
-		accumulatedEth: 0n,
+		accumulatedBidAttoEth: 0n,
 		auctionEndsAt: 604_801n,
 		clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 		clearingTick: 10n,
-		ethAtClearingTick: ONE_UNIT + HALF_UNIT,
-		ethRaiseCap: 10n * ONE_UNIT,
-		ethRaised: 4n * ONE_UNIT,
+		bidAtClearingTickAttoEth: ONE_UNIT + HALF_UNIT,
+		attoEthRaiseCap: 10n * ONE_UNIT,
+		attoEthRaised: 4n * ONE_UNIT,
 		finalized: true,
 		hitCap: true,
-		maxRepBeingSold: 4n * ONE_UNIT,
-		minBidSize: ONE_UNIT,
-		repPurchasableAtBid: undefined,
+		maxAttoRepBeingSold: 4n * ONE_UNIT,
+		minBidSizeAttoEth: ONE_UNIT,
+		attoRepPurchasableAtBid: undefined,
 		timeRemaining: 0n,
-		totalRepPurchased: 4n * ONE_UNIT,
+		totalAttoRepPurchased: 4n * ONE_UNIT,
 		underfunded: false,
 		underfundedThreshold: undefined,
-		underfundedWinningEth: 0n,
+		underfundedWinningAttoEth: 0n,
 		...overrides,
 	}
 }
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedSecurityBondAllowance: 8n * ONE_UNIT,
+		auctionedCoverageCommitmentAttoEth: 8n * ONE_UNIT,
 		claimingAvailable: true,
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentTime: 700_000n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedAttoRep: 1n,
 		migrationEndsAt: 100n,
 		parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
-		auctionableRepAtFork: 0n,
+		auctionableAttoRepAtFork: 0n,
 		securityPoolAddress: CHILD_POOL_ADDRESS,
 		systemState: 'operational',
 		truthAuction: createTruthAuction(),
@@ -159,27 +159,27 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 
 function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleSecurityBondAllowance: 0n,
+		feeEligibleCoverageCommitmentAttoEth: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
-		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedAttoRep: 1n,
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
 		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: CHILD_POOL_ADDRESS,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 0n,
+		totalPoolHeldAttoRep: 0n,
+		totalCoverageCommitmentAttoEth: 0n,
 		truthAuctionAddress: TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -191,14 +191,14 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 }
 
 function createBid(overrides: { bidIndex: bigint; tick: bigint } & Partial<Omit<TruthAuctionBidView, 'bidIndex' | 'tick'>>): TruthAuctionBidView {
-	const ethAmount = overrides.ethAmount ?? ONE_UNIT
+	const bidAmountAttoEth = overrides.bidAmountAttoEth ?? ONE_UNIT
 	return {
-		activeCumulativeEthBeforeBid: overrides.activeCumulativeEthBeforeBid ?? 0n,
+		activeCumulativeBidBeforeAttoEth: overrides.activeCumulativeBidBeforeAttoEth ?? 0n,
 		bidIndex: overrides.bidIndex,
 		bidder: overrides.bidder ?? CONNECTED_WALLET,
 		claimed: overrides.claimed ?? false,
-		cumulativeEth: overrides.cumulativeEth ?? ethAmount,
-		ethAmount,
+		cumulativeBidAttoEth: overrides.cumulativeBidAttoEth ?? bidAmountAttoEth,
+		bidAmountAttoEth,
 		refunded: overrides.refunded ?? false,
 		tick: overrides.tick,
 	}
@@ -323,7 +323,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		}
 	})
 
-	test('shows selected-bid settlement estimates for REP, assigned OI debt, and refunds', async () => {
+	test('shows selected-bid settlement estimates for REP, assigned coverage commitment, and refunds', async () => {
 		const truthAuction = createTruthAuction()
 		const childPool = createChildPool()
 		mockedForkAuctionDetails = createForkAuctionDetails({
@@ -335,7 +335,7 @@ describe('ForkAuctionSection settlement summary', () => {
 			createSettlementRow(createBid({ bidIndex: 2n, tick: 11n }), truthAuction),
 			createSettlementRow(
 				createBid({
-					activeCumulativeEthBeforeBid: ONE_UNIT,
+					activeCumulativeBidBeforeAttoEth: ONE_UNIT,
 					bidIndex: 3n,
 					tick: 10n,
 				}),
@@ -361,8 +361,8 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected-bid settlement preview.')).not.toBeNull()
-		expect(documentQueries.getByText(/Winning rows receive estimated child-pool REP plus estimated Auctioned Bond Allowance \(OI Debt\), while refund rows return locked ETH\./)).not.toBeNull()
-		expect(documentQueries.getByText('Estimated Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
+		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned coverage commitment, while refund rows return locked ETH\./)).not.toBeNull()
+		expect(documentQueries.getByText('Estimated Auctioned coverage commitment')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 1.50 REP')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 3.00 ETH')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 1.50 ETH')).not.toBeNull()
@@ -410,13 +410,13 @@ describe('ForkAuctionSection settlement summary', () => {
 		const truthAuction = createTruthAuction({
 			clearingPrice: undefined,
 			clearingTick: 0n,
-			ethRaised: 0n,
+			attoEthRaised: 0n,
 			finalized: true,
 			hitCap: false,
-			totalRepPurchased: 0n,
+			totalAttoRepPurchased: 0n,
 			underfunded: true,
 			underfundedThreshold: 2n * ONE_UNIT,
-			underfundedWinningEth: 0n,
+			underfundedWinningAttoEth: 0n,
 		})
 		const childPool = createChildPool()
 		mockedForkAuctionDetails = createForkAuctionDetails({
@@ -446,14 +446,14 @@ describe('ForkAuctionSection settlement summary', () => {
 
 	test('does not render the legacy per-tick-denominator warning when synthetic underfunded estimates are available', async () => {
 		const truthAuction = createTruthAuction({
-			ethRaised: 4n * ONE_UNIT,
+			attoEthRaised: 4n * ONE_UNIT,
 			finalized: true,
 			hitCap: false,
-			maxRepBeingSold: 8n * ONE_UNIT,
-			totalRepPurchased: 8n * ONE_UNIT,
+			maxAttoRepBeingSold: 8n * ONE_UNIT,
+			totalAttoRepPurchased: 8n * ONE_UNIT,
 			underfunded: true,
 			underfundedThreshold: HALF_UNIT,
-			underfundedWinningEth: 4n * ONE_UNIT,
+			underfundedWinningAttoEth: 4n * ONE_UNIT,
 		})
 		const childPool = createChildPool()
 		mockedForkAuctionDetails = createForkAuctionDetails({
@@ -479,7 +479,10 @@ describe('ForkAuctionSection settlement summary', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Estimated REP Claimed')).not.toBeNull()
+		expect(documentQueries.getByText('Estimated REP backing')).not.toBeNull()
+		expect(documentQueries.getByText(/Selected-bid settlement preview/)).not.toBeNull()
+		expect(documentQueries.queryByText(/Winning claims add REP backing units/)).toBeNull()
+		expect(documentQueries.queryByText(/Select winning bids and settle them together/)).toBeNull()
 		expect(documentQueries.queryByText(/per-tick ETH denominator/i)).toBeNull()
 	})
 })

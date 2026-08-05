@@ -36,7 +36,7 @@ export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 		case 'deployed':
 			return 'App contracts are deployed, but no security pools or questions are created. Use it to test setup flows from an empty deployment.'
 		case 'security-pool':
-			return 'One seeded question, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.'
+			return 'One seeded question, one security pool, and one funded vault with an active coverage commitment. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':
 			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
 		case 'securitypoolx2-auction':

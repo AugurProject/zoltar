@@ -10,19 +10,19 @@ import { EscalationGameState } from '../../peripherals/EscalationGameState.sol';
 import { ISecurityPool } from '../../peripherals/interfaces/ISecurityPool.sol';
 
 contract EscalationGameForkBoundaryZoltar {
-	uint256 private forkThreshold;
+	uint256 private forkThresholdAttoRep;
 	uint256 private forkTime;
 
 	constructor(uint256 _forkThreshold) {
-		forkThreshold = _forkThreshold;
+		forkThresholdAttoRep = _forkThreshold;
 	}
 
 	function setForkTime(uint256 _forkTime) external {
 		forkTime = _forkTime;
 	}
 
-	function getForkThreshold(uint248) external view returns (uint256) {
-		return forkThreshold;
+	function getForkThresholdAttoRep(uint248) external view returns (uint256) {
+		return forkThresholdAttoRep;
 	}
 
 	function getForkTime(uint248) external view returns (uint256) {
@@ -56,17 +56,21 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		)
 	{}
 
-	function configureBoundary(uint256 gameEndDate, uint256 _nonDecisionThreshold, uint256 winningBalance) external {
+	function configureBoundary(
+		uint256 gameEndDate,
+		uint256 _nonDecisionThresholdAttoRep,
+		uint256 winningBalanceAttoRep
+	) external {
 		activationTime = gameEndDate;
-		startBond = 1e18;
-		nonDecisionThreshold = _nonDecisionThreshold;
-		outcomeState[1].balance = winningBalance;
+		startBondAttoRep = 1e18;
+		nonDecisionThresholdAttoRep = _nonDecisionThresholdAttoRep;
+		outcomeState[1].balanceAttoRep = winningBalanceAttoRep;
 	}
 
 	function computeWinningWithdrawal(
-		uint256 depositAmount,
-		uint256 cumulativeAmount
-	) external view returns (uint256 amountToWithdraw, uint256 burnAmount) {
-		return _computeWinningWithdrawal(1, depositAmount, cumulativeAmount);
+		uint256 depositAmountAttoRep,
+		uint256 cumulativeAmountAttoRep
+	) external view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		return _computeWinningWithdrawal(1, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}
 }

@@ -75,7 +75,7 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 			key: side.key,
 			label: side.label,
 			userDeposits: side.userDeposits,
-			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n),
+			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
 		}))
 	if (reportingDetails?.status === 'not-started')
 		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
@@ -326,36 +326,38 @@ export function ReportingSection({
 	})()
 	const reportingRecheckTimestamp = rewardWindowFillTimestamp !== undefined && effectiveCurrentTimestamp !== undefined && rewardWindowFillTimestamp > effectiveCurrentTimestamp ? rewardWindowFillTimestamp : projectedFinalizationTimestamp
 	const resultingAvailableReportingRep =
-		effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep ? undefined : effectiveReportingDetails.viewerVaultAvailableEscalationRep - actualReportDepositAmount
+		effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
+			? undefined
+			: effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep - actualReportDepositAmount
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
-	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
-	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
+	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
+	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
 	const maxContributionAmount = (() => {
-		if (selectedOutcome === undefined) return { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
-		if (effectiveReportingDetails === undefined) return { amount: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep === undefined) return { amount: undefined, reason: reportingCopy.loadingAvailableVaultRep }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep <= 0n) return { amount: undefined, reason: reportingCopy.unlockedReportingRepEmpty }
-		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amount: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
+		if (selectedOutcome === undefined) return { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
+		if (effectiveReportingDetails === undefined) return { amountAttoRep: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
+		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep === undefined) return { amountAttoRep: undefined, reason: reportingCopy.loadingPoolHeldVaultRepBacking }
+		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep <= 0n) return { amountAttoRep: undefined, reason: reportingCopy.poolHeldVaultRepBackingEmpty }
+		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amountAttoRep: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
 		if (effectiveReportingDetails.status === 'not-started') {
-			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerVaultAvailableEscalationRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerVaultAvailableEscalationRep : remainingSelectedOutcomeCapacity
-			if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep : remainingSelectedOutcomeCapacity
+			if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 			return {
-				amount: cappedAmount,
+				amountAttoRep: cappedAmount,
 				reason: undefined,
 			}
 		}
 		const selectedSide = effectiveReportingDetails.sides.find(side => side.key === selectedOutcome)
-		if (selectedSide === undefined) return { amount: undefined, reason: reportingCopy.selectedSideIsUnavailable }
-		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThreshold - selectedSide.balance)
-		if (maxContributionPreview.actualDepositAmount === undefined) return { amount: undefined, reason: maxContributionPreview.reason }
+		if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
+		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThresholdAttoRep - selectedSide.balance)
+		if (maxContributionPreview.actualDepositAmount === undefined) return { amountAttoRep: undefined, reason: maxContributionPreview.reason }
 		let cappedAmount = maxContributionPreview.actualDepositAmount
-		if (cappedAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep) cappedAmount = effectiveReportingDetails.viewerVaultAvailableEscalationRep
+		if (cappedAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep) cappedAmount = effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
 		if (remainingSelectedOutcomeCapacity !== undefined && cappedAmount > remainingSelectedOutcomeCapacity) cappedAmount = remainingSelectedOutcomeCapacity
-		if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+		if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 		return {
-			amount: cappedAmount,
+			amountAttoRep: cappedAmount,
 			reason: undefined,
 		}
 	})()
@@ -374,7 +376,7 @@ export function ReportingSection({
 			reportingStatus,
 			selectedOutcome,
 			selectedAmount,
-			viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
+			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
@@ -474,15 +476,15 @@ export function ReportingSection({
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label={reportingCopy.nonDecisionThreshold}>
-							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThreshold} suffix={commonCopy.rep} />
+						<MetricField label={reportingCopy.nonDecisionThresholdAttoRep}>
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.timeLeft}>{activeReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label={reportingCopy.escalationStarted}>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
-						<MetricField label={reportingCopy.startBond}>
-							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBond} suffix={commonCopy.rep} />
+						<MetricField label={reportingCopy.startBondAttoRep}>
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</div>
 				</SectionBlock>
@@ -506,11 +508,11 @@ export function ReportingSection({
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>{reportingCopy.totalSideStake}</span>
+								<span className='panel-label'>{reportingCopy.totalSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>{reportingCopy.yourSideStake}</span>
+								<span className='panel-label'>{reportingCopy.yourSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 								<span aria-hidden='true' className='escalation-sides-legend-marker' />
@@ -535,9 +537,9 @@ export function ReportingSection({
 						</div>
 					</div>
 					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
-					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
+					{effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined ? undefined : (
 						<p className='detail'>
-							{reportingCopy.availableUnlockedVaultRepForReporting} <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix={commonCopy.rep} />.
+							{reportingCopy.availablePoolHeldVaultRepBackingForReporting} <CurrencyValue value={effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep} suffix={commonCopy.rep} />.
 						</p>
 					)}
 					<div className='field'>
@@ -550,10 +552,10 @@ export function ReportingSection({
 								className='quiet field-inline-action'
 								type='button'
 								onClick={() => {
-									if (maxContributionAmount.amount === undefined) return
-									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amount) })
+									if (maxContributionAmount.amountAttoRep === undefined) return
+									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amountAttoRep) })
 								}}
-								disabled={reportControlsLocked || maxContributionAmount.amount === undefined}
+								disabled={reportControlsLocked || maxContributionAmount.amountAttoRep === undefined}
 								title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
 							>
 								{commonCopy.max}
@@ -566,10 +568,10 @@ export function ReportingSection({
 							className='secondary'
 							type='button'
 							onClick={() => {
-								if (minimumOutcomeChangeContribution.amount === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amount) })
+								if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
 							}}
-							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amount === undefined}
+							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
 							aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 						>
@@ -579,10 +581,10 @@ export function ReportingSection({
 							className='secondary'
 							type='button'
 							onClick={() => {
-								if (maxProfitContribution.amount === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amount) })
+								if (maxProfitContribution.amountAttoRep === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
 							}}
-							disabled={reportControlsLocked || maxProfitContribution.amount === undefined}
+							disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
 							aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 						>
@@ -598,7 +600,7 @@ export function ReportingSection({
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
 						<p className='detail'>
-							{reportingCopy.currentEscalationLockLead}
+							{reportingCopy.currentEscalationDisputeStakeLead}
 							<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
 							{reportingCopy.acceptedAmountTail}
 						</p>
@@ -609,7 +611,7 @@ export function ReportingSection({
 							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={effectiveReportingDetails?.universeId} /> },
 						]}
 						primary={[
-							{ label: reportingCopy.repPlacedAtRisk, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.disputeStakedRepAfterReport, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
 						]}
 						details={[
@@ -619,10 +621,10 @@ export function ReportingSection({
 								label: reportingCopy.recheckBy,
 								value: reportingRecheckTimestamp === undefined ? commonCopy.metricUnavailablePlaceholder : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingRecheckTimestamp} />,
 							},
-							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.poolHeldVaultRepBackingAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
 						]}
-						risks={[reportingCopy.reportingLossAndLockRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
+						risks={[reportingCopy.reportingDisputeStakeRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
 						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
@@ -683,7 +685,7 @@ export function ReportingSection({
 														deposit,
 														details: [
 															<>
-																{reportingCopy.initiallyDeposited} <CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+																{reportingCopy.initiallyDeposited} <CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 															</>,
 															claimAmount === undefined ? (
 																reportingCopy.worthAfterFinalizationPendingFinalization
@@ -696,7 +698,7 @@ export function ReportingSection({
 														secondaryDetails: [
 															`${reportingCopy.currentClaimType} ${claimLabel ?? reportingCopy.pendingFinalization}`,
 															<>
-																{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+																{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 															</>,
 														],
 													}

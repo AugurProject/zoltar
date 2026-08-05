@@ -45,8 +45,8 @@ export type MarketVenueKind = 'cex' | 'dex'
 
 export type MarketConsensusObservation = {
 	assetId: string
-	askDepthEth: bigint
-	bidDepthEth: bigint
+	askDepthAttoEth: bigint
+	bidDepthAttoEth: bigint
 	blockHash?: `0x${string}` | undefined
 	blockNumber?: bigint | undefined
 	chainId: number
@@ -75,10 +75,10 @@ export type MarketConsensusSettings = {
 	maximumGroupDeviationBps: bigint
 	maximumObservationAgeMilliseconds: number
 	maximumVenueDispersionBps: bigint
-	minimumAskDepthEthPerSource: bigint
-	minimumBidDepthEthPerSource: bigint
-	minimumCexAskDepthEth: bigint
-	minimumCexBidDepthEth: bigint
+	minimumAskDepthAttoEthPerSource: bigint
+	minimumBidDepthAttoEthPerSource: bigint
+	minimumCexAskDepthAttoEth: bigint
+	minimumCexBidDepthAttoEth: bigint
 	minimumCexSourceCount: number
 	minimumDexSourceCount: number
 	minimumSourceObservationCount: number
@@ -87,8 +87,8 @@ export type MarketConsensusSettings = {
 }
 
 export type MarketGroupEstimate = {
-	askDepthEth: bigint
-	bidDepthEth: bigint
+	askDepthAttoEth: bigint
+	bidDepthAttoEth: bigint
 	kind: MarketVenueKind
 	maximumPriceRepPerEth: bigint
 	minimumPriceRepPerEth: bigint
@@ -142,17 +142,17 @@ function latestIndependentSources(observations: readonly MarketConsensusObservat
 
 function canonicalObservation(bucket: readonly MarketConsensusObservation[]) {
 	const maximumDepth = bucket.reduce((maximum, observation) => {
-		const depth = observation.askDepthEth < observation.bidDepthEth ? observation.askDepthEth : observation.bidDepthEth
+		const depth = observation.askDepthAttoEth < observation.bidDepthAttoEth ? observation.askDepthAttoEth : observation.bidDepthAttoEth
 		return depth > maximum ? depth : maximum
 	}, -1n)
-	const strongest = bucket.filter(observation => (observation.askDepthEth < observation.bidDepthEth ? observation.askDepthEth : observation.bidDepthEth) === maximumDepth)
+	const strongest = bucket.filter(observation => (observation.askDepthAttoEth < observation.bidDepthAttoEth ? observation.askDepthAttoEth : observation.bidDepthAttoEth) === maximumDepth)
 	const prices = new Set(strongest.map(observation => observation.priceRepPerEth))
 	const canonical = strongest[0]
 	if (prices.size !== 1 || canonical === undefined) return undefined
 	return {
 		...canonical,
-		askDepthEth: strongest.reduce((minimum, observation) => (observation.askDepthEth < minimum ? observation.askDepthEth : minimum), canonical.askDepthEth),
-		bidDepthEth: strongest.reduce((minimum, observation) => (observation.bidDepthEth < minimum ? observation.bidDepthEth : minimum), canonical.bidDepthEth),
+		askDepthAttoEth: strongest.reduce((minimum, observation) => (observation.askDepthAttoEth < minimum ? observation.askDepthAttoEth : minimum), canonical.askDepthAttoEth),
+		bidDepthAttoEth: strongest.reduce((minimum, observation) => (observation.bidDepthAttoEth < minimum ? observation.bidDepthAttoEth : minimum), canonical.bidDepthAttoEth),
 	}
 }
 
@@ -218,15 +218,15 @@ function groupEstimate(kind: MarketVenueKind, observations: readonly MarketConse
 	const maximumPriceRepPerEth = prices.reduce((maximum, price) => (price > maximum ? price : maximum), prices[0] ?? 0n)
 	if (observations.length < minimumSources) reasons.push(`Only ${observations.length.toString()} independent ${kind.toUpperCase()} source(s); ${minimumSources.toString()} required`)
 	if (priceRepPerEth > 0n && deviationBps(maximumPriceRepPerEth, minimumPriceRepPerEth) > settings.maximumVenueDispersionBps) reasons.push(`${kind.toUpperCase()} venue dispersion exceeds the configured limit`)
-	const bidDepthEth = observations.reduce((total, observation) => total + observation.bidDepthEth, 0n)
-	const askDepthEth = observations.reduce((total, observation) => total + observation.askDepthEth, 0n)
-	if (kind === 'dex' && observations.some(observation => observation.bidDepthEth < settings.minimumBidDepthEthPerSource)) reasons.push('DEX bid depth is below the per-source minimum')
-	if (kind === 'dex' && observations.some(observation => observation.askDepthEth < settings.minimumAskDepthEthPerSource)) reasons.push('DEX ask depth is below the per-source minimum')
-	if (kind === 'cex' && bidDepthEth < settings.minimumCexBidDepthEth) reasons.push('CEX bid depth is below the configured minimum')
-	if (kind === 'cex' && askDepthEth < settings.minimumCexAskDepthEth) reasons.push('CEX ask depth is below the configured minimum')
+	const bidDepthAttoEth = observations.reduce((total, observation) => total + observation.bidDepthAttoEth, 0n)
+	const askDepthAttoEth = observations.reduce((total, observation) => total + observation.askDepthAttoEth, 0n)
+	if (kind === 'dex' && observations.some(observation => observation.bidDepthAttoEth < settings.minimumBidDepthAttoEthPerSource)) reasons.push('DEX bid depth is below the per-source minimum')
+	if (kind === 'dex' && observations.some(observation => observation.askDepthAttoEth < settings.minimumAskDepthAttoEthPerSource)) reasons.push('DEX ask depth is below the per-source minimum')
+	if (kind === 'cex' && bidDepthAttoEth < settings.minimumCexBidDepthAttoEth) reasons.push('CEX bid depth is below the configured minimum')
+	if (kind === 'cex' && askDepthAttoEth < settings.minimumCexAskDepthAttoEth) reasons.push('CEX ask depth is below the configured minimum')
 	return {
-		askDepthEth,
-		bidDepthEth,
+		askDepthAttoEth,
+		bidDepthAttoEth,
 		kind,
 		maximumPriceRepPerEth,
 		minimumPriceRepPerEth,
@@ -313,8 +313,8 @@ export function marketConsensusDeviationBps(candidatePriceRepPerEth: bigint, est
 export function serializeMarketConsensusEstimate(estimate: MarketConsensusEstimate | undefined, format: (value: bigint) => string) {
 	if (estimate === undefined) return undefined
 	const group = (value: MarketGroupEstimate) => ({
-		askDepthEth: format(value.askDepthEth),
-		bidDepthEth: format(value.bidDepthEth),
+		askDepthEth: format(value.askDepthAttoEth),
+		bidDepthEth: format(value.bidDepthAttoEth),
 		priceRepPerEth: format(value.priceRepPerEth),
 		reasons: value.reasons,
 		reliable: value.reliable,

@@ -27,7 +27,7 @@ type OpenOracleApprovalTestCase = {
 	action: 'approveToken1' | 'approveToken2'
 	allowanceKey: 'token1Approval' | 'token2Approval'
 	changedContributionMessage: string
-	currentAllowance: bigint
+	currentCoverageCommitmentAttoEth: bigint
 	disputeNewAmount1: string
 	disputeNewAmount2: string
 	disputeTokenToSwap: 'token1' | 'token2'
@@ -42,7 +42,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		action: 'approveToken1',
 		allowanceKey: 'token1Approval',
 		changedContributionMessage: 'The required base token approval changed',
-		currentAllowance: 100n,
+		currentCoverageCommitmentAttoEth: 100n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '25',
 		disputeTokenToSwap: 'token1',
@@ -55,7 +55,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		action: 'approveToken2',
 		allowanceKey: 'token2Approval',
 		changedContributionMessage: 'The required quote token approval changed',
-		currentAllowance: 25n,
+		currentCoverageCommitmentAttoEth: 25n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '26',
 		disputeTokenToSwap: 'token2',
@@ -106,7 +106,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		reportTimestamp: 0n,
 		settlementTime: 10n,
 		settlementTimestamp: 0n,
-		settlerReward: 0n,
+		settlerRewardAttoEth: 0n,
 		stateHash: STATE_HASH,
 		timeType: true,
 		token1: TOKEN1_ADDRESS,
@@ -140,7 +140,7 @@ function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracle
 		loadOpenOracleReportDetails: async () => {
 			throw new Error('loadOpenOracleReportDetails should not be called in this test')
 		},
-		loadOpenOracleWithdrawableBalances: async () => ({ eth: 0n, token1: 0n, token2: 0n }),
+		loadOpenOracleWithdrawableBalances: async () => ({ ethAttoEth: 0n, token1: 0n, token2: 0n }),
 		readOptionalMulticall: mock(async () => [
 			{ result: 100n, status: 'success' as const },
 			{ result: 25n, status: 'success' as const },
@@ -644,7 +644,7 @@ describe('useOpenOracleOperations', () => {
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 			})
-			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCoverageCommitmentAttoEth))
 			await act(() => {
 				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 			})
@@ -734,7 +734,7 @@ describe('useOpenOracleOperations', () => {
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 			})
-			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCoverageCommitmentAttoEth))
 			await act(() => {
 				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 			})
@@ -749,7 +749,7 @@ describe('useOpenOracleOperations', () => {
 
 		for (const rejectionCase of [
 			{
-				amount: approvalCase.currentAllowance,
+				amount: approvalCase.currentCoverageCommitmentAttoEth,
 				expectedMessage: `The ${approvalCase.tokenLabel} approval must increase the current allowance`,
 				name: 'non-increasing explicit approval',
 			},
@@ -783,7 +783,7 @@ describe('useOpenOracleOperations', () => {
 				await act(async () => {
 					await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 				})
-				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCoverageCommitmentAttoEth))
 				await act(() => {
 					setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 				})
@@ -1051,7 +1051,7 @@ describe('useOpenOracleOperations', () => {
 			reportTimestamp: 1n,
 			settlementTimestamp: 11n,
 		})
-		const loadOpenOracleWithdrawableBalances = mock(async () => ({ eth: 7n, token1: 100n, token2: 25n }))
+		const loadOpenOracleWithdrawableBalances = mock(async () => ({ ethAttoEth: 7n, token1: 100n, token2: 25n }))
 		let withdrawalAttempts = 0
 		const withdrawOpenOracleBalance = mock(async () => {
 			withdrawalAttempts += 1
@@ -1076,7 +1076,7 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances).toEqual({ eth: 7n, token1: 100n, token2: 25n }))
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances).toEqual({ ethAttoEth: 7n, token1: 100n, token2: 25n }))
 
 		await act(async () => {
 			await requireHookState(hookState).withdrawBalance('token1', 100n)
@@ -1099,7 +1099,7 @@ describe('useOpenOracleOperations', () => {
 			reportTimestamp: 1n,
 			settlementTimestamp: 11n,
 		})
-		let currentBalances = { eth: 7n, token1: 100n, token2: 25n }
+		let currentBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
 		const preflightBalanceRefresh = createDeferred<typeof currentBalances>()
 		let deferBalanceRefresh = false
 		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await preflightBalanceRefresh.promise : currentBalances))
@@ -1181,7 +1181,7 @@ describe('useOpenOracleOperations', () => {
 			reportTimestamp: 1n,
 			settlementTime: 10n,
 		})
-		const balances = { eth: 7n, token1: 100n, token2: 25n }
+		const balances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
 		const deferredBalanceRefresh = createDeferred<typeof balances>()
 		let deferBalanceRefresh = false
 		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await deferredBalanceRefresh.promise : balances))
@@ -1262,7 +1262,7 @@ describe('useOpenOracleOperations', () => {
 			reportTimestamp: 1n,
 			settlementTimestamp: 11n,
 		})
-		const initialBalances = { eth: 7n, token1: 100n, token2: 25n }
+		const initialBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
 		const changedBalances = { ...initialBalances, token1: 125n }
 		const deferredBalanceRefresh = createDeferred<typeof changedBalances>()
 		let deferBalanceRefresh = false
@@ -1329,7 +1329,7 @@ describe('useOpenOracleOperations', () => {
 			reportTimestamp: 1n,
 			settlementTimestamp: 11n,
 		})
-		const initialBalances = { eth: 7n, token1: 100n, token2: 25n }
+		const initialBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
 		const changedBalances = { ...initialBalances, token1: 125n }
 		const deferredBalanceRefresh = createDeferred<typeof changedBalances>()
 		let deferBalanceRefresh = false

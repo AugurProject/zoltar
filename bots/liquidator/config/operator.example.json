@@ -70,12 +70,12 @@
 		"candidatePriority": "largest-bonus",
 		"fallbackRepPerEthPrice": "0",
 		"maximumGasCostEth": "0.02",
-		"maximumLiquidationDebtEth": "25",
+		"maximumLiquidationCoverageCommitmentEth": "25",
 		"maximumOracleRequestCostEth": "0.02",
-		"maximumRepPerPool": "10000",
+		"maximumPerPoolRep": "10000",
 		"maximumTotalDeployedRep": "25000",
-		"minimumLiquidationDebtEth": "1",
-		"minimumRepWithdrawal": "10",
+		"minimumLiquidationCoverageCommitmentEth": "1",
+		"minimumRepWithdrawalRep": "10",
 		"minimumRewardValueEth": "0.02",
 		"redeemFeesAboveEth": "0.01",
 		"stalePriceFundingBufferBps": 15000,
@@ -83,7 +83,7 @@
 		"vaultTargetHealthBps": 12500,
 		"vaultTopUpHealthBps": 11000,
 		"vaultWithdrawHealthBps": 15000,
-		"walletRepReserve": "100"
+		"walletReserveRep": "100"
 	},
 	"paused": false,
 	"privateKey": null

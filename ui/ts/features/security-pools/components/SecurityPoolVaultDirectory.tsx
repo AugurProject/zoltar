@@ -34,14 +34,14 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 					<VaultMetricGrid
 						className='workflow-vault-grid'
 						layout='preview'
-						escalationEscrowedRep={vault.escalationEscrowedRep}
-						repDepositShare={vault.repDepositShare}
+						disputeStakedAttoRep={vault.disputeStakedAttoRep}
+						vaultAttoRepBacking={vault.vaultAttoRepBacking}
 						repPerEthPrice={repPerEthPrice}
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 						selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
-						securityBondAllowance={vault.securityBondAllowance}
-						unpaidEthFees={vault.unpaidEthFees}
+						coverageCommitmentAttoEth={vault.coverageCommitmentAttoEth}
+						claimableFeesAttoEth={vault.claimableFeesAttoEth}
 					/>
 					<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>
 				</div>

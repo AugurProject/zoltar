@@ -2,84 +2,84 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
-import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
+import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_COVERAGE_COMMITMENT_ATTO_ETH, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
 
-export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, isDepositBelowMinimum, repBalanceGap }: { approvalSatisfied: boolean; depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; repBalanceGap: bigint | undefined }) {
+export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, isDepositBelowMinimum, walletRepShortfallAttoRep }: { approvalSatisfied: boolean; depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; walletRepShortfallAttoRep: bigint | undefined }) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
 	if (depositAmount <= 0n) return undefined
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
-	if (repBalanceGap !== undefined && repBalanceGap > 0n) return `Need ${formatCurrencyBalance(repBalanceGap)} more REP in this wallet.`
-	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
+	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatCurrencyBalance(walletRepShortfallAttoRep)} more REP in this wallet.`
+	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)} REP in the first deposit.`
 	return undefined
 }
 
 export function getVaultWithdrawGuardMessage({
 	bufferRequiredEthCost = false,
-	escalationEscrowedRep = 0n,
-	requiredEthCost,
+	disputeStakedAttoRep = 0n,
+	requiredCostAttoEth,
 	stagedOperationTimeoutMinutes,
 	withdrawAmount,
-	withdrawableRepAmount,
-	walletEthBalance,
+	withdrawableRepAmountAttoRep,
+	walletBalanceAttoEth,
 }: {
 	bufferRequiredEthCost?: boolean | undefined
-	escalationEscrowedRep?: bigint | undefined
-	requiredEthCost: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
+	requiredCostAttoEth: bigint | undefined
 	stagedOperationTimeoutMinutes: bigint | undefined
 	withdrawAmount: bigint | undefined
-	withdrawableRepAmount: bigint | undefined
-	walletEthBalance: bigint | undefined
+	withdrawableRepAmountAttoRep: bigint | undefined
+	walletBalanceAttoEth: bigint | undefined
 }) {
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return undefined
-	if (escalationEscrowedRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
-	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return undefined
-	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
+	if (disputeStakedAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
+	if (withdrawableRepAmountAttoRep === undefined || withdrawableRepAmountAttoRep <= 0n) return undefined
+	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmountAttoRep)} REP or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
 		includeBuffer: bufferRequiredEthCost,
-		requiredEthCost,
-		walletEthBalance,
+		requiredCostAttoEth,
+		walletBalanceAttoEth,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined
 }
 
-export function getVaultSetSecurityBondAllowanceGuardMessage({
+export function getVaultSetCoverageCommitmentGuardMessage({
 	bufferRequiredEthCost = false,
-	maxSecurityBondAllowanceAmount,
-	requiredEthCost,
-	securityBondAllowanceAmount,
+	maxCoverageCommitmentAttoEthAmount,
+	requiredCostAttoEth,
+	coverageCommitmentAttoEthAmount,
 	stagedOperationTimeoutMinutes,
-	walletEthBalance,
+	walletBalanceAttoEth,
 }: {
 	bufferRequiredEthCost?: boolean | undefined
-	maxSecurityBondAllowanceAmount: bigint | undefined
-	requiredEthCost: bigint | undefined
-	securityBondAllowanceAmount: bigint | undefined
+	maxCoverageCommitmentAttoEthAmount: bigint | undefined
+	requiredCostAttoEth: bigint | undefined
+	coverageCommitmentAttoEthAmount: bigint | undefined
 	stagedOperationTimeoutMinutes: bigint | undefined
-	walletEthBalance: bigint | undefined
+	walletBalanceAttoEth: bigint | undefined
 }) {
-	if (securityBondAllowanceAmount === undefined || securityBondAllowanceAmount < 0n) return 'Enter a valid security bond allowance.'
-	if (securityBondAllowanceAmount !== 0n && securityBondAllowanceAmount < MIN_SECURITY_BOND_ALLOWANCE) return `Enter at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH for a non-zero allowance.`
-	if (maxSecurityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > maxSecurityBondAllowanceAmount) return `Reduce the security bond allowance to ${formatCurrencyBalance(maxSecurityBondAllowanceAmount)} ETH or less.`
+	if (coverageCommitmentAttoEthAmount === undefined || coverageCommitmentAttoEthAmount < 0n) return 'Enter a valid coverage commitment.'
+	if (coverageCommitmentAttoEthAmount !== 0n && coverageCommitmentAttoEthAmount < MIN_COVERAGE_COMMITMENT_ATTO_ETH) return `Enter at least ${formatCurrencyBalance(MIN_COVERAGE_COMMITMENT_ATTO_ETH)} ETH for a non-zero coverage commitment.`
+	if (maxCoverageCommitmentAttoEthAmount !== undefined && coverageCommitmentAttoEthAmount > maxCoverageCommitmentAttoEthAmount) return `Reduce the coverage commitment to ${formatCurrencyBalance(maxCoverageCommitmentAttoEthAmount)} ETH or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
-		actionLabel: 'queue this bond allowance update',
+		actionLabel: 'queue this coverage commitment update',
 		includeBuffer: bufferRequiredEthCost,
-		requiredEthCost,
-		walletEthBalance,
+		requiredCostAttoEth,
+		walletBalanceAttoEth,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined
 }
 
-export function getVaultRedeemRepGuardMessage({ escalationEscrowedRep, redeemableRepAmount }: { escalationEscrowedRep: bigint | undefined; redeemableRepAmount: bigint | undefined }) {
-	if (escalationEscrowedRep !== undefined && escalationEscrowedRep > 0n) return 'Settle escalation deposits before redeeming REP.'
-	if (redeemableRepAmount === undefined || redeemableRepAmount <= 0n) return 'No redeemable REP is available for this vault.'
+export function getVaultRedeemRepGuardMessage({ disputeStakedAttoRep, redeemableRepAmountAttoRep }: { disputeStakedAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined }) {
+	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return 'Settle escalation deposits before redeeming REP.'
+	if (redeemableRepAmountAttoRep === undefined || redeemableRepAmountAttoRep <= 0n) return 'No redeemable REP is available for this vault.'
 	return undefined
 }
 
@@ -90,8 +90,8 @@ export function getVaultRequestPriceGuardMessage({
 	isOnActiveAppChain,
 	isPriceValid,
 	pendingReportId,
-	requiredEthCost,
-	walletEthBalance,
+	requiredCostAttoEth,
+	walletBalanceAttoEth,
 }: {
 	accountAddress: Address | undefined
 	hasLoadedSelectedPool: boolean
@@ -99,8 +99,8 @@ export function getVaultRequestPriceGuardMessage({
 	isOnActiveAppChain: boolean
 	isPriceValid: boolean | undefined
 	pendingReportId: bigint | undefined
-	requiredEthCost: bigint | undefined
-	walletEthBalance: bigint | undefined
+	requiredCostAttoEth: bigint | undefined
+	walletBalanceAttoEth: bigint | undefined
 }) {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
@@ -110,8 +110,8 @@ export function getVaultRequestPriceGuardMessage({
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'request a new price',
 		includeBuffer: bufferRequiredEthCost,
-		requiredEthCost,
-		walletEthBalance,
+		requiredCostAttoEth,
+		walletBalanceAttoEth,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined

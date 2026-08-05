@@ -14,9 +14,9 @@ test('SecurityPoolForker retains unified own-fork fields in fork session storage
 	const forkDataByPoolValueType = getRecord(forkDataByPoolEntry.type.value, 'Storage layout missing forkDataByPool value type')
 	const forkDataMembers = getArray(forkDataByPoolValueType.members, 'Storage layout missing forkDataByPool value members')
 	const forkDataLabels = new Set(forkDataMembers.map(member => getString(getRecord(member, 'Invalid forkDataByPool member').label, 'Missing member label for forkDataByPool struct type')))
-	assert.ok(forkDataLabels.has('vaultRepAtFork'))
-	assert.ok(forkDataLabels.has('escalationChildRepAtFork'))
-	assert.ok(forkDataLabels.has('escalationSourceRepAtFork'))
+	assert.ok(forkDataLabels.has('vaultRepAtForkAttoRep'))
+	assert.ok(forkDataLabels.has('escalationChildRepAtForkAttoRep'))
+	assert.ok(forkDataLabels.has('escalationSourceRepAtForkAttoRep'))
 })
 
 test('SecurityPoolForker delegates keep the exact host storage layout', () => {

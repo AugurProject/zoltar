@@ -154,7 +154,7 @@ export function SecurityPoolSection({
 					<li>
 						<span>{commonCopy.initialReportPriorityFee}</span>
 						<strong>
-							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeWeiPerGas, 9)} {commonCopy.gwei}
+							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, 9)} {commonCopy.gwei}
 						</strong>
 					</li>
 					<li>

@@ -68,7 +68,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	function deployPriceOracleManagerAndOperatorQueuer(
 		OpenOracle _openOracle,
 		ReputationToken _reputationToken,
-		uint256 _initialReportPriorityFeeWeiPerGas,
+		uint256 _initialReportPriorityFeeAttoEthPerGas,
 		bytes32 salt
 	) external returns (OpenOraclePriceCoordinator) {
 		return
@@ -79,7 +79,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 				gasConsumedOpenOracleReportPrice,
 				gasConsumedSettlement,
 				gasUnitsForOneDispute,
-				_initialReportPriorityFeeWeiPerGas,
+				_initialReportPriorityFeeAttoEthPerGas,
 				targetPriceErrorForDispute,
 				openOracleSecurityMultiplierBps,
 				settlementTime,

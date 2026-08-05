@@ -51,8 +51,8 @@ describe('ImportedForkSettlementSection', () => {
 					{
 						importedUserDeposits: [
 							{
-								amount: 10n,
-								cumulativeAmount: 12n,
+								amountAttoRep: 10n,
+								cumulativeAmountAttoRep: 12n,
 								depositor: '0x0000000000000000000000000000000000000001',
 								parentDepositIndex: 7n,
 							},
@@ -89,8 +89,8 @@ describe('ImportedForkSettlementSection', () => {
 		const importedUserDeposits = Array.from({ length: 27 }, (_, index) => {
 			const parentDepositIndex = 250n + BigInt(index)
 			return {
-				amount: parentDepositIndex,
-				cumulativeAmount: parentDepositIndex + 1n,
+				amountAttoRep: parentDepositIndex,
+				cumulativeAmountAttoRep: parentDepositIndex + 1n,
 				depositor: '0x0000000000000000000000000000000000000001' as const,
 				parentDepositIndex,
 			}
@@ -171,8 +171,8 @@ describe('ImportedForkSettlementSection', () => {
 	test('renders only the winning imported side after finalization', async () => {
 		const renderedActions: ReportingOutcomeKey[] = []
 		const importedDeposit = {
-			amount: 10n,
-			cumulativeAmount: 12n,
+			amountAttoRep: 10n,
+			cumulativeAmountAttoRep: 12n,
 			depositor: '0x0000000000000000000000000000000000000001' as const,
 			parentDepositIndex: 7n,
 		}

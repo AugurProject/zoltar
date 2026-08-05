@@ -76,13 +76,13 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 				data: encodeAbiParameters(
 					[
 						{ name: 'operation', type: 'uint8' },
-						{ name: 'amount', type: 'uint256' },
+						{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256' },
 						{ name: 'queuedAt', type: 'uint256' },
 						{ name: 'validForSeconds', type: 'uint256' },
-						{ name: 'snapshotTargetOwnership', type: 'uint256' },
-						{ name: 'snapshotTargetAllowance', type: 'uint256' },
-						{ name: 'snapshotTotalRep', type: 'uint256' },
-						{ name: 'snapshotDenominator', type: 'uint256' },
+						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
+						{ name: 'snapshotTargetCoverageCommitmentAttoEth', type: 'uint256' },
+						{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
+						{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
 						{ name: 'isPendingSlot', type: 'bool' },
 					],
 					[0n, 10n, 1n, 60n, 10n, 10n, 10n, 10n, isPendingSlot],
@@ -141,20 +141,20 @@ describe('liquidator execution safety', () => {
 	test('enforces per-pool and aggregate REP exposure for maintenance deposits', () => {
 		expect(() =>
 			assertRepLimits({
-				currentPoolRep: 90n,
-				currentTotalRep: 150n,
-				depositAmount: 11n,
-				maximumPoolRep: 100n,
-				maximumTotalRep: 1_000n,
+				currentPoolAttoRep: 90n,
+				currentTotalAttoRep: 150n,
+				depositAmountAttoRep: 11n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumRepPerPool')
+		).toThrow('maximumAttoRepPerPool')
 		expect(() =>
 			assertRepLimits({
-				currentPoolRep: 50n,
-				currentTotalRep: 195n,
-				depositAmount: 6n,
-				maximumPoolRep: 100n,
-				maximumTotalRep: 200n,
+				currentPoolAttoRep: 50n,
+				currentTotalAttoRep: 195n,
+				depositAmountAttoRep: 6n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 200n,
 			}),
 		).toThrow('maximumTotalDeployedRep')
 	})
@@ -162,14 +162,14 @@ describe('liquidator execution safety', () => {
 	test('counts REP acquired by liquidation toward both exposure limits', () => {
 		expect(() =>
 			assertRepLimits({
-				acquiredAmount: 20n,
-				currentPoolRep: 70n,
-				currentTotalRep: 100n,
-				depositAmount: 11n,
-				maximumPoolRep: 100n,
-				maximumTotalRep: 1_000n,
+				acquiredAmountAttoRep: 20n,
+				currentPoolAttoRep: 70n,
+				currentTotalAttoRep: 100n,
+				depositAmountAttoRep: 11n,
+				maximumPoolAttoRep: 100n,
+				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumRepPerPool')
+		).toThrow('maximumAttoRepPerPool')
 	})
 
 	test('keeps fee redemption available when price-dependent maintenance is blocked', () => {
@@ -177,10 +177,10 @@ describe('liquidator execution safety', () => {
 		const pool = {
 			botVault: {
 				address: wallet,
-				allowance: 10n,
-				ownership: 0n,
-				rep: 0n,
-				unpaidEthFees: 2n,
+				coverageCommitmentAttoEth: 10n,
+				backingUnits: 0n,
+				vaultAttoRepBacking: 0n,
+				claimableFeesAttoEth: 2n,
 			},
 			isPriceValid: false,
 			lastPrice: 0n,
@@ -188,8 +188,8 @@ describe('liquidator execution safety', () => {
 		}
 		const strategy = {
 			allowAutomaticWithdrawals: true,
-			minimumRepWithdrawal: 1n,
-			redeemFeesAboveEth: 1n,
+			minimumRepWithdrawalAttoRep: 1n,
+			redeemFeesAboveAttoEth: 1n,
 			vaultTargetHealthBps: 12_500n,
 			vaultTopUpHealthBps: 11_000n,
 			vaultWithdrawHealthBps: 15_000n,
@@ -203,10 +203,10 @@ describe('liquidator execution safety', () => {
 		const pool = {
 			botVault: {
 				address: wallet,
-				allowance: 0n,
-				ownership: 0n,
-				rep: 0n,
-				unpaidEthFees: 0n,
+				coverageCommitmentAttoEth: 0n,
+				backingUnits: 0n,
+				vaultAttoRepBacking: 0n,
+				claimableFeesAttoEth: 0n,
 			},
 			isPriceValid: false,
 			lastPrice: 0n,
@@ -214,22 +214,22 @@ describe('liquidator execution safety', () => {
 		}
 		const strategy = {
 			allowAutomaticWithdrawals: false,
-			minimumRepWithdrawal: 1n,
-			redeemFeesAboveEth: 0n,
+			minimumRepWithdrawalAttoRep: 1n,
+			redeemFeesAboveAttoEth: 0n,
 			vaultTargetHealthBps: 12_500n,
 			vaultTopUpHealthBps: 11_000n,
 			vaultWithdrawHealthBps: 15_000n,
 		}
 		expect(planVaultMaintenance(pool, strategy, wallet, false)).toBeUndefined()
-		expect(planVaultMaintenance({ ...pool, botVault: { ...pool.botVault, unpaidEthFees: 1n } }, strategy, wallet, false)).toEqual({ kind: 'fees' })
+		expect(planVaultMaintenance({ ...pool, botVault: { ...pool.botVault, claimableFeesAttoEth: 1n } }, strategy, wallet, false)).toEqual({ kind: 'fees' })
 	})
 
 	test('pre-funds stale liquidations against the configured higher price bound', () => {
 		expect(
 			conservativeStaleTopUp({
-				callerAllowance: 0n,
-				callerRep: 0n,
-				debtToMove: 10n * 10n ** 18n,
+				callerCoverageCommitmentAttoEth: 0n,
+				callerAttoRep: 0n,
+				coverageCommitmentToTransferAttoEth: 10n * 10n ** 18n,
 				fallbackPrice: 0n,
 				minimumTopUp: 100n * 10n ** 18n,
 				multiplierBps: 20_000n,
@@ -243,20 +243,20 @@ describe('liquidator execution safety', () => {
 	test('rejects stale full closes whose post-queue REP acquisition has no hard ceiling', () => {
 		expect(() =>
 			assertStaleLiquidationExposureBound({
-				debtToMove: 1n,
+				coverageCommitmentToTransferAttoEth: 1n,
 				target: {
 					address: getAddress('0x0000000000000000000000000000000000000030'),
-					allowance: 1n,
-					ownership: 10n,
-					rep: 10n,
-					unpaidEthFees: 0n,
+					coverageCommitmentAttoEth: 1n,
+					backingUnits: 10n,
+					vaultAttoRepBacking: 10n,
+					claimableFeesAttoEth: 0n,
 				},
 			}),
 		).toThrow('cannot guarantee')
 	})
 
 	test('applies the gas cap to the padded signed gas limit', () => {
-		expect(() => assertGasCostLimit(100_000n, 10n, 1_100_000n)).toThrow('maximumGasCostEth')
+		expect(() => assertGasCostLimit(100_000n, 10n, 1_100_000n)).toThrow('maximumGasCostAttoEth')
 		expect(() => assertGasCostLimit(100_000n, 10n, 1_300_000n)).not.toThrow()
 	})
 
@@ -296,16 +296,16 @@ describe('liquidator execution safety', () => {
 			hasStagedLiquidation(
 				[
 					{
-						amount: 1n,
+						operationAmountAttoRepOrAttoEth: 1n,
 						id: 7n,
 						initiatorVault: getAddress('0x0000000000000000000000000000000000000020'),
 						isPendingSettlement: true,
 						operation: 0n,
 						queuedAt: 1n,
-						snapshotDenominator: 1n,
-						snapshotTargetAllowance: 1n,
-						snapshotTargetOwnership: 1n,
-						snapshotTotalRep: 1n,
+						snapshotTotalRepBackingUnits: 1n,
+						snapshotTargetCoverageCommitmentAttoEth: 1n,
+						snapshotTargetBackingUnits: 1n,
+						snapshotTotalPoolHeldAttoRep: 1n,
 						targetVault: getAddress('0x0000000000000000000000000000000000000030'),
 						validForSeconds: 60n,
 					},

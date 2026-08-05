@@ -102,7 +102,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		return 'waiting' as const
 	}
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
-	const expectedWeth = parseDecimalWeth(activePosition.lockedWeth)
+	const expectedAttoWeth = parseDecimalWeth(activePosition.lockedWeth)
 	const expectedToken = parseUnits(activePosition.lockedToken, tokenDecimals)
 	const block = await client.getBlock({ blockNumber })
 	if (block.hash == null || block.hash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle quote and quorum snapshot use different canonical blocks')
@@ -129,8 +129,8 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		})
 		replacementAmount = credit.amount
 		replacementToken = credit.token === 'token1' ? config.network.weth : activePosition.token
-		const holderBalance = credit.token === 'token1' ? balancesBefore.holderWeth : balancesBefore.holderToken
-		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceWeth : balancesBefore.internalAllowanceToken
+		const holderBalance = credit.token === 'token1' ? balancesBefore.holderAttoWeth : balancesBefore.holderToken
+		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceAttoWeth : balancesBefore.internalAllowanceToken
 		if (holderBalance < replacementAmount + 1n) throw new Error(`Position ${activePosition.reportId} replacement credit is not yet available`)
 		if (allowance < replacementAmount) {
 			throw new Error(`Position ${activePosition.reportId} replacement credit exceeds its executor internal allowance`)
@@ -161,16 +161,16 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		const withdrawalMismatch = lifecycleWithdrawalMismatch({
 			currentReporter,
 			expectedToken,
-			expectedWeth,
+			expectedAttoWeth,
 			holderToken: balancesBefore.holderToken,
-			holderWeth: balancesBefore.holderWeth,
+			holderAttoWeth: balancesBefore.holderAttoWeth,
 			willSettle,
 		})
 		if (withdrawalMismatch !== undefined) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${withdrawalMismatch}`)
 		}
-		const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedWeth, token2: expectedToken })
+		const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceAttoWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedAttoWeth, token2: expectedToken })
 		if (allowanceMismatch !== undefined) throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${allowanceMismatch}`)
 		lifecycleCall = {
 			data: encodeFunctionData({
@@ -178,7 +178,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 				functionName: 'settleAndWithdraw',
 				args: [
 					{
-						amount1: expectedWeth,
+						amount1: expectedAttoWeth,
 						amount2: expectedToken,
 						expectedParentBlockHash: storedSnapshot.blockHash,
 						openOracle: config.openOracle,

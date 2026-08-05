@@ -38,14 +38,14 @@ describe('MarketOverviewSection wallet asset control', () => {
 	test('adds the current universe REP token control to the overview', async () => {
 		const universe = {
 			childUniverses: [],
-			forkThreshold: 100n,
+			forkThresholdAttoRep: 100n,
 			forkQuestionDetails: undefined,
 			forkTime: 0n,
 			forkingOutcomeIndex: 0n,
 			hasForked: false,
 			parentUniverseId: 0n,
 			reputationToken: TOKEN_ADDRESS,
-			totalTheoreticalSupply: 1_000n,
+			totalTheoreticalSupplyAttoRep: 1_000n,
 			universeId: 0n,
 		} satisfies ZoltarUniverseSummary
 		const renderedComponent = await renderIntoDocument(

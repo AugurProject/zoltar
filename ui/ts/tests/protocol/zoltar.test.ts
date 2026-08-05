@@ -123,7 +123,7 @@ describe('zoltar contract helpers', () => {
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
 			readContractHandlers: {
-				getTotalTheoreticalSupply: async () => 111n,
+				getTotalTheoreticalSupplyAttoRep: async () => 111n,
 				getOutcomeLabels: async () => ['Yes', 'No'],
 			},
 		})
@@ -134,7 +134,7 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.hasForked).toBe(false)
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.childUniverses).toEqual([])
-		expect(summary?.totalTheoreticalSupply).toBe(111n)
+		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(111n)
 		expect(summary?.forkBurnDivisor).toBe(5n)
 		expect(summary?.zoltarAddress).toBeDefined()
 	})
@@ -146,7 +146,7 @@ describe('zoltar contract helpers', () => {
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
 			readContractHandlers: {
-				getTotalTheoreticalSupply: async () => 222n,
+				getTotalTheoreticalSupplyAttoRep: async () => 222n,
 				getOutcomeLabels: async () => [],
 				getDeployedChildUniverses: async () => [[], [], []],
 			},
@@ -168,7 +168,7 @@ describe('zoltar contract helpers', () => {
 		const client = createReadClient({
 			multicallResponses: [[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n], [QUESTION_TUPLE_BINARY, 1n], childUniverseIds, [childUniverseTuple1, childUniverseTuple2, childUniverseTuple3]],
 			readContractHandlers: {
-				getTotalTheoreticalSupply: async () => 999n,
+				getTotalTheoreticalSupplyAttoRep: async () => 999n,
 				getOutcomeLabels: async () => ['Yes', 'No'],
 				getChildUniverseId: async () => {
 					throw new Error('getChildUniverseId should be resolved via multicall in this test')
@@ -186,6 +186,6 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.childUniverses.map(universe => universe.exists)).toEqual([true, true, true])
 		expect(summary?.childUniverses.map(universe => universe.parentUniverseId)).toEqual([99n, 98n, 97n])
 		expect(summary?.forkQuestionDetails?.marketType).toBe('binary')
-		expect(summary?.totalTheoreticalSupply).toBe(999n)
+		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(999n)
 	})
 })

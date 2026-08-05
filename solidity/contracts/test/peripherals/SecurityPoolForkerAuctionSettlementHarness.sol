@@ -8,32 +8,32 @@ import { SecurityPoolForkerForkData } from '../../peripherals/SecurityPoolForker
 
 contract AuctionSettlementPoolHarness {
 	struct Vault {
-		uint256 poolOwnership;
-		uint256 securityBondAllowance;
+		uint256 repBackingUnits;
+		uint256 coverageCommitmentAttoEth;
 		uint256 fees;
 		uint256 feeIndex;
 	}
 
 	mapping(address vault => Vault) public securityVaults;
-	uint256 public poolOwnershipDenominator = 1e18;
-	uint256 public feeEligibleSecurityBondAllowance;
+	uint256 public totalRepBackingUnits = 1e18;
+	uint256 public feeEligibleCoverageCommitmentAttoEth;
 
 	function updateVaultFees(address) external {}
 
 	function configureVault(
 		address vault,
-		uint256 poolOwnership,
-		uint256 securityBondAllowance,
+		uint256 repBackingUnits,
+		uint256 coverageCommitmentAttoEth,
 		uint256 feeIndex
 	) external {
 		Vault storage current = securityVaults[vault];
-		current.poolOwnership = poolOwnership;
-		current.securityBondAllowance = securityBondAllowance;
+		current.repBackingUnits = repBackingUnits;
+		current.coverageCommitmentAttoEth = coverageCommitmentAttoEth;
 		current.feeIndex = feeIndex;
 	}
 
-	function addFeeEligibleSecurityBondAllowance(address, uint256 amount) external {
-		feeEligibleSecurityBondAllowance += amount;
+	function addFeeEligibleCoverageCommitmentAttoEth(address, uint256 amount) external {
+		feeEligibleCoverageCommitmentAttoEth += amount;
 	}
 }
 
@@ -44,11 +44,11 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 		ISecurityPool securityPool,
 		address vault,
 		uint256 amount,
-		uint256 newSecurityBondAllowance
+		uint256 newCoverageCommitmentAttoEth
 	) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		data.auctionPoolOwnershipPerRep = 10;
-		data.auctionedSecurityBondAllowance = 3;
-		_creditAuctionProceeds(securityPool, vault, data, amount, newSecurityBondAllowance, 1);
+		data.auctionRepBackingUnitsPerAttoRep = 10;
+		data.auctionedCoverageCommitmentAttoEth = 3;
+		_creditAuctionProceeds(securityPool, vault, data, amount, newCoverageCommitmentAttoEth, 1);
 	}
 }

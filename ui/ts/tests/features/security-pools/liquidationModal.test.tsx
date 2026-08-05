@@ -16,7 +16,7 @@ import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '../../testUtils/transactionActionButton.js'
 
-const ETH = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
@@ -52,8 +52,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: 1000n,
-		queuedOperationEthCost: 1n,
-		requestPriceEthCost: 1n,
+		queuedOperationCostAttoEth: 1n,
+		requestPriceCostAttoEth: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
@@ -63,10 +63,10 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
-		escalationEscrowedRep: 0n,
-		repDepositShare: 5n * 10n ** 18n,
-		securityBondAllowance: 2n * 10n ** 18n,
-		unpaidEthFees: 0n,
+		disputeStakedAttoRep: 0n,
+		vaultAttoRepBacking: 5n * 10n ** 18n,
+		coverageCommitmentAttoEth: 2n * 10n ** 18n,
+		claimableFeesAttoEth: 0n,
 		vaultAddress: zeroAddress,
 		...overrides,
 	}
@@ -74,27 +74,27 @@ function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> =
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
+		feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
-		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: 3n * 10n ** 18n,
 		lastOracleSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
 		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 5n * 10n ** 18n,
-		totalSecurityBondAllowance: 2n * 10n ** 18n,
+		totalPoolHeldAttoRep: 5n * 10n ** 18n,
+		totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -148,8 +148,8 @@ describe('LiquidationModal', () => {
 			closeLiquidationModal: () => undefined,
 			currentPoolOracleManagerDetails: undefined,
 			isOnActiveAppChain: true,
-			liquidationAmount: '1',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '1',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			liquidationManagerAddress: zeroAddress,
 			liquidationFundingPreview: undefined,
 			liquidationFundingPreviewError: undefined,
@@ -228,15 +228,15 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
 			liquidationFundingPreview: {
-				currentRepBalance: 25n * ETH,
-				currentWethBalance: 1n * ETH,
-				initialReportRepRequired: 10n * ETH,
-				initialReportWethRequired: 2n * ETH,
-				queueOperationEthValue: (12n * ETH) / 10n,
-				totalWalletEthRequired: (22n * ETH) / 10n,
-				wethShortfall: 1n * ETH,
+				currentRepBalanceAttoRep: 25n * ATTO_ETH_PER_ETH,
+				currentWethBalanceAttoEth: 1n * ATTO_ETH_PER_ETH,
+				initialReportRepRequiredAttoRep: 10n * ATTO_ETH_PER_ETH,
+				initialReportWethRequiredAttoEth: 2n * ATTO_ETH_PER_ETH,
+				queueOperationValueAttoEth: (12n * ATTO_ETH_PER_ETH) / 10n,
+				totalWalletEthRequiredAttoEth: (22n * ATTO_ETH_PER_ETH) / 10n,
+				wethShortfallAttoEth: 1n * ATTO_ETH_PER_ETH,
 			},
-			walletEthBalance: 5n * ETH,
+			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -500,7 +500,7 @@ describe('LiquidationModal', () => {
 
 	test('keeps focus on the edited input while the modal rerenders', async () => {
 		function LiquidationHarness() {
-			const [liquidationAmount, setLiquidationAmount] = useState('1')
+			const [coverageCommitmentTransferEthAmount, setLiquidationAmount] = useState('1')
 
 			return (
 				<LiquidationModal
@@ -508,8 +508,8 @@ describe('LiquidationModal', () => {
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={undefined}
 					isOnActiveAppChain
-					liquidationAmount={liquidationAmount}
-					liquidationMaxAmount={5n}
+					coverageCommitmentTransferEthAmount={coverageCommitmentTransferEthAmount}
+					maximumCoverageCommitmentTransferAttoEth={5n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -562,7 +562,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				pendingOperation: {
-					amount: 5n,
+					amount: 5n * 10n ** 18n,
 					initiatorVault: zeroAddress,
 					operation: 'liquidation',
 					operationId: 9n,
@@ -570,8 +570,8 @@ describe('LiquidationModal', () => {
 				},
 				pendingOperationSlotId: 9n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			liquidationTargetVault: zeroAddress,
 			onSelectedPoolViewChange: view => {
 				selectedViews.push(view ?? '')
@@ -587,6 +587,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#9')).not.toBeNull()
+		expect(documentQueries.getByText('Coverage commitment transfer')).not.toBeNull()
+		expect(documentQueries.getByText('5 ETH')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' }).closest('.liquidation-modal-actions')).toBeNull()
 
 		await act(() => {
@@ -609,8 +611,8 @@ describe('LiquidationModal', () => {
 				},
 				pendingOperationSlotId: 8n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			liquidationTargetVault: zeroAddress,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
@@ -638,8 +640,8 @@ describe('LiquidationModal', () => {
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -669,8 +671,8 @@ describe('LiquidationModal', () => {
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -684,28 +686,28 @@ describe('LiquidationModal', () => {
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
-				requestPriceEthCost: 10n * ETH,
+				requestPriceCostAttoEth: 10n * ATTO_ETH_PER_ETH,
 			}),
 			liquidationFundingPreview: {
-				currentRepBalance: 0n,
-				currentWethBalance: 0n,
-				initialReportRepRequired: 0n,
-				initialReportWethRequired: 0n,
-				queueOperationEthValue: 12n * ETH,
-				totalWalletEthRequired: 12n * ETH,
-				wethShortfall: 0n,
+				currentRepBalanceAttoRep: 0n,
+				currentWethBalanceAttoEth: 0n,
+				initialReportRepRequiredAttoRep: 0n,
+				initialReportWethRequiredAttoEth: 0n,
+				queueOperationValueAttoEth: 12n * ATTO_ETH_PER_ETH,
+				totalWalletEthRequiredAttoEth: 12n * ATTO_ETH_PER_ETH,
+				wethShortfallAttoEth: 0n,
 			},
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
-			walletEthBalance: 5n * ETH,
+			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -720,28 +722,28 @@ describe('LiquidationModal', () => {
 				isPriceValid: false,
 			}),
 			liquidationFundingPreview: {
-				currentRepBalance: 0n,
-				currentWethBalance: 0n,
-				initialReportRepRequired: 0n,
-				initialReportWethRequired: 0n,
-				queueOperationEthValue: 1n,
-				totalWalletEthRequired: 1n,
-				wethShortfall: 0n,
+				currentRepBalanceAttoRep: 0n,
+				currentWethBalanceAttoEth: 0n,
+				initialReportRepRequiredAttoRep: 0n,
+				initialReportWethRequiredAttoEth: 0n,
+				queueOperationValueAttoEth: 1n,
+				totalWalletEthRequiredAttoEth: 1n,
+				wethShortfallAttoEth: 0n,
 			},
-			liquidationAmount: '100',
+			coverageCommitmentTransferEthAmount: '100',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 2_000n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
-			walletEthBalance: 100n * ETH,
+			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -749,15 +751,15 @@ describe('LiquidationModal', () => {
 		expect(queueButton.disabled).toBe(false)
 	})
 
-	test('uses the full queued allowance for Max when the current oracle price is stale', async () => {
+	test('coverage commitment', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
-			liquidationMaxAmount: 100n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '1',
+			maximumCoverageCommitmentTransferAttoEth: 100n * 10n ** 18n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
@@ -766,8 +768,8 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -789,14 +791,14 @@ describe('LiquidationModal', () => {
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
 				securityPoolAddress: zeroAddress,
 				stagedExecution: {
-					errorMessage: 'Local Security Bond Allowance broken',
+					errorMessage: 'Local Coverage commitment broken',
 					operation: 'liquidation',
 					operationId: 4n,
 					success: false,
@@ -807,7 +809,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
-		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(documentQueries.getByText('Local Coverage commitment broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
 
@@ -818,14 +820,14 @@ describe('LiquidationModal', () => {
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
 				securityPoolAddress: zeroAddress,
 				stagedExecution: {
-					errorMessage: 'Caller debt',
+					errorMessage: 'Caller commitment',
 					operation: 'liquidation',
 					operationId: 5n,
 					success: false,
@@ -835,7 +837,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Your vault would remain below the minimum security bond allowance after liquidation.')).not.toBeNull()
+		expect(documentQueries.getByText('Your vault would remain below the minimum coverage commitment after liquidation.')).not.toBeNull()
 
 		renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
@@ -846,8 +848,8 @@ describe('LiquidationModal', () => {
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
-			liquidationAmount: '5',
-			liquidationMaxAmount: 5n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '5',
+			maximumCoverageCommitmentTransferAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ad',
@@ -884,8 +886,8 @@ describe('LiquidationModal', () => {
 						pendingOperationSlotId: 0n,
 					})}
 					isOnActiveAppChain
-					liquidationAmount='1'
-					liquidationMaxAmount={5n * 10n ** 18n}
+					coverageCommitmentTransferEthAmount='1'
+					maximumCoverageCommitmentTransferAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -920,13 +922,13 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
-						repDepositShare: 20n * 10n ** 18n,
-						securityBondAllowance: 1n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
+						coverageCommitmentAttoEth: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						repDepositShare: 12n * 10n ** 18n,
-						securityBondAllowance: 11n * 10n ** 18n,
+						vaultAttoRepBacking: 12n * 10n ** 18n,
+						coverageCommitmentAttoEth: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -978,8 +980,8 @@ describe('LiquidationModal', () => {
 						pendingOperationSlotId: 0n,
 					})}
 					isOnActiveAppChain
-					liquidationAmount='1'
-					liquidationMaxAmount={5n * 10n ** 18n}
+					coverageCommitmentTransferEthAmount='1'
+					maximumCoverageCommitmentTransferAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1002,13 +1004,13 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={securityPoolLiquidationError}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						repDepositShare: 20n * 10n ** 18n,
-						securityBondAllowance: 1n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
+						coverageCommitmentAttoEth: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						repDepositShare: 12n * 10n ** 18n,
-						securityBondAllowance: 11n * 10n ** 18n,
+						vaultAttoRepBacking: 12n * 10n ** 18n,
+						coverageCommitmentAttoEth: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -1041,14 +1043,14 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 3n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
-			liquidationMaxAmount: 25n * 10n ** 18n,
+			coverageCommitmentTransferEthAmount: '1',
+			maximumCoverageCommitmentTransferAttoEth: 25n * 10n ** 18n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 73n * 10n ** 18n,
-				securityBondAllowance: 50n * 10n ** 18n,
+				vaultAttoRepBacking: 73n * 10n ** 18n,
+				coverageCommitmentAttoEth: 50n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1070,8 +1072,8 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 1000n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
-			liquidationMaxAmount: 995n * 10n ** 17n,
+			coverageCommitmentTransferEthAmount: '1',
+			maximumCoverageCommitmentTransferAttoEth: 995n * 10n ** 17n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
@@ -1080,8 +1082,8 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 1000n * 10n ** 18n,
-				securityBondAllowance: 14n * 10n ** 17n,
+				vaultAttoRepBacking: 1000n * 10n ** 18n,
+				coverageCommitmentAttoEth: 14n * 10n ** 17n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1099,8 +1101,8 @@ describe('LiquidationModal', () => {
 	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1111,8 +1113,8 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1127,21 +1129,21 @@ describe('LiquidationModal', () => {
 	test('shows target-safe before post-liquidation REP floor warnings for a safe near-floor target vault', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
+			coverageCommitmentTransferEthAmount: '1',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 11n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 11n * 10n ** 18n,
+				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1150,27 +1152,27 @@ describe('LiquidationModal', () => {
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
-		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
+		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
 	test('allows full-close liquidation when the target only holds the minimum REP deposit', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 61n * 10n ** 17n,
 			}),
-			liquidationAmount: '1',
+			coverageCommitmentTransferEthAmount: '1',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 10n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1178,28 +1180,28 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
-		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
+		expect(documentQueries.queryByText('No coverage commitment is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
 	test('allows full-close liquidation when the computed REP penalty exceeds the target vault balance', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
+			coverageCommitmentTransferEthAmount: '1',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 10n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1207,28 +1209,28 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
-		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
+		expect(documentQueries.queryByText('No coverage commitment is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
 	test('does not offer a positive Max or REP transfer preview for a safe target vault', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
-			liquidationAmount: '2',
+			coverageCommitmentTransferEthAmount: '2',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1237,8 +1239,8 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
@@ -1247,21 +1249,21 @@ describe('LiquidationModal', () => {
 	test('allows an atomic bonus-priced liquidation', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 4n * 10n ** 17n,
 			}),
-			liquidationAmount: '0.000000000000000001',
+			coverageCommitmentTransferEthAmount: '0.000000000000000001',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 130n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 130n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1269,168 +1271,168 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/Escalation claims, free-REP surplus, and accrued fees stay with the target vault/)).not.toBeNull()
+		expect(documentQueries.getByText(/Escalation claims, pool-held vault REP backing surplus, and accrued fees stay with the target vault/)).not.toBeNull()
 		expect(documentQueries.getByText(/A maximum request records any untransferred residual as bad debt/)).not.toBeNull()
 	})
 
-	test('previews the exact post-ownership-conversion REP amount after a pool donation', () => {
-		const totalRepBalance = 200n * ETH + 1n
-		const poolOwnershipDenominator = 200n * ETH * ETH
+	test('previews the exact post-backingUnits-conversion REP amount after a pool donation', () => {
+		const totalPoolHeldRepBalanceAttoRep = 200n * ATTO_ETH_PER_ETH + 1n
+		const totalRepBackingUnits = 200n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH
 		const targetVaultSummary = createTargetVaultSummary({
-			poolOwnership: 100n * ETH * ETH,
-			poolOwnershipDenominator,
-			repDepositShare: 100n * ETH,
-			securityBondAllowance: 100n * ETH,
-			totalRepBalance,
+			repBackingUnits: 100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH,
+			totalRepBackingUnits,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+			coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
+			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
-			liquidationAmount: 1n * ETH,
-			repPerEthPrice: 1n * ETH,
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferAttoEth: 1n * ATTO_ETH_PER_ETH,
+			repPerEthPrice: 1n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
-		const quotedRep = (105n * ETH) / 100n
-		const ownershipMoved = (quotedRep * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
-		const exactRepMoved = (ownershipMoved * totalRepBalance) / poolOwnershipDenominator
+		const quotedRep = (105n * ATTO_ETH_PER_ETH) / 100n
+		const backingUnitsMoved = (quotedRep * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
+		const exactRepMoved = (backingUnitsMoved * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
 
 		expect(exactRepMoved).toBe(quotedRep)
-		expect(simulation.repToMove).toBe(exactRepMoved)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe(exactRepMoved)
 	})
 
-	test('matches the contract partial reserve when the pool ownership rate is non-integral', () => {
-		const totalRepBalance = 20n * ETH
-		const poolOwnership = 20n * ETH * ETH + 1n
-		const poolOwnershipDenominator = poolOwnership
+	test('matches the contract partial reserve when the REP backing units rate is non-integral', () => {
+		const totalPoolHeldRepBalanceAttoRep = 20n * ATTO_ETH_PER_ETH
+		const repBackingUnits = 20n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH + 1n
+		const totalRepBackingUnits = repBackingUnits
 		const targetVaultSummary = createTargetVaultSummary({
-			poolOwnership,
-			poolOwnershipDenominator,
-			repDepositShare: 20n * ETH,
-			securityBondAllowance: 20n * ETH,
-			totalRepBalance,
+			repBackingUnits,
+			totalRepBackingUnits,
+			vaultAttoRepBacking: 20n * ATTO_ETH_PER_ETH,
+			coverageCommitmentAttoEth: 20n * ATTO_ETH_PER_ETH,
+			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
-			liquidationAmount: 10n * ETH,
-			repPerEthPrice: ETH,
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferAttoEth: 10n * ATTO_ETH_PER_ETH,
+			repPerEthPrice: ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
-		const reserveOwnership = (10n * ETH * poolOwnershipDenominator + totalRepBalance - 1n) / totalRepBalance
-		const awardableRep = ((poolOwnership - reserveOwnership) * totalRepBalance) / poolOwnershipDenominator
-		const expectedDebt = (awardableRep * ETH * 10_000n) / (ETH * 10_500n)
+		const reserveBackingUnits = (10n * ATTO_ETH_PER_ETH * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
+		const awardableAttoRep = ((repBackingUnits - reserveBackingUnits) * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
+		const expectedCoverageCommitmentTransferAttoEth = (awardableAttoRep * ATTO_ETH_PER_ETH * 10_000n) / (ATTO_ETH_PER_ETH * 10_500n)
 
-		expect(awardableRep).toBe(10n * ETH - 1n)
-		expect(simulation.debtToMove).toBe(expectedDebt)
-		expect(simulation.badDebtRecorded).toBe(0n)
+		expect(awardableAttoRep).toBe(10n * ATTO_ETH_PER_ETH - 1n)
+		expect(simulation.coverageCommitmentToTransferAttoEth).toBe(expectedCoverageCommitmentTransferAttoEth)
+		expect(simulation.badDebtAttoEth).toBe(0n)
 	})
 
-	test('caps debt at the fully funded award and previews residual bad debt at the minimum multiplier', () => {
+	test('caps coverage commitment at the fully funded award and previews residual bad debt at the minimum multiplier', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			escalationEscrowedRep: 900n * ETH,
-			repDepositShare: 100n * ETH,
-			securityBondAllowance: 900n * ETH,
+			disputeStakedAttoRep: 900n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+			coverageCommitmentAttoEth: 900n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 1000n * ETH }),
-			liquidationAmount: 900n * ETH,
-			repPerEthPrice: 2n * ETH,
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 1000n * ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferAttoEth: 900n * ATTO_ETH_PER_ETH,
+			repPerEthPrice: 2n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 10_002n,
 			targetVaultSummary,
 		})
-		const expectedDebt = (100n * ETH * ETH * 10_000n) / (2n * ETH * 10_500n)
+		const expectedCoverageCommitmentTransferAttoEth = (100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH * 10_000n) / (2n * ATTO_ETH_PER_ETH * 10_500n)
 
-		expect(simulation.debtToMove).toBe(expectedDebt)
-		expect(simulation.repToMove).toBe(100n * ETH - 1n)
-		expect(simulation.badDebtRecorded).toBe(900n * ETH - expectedDebt)
-		expect(simulation.targetAfter.escalationEscrowedRep).toBe(900n * ETH)
-		expect(simulation.targetAfter.securityBondAllowance).toBe(0n)
+		expect(simulation.coverageCommitmentToTransferAttoEth).toBe(expectedCoverageCommitmentTransferAttoEth)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe(100n * ATTO_ETH_PER_ETH - 1n)
+		expect(simulation.badDebtAttoEth).toBe(900n * ATTO_ETH_PER_ETH - expectedCoverageCommitmentTransferAttoEth)
+		expect(simulation.targetAfter.disputeStakedAttoRep).toBe(900n * ATTO_ETH_PER_ETH)
+		expect(simulation.targetAfter.coverageCommitmentAttoEth).toBe(0n)
 	})
 
-	test('does not preview negative debt for a partial request against sub-minimum auction allowance', () => {
+	test('coverage commitment', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			repDepositShare: 100n * ETH,
-			securityBondAllowance: ETH / 2n,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+			coverageCommitmentAttoEth: ATTO_ETH_PER_ETH / 2n,
 		})
-		const callerVaultSummary = createTargetVaultSummary({ repDepositShare: 100n * ETH, securityBondAllowance: 0n })
+		const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, coverageCommitmentAttoEth: 0n })
 		const partial = simulateLiquidation({
 			callerVaultSummary,
-			liquidationAmount: ETH / 4n,
-			repPerEthPrice: 300n * ETH,
+			coverageCommitmentTransferAttoEth: ATTO_ETH_PER_ETH / 4n,
+			repPerEthPrice: 300n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
 		const maximum = simulateLiquidation({
 			callerVaultSummary,
-			liquidationAmount: ETH / 2n,
-			repPerEthPrice: 300n * ETH,
+			coverageCommitmentTransferAttoEth: ATTO_ETH_PER_ETH / 2n,
+			repPerEthPrice: 300n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
 
-		expect(partial.debtToMove).toBe(0n)
-		expect(partial.badDebtRecorded).toBe(0n)
-		expect(partial.targetAfter.securityBondAllowance).toBe(ETH / 2n)
-		expect(maximum.debtToMove).toBe(0n)
-		expect(maximum.badDebtRecorded).toBe(ETH / 2n)
-		expect(maximum.targetAfter.securityBondAllowance).toBe(0n)
+		expect(partial.coverageCommitmentToTransferAttoEth).toBe(0n)
+		expect(partial.badDebtAttoEth).toBe(0n)
+		expect(partial.targetAfter.coverageCommitmentAttoEth).toBe(ATTO_ETH_PER_ETH / 2n)
+		expect(maximum.coverageCommitmentToTransferAttoEth).toBe(0n)
+		expect(maximum.badDebtAttoEth).toBe(ATTO_ETH_PER_ETH / 2n)
+		expect(maximum.targetAfter.coverageCommitmentAttoEth).toBe(0n)
 	})
 
-	test('leaves escalation REP with the target during liquidation', () => {
+	test('leaves dispute-staked REP with the target during liquidation', () => {
 		const targetVaultSummary = createTargetVaultSummary({
-			escalationEscrowedRep: 11n * ETH,
-			repDepositShare: 100n * ETH,
-			securityBondAllowance: 100n * ETH,
+			disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
+			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+			coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH }),
-			liquidationAmount: 50n * ETH,
-			repPerEthPrice: ETH,
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferAttoEth: 50n * ATTO_ETH_PER_ETH,
+			repPerEthPrice: ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary,
 		})
 
-		expect(simulation.repToMove).toBe((105n * ETH) / 2n)
-		expect(simulation.targetAfter.escalationEscrowedRep).toBe(11n * ETH)
-		expect(simulation.callerAfter.escalationEscrowedRep).toBe(0n)
+		expect(simulation.vaultAttoRepBackingToTransfer).toBe((105n * ATTO_ETH_PER_ETH) / 2n)
+		expect(simulation.targetAfter.disputeStakedAttoRep).toBe(11n * ATTO_ETH_PER_ETH)
+		expect(simulation.callerAfter.disputeStakedAttoRep).toBe(0n)
 	})
 
-	test('renders the full free-REP award and retained fees', async () => {
+	test('renders the full pool-held vault REP backing award and retained fees', async () => {
 		const renderedComponent = await renderLiquidationModal({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
-			liquidationAmount: '50',
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				escalationEscrowedRep: 11n * ETH,
-				repDepositShare: 100n * ETH,
-				securityBondAllowance: 100n * ETH,
-				unpaidEthFees: 7n * ETH,
+				disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
+				claimableFeesAttoEth: 7n * ATTO_ETH_PER_ETH,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
-		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 52.50 REP')
+		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 52.50 REP')
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
 	})
 
-	test('does not credit target escalation REP against the free-REP award', async () => {
+	test('does not credit target dispute-staked REP against the pool-held vault REP backing award', async () => {
 		const renderedComponent = await renderLiquidationModal({
-			callerVaultSummary: createTargetVaultSummary({ repDepositShare: 100n * ETH, vaultAddress: defaultCallerVaultAddress }),
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ETH }),
-			liquidationAmount: '50',
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 2n * ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				escalationEscrowedRep: 300n * ETH,
-				repDepositShare: 300n * ETH,
-				securityBondAllowance: 100n * ETH,
+				disputeStakedAttoRep: 300n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 300n * ATTO_ETH_PER_ETH,
+				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 105.00 REP')
-		expect(getTransactionReviewValue('Free REP Moved')).toBe('≈ 105.00 REP')
+		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 105.00 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1441,8 +1443,8 @@ describe('LiquidationModal', () => {
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={undefined}
 					isOnActiveAppChain
-					liquidationAmount='1'
-					liquidationMaxAmount={5n * 10n ** 18n}
+					coverageCommitmentTransferEthAmount='1'
+					maximumCoverageCommitmentTransferAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1501,18 +1503,18 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '2',
+			coverageCommitmentTransferEthAmount: '2',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 20n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
+				coverageCommitmentAttoEth: 1n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 30n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 30n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1535,18 +1537,18 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
+			coverageCommitmentTransferEthAmount: '1',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 20n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 30n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 30n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1558,21 +1560,21 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Your vault would remain liquidatable after this liquidation.')).not.toBeNull()
 	})
 
-	test('does not use target escalation REP to make the caller appear healthy', async () => {
+	test('does not use target dispute-staked REP to make the caller appear healthy', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
-				escalationEscrowedRep: 0n,
-				repDepositShare: 23n * ETH,
-				securityBondAllowance: 0n,
+				disputeStakedAttoRep: 0n,
+				vaultAttoRepBacking: 23n * ATTO_ETH_PER_ETH,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ETH }),
-			liquidationAmount: '50',
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH }),
+			coverageCommitmentTransferEthAmount: '50',
 			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
-				escalationEscrowedRep: 100n * ETH,
-				repDepositShare: 100n * ETH,
-				securityBondAllowance: 100n * ETH,
+				disputeStakedAttoRep: 100n * ATTO_ETH_PER_ETH,
+				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
+				coverageCommitmentAttoEth: 100n * ATTO_ETH_PER_ETH,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1615,19 +1617,19 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '1',
+			coverageCommitmentTransferEthAmount: '1',
 			liquidationTargetVault: vaultAddress,
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 5n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 5n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
 		})
@@ -1650,18 +1652,18 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '2',
+			coverageCommitmentTransferEthAmount: '2',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 5n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 5n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1670,9 +1672,9 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Your Vault')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
-		expect(documentQueries.getByText('Your Free REP After')).not.toBeNull()
-		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
-		expect(documentQueries.getByText('Free REP Moved')).not.toBeNull()
+		expect(documentQueries.getByText('Your vault REP backing after')).not.toBeNull()
+		expect(documentQueries.getByText('Your coverage commitment after')).not.toBeNull()
+		expect(documentQueries.getByText('REP backing transferred')).not.toBeNull()
 	})
 
 	test('shows only the fully funded award and the residual bad debt for a maximum liquidation', async () => {
@@ -1683,25 +1685,25 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '2',
+			coverageCommitmentTransferEthAmount: '2',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 2n * 10n ** 18n,
-				securityBondAllowance: 2n * 10n ** 18n,
-				unpaidEthFees: 25n * 10n ** 16n,
+				vaultAttoRepBacking: 2n * 10n ** 18n,
+				coverageCommitmentAttoEth: 2n * 10n ** 18n,
+				claimableFeesAttoEth: 25n * 10n ** 16n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
@@ -1719,18 +1721,18 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '100',
+			coverageCommitmentTransferEthAmount: '100',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 2_000n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1747,33 +1749,33 @@ describe('LiquidationModal', () => {
 				isPriceValid: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
-			liquidationAmount: '99.6',
+			coverageCommitmentTransferEthAmount: '99.6',
 			selectedPool: createSelectedPool({
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
-				repDepositShare: 2_000n * 10n ** 18n,
-				securityBondAllowance: 0n,
+				vaultAttoRepBacking: 2_000n * 10n ** 18n,
+				coverageCommitmentAttoEth: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 100n * 10n ** 18n,
-				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAttoRepBacking: 100n * 10n ** 18n,
+				coverageCommitmentAttoEth: 100n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
-		expect(document.body.textContent?.includes('The target vault would fall below the minimum security bond allowance after liquidation.')).toBe(false)
-		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
-		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
-		expect(debtAssumedLabel.nextElementSibling?.textContent).toBe('≈ 8.57 ETH')
+		expect(document.body.textContent?.includes('The target vault would fall below the minimum coverage commitment after liquidation.')).toBe(false)
+		const coverageCommitmentAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Coverage commitment assumed')
+		if (!(coverageCommitmentAssumedLabel instanceof HTMLElement)) throw new Error('Expected Coverage commitment assumed label')
+		expect(coverageCommitmentAssumedLabel.nextElementSibling?.textContent).toBe('≈ 8.57 ETH')
 	})
 
 	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the executable cap', async () => {
 		function LiquidationSimulationHarness() {
-			const [liquidationAmount, setLiquidationAmount] = useState('5000')
+			const [coverageCommitmentTransferEthAmount, setLiquidationAmount] = useState('5000')
 
 			return (
 				<LiquidationModal
@@ -1784,8 +1786,8 @@ describe('LiquidationModal', () => {
 						lastPrice: 3n * 10n ** 18n,
 					})}
 					isOnActiveAppChain
-					liquidationAmount={liquidationAmount}
-					liquidationMaxAmount={2_500n * 10n ** 18n}
+					coverageCommitmentTransferEthAmount={coverageCommitmentTransferEthAmount}
+					maximumCoverageCommitmentTransferAttoEth={2_500n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1808,13 +1810,13 @@ describe('LiquidationModal', () => {
 					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
-						repDepositShare: 30_000n * 10n ** 18n,
-						securityBondAllowance: 1_000n * 10n ** 18n,
+						vaultAttoRepBacking: 30_000n * 10n ** 18n,
+						coverageCommitmentAttoEth: 1_000n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						repDepositShare: 1840n * 10n ** 18n,
-						securityBondAllowance: 2_500n * 10n ** 18n,
+						vaultAttoRepBacking: 1840n * 10n ** 18n,
+						coverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -1835,16 +1837,16 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Free REP Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Free REP Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
-		const debtAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Debt Assumed')
-		if (!(debtAssumedLabel instanceof HTMLElement)) throw new Error('Expected Debt Assumed label')
-		const debtAssumedValue = debtAssumedLabel.nextElementSibling
-		if (!(debtAssumedValue instanceof HTMLElement)) throw new Error('Expected Debt Assumed value')
-		expect(debtAssumedValue.textContent).toBe('≈ 584.13 ETH')
+		const coverageCommitmentAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Coverage commitment assumed')
+		if (!(coverageCommitmentAssumedLabel instanceof HTMLElement)) throw new Error('Expected Coverage commitment assumed label')
+		const coverageCommitmentAssumedValue = coverageCommitmentAssumedLabel.nextElementSibling
+		if (!(coverageCommitmentAssumedValue instanceof HTMLElement)) throw new Error('Expected Coverage commitment assumed value')
+		expect(coverageCommitmentAssumedValue.textContent).toBe('≈ 584.13 ETH')
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
@@ -1853,7 +1855,7 @@ describe('LiquidationModal', () => {
 		const repMovedValueAfter = repMovedLabel.nextElementSibling
 		if (!(repMovedValueAfter instanceof HTMLElement)) throw new Error('Expected Rep Moved value after input')
 		expect(repMovedValueAfter.textContent).toBe(clampedPreviewText)
-		expect(debtAssumedValue.textContent).toBe('≈ 584.13 ETH')
+		expect(coverageCommitmentAssumedValue.textContent).toBe('≈ 584.13 ETH')
 
 		render(null, container)
 		container.remove()
@@ -1882,7 +1884,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
 	})
 
-	test('keeps dual-coverage liquidation decisions aligned with neutral exact REP and allowance context', async () => {
+	test('coverage commitment', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -1893,9 +1895,9 @@ describe('LiquidationModal', () => {
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				escalationEscrowedRep: 4n * 10n ** 18n,
-				repDepositShare: 16n * 10n ** 18n,
-				securityBondAllowance: 10n * 10n ** 18n,
+				disputeStakedAttoRep: 4n * 10n ** 18n,
+				vaultAttoRepBacking: 16n * 10n ** 18n,
+				coverageCommitmentAttoEth: 10n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1903,9 +1905,9 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
-		expect(documentQueries.getByText('Target Bond Allowance')).not.toBeNull()
-		expect(documentQueries.getByText('Target Free REP')).not.toBeNull()
-		expect(documentQueries.getByText('Target Escalation REP')).not.toBeNull()
+		expect(documentQueries.getByText('Target coverage commitment')).not.toBeNull()
+		expect(documentQueries.getByText('Target vault REP backing')).not.toBeNull()
+		expect(documentQueries.getByText('Target dispute-staked REP')).not.toBeNull()
 		expect(documentQueries.queryByText(/Collateralization/)).toBeNull()
 		expect(documentQueries.queryByText('Below target')).toBeNull()
 	})

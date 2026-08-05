@@ -2,7 +2,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { balanceOfShares, OperationType } from '../testSupport/simulator/utils/contracts/peripherals'
-import { createCompleteSet, getShareTokenSupply, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture } from './peripherals/fixture'
 
@@ -10,18 +10,18 @@ const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 describe('Audit regression: escalation start configuration liveness', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
-	const { assert, deployOriginSecurityPool, getSecurityPoolsEscalationGame, getSecurityVault, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, poolOwnershipToRep, redeemRep, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
+	const { assert, deployOriginSecurityPool, getSecurityPoolsEscalationGame, getSecurityVault, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, backingUnitsToAttoRep, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps, securityPoolAddresses } = fixture
 		const openInterestAmount = 1n * 10n ** 18n
-		const securityBondAllowance = 25n * 10n ** 18n
+		const coverageCommitmentAttoEth = 25n * 10n ** 18n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		const readNonDecisionThreshold = async () =>
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,
 				address: getZoltarAddress(),
-				functionName: 'getNonDecisionThreshold',
+				functionName: 'getNonDecisionThresholdAttoRep',
 				args: [genesisUniverse],
 			})
 
@@ -30,21 +30,21 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			await client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
-				functionName: 'initialEscalationGameDeposit',
+				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
-			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit,
+			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
 			'the canonical factory deployment must preserve the default immutable escalation bond',
 		)
-		assert.strictEqual(reportBond, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, 'the production start bond must be exactly 1 REP')
+		assert.strictEqual(reportBond, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the production start bond must be exactly 1 REP')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance, reportedRepEthPrice)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const vaultRepBeforeResolution = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.repDepositShare)
-		const shareSupplyBeforeResolution = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+		const vaultRepBeforeResolution = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.repBackingUnits)
+		const shareSupplyBeforeResolution = await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool)
 		const holderSharesBeforeResolution = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.ok(vaultRepBeforeResolution > reportBond, 'the vault REP redemption must represent a funded claim')
 		assert.ok(shareSupplyBeforeResolution > 0n, 'the pool must have open-interest liabilities before escalation starts')
@@ -67,7 +67,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,
 				address: getZoltarAddress(),
-				functionName: 'getUniverseTheoreticalSupply',
+				functionName: 'getUniverseTheoreticalSupplyAttoRep',
 				args: [genesisUniverse],
 			}),
 			trackedSupplyForOneRepThreshold,
@@ -87,7 +87,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			await client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
-				functionName: 'initialEscalationGameDeposit',
+				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
 			reportBond,
@@ -97,7 +97,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			await client.readContract({
 				abi: fixture.peripherals_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
-				functionName: 'startBond',
+				functionName: 'startBondAttoRep',
 				args: [],
 			}),
 			reportBond - 1n,
@@ -107,7 +107,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			await client.readContract({
 				abi: fixture.peripherals_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
-				functionName: 'nonDecisionThreshold',
+				functionName: 'nonDecisionThresholdAttoRep',
 				args: [],
 			}),
 			reportBond,
@@ -122,10 +122,10 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await mockWindow.setTime(escalationEndTime + 1n)
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
-		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-		assert.strictEqual(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'resolved open interest must be fully redeemable')
+		assert.strictEqual(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'resolved open interest must be fully redeemable')
 		const vaultAfterRedemption = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		assert.strictEqual(vaultAfterRedemption.repDepositShare, 0n, 'the funded vault REP claim must be fully redeemable')
+		assert.strictEqual(vaultAfterRedemption.repBackingUnits, 0n, 'the funded vault REP claim must be fully redeemable')
 	})
 })
