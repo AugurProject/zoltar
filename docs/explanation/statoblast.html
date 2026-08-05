@@ -162,7 +162,7 @@
 								<div class="architecture-component">
 									<strong>Stage guarded operations</strong>
 									<code>OpenOraclePriceCoordinator</code>
-									<p>Owns cached price and staged-operation state. A vault or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
+									<p>Owns cached price and staged-operation state. A vault owner or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
 								</div>
 								<div class="architecture-component">
 									<strong>Report REP/ETH price</strong>
@@ -747,14 +747,14 @@
 							</tr>
 							<tr>
 								<td><code>claimForkedEscalationDeposits</code></td>
-								<td>A non-decision fork exists and the vault claims winning parent deposits for a selected outcome.</td>
+								<td>A non-decision fork exists and the vault owner claims winning parent deposits for a selected outcome.</td>
 								<td>Winning parent deposit indexes; own-fork claims pay the ordinary winning reward in child REP to the committed depositor. The escalation's own fork has already removed the winner haircut from aggregate backing, so the claim does not burn it again.</td>
 							</tr>
 							<tr>
 								<td><code>migrateVaultWithUnresolvedEscalation</code></td>
 								<td>Optional cleanup after an own or external fork captured unresolved parent escalation-deposit accounting before the game finalized.</td>
 								<td>
-									The affected vault invokes the wrapper for its own unresolved parent escalation-deposit totals. See the
+									The affected vault owner invokes the wrapper for their security vault's unresolved parent escalation-deposit totals. See the
 									<a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">operator cleanup reference</a>
 									for ordering, scope, and proof independence.
 								</td>
@@ -768,7 +768,7 @@
 					</table>
 				</div>
 				<p>The pool removes REP backing units and escrows REP when the user deposits into the local game. Settlement does not re-mint those REP backing units: a winner receives the ordinary winning payout as wallet REP, while a losing settlement clears escrow without a payout. An own-fork direct claim uses the same winning reward math and releases pre-funded child REP from the selected child's aggregate backing to the immutable depositor committed in the claim leaf, using the retention and rounding rule documented in the <a href="../explanation/escalation-game.html#claim-ownership">escalation architecture</a>. It is not a claim-time conversion and does not mint child-REP backing units. Own-fork direct claims must still be submitted before the parent migration window closes.</p>
-				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault. For a direct claim, that named vault must be the deposit's committed depositor; its authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on the named vault's own unresolved parent dispute-staked REP accounting.</p>
+				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault-owner address. For a direct claim, that vault owner must be the deposit's committed depositor; their authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on that owner's security vault and its unresolved parent dispute-staked REP accounting.</p>
 				<p>External Zoltar forks interrupt the escalation game. This is called continuation. The canonical continuation lifecycle lives in <a href="#migration">Forks and Migration</a>. This section only distinguishes the settlement entry points and their caller permissions.</p>
 				<p>Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
 			</section>
@@ -850,7 +850,7 @@
 					</li>
 				</ul>
 				<p id="branch-capital-reproduction-risk">REP migration and share migration intentionally reproduce a source position into every selected child branch. A share source remains as a transfer-locked entitlement after first use, and each child balance is colored by a distinct universe, so this is not a same-universe double claim. Integrations must nevertheless keep branch balance sheets separate: summing child REP or shares as though all branches were simultaneously redeemable in one economic universe overstates capital.</p>
-				<p>The migration API is not a single generic “fork migrator” role. Child creation is permissionless, <code>migrateVault</code> always acts on the caller’s own vault, and the unresolved-escalation and own-fork-claim entry points require the affected vault as caller. This matters for off-chain automation because a keeper can help with liveness, but it cannot migrate another vault's accounting or claim another vault's dispute-staked REP.</p>
+				<p>The migration API is not a single generic “fork migrator” role. Child creation is permissionless, <code>migrateVault</code> always acts on the caller’s own security vault, and the unresolved-escalation and own-fork-claim entry points require the affected vault owner as caller. This matters for off-chain automation because a keeper can help with liveness, but it cannot migrate another owner's security-vault accounting or claim another depositor's dispute-staked REP.</p>
 				<h3>Fork Migration Contract Trace</h3>
 				<div class="table-wrap">
 					<table class="wide-table">

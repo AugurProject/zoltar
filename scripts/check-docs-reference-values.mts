@@ -932,7 +932,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(migrateSharesRow, /an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
 	assert.match(claimForkedEscalationDepositsRow, /every deposit to commit `vault` as its immutable depositor/)
-	assert.match(whitepaperStatoblast.replaceAll(/\s+/g, ' '), /named vault must be the deposit's committed depositor[\s\S]*settlement pays that same depositor/)
+	assert.match(whitepaperStatoblast.replaceAll(/\s+/g, ' '), /vault owner must be the deposit's committed depositor[\s\S]*settlement pays that same depositor/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`DisputeStakedRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)

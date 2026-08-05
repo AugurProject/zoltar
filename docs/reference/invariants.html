@@ -639,9 +639,9 @@
 				<h2>Pool Assets, Shares, and Vaults</h2>
 				<p>The raw ETH balance needs an explicit surplus term. Without it, forced ETH is indistinguishable from collateral and can change an exchange rate or lifecycle precondition.</p>
 				<div class="equation" id="eq-pool-eth-conservation" role="region" aria-label="ETH conservation equation" tabindex="0">
-					<math display="block" aria-label="Raw ETH balance equals settlement collateral plus unallocated accrued fees plus total claimable vault fees plus explicit surplus" data-source="rawEthBalance = settlementCollateralAttoEth + unallocatedAccruedFeesAttoEth + totalClaimableVaultFeesAttoEth + explicitSurplus">
+					<math display="block" aria-label="All values in attoETH: raw ETH balance equals settlement collateral plus unallocated accrued fees plus total claimable vault fees plus explicit surplus" data-source="rawEthBalanceAttoEth = settlementCollateralAttoEth + unallocatedAccruedFeesAttoEth + totalClaimableVaultFeesAttoEth + explicitSurplusAttoEth">
 						<mrow>
-							<mi>rawEthBalance</mi>
+							<mi>rawEthBalanceAttoEth</mi>
 							<mo>=</mo>
 							<mi>settlementCollateralAttoEth</mi>
 							<mo>+</mo>
@@ -649,10 +649,10 @@
 							<mo>+</mo>
 							<mi>totalClaimableVaultFeesAttoEth</mi>
 							<mo>+</mo>
-							<mi>explicitSurplus</mi>
+							<mi>explicitSurplusAttoEth</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">ETH Conservation Boundary</span>Every successful external call should reconcile raw ETH into named liabilities or an explicit surplus bucket. Raw balance alone must not define collateral.</p>
+					<p class="equation-caption"><span class="equation-label">ETH Conservation Boundary</span>Every successful external call should reconcile raw ETH into named liabilities or an explicit surplus bucket. All equation terms are denominated in attoETH; raw balance alone must not define collateral.</p>
 				</div>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="bal-01">

@@ -477,21 +477,21 @@
 						</tr>
 						<tr>
 							<td><code>migrateVault(securityPool, outcomeIndex)</code></td>
-							<td>Vault owner for its non-escrowed position</td>
+							<td>Vault owner for their non-escrowed position</td>
 							<td>Migration window open; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.</td>
 							<td>Transfers the caller's REP backing units and coverage commitment into one child pool, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. Repeat calls can have no additional REP backing units or coverage commitment to move.</td>
 							<td><code>VaultMigrationCheckpoint</code></td>
 						</tr>
 						<tr>
 							<td><code>migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)</code></td>
-							<td>The named vault</td>
+							<td>The named vault owner</td>
 							<td>Migration window open; caller equals <code>vault</code>; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>First runs ordinary migration for the same vault, which may transfer REP backing units and coverage commitment to the selected child, checkpoint but retain claimable fees in the parent vault, and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.</td>
 							<td>Vault migration events plus <code>EscalationMigrationEntitlementInitialized</code> on first export and <code>EscalationMigrationEntitlementMaterialized</code> for the selected child</td>
 						</tr>
 						<tr>
 							<td><code>claimForkedEscalationDeposits(...)</code></td>
-							<td>The named vault</td>
+							<td>The named vault owner</td>
 							<td>Caller equals <code>vault</code>; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies <code>canTriggerOwnFork()</code> by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in <code>ForkMigration</code>, has a continuation game that passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>, and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, unclaimed deposit identities, and every deposit to commit <code>vault</code> as its immutable depositor.</td>
 							<td>First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.</td>
 							<td><code>DeployChild</code>, <code>SecurityPoolRegistered</code>, <code>DeploySecurityPool</code>, <code>AuthorizationUpdated</code>, <code>ChildPoolLinked</code>, <code>TotalRepBackingUnitsSet</code>, <code>AwaitingForkContinuationSet</code>, <code>EscalationGameSet</code>, <code>GameContinuedFromFork</code>, <code>ForkCarryCheckpoint</code>, <code>MigrationRepSplit</code>, <code>ChildDisputeStakedRepMaterialized</code>, and <code>PoolHeldRepSweptToChild</code> as setup requires; per claimed deposit, <code>CarryDepositConsumed</code> and <code>ClaimDeposit</code>; escrow record/export events when REP is paid; always <code>ClaimForkedEscalationDepositsToWallet</code>, including for an empty list</td>
@@ -513,14 +513,14 @@
 						<tr>
 							<td><code>settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)</code></td>
 							<td>Anyone on behalf of the named bidder vault</td>
-							<td>At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault and remain unsettled.</td>
+							<td>At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault owner and remain unsettled.</td>
 							<td>Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP backing and coverage-commitment result; a winning dust bid may receive coverage commitment even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.</td>
 							<td>Underlying auction <code>BidSettled</code>; <code>EthRefundDeferred</code> when the named bidder rejects a positive refund; <code>ClaimAuctionProceeds</code> when REP backing or coverage commitment is credited</td>
 						</tr>
 						<tr>
 							<td><code>claimAuctionProceeds(securityPool, vault, tickIndices)</code></td>
 							<td>Anyone on behalf of the named bidder vault</td>
-							<td>Auction finalized. A nonempty list additionally requires every index to belong to the named vault and remain unsettled.</td>
+							<td>Auction finalized. A nonempty list additionally requires every index to belong to the named vault owner and remain unsettled.</td>
 							<td>For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child REP backing units, and independently credits the bid positional coverage-commitment allocation. A winning dust bid can receive positive coverage commitment when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.</td>
 							<td>For processed bids, underlying auction <code>BidSettled</code>; <code>EthRefundDeferred</code> when the named bidder rejects a positive refund; <code>ClaimAuctionProceeds</code> when REP backing or coverage commitment is credited; no event for an empty list</td>
 						</tr>

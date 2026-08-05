@@ -76,19 +76,19 @@
 					<li>Coverage commitment is capped by the request, target coverage commitment, and the complete award fundable from available pool-held vault REP backing. A partial request also preserves the minimum target REP and coverage commitment positions.</li>
 					<li>The award is quoted with an attoREP ceiling, converted to REP backing units with a ceiling, and converted back to the reported pool-held vault REP backing amount.</li>
 					<li>The target retains all accrued unpaid fees, including fees checkpointed immediately before liquidation.</li>
-					<li>Every escalation claim remains owned by its committed depositor and pays only that vault if it wins.</li>
+					<li>Every escalation claim remains owned by its committed depositor and pays only that depositor if it wins.</li>
 					<li>A maximum request normally moves the funded coverage commitment and its complete award. Any untransferred residual coverage commitment is recorded in <code>vaultBadDebtAttoEth</code> and cumulative <code>totalBadDebtAttoEth</code>, then removed from total and fee-eligible active coverage commitment.</li>
 					<li>If a positive funded slice would leave the caller's resulting coverage commitment below <code>MIN_COVERAGE_COMMITMENT_ATTO_ETH</code>, the maximum-request path transfers no coverage commitment, REP, or REP backing units and records the target's complete coverage commitment as bad debt. It emits no <code>VaultLiquidated</code> or post-transfer caller checkpoint; fee updates before execution may still emit caller or target checkpoints.</li>
 				</ul>
 				<p>There is no transfer or approval function for escalation claims. The claim remains bound to the depositor committed in the carry leaf, and settlement is its only payout path.</p>
-				<p>Because claim ownership cannot change, a vault can continue reporting in the same game without owner-slot or per-vault bundle limits. Each carry leaf independently commits its depositor, outcome, amount, stable index, cumulative amount, and source node.</p>
+				<p>Because claim ownership cannot change, a vault owner can continue reporting through the same security vault without owner-slot or per-vault bundle limits. Each carry leaf independently commits its depositor, outcome, amount, stable index, cumulative amount, and source node.</p>
 				<p>Liquidation does not inspect or value this claim commitment. Its gas cost is independent of the target's reporter count, portfolio size, and fork depth.</p>
 			</section>
 
 			<section id="incentives">
 				<span id="game-theory"></span>
 				<h2>Why Claims Stay Put</h2>
-				<p>A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them. Its compensation is the deterministic 105% pool-held vault REP backing award for assuming coverage commitment; the target retains both the upside and downside of every report it originated.</p>
+				<p>A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them. Its compensation is the deterministic 105% pool-held vault REP backing award for assuming coverage commitment; the target vault owner retains both the upside and downside of every report they originated.</p>
 				<p>This separation also keeps settlement identity simple: the committed depositor remains the payout address at every fork depth. A liquidator must remain healthy after accepting the coverage commitment and pool-held vault REP backing.</p>
 				<p>A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or submit a maximum request that moves only funded coverage commitment and records the untransferred remainder as bad debt. Requiring instant target health would make many partial liquidations impossible and would force keepers to finance a larger slice than requested, potentially the target's complete coverage commitment.</p>
 				<p>The 105% quote is paid from pool-held vault REP backing and compensates execution risk, gas, and capital. Accrued ETH fees, escalation claims, and pool-held vault REP backing surplus are always inaccessible. The backstop never mints REP backing units or socializes the missing bonus: it writes the residual coverage commitment out of active capacity, emits <code>VaultBadDebtRecorded</code>, and can leave existing collateral above active coverage commitment so no additional complete sets can be created until capacity is restored.</p>
