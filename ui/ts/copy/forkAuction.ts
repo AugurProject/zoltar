@@ -75,7 +75,7 @@ export const selectedBidSettlementPreview = 'Selected-bid settlement preview.'
 export const selectedBids = 'Selected Bids'
 export const selectedWinningBids = 'Selected Winning Bids'
 export const selectedRefundRows = 'Selected Refund Rows'
-export const estimatedRepClaimedAttoRep = 'Estimated REP Backing Units'
+export const estimatedVaultRepBackingAttoRep = 'Estimated REP backing'
 export const formatEstimatedValue = (label: CopyTemplateValue) => `Estimated ${label}`
 export const estimatedRefundedAttoEth = 'Estimated ETH Refunded'
 export const ownEscalationFork = 'Own escalation fork'

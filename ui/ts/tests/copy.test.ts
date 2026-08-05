@@ -38,7 +38,7 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 		forkAuctionCopy.formatStartTruthAuctionDetail(coverageCommitment),
 	]
 	for (const copy of settlementCopy) expect(copy).toContain('REP backing units')
-	expect(forkAuctionCopy.estimatedRepClaimedAttoRep).toBe('Estimated REP Backing Units')
+	expect(forkAuctionCopy.estimatedVaultRepBackingAttoRep).toBe('Estimated REP backing')
 })
 
 test('security-pool count summaries own their complete prose', () => {

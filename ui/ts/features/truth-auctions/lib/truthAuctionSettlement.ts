@@ -29,7 +29,7 @@ export type TruthAuctionSettlementSelectionEstimate = {
 	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
-	estimatedRepClaimedAttoRep: bigint
+	estimatedVaultRepBackingAttoRep: bigint
 }
 
 export function getTruthAuctionSettlementBidKey(bid: Pick<TruthAuctionBidView, 'bidIndex' | 'tick'>) {
@@ -93,7 +93,7 @@ export function getTruthAuctionSettlementSelectionEstimate({
 	truthAuction: TruthAuctionMetrics | undefined
 }): TruthAuctionSettlementSelectionEstimate {
 	let estimatedRefundedAttoEth = 0n
-	let estimatedRepClaimedAttoRep = 0n
+	let estimatedVaultRepBackingAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningAttoEth > 0n && truthAuction.totalRepPurchasedAttoRep > 0n
 	let underfundedRemainder = 0n
@@ -103,26 +103,26 @@ export function getTruthAuctionSettlementSelectionEstimate({
 		estimatedRefundedAttoEth += estimate.refundedBidAmountAttoEth
 		if (shouldCarryUnderfundedRemainder && row.disposition.canPrefillSettle) {
 			const numerator = row.bid.bidAmountAttoEth * truthAuction.totalRepPurchasedAttoRep + underfundedRemainder
-			estimatedRepClaimedAttoRep += numerator / truthAuction.underfundedWinningAttoEth
+			estimatedVaultRepBackingAttoRep += numerator / truthAuction.underfundedWinningAttoEth
 			underfundedRemainder = numerator % truthAuction.underfundedWinningAttoEth
 		} else {
-			estimatedRepClaimedAttoRep += estimate.purchasedRepAmountAttoRep
+			estimatedVaultRepBackingAttoRep += estimate.purchasedRepAmountAttoRep
 		}
 	}
 
 	let estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined = 0n
-	if (estimatedRepClaimedAttoRep > 0n) {
+	if (estimatedVaultRepBackingAttoRep > 0n) {
 		if (truthAuction === undefined || truthAuction.totalRepPurchasedAttoRep === 0n || auctionedCoverageCommitmentAttoEth === undefined) {
 			estimatedAssignedCoverageCommitmentAttoEth = undefined
 		} else {
-			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedRepClaimedAttoRep) / truthAuction.totalRepPurchasedAttoRep
+			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedVaultRepBackingAttoRep) / truthAuction.totalRepPurchasedAttoRep
 		}
 	}
 
 	return {
 		estimatedAssignedCoverageCommitmentAttoEth,
 		estimatedRefundedAttoEth,
-		estimatedRepClaimedAttoRep,
+		estimatedVaultRepBackingAttoRep,
 	}
 }
 

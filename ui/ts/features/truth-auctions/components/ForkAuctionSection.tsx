@@ -164,14 +164,14 @@ function renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCopy
 function renderTruthAuctionSettlementSelectionSummary({
 	estimatedAssignedCoverageCommitmentAttoEth,
 	estimatedRefundedAttoEth,
-	estimatedRepClaimedAttoRep,
+	estimatedVaultRepBackingAttoRep,
 	selectedClaimCount,
 	selectedRefundCount,
 	selectedRowCount,
 }: {
 	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
 	estimatedRefundedAttoEth: bigint
-	estimatedRepClaimedAttoRep: bigint | undefined
+	estimatedVaultRepBackingAttoRep: bigint | undefined
 	selectedClaimCount: number
 	selectedRefundCount: number
 	selectedRowCount: number
@@ -191,7 +191,7 @@ function renderTruthAuctionSettlementSelectionSummary({
 	const refundDescription = estimatedRefundedAttoEth > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
 	let roundingDescription: string | undefined
 	if (selectedClaimCount > 0) {
-		if (estimatedRepClaimedAttoRep === undefined) {
+		if (estimatedVaultRepBackingAttoRep === undefined) {
 			roundingDescription = forkAuctionCopy.underfundedWinningClaimUnavailable
 		} else {
 			roundingDescription = forkAuctionCopy.settlementRoundingNotice
@@ -207,7 +207,7 @@ function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedBids, value: selectedRowCount.toString() },
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
-				{ label: forkAuctionCopy.estimatedRepClaimedAttoRep, value: estimatedRepClaimedAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRepClaimedAttoRep} suffix={commonCopy.rep} /> },
+				{ label: forkAuctionCopy.estimatedVaultRepBackingAttoRep, value: estimatedVaultRepBackingAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedVaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
 				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL), value: estimatedAssignedCoverageCommitmentAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
 				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
@@ -1382,7 +1382,7 @@ export function ForkAuctionSection({
 			selectionSummary: renderTruthAuctionSettlementSelectionSummary({
 				estimatedAssignedCoverageCommitmentAttoEth: settlementSelectionEstimate.estimatedAssignedCoverageCommitmentAttoEth,
 				estimatedRefundedAttoEth: settlementSelectionEstimate.estimatedRefundedAttoEth,
-				estimatedRepClaimedAttoRep: settlementSelectionEstimate.estimatedRepClaimedAttoRep,
+				estimatedVaultRepBackingAttoRep: settlementSelectionEstimate.estimatedVaultRepBackingAttoRep,
 				selectedClaimCount: selectedClaimSettlementBidRows.length,
 				selectedRefundCount: selectedRefundSettlementBidRows.length,
 				selectedRowCount: selectedSettlementBidRows.length,

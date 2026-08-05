@@ -656,7 +656,7 @@ void describe('fork auction helpers', () => {
 		).toEqual({
 			estimatedAssignedCoverageCommitmentAttoEth: 2n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT,
-			estimatedRepClaimedAttoRep: 2n * ONE_UNIT,
+			estimatedVaultRepBackingAttoRep: 2n * ONE_UNIT,
 		})
 	})
 
@@ -709,7 +709,7 @@ void describe('fork auction helpers', () => {
 		).toEqual({
 			estimatedAssignedCoverageCommitmentAttoEth: undefined,
 			estimatedRefundedAttoEth: 0n,
-			estimatedRepClaimedAttoRep: 10n,
+			estimatedVaultRepBackingAttoRep: 10n,
 		})
 	})
 
@@ -816,7 +816,7 @@ void describe('fork auction helpers', () => {
 		).toEqual({
 			estimatedAssignedCoverageCommitmentAttoEth: 3n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT + HALF_UNIT,
-			estimatedRepClaimedAttoRep: ONE_UNIT + HALF_UNIT,
+			estimatedVaultRepBackingAttoRep: ONE_UNIT + HALF_UNIT,
 		})
 	})
 
@@ -843,7 +843,7 @@ void describe('fork auction helpers', () => {
 		).toEqual({
 			estimatedAssignedCoverageCommitmentAttoEth: 0n,
 			estimatedRefundedAttoEth: ONE_UNIT,
-			estimatedRepClaimedAttoRep: 0n,
+			estimatedVaultRepBackingAttoRep: 0n,
 		})
 	})
 

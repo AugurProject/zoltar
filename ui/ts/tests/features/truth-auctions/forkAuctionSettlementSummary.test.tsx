@@ -479,7 +479,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Estimated REP Backing Units')).not.toBeNull()
+		expect(documentQueries.getByText('Estimated REP backing')).not.toBeNull()
 		expect(documentQueries.getByText(/Selected-bid settlement preview/)).not.toBeNull()
 		expect(documentQueries.queryByText(/Winning claims add REP backing units/)).toBeNull()
 		expect(documentQueries.queryByText(/Select winning bids and settle them together/)).toBeNull()
