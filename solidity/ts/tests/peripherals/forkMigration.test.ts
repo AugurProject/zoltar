@@ -951,9 +951,9 @@ describe('Peripherals: fork migration', () => {
 			const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const snapshotTargetBackingUnits = vaultBefore.vaultRepBackingAttoRep
 			const snapshotTotalPoolHeldRepAttoRep = await getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
-			const snapshotDenominator = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
+			const snapshotTotalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 
-			const snapshotExpectedRepDeposit = (snapshotTargetBackingUnits * snapshotTotalPoolHeldRepAttoRep) / snapshotDenominator
+			const snapshotExpectedRepDeposit = (snapshotTargetBackingUnits * snapshotTotalPoolHeldRepAttoRep) / snapshotTotalRepBackingUnits
 
 			// Queue liquidation (liquidator requests price to trigger liquidation)
 			const forcedPrice = PRICE_PRECISION * 10n

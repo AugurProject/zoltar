@@ -92,6 +92,53 @@
 	overflow-wrap: anywhere;
 }
 
+body.docs-diagram-expanded {
+	overflow: hidden;
+}
+
+.plot-figure-expanded {
+	position: fixed !important;
+	z-index: 1000;
+	inset: 0.75rem;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	width: auto !important;
+	max-width: none !important;
+	height: auto;
+	margin: 0 !important;
+	padding: 0.75rem !important;
+	border: 1px solid var(--line, rgba(0, 0, 0, 0.15)) !important;
+	border-radius: 0.75rem !important;
+	background: var(--paper, #fff) !important;
+	box-shadow: 0 1.5rem 4rem rgba(15, 23, 31, 0.28) !important;
+	overflow: hidden !important;
+}
+
+.plot-figure-expanded > .plot-chart-toolbar {
+	position: static;
+	margin-bottom: 0.5rem;
+}
+
+.plot-figure-expanded > .plot-chart {
+	display: flex;
+	min-height: 0;
+	align-items: center;
+	justify-content: center;
+}
+
+.plot-figure-expanded > .plot-chart > svg {
+	width: 100% !important;
+	height: auto !important;
+	max-width: 100% !important;
+	max-height: 100% !important;
+}
+
+.plot-figure-expanded > .diagram-caption {
+	max-height: min(24vh, 10rem);
+	margin-top: 0.5rem;
+	overflow-y: auto;
+}
+
 .plot-chart-fallback {
 	display: block;
 	padding: 1rem;
@@ -3581,6 +3628,22 @@ body.paper-zoltar .footer-note {
 		display: none;
 	}
 
+	.plot-figure-expanded {
+		grid-template-rows: auto auto minmax(0, 1fr);
+	}
+
+	.plot-figure-expanded > .plot-chart {
+		align-items: flex-start;
+	}
+
+	.plot-figure-expanded > .diagram-caption {
+		max-height: none;
+	}
+
+	.plot-figure-expanded .plot-chart-pan-cue {
+		display: none;
+	}
+
 	body.paper-statoblast .architecture-map-heading,
 	body.paper-statoblast .architecture-layer,
 	body.paper-statoblast .architecture-path {
@@ -3690,6 +3753,23 @@ body.paper-zoltar .footer-note {
 	padding-inline-start: 0.65rem;
 	color: var(--ink);
 	white-space: normal;
+}
+
+.docs-equation-compact-relation {
+	font-weight: 750;
+}
+
+.docs-equation-compact-cases {
+	display: grid;
+	gap: 0.3rem;
+	margin-top: 0.25rem;
+	padding-left: 0.65rem;
+	border-left: 2px solid var(--line, rgba(0, 0, 0, 0.16));
+}
+
+.docs-equation-compact-case {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .docs-auto-table-scroll {

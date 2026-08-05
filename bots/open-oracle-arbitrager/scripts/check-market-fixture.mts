@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
-import { calculateOracleMinimumWethReport, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracleInitialReport'
+import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracleInitialReport'
 import { evaluateBuyRep, evaluateSellRep } from '#core/strategy'
 
 const fixture = {
@@ -44,7 +44,7 @@ const gasStressExpectations = [
 ] as const
 
 function minimumReport(baseFeeAttoEthPerGas: bigint) {
-	return calculateOracleMinimumWethReport({
+	return calculateOracleMinimumWethReportAttoEth({
 		...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 		baseFeeAttoEthPerGas,
 	})

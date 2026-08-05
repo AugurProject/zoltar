@@ -29,6 +29,14 @@ Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
 command-line arguments. The dashboard defaults to
 `http://127.0.0.1:4183`.
 
+Loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
+`ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The
+browser's HTTP Basic prompt uses username `operator` and that password. Keep the
+listener on a trusted network or behind an authenticated TLS proxy: Basic
+authentication protects access but does not encrypt the private key or settings in
+transit. Mutable requests also retain same-origin and fixed-authority checks, and
+JSON request bodies are capped at 1 MiB.
+
 Keep `runtime.execute` false until the factory, WETH, signer, selected pools, RPC
 endpoints, gas limits, and REP limits have been reviewed. When execution is
 enabled:

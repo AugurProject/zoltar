@@ -641,14 +641,14 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 snapshotTargetBackingUnits,
 		uint256 snapshotTargetCoverageCommitmentAttoEth,
 		uint256 snapshotTotalPoolHeldRepAttoRep,
-		uint256 snapshotDenominator
+		uint256 snapshotTotalRepBackingUnits
 	) external isOperational onlyValidOracle {
 		// The coordinator still commits these queue-time values for its distance
 		// check. Pool execution intentionally uses the live rate so an unsolicited
 		// ERC-20 transfer cannot cancel liquidation.
 		assembly ('memory-safe') {
 			pop(snapshotTotalPoolHeldRepAttoRep)
-			pop(snapshotDenominator)
+			pop(snapshotTotalRepBackingUnits)
 		}
 		require(!isEscalationResolved(), 'Resolved');
 		updateVaultFees(targetVaultAddress);

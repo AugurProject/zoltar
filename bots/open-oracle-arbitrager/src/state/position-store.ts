@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { getAddress, type Address, type Hex } from '#ethereum'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/operator-state'
 
@@ -13,6 +13,7 @@ type PositionJournalFileHandle = {
 }
 
 export type PositionJournalFilesystem = {
+	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
 	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
 	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<PositionJournalFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
@@ -20,12 +21,10 @@ export type PositionJournalFilesystem = {
 	rm: (path: string, options: { force: true }) => Promise<unknown>
 }
 
-export type ExclusiveProcessLock = {
-	path: string
-	release: () => Promise<void>
-}
+export type { ExclusiveProcessLock }
 
 const positionJournalFilesystem: PositionJournalFilesystem = {
+	lstat,
 	mkdir,
 	open,
 	readFile,
@@ -483,62 +482,12 @@ export async function loadPositionJournal(path: string) {
 	return positions
 }
 
-async function acquireExclusiveProcessLock(lockPath: string, subject: string, metadata: Record<string, string | number>, filesystem: PositionJournalFilesystem): Promise<ExclusiveProcessLock> {
-	await filesystem.mkdir(dirname(lockPath), { mode: 0o700, recursive: true })
-	let handle: PositionJournalFileHandle
-	try {
-		handle = await filesystem.open(lockPath, 'wx', 0o600)
-	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST') {
-			let owner = 'owner metadata unavailable'
-			try {
-				owner = (await filesystem.readFile(lockPath, 'utf8')).trim()
-			} catch (readError) {
-				void readError
-			}
-			throw new Error(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
-		}
-		throw error
-	}
-	const payload = `${JSON.stringify({ acquiredAt: new Date().toISOString(), ...metadata, pid: process.pid })}\n`
-	try {
-		await handle.writeFile(payload, { encoding: 'utf8' })
-		await handle.chmod(0o600)
-		await handle.sync()
-	} catch (error) {
-		await handle.close()
-		await filesystem.rm(lockPath, { force: true })
-		throw error
-	}
-	let released = false
-	return {
-		path: lockPath,
-		release: async () => {
-			if (released) return
-			released = true
-			await handle.close()
-			let current: string
-			try {
-				current = await filesystem.readFile(lockPath, 'utf8')
-			} catch (error) {
-				throw new Error(`Position journal lock ${lockPath} disappeared before release: ${error instanceof Error ? error.message : String(error)}`)
-			}
-			if (current !== payload) throw new Error(`Position journal lock ${lockPath} changed ownership before release`)
-			await filesystem.rm(lockPath, { force: true })
-		},
-	}
-}
-
 export function acquirePositionJournalLock(path: string, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
-	const resolvedPath = resolve(path)
-	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `Position journal ${resolvedPath}`, { journal: resolvedPath }, filesystem)
+	return acquireFileProcessLock(path, 'Position journal', filesystem)
 }
 
 export function acquireExecutionSignerLock(chainId: number, account: Address, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
-	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
-	const signer = getAddress(account)
-	const lockPath = join(tmpdir(), 'zoltar-open-oracle-arbitrager-locks', `${chainId.toString()}-${signer.toLowerCase()}.lock`)
-	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { chainId, signer }, filesystem)
+	return acquireSharedExecutionSignerLock(chainId, account, filesystem)
 }
 
 export async function savePositionJournal(path: string, positions: readonly PositionRecord[], filesystem: PositionJournalFilesystem = positionJournalFilesystem) {

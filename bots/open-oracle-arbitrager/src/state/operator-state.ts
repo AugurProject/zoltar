@@ -515,12 +515,25 @@ function positionTotals(positions: readonly PositionRecord[]) {
 	}
 }
 
+export type OperatorSnapshotFixedState = {
+	deployment?: DeploymentSettings | undefined
+	execute: boolean
+	executor: Address | undefined
+	expectedChainId: number
+	explorerUrl: string
+	network: NetworkName
+	openOracle: Address
+	queuedWallet: Address | null | undefined
+	savedWallet: Address | undefined
+	wallet: Address | undefined
+}
+
 export function operatorSnapshot(
 	state: OperatorState,
 	strategy: MutableStrategy,
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
-	fixed: { deployment?: DeploymentSettings | undefined; execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
+	fixed: OperatorSnapshotFixedState,
 	riskLimits: RiskLimits = {
 		lifecycleGasReserveWethAttoEth: 10n ** 16n,
 		maxConcurrentPositions: 1,
@@ -531,7 +544,7 @@ export function operatorSnapshot(
 ): OperatorSnapshot {
 	const totals = positionTotals(state.positions)
 	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
-	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
+	const lockedWethAttoEth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(Number(BigInt(state.blockTimestamp) * 1_000n))
 	const dailyGasSpentWethAttoEth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
@@ -578,10 +591,10 @@ export function operatorSnapshot(
 			},
 			usage: {
 				dailyGasSpentWeth: decimalWeth(dailyGasSpentWethAttoEth),
-				lockedWeth: decimalWeth(lockedWeth),
+				lockedWeth: decimalWeth(lockedWethAttoEth),
 				openPositions: openPositions.length,
 				remainingDailyGasWeth: decimalWeth(dailyGasSpentWethAttoEth >= riskLimits.maxDailyGasSpendWethAttoEth ? 0n : riskLimits.maxDailyGasSpendWethAttoEth - dailyGasSpentWethAttoEth),
-				remainingLockedWeth: decimalWeth(lockedWeth >= riskLimits.maxTotalLockedWethAttoEth ? 0n : riskLimits.maxTotalLockedWethAttoEth - lockedWeth),
+				remainingLockedWeth: decimalWeth(lockedWethAttoEth >= riskLimits.maxTotalLockedWethAttoEth ? 0n : riskLimits.maxTotalLockedWethAttoEth - lockedWethAttoEth),
 			},
 		},
 		connectivity,

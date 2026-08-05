@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { privateKeyToAccount, type Hex } from '#ethereum'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { assertDistinctPersistentPaths } from '#config/configuration'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -92,7 +93,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			pollMilliseconds: 1_000,
 			twapSeconds: 1_800,
 		},
-		submission: { minimumRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 		tokenAddresses: [],
 	}
 }
@@ -130,6 +131,10 @@ async function waitForJson(origin: string, path: string) {
 }
 
 describe('file-only startup configuration', () => {
+	test('rejects an operator file reused as a runtime persistence file', () => {
+		expect(() => assertDistinctPersistentPaths('/state/operator.json', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/nested/../operator.json' })).toThrow('must use distinct paths')
+	})
+
 	test('rejects every command-line argument', async () => {
 		const directory = await temporaryDirectory()
 		const result = await runToExit(join(directory, 'missing.json'), ['--help'])
@@ -211,6 +216,23 @@ describe('file-only startup configuration', () => {
 		expect((await loadOperatorSettings(path))?.paused).toBe(true)
 
 		const currentEnvelope = await waitForJson(origin, '/api/configuration')
+		const beforeCollision = await Bun.file(path).text()
+		const collisionEnvelope = structuredClone(currentEnvelope)
+		const collisionConfiguration = collisionEnvelope['configuration']
+		if (typeof collisionConfiguration !== 'object' || collisionConfiguration === null || Array.isArray(collisionConfiguration)) throw new Error('Collision configuration document is missing')
+		const collisionRuntime = Reflect.get(collisionConfiguration, 'runtime')
+		if (typeof collisionRuntime !== 'object' || collisionRuntime === null || Array.isArray(collisionRuntime)) throw new Error('Collision runtime configuration is missing')
+		Reflect.set(collisionRuntime, 'positionFile', path)
+		const collisionResponse = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(collisionEnvelope),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(collisionResponse.status).toBe(400)
+		expect(await collisionResponse.json()).toEqual({ error: 'Operator settings and runtime persistence files must use distinct paths' })
+		expect(await Bun.file(path).text()).toBe(beforeCollision)
+		expect((await waitForJson(origin, '/api/configuration'))['revision']).toBe(currentEnvelope['revision'])
+
 		const currentConfiguration = currentEnvelope['configuration']
 		if (typeof currentConfiguration !== 'object' || currentConfiguration === null || Array.isArray(currentConfiguration)) throw new Error('Current configuration document is missing')
 		const currentRuntime = Reflect.get(currentConfiguration, 'runtime')

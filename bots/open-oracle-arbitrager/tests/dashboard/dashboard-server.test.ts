@@ -319,11 +319,34 @@ test('returns a structured unavailable response when the initial state read fail
 })
 
 test('supports a container bind while retaining loopback request authority', async () => {
+	const password = 'correct horse battery staple'
+	expect(() =>
+		startDashboardServer(0, {
+			getSnapshot: () => {
+				throw new Error('Not needed')
+			},
+			hostname: '0.0.0.0',
+			setPaused: () => undefined,
+			updateConnectivity: () => {
+				throw new Error('Not needed')
+			},
+			updateSigner: () => {
+				throw new Error('Not needed')
+			},
+			updateSubmission: () => {
+				throw new Error('Not needed')
+			},
+			updateStrategy: () => {
+				throw new Error('Not needed')
+			},
+		}),
+	).toThrow('ZOLTAR_BOT_DASHBOARD_PASSWORD')
 	const server = startDashboardServer(0, {
 		getSnapshot: () => {
 			throw new Error('Not needed')
 		},
 		hostname: '0.0.0.0',
+		password,
 		setPaused: () => undefined,
 		updateConnectivity: () => {
 			throw new Error('Not needed')
@@ -340,6 +363,9 @@ test('supports a container bind while retaining loopback request authority', asy
 	})
 	servers.push(server)
 	expect(server.hostname).toBe('0.0.0.0')
-	const response = await fetch(`http://127.0.0.1:${server.port}`)
+	const origin = `http://127.0.0.1:${server.port}`
+	expect((await fetch(origin)).status).toBe(401)
+	const authorization = `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
+	const response = await fetch(origin, { headers: { authorization } })
 	expect(response.status).toBe(200)
 })

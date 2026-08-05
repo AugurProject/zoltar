@@ -63,7 +63,7 @@ struct StagedOperation {
 	uint256 snapshotTargetCoverageCommitmentAttoEth;
 	uint256 snapshotTargetDisputeStakedRepAttoRep;
 	uint256 snapshotTotalPoolHeldRepAttoRep;
-	uint256 snapshotDenominator;
+	uint256 snapshotTotalRepBackingUnits;
 }
 
 contract OpenOraclePriceCoordinator {
@@ -102,16 +102,16 @@ contract OpenOraclePriceCoordinator {
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
-	uint256 public pendingReportMaxSettlementBaseFee;
+	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 
 	event SecurityPoolSet(ISecurityPool indexed securityPool);
 	event RepEthPriceSet(uint256 price);
-	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFee);
+	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event PriceReportRejected(
 		uint256 indexed reportId,
 		string reason,
 		uint256 pendingReportId,
-		uint256 pendingReportMaxSettlementBaseFee,
+		uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
@@ -120,7 +120,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 indexed reportId,
 		uint256 settlementTimestamp,
 		uint256 pendingReportId,
-		uint256 pendingReportMaxSettlementBaseFee,
+		uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
@@ -136,7 +136,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 snapshotTargetBackingUnits,
 		uint256 snapshotTargetCoverageCommitmentAttoEth,
 		uint256 snapshotTotalPoolHeldRepAttoRep,
-		uint256 snapshotDenominator,
+		uint256 snapshotTotalRepBackingUnits,
 		bool isPendingSlot
 	);
 	event StagedOperationDisputeStakedRepSnapshotted(
@@ -158,7 +158,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 pendingReportId,
 		address pendingReportSponsor,
 		uint256 pendingOperationSlotId,
-		uint256 pendingReportMaxSettlementBaseFee,
+		uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp,
 		uint256 stagedOperationCounter,
@@ -378,7 +378,7 @@ contract OpenOraclePriceCoordinator {
 		require(initialRepReportAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(escalationHaltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerRewardAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		pendingReportMaxSettlementBaseFee =
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
 		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES;
@@ -431,7 +431,7 @@ contract OpenOraclePriceCoordinator {
 				blockTimestampBound: 0
 			})
 		);
-		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
+		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
 
@@ -443,13 +443,13 @@ contract OpenOraclePriceCoordinator {
 		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
-		pendingReportMaxSettlementBaseFee = 0;
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
 		_consumeRecoveredPendingOperation();
 		emit PendingReportRecovered(
 			reportId,
 			settlementTimestamp,
 			pendingReportId,
-			pendingReportMaxSettlementBaseFee,
+			pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 			lastPrice,
 			lastSettlementTimestamp
 		);
@@ -479,9 +479,9 @@ contract OpenOraclePriceCoordinator {
 		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
-		uint256 maxSettlementBaseFee = pendingReportMaxSettlementBaseFee;
-		pendingReportMaxSettlementBaseFee = 0;
-		if (block.basefee > maxSettlementBaseFee) {
+		uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
+		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) {
 			_emitPriceReportRejected(reportId, 'Base fee too high');
 			return;
 		}
@@ -539,7 +539,7 @@ contract OpenOraclePriceCoordinator {
 			reportId,
 			reason,
 			pendingReportId,
-			pendingReportMaxSettlementBaseFee,
+			pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 			lastPrice,
 			lastSettlementTimestamp
 		);
@@ -600,7 +600,7 @@ contract OpenOraclePriceCoordinator {
 		(uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCoverageCommitmentAttoEth, , ) = securityPool
 			.securityVaults(targetVault);
 		uint256 snapshotTotalPoolHeldRepAttoRep = securityPool.getTotalPoolHeldRepAttoRep();
-		uint256 snapshotDenominator = securityPool.totalRepBackingUnits();
+		uint256 snapshotTotalRepBackingUnits = securityPool.totalRepBackingUnits();
 		uint256 snapshotTargetDisputeStakedRepAttoRep =
 			operation == OperationType.Liquidation && address(securityPool.escalationGame()) != address(0x0)
 				? securityPool.escalationGame().disputeStakedRepByVaultAttoRep(targetVault)
@@ -616,7 +616,7 @@ contract OpenOraclePriceCoordinator {
 			snapshotTargetCoverageCommitmentAttoEth: snapshotTargetCoverageCommitmentAttoEth,
 			snapshotTargetDisputeStakedRepAttoRep: snapshotTargetDisputeStakedRepAttoRep,
 			snapshotTotalPoolHeldRepAttoRep: snapshotTotalPoolHeldRepAttoRep,
-			snapshotDenominator: snapshotDenominator
+			snapshotTotalRepBackingUnits: snapshotTotalRepBackingUnits
 		});
 		_trackActiveStagedOperation(operationId);
 
@@ -744,7 +744,7 @@ contract OpenOraclePriceCoordinator {
 				stagedOperation.snapshotTargetBackingUnits,
 				stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
 				stagedOperation.snapshotTotalPoolHeldRepAttoRep,
-				stagedOperation.snapshotDenominator
+				stagedOperation.snapshotTotalRepBackingUnits
 			)
 		{
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
@@ -799,7 +799,7 @@ contract OpenOraclePriceCoordinator {
 			stagedOperation.snapshotTargetBackingUnits,
 			stagedOperation.snapshotTargetCoverageCommitmentAttoEth,
 			stagedOperation.snapshotTotalPoolHeldRepAttoRep,
-			stagedOperation.snapshotDenominator,
+			stagedOperation.snapshotTotalRepBackingUnits,
 			isPendingSlot
 		);
 		emit StagedOperationDisputeStakedRepSnapshotted(
@@ -821,7 +821,7 @@ contract OpenOraclePriceCoordinator {
 			pendingReportId,
 			pendingReportSponsor,
 			pendingOperationSlotId,
-			pendingReportMaxSettlementBaseFee,
+			pendingReportMaxSettlementBaseFeeAttoEthPerGas,
 			lastPrice,
 			lastSettlementTimestamp,
 			stagedOperationCounter,
@@ -856,12 +856,12 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _getSnapshotVaultRep(StagedOperation memory stagedOperation) private pure returns (uint256) {
-		if (stagedOperation.snapshotDenominator == 0) {
+		if (stagedOperation.snapshotTotalRepBackingUnits == 0) {
 			return stagedOperation.snapshotTargetBackingUnits / PRICE_PRECISION;
 		}
 		return
 			(stagedOperation.snapshotTargetBackingUnits * stagedOperation.snapshotTotalPoolHeldRepAttoRep) /
-			stagedOperation.snapshotDenominator;
+			stagedOperation.snapshotTotalRepBackingUnits;
 	}
 
 	function _isLiquidationBeyondMinPriceDistance(StagedOperation memory stagedOperation) private view returns (bool) {

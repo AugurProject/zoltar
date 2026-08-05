@@ -1,10 +1,11 @@
 import { getAddress, keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
+import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
 export type SubmissionMode = 'private' | 'public'
 
 export type SubmissionSettings = {
-	minimumRelaySuccesses: number
+	minimumBundleRelaySuccesses: number
 	mode: SubmissionMode
 	relayUrls: readonly string[]
 }
@@ -79,8 +80,8 @@ export function validateSubmissionSettings(value: unknown): SubmissionSettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Submission settings must be a JSON object')
 	const record = value as Record<string, unknown>
 	const keys = Object.keys(record)
-	if (keys.some(key => key !== 'minimumRelaySuccesses' && key !== 'mode' && key !== 'relayUrls') || !keys.includes('mode') || !keys.includes('relayUrls')) {
-		throw new Error('Submission settings require mode, relayUrls, and optional minimumRelaySuccesses')
+	if (keys.some(key => key !== 'minimumBundleRelaySuccesses' && key !== 'mode' && key !== 'relayUrls') || !keys.includes('mode') || !keys.includes('relayUrls')) {
+		throw new Error('Submission settings require mode, relayUrls, and optional minimumBundleRelaySuccesses')
 	}
 	if (record['mode'] !== 'public' && record['mode'] !== 'private') throw new Error('Submission mode must be public or private')
 	const rawRelayUrls = record['relayUrls']
@@ -93,13 +94,13 @@ export function validateSubmissionSettings(value: unknown): SubmissionSettings {
 	}
 	const relayUrls = [...new Set(normalizedRelayUrls)]
 	if (record['mode'] === 'private' && relayUrls.length === 0) throw new Error('Private submission requires at least one relay URL')
-	const minimumRelaySuccesses = record['minimumRelaySuccesses'] ?? 1
+	const minimumBundleRelaySuccesses = record['minimumBundleRelaySuccesses'] ?? 1
 	const maximumRelaySuccesses = record['mode'] === 'private' ? relayUrls.length : 8
-	if (typeof minimumRelaySuccesses !== 'number' || !Number.isSafeInteger(minimumRelaySuccesses) || minimumRelaySuccesses < 1 || minimumRelaySuccesses > maximumRelaySuccesses) {
-		throw new Error(record['mode'] === 'private' ? 'Minimum successful relays must be an integer between 1 and the configured private relay count' : 'Minimum successful relays must be an integer between 1 and 8')
+	if (typeof minimumBundleRelaySuccesses !== 'number' || !Number.isSafeInteger(minimumBundleRelaySuccesses) || minimumBundleRelaySuccesses < 1 || minimumBundleRelaySuccesses > maximumRelaySuccesses) {
+		throw new Error(record['mode'] === 'private' ? 'Minimum bundle relay successes must be an integer between 1 and the configured private relay count' : 'Minimum bundle relay successes must be an integer between 1 and 8')
 	}
 	return {
-		minimumRelaySuccesses,
+		minimumBundleRelaySuccesses,
 		mode: record['mode'],
 		relayUrls,
 	}
@@ -200,7 +201,7 @@ async function authenticatedRelayRequest(parameters: { address: Address; body: s
 	})
 	let decoded: unknown
 	try {
-		decoded = await response.json()
+		decoded = await boundedJsonResponse(response, RELAY_RESPONSE_BYTES, 'Relay')
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Relay returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
@@ -413,9 +414,6 @@ export async function submitSignedTransaction(parameters: {
 		if (acceptedTargets.length === 0) {
 			throw new SubmissionFailure(`Every public RPC rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
 		}
-		if (acceptedTargets.length < parameters.settings.minimumRelaySuccesses) {
-			throw new SubmissionFailure(`Public transaction submission required ${parameters.settings.minimumRelaySuccesses.toString()} accepting RPCs but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
-		}
 		return {
 			acceptedTargets,
 			failedTargets,
@@ -447,9 +445,6 @@ export async function submitSignedTransaction(parameters: {
 	}
 	if (acceptedTargets.length === 0) {
 		throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
-	}
-	if (acceptedTargets.length < parameters.settings.minimumRelaySuccesses) {
-		throw new SubmissionFailure(`Private transaction submission required ${parameters.settings.minimumRelaySuccesses.toString()} accepting relays but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
 	}
 	return {
 		acceptedTargets,

@@ -127,7 +127,7 @@ export type CoordinatorOperationReplay = {
 	snapshotTargetCoverageCommitmentAttoEth: bigint
 	snapshotTargetDisputeStakedRepAttoRep: bigint
 	snapshotTotalPoolHeldRepAttoRep: bigint
-	snapshotDenominator: bigint
+	snapshotTotalRepBackingUnits: bigint
 	isPendingSlot: boolean
 	status: 'Queued' | 'Succeeded' | 'Failed' | 'Recovered'
 	errorMessage?: string
@@ -250,7 +250,7 @@ export type CoordinatorReplay = {
 	pendingReportId: bigint
 	pendingReportSponsor: Address
 	pendingOperationSlotId: bigint
-	pendingReportMaxSettlementBaseFee: bigint
+	pendingReportMaxSettlementBaseFeeAttoEthPerGas: bigint
 	stagedOperationCounter: bigint
 	activeStagedOperationCount: bigint
 	pendingSettlementOperationCount: bigint
@@ -1324,7 +1324,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			pendingReportId: 0n,
 			pendingReportSponsor: ZERO_ADDRESS,
 			pendingOperationSlotId: 0n,
-			pendingReportMaxSettlementBaseFee: 0n,
+			pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
 			stagedOperationCounter: 0n,
 			activeStagedOperationCount: 0n,
 			pendingSettlementOperationCount: 0n,
@@ -1339,7 +1339,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		coordinator.pendingReportId = requireBigInt(log.args, 'pendingReportId')
 		coordinator.pendingReportSponsor = requireAddress(log.args, 'pendingReportSponsor')
 		coordinator.pendingOperationSlotId = requireBigInt(log.args, 'pendingOperationSlotId')
-		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
+		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
 		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
 		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
 		coordinator.stagedOperationCounter = requireBigInt(log.args, 'stagedOperationCounter')
@@ -1358,7 +1358,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'PriceRequested') {
 		const reportId = requireBigInt(log.args, 'reportId')
 		coordinator.pendingReportId = reportId
-		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
+		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
 		coordinator.reports.set(reportId, { status: 'Requested' })
 		return
 	}
@@ -1367,7 +1367,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		const price = requireBigInt(log.args, 'price')
 		const settlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
 		coordinator.pendingReportId = 0n
-		coordinator.pendingReportMaxSettlementBaseFee = 0n
+		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0n
 		coordinator.lastPrice = price
 		coordinator.lastSettlementTimestamp = settlementTimestamp
 		coordinator.reports.set(reportId, { status: 'Reported', price, settlementTimestamp })
@@ -1376,7 +1376,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'PriceReportRejected') {
 		const reportId = requireBigInt(log.args, 'reportId')
 		coordinator.pendingReportId = requireBigInt(log.args, 'pendingReportId')
-		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
+		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
 		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
 		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
 		coordinator.reports.set(reportId, { status: 'Rejected', reason: requireString(log.args, 'reason') })
@@ -1386,7 +1386,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		const reportId = requireBigInt(log.args, 'reportId')
 		const settlementTimestamp = requireBigInt(log.args, 'settlementTimestamp')
 		coordinator.pendingReportId = requireBigInt(log.args, 'pendingReportId')
-		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
+		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
 		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
 		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
 		coordinator.reports.set(reportId, { status: 'Recovered', settlementTimestamp })
@@ -1421,7 +1421,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			snapshotTargetCoverageCommitmentAttoEth: requireBigInt(log.args, 'snapshotTargetCoverageCommitmentAttoEth'),
 			snapshotTargetDisputeStakedRepAttoRep: 0n,
 			snapshotTotalPoolHeldRepAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldRepAttoRep'),
-			snapshotDenominator: requireBigInt(log.args, 'snapshotDenominator'),
+			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),
 			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
 			status: 'Queued',
 		})

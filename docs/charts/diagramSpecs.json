@@ -3317,7 +3317,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tRedeemable REP\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tVault REP backing amount\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -3356,7 +3356,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tCollateral Decay\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tSettlement Collateral Decay\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"

@@ -389,7 +389,7 @@ function loadSubmission(submission: SubmissionSettings) {
 	const mode = element<HTMLSelectElement>('submission-mode')
 	mode.value = submission.mode
 	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
-	element<HTMLInputElement>('minimum-relay-successes').value = submission.minimumRelaySuccesses.toString()
+	element<HTMLInputElement>('minimum-bundle-relay-successes').value = submission.minimumBundleRelaySuccesses.toString()
 }
 
 function loadConnectivity(connectivity: ConnectivitySettings) {
@@ -953,7 +953,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 	setText('submission-status', 'Applying submission settings…')
 	try {
 		const submission = {
-			minimumRelaySuccesses: Number(element<HTMLInputElement>('minimum-relay-successes').value),
+			minimumBundleRelaySuccesses: Number(element<HTMLInputElement>('minimum-bundle-relay-successes').value),
 			mode: element<HTMLSelectElement>('submission-mode').value,
 			relayUrls: element<HTMLTextAreaElement>('relay-urls')
 				.value.split('\n')

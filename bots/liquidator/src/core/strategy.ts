@@ -85,12 +85,12 @@ export function calculateLiquidationTransfer(parameters: {
 	currentPoolHeldRepBalanceAttoRep: bigint
 	price: bigint
 	requestedCommitmentTransferAttoEth: bigint
-	snapshotPoolHeldRepBalanceBackingUnits: bigint
+	snapshotTotalRepBackingUnits: bigint
 	snapshotTargetCoverageCommitmentAttoEth: bigint
 	snapshotTargetBackingUnits: bigint
-	snapshotPoolHeldRepBalanceAttoRep: bigint
+	snapshotTotalPoolHeldRepAttoRep: bigint
 }) {
-	const snapshotTargetVaultRepBackingAttoRep = parameters.snapshotPoolHeldRepBalanceBackingUnits === 0n ? parameters.snapshotTargetBackingUnits / PRICE_PRECISION : (parameters.snapshotTargetBackingUnits * parameters.snapshotPoolHeldRepBalanceAttoRep) / parameters.snapshotPoolHeldRepBalanceBackingUnits
+	const snapshotTargetVaultRepBackingAttoRep = parameters.snapshotTotalRepBackingUnits === 0n ? parameters.snapshotTargetBackingUnits / PRICE_PRECISION : (parameters.snapshotTargetBackingUnits * parameters.snapshotTotalPoolHeldRepAttoRep) / parameters.snapshotTotalRepBackingUnits
 	let maximumCoverageCommitmentTransferAttoEth = 0n
 	if (snapshotTargetVaultRepBackingAttoRep > MIN_REP_DEPOSIT_ATTO_REP) {
 		maximumCoverageCommitmentTransferAttoEth = ((snapshotTargetVaultRepBackingAttoRep - MIN_REP_DEPOSIT_ATTO_REP) * PRICE_PRECISION * BPS_DENOMINATOR) / (parameters.price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
@@ -130,10 +130,10 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		currentPoolHeldRepBalanceAttoRep: pool.totalRepAttoRep,
 		price: pool.price,
 		requestedCommitmentTransferAttoEth: strategy.maximumLiquidationCoverageCommitmentAttoEth,
-		snapshotPoolHeldRepBalanceBackingUnits: pool.denominator,
+		snapshotTotalRepBackingUnits: pool.denominator,
 		snapshotTargetCoverageCommitmentAttoEth: target.coverageCommitmentAttoEth,
 		snapshotTargetBackingUnits: target.backingUnits,
-		snapshotPoolHeldRepBalanceAttoRep: pool.totalRepAttoRep,
+		snapshotTotalPoolHeldRepAttoRep: pool.totalRepAttoRep,
 	})
 	if (transfer.coverageCommitmentToTransferAttoEth < strategy.minimumLiquidationCoverageCommitmentAttoEth) return undefined
 	if (!isUnsafeVault(transfer.vaultRepBackingToTransferAttoRep, transfer.coverageCommitmentToTransferAttoEth, pool.multiplierBps, pool.price)) {

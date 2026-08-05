@@ -21,7 +21,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xc989eabC3957CAA1C9948368125f8be641f827Fb"
+			"address": "0x625E5E5C84e480f1b07Fe1254D7BB3132E464E24"
 		},
 		{
 			"id": "weth",
@@ -76,7 +76,7 @@
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0xDCfF78674cF5De6aAd8B0c88E393B60cec885b6c"
+			"address": "0x564D9dcEa52bd8Dc459ddc0025Dd883D8E3fBD6b"
 		},
 		{
 			"id": "securityPoolForker",
@@ -96,7 +96,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x0a2C97B425F77236b28e2F39F75073acBA845C39"
+			"address": "0x3dedd5049b54e0552B79c2611A37E17c89473Fa7"
 		}
 	],
 	"derivedContracts": [

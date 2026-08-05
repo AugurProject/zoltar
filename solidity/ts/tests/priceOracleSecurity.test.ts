@@ -2,7 +2,7 @@ import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/shared/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
@@ -400,7 +400,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		}
 		const replayed = replayZoltarEvents(replayLogs).coordinators.get(priceOracle)
 		if (replayed === undefined || replayed.checkpointReason === undefined) throw new Error(`${context}: coordinator state checkpoint was not replayed`)
-		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFee, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
+		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
 			getPendingReportId(client, priceOracle),
 			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'pendingReportSponsor', address: priceOracle, args: [] }),
 			getPendingOperationSlotId(client, priceOracle),
@@ -414,7 +414,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(replayed.pendingReportId, pendingReportId, `${context}: pending report replay mismatch`)
 		assert.strictEqual(replayed.pendingReportSponsor, pendingReportSponsor, `${context}: report sponsor replay mismatch`)
 		assert.strictEqual(replayed.pendingOperationSlotId, pendingOperationSlotId, `${context}: pending operation replay mismatch`)
-		assert.strictEqual(replayed.pendingReportMaxSettlementBaseFee, pendingReportMaxSettlementBaseFee, `${context}: settlement base-fee replay mismatch`)
+		assert.strictEqual(replayed.pendingReportMaxSettlementBaseFeeAttoEthPerGas, pendingReportMaxSettlementBaseFeeAttoEthPerGas, `${context}: settlement base-fee replay mismatch`)
 		assert.strictEqual(replayed.lastPrice, lastPrice, `${context}: last price replay mismatch`)
 		assert.strictEqual(replayed.lastSettlementTimestamp, lastSettlementTimestamp, `${context}: settlement timestamp replay mismatch`)
 		assert.strictEqual(replayed.stagedOperationCounter, stagedOperationCounter, `${context}: operation counter replay mismatch`)
@@ -451,7 +451,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
-		assert.strictEqual(minimumToken1ReportAttoEth, calculateOracleMinimumWethReport(), 'zero-basefee test chains should retain the configured priority-fee report')
+		assert.strictEqual(minimumToken1ReportAttoEth, calculateOracleMinimumWethReportAttoEth(), 'zero-basefee test chains should retain the configured priority-fee report')
 		await requestPrice(client, priceOracle)
 
 		const reportId = await getPendingReportId(client, priceOracle)
@@ -469,7 +469,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			address: priceOracle,
 			args: [],
 		})
-		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
+		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
 	})
 
 	test('coordinator adds priority-fee security to the open-interest-dependent initial report', async () => {
@@ -487,7 +487,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
-		const expectedMinimumToken1Report = calculateOracleMinimumWethReport({
+		const expectedMinimumToken1Report = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			openInterestAttoEth: openInterest,
 		})
@@ -502,7 +502,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReport() * 2n
+		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
 		const requestPriceWithMinimumAbi = [
 			{
 				inputs: [
@@ -540,7 +540,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReport() * 2n
+		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
 		await wrapWeth(client, requestedInitialWethAttoEth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -590,7 +590,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(coordinatorRepSurplus, donatedRep, 'the coordinator should hold the unsolicited REP outside OpenOracle')
 
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWethAttoEth = calculateOracleMinimumWethReport() * 2n
+		const requestedInitialWethAttoEth = calculateOracleMinimumWethReportAttoEth() * 2n
 		await wrapWeth(client, requestedInitialWethAttoEth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -637,7 +637,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
 		const requestBaseFeeAttoEthPerGas = 45n * 10n ** 9n
 		const proposedRepPerEthPrice = 1000n * 10n ** 18n
-		const maximumMinimumWethReport = calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas })
+		const maximumMinimumWethReport = calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas })
 		await wrapWeth(client, maximumMinimumWethReport)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -681,7 +681,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		assert.strictEqual(
 			await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'minimumToken1ReportAttoEth', address: tunedCoordinator, args: [] }),
-			calculateOracleMinimumWethReport({
+			calculateOracleMinimumWethReportAttoEth({
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				baseFeeAttoEthPerGas,
 				openOracleSecurityMultiplierBps: tunedOpenOracleSecurityMultiplierBps,
@@ -1160,7 +1160,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('oracle settlement accepts the exact nonzero basefee cap and rejects one attoETH above it', async () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const expectedSettlementBaseFeeCap = (requestBaseFeeAttoEthPerGas * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
-		const minimumWethReport = calculateOracleMinimumWethReport({
+		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
@@ -1237,7 +1237,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const finalReportBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
 		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
-		const minimumWethReport = calculateOracleMinimumWethReport({
+		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
@@ -1310,7 +1310,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const finalDisputeBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
 		const requestEthCost = baseFeeAttoEthPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
-		const initialWethReport = calculateOracleMinimumWethReport({
+		const initialWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas,
 		})
@@ -1469,7 +1469,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(rejectedLog.args.reportId, pendingReportId, 'PriceReportRejected should identify the rejected report')
 		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'PriceReportRejected should expose the rejection reason')
 		assert.strictEqual(rejectedLog.args.pendingReportId, pendingReportIdAfterSettlement, 'PriceReportRejected should expose the cleared pending report id')
-		assert.strictEqual(rejectedLog.args.pendingReportMaxSettlementBaseFee, pendingMaxSettlementBaseFeeAfterSettlement, 'PriceReportRejected should expose the cleared basefee guard')
+		assert.strictEqual(rejectedLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, pendingMaxSettlementBaseFeeAfterSettlement, 'PriceReportRejected should expose the cleared basefee guard')
 		assert.strictEqual(rejectedLog.args.lastPrice, lastPriceBeforeSettlement, 'PriceReportRejected should expose the unchanged last price')
 		assert.strictEqual(rejectedLog.args.lastSettlementTimestamp, lastSettlementTimestampBeforeSettlement, 'PriceReportRejected should expose the unchanged settlement timestamp')
 
@@ -2061,7 +2061,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingMaxSettlementBaseFeeAfterRecovery, 0n, 'recovery should clear the stale basefee guard')
 		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
 		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
-		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
+		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
 		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the unchanged last price')
 		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the unchanged settlement timestamp')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + pendingState.game.currentAmount2, 'recovery should return the settled REP amount to the sponsor')
@@ -2110,7 +2110,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (recoveryLog === undefined) throw new Error('missing PendingReportRecovered log')
 		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
 		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
-		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, 0n, 'PendingReportRecovered should expose the cleared basefee guard')
+		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, 0n, 'PendingReportRecovered should expose the cleared basefee guard')
 		const recoveryConsumedLog = findPendingOperationRecoveryConsumedLog(recoveryReceipt.logs)
 		assert.strictEqual(recoveryConsumedLog?.args.operationId, 1n, 'recovery should emit the consumed operation id')
 		assert.strictEqual(recoveryConsumedLog?.args.operation, BigInt(OperationType.SetCoverageCommitment), 'recovery should emit the consumed operation type')

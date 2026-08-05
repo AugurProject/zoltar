@@ -168,7 +168,7 @@ describe('event-only replay', () => {
 					pendingReportId: 9n,
 					pendingReportSponsor: sponsor,
 					pendingOperationSlotId: 4n,
-					pendingReportMaxSettlementBaseFee: 100n,
+					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n,
 					lastPrice: 12n,
 					lastSettlementTimestamp: 20n,
 					stagedOperationCounter: 4n,
@@ -271,7 +271,7 @@ describe('event-only replay', () => {
 					pendingReportId: 0n,
 					pendingReportSponsor: zeroAddress,
 					pendingOperationSlotId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
+					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
 					lastPrice: 0n,
 					lastSettlementTimestamp: 0n,
 					stagedOperationCounter: 0n,
@@ -404,7 +404,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 5,
-				args: { reportId: 1n, pendingReportMaxSettlementBaseFee: 100n },
+				args: { reportId: 1n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -414,7 +414,7 @@ describe('event-only replay', () => {
 					reportId: 1n,
 					reason: 'Base fee too high',
 					pendingReportId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
+					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
 					lastPrice: 12n,
 					lastSettlementTimestamp: 20n,
 				},
@@ -423,7 +423,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 7,
-				args: { reportId: 2n, pendingReportMaxSettlementBaseFee: 101n },
+				args: { reportId: 2n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 101n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -435,7 +435,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 9,
-				args: { reportId: 3n, pendingReportMaxSettlementBaseFee: 102n },
+				args: { reportId: 3n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 102n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -445,7 +445,7 @@ describe('event-only replay', () => {
 					reportId: 3n,
 					settlementTimestamp: 26n,
 					pendingReportId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
+					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
 					lastPrice: 15n,
 					lastSettlementTimestamp: 25n,
 				},
@@ -465,7 +465,7 @@ describe('event-only replay', () => {
 					snapshotTargetBackingUnits: 11n,
 					snapshotTargetCoverageCommitmentAttoEth: 12n,
 					snapshotTotalPoolHeldRepAttoRep: 13n,
-					snapshotDenominator: 14n,
+					snapshotTotalRepBackingUnits: 14n,
 					isPendingSlot: true,
 				},
 			}),
@@ -524,7 +524,7 @@ describe('event-only replay', () => {
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetCoverageCommitmentAttoEth: 6n,
 					snapshotTotalPoolHeldRepAttoRep: 7n,
-					snapshotDenominator: 8n,
+					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
 				},
 			}),
@@ -543,7 +543,7 @@ describe('event-only replay', () => {
 					snapshotTargetBackingUnits: 9n,
 					snapshotTargetCoverageCommitmentAttoEth: 10n,
 					snapshotTotalPoolHeldRepAttoRep: 11n,
-					snapshotDenominator: 12n,
+					snapshotTotalRepBackingUnits: 12n,
 					isPendingSlot: false,
 				},
 			}),
@@ -1272,7 +1272,7 @@ describe('event-only replay', () => {
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetCoverageCommitmentAttoEth: 6n,
 					snapshotTotalPoolHeldRepAttoRep: 7n,
-					snapshotDenominator: 8n,
+					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
 				},
 			}),
@@ -1435,7 +1435,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.snapshotTargetCoverageCommitmentAttoEth, storedOperation[7], 'coverage commitment')
 		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedRepAttoRep, storedOperation[8], 'queued dispute-staked REP snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTotalPoolHeldRepAttoRep, storedOperation[9], 'queued REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotDenominator, storedOperation[10], 'queued denominator snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[10], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,

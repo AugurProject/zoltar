@@ -53,7 +53,7 @@
 		const existing = equation.querySelector(':scope > .docs-equation-compact')
 		const rows = table === null ? [] : Array.from(table.querySelectorAll(':scope > mtr'))
 		const rowCells = rows.map(row => Array.from(row.children).filter(cell => cell.localName === 'mtd'))
-		const isDefinitionTable = table?.querySelector('mtable') === null && rowCells.length > 0 && rowCells.every(cells => cells.length >= 3 && definitionRelations.has(mathText(cells[1]).trim()))
+		const isDefinitionTable = rowCells.length > 0 && rowCells.every(cells => cells.length >= 3 && definitionRelations.has(mathText(cells[1]).trim()))
 		if (!isDefinitionTable) {
 			existing?.remove()
 			equation.classList.remove('equation-compact-active')
@@ -67,7 +67,6 @@
 			for (const cells of rowCells) {
 				const label = cells[0] === undefined ? '' : mathText(cells[0])
 				const relation = cells[1] === undefined ? '' : mathText(cells[1])
-				const expression = cells.slice(2).map(mathText).join(' ')
 				const compactRow = document.createElement('div')
 				compactRow.className = 'docs-equation-compact-row'
 				const compactLabel = document.createElement('span')
@@ -75,7 +74,26 @@
 				compactLabel.textContent = breakableEquationText(label)
 				const compactExpression = document.createElement('span')
 				compactExpression.className = 'docs-equation-compact-expression'
-				compactExpression.textContent = breakableEquationText(`${relation} ${expression}`)
+				const nestedTable = cells
+					.slice(2)
+					.map(cell => cell.querySelector('mtable'))
+					.find(candidate => candidate !== null)
+				if (nestedTable === undefined) {
+					compactExpression.textContent = breakableEquationText(`${relation} ${cells.slice(2).map(mathText).join(' ')}`)
+				} else {
+					const compactRelation = document.createElement('span')
+					compactRelation.className = 'docs-equation-compact-relation'
+					compactRelation.textContent = breakableEquationText(relation)
+					const compactCases = document.createElement('span')
+					compactCases.className = 'docs-equation-compact-cases'
+					for (const nestedRow of nestedTable.querySelectorAll(':scope > mtr')) {
+						const compactCase = document.createElement('span')
+						compactCase.className = 'docs-equation-compact-case'
+						compactCase.textContent = breakableEquationText(Array.from(nestedRow.children).map(mathText).join(' '))
+						compactCases.append(compactCase)
+					}
+					compactExpression.append(compactRelation, compactCases)
+				}
 				compactRow.append(compactLabel, compactExpression)
 				compact.append(compactRow)
 			}

@@ -1,14 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_PERCENTAGE_PRECISION, calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
+import {
+	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+	MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
+	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
+	ORACLE_PERCENTAGE_PRECISION,
+	calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas,
+	calculateOracleMinimumWethReportAttoEth,
+} from '@zoltar/shared/oracleInitialReport'
 
 describe('oracle initial report sizing', () => {
 	test('uses the configured priority-fee report when the current base fee and open interest are zero', () => {
-		expect(calculateOracleMinimumWethReport()).toBe(807692307692307693n)
+		expect(calculateOracleMinimumWethReportAttoEth()).toBe(807692307692307693n)
 	})
 
 	test('adds priority-fee security to the base-fee-dependent report', () => {
 		const baseFeeAttoEthPerGas = 30n * 10n ** 9n
-		const minimumWethReport = calculateOracleMinimumWethReport({
+		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas,
 		})
@@ -23,7 +30,7 @@ describe('oracle initial report sizing', () => {
 
 	test('adds priority-fee security to the larger open-interest-dependent report', () => {
 		expect(
-			calculateOracleMinimumWethReport({
+			calculateOracleMinimumWethReportAttoEth({
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				baseFeeAttoEthPerGas: 30n * 10n ** 9n,
 				openInterestAttoEth: 500n * 10n ** 18n,
@@ -33,7 +40,7 @@ describe('oracle initial report sizing', () => {
 
 	test('allows deployments to tune the target correction error', () => {
 		expect(
-			calculateOracleMinimumWethReport({
+			calculateOracleMinimumWethReportAttoEth({
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				baseFeeAttoEthPerGas: 30n * 10n ** 9n,
 				openOracleSecurityMultiplierBps: 100000n,
@@ -44,7 +51,7 @@ describe('oracle initial report sizing', () => {
 
 	test('rounds up fractional WETH report sizes', () => {
 		expect(
-			calculateOracleMinimumWethReport({
+			calculateOracleMinimumWethReportAttoEth({
 				baseFeeAttoEthPerGas: 1n,
 				gasUnitsForOneDispute: 1n,
 				initialReportPriorityFeeAttoEthPerGas: 0n,
@@ -59,7 +66,7 @@ describe('oracle initial report sizing', () => {
 
 	test('rejects fees that eliminate the target correction profit', () => {
 		expect(() =>
-			calculateOracleMinimumWethReport({
+			calculateOracleMinimumWethReportAttoEth({
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				targetPriceErrorForDispute: 100000n,
 			}),
@@ -68,11 +75,11 @@ describe('oracle initial report sizing', () => {
 
 	test('caps the immutable priority fee so its report and escalation halt fit uint128', () => {
 		const uint128Max = (1n << 128n) - 1n
-		const maximumReport = calculateOracleMinimumWethReport({
+		const maximumReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			initialReportPriorityFeeAttoEthPerGas: MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 		})
-		const firstInvalidReport = calculateOracleMinimumWethReport({
+		const firstInvalidReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			initialReportPriorityFeeAttoEthPerGas: MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n,
 		})

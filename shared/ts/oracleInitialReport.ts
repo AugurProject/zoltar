@@ -55,7 +55,7 @@ function ceilDivide(numerator: bigint, denominator: bigint) {
 	return (numerator + denominator - 1n) / denominator
 }
 
-export function calculateOracleMinimumWethReport(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS) {
+export function calculateOracleMinimumWethReportAttoEth(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS) {
 	const feeSum = BigInt(parameters.openOracleProtocolFee + parameters.openOracleReporterFee)
 	const correctionProfitNumerator = parameters.targetPriceErrorForDispute - feeSum
 	const denominator = BPS_DENOMINATOR * correctionProfitNumerator

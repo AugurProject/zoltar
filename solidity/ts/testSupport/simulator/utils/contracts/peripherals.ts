@@ -206,7 +206,7 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'pendingReportMaxSettlementBaseFee',
+		functionName: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
 	})

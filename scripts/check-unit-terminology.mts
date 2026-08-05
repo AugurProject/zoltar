@@ -9,7 +9,7 @@ const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
 const legacyTerminology = /free[ -]?rep|freerep|pool[ -]?ownership|poolOwnership|security[ -]?bond|securityBond|bond[ -]?allowance|bondAllowance|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
 const missingAtomicSuffixIdentifiers =
-	/\b(?:ethBalance|wethBalance|requestPriceEthCost|getRequestPriceEthCost|getQueuedOperationEthCost|ethCost|queuedOperationEthCost|totalAccruedFees|requiredEthCost|walletEthBalance|liquidationMaxAmount|netProfitWeth|winningEth|candidateWinningEth|activeCumulativeEth|provisionalEthRaised|acceptedEth|profitBeforeGasWeth|wethRefund|expectedEth)\b/
+	/\b(?:ethBalance|wethBalance|requestPriceEthCost|getRequestPriceEthCost|getQueuedOperationEthCost|ethCost|queuedOperationEthCost|totalAccruedFees|requiredEthCost|walletEthBalance|liquidationMaxAmount|netProfitWeth|winningEth|candidateWinningEth|activeCumulativeEth|provisionalEthRaised|acceptedEth|profitBeforeGasWeth|wethRefund|expectedEth|initialWeth|pendingReportMaxSettlementBaseFee|calculateOracleMinimumWethReport|snapshotDenominator|snapshotPoolHeldRepBalanceAttoRep|snapshotPoolHeldRepBalanceBackingUnits)\b/
 const formattedAtomicStringField = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*string\b/
 const humanDecimalUnderAtomicKey = /["'][A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*["']\s*:\s*["'](?:0|[1-9]\d*)(?:\.\d+)?["']/
 const humanDecimalUnderAtomicProperty = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\s*:\s*["'](?:0|[1-9]\d*)(?:\.\d+)?["']/
@@ -60,6 +60,7 @@ function findUnsuffixedAtomicEthBigintIdentifier(source: string) {
 
 if (findUnsuffixedAtomicEthBigintIdentifier('type Unsafe = { wethRefund: bigint }') !== 'wethRefund') throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed atomic WETH declaration')
 if (findUnsuffixedAtomicEthBigintIdentifier('type Safe = { wethRefundAttoEth: bigint; priceRepPerEth: bigint }') !== undefined) throw new Error('Unit terminology checker rejected canonical attoETH or REP-per-ETH declarations')
+if (!missingAtomicSuffixIdentifiers.test('const initialWeth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an inferred unsuffixed atomic WETH value')
 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {

@@ -202,10 +202,10 @@ async function loadPool(
 				isPendingSettlement: pendingSettlementOperationIds.includes(id),
 				operation: operation.operation,
 				queuedAt: operation.queuedAt,
-				snapshotPoolHeldRepBalanceBackingUnits: operation.snapshotPoolHeldRepBalanceBackingUnits,
+				snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
 				snapshotTargetCoverageCommitmentAttoEth: operation.snapshotTargetCoverageCommitmentAttoEth,
 				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits,
-				snapshotPoolHeldRepBalanceAttoRep: operation.snapshotPoolHeldRepBalanceAttoRep,
+				snapshotTotalPoolHeldRepAttoRep: operation.snapshotTotalPoolHeldRepAttoRep,
 				targetVault: getAddress(operation.targetVault),
 				validForSeconds: operation.validForSeconds,
 			})

@@ -52,10 +52,10 @@ describe('liquidation strategy', () => {
 			currentPoolHeldRepBalanceAttoRep: 1_000n * PRICE_PRECISION,
 			price: 10n * PRICE_PRECISION,
 			requestedCommitmentTransferAttoEth: 75n * PRICE_PRECISION,
-			snapshotPoolHeldRepBalanceBackingUnits: 1_000n * PRICE_PRECISION,
+			snapshotTotalRepBackingUnits: 1_000n * PRICE_PRECISION,
 			snapshotTargetCoverageCommitmentAttoEth: 75n * PRICE_PRECISION,
 			snapshotTargetBackingUnits: 1_000n * PRICE_PRECISION,
-			snapshotPoolHeldRepBalanceAttoRep: 1_000n * PRICE_PRECISION,
+			snapshotTotalPoolHeldRepAttoRep: 1_000n * PRICE_PRECISION,
 		})
 		expect(transfer.coverageCommitmentToTransferAttoEth).toBe(75n * PRICE_PRECISION)
 		expect(transfer.vaultRepBackingToTransferAttoRep).toBe(787_500000000000000000n)

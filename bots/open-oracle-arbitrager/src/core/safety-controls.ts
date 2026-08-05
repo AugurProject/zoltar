@@ -78,14 +78,14 @@ export function positionRiskLimitMismatch(
 	now = new Date(),
 ) {
 	const openPositions = parameters.positions.filter(position => positionConsumesRisk(position.status))
-	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
+	const lockedWethAttoEth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const dailyGasSpentWethAttoEth = utcDayGasSpentWeth(parameters.positions, now)
 	return riskLimitMismatch(
 		{
 			capitalAtRiskWethAttoEth: parameters.capitalAtRiskWethAttoEth,
 			concurrentPositions: openPositions.length,
 			dailyGasSpentWethAttoEth: dailyGasSpentWethAttoEth + parameters.projectedGasCostWethAttoEth,
-			projectedLockedWethAttoEth: lockedWeth + parameters.capitalAtRiskWethAttoEth,
+			projectedLockedWethAttoEth: lockedWethAttoEth + parameters.capitalAtRiskWethAttoEth,
 		},
 		limits,
 	)

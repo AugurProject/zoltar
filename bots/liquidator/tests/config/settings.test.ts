@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '../helpers/ethereum.ts'
-import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
+import { parseSettings, parseStrategy, saveSettings, serializedSettings, type SettingsFilesystem } from '../../src/config/settings.ts'
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -72,7 +73,7 @@ const settings = {
 		walletRepReserveRep: '100',
 	},
 	submission: {
-		minimumRelaySuccesses: 1,
+		minimumBundleRelaySuccesses: 1,
 		mode: 'public',
 		relayUrls: [],
 	},
@@ -147,5 +148,25 @@ describe('liquidator settings', () => {
 		})
 		expect(parsed.childMarketConfigurations[0]?.assetAddress).toBe(getAddress(childMarket.assetAddress))
 		expect(parsed.desiredPools[0]).toEqual({ initialReportPriorityFeeAttoEthPerGas: 1_000_000_000n, questionId: 7n, statoblastSecurityMultiplierBps: 12_500n, universeId: 0n })
+	})
+
+	test('syncs the configuration and parent directory before returning success', async () => {
+		const parsed = parseSettings(settings)
+		const current = `${JSON.stringify(serializedSettings(parsed), undefined, 2)}\n`
+		const expectedRevision = createHash('sha256').update(current).digest('hex')
+		const events: string[] = []
+		const filesystem: SettingsFilesystem = {
+			mkdir: async () => events.push('mkdir'),
+			open: async (_path, flags) => ({
+				close: async () => events.push(`${flags}:close`),
+				sync: async () => events.push(`${flags}:sync`),
+				writeFile: async () => events.push(`${flags}:write`),
+			}),
+			readFile: async () => current,
+			rename: async () => events.push('rename'),
+			rm: async () => events.push('rm'),
+		}
+		await saveSettings('/state/operator.json', parsed, expectedRevision, filesystem)
+		expect(events).toEqual(['mkdir', 'wx:write', 'wx:sync', 'wx:close', 'rename', 'r:sync', 'r:close'])
 	})
 })

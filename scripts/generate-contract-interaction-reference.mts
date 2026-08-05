@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = '12a27563858be35a525fa1588600be16bb297860e6c376639853ad179363dfaa'
+const expectedProductionSoliditySourceFingerprint = '2569b6172e8b9f68d6e3619e02b53ca83a9e1b9911c5bc0f557210c9294e81a8'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -329,7 +329,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'c12eafc217df8a598467eb27ce0efc8a81a13366b126250e038085ee2e2d9f01'
+const referencedEventAbiFingerprint = 'fcf0cd75358a88ebae758836a93c22c643adb136843246a2ce88665ce669d2b5'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -475,7 +475,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': '651673bb591a5b420cde1eaf82f35bb06b457d2b6de9b1eeba0d9ee3ac67a958',
-	'solidity/contracts/peripherals/SecurityPool.sol': 'c36c725f73b452429f4724f351e1560c286705f537f19c15e0569fb7ddc7a7c6',
+	'solidity/contracts/peripherals/SecurityPool.sol': '9e6cca595916aeb3a3535504e033a7695402f1adbf157e076dca8f32afc199bb',
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -693,7 +693,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '09674e109c0a5f98292d5e5033bf64159551fe50048e10560b58f488aea61306',
+		compiledAbiFingerprint: '5f1e4d86897c214d702507b8f47bfe2ca39c967906f2c8d19c1fbcee7cf5ed4f',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
 		readAbiFingerprint: '09ad16859e7cc7f00a27a03e5fcd02ec6abb509d724ce92ee855f89fdb743119',
@@ -1367,12 +1367,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'f0f9b98b087e62efd03290bbf17c29a30770617fdc9759d0e9b2927bd2ae21e5',
+		compiledAbiFingerprint: '222424855ecbae2077d9b04f8fae5d047cba86a3d42f4143ef53692a23d926b5',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, coverage-commitment, and liquidation operations behind it.',
-		readAbiFingerprint: 'b0a62b4ff2250eb7fb4b42e634efd780549a739ddf1f5871d9a54dc51558c107',
+		readAbiFingerprint: 'ffa866abf9af610b796116aafe1af8755b7f09381b1ca344863eb6bb7d929cea',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -1416,7 +1416,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'escalationHaltMultiplierBps' },
 			{ name: 'maxSettlementBaseFeeMultiplierBps' },
 			{ name: 'minLiquidationPriceDistanceBps' },
-			{ name: 'pendingReportMaxSettlementBaseFee' },
+			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
 			{ name: 'stagedOperationCounter' },
 			{ name: 'stagedOperations' },
 		],

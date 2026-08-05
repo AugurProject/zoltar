@@ -197,7 +197,7 @@ interface ISecurityPool {
 		uint256 snapshotTargetBackingUnits,
 		uint256 snapshotTargetCoverageCommitmentAttoEth,
 		uint256 snapshotTotalPoolHeldRepAttoRep,
-		uint256 snapshotDenominator
+		uint256 snapshotTotalRepBackingUnits
 	) external;
 	function executeCoverageCommitmentUpdate(address callerVault, uint256 amountAttoEth) external;
 

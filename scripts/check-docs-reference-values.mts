@@ -551,7 +551,11 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.ok(correctionGasBudget * 3n >= settlementGasCostAtAssumption * 10n, 'positive configured priority must preserve the base-fee-only 10/3 lower bound when actual priority matches')
 	assert.notEqual(correctionGasBudget * 3n, settlementGasCostAtAssumption * 10n, 'positive configured priority makes the settlement-cap ratio larger than, rather than exactly, 10/3')
 	assert.ok(correctionGasBudget * 3n < settlementGasCostAboveAssumption * 10n, 'an actual priority fee above configuration can weaken the 10/3 base-fee-only bound')
-	assert.match(priceCoordinator, /uint256 maxSettlementBaseFee = pendingReportMaxSettlementBaseFee;\s*pendingReportMaxSettlementBaseFee = 0;\s*if \(block\.basefee > maxSettlementBaseFee\)/, 'coordinator must preserve the request-time cap before clearing it and accept an equal settlement base fee')
+	assert.match(
+		priceCoordinator,
+		/uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;\s*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;\s*if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\)/,
+		'coordinator must preserve the request-time cap before clearing it and accept an equal settlement base fee',
+	)
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
 	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
 	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\)/, 'coordinator must derive the request bounty from getRequestPriceCostAttoEth')

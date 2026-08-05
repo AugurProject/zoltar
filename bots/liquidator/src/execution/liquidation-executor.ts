@@ -1,4 +1,4 @@
-import { createPublicClient, decodeEventLog, encodeFunctionData, http, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, encodeFunctionData, http, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -7,6 +7,10 @@ import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, secu
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, requiredRepForCoverageCommitment, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
+import { validateReceiptExpectation } from '#execution/receipt-validation'
+import { finalizedReceiptWithQuorum } from '#execution/recovery'
+
+export { requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '#execution/receipt-validation'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 
@@ -18,6 +22,22 @@ type Call = {
 	receiptExpectation?: PendingTransactionIntent['receiptExpectation'] | undefined
 	to: Address
 	value?: bigint | undefined
+}
+
+export class TransactionAwaitingCanonicalFinality extends Error {
+	readonly hash: Hex
+
+	constructor(label: string, hash: Hex) {
+		super(`${label} transaction ${hash} is awaiting canonical finality`)
+		this.name = 'TransactionAwaitingCanonicalFinality'
+		this.hash = hash
+	}
+}
+
+export function requireFinalizedTransactionReceipt(label: string, hash: Hex, result: Awaited<ReturnType<typeof finalizedReceiptWithQuorum>>) {
+	if (result.receipt !== undefined) return result.receipt
+	if (!result.observed) throw new Error(`${label} receipt disappeared before canonical finality`)
+	throw new TransactionAwaitingCanonicalFinality(label, hash)
 }
 
 function maximumFeePerGas(baseFeePerGas: bigint) {
@@ -125,11 +145,13 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		signMessage: account.signMessage,
 	})
 	const hash: Hex = signed.hash
-	const receipt = await wallet.waitForTransactionReceipt({
+	await wallet.waitForTransactionReceipt({
 		hash,
 		pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
 		timeout: 180_000,
 	})
+	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash)
+	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	if (receipt.status !== 'success') {
 		throw new Error(`${call.label} reverted in transaction ${receipt.transactionHash}`)
 	}
@@ -238,24 +260,24 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 	)
 }
 
-export function assertRepLimits(parameters: { acquiredAmount?: bigint | undefined; currentPoolRepAttoRep: bigint; currentPoolHeldRepBalanceAttoRep: bigint; depositAmount: bigint; maximumPoolRepAttoRep: bigint; maximumTotalRepAttoRep: bigint }) {
-	const acquiredAmount = parameters.acquiredAmount ?? 0n
-	if (parameters.currentPoolRepAttoRep + parameters.depositAmount + acquiredAmount > parameters.maximumPoolRepAttoRep) {
+export function assertRepLimits(parameters: { acquiredAmountAttoRep?: bigint | undefined; currentPoolRepAttoRep: bigint; currentTotalRepAttoRep: bigint; depositAmountAttoRep: bigint; maximumPoolRepAttoRep: bigint; maximumTotalRepAttoRep: bigint }) {
+	const acquiredAmountAttoRep = parameters.acquiredAmountAttoRep ?? 0n
+	if (parameters.currentPoolRepAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumPoolRepAttoRep) {
 		throw new Error('REP deployment would exceed strategy.maximumRepPerPoolAttoRep')
 	}
-	if (parameters.currentPoolHeldRepBalanceAttoRep + parameters.depositAmount + acquiredAmount > parameters.maximumTotalRepAttoRep) {
+	if (parameters.currentTotalRepAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumTotalRepAttoRep) {
 		throw new Error('REP deployment would exceed strategy.maximumTotalDeployedRepAttoRep')
 	}
 }
 
-export function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmount: bigint, acquiredAmount = 0n) {
-	const poolReservedRep = reservedLiquidationRep(pool, settings)
-	const totalDeployedRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultRepBackingAttoRep + reservedLiquidationRep(observedPool, settings), 0n)
+export function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmountAttoRep: bigint, acquiredAmountAttoRep = 0n) {
+	const poolReservedRepAttoRep = reservedLiquidationRep(pool, settings)
+	const totalDeployedRepAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultRepBackingAttoRep + reservedLiquidationRep(observedPool, settings), 0n)
 	assertRepLimits({
-		acquiredAmount,
-		currentPoolRepAttoRep: pool.botVault.vaultRepBackingAttoRep + poolReservedRep,
-		currentPoolHeldRepBalanceAttoRep: totalDeployedRep,
-		depositAmount,
+		acquiredAmountAttoRep,
+		currentPoolRepAttoRep: pool.botVault.vaultRepBackingAttoRep + poolReservedRepAttoRep,
+		currentTotalRepAttoRep: totalDeployedRepAttoRep,
+		depositAmountAttoRep,
 		maximumPoolRepAttoRep: settings.strategy.maximumRepPerPoolAttoRep,
 		maximumTotalRepAttoRep: settings.strategy.maximumTotalDeployedRepAttoRep,
 	})
@@ -266,16 +288,16 @@ function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSetting
 	const bufferedPrice = (referencePrice * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 	return pool.stagedOperations.reduce((total, operation) => {
 		if (operation.operation !== 0n || operation.initiatorVault.toLowerCase() !== pool.botVault.address.toLowerCase()) return total
-		const snapshotRep = operation.snapshotPoolHeldRepBalanceBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotPoolHeldRepBalanceAttoRep) / operation.snapshotPoolHeldRepBalanceBackingUnits
-		const estimatedRep = (operation.amount * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
-		if (operation.isPendingSettlement || operation.amount === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedRep > snapshotRep ? estimatedRep : snapshotRep)
-		return total + (estimatedRep < snapshotRep ? estimatedRep : snapshotRep)
+		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldRepAttoRep) / operation.snapshotTotalRepBackingUnits
+		const estimatedRepAttoRep = (operation.amount * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
+		if (operation.isPendingSettlement || operation.amount === operation.snapshotTargetCoverageCommitmentAttoEth) return total + (estimatedRepAttoRep > snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
+		return total + (estimatedRepAttoRep < snapshotVaultRepBackingAttoRep ? estimatedRepAttoRep : snapshotVaultRepBackingAttoRep)
 	}, 0n)
 }
 
-async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, amount: bigint, priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined) {
-	if (amount === 0n) return
-	assertRepExposureLimits(settings, state, pool, amount)
+async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, amountAttoRep: bigint, priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined) {
+	if (amountAttoRep === 0n) return
+	assertRepExposureLimits(settings, state, pool, amountAttoRep)
 	if (!settings.strategy.allowAutomaticDeposits) {
 		throw new Error('Candidate requires REP but automatic deposits are disabled')
 	}
@@ -285,10 +307,10 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (walletBalance < amount + settings.strategy.walletRepReserveAttoRep) {
+	if (walletBalance < amountAttoRep + settings.strategy.walletRepReserveAttoRep) {
 		throw new Error('Wallet REP reserve would be breached by the required pool deposit')
 	}
-	await ensureAllowance(wallet, settings, state, pool.repToken, pool.address, amount, 'deposit', priceStillAllowed)
+	await ensureAllowance(wallet, settings, state, pool.repToken, pool.address, amountAttoRep, 'deposit', priceStillAllowed)
 	await submitCall(
 		wallet,
 		settings,
@@ -296,7 +318,7 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 		{
 			data: encodeFunctionData({
 				abi: securityPoolAbi,
-				args: [amount],
+				args: [amountAttoRep],
 				functionName: 'depositRepToVault',
 			}),
 			gas: 300_000n,
@@ -306,46 +328,6 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 		},
 		'deposit',
 	)
-}
-
-export function requireSuccessfulStagedOperation(receipt: TransactionReceipt, coordinator: Address, operation: 0 | 1) {
-	for (const log of receipt.logs) {
-		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
-		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'ExecutedStagedOperation' || decoded.args.operation !== BigInt(operation)) continue
-			if (!decoded.args.success) {
-				throw new Error(`Staged operation failed: ${decoded.args.errorMessage}`)
-			}
-			return
-		} catch (error) {
-			if (error instanceof Error && error.message.startsWith('Staged operation failed:')) throw error
-		}
-	}
-	throw new Error('Coordinator receipt did not confirm the staged operation outcome')
-}
-
-export function requirePendingStagedOperation(receipt: TransactionReceipt, coordinator: Address, initiator: Address, target: Address, amount: bigint) {
-	for (const log of receipt.logs) {
-		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
-		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'StagedOperationQueued') continue
-			if (decoded.args.operation === 0n && decoded.args.initiatorVault.toLowerCase() === initiator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.amount === amount && decoded.args.isPendingSlot) return decoded.args.operationId
-		} catch (error) {
-			void error
-		}
-	}
-	throw new Error('Coordinator did not place the liquidation in a pending settlement slot')
-}
-
-export function validateReceiptExpectation(receipt: TransactionReceipt, expectation: PendingTransactionIntent['receiptExpectation']) {
-	if (expectation.type === 'transaction') return { queuedOperationId: undefined }
-	if (expectation.type === 'staged-success') {
-		requireSuccessfulStagedOperation(receipt, expectation.coordinator, expectation.operation)
-		return { queuedOperationId: undefined }
-	}
-	return { queuedOperationId: requirePendingStagedOperation(receipt, expectation.coordinator, expectation.initiator, expectation.target, expectation.amount) }
 }
 
 export function conservativeStaleTopUp(parameters: { callerCoverageCommitmentAttoEth: bigint; callerRepAttoRep: bigint; coverageCommitmentToTransferAttoEth: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {
@@ -372,23 +354,23 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 		throw new Error('Stale unseeded oracle requires strategy.fallbackRepPerEthPrice')
 	}
 	const initialWethAttoEth = pool.minimumToken1ReportAttoEth + pool.minimumToken1ReportAttoEth / 50n + 1n
-	const initialRep = (initialWethAttoEth * proposedPrice + 10n ** 18n - 1n) / 10n ** 18n
-	const currentRep = await wallet.readContract({
+	const initialRepAttoRep = (initialWethAttoEth * proposedPrice + 10n ** 18n - 1n) / 10n ** 18n
+	const currentRepAttoRep = await wallet.readContract({
 		abi: erc20Abi,
 		address: pool.repToken,
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (currentRep < initialRep + reservedTopUpRepAttoRep + settings.strategy.walletRepReserveAttoRep) {
+	if (currentRepAttoRep < initialRepAttoRep + reservedTopUpRepAttoRep + settings.strategy.walletRepReserveAttoRep) {
 		throw new Error('Oracle initial report would breach the wallet REP reserve')
 	}
-	const currentWeth = await wallet.readContract({
+	const currentWethAttoEth = await wallet.readContract({
 		abi: erc20Abi,
 		address: settings.deployment.weth,
 		args: [wallet.account.address],
 		functionName: 'balanceOf',
 	})
-	if (currentWeth < initialWethAttoEth) {
+	if (currentWethAttoEth < initialWethAttoEth) {
 		await submitCall(
 			wallet,
 			settings,
@@ -399,19 +381,19 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 				label: 'Wrap ETH for oracle initial report',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 				to: settings.deployment.weth,
-				value: initialWethAttoEth - currentWeth,
+				value: initialWethAttoEth - currentWethAttoEth,
 			},
 			'liquidation',
 		)
 	}
-	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialRep, 'liquidation', priceStillAllowed)
-	const wethAllowance = await wallet.readContract({
+	await ensureAllowance(wallet, settings, state, pool.repToken, pool.manager, initialRepAttoRep, 'liquidation', priceStillAllowed)
+	const wethAllowanceAttoEth = await wallet.readContract({
 		abi: erc20Abi,
 		address: settings.deployment.weth,
 		args: [wallet.account.address, pool.manager],
 		functionName: 'allowance',
 	})
-	if (wethAllowance < initialWethAttoEth) {
+	if (wethAllowanceAttoEth < initialWethAttoEth) {
 		await submitCall(
 			wallet,
 			settings,
@@ -435,14 +417,14 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 
 export async function executeLiquidation(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, candidate: LiquidationCandidate, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!pool.isPriceValid) assertStaleLiquidationExposureBound(candidate)
-	const topUpAttoRep = pool.isPriceValid
-		? candidate.topUpAttoRep
+	const topUpRepAttoRep = pool.isPriceValid
+		? candidate.topUpRepAttoRep
 		: conservativeStaleTopUp({
 				callerCoverageCommitmentAttoEth: pool.botVault.coverageCommitmentAttoEth,
 				callerRepAttoRep: pool.botVault.vaultRepBackingAttoRep,
 				coverageCommitmentToTransferAttoEth: candidate.coverageCommitmentToTransferAttoEth,
 				fallbackPrice: settings.strategy.fallbackRepPerEthPrice,
-				minimumTopUp: candidate.topUpAttoRep,
+				minimumTopUp: candidate.topUpRepAttoRep,
 				multiplierBps: pool.multiplierBps,
 				referencePrice: pool.lastPrice,
 				safetyBps: settings.strategy.stalePriceFundingBufferBps,
@@ -450,8 +432,8 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 			})
 	const acquisitionPrice = pool.isPriceValid ? candidate.pool.price : (candidate.pool.price * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 	const acquiredRepCeiling = conservativeLiquidationRep(candidate, acquisitionPrice)
-	assertRepExposureLimits(settings, state, pool, topUpAttoRep, acquiredRepCeiling)
-	await depositRepToVault(wallet, settings, state, pool, topUpAttoRep, priceStillAllowed)
+	assertRepExposureLimits(settings, state, pool, topUpRepAttoRep, acquiredRepCeiling)
+	await depositRepToVault(wallet, settings, state, pool, topUpRepAttoRep, priceStillAllowed)
 	const usesExistingPendingReport = !pool.isPriceValid && pool.pendingReportId > 0n
 	if (usesExistingPendingReport && pool.pendingReportSponsor.toLowerCase() !== wallet.account.address.toLowerCase()) {
 		throw new Error('A different sponsor owns the pool pending price report')
@@ -478,7 +460,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 	)
 }
 
-type VaultMaintenancePlan = { amount: bigint; kind: 'deposit' | 'withdraw' } | { kind: 'fees' } | undefined
+type VaultMaintenancePlan = { amountAttoRep: bigint; kind: 'deposit' | 'withdraw' } | { kind: 'fees' } | undefined
 
 export function planVaultMaintenance(
 	pool: Pick<PoolObservation, 'botVault' | 'isPriceValid' | 'lastPrice' | 'multiplierBps'>,
@@ -489,12 +471,12 @@ export function planVaultMaintenance(
 	if (priceDependentMaintenanceAllowed && pool.lastPrice > 0n) {
 		const health = vaultHealthBps(pool.botVault.vaultRepBackingAttoRep, pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice)
 		if (pool.botVault.coverageCommitmentAttoEth > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
-			const targetRep = requiredRepForCoverageCommitment(pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps)
-			return { amount: targetRep > pool.botVault.vaultRepBackingAttoRep ? targetRep - pool.botVault.vaultRepBackingAttoRep : 0n, kind: 'deposit' }
+			const targetRepAttoRep = requiredRepForCoverageCommitment(pool.botVault.coverageCommitmentAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps)
+			return { amountAttoRep: targetRepAttoRep > pool.botVault.vaultRepBackingAttoRep ? targetRepAttoRep - pool.botVault.vaultRepBackingAttoRep : 0n, kind: 'deposit' }
 		}
 		if (strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === walletAddress.toLowerCase()) {
-			const surplus = surplusRepForWithdrawal(pool.botVault, { multiplierBps: pool.multiplierBps, price: pool.lastPrice }, strategy)
-			if (surplus > 0n) return { amount: surplus, kind: 'withdraw' }
+			const surplusAttoRep = surplusRepForWithdrawal(pool.botVault, { multiplierBps: pool.multiplierBps, price: pool.lastPrice }, strategy)
+			if (surplusAttoRep > 0n) return { amountAttoRep: surplusAttoRep, kind: 'withdraw' }
 		}
 	}
 	if (pool.botVault.claimableFeesAttoEth > 0n && pool.botVault.claimableFeesAttoEth >= strategy.redeemFeesAboveAttoEth) return { kind: 'fees' }
@@ -505,7 +487,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 	if (!isPoolExecutionEligible(pool)) return false
 	const plan = planVaultMaintenance(pool, settings.strategy, wallet.account.address, await priceStillAllowed())
 	if (plan?.kind === 'deposit') {
-		await depositRepToVault(wallet, settings, state, pool, plan.amount, priceStillAllowed)
+		await depositRepToVault(wallet, settings, state, pool, plan.amountAttoRep, priceStillAllowed)
 		return true
 	}
 	if (plan?.kind === 'withdraw') {
@@ -516,7 +498,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 			{
 				data: encodeFunctionData({
 					abi: coordinatorAbi,
-					args: [1, wallet.account.address, plan.amount, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
+					args: [1, wallet.account.address, plan.amountAttoRep, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
 					functionName: 'requestPriceIfNeededAndStageOperation',
 				}),
 				gas: 700_000n,
@@ -553,7 +535,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 
 export function dryRunCandidate(state: RuntimeState, candidate: LiquidationCandidate) {
 	recordActivity(state, {
-		details: `pool=${candidate.pool.address} target=${candidate.target.address} coverageCommitmentAttoEth=${candidate.coverageCommitmentToTransferAttoEth.toString()} repTopUpAttoRep=${candidate.topUpAttoRep.toString()} bonusAttoEth=${candidate.bonusValueAttoEth.toString()}`,
+		details: `pool=${candidate.pool.address} target=${candidate.target.address} coverageCommitmentTransferAttoEth=${candidate.coverageCommitmentToTransferAttoEth.toString()} repTopUpAttoRep=${candidate.topUpRepAttoRep.toString()} bonusAttoEth=${candidate.bonusValueAttoEth.toString()}`,
 		kind: 'liquidation',
 		message: 'Liquidation candidate selected',
 		status: 'dry-run',
