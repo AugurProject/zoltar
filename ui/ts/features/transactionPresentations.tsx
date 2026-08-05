@@ -8,7 +8,7 @@ import { AddressValue } from '../components/AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
 import { UniverseLink } from './universes/components/UniverseLink.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { AUCTIONED_BOND_ALLOWANCE_LABEL } from './truth-auctions/lib/forkAuction.js'
+import { AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from './markets/lib/marketType.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
@@ -192,7 +192,7 @@ export function createZoltarMigrationSuccessPresentation(result: ZoltarMigration
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amount)} ${commonCopy.rep}` },
+			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amountAttoRep)} ${commonCopy.rep}` },
 			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
 		],
 		title: result.action === 'addRepToMigrationBalance' ? transactionCopy.repPrepared : transactionCopy.repSplit,
@@ -237,7 +237,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
-			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeWeiPerGas, 9)} gwei` },
+			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeAttoEthPerGas, 9)} gwei` },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
@@ -261,12 +261,19 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 	]
 }
 
+function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action']) {
+	if (actionName === 'depositRepToVault') return securityPoolCopy.depositRepToVault
+	if (actionName === 'queueSetCoverageCommitmentAttoEth') return securityPoolCopy.setCoverageCommitment
+	if (actionName === 'queueWithdrawRep') return securityPoolCopy.withdrawRep
+	return humanizeAction(actionName)
+}
+
 export function createSecurityVaultTransactionIntent(actionName: SecurityVaultActionResult['action'], context?: SecurityVaultTransactionContext) {
 	return buildIntent({
 		action: actionName,
 		rows: getSecurityVaultTransactionRows(context),
 		source: 'security-vault',
-		submittedTitle: humanizeAction(actionName),
+		submittedTitle: getSecurityVaultActionTitle(actionName),
 	})
 }
 
@@ -279,7 +286,7 @@ export function createSecurityVaultSuccessPresentation(result: SecurityVaultActi
 		...(queuedOperationDetail === undefined ? {} : { detail: queuedOperationDetail }),
 		hash: result.hash,
 		rows: [...(getSecurityVaultTransactionRows(context) ?? []), ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
-		title: humanizeAction(result.action),
+		title: getSecurityVaultActionTitle(result.action),
 		tone: 'success',
 	})
 }
@@ -531,7 +538,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 	let resolvedSubmittedTitle = submittedTitle
 	if (resolvedSubmittedTitle === undefined) {
 		if (actionName === 'migrateUnresolvedEscalation') {
-			resolvedSubmittedTitle = transactionCopy.clearParentEscalationLocks
+			resolvedSubmittedTitle = transactionCopy.clearUnresolvedParentEscalationDepositAccounting
 		} else if (actionName === 'claimParentEscalationDeposits') {
 			resolvedSubmittedTitle = transactionCopy.claimParentEscalationDeposits
 		} else {
@@ -551,7 +558,7 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 	if (result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund') {
 		title = transactionCopy.settleFinalizedRefunds
 	} else if (result.action === 'migrateUnresolvedEscalation') {
-		title = transactionCopy.clearParentEscalationLocks
+		title = transactionCopy.clearUnresolvedParentEscalationDepositAccounting
 	} else if (result.action === 'claimParentEscalationDeposits') {
 		title = transactionCopy.claimParentEscalationDeposits
 	}
@@ -559,12 +566,12 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 				}
-				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 			case 'createChildUniverse':
 				return transactionCopy.childUniverseLinkedToForkPathDetail
 			case 'forkWithOwnEscalation':

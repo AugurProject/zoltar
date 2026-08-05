@@ -30,15 +30,15 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			reportingDetails: {
 				activationTime: 1n,
 				bindingCapital: 5n,
-				completeSetCollateralAmount: 1n,
+				settlementCollateralAttoEth: 1n,
 				currentRequiredBond: 2n,
 				currentTime: 100n,
 				escalationEndTime: 500n,
 				escalationGameAddress: zeroAddress,
-				forkThreshold: 10n,
+				forkThresholdAttoRep: 10n,
 				hasReachedNonDecision: false,
 				marketDetails: createMarketDetails({ endTime: 0n }),
-				nonDecisionThreshold: 20n,
+				nonDecisionThresholdAttoRep: 20n,
 				questionOutcome,
 				securityPoolAddress: zeroAddress,
 				sides: [
@@ -46,17 +46,17 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 				],
-				startBond: 1n,
+				startBondAttoRep: 1n,
 				status: 'active',
 				systemState: 'operational',
-				totalCost: 2n,
+				totalCostAttoRep: 2n,
 				universeId: 1n,
 				settlementState: 'locked',
 				parentWithdrawalEnabled: false,
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
-				viewerVaultEscrowedRep: 0n,
-				viewerVaultRepDepositShare: 10n,
+				viewerVaultDisputeStakedRepAttoRep: 0n,
+				viewerVaultRepBackingAttoRep: 10n,
 			},
 			reportingForm: {
 				reportAmount: '0.000000000000000001',
@@ -146,15 +146,15 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 							reportingDetails: {
 								activationTime: 1_699_999_000n,
 								bindingCapital: 5n,
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentRequiredBond: 2n,
 								currentTime: 1_700_000_000n,
 								escalationEndTime: 1_700_000_500n,
 								escalationGameAddress: zeroAddress,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								hasReachedNonDecision: false,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: zeroAddress,
 								sides: [
@@ -162,17 +162,17 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 									{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 									{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 								],
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'active',
 								systemState: 'forkTruthAuction',
-								totalCost: 2n,
+								totalCostAttoRep: 2n,
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 10n,
+								viewerPoolHeldVaultRepBackingAttoRep: 10n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 10n,
+								viewerVaultDisputeStakedRepAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 10n,
 							},
 						}),
 						securityPoolAddress: zeroAddress,
@@ -193,7 +193,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
-	test('allows reporting with a stale oracle price when the pool has no security bond allowance', async () => {
+	test('allows reporting with a stale oracle price when the pool has no coverage commitment', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<SecurityPoolWorkflowSection
@@ -208,7 +208,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalSecurityBondAllowance: 0n,
+								totalCoverageCommitmentAttoEth: 0n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -342,8 +342,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -391,8 +391,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -409,10 +409,48 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
 		expect(documentQueries.getByText('Operation ID')).not.toBeNull()
+		expect(documentQueries.getByText('REP withdrawal')).not.toBeNull()
+		expect(documentQueries.getByText('5 REP')).not.toBeNull()
 		expect(documentQueries.getByText('Staged Operation ID')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+	})
+
+	test('labels ETH-denominated staged operation amounts by accounting role', async () => {
+		for (const stagedCase of [
+			{ amountLabel: 'Coverage commitment', operation: 'setCoverageCommitment' as const },
+			{ amountLabel: 'Coverage commitment transfer', operation: 'liquidation' as const },
+		]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							pendingOperation: {
+								amount: 5n * 10n ** 18n,
+								initiatorVault: zeroAddress,
+								operation: stagedCase.operation,
+								operationId: 7n,
+								targetVault: zeroAddress,
+							},
+							pendingOperationSlotId: 7n,
+						}),
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'staged-operations',
+					})}
+					showHeader={false}
+				/>,
+			)
+			try {
+				const documentQueries = within(document.body)
+				expect(documentQueries.getByText(stagedCase.amountLabel)).not.toBeNull()
+				expect(documentQueries.getByText('5 ETH')).not.toBeNull()
+			} finally {
+				renderedComponent.cleanup()
+			}
+		}
 	})
 
 	test('does not show staged-operation cancellation actions', async () => {
@@ -471,8 +509,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -511,8 +549,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -540,13 +578,13 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
-		const requests: Array<{ managerAddress: string; reviewedRequestEthValue: bigint; securityPoolAddress: string }> = []
+		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string }> = []
 		const pool = createSelectedPool()
 		const baseProps = createSecurityPoolWorkflowProps({
-			accountState: createAccountState({ ethBalance: 100n * 10n ** 18n }),
+			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
 			checkedSecurityPoolAddress: pool.securityPoolAddress,
-			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestEthValue) => requests.push({ managerAddress, reviewedRequestEthValue, securityPoolAddress }),
-			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceEthCost: 2n * 10n ** 18n }),
+			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestValueAttoEth) => requests.push({ managerAddress, reviewedRequestValueAttoEth, securityPoolAddress }),
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 2n * 10n ** 18n }),
 			securityPoolAddress: pool.securityPoolAddress,
 			securityPools: [pool],
 			selectedPoolView: 'price-oracle',
@@ -566,25 +604,25 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(requests).toEqual([])
 
 		await act(async () => {
-			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceEthCost: 3n * 10n ** 18n })} showHeader={false} />, renderedComponent.container)
+			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n })} showHeader={false} />, renderedComponent.container)
 		})
 		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
-		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestEthValue: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
+		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 					checkedSecurityPoolAddress: zeroAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: false,
 						pendingReportId: 0n,
-						requestPriceEthCost: 10n * 10n ** 18n,
+						requestPriceCostAttoEth: 10n * 10n ** 18n,
 					}),
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool()],
@@ -624,14 +662,14 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			<ChainTimestampContext.Provider value={1000n}>
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
-						accountState: createAccountState({ ethBalance: 100n * 10n ** 18n }),
+						accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
 						checkedSecurityPoolAddress: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
 							lastSettlementTimestamp: 700n,
 							pendingReportId: 0n,
 							priceValidUntilTimestamp: 1000n,
-							requestPriceEthCost: 1n,
+							requestPriceCostAttoEth: 1n,
 						}),
 						securityPoolAddress: zeroAddress,
 						securityPools: [createSelectedPool()],

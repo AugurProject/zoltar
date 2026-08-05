@@ -70,7 +70,7 @@ function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecur
 				async () =>
 					({
 						deployPoolHash: '0x0' as Hash,
-						initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+						initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 						questionId: '0x0b',
 						securityPoolAddress: zeroAddress,
 						statoblastSecurityMultiplierBps: 20_000n,
@@ -483,7 +483,7 @@ describe('useSecurityPoolCreation', () => {
 			client.onTransactionSubmitted?.('0xabc')
 			return {
 				deployPoolHash: '0xabc' as Hash,
-				initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
 				statoblastSecurityMultiplierBps: 20_000n,
@@ -746,7 +746,7 @@ describe('useSecurityPoolCreation', () => {
 		}
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc',
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -818,7 +818,7 @@ describe('useSecurityPoolCreation', () => {
 
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc' as Hash,
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -899,7 +899,7 @@ describe('useSecurityPoolCreation', () => {
 
 		createPoolDeferred.resolve({
 			deployPoolHash: '0xabc',
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -976,7 +976,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool: mock(async () => ({
 				deployPoolHash: '0xabc' as Hash,
-				initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
 				statoblastSecurityMultiplierBps: 20_000n,
@@ -997,7 +997,7 @@ describe('useSecurityPoolCreation', () => {
 		const activeAccounts = createDeferred<readonly Address[]>()
 		const createSecurityPool = mock(async (_client: unknown, parameters: { questionId: bigint; statoblastSecurityMultiplierBps: bigint }) => ({
 			deployPoolHash: '0xabc' as Hash,
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: `0x${parameters.questionId.toString(16)}`,
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,

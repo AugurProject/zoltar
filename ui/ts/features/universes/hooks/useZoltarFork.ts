@@ -74,7 +74,7 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 			},
 			{
 				abi: Zoltar_Zoltar.abi,
-				functionName: 'getMigrationRepBalance',
+				functionName: 'getMigrationRepBalanceAttoRep',
 				address: getZoltarAddress(),
 				args: [accountAddress, universeId],
 			},
@@ -159,11 +159,11 @@ export function useZoltarFork(
 		loading: false,
 		value: undefined,
 	})
-	const zoltarForkRepBalance = useSignal<bigint | undefined>(undefined)
+	const zoltarForkRepBalanceAttoRep = useSignal<bigint | undefined>(undefined)
 	const zoltarForkActiveAction = useSignal<'approve' | 'fork' | undefined>(undefined)
 	const zoltarForkFeedback = useSignal<ActionFeedback<ZoltarForkActionResult['action']> | undefined>(undefined)
-	const zoltarMigrationPreparedRepBalance = useSignal<bigint | undefined>(undefined)
-	const zoltarMigrationChildRepBalances = useSignal<Record<string, bigint | undefined>>({})
+	const zoltarMigrationPreparedRepBalanceAttoRep = useSignal<bigint | undefined>(undefined)
+	const zoltarMigrationChildRepBalancesAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const nextForkAccessLoad = useRequestGuard()
 	const forkAccessScopeKey = `${accountAddress ?? 'disconnected'}:${activeUniverseId.toString()}:${zoltarUniverse?.universeId.toString() ?? 'missing'}:${zoltarUniverse?.reputationToken ?? 'missing'}`
 	const currentForkAccessScope = useRef({ generation: 0, key: forkAccessScopeKey })
@@ -186,9 +186,9 @@ export function useZoltarFork(
 				loading: false,
 				value: undefined,
 			}
-			zoltarForkRepBalance.value = undefined
-			zoltarMigrationPreparedRepBalance.value = undefined
-			zoltarMigrationChildRepBalances.value = {}
+			zoltarForkRepBalanceAttoRep.value = undefined
+			zoltarMigrationPreparedRepBalanceAttoRep.value = undefined
+			zoltarMigrationChildRepBalancesAttoRep.value = {}
 			return
 		}
 
@@ -200,7 +200,7 @@ export function useZoltarFork(
 				error: undefined,
 				loading: true,
 			}
-		if (isCurrentScope()) zoltarMigrationChildRepBalances.value = {}
+		if (isCurrentScope()) zoltarMigrationChildRepBalancesAttoRep.value = {}
 
 		await forkAccessLoad.track(async () => {
 			const accessResults = await dependencies.loadZoltarForkAccess(accountAddress, reputationToken, universeId, childUniverses).catch(error => {
@@ -213,7 +213,7 @@ export function useZoltarFork(
 			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
 			if (!isCurrentScope()) return
 			loadedForkAccessScopeGeneration.current = forkAccessScopeGeneration
-			if (repBalanceResult?.status === 'success') zoltarForkRepBalance.value = repBalanceResult.result
+			if (repBalanceResult?.status === 'success') zoltarForkRepBalanceAttoRep.value = repBalanceResult.result
 			if (approvalResult?.status === 'success') {
 				zoltarForkApproval.value = {
 					error: undefined,
@@ -228,9 +228,9 @@ export function useZoltarFork(
 				}
 			}
 			if (preparedRepBalanceResult?.status === 'success') {
-				zoltarMigrationPreparedRepBalance.value = preparedRepBalanceResult.result
+				zoltarMigrationPreparedRepBalanceAttoRep.value = preparedRepBalanceResult.result
 			} else {
-				zoltarMigrationPreparedRepBalance.value = undefined
+				zoltarMigrationPreparedRepBalanceAttoRep.value = undefined
 			}
 			const nextChildBalances: Record<string, bigint | undefined> = {}
 			for (const [index, child] of childUniverses.entries()) {
@@ -238,7 +238,7 @@ export function useZoltarFork(
 				if (childBalanceResult?.status !== 'success') continue
 				nextChildBalances[child.universeId.toString()] = childBalanceResult.result
 			}
-			zoltarMigrationChildRepBalances.value = nextChildBalances
+			zoltarMigrationChildRepBalancesAttoRep.value = nextChildBalances
 		})
 	}
 
@@ -308,7 +308,7 @@ export function useZoltarFork(
 			await runZoltarForkAction(
 				'approve',
 				async (walletAddress, universe, questionId) => {
-					const approvalAmount = amount ?? universe.forkThreshold
+					const approvalAmount = amount ?? universe.forkThresholdAttoRep
 					return await dependencies.approveForkRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.reputationToken, approvalAmount, questionId, universe.universeId)
 				},
 				'Failed to approve REP for the universe fork',
@@ -354,10 +354,10 @@ export function useZoltarFork(
 		zoltarForkFeedback: zoltarForkFeedback.value,
 		zoltarForkPending: zoltarForkPending.value,
 		zoltarForkQuestionId,
-		zoltarForkRepBalance: hasCurrentForkAccess ? zoltarForkRepBalance.value : undefined,
+		zoltarForkRepBalanceAttoRep: hasCurrentForkAccess ? zoltarForkRepBalanceAttoRep.value : undefined,
 		zoltarForkResult: zoltarForkResult.value,
-		zoltarMigrationChildRepBalances: hasCurrentForkAccess ? zoltarMigrationChildRepBalances.value : {},
-		zoltarMigrationPreparedRepBalance: hasCurrentForkAccess ? zoltarMigrationPreparedRepBalance.value : undefined,
+		zoltarMigrationChildRepBalancesAttoRep: hasCurrentForkAccess ? zoltarMigrationChildRepBalancesAttoRep.value : {},
+		zoltarMigrationPreparedRepBalanceAttoRep: hasCurrentForkAccess ? zoltarMigrationPreparedRepBalanceAttoRep.value : undefined,
 		setZoltarForkQuestionId: (questionId: string) => {
 			forkQuestionSelection.value = { questionId, scopeKey: forkQuestionScopeKey }
 		},

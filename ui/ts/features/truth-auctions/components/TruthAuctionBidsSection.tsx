@@ -109,10 +109,10 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 									<AddressValue address={row.bidder} copyable={false} />
 								</div>
 								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-									<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
+									<CurrencyValue value={row.bidAmountAttoEth} suffix={commonCopy.eth} copyable={false} />
 								</span>
 								<span data-label={forkAuctionCopy.loadedDepthEth} role='cell'>
-									<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
+									<CurrencyValue value={row.cumulativeBidAttoEth} suffix={commonCopy.eth} copyable={false} />
 								</span>
 								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
 									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
@@ -164,7 +164,7 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 									{renderPriceValue(row.price)}
 								</span>
 								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-									<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
+									<CurrencyValue value={row.bidAmountAttoEth} suffix={commonCopy.eth} copyable={false} />
 								</span>
 								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
 									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>

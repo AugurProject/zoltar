@@ -203,7 +203,7 @@ bun run run</code></pre>
 					</math>
 					<p class="equation-caption"><span class="equation-label">OpenOracle fee</span>The bot does not replace integer rounding with floating-point arithmetic.</p>
 				</div>
-				<p>The next WETH-side report amount is the current amount multiplied by the game multiplier and capped at <code>escalationHalt</code>. Once the halt has been reached, OpenOracle advances by one atomic unit. The token-side amount comes from an executable Uniswap quote at that replacement ratio.</p>
+				<p>The next WETH-side report amount is the current amount multiplied by the game multiplier and capped at <code>escalationHalt</code>. Once the halt has been reached, OpenOracle advances by one attoETH. The token-side amount comes from an executable Uniswap quote at that replacement ratio.</p>
 				<p><strong>Sell-token direction.</strong> The bot receives a size-aware quote for selling the current token amount:</p>
 				<div class="equation" id="eq-arbitrager-sell-profit" tabindex="0">
 					<math display="block" aria-label="sell profit equals WETH output minus report WETH minus reporter fee minus protocol fee" data-source="P_sell = WETH_out - WETH_report - fee_reporter - fee_protocol">
@@ -257,7 +257,7 @@ bun run run</code></pre>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Modeled net</span>Every term is measured in WETH. It must meet both the absolute WETH floor and <code>P<sub>modeled</sub> × 10,000 ≥ B<sub>return</sub> × minimumProfitBps</code>.</p>
 				</div>
-				<p>For a sell-token hedge, <code>B<sub>return</sub></code> is the report's WETH contribution plus its WETH fees. For a buy-token hedge it is the exact-output Uniswap quote's required WETH input. Equality passes the threshold; integer comparison occurs in WETH wei before display formatting.</p>
+				<p>For a sell-token hedge, <code>B<sub>return</sub></code> is the report's WETH contribution plus its WETH fees. For a buy-token hedge it is the exact-output Uniswap quote's required WETH input. Equality passes the threshold; integer comparison occurs in WETH attoETH before display formatting.</p>
 				<p>For a direct Uniswap V2 WETH/token pair with input reserve <code>R<sub>in</sub></code >, output reserve <code>R<sub>out</sub></code >, and input <code>A<sub>in</sub></code >, the bot applies Router02's 0.30% fee and integer rounding exactly: <code>A<sub>out</sub> = floor(997 × A<sub>in</sub> × R<sub>out</sub> / (1000 × R<sub>in</sub> + 997 × A<sub>in</sub>))</code>. For exact output it uses Router02's rounded-up inverse. The strategy then compares every configured V2, V3, and V4 executable quote using the same profit, slippage, and gas policy; it never selects a venue from display spot price alone.</p>
 				<ul>
 					<li>Entry gas reserves <code>1,200,000 × gas price</code>; private mode replaces the gas amount with the largest successful relay simulation.</li>

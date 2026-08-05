@@ -419,7 +419,7 @@ void describe('market creation helpers', () => {
 		} as SecurityPoolFormState)
 
 		expect(parameters).toEqual({
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: 42n,
 			statoblastSecurityMultiplierBps: 20_000n,
 		})
@@ -444,7 +444,7 @@ void describe('market creation helpers', () => {
 				statoblastSecurityMultiplierBps: '2',
 			}),
 		).toEqual({
-			initialReportPriorityFeeWeiPerGas: 10_500_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_500_000_000n,
 			questionId: 42n,
 			statoblastSecurityMultiplierBps: 20_000n,
 		})

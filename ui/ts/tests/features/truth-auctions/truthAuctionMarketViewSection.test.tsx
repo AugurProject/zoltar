@@ -27,7 +27,7 @@ describe('TruthAuctionMarketViewSection', () => {
 				clearingTick={undefined}
 				hasMoreTickSummaries={true}
 				loadingTruthAuctionBook={true}
-				maxTickEth={5n}
+				maxTickAttoEth={5n}
 				onLoadNextTickPage={() => undefined}
 				onSelectTick={() => undefined}
 				renderPriceValue={value => value?.toString()}
@@ -35,8 +35,8 @@ describe('TruthAuctionMarketViewSection', () => {
 				truthAuctionBookError={undefined}
 				truthAuctionDepthPoints={[
 					{
-						cumulativeEth: 5n,
-						currentTotalEth: 5n,
+						cumulativeBidAttoEth: 5n,
+						currentTotalBidAttoEth: 5n,
 						disposition: { label: 'Winning', tone: 'success' },
 						isPreviewTick: false,
 						isSelected: true,

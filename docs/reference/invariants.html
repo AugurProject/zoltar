@@ -26,7 +26,7 @@
 				<div class="invariant-explorer-controls">
 					<label>
 						<span>Search</span>
-						<input type="search" placeholder="Try “replay” or “auction allowance”" autocomplete="off" data-invariant-search />
+						<input type="search" placeholder="Try “replay” or “auction coverage commitment”" autocomplete="off" data-invariant-search />
 					</label>
 					<label>
 						<span>Property type</span>
@@ -234,7 +234,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>getForkThreshold</code> and <code>forkUniverse</code></a>
+										<a href="../../solidity/contracts/Zoltar.sol"><code>getForkThresholdAttoRep</code> and <code>forkUniverse</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -356,7 +356,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>childUniverseTheoreticalSupplySnapshots</code></a>
+										<a href="../../solidity/contracts/Zoltar.sol"><code>childUniverseTheoreticalSupplySnapshotsAttoRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -438,7 +438,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Only the immutable coordinator may execute price-sensitive pool operations, and only the immutable forker may mutate fork accounting or transfer migration assets.</div>
-							<p class="invariant-example"><strong>Example:</strong> A wallet calling <code>performWithdrawRep</code> directly is rejected because only the coordinator may call it.</p>
+							<p class="invariant-example"><strong>Example:</strong> A wallet calling <code>withdrawRepFromVault</code> directly is rejected because only the coordinator may call it.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -562,8 +562,8 @@
 						<summary><code>AUTH-06</code><span class="invariant-title">Permissionless settlement beneficiaries</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Anyone may trigger permissionless settlement, but the caller cannot choose its beneficiary. Each transfer or ownership credit goes only to the vault, bidder, depositor, or share holder recorded for that claim.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP and ownership are credited to Bob's vault.</p>
+							<div class="invariant-property">Anyone may trigger permissionless settlement, but the caller cannot choose its beneficiary. Each transfer or REP-backing-unit credit goes only to the vault, bidder, depositor, or share holder recorded for that claim.</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP remains pool-held while the corresponding REP backing units and coverage commitment are credited to Bob's vault.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -639,15 +639,15 @@
 				<h2>Pool Assets, Shares, and Vaults</h2>
 				<p>The raw ETH balance needs an explicit surplus term. Without it, forced ETH is indistinguishable from collateral and can change an exchange rate or lifecycle precondition.</p>
 				<div class="equation" id="eq-pool-eth-conservation" role="region" aria-label="ETH conservation equation" tabindex="0">
-					<math display="block" aria-label="Raw ETH balance equals complete set collateral plus unallocated fee reserve plus total fees owed to vaults plus explicit surplus" data-source="rawEthBalance = completeSetCollateral + unallocatedFeeReserve + totalFeesOwedToVaults + explicitSurplus">
+					<math display="block" aria-label="Raw ETH balance equals settlement collateral plus unallocated accrued fees plus total claimable vault fees plus explicit surplus" data-source="rawEthBalance = settlementCollateralAttoEth + unallocatedAccruedFeesAttoEth + totalClaimableVaultFeesAttoEth + explicitSurplus">
 						<mrow>
 							<mi>rawEthBalance</mi>
 							<mo>=</mo>
-							<mi>completeSetCollateral</mi>
+							<mi>settlementCollateralAttoEth</mi>
 							<mo>+</mo>
-							<mi>unallocatedFeeReserve</mi>
+							<mi>unallocatedAccruedFeesAttoEth</mi>
 							<mo>+</mo>
-							<mi>totalFeesOwedToVaults</mi>
+							<mi>totalClaimableVaultFeesAttoEth</mi>
 							<mo>+</mo>
 							<mi>explicitSurplus</mi>
 						</mrow>
@@ -661,7 +661,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								At every successful external-call boundary,
-								<code>raw ETH = tracked collateral + unallocated fee reserve + total vault fee debt + unaccounted surplus</code>. Surplus is the derived remainder and is never a protocol liability.
+								<code>raw ETH = tracked collateral + unallocated fee reserve + total claimable vault fees + unaccounted surplus</code>. Surplus is the derived remainder and is never a protocol liability.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If the pool holds 12 ETH, owes 2 ETH in fees, and tracks 9 ETH of collateral, the remaining 1 ETH is surplus rather than additional collateral.</p>
 							<dl class="invariant-metadata">
@@ -712,8 +712,8 @@
 						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Tracked complete-set collateral never exceeds total security-bond allowance. New complete sets additionally use only vault-assigned, fee-eligible allowance as capacity, so an unclaimed truth-auction allocation cannot secure new open interest. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral.</div>
-							<p class="invariant-example"><strong>Example:</strong> With 10 ETH of bond allowance, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH.</p>
+							<div class="invariant-property">Tracked complete-set collateral never exceeds total coverage commitment. New complete sets additionally use only vault-assigned, fee-eligible coverage commitment as capacity, so an unclaimed truth-auction allocation cannot secure new open interest. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral.</div>
+							<p class="invariant-example"><strong>Example:</strong> With 10 ETH of coverage commitment, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -737,8 +737,8 @@
 						<summary><code>BAL-04</code><span class="invariant-title">REP coverage boundaries</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At the latest valid REP-per-ETH price, setting an allowance requires the affected vault to remain non-liquidatable and the aggregate pool totals to independently pass the same two health tests. Associated REP may equal allowance times the pool multiplier because ordinary liquidation requires a strict shortfall. For positive allowance, free REP must be strictly greater than allowance times the effective free-REP multiplier: the greater of the halfway migration multiplier and the 10,500-BPS liquidation-award reserve. Equality is unsafe. Later REP withdrawals and escalation deposits preserve both boundaries for the affected vault and aggregate pool.</div>
-							<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH with a 2× pool multiplier and a 1.5× migration multiplier, a 1 ETH allowance may have exactly 200 associated REP, but it needs more than 150 free REP. Exactly 150 free REP is unsafe. Both the vault and aggregate totals must pass this example.</p>
+							<div class="invariant-property">At the latest valid REP-per-ETH price, setting a coverage commitment requires the affected vault to remain non-liquidatable and the aggregate pool totals to independently pass the same two health tests. Associated REP may equal coverage commitment times the pool multiplier because ordinary liquidation requires a strict shortfall. For positive coverage commitment, pool-held vault REP backing must be strictly greater than coverage commitment times the effective pool-held vault REP backing multiplier: the greater of the halfway migration multiplier and the 10,500-BPS liquidation-award reserve. Equality is unsafe. Later REP withdrawals and escalation deposits preserve both boundaries for the affected vault and aggregate pool.</div>
+							<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH with a 2× pool multiplier and a 1.5× migration multiplier, a 1 ETH coverage commitment may have exactly 200 associated REP, but it needs more than 150 pool-held vault REP backing. Exactly 150 pool-held vault REP backing is unsafe. Both the vault and aggregate totals must pass this example.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -751,18 +751,18 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Allowance and withdrawal checks</a>
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Coverage commitment and withdrawal checks</a>
 									</dd>
 								</div>
 							</dl>
 						</div>
 					</details>
 					<details class="invariant-entry" id="bal-05">
-						<summary><code>BAL-05</code><span class="invariant-title">REP ownership conversion consistency</span></summary>
+						<summary><code>BAL-05</code><span class="invariant-title">REP backing units conversion consistency</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">After deposits, withdrawals, liquidations, escalation transfers, migration, and auction claims, the same current pool REP balance and ownership denominator govern both REP-to-ownership and ownership-to-REP conversion.</div>
-							<p class="invariant-example"><strong>Example:</strong> Depositing REP and immediately converting the resulting ownership back to REP uses the same denominator rather than a stale pre-deposit balance.</p>
+							<div class="invariant-property">After deposits, withdrawals, liquidations, escalation transfers, migration, and auction claims, the same current pool-held REP balance and total REP backing units govern both REP-to-backing-unit and backing-units-to-REP conversion.</div>
+							<p class="invariant-example"><strong>Example:</strong> Depositing REP and immediately converting the resulting REP backing units back to REP uses the same denominator rather than a stale pre-deposit balance.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -775,7 +775,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>repToPoolOwnership</code> and <code>poolOwnershipToRep</code></a>
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoRepToBackingUnits</code> and <code>backingUnitsToAttoRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -785,8 +785,8 @@
 						<summary><code>BAL-06</code><span class="invariant-title">Fee liability accounting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Every accrued fee wei is represented once as unallocated reserve or vault debt, and redemption clears the debt before ETH is sent.</div>
-							<p class="invariant-example"><strong>Example:</strong> Assigning 3 wei of reserve to a vault decreases unallocated reserve by 3 and increases that vault's debt by 3, without creating a second claim.</p>
+							<div class="invariant-property">Every attoETH of accrued fees is represented once as unallocated reserve or claimable vault fees, and redemption clears the claimable fee balance before ETH is sent.</div>
+							<p class="invariant-example"><strong>Example:</strong> Assigning 3 attoETH of reserve to a vault decreases unallocated reserve by 3 and increases that vault's claimable fees by 3, without creating a second claim.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -834,12 +834,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								<code>totalFeesOwedToVaults</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible allowance equals summed live vault allowance, and uncheckpointed allowance equals allowance whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated allowances remain pending outside those pool aggregates. A <code>PoolForked</code>
-								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total allowance equals fee-eligible allowance plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction allowance exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
+								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible coverage commitment equals summed live vault coverage commitment, and uncheckpointed coverage commitment equals coverage commitment whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated coverage commitments remain pending outside those pool aggregates. A <code>PoolForked</code>
+								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total coverage commitment equals fee-eligible coverage commitment plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction coverage commitment exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
 								<a href="../explanation/truth-auctions.html#settlement">auction settlement specification</a>
 								owns that zero-purchase allocation rule.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Migrating one of two 3 ETH vault allowances leaves the parent's frozen 6 ETH total unchanged and records 3 ETH as pending in the child. With purchased REP, claims move the remaining 3 ETH from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remaining 3 ETH stays unassigned and ineligible.</p>
+							<p class="invariant-example"><strong>Example:</strong> Migrating one of two 3 ETH vault coverage commitments leaves the parent's frozen 6 ETH total unchanged and records 3 ETH as pending in the child. With purchased REP, claims move the remaining 3 ETH from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remaining 3 ETH stays unassigned and ineligible.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -912,7 +912,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">A successful positive-value complete-set mint returns a positive share amount.</div>
-							<p class="invariant-example"><strong>Example:</strong> A 1 wei mint that rounds to zero shares reverts instead of accepting the ETH.</p>
+							<p class="invariant-example"><strong>Example:</strong> A 1 attoETH mint that rounds to zero shares reverts instead of accepting the ETH.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -925,7 +925,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>cashToShares</code> and <code>createCompleteSet</code></a>
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>createCompleteSet</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -949,7 +949,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>cashToShares</code> and <code>redeemShares</code></a>
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>redeemShares</code></a>
 										and
 										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
 									</dd>
@@ -1011,11 +1011,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="vault-01">
-						<summary><code>VAULT-01</code><span class="invariant-title">Escrowed REP isolation</span></summary>
+						<summary><code>VAULT-01</code><span class="invariant-title">Dispute-staked REP isolation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">REP escrowed in an escalation game cannot also be withdrawn, liquidated as unlocked REP, or migrated as unlocked vault ownership.</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with 20 REP deposited and 5 REP escrowed cannot make an ordinary withdrawal while that escrow remains; unlocked-state migration can move only the other 15 REP, while the escrow claim follows its separate migration path.</p>
+							<div class="invariant-property">REP escrowed in an escalation game cannot also be withdrawn, liquidated as pool-held vault REP backing, or migrated through the ordinary non-escrowed vault path.</div>
+							<p class="invariant-example"><strong>Example:</strong> A vault initially attributed 20 REP that dispute-stakes 5 REP is left with 15 REP of vault backing plus a separate 5 REP claim. It cannot make an ordinary withdrawal while that escrow remains; ordinary vault migration moves only the 15 REP backing, while the dispute-staked REP claim follows its separate migration path.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1039,8 +1039,8 @@
 						<summary><code>VAULT-02</code><span class="invariant-title">Liquidation conservation and freshness</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A liquidation transfers rather than creates aggregate ownership. It moves only allowance whose complete fixed 5%-bonus award is funded by target free REP. Escalation claims, accrued fees, and free-REP surplus always remain with the target vault. A maximum request records untransferred residual allowance as bad debt and removes it from active and fee-eligible allowance without minting ownership or diluting another holder. The resulting liquidator must meet coverage rules whenever debt moves; the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution must reject a target whose protected ownership or allowance changed after staging, in either direction. The pool then re-evaluates health against live balances and the live REP-per-ownership rate. Target-assigned rescue collateral therefore invalidates the old quote instead of becoming collateral for a keeper who priced a smaller bundle, while an unsolicited pool-wide REP transfer cannot purchase a one-unit liquidation veto. A sufficiently large pool donation may still restore live health.</div>
-							<p class="invariant-example"><strong>Example:</strong> If the target adds REP after a liquidation is staged, execution rejects the stale snapshot. A keeper may quote the new state, but cannot seize the rescue deposit while assuming only the old liabilities.</p>
+							<div class="invariant-property">A liquidation transfers rather than creates aggregate REP backing units. It moves only coverage commitment whose complete fixed 5%-bonus award is funded by target pool-held vault REP backing. Escalation claims, accrued fees, and pool-held vault REP backing surplus always remain with the target vault. A maximum request records untransferred residual coverage commitment as bad debt and removes it from active and fee-eligible coverage commitment without minting REP backing units or diluting another vault owner. The resulting liquidator must meet coverage rules whenever coverage commitment moves; the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution rejects changed target REP backing units or coverage commitment and then re-evaluates health from live balances. See <a href="../explanation/liquidations.html#queue-semantics">Queued Execution</a> for the canonical stale-quote lifecycle.</div>
+							<p class="invariant-example"><strong>Example:</strong> If the target adds REP after a liquidation is staged, execution rejects the stale snapshot. A keeper may quote the new state, but cannot receive the newly assigned REP backing under the stale quote.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1066,7 +1066,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">An escalation claim is permanently bound to the depositor committed in its carry leaf and has no transfer path or parent-OI migration power. Liquidation cannot read, move, or acquire it. Final settlement pays the committed depositor after proof verification and replay protection.</div>
-							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's allowance leaves every escalation claim unchanged, and locking that claim cannot increase the OI routed to any child.</p>
+							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's coverage commitment leaves every escalation claim unchanged, and locking that claim cannot increase the OI routed to any child.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1090,7 +1090,7 @@
 						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The historical vault registry is append-only and unique. Its active index is a unique subset of that history. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero ownership, allowance, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
+							<div class="invariant-property">The historical vault registry is append-only and unique. Its active index is a unique subset of that history. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, coverage commitment, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
 							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in both active and historical pagination until optional vault cleanup synchronizes and prunes it.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1149,7 +1149,7 @@
 						<summary><code>FORK-02</code><span class="invariant-title">Immutable fork snapshot</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">When the parent first enters fork mode, it captures fork time, collateral, REP buckets, ownership denominator, escalation state, and allowance exactly once. Those immutable values are the common basis for every child of that fork.</div>
+							<div class="invariant-property">When the parent first enters fork mode, it captures fork time, collateral, REP buckets, total REP backing units, escalation state, and coverage commitment exactly once. Those immutable values are the common basis for every child of that fork.</div>
 							<p class="invariant-example"><strong>Example:</strong> REP sent unsolicited to the parent after fork mode begins cannot change the REP snapshot used to initialize a later-created No child.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1271,11 +1271,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="fork-07">
-						<summary><code>FORK-07</code><span class="invariant-title">Single-use unlocked vault migration</span></summary>
+						<summary><code>FORK-07</code><span class="invariant-title">Single-use non-escrowed vault migration</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Migrating unlocked vault state credits one child and clears the corresponding parent ownership and allowance before it can be reused.</div>
-							<p class="invariant-example"><strong>Example:</strong> After Alice migrates her unlocked position to the Yes child, a second migration call cannot credit the same parent ownership to the No child.</p>
+							<div class="invariant-property">Vault migration credits one child and clears the corresponding parent REP backing units and coverage commitment before reuse. It checkpoints and retains claimable fees in the parent vault while routing proportional settlement collateral separately at pool level.</div>
+							<p class="invariant-example"><strong>Example:</strong> After Alice migrates her non-escrowed vault accounting to the Yes child, a second migration call cannot credit the same parent REP backing units to the No child.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1288,7 +1288,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateVaultUnlockedState</code></a>
+										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateNonEscrowedVaultAccounting</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1299,12 +1299,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears parent locks; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
-								<code>sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
-								<a href="../explanation/statoblast.html#source-principal-at-fork"><code>sourcePrincipalAtFork</code></a>
+								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears unresolved parent escalation-deposit accounting; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
+								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
+								<a href="../explanation/statoblast.html#source-principal-at-fork"><code>sourcePrincipalAtForkAttoRep</code></a>
 								is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her parent lock, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
+							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1334,7 +1334,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Cumulative parent ETH transferred to children never exceeds the fork collateral snapshot and is derived from cumulative migrated REP, not per-call rounding.</div>
-							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>⌈fork collateral × R / denominator⌉</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtFork</code> for an own fork and <code>auctionableRepAtFork</code> otherwise.</p>
+							<p class="invariant-example"><strong>Example:</strong> If several calls collectively migrate <code>R</code> child REP, their collateral target is <code>⌈fork collateral × R / denominator⌉</code>, independent of how that same <code>R</code> is partitioned. The denominator is <code>vaultRepAtForkAttoRep</code> for an own fork and <code>auctionableRepAtForkAttoRep</code> otherwise.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1399,7 +1399,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>setTotalShares</code> during auction preparation</a>, <a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>sharesToCash</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
+										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
 										>,
 										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
 									</dd>
@@ -1441,8 +1441,8 @@
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalEscrowedRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryEscrowedRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the truth auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
-							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, <code>totalEscrowedRep</code> is 22 REP before the auction. A 75% retention records <code>⌊22 × 75%⌋ = 16</code> total effective REP and <code>⌊12 × 75%⌋ = 9</code> aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
+							<div class="invariant-property"><code>totalDisputeStakedRepAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedRepAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the truth auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
+							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, the total is 22 REP, represented as <code>22 × 10^18</code> attoREP in <code>totalDisputeStakedRepAttoRep</code>, before the auction. A 75% retention records <code>⌊22 × 75%⌋ = 16</code> total effective REP and <code>⌊12 × 75%⌋ = 9</code> aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1466,7 +1466,7 @@
 						<summary><code>ESC-02</code><span class="invariant-title">Local unresolved REP reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalLocalUnresolvedRep</code> equals the sum of unresolved local deposits, and each vault-local counter is its exact component.</div>
+							<div class="invariant-property"><code>totalLocalUnresolvedRepAttoRep</code> equals the sum of unresolved local deposits, and each vault-local counter is its exact component.</div>
 							<p class="invariant-example"><strong>Example:</strong> If Alice has 3 unresolved REP and Bob has 5, their counters are 3 and 5 and the global local-unresolved total is 8.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1490,7 +1490,7 @@
 						<summary><code>ESC-03</code><span class="invariant-title">Outcome carry reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For each outcome, <code>currentCarryTotal</code> equals effective inherited unresolved principal plus unresolved local deposits. Effective inherited principal subtracts immediate-parent direct claims and becomes zero for an inherited losing outcome after finalization.</div>
+							<div class="invariant-property">For each outcome, <code>currentCarryTotalAttoRep</code> equals effective inherited unresolved principal plus unresolved local deposits. Effective inherited principal subtracts immediate-parent direct claims and becomes zero for an inherited losing outcome after finalization.</div>
 							<p class="invariant-example"><strong>Example:</strong> A child snapshots 7 Yes REP, the parent directly claims 2 REP, and the child receives a new unresolved 2 REP Yes deposit. Its current Yes carry is <code>(7 - 2) + 2 = 7 REP</code>.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1680,7 +1680,7 @@
 						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be swept until effective unresolved principal is zero for every outcome and <code>totalEscrowedRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition.</div>
+							<div class="invariant-property">Residual REP cannot be swept until effective unresolved principal is zero for every outcome and <code>totalDisputeStakedRepAttoRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1705,7 +1705,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">When a universe forks on a pool's question, each child pool and its continuation game use that child's Invalid, Yes, or No branch as the final pool-question outcome. Once a pool inherits that fixed outcome, new local escalation deposits and every later fork transition revert, whether the new universe fork uses the same question or another one. Deposit withdrawal reverts unless the pool and game report the same outcome.</div>
-							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No. It rejects new local escalation REP before escrow, so a later local non-decision cannot lock vault redemption. A later matching or unrelated universe fork leaves the stored <code>SystemState.Operational</code> and fixed Yes outcome unchanged, and eligible share, vault REP, and carried-proof redemption paths remain available, while universe-fork guards still freeze normal operating calls.</p>
+							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No. It rejects new local dispute-staked REP before escrow, so a later local non-decision cannot lock vault redemption. A later matching or unrelated universe fork leaves the stored <code>SystemState.Operational</code> and fixed Yes outcome unchanged, and eligible share, vault REP, and carried-proof redemption paths remain available, while universe-fork guards still freeze normal operating calls.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1731,7 +1731,7 @@
 						<summary><code>ESC-13</code><span class="invariant-title">Non-decision threshold and live start-bond arithmetic</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For a positive fork threshold <code>F</code>, non-decision requires <code>⌈F / 2⌉</code> REP on two outcomes. Therefore the two threshold balances total at least <code>F</code>, while one wei less on both outcomes totals strictly less than <code>F</code>. The configured start bond is at least 1 REP and a new origin requires the live non-decision threshold to exceed it. If an existing pool's live threshold later falls to or below that configured bond, ordinary game deployment uses <code>nonDecisionThreshold - 1</code>, provided the threshold exceeds one atomic REP unit.</div>
+							<div class="invariant-property">For a positive fork threshold <code>F</code>, non-decision requires <code>⌈F / 2⌉</code> REP on two outcomes. Therefore the two threshold balances total at least <code>F</code>, while one attoREP less on both outcomes totals strictly less than <code>F</code>. The configured start bond is at least 1 REP and a new origin requires the live non-decision threshold to exceed it. If an existing pool's live threshold later falls to or below that configured bond, ordinary game deployment uses <code>nonDecisionThresholdAttoRep - 1</code>, provided the threshold exceeds one attoREP.</div>
 							<p class="invariant-example"><strong>Example:</strong> If <code>F = 5</code>, non-decision requires 3 REP on two outcomes, so the two balances hold 6 REP; balances of 2 and 2 remain below the 5 REP fork threshold.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1745,7 +1745,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>getNonDecisionThreshold</code></a>
+										<a href="../../solidity/contracts/Zoltar.sol"><code>getNonDecisionThresholdAttoRep</code></a>
 										,
 										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol">origin threshold admission</a>, <a href="../../solidity/contracts/peripherals/factories/EscalationGameFactory.sol"><code>deployEscalationGame</code></a
 										>, and
@@ -1792,7 +1792,7 @@
 				<h2>REP/ETH Oracle Operations</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
-					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, allowance changes, pool assets, or cumulative operations that use an accepted price.</p>
+					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, coverage commitment changes, pool assets, or cumulative operations that use an accepted price.</p>
 					<p>The protocol also makes no bounded-liveness claim for a pending sponsor lane. Every valid dispute restarts settlement, incurs transaction execution, and must fund the contract-specified replacement position. Under ordinary non-dust parameters, protocol fees and the required position also accumulate; before the escalation halt, integer flooring can leave dust-sized rounds unchanged. A participant willing and able to keep submitting and funding disputes may therefore delay unrelated users without a coordinator-level deadline. This paid, capital-unbounded pause is intentional and is not a violation of a Zoltar liveness invariant.</p>
 					<p>Security review should verify the correction-profit calculation, report accounting, dispute access, and the stated inclusion assumption. A concrete bypass of the required position or fee, capital reuse, invalid deadline transition, or cache-conformance failure remains a finding. The mere absence of a report-notional bound or absolute pending-report duration does not.</p>
 				</div>
@@ -1902,8 +1902,8 @@
 						<summary><code>ORA-05</code><span class="invariant-title">Staged operation targets</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Withdrawals and allowance changes target the initiating vault; liquidations target another vault and fail when the protected snapshot becomes stale.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice can stage her own REP withdrawal, but a staged liquidation names Bob and fails if Bob changes his allowance before execution.</p>
+							<div class="invariant-property">Withdrawals and coverage commitment changes target the initiating vault; liquidations target another vault and fail when the protected snapshot becomes stale.</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice can stage her own REP withdrawal, but a staged liquidation names Bob and fails if Bob changes his coverage commitment before execution.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2083,7 +2083,7 @@
 						<summary><code>AUC-03</code><span class="invariant-title">Single-use bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Each bid is settled or refunded at most once; claimed state is set before an external ETH refund. The best-effort push is gas-bounded, and any rejected, reverted, or gas-exhausted positive refund is moved to bidder-specific pull escrow without reverting the bid's REP or allowance settlement.</div>
+							<div class="invariant-property">Each bid is settled or refunded at most once; claimed state is set before an external ETH refund. The best-effort push is gas-bounded, and any rejected, reverted, or gas-exhausted positive refund is moved to bidder-specific pull escrow without reverting the bid's REP or coverage commitment settlement.</div>
 							<p class="invariant-example"><strong>Example:</strong> A bidder whose refund callback reenters, rejects ETH, or consumes its complete callback budget cannot withdraw the same bid a second time or starve the remaining settlement because the bid is already marked claimed and the push is gas-bounded; deferred ETH remains available through <code>withdrawPendingEthRefund</code>.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2107,8 +2107,8 @@
 						<summary><code>AUC-04</code><span class="invariant-title">Claim-order independence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, and security-bond allowance results independent of post-finalization claim order.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and allowance as Bob claiming before Alice.</p>
+							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, and coverage commitment results independent of post-finalization claim order.</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and coverage commitment as Bob claiming before Alice.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2132,7 +2132,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">A zero-demand auction records zero purchased REP. Otherwise, the sum of all winning-bid REP allocations equals the stored aggregate purchase, and each bid's unretained ETH remains refundable.</div>
-							<p class="invariant-example"><strong>Example:</strong> If finalization stores 30 purchased REP, all winning claims together receive exactly 30 REP and every unused bid wei is returned.</p>
+							<p class="invariant-example"><strong>Example:</strong> If finalization stores 30 purchased REP, all winning claims together receive exactly 30 REP and every unretained attoETH is refunded.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2155,8 +2155,8 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim credits purchased REP, pool ownership, and its fixed-position share of the complete unmigrated allowance to the bid's recorded vault. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps allowance rounding independent of claim order. A winning dust bid still receives a positive fixed-position allowance share when its REP allocation rounds to zero.</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with migrated ownership keeps it when claiming auction REP; the claim adds the ownership and deterministic allowance share assigned to that winning bid. If a dust bid's REP share is zero but its allowance share is positive, claiming that bid alone still credits the allowance.</p>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated coverage commitment to the bid's recorded vault. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps coverage commitment rounding independent of claim order. A winning dust bid still receives a positive fixed-position coverage commitment share when its REP allocation rounds to zero.</div>
+							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid; the claim adds the REP backing units and deterministic coverage commitment share assigned to that bid while the purchased REP remains pool-held. If a dust bid's REP share is zero but its coverage commitment share is positive, claiming that bid alone still credits the coverage commitment.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2181,9 +2181,9 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								In underfunded clearing, qualifying ETH is retained bid ETH offered at or above the cap-implied qualification threshold. The threshold is not an execution-price floor. Qualifying bidders collectively receive
-								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate effective price <code>underfundedWinningEth / maxRepBeingSold</code>. Per-bid cumulative floors then assign indivisible atomic units, so a dust winner can round to zero REP without changing the aggregate price. With no qualifying ETH, every bid refunds.
+								<code>maxRepBeingSoldAttoRep</code> in proportion to that ETH at the aggregate effective price <code>underfundedWinningAttoEth / maxRepBeingSoldAttoRep</code>. Per-bid cumulative floors then assign indivisible attoETH and attoREP, so a dust winner can round to zero REP without changing the aggregate price. With no qualifying ETH, every bid refunds.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If Alice supplies 60% and Bob 40% of qualifying ETH, they receive 60% and 40% of the complete REP sale cap subject to deterministic atomic-unit rounding.</p>
+							<p class="invariant-example"><strong>Example:</strong> If Alice supplies 60% and Bob 40% of qualifying ETH, they receive 60% and 40% of the complete REP sale cap subject to deterministic attoREP rounding.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2207,7 +2207,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Auction finalization succeeds regardless of unsolicited ETH already present in the child pool or forker.</div>
-							<p class="invariant-example"><strong>Example:</strong> One wei forced into the child before finalization remains surplus and does not change protocol-accounted collateral.</p>
+							<p class="invariant-example"><strong>Example:</strong> One attoETH forced into the child before finalization remains surplus and does not change protocol-accounted collateral.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2311,7 +2311,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Before finalization, auction ETH equals active unrefunded bids plus aggregate <code>pendingEthRefunds</code> and explicit surplus. After finalization, the remaining balance equals refunds still attached to unclaimed bids plus deferred <code>pendingEthRefunds</code> and explicit surplus. Per-bid settlement partitions and aggregate REP allocation are owned by <a href="#auc-05"><code>AUC-05</code></a
+								Before finalization, auction ETH equals active unrefunded bids plus aggregate <code>pendingEthRefundsAttoEth</code> and explicit surplus. After finalization, the remaining balance equals refunds still attached to unclaimed bids plus deferred <code>pendingEthRefundsAttoEth</code> and explicit surplus. Per-bid settlement partitions and aggregate REP allocation are owned by <a href="#auc-05"><code>AUC-05</code></a
 								>.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If a rejected pre-finalization push removes a 2 ETH losing bid from active clearing, raw ETH still equals the remaining active bids plus the 2 ETH deferred refund. After finalization, the same deferred bucket composes with unclaimed-bid refunds and any forced surplus.</p>
@@ -2495,7 +2495,7 @@
 								Genesis REP and configured WETH obey the exact transfer, return-value, decimal, and callback behavior assumed by pool and oracle accounting. Mainnet relies on external token behavior; Sepolia relies on verified deployments of the reviewed
 								<code>GenesisReputationToken</code> and <code>WETH9</code> contracts for issuance and transfer mechanics. Burn-sink inaccessibility remains an external assumption on both networks.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Genesis REP transfer returns and moves exactly the requested atomic units rather than charging a fee that leaves pool accounting overstated; child REP supply remains bounded by its contract-enforced theoretical ceiling.</p>
+							<p class="invariant-example"><strong>Example:</strong> Genesis REP transfer returns and moves exactly the requested attoREP rather than charging a fee that leaves pool accounting overstated; child REP supply remains bounded by its contract-enforced theoretical ceiling.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2531,7 +2531,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">External ETH or token callbacks observe effects already committed for that action. A required delivery that fails reverts without leaving partial accounting; an explicitly deferrable delivery instead commits the action together with an exactly accounted recipient liability.</div>
-							<p class="invariant-example"><strong>Example:</strong> A fee recipient's fallback observes its fee debt already cleared, so reentry cannot redeem the same debt twice.</p>
+							<p class="invariant-example"><strong>Example:</strong> A fee recipient's fallback observes its claimable fees already cleared, so reentry cannot redeem the same claimable fees twice.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

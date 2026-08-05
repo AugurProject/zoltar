@@ -51,7 +51,7 @@ import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceEthCost, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getRequestPriceCostAttoEth, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -258,12 +258,12 @@ describe('Open Oracle helpers', () => {
 			escalationHalt: 0n,
 			exactToken1Report: 1n,
 			initialToken2Amount: 1n,
-			ethValue: 1_000n,
+			ethValueAttoEth: 1_000n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 100,
 			settlementTime: 60,
-			settlerReward: 1_000n,
+			settlerRewardAttoEth: 1_000n,
 			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 			token2Address: WETH_ADDRESS,
 		})
@@ -274,12 +274,12 @@ describe('Open Oracle helpers', () => {
 			escalationHalt: 0n,
 			exactToken1Report: 2n,
 			initialToken2Amount: 2n,
-			ethValue: 1_100n,
+			ethValueAttoEth: 1_100n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 100,
 			settlementTime: 60,
-			settlerReward: 1_100n,
+			settlerRewardAttoEth: 1_100n,
 			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 			token2Address: WETH_ADDRESS,
 		})
@@ -305,26 +305,26 @@ describe('Open Oracle helpers', () => {
 		const token2Amount = 4n
 		await wrapUiWeth(uiWriteClient, token2Amount)
 		const repBalanceBeforeReport = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)
-		const wethBalanceBeforeReport = await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)
+		const wethBalanceAttoEthBeforeReport = await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)
 
 		await createOpenOracleReportInstance(uiWriteClient, {
 			disputeDelay: 10,
 			escalationHalt: 0n,
 			exactToken1Report: token1Amount,
 			initialToken2Amount: token2Amount,
-			ethValue: 1_000n,
+			ethValueAttoEth: 1_000n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 100,
 			settlementTime: 60,
-			settlerReward: 1_000n,
+			settlerRewardAttoEth: 1_000n,
 			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 			token2Address: WETH_ADDRESS,
 		})
 		const report = (await loadOpenOracleReportSummaries(uiReadClient, 0, 1)).reports[0]
 		if (report === undefined) throw new Error('Expected a standalone report')
 		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport - token1Amount)
-		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport - token2Amount)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceAttoEthBeforeReport - token2Amount)
 
 		await mockWindow.advanceTime(61n)
 		installInjectedEthereum(mockWindow, settler)
@@ -332,12 +332,12 @@ describe('Open Oracle helpers', () => {
 		const settlement = await settleOracleReport(settlerWriteClient, getOpenOracleAddress(), report.reportId)
 		expect(settlement.action).toBe('settle')
 		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport - token1Amount)
-		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport - token2Amount)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceAttoEthBeforeReport - token2Amount)
 
 		const reporterWithdrawable = await loadOpenOracleWithdrawableBalances(uiReadClient, getOpenOracleAddress(), reporter, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS))
 		const settlerWithdrawable = await loadOpenOracleWithdrawableBalances(uiReadClient, getOpenOracleAddress(), settler, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS))
-		expect(reporterWithdrawable).toEqual({ eth: 0n, token1: token1Amount, token2: token2Amount })
-		expect(settlerWithdrawable).toEqual({ eth: 1_000n, token1: 0n, token2: 0n })
+		expect(reporterWithdrawable).toEqual({ ethAttoEth: 0n, token1: token1Amount, token2: token2Amount })
+		expect(settlerWithdrawable).toEqual({ ethAttoEth: 1_000n, token1: 0n, token2: 0n })
 
 		installInjectedEthereum(mockWindow, reporter)
 		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(addressString(GENESIS_REPUTATION_TOKEN)), maxUint256, reporter)
@@ -345,7 +345,7 @@ describe('Open Oracle helpers', () => {
 		installInjectedEthereum(mockWindow, settler)
 		await withdrawOpenOracleBalance(settlerWriteClient, getOpenOracleAddress(), zeroAddress, maxUint256, settler)
 		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport)
-		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceAttoEthBeforeReport)
 		for (const [holder, token] of [
 			[reporter, getAddress(addressString(GENESIS_REPUTATION_TOKEN))],
 			[reporter, getAddress(WETH_ADDRESS)],
@@ -369,12 +369,12 @@ describe('Open Oracle helpers', () => {
 				escalationHalt: 0n,
 				exactToken1Report: 1n,
 				initialToken2Amount: 1n,
-				ethValue: 1_000n,
+				ethValueAttoEth: 1_000n,
 				feePercentage: 100,
 				multiplier: 100,
 				protocolFee: 100,
 				settlementTime: 60,
-				settlerReward: 1_000n,
+				settlerRewardAttoEth: 1_000n,
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
 			}),
@@ -395,12 +395,12 @@ describe('Open Oracle helpers', () => {
 				escalationHalt: 0n,
 				exactToken1Report: 1n,
 				initialToken2Amount: 1n,
-				ethValue: 1_000n,
+				ethValueAttoEth: 1_000n,
 				feePercentage: 100,
 				multiplier: 65_536,
 				protocolFee: 100,
 				settlementTime: 60,
-				settlerReward: 1_000n,
+				settlerRewardAttoEth: 1_000n,
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
 			}),
@@ -593,7 +593,7 @@ describe('Open Oracle helpers', () => {
 				multiplier: '100',
 				protocolFee: '0.002',
 				settlementTime: '60',
-				settlerReward: '0.000000000000001',
+				settlerRewardEthAmount: '0.000000000000001',
 				token1Address,
 				token2Address: WETH_ADDRESS,
 			},
@@ -606,12 +606,12 @@ describe('Open Oracle helpers', () => {
 			escalationHalt: 2_500_000n,
 			exactToken1Report: 1_250_000n,
 			initialToken2Amount: 2_000_000_000_000_000_000n,
-			ethValue: 1000n,
+			ethValueAttoEth: 1000n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 200,
 			settlementTime: 60,
-			settlerReward: 1000n,
+			settlerRewardAttoEth: 1000n,
 			token1Address: getAddress(token1Address),
 			token2Address: getAddress(WETH_ADDRESS),
 		})
@@ -630,7 +630,7 @@ describe('Open Oracle helpers', () => {
 			multiplier: '100',
 			protocolFee: '1',
 			settlementTime: '60',
-			settlerReward: '1',
+			settlerRewardEthAmount: '1',
 			token1Address,
 			token2Address: WETH_ADDRESS,
 		}
@@ -653,7 +653,7 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Base token amount exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerReward: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, ethValue: (1n << 96n).toString() } })).toBe('ETH value to send exceeds the contract maximum.')
 	})
 
@@ -670,7 +670,7 @@ describe('Open Oracle helpers', () => {
 				multiplier: '100',
 				protocolFee: '1',
 				settlementTime: '60',
-				settlerReward: '1',
+				settlerRewardEthAmount: '1',
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
 			},
@@ -695,7 +695,7 @@ describe('Open Oracle helpers', () => {
 					multiplier: '100',
 					protocolFee: '50.00001',
 					settlementTime: '60',
-					settlerReward: '1',
+					settlerRewardEthAmount: '1',
 					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 					token2Address: WETH_ADDRESS,
 				},
@@ -715,7 +715,7 @@ describe('Open Oracle helpers', () => {
 					multiplier: (1n << 16n).toString(),
 					protocolFee: '1',
 					settlementTime: '60',
-					settlerReward: '1',
+					settlerRewardEthAmount: '1',
 					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 					token2Address: WETH_ADDRESS,
 				},
@@ -799,7 +799,7 @@ describe('Open Oracle helpers', () => {
 		}
 	})
 
-	test('dispute and settle availability reject invalid atomic reports or already-settled reports', () => {
+	test('dispute and settle availability reject invalid attoETH/attoREP reports or already-settled reports', () => {
 		const noInitialReport = createOpenOracleLifecycleReport({
 			currentReporter: zeroAddress,
 			reportTimestamp: 0n,
@@ -852,22 +852,22 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
 			abi: [
 				{
 					type: 'function',
-					name: 'minimumToken1Report',
+					name: 'minimumToken1ReportAttoEth',
 					stateMutability: 'view',
 					inputs: [],
 					outputs: [{ name: '', type: 'uint256' }],
 				},
 			],
-			functionName: 'minimumToken1Report',
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
@@ -892,21 +892,21 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('requestOraclePrice submits the reviewed ETH value after the live request cost changes', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const reviewBaseFeeWeiPerGas = 1n * 10n ** 9n
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${reviewBaseFeeWeiPerGas.toString(16)}`] })
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const reviewBaseFeeAttoEthPerGas = 1n * 10n ** 9n
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${reviewBaseFeeAttoEthPerGas.toString(16)}`] })
 		await mockWindow.request({ method: 'evm_mine', params: [] })
-		const reviewedBaseCost = await getRequestPriceEthCost(client, managerAddress)
-		const reviewedRequestEthValue = addOpenOracleBountyBuffer(reviewedBaseCost)
+		const reviewedBaseCost = await getRequestPriceCostAttoEth(client, managerAddress)
+		const reviewedRequestValueAttoEth = addOpenOracleBountyBuffer(reviewedBaseCost)
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		await mockWindow.request({ method: 'evm_mine', params: [] })
-		expect(await getRequestPriceEthCost(client, managerAddress)).not.toBe(reviewedBaseCost)
+		expect(await getRequestPriceCostAttoEth(client, managerAddress)).not.toBe(reviewedBaseCost)
 
 		let submittedRequestEthValue: bigint | undefined
 		const writeClientWithPrepareSpy = createWalletWriteClient(addressString(TEST_ADDRESSES[0]), {
@@ -914,49 +914,49 @@ describe('Open Oracle helpers', () => {
 				if (preview.functionName === 'requestPrice') submittedRequestEthValue = preview.value
 			},
 		})
-		await requestOraclePrice(writeClientWithPrepareSpy, managerAddress, minimumToken1Report, 0n, reviewedRequestEthValue)
+		await requestOraclePrice(writeClientWithPrepareSpy, managerAddress, minimumToken1ReportAttoEth, 0n, reviewedRequestValueAttoEth)
 
-		expect(submittedRequestEthValue).toBe(reviewedRequestEthValue)
+		expect(submittedRequestEthValue).toBe(reviewedRequestValueAttoEth)
 	})
 
 	test('requestOraclePrice accepts caller-selected WETH above the coordinator minimum', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const requestedInitialWeth = minimumToken1Report * 3n
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const requestedInitialWethAttoEth = minimumToken1ReportAttoEth * 3n
 
-		await requestOraclePrice(uiWriteClient, managerAddress, 10n ** 18n, requestedInitialWeth)
+		await requestOraclePrice(uiWriteClient, managerAddress, 10n ** 18n, requestedInitialWethAttoEth)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
-		expect(reportDetails.exactToken1Report).toBe(requestedInitialWeth)
-		expect(reportDetails.currentAmount1).toBe(requestedInitialWeth)
-		expect(reportDetails.currentAmount2).toBe(requestedInitialWeth)
+		expect(reportDetails.exactToken1Report).toBe(requestedInitialWethAttoEth)
+		expect(reportDetails.currentAmount1).toBe(requestedInitialWethAttoEth)
+		expect(reportDetails.currentAmount2).toBe(requestedInitialWethAttoEth)
 	})
 
 	test('requestOraclePrice derives stale cached price refresh amounts with coordinator 1e18 precision', async () => {
 		const seededRepEthPrice = 2n * 10n ** 18n
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
 			abi: [
 				{
 					type: 'function',
-					name: 'minimumToken1Report',
+					name: 'minimumToken1ReportAttoEth',
 					stateMutability: 'view',
 					inputs: [],
 					outputs: [{ name: '', type: 'uint256' }],
 				},
 			],
-			functionName: 'minimumToken1Report',
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const seededAmount2 = minimumToken1Report * 2n
-		const seededRequestEthCost = await getRequestPriceEthCost(client, managerAddress)
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const seededAmount2 = minimumToken1ReportAttoEth * 2n
+		const seededRequestEthCost = await getRequestPriceCostAttoEth(client, managerAddress)
 
 		await requestPriceWithValue(client, managerAddress, seededRequestEthCost, seededRepEthPrice)
 		const seededReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
@@ -968,53 +968,53 @@ describe('Open Oracle helpers', () => {
 
 		const staleRefreshReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const staleRefreshDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), staleRefreshReportId)
-		expect(staleRefreshDetails.currentAmount1).toBe(minimumToken1Report)
+		expect(staleRefreshDetails.currentAmount1).toBe(minimumToken1ReportAttoEth)
 		expect(staleRefreshDetails.currentAmount2).toBe(seededAmount2)
 		expect(seededRepEthPrice).toBe((staleRefreshDetails.currentAmount2 * 10n ** 18n) / staleRefreshDetails.currentAmount1)
 	})
 
 	test('requestOraclePrice rejects fresh cached prices before wrap or approval side effects', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
 			abi: [
 				{
 					type: 'function',
-					name: 'minimumToken1Report',
+					name: 'minimumToken1ReportAttoEth',
 					stateMutability: 'view',
 					inputs: [],
 					outputs: [{ name: '', type: 'uint256' }],
 				},
 			],
-			functionName: 'minimumToken1Report',
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		await mockWindow.advanceTime(DAY)
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), reportId)
-		const wethBalanceAfterSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
+		const wethBalanceAttoEthAfterSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 
 		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('A fresh oracle price is already available')
-		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(wethBalanceAfterSettlement)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(wethBalanceAttoEthAfterSettlement)
 		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBe(0n)
 	})
 
 	test('loadCoordinatorInitialReportFundingRequirement uses a live quote for the REP side', async () => {
-		const minimumToken1Report = 100n * 10n ** 18n
+		const minimumToken1ReportAttoEth = 100n * 10n ** 18n
 		const quotedAmount2 = 7n * 10n ** 18n
-		const currentWethBalance = 2n * 10n ** 18n
-		const currentRepBalance = 300n * 10n ** 18n
+		const currentWethBalanceAttoEth = 2n * 10n ** 18n
+		const currentRepBalanceAttoRep = 300n * 10n ** 18n
 		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const mockClient = createConnectedReadClient()
 		mockClient.readContract = async parameters => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
-			if (functionName === 'minimumToken1Report') return minimumToken1Report as never
+			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 			if (functionName === 'lastPrice') return 0n as never
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
-			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return currentWethBalance as never
-			if (functionName === 'balanceOf' && address === reputationTokenAddress) return currentRepBalance as never
+			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return currentWethBalanceAttoEth as never
+			if (functionName === 'balanceOf' && address === reputationTokenAddress) return currentRepBalanceAttoRep as never
 			throw new Error(`Unexpected read ${functionName} for ${address}`)
 		}
 		mockClient.simulateContract = async () => ({ result: [quotedAmount2, 100000n], request: {} as never }) as never
@@ -1022,35 +1022,35 @@ describe('Open Oracle helpers', () => {
 		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address)
 
 		expect(funding.initialReportAmount2).toBe(quotedAmount2 * 2n)
-		expect(funding.proposedRepPerEthPrice).toBe((quotedAmount2 * 10n ** 18n) / minimumToken1Report)
-		expect(funding.minimumToken1Report).toBe(minimumToken1Report)
-		expect(funding.maximumInitialWeth).toBe(minimumToken1Report * 2n)
-		expect(funding.wethShortfall).toBe(minimumToken1Report * 2n - currentWethBalance)
+		expect(funding.proposedRepPerEthPrice).toBe((quotedAmount2 * 10n ** 18n) / minimumToken1ReportAttoEth)
+		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
+		expect(funding.maximumInitialWethAttoEth).toBe(minimumToken1ReportAttoEth * 2n)
+		expect(funding.wethShortfallAttoEth).toBe(minimumToken1ReportAttoEth * 2n - currentWethBalanceAttoEth)
 	})
 
 	test('loadCoordinatorInitialReportFundingRequirement funds a caller-selected WETH amount above the buffered minimum', async () => {
-		const minimumToken1Report = 100n
-		const requestedInitialWeth = 250n
+		const minimumToken1ReportAttoEth = 100n
+		const requestedInitialWethAttoEth = 250n
 		const proposedRepPerEthPrice = 2n * 10n ** 18n
 		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const mockClient = createConnectedReadClient()
 		mockClient.readContract = async parameters => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
-			if (functionName === 'minimumToken1Report') return minimumToken1Report as never
+			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
 			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return 0n as never
 			if (functionName === 'balanceOf' && address === reputationTokenAddress) return 1_000n as never
 			throw new Error(`Unexpected read ${functionName} for ${address}`)
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialWeth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialWethAttoEth)
 
-		expect(funding.minimumToken1Report).toBe(minimumToken1Report)
-		expect(funding.requestedInitialWeth).toBe(requestedInitialWeth)
-		expect(funding.maximumInitialWeth).toBe(requestedInitialWeth)
+		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
+		expect(funding.requestedInitialWethAttoEth).toBe(requestedInitialWethAttoEth)
+		expect(funding.maximumInitialWethAttoEth).toBe(requestedInitialWethAttoEth)
 		expect(funding.initialReportAmount2).toBe(500n)
-		expect(funding.wethShortfall).toBe(requestedInitialWeth)
+		expect(funding.wethShortfallAttoEth).toBe(requestedInitialWethAttoEth)
 	})
 
 	test('requestOraclePrice rejects an unavailable first-report REP quote instead of assuming a price', async () => {
@@ -1059,22 +1059,22 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('requestOraclePrice rejects insufficient REP before WETH wrap side effects', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
 			abi: [
 				{
 					type: 'function',
-					name: 'minimumToken1Report',
+					name: 'minimumToken1ReportAttoEth',
 					stateMutability: 'view',
 					inputs: [],
 					outputs: [{ name: '', type: 'uint256' }],
 				},
 			],
-			functionName: 'minimumToken1Report',
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const currentRepBalance = await client.readContract({
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const currentRepBalanceAttoRep = await client.readContract({
 			address: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
 			abi: [
 				{
@@ -1088,10 +1088,10 @@ describe('Open Oracle helpers', () => {
 			functionName: 'balanceOf',
 			args: [uiWriteClient.account.address],
 		})
-		if (typeof currentRepBalance !== 'bigint') throw new Error('expected bigint REP balance')
-		const repToKeep = minimumToken1Report - 1n
-		const repToTransfer = currentRepBalance - repToKeep
-		const startWethBalance = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
+		if (typeof currentRepBalanceAttoRep !== 'bigint') throw new Error('expected bigint REP balance')
+		const repToKeep = minimumToken1ReportAttoEth - 1n
+		const repToTransfer = currentRepBalanceAttoRep - repToKeep
+		const startWethBalanceAttoEth = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 		const transferHash = await client.writeContract({
 			abi: [
 				{
@@ -1111,49 +1111,49 @@ describe('Open Oracle helpers', () => {
 		})
 		await client.waitForTransactionReceipt({ hash: transferHash })
 
-		await expect(requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)).rejects.toThrow('Insufficient REP balance for coordinator initial report')
-		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(startWethBalance)
+		await expect(requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)).rejects.toThrow('Insufficient REP balance for coordinator initial report')
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(startWethBalanceAttoEth)
 	})
 
-	test('loadOracleManagerDetails preserves queued zero-amount security bond allowance operations', async () => {
-		await requestPriceIfNeededAndStageOperation(client, managerAddress, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+	test('loadOracleManagerDetails preserves queued zero-amount coverage commitment operations', async () => {
+		await requestPriceIfNeededAndStageOperation(client, managerAddress, OperationType.SetCoverageCommitment, client.account.address, 0n)
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 
 		expect(details.pendingOperationSlotId).toBeGreaterThan(0n)
 		expect(details.activeStagedOperationCount).toBe(1n)
 		expect(details.pendingOperation).toBeDefined()
-		expect(details.pendingOperation?.operation).toBe('setSecurityBondsAllowance')
+		expect(details.pendingOperation?.operation).toBe('setCoverageCommitment')
 		expect(details.pendingOperation?.amount).toBe(0n)
 		expect(details.pendingOperation?.targetVault).toBe(client.account.address)
 	})
 
 	test('queueOracleManagerOperation returns queued operation metadata for the pending settlement list', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 
 		expect(result.queuedOperation).toBeDefined()
 		expect(result.queuedOperation?.isPendingSlot).toBe(true)
-		expect(result.queuedOperation?.operation).toBe('setSecurityBondsAllowance')
+		expect(result.queuedOperation?.operation).toBe('setCoverageCommitment')
 		expect(result.queuedOperation?.operationId).toBeGreaterThan(0n)
 		expect(result.stagedExecution).toBeUndefined()
 	})
 
 	test('queueOracleManagerOperation preserves incremental ids when adding to the pending settlement list', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
+		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const firstOperationId = firstResult.queuedOperation?.operationId
@@ -1169,30 +1169,30 @@ describe('Open Oracle helpers', () => {
 		expect(details.pendingOperationSlotId).toBe(firstOperationId)
 		expect(details.pendingOperation?.operationId).toBe(firstOperationId)
 		expect(details.stagedOperations?.map(operation => operation.operationId)).toEqual([secondOperationId, firstOperationId])
-		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
+		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setCoverageCommitment'])
 	})
 
 	test('queueOracleManagerOperation only lets the pending report sponsor add more queued operations', async () => {
 		const secondAddress = addressString(TEST_ADDRESSES[1])
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
-		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)
+		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
-		expect(managerDetails.queuedOperationEthCost).toBe(0n)
+		expect(managerDetails.queuedOperationCostAttoEth).toBe(0n)
 
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		installInjectedEthereum(mockWindow, secondAddress)
 		const secondUiWriteClient = createWalletWriteClient(secondAddress)
-		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
-		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setCoverageCommitment', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
+		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(queuedResult.queuedOperation).toBeDefined()
 		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)
@@ -1200,15 +1200,15 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
-		const minimumToken1Report = await client.readContract({
+		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
+		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
 		const proposedRepPerEthPrice = 10n ** 18n
-		await requestOraclePrice(uiWriteClient, managerAddress, proposedRepPerEthPrice, minimumToken1Report)
+		await requestOraclePrice(uiWriteClient, managerAddress, proposedRepPerEthPrice, minimumToken1ReportAttoEth)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const { exactToken1Report: reportExactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

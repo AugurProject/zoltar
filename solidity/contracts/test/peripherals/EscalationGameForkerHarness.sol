@@ -8,17 +8,20 @@ contract EscalationGameForkerHarness {
 	function exportUnresolvedRepForTest(
 		EscalationGame parentEscalationGame,
 		address vault
-	) external returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) {
+	)
+		external
+		returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory currentRepByOutcomeAttoRep)
+	{
 		if (parentEscalationGame.forkContinuation()) {
-			(sourcePrincipalByOutcome, currentRepByOutcome) = parentEscalationGame
+			(sourcePrincipalByOutcomeAttoRep, currentRepByOutcomeAttoRep) = parentEscalationGame
 				.exportForkedEscrowByOutcomeWithoutTransfer(vault);
 		}
 		uint256[3] memory localPrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedTotalsWithoutTransfer(
 			vault
 		);
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			sourcePrincipalByOutcome[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
-			currentRepByOutcome[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
+			sourcePrincipalByOutcomeAttoRep[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
+			currentRepByOutcomeAttoRep[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
 		}
 	}
 
@@ -26,28 +29,34 @@ contract EscalationGameForkerHarness {
 		EscalationGame parentEscalationGame,
 		EscalationGame childEscalationGame,
 		address vault
-	) external returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) {
-		(sourcePrincipalByOutcome, currentRepByOutcome) = this.exportUnresolvedRepForTest(parentEscalationGame, vault);
-		uint256 totalSourcePrincipal = _sumOutcomeAmounts(sourcePrincipalByOutcome);
-		if (totalSourcePrincipal == 0) return (sourcePrincipalByOutcome, currentRepByOutcome);
-		uint256 totalCurrentRep = _sumOutcomeAmounts(currentRepByOutcome);
-		uint256 allocatedChildRep;
-		uint256 allocatedCurrentRep;
+	)
+		external
+		returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory currentRepByOutcomeAttoRep)
+	{
+		(sourcePrincipalByOutcomeAttoRep, currentRepByOutcomeAttoRep) = this.exportUnresolvedRepForTest(
+			parentEscalationGame,
+			vault
+		);
+		uint256 totalSourcePrincipal = _sumOutcomeAmounts(sourcePrincipalByOutcomeAttoRep);
+		if (totalSourcePrincipal == 0) return (sourcePrincipalByOutcomeAttoRep, currentRepByOutcomeAttoRep);
+		uint256 totalCurrentRepAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);
+		uint256 allocatedChildRepAttoRep;
+		uint256 allocatedCurrentRepAttoRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			uint256 outcomeSourcePrincipal = sourcePrincipalByOutcome[outcomeIndex];
-			uint256 outcomeCurrentRep = currentRepByOutcome[outcomeIndex];
-			if (outcomeSourcePrincipal == 0 && outcomeCurrentRep == 0) continue;
-			allocatedCurrentRep += outcomeCurrentRep;
-			uint256 outcomeChildRep =
-				allocatedCurrentRep == totalCurrentRep
-					? totalCurrentRep - allocatedChildRep
-					: (outcomeCurrentRep * totalCurrentRep) / totalCurrentRep;
-			allocatedChildRep += outcomeChildRep;
+			uint256 outcomeSourcePrincipal = sourcePrincipalByOutcomeAttoRep[outcomeIndex];
+			uint256 outcomeCurrentRepAttoRep = currentRepByOutcomeAttoRep[outcomeIndex];
+			if (outcomeSourcePrincipal == 0 && outcomeCurrentRepAttoRep == 0) continue;
+			allocatedCurrentRepAttoRep += outcomeCurrentRepAttoRep;
+			uint256 outcomeChildRepAttoRep =
+				allocatedCurrentRepAttoRep == totalCurrentRepAttoRep
+					? totalCurrentRepAttoRep - allocatedChildRepAttoRep
+					: (outcomeCurrentRepAttoRep * totalCurrentRepAttoRep) / totalCurrentRepAttoRep;
+			allocatedChildRepAttoRep += outcomeChildRepAttoRep;
 			childEscalationGame.recordForkedEscrowForOutcome(
 				vault,
 				BinaryOutcomes.BinaryOutcome(outcomeIndex),
 				outcomeSourcePrincipal,
-				outcomeChildRep
+				outcomeChildRepAttoRep
 			);
 		}
 	}

@@ -24,54 +24,58 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	address internal immutable owner;
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 
-	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
-	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);
+	event GameStarted(uint256 activationTime, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep);
+	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ClaimDeposit(
 		address indexed depositor,
 		BinaryOutcomes.BinaryOutcome indexed outcome,
 		uint256 indexed parentDepositIndex,
-		uint256 originalDepositAmount,
-		uint256 amountToWithdraw,
-		uint256 burnAmount,
+		uint256 originalDepositAmountAttoRep,
+		uint256 amountToWithdrawAttoRep,
+		uint256 burnAmountAttoRep,
 		bool transferredRep
 	);
 	event VaultUnresolvedTotalsExported(
 		address indexed vault,
 		address repReceiver,
-		uint256[3] principalByOutcome,
-		uint256 principalToTransfer,
+		uint256[3] principalByOutcomeAttoRep,
+		uint256 principalToTransferAttoRep,
 		bool transferredRep
 	);
 	event ForkedEscrowRecorded(
 		address indexed depositor,
 		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 sourcePrincipalTotal,
-		uint256 childRepTotal,
-		uint256 escrowedRepByVault,
-		uint256 totalEscrowedRep,
-		uint256 outcomeBalance
+		uint256 sourcePrincipalTotalAttoRep,
+		uint256 childRepTotalAttoRep,
+		uint256 disputeStakedRepByVaultAttoRep,
+		uint256 totalDisputeStakedRepAttoRep,
+		uint256 outcomeBalanceAttoRep
 	);
-	event VaultEscrowUpdated(address indexed vault, uint256 escrowedRepByVault, uint256 totalEscrowedRep);
+	event VaultEscrowUpdated(
+		address indexed vault,
+		uint256 disputeStakedRepByVaultAttoRep,
+		uint256 totalDisputeStakedRepAttoRep
+	);
 	event ForkedEscrowClaimed(
 		address indexed depositor,
 		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 sourcePrincipalClaimed,
-		uint256 childRepClaimed
+		uint256 sourcePrincipalClaimedAttoRep,
+		uint256 childRepClaimedAttoRep
 	);
 	event ForkedEscrowExported(
 		address indexed vault,
 		address repReceiver,
-		uint256[3] sourcePrincipalByOutcome,
-		uint256[3] childRepByOutcome,
-		uint256 totalChildRepToTransfer,
+		uint256[3] sourcePrincipalByOutcomeAttoRep,
+		uint256[3] childRepByOutcomeAttoRep,
+		uint256 totalChildRepToTransferAttoRep,
 		bool transferredRep
 	);
-	event ResidualRepSweptToSecurityPool(uint256 amount);
+	event ResidualRepSweptToSecurityPool(uint256 amountAttoRep);
 	event TruthAuctionHaircutApplied(
-		uint256 repBefore,
-		uint256 repRemoved,
-		uint256 repRemaining,
+		uint256 repBeforeAttoRep,
+		uint256 repRemovedAttoRep,
+		uint256 repRemainingAttoRep,
 		uint256 rebasedElapsed
 	);
 
@@ -114,28 +118,30 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		return startIndex + count;
 	}
 
-	function escrowedRepByVault(address vault) public view returns (uint256 amount) {
+	function disputeStakedRepByVaultAttoRep(address vault) public view returns (uint256 amountAttoRep) {
 		return _claimEscrowedRepByVault(vault);
 	}
 
-	function _consumeEscrowedRepForBundle(address depositor, uint256 amount) internal {
-		if (amount == 0) return;
+	function _consumeEscrowedRepForBundle(address depositor, uint256 amountAttoRep) internal {
+		if (amountAttoRep == 0) return;
 		EscalationClaimBundle storage bundle = escalationClaimBundles[depositor];
-		uint256 shares = _repToClaimShares(amount);
-		require(bundle.escrowedRep >= shares, 'Escrowed REP low');
-		bundle.escrowedRep -= shares;
-		totalEscrowedRep -= amount;
-		emit VaultEscrowUpdated(depositor, escrowedRepByVault(depositor), totalEscrowedRep);
+		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
+		require(bundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
+		bundle.disputeStakedRepClaimUnits -= claimUnits;
+		totalDisputeStakedRepAttoRep -= amountAttoRep;
+		emit VaultEscrowUpdated(depositor, disputeStakedRepByVaultAttoRep(depositor), totalDisputeStakedRepAttoRep);
 	}
 
-	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amount) internal {
+	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) internal {
 		_delegateDepositCall(
-			abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amount))
+			abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amountAttoRep))
 		);
 	}
 
-	function _creditClaimOwners(address bundleId, uint256 amount) internal {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amount)));
+	function _creditClaimOwners(address bundleId, uint256 amountAttoRep) internal {
+		_delegateDepositCall(
+			abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amountAttoRep))
+		);
 	}
 
 	function _delegateDepositCall(bytes memory callData) internal returns (bytes memory returnData) {
@@ -161,26 +167,26 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _getDepositDelegate() internal view virtual returns (address);
 
-	function _consumeUnresolvedRepForVault(address depositor, uint256 amount) internal {
-		if (amount == 0) return;
-		uint256 unresolvedRep = unresolvedRepByVault[depositor];
-		require(unresolvedRep >= amount, 'Vault unresolved REP low');
-		require(totalLocalUnresolvedRep >= amount, 'Local unresolved REP low');
-		unresolvedRepByVault[depositor] = unresolvedRep - amount;
-		totalLocalUnresolvedRep -= amount;
+	function _consumeUnresolvedRepForVault(address depositor, uint256 amountAttoRep) internal {
+		if (amountAttoRep == 0) return;
+		uint256 unresolvedRepAttoRep = unresolvedRepByVaultAttoRep[depositor];
+		require(unresolvedRepAttoRep >= amountAttoRep, 'Vault unresolved REP low');
+		require(totalLocalUnresolvedRepAttoRep >= amountAttoRep, 'Local unresolved REP low');
+		unresolvedRepByVaultAttoRep[depositor] = unresolvedRepAttoRep - amountAttoRep;
+		totalLocalUnresolvedRepAttoRep -= amountAttoRep;
 	}
 
-	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amount) internal {
+	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) internal {
 		_delegateDepositCall(
 			abi.encodeCall(
 				EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners,
-				(bundleId, outcomeIndex, amount)
+				(bundleId, outcomeIndex, amountAttoRep)
 			)
 		);
 	}
 
-	function _safeTransferRep(address receiver, uint256 amount) internal {
-		if (amount == 0) return;
-		IERC20(address(repToken)).safeTransfer(receiver, amount);
+	function _safeTransferRep(address receiver, uint256 amountAttoRep) internal {
+		if (amountAttoRep == 0) return;
+		IERC20(address(repToken)).safeTransfer(receiver, amountAttoRep);
 	}
 }

@@ -32,9 +32,9 @@
 				<p>The emitting address identifies the current pool, game, auction, token, or coordinator. Shared factories and the forker include relationship addresses because one emitter manages several children.</p>
 				<h2 id="units-and-value-semantics">Units and value semantics</h2>
 				<ul>
-					<li><code>ethAmount</code> values are wei. <code>repAmount</code> and <code>shareAmount</code> use the token's smallest unit.</li>
+					<li>ETH-domain fields use attoETH, REP-domain fields use attoREP, and outcome-share fields use attoShares. The UI formats them as ETH, REP, and shares.</li>
 					<li>Pool fee indexes and retention rates use the scales documented on their interface fields. Treat a field named <code>resulting...</code> as the authoritative post-mutation value.</li>
-					<li>Delta fields such as <code>migratedRepDelta</code>, <code>collateralDelta</code>, and <code>ethRefund</code> describe only the current item or action. Cumulative and resulting fields replace the prior replay value.</li>
+					<li>Delta fields such as <code>migratedRepDeltaAttoRep</code>, <code>settlementCollateralTransferredAttoEth</code>, and <code>refundAttoEth</code> describe only the current item or action. Cumulative and resulting fields replace the prior replay value.</li>
 					<li>A conceptual burn or escrow movement is not an ERC-20 burn unless the corresponding token event says so.</li>
 				</ul>
 				<table>
@@ -47,38 +47,38 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>ethAmount</code>, collateral, fees, allowances, reserves</td>
-							<td>Wei; security-bond allowances are wei-denominated obligations</td>
-							<td><code>CompleteSetCreated.ethAmount</code> is the gross ETH supplied. Redemption <code>ethAmount</code> fields are the net wei paid after fee accrual has reduced collateral. Resulting collateral fields replace prior state.</td>
+							<td><code>bidAmountAttoEth</code>, collateral, fees, coverage commitments, reserves</td>
+							<td>attoETH; coverage commitments are attoETH-denominated obligations</td>
+							<td><code>CompleteSetCreated.settlementCollateralProvidedAttoEth</code> is the gross attoETH supplied. Redemption <code>settlementCollateralRedeemedAttoEth</code> fields are the net attoETH paid after fee accrual has reduced collateral. Resulting collateral fields replace prior state.</td>
 						</tr>
 						<tr>
-							<td><code>repAmount</code>, REP auction fills</td>
-							<td>REP token base units</td>
+							<td><code>repAmountAttoRep</code>, REP auction fills</td>
+							<td>attoREP</td>
 							<td>Migration, consumption, and fill fields are per-action deltas unless named cumulative or resulting.</td>
 						</tr>
 						<tr>
-							<td><code>shareAmount</code>, <code>sharesMinted</code>, share-token supply</td>
-							<td>Share-token base units</td>
-							<td>Mint/burn amounts are deltas. <code>resultingShareTokenSupply</code> is the authoritative remaining economic claim supply, including unmaterialized fork entitlements. Integer division in redemption rounds the wei payout down.</td>
+							<td><code>amountAttoShares</code>, <code>completeSetsMintedAttoShares</code>, share-token supply</td>
+							<td>attoShares</td>
+							<td>Mint/burn amounts are deltas. <code>resultingShareTokenSupplyAttoShares</code> is the authoritative remaining economic claim supply, including unmaterialized fork entitlements. Integer division in redemption rounds the attoETH payout down.</td>
 						</tr>
 						<tr>
-							<td><code>poolOwnershipAmount</code> and ownership denominators</td>
-							<td>Internal pool-ownership units</td>
-							<td>Initial conversion uses <code>repAmount * 1e18</code>; later conversions preserve the current proportional ownership ratio with Solidity integer rounding. Resulting denominators replace prior totals.</td>
+							<td><code>repBackingUnits</code> and total REP backing units</td>
+							<td>Internal REP backing units</td>
+							<td>Initial conversion uses <code>repAmountAttoRep * 1e18</code>; later conversions preserve the current proportional REP-backing-unit ratio with Solidity integer rounding. Resulting denominators replace prior totals.</td>
 						</tr>
 						<tr>
 							<td>Pool and vault <code>feeIndex</code></td>
-							<td><code>1e18</code> fixed-point fee-per-eligible-allowance unit</td>
-							<td>Index deltas truncate toward zero. <code>feeIndexRemainder</code> carries the allocation numerator modulo the current eligible-allowance denominator.</td>
+							<td><code>1e18</code> fixed-point fee-per-eligible-coverage commitment unit</td>
+							<td>Index deltas truncate toward zero. <code>feeIndexRemainder</code> carries the allocation numerator modulo the current eligible-coverage commitment denominator.</td>
 						</tr>
 						<tr>
 							<td><code>vaultFeeRemainder</code></td>
-							<td>Sub-wei numerator with denominator <code>1e18</code></td>
-							<td>Carries one vault's fractional entitlement into its next <code>VaultAccountingCheckpoint</code>. It is authoritative even when <code>unpaidEthFees</code> does not change.</td>
+							<td>Sub-attoETH numerator with denominator <code>1e18</code></td>
+							<td>Carries one vault's fractional entitlement into its next <code>VaultAccountingCheckpoint</code>. It is authoritative even when <code>claimableFeesAttoEth</code> does not change.</td>
 						</tr>
 						<tr>
 							<td><code>totalFeesOwedRemainder</code></td>
-							<td>Sub-wei numerator with denominator <code>1e18</code></td>
+							<td>Sub-attoETH numerator with denominator <code>1e18</code></td>
 							<td>Carries truncated global fee accrual into the next checkpoint and is always below <code>1e18</code>.</td>
 						</tr>
 						<tr>
@@ -88,13 +88,13 @@
 						</tr>
 						<tr>
 							<td>Coordinator REP/ETH <code>price</code></td>
-							<td><code>(REP base units * 1e18) / ETH wei</code></td>
+							<td><code>(attoREP * 1e18) / attoETH</code></td>
 							<td>Truncates toward zero. A larger value means more REP is required per ETH.</td>
 						</tr>
 						<tr>
 							<td>Auction ETH fields</td>
-							<td>Wei</td>
-							<td><code>grossEthAccepted</code> is the accepted ETH transferred to the auction owner. Per bid, <code>ethUsed + ethRefund = originalEthAmount</code>; REP fills use token base units. For deferred refunds, <code>amount</code> is the newly deferred delta and <code>pendingAmount</code> is the authoritative resulting bidder balance.</td>
+							<td>attoETH</td>
+							<td><code>grossAcceptedAttoEth</code> is the accepted ETH transferred to the auction owner. Per bid, <code>bidUsedAttoEth + refundAttoEth = originalBidAmountAttoEth</code>; REP fills use attoREP. For deferred refunds, <code>amountAttoEth</code> is the newly deferred delta and <code>pendingAmountAttoEth</code> is the authoritative resulting bidder balance.</td>
 						</tr>
 						<tr>
 							<td>Timestamps and BPS parameters</td>
@@ -132,11 +132,11 @@
 						</tr>
 						<tr>
 							<td>Parent pool fork state</td>
-							<td><code>SecurityPoolForkSnapshot</code>, <code>ParentRepLocked</code>, <code>EscalationRepDrainedAtFork</code>, accepted only after the forker-emitter and factory-registration checks above</td>
+							<td><code>SecurityPoolForkSnapshot</code>, <code>ParentRepLocked</code>, <code>DisputeStakedRepDrainedAtFork</code>, accepted only after the forker-emitter and factory-registration checks above</td>
 						</tr>
 						<tr>
 							<td>Child pool and migrated vault</td>
-							<td><code>ChildPoolLinked</code>, <code>ChildRepSplit</code>, <code>ChildPoolRepSwept</code>, <code>ChildEscalationRepMaterialized</code>, <code>VaultMigrationCheckpoint</code></td>
+							<td><code>ChildPoolLinked</code>, <code>ChildRepSplit</code>, <code>ChildPoolRepSwept</code>, <code>ChildDisputeStakedRepMaterialized</code>, <code>VaultMigrationCheckpoint</code></td>
 						</tr>
 						<tr>
 							<td>Vault escalation entitlement</td>
@@ -148,7 +148,7 @@
 						</tr>
 						<tr>
 							<td>Remaining share economic-claim supply</td>
-							<td><code>ShareTokenSupplySet</code>; then the <code>resultingShareTokenSupply</code> field on complete-set and winning-share action events</td>
+							<td><code>ShareTokenSupplySet</code>; then the <code>resultingShareTokenSupplyAttoShares</code> field on complete-set and winning-share action events</td>
 						</tr>
 						<tr>
 							<td>Escalation continuation</td>
@@ -164,7 +164,7 @@
 						</tr>
 						<tr>
 							<td>Coordinator operations</td>
-							<td><code>StagedOperationQueued</code>, <code>StagedOperationEscalationRepSnapshotted</code>, <code>ExecutedStagedOperation</code>, terminal report events, <code>CoordinatorStateCheckpoint</code></td>
+							<td><code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, <code>ExecutedStagedOperation</code>, terminal report events, <code>CoordinatorStateCheckpoint</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -187,12 +187,12 @@
 						</tr>
 						<tr>
 							<td><code>Zoltar.UniverseInitialized</code></td>
-							<td><code>universeId indexed</code>, <code>forkTime</code>, <code>forkQuestionId</code>, <code>forkingOutcomeIndex</code>, <code>reputationToken</code>, <code>parentUniverseId indexed</code>, <code>universeTheoreticalSupply</code></td>
+							<td><code>universeId indexed</code>, <code>forkTime</code>, <code>forkQuestionId</code>, <code>forkingOutcomeIndex</code>, <code>reputationToken</code>, <code>parentUniverseId indexed</code>, <code>universeTheoreticalSupplyAttoRep</code></td>
 							<td>Discovers the root universe and its genesis REP token and theoretical supply. The constructor emits it only for universe 0.</td>
 						</tr>
 						<tr>
 							<td><code>Zoltar.DeployChild</code></td>
-							<td><code>deployer</code>, <code>universeId indexed</code>, <code>outcomeIndex indexed</code>, <code>childUniverseId indexed</code>, <code>childReputationToken</code>, <code>childUniverseTheoreticalSupply</code></td>
+							<td><code>deployer</code>, <code>universeId indexed</code>, <code>outcomeIndex indexed</code>, <code>childUniverseId indexed</code>, <code>childReputationToken</code>, <code>childUniverseTheoreticalSupplyAttoRep</code></td>
 							<td>Discovers a child universe, its parent branch, child REP token, and theoretical supply.</td>
 						</tr>
 						<tr>
@@ -202,7 +202,7 @@
 						</tr>
 						<tr>
 							<td><code>SecurityPoolFactory.DeploySecurityPool</code></td>
-							<td><code>securityPool indexed</code>, <code>truthAuction</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>shareToken</code>, <code>parent indexed</code>, <code>universeId indexed</code>, <code>questionId</code>, <code>statoblastSecurityMultiplierBps</code>, <code>initialReportPriorityFeeWeiPerGas</code>, <code>currentRetentionRate</code>, <code>completeSetCollateralAmount</code></td>
+							<td><code>securityPool indexed</code>, <code>truthAuction</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>shareToken</code>, <code>parent indexed</code>, <code>universeId indexed</code>, <code>questionId</code>, <code>statoblastSecurityMultiplierBps</code>, <code>initialReportPriorityFeeAttoEthPerGas</code>, <code>currentRetentionRate</code>, <code>settlementCollateralAttoEth</code></td>
 							<td>Discovers the pool and all of its constructed relationships, including the immutable initial-report priority fee inherited by child pools in the lineage.</td>
 						</tr>
 						<tr>
@@ -212,33 +212,33 @@
 						</tr>
 						<tr>
 							<td><code>SecurityPoolForker.ChildRepSplit</code></td>
-							<td><code>parent indexed</code>, <code>outcomeIndex indexed</code>, <code>childPoolRepSplit</code>, <code>pendingChildRep</code></td>
+							<td><code>parent indexed</code>, <code>outcomeIndex indexed</code>, <code>childPoolRepSplitAttoRep</code>, <code>pendingChildRepAttoRep</code></td>
 							<td>Replaces cumulative REP split and pending-to-pool accounting for that branch.</td>
 						</tr>
 						<tr>
-							<td><code>SecurityPoolForker.ChildEscalationRepMaterialized</code></td>
-							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>childGame indexed</code>, <code>outcomeIndex</code>, <code>repAmount</code>, <code>resultingEscalationRepBalance</code></td>
+							<td><code>SecurityPoolForker.ChildDisputeStakedRepMaterialized</code></td>
+							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>childGame indexed</code>, <code>outcomeIndex</code>, <code>repAmountAttoRep</code>, <code>resultingDisputeStakedRepBalanceAttoRep</code></td>
 							<td>Records child REP delivered as continuation-game backing and its resulting balance.</td>
 						</tr>
 						<tr>
 							<td><code>SecurityPoolForker.ChildPoolRepSwept</code></td>
-							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>outcomeIndex indexed</code>, <code>repAmount</code>, <code>resultingChildPoolRepBalance</code></td>
+							<td><code>parentPool indexed</code>, <code>childPool indexed</code>, <code>outcomeIndex indexed</code>, <code>repAmountAttoRep</code>, <code>resultingChildPoolRepBalanceAttoRep</code></td>
 							<td>Records pending child REP delivered to the pool and its resulting balance.</td>
 						</tr>
 						<tr>
 							<td><code>SecurityPoolForker.EscalationMigrationEntitlementInitialized</code></td>
-							<td><code>parent indexed</code>, <code>vault indexed</code>, <code>sourcePrincipalByOutcome</code>, <code>currentRepByOutcome</code>, <code>totalCurrentRep</code></td>
+							<td><code>parent indexed</code>, <code>vault indexed</code>, <code>sourcePrincipalByOutcomeAttoRep</code>, <code>currentRepByOutcomeAttoRep</code>, <code>totalCurrentRepAttoRep</code></td>
 							<td>Freezes the vault's exported unresolved-escalation entitlement once.</td>
 						</tr>
 						<tr>
 							<td><code>SecurityPoolForker.EscalationMigrationEntitlementMaterialized</code></td>
-							<td><code>parent indexed</code>, <code>vault indexed</code>, <code>childOutcomeIndex indexed</code>, <code>child</code>, <code>childRep</code></td>
+							<td><code>parent indexed</code>, <code>vault indexed</code>, <code>childOutcomeIndex indexed</code>, <code>child</code>, <code>childRepAttoRep</code></td>
 							<td>Marks that entitlement as materialized for one child branch.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGame.TruthAuctionHaircutApplied</code></td>
-							<td><code>repBefore</code>, <code>repRemoved</code>, <code>repRemaining</code>, <code>rebasedElapsed</code></td>
-							<td>Applies the one-time auction retention ratio to effective escalation balances and claims, and replaces the continuation's elapsed curve position. Integer products divide down in atomic REP units.</td>
+							<td><code>repBeforeAttoRep</code>, <code>repRemovedAttoRep</code>, <code>repRemainingAttoRep</code>, <code>rebasedElapsed</code></td>
+							<td>Applies the one-time auction retention ratio to effective escalation balances and claims, and replaces the continuation's elapsed curve position. Integer products divide down in attoREP.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGame.ForkContinuationResumed</code></td>
@@ -246,49 +246,49 @@
 							<td>Starts post-fork time after aggregate backing is complete. Reducers retain the haircut's rebased elapsed position separately; the deadline is <code>max(rebasedCurveEnd, resumedAt + 3 days)</code>.</td>
 						</tr>
 						<tr>
-							<td><code>OpenOraclePriceCoordinator.StagedOperationEscalationRepSnapshotted</code></td>
-							<td><code>operationId indexed</code>, <code>snapshotTargetEscalationRep</code></td>
-							<td>Completes the immediately preceding queue record with the target vault's escalation-locked REP. A separate event preserves full-width accounting and keeps the coordinator factory deployable; reducers require the matching <code>StagedOperationQueued</code> first.</td>
+							<td><code>OpenOraclePriceCoordinator.StagedOperationDisputeStakedRepSnapshotted</code></td>
+							<td><code>operationId indexed</code>, <code>snapshotTargetDisputeStakedRepAttoRep</code></td>
+							<td>Completes the immediately preceding queue record with the target vault's dispute-staked REP. A separate event preserves full-width accounting and keeps the coordinator factory deployable; reducers require the matching <code>StagedOperationQueued</code> first.</td>
 						</tr>
 						<tr>
 							<td><code>SecurityPool.VaultBadDebtRecorded</code></td>
-							<td><code>targetVault indexed</code>, <code>badDebtAmount</code>, <code>resultingVaultBadDebt</code>, <code>resultingTotalBadDebt</code></td>
-							<td>Records an untransferred residual from a maximum liquidation request. This includes an award-unfunded remainder and a funded slice rejected because it would leave the caller below the minimum allowance. Add no ownership or keeper debt for the recorded amount; replace the target and cumulative audit totals with the resulting fields. The accompanying accounting checkpoints expose the reduced active allowance.</td>
+							<td><code>targetVault indexed</code>, <code>badDebtAttoEth</code>, <code>resultingVaultBadDebtAttoEth</code>, <code>resultingTotalBadDebtAttoEth</code></td>
+							<td>Records an untransferred residual from a maximum liquidation request. This includes an award-unfunded remainder and a funded slice rejected because it would leave the caller below the minimum coverage commitment. Add no REP backing units or keeper coverage commitment for the recorded amount; replace the target and cumulative audit totals with the resulting fields. The accompanying accounting checkpoints expose the reduced active coverage commitment.</td>
 						</tr>
 						<tr>
 							<td><code>UniformPriceDualCapBatchAuction.EthRefundDeferred</code></td>
-							<td><code>bidder indexed</code>, <code>amount</code>, <code>pendingAmount</code></td>
-							<td>Adds <code>amount</code> to the bidder's refund liability and replaces its authoritative balance with <code>pendingAmount</code> after a positive refund push fails.</td>
+							<td><code>bidder indexed</code>, <code>amountAttoEth</code>, <code>pendingAmountAttoEth</code></td>
+							<td>Adds <code>amountAttoEth</code> to the bidder's refund liability and replaces its authoritative balance with <code>pendingAmountAttoEth</code> after a positive refund push fails.</td>
 						</tr>
 						<tr>
 							<td><code>UniformPriceDualCapBatchAuction.PendingEthRefundWithdrawn</code></td>
-							<td><code>bidder indexed</code>, <code>amount</code></td>
+							<td><code>bidder indexed</code>, <code>amountAttoEth</code></td>
 							<td>Clears the bidder's complete deferred-refund liability immediately before the pull callback. A failed pull reverts this event and the clear.</td>
 						</tr>
 					</tbody>
 				</table>
 				<p>These child and entitlement event families are declared in migration base, interface, or delegate modules but are emitted from the recognized <code>SecurityPoolForker</code> address because the implementation executes them through <code>delegatecall</code>. Accepting the same signature from a helper, delegate, or event-emitter address would allow false protocol history.</p>
-				<p><code>ReputationToken.TheoreticalSupplySet(totalTheoreticalSupply)</code>, <code>Mint(account indexed, value)</code>, and <code>Burn(account indexed, value, totalTheoreticalSupply)</code> explain the theoretical-supply changes around the standard ERC-20 <code>Transfer</code> stream. The ERC-20 transfer remains authoritative for balances and actual supply; <code>Burn.totalTheoreticalSupply</code> is the authoritative post-burn ceiling.</p>
-				<p>Pool migration setters have exact replacement events: <code>AwaitingForkContinuationSet(awaitingForkContinuation)</code>, <code>OwnershipDenominatorSet(poolOwnershipDenominator)</code>, <code>ShareTokenSupplySet(shareTokenSupply)</code>, and <code>SystemStateSet(systemState)</code>. Apply them only from the affected recognized pool. <code>configureVault</code> and <code>setPoolFinancials</code> instead end in the authoritative vault or pool checkpoints described below.</p>
-				<p>Escalation escrow bookkeeping uses <code>VaultEscrowUpdated(vault indexed, escrowedRepByVault, totalEscrowedRep)</code>, <code>ForkedEscrowRecorded(depositor indexed, outcome indexed, sourcePrincipalTotal, childRepTotal, escrowedRepByVault, totalEscrowedRep, outcomeBalance)</code>, <code>VaultUnresolvedTotalsExported(vault indexed, repReceiver, principalByOutcome, principalToTransfer, transferredRep)</code>, and <code>ForkedEscrowExported(vault indexed, repReceiver, sourcePrincipalByOutcome, childRepByOutcome, totalChildRepToTransfer, transferredRep)</code>. The ABI also declares <code>ForkedEscrowClaimed</code>, but the current implementation never emits it; reducers must not wait for or synthesize that event.</p>
+				<p><code>ReputationToken.TheoreticalSupplySet(totalTheoreticalSupplyAttoRep)</code>, <code>Mint(account indexed, valueAttoRep)</code>, and <code>Burn(account indexed, valueAttoRep, totalTheoreticalSupplyAttoRep)</code> explain the theoretical-supply changes around the standard ERC-20 <code>Transfer</code> stream. The ERC-20 transfer remains authoritative for balances and actual supply; <code>Burn.totalTheoreticalSupplyAttoRep</code> is the authoritative post-burn ceiling.</p>
+				<p>Pool migration setters have exact replacement events: <code>AwaitingForkContinuationSet(awaitingForkContinuation)</code>, <code>TotalRepBackingUnitsSet(totalRepBackingUnits)</code>, <code>ShareTokenSupplySet(shareTokenSupplyAttoShares)</code>, and <code>SystemStateSet(systemState)</code>. Apply them only from the affected recognized pool. <code>configureVault</code> and <code>setPoolFinancials</code> instead end in the authoritative vault or pool checkpoints described below.</p>
+				<p>Escalation escrow bookkeeping uses <code>VaultEscrowUpdated(vault indexed, disputeStakedRepByVaultAttoRep, totalDisputeStakedRepAttoRep)</code>, <code>ForkedEscrowRecorded(depositor indexed, outcome indexed, sourcePrincipalTotalAttoRep, childRepTotalAttoRep, disputeStakedRepByVaultAttoRep, totalDisputeStakedRepAttoRep, outcomeBalanceAttoRep)</code>, <code>VaultUnresolvedTotalsExported(vault indexed, repReceiver, principalByOutcomeAttoRep, principalToTransferAttoRep, transferredRep)</code>, and <code>ForkedEscrowExported(vault indexed, repReceiver, sourcePrincipalByOutcomeAttoRep, childRepByOutcomeAttoRep, totalChildRepToTransferAttoRep, transferredRep)</code>. The ABI also declares <code>ForkedEscrowClaimed</code>, but the current implementation never emits it; reducers must not wait for or synthesize that event.</p>
 				<p>Standard ERC-20 <code>Transfer</code> and <code>Approval</code>, plus ERC-1155 <code>TransferSingle</code>, <code>TransferBatch</code>, and <code>ApprovalForAll</code>, may be indexed for wallet balances and authorization, but they do not replace a Zoltar lifecycle or accounting field. The ERC-1155 ABI declares <code>URI</code>, but the current implementation never emits it; indexers must not wait for or synthesize that event. ERC-20 <code>Approval</code> is not an authoritative allowance reducer: a finite <code>transferFrom</code> spend decreases allowance without emitting <code>Approval</code>, while infinite allowance is neither decreased nor re-emitted. OpenOracle's <code>InternalApproval</code> likewise tracks only its separate internal-balance allowance and is not part of the packed report-state reducer. The imported <code>IAugur</code> event declarations are compatibility types; Zoltar contracts do not emit an Augur event stream.</p>
 				<p><code>DeploymentStatusOracle.DeploymentAddressesSet(address[])</code> is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by <code>getDeploymentMask()</code>; see <a href="../reference/deployment-status.html">Deployment Status Oracle</a>.</p>
 				<h2 id="canonical-reducers">Canonical reducers</h2>
-				<p>Pool accounting is checkpoint based. Replace all eleven fields whenever <code>PoolAccountingCheckpoint</code> is observed. Replace the named vault record, including <code>vaultFeeRemainder</code>, and its global denominators on <code>VaultAccountingCheckpoint</code>. Reduce <code>VaultBadDebtRecorded</code> from the recognized pool address to replace the target's cumulative writeoff and the pool's cumulative <code>totalBadDebt</code>; these audit totals are deliberately separate from active allowance. Action events explain cause; checkpoint values are authoritative when both appear.</p>
-				<p>Share economic-claim accounting is replace based. When <code>startTruthAuction</code> prepares the child after its migration window and emits <code>ShareTokenSupplySet</code>, replace that pool's remaining economic claim supply with the event value; this includes source entitlements whose child ERC-1155 balances have not materialized yet. ERC-1155 transfers and <code>Migrate</code> update materialized token balances but do not change this denominator. <code>CompleteSetCreated</code>, <code>CompleteSetRedeemed</code>, and <code>SharesRedeemed</code> subsequently replace it through <code>resultingShareTokenSupply</code>.</p>
+				<p>Pool accounting is checkpoint based. Replace all eleven fields whenever <code>PoolAccountingCheckpoint</code> is observed. Replace the named vault record, including <code>vaultFeeRemainder</code>, and its global denominators on <code>VaultAccountingCheckpoint</code>. Reduce <code>VaultBadDebtRecorded</code> from the recognized pool address to replace the target's cumulative writeoff and the pool's cumulative <code>totalBadDebtAttoEth</code>; these audit totals are deliberately separate from active coverage commitment. Action events explain cause; checkpoint values are authoritative when both appear.</p>
+				<p>Share economic-claim accounting is replace based. When <code>startTruthAuction</code> prepares the child after its migration window and emits <code>ShareTokenSupplySet</code>, replace that pool's remaining economic claim supply with the event value; this includes source entitlements whose child ERC-1155 balances have not materialized yet. ERC-1155 transfers and <code>Migrate</code> update materialized token balances but do not change this denominator. <code>CompleteSetCreated</code>, <code>CompleteSetRedeemed</code>, and <code>SharesRedeemed</code> subsequently replace it through <code>resultingShareTokenSupplyAttoShares</code>.</p>
 				<p>For the Zoltar-owned oracle coordinator, replace pending report ID and sponsor, pending operation slot and counts, base-fee guard, and latest price and settlement time whenever <code>CoordinatorStateCheckpoint</code> is observed. The associated report and operation IDs identify the cause; zero means that cause has no corresponding ID. Report and operation action events retain lifecycle history, while the checkpoint is the authoritative resulting state. Open Oracle's internal payouts and liabilities remain outside this contract.</p>
-				<p>For escalation, append each <code>LocalDepositAppended</code> leaf under its stable deposit index and retain the live event-derived MMR peaks and leaves for every game. The leaf's depositor is the immutable claim owner. On <code>ClaimDeposit</code> with <code>transferredRep = false</code>, decrement that depositor's raw local backing by <code>originalDepositAmount</code> when <code>truthAuctionRepBefore == 0</code>; otherwise decrement by the ceiling of <code>originalDepositAmount × truthAuctionRepBefore / truthAuctionRepRemaining</code>. Other unconsumed deposits by the same depositor remain backed. There are no claim-owner transitions, owner slots, portfolio registries, or participant caps.</p>
+				<p>For escalation, append each <code>LocalDepositAppended</code> leaf under its stable deposit index and retain the live event-derived MMR peaks and leaves for every game. The leaf's depositor is the immutable claim owner. On <code>ClaimDeposit</code> with <code>transferredRep = false</code>, decrement that depositor's raw local backing by <code>originalDepositAmountAttoRep</code> when <code>truthAuctionRepBeforeAttoRep == 0</code>; otherwise decrement by the ceiling of <code>originalDepositAmountAttoRep × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep</code>. Other unconsumed deposits by the same depositor remain backed. There are no claim-owner transitions, owner slots, portfolio registries, or participant caps.</p>
 				<p>When <code>SecurityPoolForkSnapshot</code> records unresolved escalation, preserve the proof/carry roots, counts, peaks, and leaves under <code>escalationSnapshotId</code>. <code>ForkCarryCheckpoint</code> installs that immutable proof state, aggregate backing, and retention checkpoint in the child. It copies no leaves, bundles, or owners. A winning inherited settlement supplies its carry proof, derives the immutable payout address from the committed depositor, consumes the stable index through the nullifier tree, and pays once. The fixed 64-peak MMR frontier is logarithmic commitment state supporting up to <code>2^64 - 1</code> leaves, not a 64-participant cap.</p>
-				<p><code>TruthAuctionHaircutApplied</code> replaces the game's effective REP basis, rebases elapsed curve position, and updates its cumulative normalized binary retention mantissa and exponent. A carried proof compares the current checkpoint directly with the checkpoint of the game that created its stable identity and applies that single ratio to both proof amount and cumulative amount. Renormalization preserves significant bits across arbitrary recursive depth; the final REP-base-unit result may floor to zero, but the lineage checkpoint itself does not. Recursive forks therefore cannot make old haircuts disappear or make liquidation run out of ancestry slots. Independently floor event-derived outcome balances, aggregate <code>totalEscrowedRep</code>, and aggregate <code>forkCarryEscrowedRep</code>; never reconstruct an aggregate by summing independently rounded bundle views. A later <code>LocalDepositAppended</code> after resume is converted to raw claim units with ceiling division by the game's local auction ratio so it does not inherit earlier losses. The haircut does not reverse an already triggered own fork. <code>ForkContinuationResumed(resumedAt)</code> starts time later and sets the deadline to <code>max(rebasedCurveEnd, resumedAt + 3 days)</code>. <code>NonDecisionReached</code> records the <code>Local</code> lifecycle state and timestamp. <code>InheritedThresholdTie(sourceGame indexed)</code> records inherited state without fabricating a local timestamp; accept it only after a <code>ForkCarryCheckpoint</code> from the same child emitter, and require its indexed <code>sourceGame</code> to equal that checkpoint's source. Apply each <code>CarryDepositConsumed</code> by its explicit reason and resulting roots and totals. Reconstruct and maintain peaks from events; never read them from contract storage.</p>
+				<p><code>TruthAuctionHaircutApplied</code> replaces the game's effective REP basis, rebases elapsed curve position, and updates its cumulative normalized binary retention mantissa and exponent. A carried proof compares the current checkpoint directly with the checkpoint of the game that created its stable identity and applies that single ratio to both proof amount and cumulative amount. Renormalization preserves significant bits across arbitrary recursive depth; the final REP-base-unit result may floor to zero, but the lineage checkpoint itself does not. Recursive forks therefore cannot make old haircuts disappear or make liquidation run out of ancestry slots. Independently floor event-derived outcome balances, aggregate <code>totalDisputeStakedRepAttoRep</code>, and aggregate <code>forkCarryDisputeStakedRepAttoRep</code>; never reconstruct an aggregate by summing independently rounded bundle views. A later <code>LocalDepositAppended</code> after resume is converted to raw claim units with ceiling division by the game's local auction ratio so it does not inherit earlier losses. The haircut does not reverse an already triggered own fork. <code>ForkContinuationResumed(resumedAt)</code> starts time later and sets the deadline to <code>max(rebasedCurveEnd, resumedAt + 3 days)</code>. <code>NonDecisionReached</code> records the <code>Local</code> lifecycle state and timestamp. <code>InheritedThresholdTie(sourceGame indexed)</code> records inherited state without fabricating a local timestamp; accept it only after a <code>ForkCarryCheckpoint</code> from the same child emitter, and require its indexed <code>sourceGame</code> to equal that checkpoint's source. Apply each <code>CarryDepositConsumed</code> by its explicit reason and resulting roots and totals. Reconstruct and maintain peaks from events; never read them from contract storage.</p>
 				<p>For auctions, create a bid on every <code>BidSubmitted</code>. The stable identity is <code>(auction emitter, tick, bidIndex)</code>, including same-tick FIFO bids. Replace that bid's settlement fields on <code>BidSettled</code>. Batch calls emit one settlement event per affected bid.</p>
-				<p>Track deferred-refund liabilities separately by <code>(auction emitter, bidder)</code>. On <code>EthRefundDeferred</code>, require the event's <code>pendingAmount</code> to equal the prior reconstructed balance plus the <code>amount</code> delta, then replace the balance with <code>pendingAmount</code>. On <code>PendingEthRefundWithdrawn</code>, require <code>amount</code> to equal that bidder's complete prior balance, then clear it to zero. The auction emits that clear before its external pull callback, so any reentrant settlement that creates a new deferred refund appears later in the same receipt and adds to zero; a failed callback reverts the complete log sequence. A <code>BidSettled</code> refund can therefore leave an auction liability even though the bid itself is final; do not infer refund delivery from <code>BidSettled</code> alone.</p>
+				<p>Track deferred-refund liabilities separately by <code>(auction emitter, bidder)</code>. On <code>EthRefundDeferred</code>, require the event's <code>pendingAmountAttoEth</code> to equal the prior reconstructed balance plus the <code>amountAttoEth</code> delta, then replace the balance with <code>pendingAmountAttoEth</code>. On <code>PendingEthRefundWithdrawn</code>, require <code>amountAttoEth</code> to equal that bidder's complete prior balance, then clear it to zero. The auction emits that clear before its external pull callback, so any reentrant settlement that creates a new deferred refund appears later in the same receipt and adds to zero; a failed callback reverts the complete log sequence. A <code>BidSettled</code> refund can therefore leave an auction liability even though the bid itself is final; do not infer refund delivery from <code>BidSettled</code> alone.</p>
 				<h2 id="standard-token-events">Standard token events</h2>
 				<p>Use ERC-20 <code>Transfer</code> and ERC-1155 <code>TransferSingle</code>/<code>TransferBatch</code> to reconstruct token balances and supply. For <code>TransferBatch</code>, require <code>ids.length == values.length</code> and apply each <code>(ids[i], values[i])</code> pair in array order, updating the balance and per-token-ID supply independently. A zero <code>from</code> mints that item and a zero <code>to</code> burns it.</p>
 				<p>Token events do not establish protocol cause. Attribute minting, migration, escrow, auction purchase, fork locking, sweeping, and redemption with the corresponding Zoltar-specific event. Array-taking protocol calls expand into one cause event per affected item, including <code>MigrationRepSplit</code>, <code>Migrate</code>, <code>CarryDepositConsumed</code>, and <code>BidSettled</code>; this is distinct from one array-valued <code>TransferBatch</code>. Receipt decoders must also verify the emitter address before accepting a matching signature.</p>
 				<h2 id="lifecycle-example">Lifecycle example</h2>
 				<ol>
 					<li>Pre-discover the origin pool, share token, auction, and coordinator from the configured factory's <code>DeploySecurityPool</code>, then replay the complete deployment receipt in canonical order. This retains the share token's earlier constructor <code>AuthorizationUpdated</code> and the initial coordinator and pool checkpoints.</li>
-					<li>Apply <code>DepositRep</code>, its vault checkpoint, <code>CompleteSetCreated</code>, and its pool checkpoint. Token transfer events update balances; the Zoltar events explain why they moved.</li>
+					<li>Apply <code>RepDepositedToVault</code>, its vault checkpoint, <code>CompleteSetCreated</code>, and its pool checkpoint. Token transfer events update balances; the Zoltar events explain why they moved.</li>
 					<li>Pre-discover each game from its pool's <code>EscalationGameSet</code>, then append local escalation deposits and their stable leaf identities until the game resolves or reaches non-decision.</li>
 					<li>On a universe or own-game fork, first verify both the forker emitter and the indexed parent's factory registration, then freeze the parent from <code>SecurityPoolForkSnapshot</code> and apply the cause-specific REP locking and draining events.</li>
 					<li>Discover two parallel child universes and pools independently. Initialize each continuation from its <code>ForkCarryCheckpoint</code>; never treat one child's consumption as the other's.</li>

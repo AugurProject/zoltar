@@ -13,7 +13,7 @@ type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
 	hasMoreTickSummaries: boolean
 	loadingTruthAuctionBook: boolean
-	maxTickEth: bigint
+	maxTickAttoEth: bigint
 	onLoadNextTickPage: () => void
 	onSelectTick: (tick: bigint) => void
 	renderPriceValue: (value: bigint | undefined) => ComponentChildren
@@ -26,7 +26,7 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
 }
 
-export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
+export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
 		<SectionBlock variant='embedded'>
 			{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
@@ -67,7 +67,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 									onClick={() => onSelectTick(point.tick)}
 									type='button'
 								>
-									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalEth, maxTickEth)}%` }} />
+									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalBidAttoEth, maxTickAttoEth)}%` }} />
 									<div className='truth-auction-price-row-copy'>
 										<div className='truth-auction-price-row-main'>
 											<div>
@@ -82,10 +82,10 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										</div>
 										<div className='truth-auction-price-row-meta'>
 											<span>
-												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalEth} suffix={commonCopy.eth} copyable={false} />
+												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalBidAttoEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span className='truth-auction-ladder-row-cumulative'>
-												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
+												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeBidAttoEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span>{forkAuctionCopy.formatSubmissionsLabel(point.submissionCount.toString())}</span>
 										</div>

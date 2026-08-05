@@ -11,20 +11,20 @@
 		<main>
 			<header>
 				<h1>Liquidate an unsafe vault</h1>
-				<p>Transfer unsafe allowance and its target-funded free-REP award into a non-liquidatable liquidator vault using the correct fresh-price path.</p>
+				<p>Transfer unsafe coverage commitment and its target-funded pool-held vault REP backing award into a non-liquidatable liquidator vault using the correct fresh-price path.</p>
 			</header>
 			<section id="verify-the-target">
 				<h2>Verify the target</h2>
-				<p>Inspect the target vault's allowance, locked and unlocked REP, pending liquidation state, and pool lifecycle. Calculate health using current protocol values. Do not depend on a cached UI label when the execution transaction will use fresher state.</p>
+				<p>Inspect the target vault's coverage commitment, pool-held vault REP backing, dispute-staked REP, pending liquidation state, and pool lifecycle. Calculate health using current protocol values. Do not depend on a cached UI label when the execution transaction will use fresher state.</p>
 			</section>
 			<section id="prepare-the-liquidator">
 				<h2>Prepare the liquidator</h2>
-				<p>Use a distinct liquidator vault that remains non-liquidatable after accepting the transferred allowance and award. The liquidator does not supply REP or ETH liquidation principal: the complete bonus-bearing award comes from the target's free REP. A maximum request records any unfunded residual allowance as bad debt; it does not draw an external backstop payment.</p>
+				<p>Use a distinct liquidator vault that remains non-liquidatable after accepting the transferred coverage commitment and award. The liquidator does not supply REP or ETH liquidation principal: the complete bonus-bearing award comes from the target's pool-held vault REP backing. A maximum request records any untransferred residual coverage commitment as bad debt; it does not draw an external backstop payment.</p>
 			</section>
 			<section id="stage-with-a-fresh-price">
 				<h2>Stage on the correct price path</h2>
 				<ol>
-					<li>Preview the transferable allowance, complete target-funded free-REP award, and any residual bad debt from a maximum request.</li>
+					<li>Preview the transferable coverage commitment, complete target-funded pool-held vault REP backing award, and any residual bad debt from a maximum request.</li>
 					<li>Stage the operation through the pool's price coordinator.</li>
 					<li>If the cached REP/ETH price is fresh, the staged operation executes immediately and no report is created.</li>
 					<li>If the price is stale, the requester sponsors the OpenOracle bounty and initial position; track the report and correction window through settlement.</li>
@@ -33,7 +33,7 @@
 			</section>
 			<section id="execute-and-check">
 				<h2>Execute and check the result</h2>
-				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's free REP funded the complete award, the transferred allowance and ownership reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A failed callback is not a successful liquidation.</p>
+				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's pool-held vault REP backing funded the complete award, the transferred coverage commitment and REP backing units reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A failed callback is not a successful liquidation.</p>
 			</section>
 			<section id="recover-or-repeat">
 				<h2>Recover or repeat</h2>

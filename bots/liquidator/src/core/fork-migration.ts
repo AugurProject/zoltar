@@ -13,7 +13,7 @@ export type VaultMigration = {
 }
 
 function hasVaultPosition(pool: PoolObservation) {
-	return pool.botVault.ownership > 0n || pool.botVault.allowance > 0n
+	return pool.botVault.backingUnits > 0n || pool.botVault.coverageCommitmentAttoEth > 0n
 }
 
 function hasBotStagedOperation(pool: PoolObservation) {

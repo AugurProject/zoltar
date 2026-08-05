@@ -9,9 +9,9 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(
 		address indexed targetVault,
-		uint256 badDebtAmount,
-		uint256 resultingVaultBadDebt,
-		uint256 resultingTotalBadDebt
+		uint256 badDebtAttoEth,
+		uint256 resultingVaultBadDebtAttoEth,
+		uint256 resultingTotalBadDebtAttoEth
 	);
 
 	function resumeForkedEscalationGame() external {
@@ -27,98 +27,133 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	function performBundledLiquidation(
 		address callerVault,
 		address targetVault,
-		uint256 debtAmount,
-		uint256 snapshotTargetOwnership,
-		uint256 snapshotTargetAllowance,
+		uint256 requestedCommitmentTransferAttoEth,
+		uint256 snapshotTargetBackingUnits,
+		uint256 snapshotTargetCoverageCommitmentAttoEth,
 		uint256 repEthPrice
-	) external returns (uint256 debtToMove, uint256 repToMove, uint256 badDebtRecorded) {
+	)
+		external
+		returns (
+			uint256 coverageCommitmentToTransferAttoEth,
+			uint256 vaultRepBackingToTransferAttoRep,
+			uint256 badDebtAttoEth
+		)
+	{
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(callerVault != targetVault, 'Caller bad');
-		require(securityVaults[targetVault].poolOwnership == snapshotTargetOwnership, 'Target ownership changed');
 		require(
-			securityVaults[targetVault].securityBondAllowance == snapshotTargetAllowance,
-			'Target allowance changed'
+			securityVaults[targetVault].repBackingUnits == snapshotTargetBackingUnits,
+			'Target backingUnits changed'
 		);
-		uint256 targetFreeRep = pool.poolOwnershipToRep(snapshotTargetOwnership);
-		uint256 targetEscalationRep =
-			address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(targetVault);
+		require(
+			securityVaults[targetVault].coverageCommitmentAttoEth == snapshotTargetCoverageCommitmentAttoEth,
+			'Target commitment changed'
+		);
+		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(snapshotTargetBackingUnits);
+		uint256 targetDisputeStakedRepAttoRep =
+			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(targetVault);
 		require(
 			!SecurityPoolUtils.isVaultHealthy(
-				targetFreeRep,
-				targetEscalationRep,
-				snapshotTargetAllowance,
+				targetVaultRepBackingAttoRep,
+				targetDisputeStakedRepAttoRep,
+				snapshotTargetCoverageCommitmentAttoEth,
 				repEthPrice,
 				statoblastSecurityMultiplierBps
 			),
 			'Target safe'
 		);
-		uint256 ownershipToMove;
-		(debtToMove, repToMove, ownershipToMove) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
-			securityVaults[targetVault].poolOwnership,
-			snapshotTargetAllowance,
-			debtAmount,
-			repEthPrice,
-			pool.getTotalRepBalance(),
-			poolOwnershipDenominator
-		);
+		uint256 backingUnitsToTransfer;
+		(
+			coverageCommitmentToTransferAttoEth,
+			vaultRepBackingToTransferAttoRep,
+			backingUnitsToTransfer
+		) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
+				securityVaults[targetVault].repBackingUnits,
+				snapshotTargetCoverageCommitmentAttoEth,
+				requestedCommitmentTransferAttoEth,
+				repEthPrice,
+				pool.getTotalPoolHeldRepAttoRep(),
+				totalRepBackingUnits
+			);
 		if (
-			debtToMove != 0 &&
-			securityVaults[callerVault].securityBondAllowance + debtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+			coverageCommitmentToTransferAttoEth != 0 &&
+			securityVaults[callerVault].coverageCommitmentAttoEth + coverageCommitmentToTransferAttoEth <
+				SecurityPoolUtils.MIN_COVERAGE_COMMITMENT_ATTO_ETH
 		) {
-			require(debtAmount >= snapshotTargetAllowance, 'Caller debt');
-			debtToMove = 0;
-			repToMove = 0;
-			ownershipToMove = 0;
+			require(
+				requestedCommitmentTransferAttoEth >= snapshotTargetCoverageCommitmentAttoEth,
+				'Commitment request low'
+			);
+			coverageCommitmentToTransferAttoEth = 0;
+			vaultRepBackingToTransferAttoRep = 0;
+			backingUnitsToTransfer = 0;
 		}
-		if (debtAmount >= snapshotTargetAllowance) {
-			badDebtRecorded = snapshotTargetAllowance - debtToMove;
-			if (badDebtRecorded != 0) {
-				totalBadDebt += badDebtRecorded;
-				vaultBadDebt[targetVault] += badDebtRecorded;
-				totalSecurityBondAllowance -= badDebtRecorded;
-				feeEligibleSecurityBondAllowance -= badDebtRecorded;
-				emit VaultBadDebtRecorded(targetVault, badDebtRecorded, vaultBadDebt[targetVault], totalBadDebt);
+		if (requestedCommitmentTransferAttoEth >= snapshotTargetCoverageCommitmentAttoEth) {
+			badDebtAttoEth = snapshotTargetCoverageCommitmentAttoEth - coverageCommitmentToTransferAttoEth;
+			if (badDebtAttoEth != 0) {
+				totalBadDebtAttoEth += badDebtAttoEth;
+				vaultBadDebtAttoEth[targetVault] += badDebtAttoEth;
+				totalCoverageCommitmentAttoEth -= badDebtAttoEth;
+				feeEligibleCoverageCommitmentAttoEth -= badDebtAttoEth;
+				emit VaultBadDebtRecorded(
+					targetVault,
+					badDebtAttoEth,
+					vaultBadDebtAttoEth[targetVault],
+					totalBadDebtAttoEth
+				);
 			}
 		}
-		require(debtToMove > 0 || badDebtRecorded > 0, 'No liq');
+		require(coverageCommitmentToTransferAttoEth > 0 || badDebtAttoEth > 0, 'No liq');
 
 		feeIndexRemainder = 0;
-		securityVaults[targetVault].securityBondAllowance = snapshotTargetAllowance - debtToMove - badDebtRecorded;
-		securityVaults[targetVault].poolOwnership -= ownershipToMove;
-		if (debtToMove == 0) return (debtToMove, repToMove, badDebtRecorded);
-		securityVaults[callerVault].securityBondAllowance += debtToMove;
-		securityVaults[callerVault].poolOwnership += ownershipToMove;
-		uint256 callerEscalationRep;
+		securityVaults[targetVault].coverageCommitmentAttoEth =
+			snapshotTargetCoverageCommitmentAttoEth -
+			coverageCommitmentToTransferAttoEth -
+			badDebtAttoEth;
+		securityVaults[targetVault].repBackingUnits -= backingUnitsToTransfer;
+		if (coverageCommitmentToTransferAttoEth == 0)
+			return (coverageCommitmentToTransferAttoEth, vaultRepBackingToTransferAttoRep, badDebtAttoEth);
+		securityVaults[callerVault].coverageCommitmentAttoEth += coverageCommitmentToTransferAttoEth;
+		securityVaults[callerVault].repBackingUnits += backingUnitsToTransfer;
+		uint256 callerDisputeStakedRepAttoRep;
 		if (address(escalationGame) != address(0x0)) {
-			try escalationGame.escrowedRepByVault(callerVault) returns (uint256 claimRep) {
-				callerEscalationRep = claimRep;
+			try escalationGame.disputeStakedRepByVaultAttoRep(callerVault) returns (uint256 claimRep) {
+				callerDisputeStakedRepAttoRep = claimRep;
 			} catch {
 				revert('Claim balance failed');
 			}
 		}
 		require(
 			SecurityPoolUtils.isVaultHealthy(
-				pool.poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
-				callerEscalationRep,
-				securityVaults[callerVault].securityBondAllowance,
+				pool.backingUnitsToAttoRep(securityVaults[callerVault].repBackingUnits),
+				callerDisputeStakedRepAttoRep,
+				securityVaults[callerVault].coverageCommitmentAttoEth,
 				repEthPrice,
 				statoblastSecurityMultiplierBps
 			),
 			'Caller bad'
 		);
-		uint256 targetAllowanceAfter = securityVaults[targetVault].securityBondAllowance;
-		uint256 targetFreeRepAfter = pool.poolOwnershipToRep(securityVaults[targetVault].poolOwnership);
-		require(
-			targetAllowanceAfter == 0 || targetAllowanceAfter >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
-			'Target debt'
-		);
-		require(targetAllowanceAfter == 0 || targetFreeRepAfter >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'Target REP');
-		require(
-			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
-			'Caller debt'
+		uint256 targetCoverageCommitmentAttoEthAfter = securityVaults[targetVault].coverageCommitmentAttoEth;
+		uint256 targetVaultRepBackingAfterAttoRep = pool.backingUnitsToAttoRep(
+			securityVaults[targetVault].repBackingUnits
 		);
 		require(
-			pool.poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT,
+			targetCoverageCommitmentAttoEthAfter == 0 ||
+				targetCoverageCommitmentAttoEthAfter >= SecurityPoolUtils.MIN_COVERAGE_COMMITMENT_ATTO_ETH,
+			'Target commitment'
+		);
+		require(
+			targetCoverageCommitmentAttoEthAfter == 0 ||
+				targetVaultRepBackingAfterAttoRep >= SecurityPoolUtils.MIN_REP_DEPOSIT_ATTO_REP,
+			'Target REP'
+		);
+		require(
+			securityVaults[callerVault].coverageCommitmentAttoEth >= SecurityPoolUtils.MIN_COVERAGE_COMMITMENT_ATTO_ETH,
+			'Caller commitment'
+		);
+		require(
+			pool.backingUnitsToAttoRep(securityVaults[callerVault].repBackingUnits) >=
+				SecurityPoolUtils.MIN_REP_DEPOSIT_ATTO_REP,
 			'Caller REP'
 		);
 	}

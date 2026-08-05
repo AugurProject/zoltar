@@ -28,8 +28,8 @@ describe('EscalationDepositSelectionList', () => {
 		const deposits = [
 			{
 				deposit: {
-					amount: 10n,
-					cumulativeAmount: 10n,
+					amountAttoRep: 10n,
+					cumulativeAmountAttoRep: 10n,
 					depositIndex: 7n,
 					depositor: zeroAddress,
 				},
@@ -37,8 +37,8 @@ describe('EscalationDepositSelectionList', () => {
 			},
 			{
 				deposit: {
-					amount: 20n,
-					cumulativeAmount: 30n,
+					amountAttoRep: 20n,
+					cumulativeAmountAttoRep: 30n,
 					depositIndex: 8n,
 					depositor: zeroAddress,
 				},
@@ -84,8 +84,8 @@ describe('EscalationDepositSelectionList', () => {
 		const deposits = [
 			{
 				deposit: {
-					amount: 10n,
-					cumulativeAmount: 10n,
+					amountAttoRep: 10n,
+					cumulativeAmountAttoRep: 10n,
 					depositIndex: 8n,
 					depositor: zeroAddress,
 				},
@@ -115,8 +115,8 @@ describe('EscalationDepositSelectionList', () => {
 			const depositIndex = 250n + BigInt(index)
 			return {
 				deposit: {
-					amount: depositIndex,
-					cumulativeAmount: depositIndex,
+					amountAttoRep: depositIndex,
+					cumulativeAmountAttoRep: depositIndex,
 					depositIndex,
 					depositor: zeroAddress,
 				},

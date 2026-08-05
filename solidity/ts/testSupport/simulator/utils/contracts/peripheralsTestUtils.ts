@@ -7,11 +7,11 @@ import { GENESIS_REPUTATION_TOKEN } from '../constants'
 import { approveToken, contractExists, getERC20Balance } from '../utilities'
 import { WriteClient } from '../clients'
 import assert from '../assert'
-import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceEthCost, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportPrice, requestPriceWithValue } from './peripherals'
+import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportPrice, requestPriceWithValue } from './peripherals'
 import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
-import { getTotalTheoreticalSupply } from './zoltar'
-import { depositRep, depositToEscalationGame, getRepToken, getSecurityVault, poolOwnershipToRep } from './securityPool'
+import { getTotalTheoreticalSupplyAttoRep } from './zoltar'
+import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityVault, backingUnitsToAttoRep } from './securityPool'
 
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n
@@ -19,13 +19,13 @@ const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
-export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, questionId: bigint) => {
+export const approveAndDepositRepToVault = async (client: WriteClient, repDeposit: bigint, questionId: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
-	await depositRep(client, securityPoolAddress, repDeposit)
+	await depositRepToVault(client, securityPoolAddress, repDeposit)
 
 	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
@@ -33,13 +33,13 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: Address) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+	const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
-	assert.ok(repAmount >= 2n * forkThreshold, 'not enough rep in vault to fork')
+	const repAmountAttoRep = await backingUnitsToAttoRep(client, securityPoolAddress, vault.vaultRepBackingAttoRep)
+	assert.ok(repAmountAttoRep >= 2n * forkThresholdAttoRep, 'not enough rep in vault to fork')
 	const minRepDeposit = 10n * 10n ** 18n
-	const secondEscalationDeposit = repAmount - 2n * forkThreshold < minRepDeposit ? repAmount - forkThreshold : forkThreshold
-	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkThreshold)
+	const secondEscalationDeposit = repAmountAttoRep - 2n * forkThresholdAttoRep < minRepDeposit ? repAmountAttoRep - forkThresholdAttoRep : forkThresholdAttoRep
+	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkThresholdAttoRep)
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, secondEscalationDeposit)
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
 }
@@ -72,8 +72,8 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 }
 
 export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, ethCost)
+	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
+	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, costAttoEth)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
@@ -81,9 +81,9 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Anv
 	if (await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) {
 		await mockWindow.advanceTime(ORACLE_PRICE_VALID_FOR_SECONDS + 1n)
 	}
-	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, ethCost, forceRepEthPriceTo)
+	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
+	await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, costAttoEth, forceRepEthPriceTo)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
-export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => securityBondAllowance * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n
+export const canLiquidate = (lastPrice: bigint, coverageCommitmentAttoEth: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => coverageCommitmentAttoEth * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n

@@ -20,8 +20,8 @@ test('responsive docs compact equations and label unavoidable equation and table
 							<mtd><mo>=</mo></mtd>
 							<mtd>
 								<mfrac>
-									<mrow><mi>amountToWithdraw</mi><mo>·</mo><mi>actualForkThreshold</mi></mrow>
-									<mi>nonDecisionThreshold</mi>
+									<mrow><mi>amountToWithdrawAttoRep</mi><mo>·</mo><mi>actualForkThreshold</mi></mrow>
+									<mi>nonDecisionThresholdAttoRep</mi>
 								</mfrac>
 								<mspace linebreak="newline"></mspace>
 								<mtext> if forkTime &lt;= escalationGameEndDate</mtext>
@@ -120,7 +120,7 @@ test('responsive docs compact equations and label unavoidable equation and table
 		const compactText = compactEquation?.textContent?.replaceAll('\u200b', '')
 		expect(compactEquation?.getAttribute('aria-hidden')).toBe('true')
 		expect(compactText).toContain('scaledWithdrawal')
-		expect(compactText).toContain('amountToWithdraw · actualForkThreshold) / (nonDecisionThreshold')
+		expect(compactText).toContain('amountToWithdrawAttoRep · actualForkThreshold) / (nonDecisionThresholdAttoRep')
 		expect(compactText).toContain('if forkTime <= escalationGameEndDate')
 		expect(math.querySelector('mo')?.getAttribute('linebreak')).toBe('goodbreak')
 		expect(math.querySelector('mo')?.getAttribute('linebreakstyle')).toBe('after')

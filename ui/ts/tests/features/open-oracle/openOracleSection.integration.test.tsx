@@ -39,12 +39,12 @@ const openOracleCreateParameters = {
 	escalationHalt: 0n,
 	exactToken1Report: 100n * 10n ** 18n,
 	initialToken2Amount: (100n * 10n ** 18n) / initialReportPrice,
-	ethValue: 1000n,
+	ethValueAttoEth: 1000n,
 	feePercentage: 100,
 	multiplier: 100,
 	protocolFee: 100,
 	settlementTime: 60,
-	settlerReward: 1000n,
+	settlerRewardAttoEth: 1000n,
 	token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 	token2Address: getAddress(WETH_ADDRESS),
 }
@@ -77,8 +77,8 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 	const accountState: AccountState = {
 		address: accountAddress,
 		chainId: '0x1',
-		ethBalance: 10n ** 30n,
-		wethBalance: undefined,
+		ethBalanceAttoEth: 10n ** 30n,
+		wethBalanceAttoEth: undefined,
 	}
 
 	return (
@@ -164,8 +164,8 @@ async function fillOpenOracleCreateForm() {
 	await setInputValue('Quote Token Address', openOracleCreateParameters.token2Address)
 	await setInputValue('Base Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
 	await setInputValue('Quote Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
-	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerReward))
-	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValue))
+	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerRewardAttoEth))
+	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValueAttoEth))
 	await clickElement(within(document.body).getByText('Advanced Dispute & Timing Settings', { selector: 'summary' }))
 	await setInputValue('Dispute Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())

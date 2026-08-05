@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = 'a9be11e89974352f824967c2891088bbe6e875e99a00cc0299d86d298483e975'
+const expectedProductionSoliditySourceFingerprint = '12a27563858be35a525fa1588600be16bb297860e6c376639853ad179363dfaa'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -59,7 +59,7 @@ const eventSourceByName: Record<string, string> = {
 	BidSubmitted: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	Burn: 'solidity/contracts/ReputationToken.sol',
 	CarryDepositConsumed: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
-	ChildEscalationRepMaterialized: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	ChildDisputeStakedRepMaterialized: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildPoolLinked: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	ChildPoolRepSwept: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildRepSplit: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
@@ -72,12 +72,12 @@ const eventSourceByName: Record<string, string> = {
 	DeployChild: 'solidity/contracts/Zoltar.sol',
 	DeploySecurityPool: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	DepositOnOutcome: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
-	DepositRep: 'solidity/contracts/peripherals/SecurityPool.sol',
+	RepDepositedToVault: 'solidity/contracts/peripherals/SecurityPool.sol',
 	DepositToEscalationGame: 'solidity/contracts/peripherals/SecurityPool.sol',
 	EscalationGameSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	EscalationMigrationEntitlementInitialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	EscalationMigrationEntitlementMaterialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
-	EscalationRepDrainedAtFork: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	DisputeStakedRepDrainedAtFork: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	TruthAuctionHaircutApplied: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	EthRefundDeferred: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	ExecutedStagedOperation: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
@@ -95,18 +95,18 @@ const eventSourceByName: Record<string, string> = {
 	MigrationRepSplit: 'solidity/contracts/Zoltar.sol',
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
-	OwnershipDenominatorSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	TotalRepBackingUnitsSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PendingEthRefundWithdrawn: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ParentRepLocked: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
-	PerformWithdrawRep: 'solidity/contracts/peripherals/SecurityPool.sol',
+	RepWithdrawnFromVault: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PoolForkModeActivated: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PriceReportRejected: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PriceReported: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PriceRequested: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	QuestionCreated: 'solidity/contracts/ZoltarQuestionData.sol',
-	RedeemRep: 'solidity/contracts/peripherals/SecurityPool.sol',
+	RepRedeemedFromVault: 'solidity/contracts/peripherals/SecurityPool.sol',
 	RepBurned: 'solidity/contracts/Zoltar.sol',
 	RepEthPriceSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
@@ -115,7 +115,7 @@ const eventSourceByName: Record<string, string> = {
 	SecurityPoolRegistered: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	ShareTokenSupplySet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	SharesRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
-	StagedOperationEscalationRepSnapshotted: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
+	StagedOperationDisputeStakedRepSnapshotted: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	StagedOperationQueued: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SystemStateSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	TruthAuctionFinalized: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
@@ -166,12 +166,12 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	},
 	{
 		name: 'UniverseInitialized',
-		parameters: 'uint248 indexed universeId,uint256 forkTime,uint256 forkQuestionId,uint256 forkingOutcomeIndex,ReputationToken reputationToken,uint248 indexed parentUniverseId,uint256 universeTheoreticalSupply',
+		parameters: 'uint248 indexed universeId,uint256 forkTime,uint256 forkQuestionId,uint256 forkingOutcomeIndex,ReputationToken reputationToken,uint248 indexed parentUniverseId,uint256 universeTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
 		name: 'DeployChild',
-		parameters: 'address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,ReputationToken childReputationToken,uint256 childUniverseTheoreticalSupply',
+		parameters: 'address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,ReputationToken childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
@@ -182,7 +182,7 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	{
 		name: 'DeploySecurityPool',
 		parameters:
-			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeWeiPerGas,uint256 currentRetentionRate,uint256 completeSetCollateralAmount',
+			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -192,34 +192,34 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	},
 	{
 		name: 'ChildRepSplit',
-		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,uint256 childPoolRepSplit,uint256 pendingChildRep',
+		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,uint256 childPoolRepSplitAttoRep,uint256 pendingChildRepAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	},
 	{
-		name: 'ChildEscalationRepMaterialized',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 repAmount,uint256 resultingEscalationRepBalance',
+		name: 'ChildDisputeStakedRepMaterialized',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 repAmountAttoRep,uint256 resultingDisputeStakedRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
 		name: 'ChildPoolRepSwept',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 repAmount,uint256 resultingChildPoolRepBalance',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 repAmountAttoRep,uint256 resultingChildPoolRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	},
 	{
 		name: 'EscalationMigrationEntitlementInitialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256[3] sourcePrincipalByOutcome,uint256[3] currentRepByOutcome,uint256 totalCurrentRep',
+		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] currentRepByOutcomeAttoRep,uint256 totalCurrentRepAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	},
 	{
 		name: 'EscalationMigrationEntitlementMaterialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256 indexed childOutcomeIndex,ISecurityPool child,uint256 childRep',
+		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256 indexed childOutcomeIndex,ISecurityPool child,uint256 childRepAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	},
-	{ name: 'TheoreticalSupplySet', parameters: 'uint256 totalTheoreticalSupply', sourcePath: 'solidity/contracts/ReputationToken.sol' },
-	{ name: 'Mint', parameters: 'address indexed account,uint256 value', sourcePath: 'solidity/contracts/ReputationToken.sol' },
+	{ name: 'TheoreticalSupplySet', parameters: 'uint256 totalTheoreticalSupplyAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
+	{ name: 'Mint', parameters: 'address indexed account,uint256 valueAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
 	{
 		name: 'Burn',
-		parameters: 'address indexed account,uint256 value,uint256 totalTheoreticalSupply',
+		parameters: 'address indexed account,uint256 valueAttoRep,uint256 totalTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 	},
 	{
@@ -228,39 +228,39 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
 	},
 	{
-		name: 'OwnershipDenominatorSet',
-		parameters: 'uint256 poolOwnershipDenominator',
+		name: 'TotalRepBackingUnitsSet',
+		parameters: 'uint256 totalRepBackingUnits',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
 	},
 	{
 		name: 'ShareTokenSupplySet',
-		parameters: 'uint256 shareTokenSupply',
+		parameters: 'uint256 shareTokenSupplyAttoShares',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
 	},
 	{ name: 'SystemStateSet', parameters: 'SystemState systemState', sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol' },
 	{
 		name: 'VaultEscrowUpdated',
-		parameters: 'address indexed vault,uint256 escrowedRepByVault,uint256 totalEscrowedRep',
+		parameters: 'address indexed vault,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedRepAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
 		name: 'ForkedEscrowRecorded',
-		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalTotal,uint256 childRepTotal,uint256 escrowedRepByVault,uint256 totalEscrowedRep,uint256 outcomeBalance',
+		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalTotalAttoRep,uint256 childRepTotalAttoRep,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedRepAttoRep,uint256 outcomeBalanceAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
 		name: 'VaultUnresolvedTotalsExported',
-		parameters: 'address indexed vault,address repReceiver,uint256[3] principalByOutcome,uint256 principalToTransfer,bool transferredRep',
+		parameters: 'address indexed vault,address repReceiver,uint256[3] principalByOutcomeAttoRep,uint256 principalToTransferAttoRep,bool transferredRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
 		name: 'ForkedEscrowExported',
-		parameters: 'address indexed vault,address repReceiver,uint256[3] sourcePrincipalByOutcome,uint256[3] childRepByOutcome,uint256 totalChildRepToTransfer,bool transferredRep',
+		parameters: 'address indexed vault,address repReceiver,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] childRepByOutcomeAttoRep,uint256 totalChildRepToTransferAttoRep,bool transferredRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
 		name: 'ForkedEscrowClaimed',
-		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalClaimed,uint256 childRepClaimed',
+		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalClaimedAttoRep,uint256 childRepClaimedAttoRep',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	},
 	{
@@ -292,7 +292,7 @@ const assemblyEventEmissions: Array<{
 	sourcePath: string
 }> = [
 	{
-		dataArguments: 'carryRoots, nullifierRoots, leafCounts, unresolvedTotals, resolutionBalances',
+		dataArguments: 'carryRoots, nullifierRoots, leafCounts, unresolvedTotalsAttoRep, resolutionBalancesAttoRep',
 		indexedArguments: 'sourceGame, snapshotId',
 		name: 'ForkCarryCheckpoint',
 		signature: 'ForkCarryCheckpoint(address,bytes32,bytes32[3],bytes32[3],uint256[3],uint256[3],uint256[3])',
@@ -300,7 +300,7 @@ const assemblyEventEmissions: Array<{
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameCarry.sol',
 	},
 	{
-		dataArguments: 'BinaryOutcomes.BinaryOutcome(outcomeIndex), amount, reason, carryTotal, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
+		dataArguments: 'BinaryOutcomes.BinaryOutcome(outcomeIndex), amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
 		name: 'CarryDepositConsumed',
 		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)',
@@ -316,9 +316,9 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 			{ argument: 'parent', offset: '0x04' },
 			{ argument: 'migrationProxy', offset: '0x24' },
 			{ argument: 'sourceGame', offset: '0x44' },
-			{ argument: 'poolRepAtFork', offset: '0x64' },
-			{ argument: 'escalationRepAtFork', offset: '0x84' },
-			{ argument: 'resultingLockedRep', offset: '0xa4' },
+			{ argument: 'poolRepAtForkAttoRep', offset: '0x64' },
+			{ argument: 'disputeStakedRepAtForkAttoRep', offset: '0x84' },
+			{ argument: 'resultingLockedRepAttoRep', offset: '0xa4' },
 		],
 		calldataLength: '0xc4',
 		selector: '0x408d33da',
@@ -329,7 +329,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'c9b0bcaaddd862796e4cb025ea35d428b2ba798ff5ceceb77d4821b26a8833d5'
+const referencedEventAbiFingerprint = 'c12eafc217df8a598467eb27ce0efc8a81a13366b126250e038085ee2e2d9f01'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -350,7 +350,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ReputationToken.sol': {
 		burn: ['external(address,uint256)'],
 		mint: ['external(address,uint256)'],
-		setMaxTheoreticalSupply: ['external(uint256)'],
+		setMaxTheoreticalSupplyAttoRep: ['external(uint256)'],
 	},
 	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': {
 		deployChildSecurityPool: ['external(ISecurityPool,IShareToken,uint248,uint256,uint256,uint256,uint256)'],
@@ -392,32 +392,32 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
-		addFeeEligibleSecurityBondAllowance: ['external(address,uint256)'],
+		addFeeEligibleCoverageCommitmentAttoEth: ['external(address,uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		burnEscalationWinnerHaircut: ['external(uint256)'],
 		configureVault: ['external(address,uint256,uint256,uint256)'],
 		createCompleteSet: ['external()'],
-		depositRep: ['external(uint256)'],
+		depositRepToVault: ['external(uint256)'],
 		depositToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 		initializeForkedEscalationGame: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
 		performLiquidation: ['external(address,address,uint256,uint256,uint256,uint256,uint256)'],
-		performSetSecurityBondsAllowance: ['external(address,uint256)'],
-		performWithdrawRep: ['external(address,uint256)'],
+		executeCoverageCommitmentUpdate: ['external(address,uint256)'],
+		withdrawRepFromVault: ['external(address,uint256)'],
 		receive: ['external payable()'],
 		redeemCompleteSet: ['external(uint256)'],
 		redeemFees: ['external(address)'],
-		redeemRep: ['external(address)'],
+		redeemRepFromVault: ['external(address)'],
 		redeemShares: ['external()'],
 		resumeForkedEscalationGame: ['external()'],
 		setAwaitingForkContinuation: ['external(bool)'],
-		setOwnershipDenominator: ['external(uint256)'],
+		setTotalRepBackingUnits: ['external(uint256)'],
 		setPoolFinancials: ['external(uint256,uint256,uint256)'],
 		setStartingParams: ['external(uint256,uint256)'],
 		setSystemState: ['external(SystemState)'],
-		setTotalShares: ['external(uint256)'],
+		setTotalSharesAttoShares: ['external(uint256)'],
 		transferEth: ['external(address payable,uint256)'],
-		updateCollateralAmount: ['public()'],
+		updateSettlementCollateral: ['public()'],
 		updateRetentionRate: ['public()'],
 		updateVaultFees: ['public(address)'],
 		withdrawForkedEscalationDeposits: ['external(QuestionOutcome,CarriedDepositProof[])'],
@@ -464,25 +464,25 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
-	'solidity/contracts/ReputationToken.sol': '0d2445ed40b55f81c68026363738ae2cd5290aa001b56e069cb31b73d321d3f0',
-	'solidity/contracts/Zoltar.sol': '2c00ff05d4ec7476a23ee5a86e3934d28b59a039da7d634c4422435696508ae2',
+	'solidity/contracts/ReputationToken.sol': 'b3e68791ded4f7fd9cc70785bdd3c55d5ec7fde5ad64b7fbe8aee03d5d273e3b',
+	'solidity/contracts/Zoltar.sol': '6479e6b24905f8f3299e486703df934aa7811152a9d20517596da64cbcd4b471',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
-	'solidity/contracts/peripherals/EscalationGame.sol': '008f81a3f916c0bee2303fac2d2e4c7934e5e9570741699e138d266c8261e177',
+	'solidity/contracts/peripherals/EscalationGame.sol': '41394612ae4488f08c9f4c18ff912cec089fc40a3f5d501a27cb8b2fabc4db57',
 	'solidity/contracts/peripherals/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/EscalationGameCarry.sol': '7fd8be73b61c6624fb644d2b5818fa414e582e9ed4eea54eceee533f4a022d47',
-	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'b3755415ee7ff2d0457653e9c9e6a6cca56435ed3b76008ab5446c315f837452',
-	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '60c97762c2d882dcb82dd15fa4059f1fc440c9829df809a7932429121a03d83f',
+	'solidity/contracts/peripherals/EscalationGameCarry.sol': 'bdd7cfe47523c5e0c8985eec993214de44caf88fc4f2e6f1586d2d03c0a02ef0',
+	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'c75cd0c9ea134a3bfa03227d0500485049818553447b4b258ff220cb0d201dde',
+	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '73f9aad63165cacbff5bd02fd57a6b5a3f73737545018ecdf152c46f905c8c32',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'd6e92001bdc028def593ed95c37a8c23bab0a9006d0a5c9164f9a9f92b84ad49',
-	'solidity/contracts/peripherals/SecurityPool.sol': '96815522311e78330f2e18b8d800f5fb80b919a1676f7fee8cd98fc71bf0fae8',
+	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': '651673bb591a5b420cde1eaf82f35bb06b457d2b6de9b1eeba0d9ee3ac67a958',
+	'solidity/contracts/peripherals/SecurityPool.sol': 'c36c725f73b452429f4724f351e1560c286705f537f19c15e0569fb7ddc7a7c6',
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'c6fbecf8a9b808a1111fadb9cbb1a5b53edc30dff9cdac2f116fa58133536c2f',
-	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '22009fa557a407a62acc50e796d78fbfa46cc3a788a557db9c57cec0cb28d0a0',
+	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'bda62dec35e08fdbe8173a1b1464743e4250e119df60a66248dd2e3170765139',
+	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '618aed7f3f8bdfd50267b9d7533db3f489f45715f1cd448f5107f67631814d34',
 	'solidity/contracts/peripherals/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
-	'solidity/contracts/peripherals/tokens/ShareToken.sol': '45fffaf3a3150648f3f43a9129d2a5af0ddc4e261de52a6ad379fa804e44672d',
+	'solidity/contracts/peripherals/tokens/ShareToken.sol': '2a3339ca5db0ccabc2bc10318ff3baf52273b90837f01683d3e5147a13fd2d0d',
 }
 
 const readDeclarationExclusionsBySource: Record<string, string[]> = {
@@ -530,23 +530,23 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '85f2ab1d0cf3cfbfc5411671a1c5858ee548021d053d4dbabb1879fb1c78be63',
+		compiledAbiFingerprint: '9e84361ae5635d4370f85f654efc8a70e0aa805e785544cc5e7835261d38543e',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: 'd7c4966a405469df7438e594454842b4caa5864c9dda64c4098ef7a5309cada6',
+		readAbiFingerprint: 'e97b9eb4ca404aff61d3d78e0880d651c06613c0c495f1265592b4aba8bc7673',
 		readSurface:
-			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
 			{ name: 'forkQuestionMatches' },
 			{ name: 'getRepToken' },
-			{ name: 'getForkThreshold' },
-			{ name: 'getNonDecisionThreshold' },
-			{ name: 'getUniverseTheoreticalSupply' },
+			{ name: 'getForkThresholdAttoRep' },
+			{ name: 'getNonDecisionThresholdAttoRep' },
+			{ name: 'getUniverseTheoreticalSupplyAttoRep' },
 			{ name: 'getChildUniverseId' },
 			{ name: 'getDeployedChildUniverses' },
-			{ name: 'getMigrationRepBalance' },
+			{ name: 'getMigrationRepBalanceAttoRep' },
 		],
 		readStorageDeclarations: [{ name: 'universes' }, { name: 'deployedChildOutcomeIndexes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
@@ -560,7 +560,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`UniverseForked`',
 			},
 			{
-				call: '`burnRep(universeId, amount)`',
+				call: '`burnRep(universeId, amountAttoRep)`',
 				caller: 'Any REP holder; the caller can burn only its own balance',
 				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.',
 				declarations: [{ name: 'burnRep' }],
@@ -576,7 +576,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`DeployChild`',
 			},
 			{
-				call: '`addRepToMigrationBalance(universeId, amount)`',
+				call: '`addRepToMigrationBalance(universeId, amountAttoRep)`',
 				caller: 'Parent REP holder',
 				effect: "Burns or sinks additional parent REP and increases the caller's reusable migration balance.",
 				declarations: [{ name: 'addRepToMigrationBalance' }],
@@ -584,7 +584,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`MigrationRepAdded`',
 			},
 			{
-				call: '`splitMigrationRep(universeId, amount, outcomeIndexes)`',
+				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
 				caller: 'Migration-balance holder',
 				effect:
 					'Mints `amount` of child REP into every selected branch, deploying missing children lazily. An empty outcome list returns after the universe-fork guard without outcome validation, deployment, minting, or events. A nonempty zero-amount call still validates every outcome, may deploy missing children, performs zero-value child REP mints, and records a zero split for every branch.',
@@ -595,13 +595,13 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'a7c983224bd1738e3cf9300f139edfa6968519466c71d881c65242d2013ed6c1',
+		compiledAbiFingerprint: '14cee3c68c22f454d0d83f16aad27d40b686fa8abc7fb0220c03ba19ba609f64',
 		name: 'ReputationToken',
 		purpose: 'Implements universe-specific ERC-20 REP and enforces the supply ceiling maintained by Zoltar.',
-		readAbiFingerprint: '16a3e564da0ed3bc8da54a65d8051e810d27f8f50db525f5f1d176301168efd7',
-		readSurface: 'Use `getTotalTheoreticalSupply`, `zoltar`, and the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads.',
+		readAbiFingerprint: '1385406a6e5989eb754a8adeb36f946309659127e088734528cdffa7f8bbe7c8',
+		readSurface: 'Use `getTotalTheoreticalSupplyAttoRep`, `zoltar`, and the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads.',
 		readDeclarations: [
-			{ name: 'getTotalTheoreticalSupply' },
+			{ name: 'getTotalTheoreticalSupplyAttoRep' },
 			{ name: 'name', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'symbol', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'decimals', sourcePath: 'solidity/contracts/ERC20.sol' },
@@ -613,15 +613,15 @@ const contractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 		interactions: [
 			{
-				call: '`setMaxTheoreticalSupply(totalTheoreticalSupply)`',
+				call: '`setMaxTheoreticalSupplyAttoRep(totalTheoreticalSupplyAttoRep)`',
 				caller: '`Zoltar` only',
 				effect: 'Sets the child token theoretical-supply ceiling used to bound subsequent migration mints.',
-				declarations: [{ name: 'setMaxTheoreticalSupply' }],
+				declarations: [{ name: 'setMaxTheoreticalSupplyAttoRep' }],
 				preconditions: 'Called by Zoltar as part of child-universe creation.',
 				signals: '`TheoreticalSupplySet`',
 			},
 			{
-				call: '`mint(account, value)`',
+				call: '`mint(account, valueAttoRep)`',
 				caller: '`Zoltar` only',
 				effect: 'Mints branch REP to an account.',
 				declarations: [{ name: 'mint' }],
@@ -629,7 +629,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`Mint` and ERC-20 `Transfer`',
 			},
 			{
-				call: '`burn(account, value)`',
+				call: '`burn(account, valueAttoRep)`',
 				caller: '`Zoltar` only',
 				effect: 'Burns account REP and reduces both actual and theoretical supply by the same amount.',
 				declarations: [{ name: 'burn' }],
@@ -663,29 +663,29 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'd74fe342c1762ca3d8f202b4ea030d7c91557cc73293f1571a640d5fe513d409',
+		compiledAbiFingerprint: '36d2359ae4e137b17b36427dd66d17901731d27a28cd8ada8d1bd8826dd68adf',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
-		readAbiFingerprint: 'c0ba5d92d33347389bb7ec828c057ea30e0ddc9457f87225d517966bde45e498',
+		readAbiFingerprint: 'd78fb242d1e6ee936527b4e663eee6f67da2ed8d157bb0800dfa4f5366ce371e',
 		readSurface:
-			'Use `initialEscalationGameDeposit` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `initialEscalationGameDepositAttoRep` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
-		readStorageDeclarations: [{ name: 'initialEscalationGameDeposit' }],
+		readStorageDeclarations: [{ name: 'initialEscalationGameDepositAttoRep' }],
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
-				call: '`deployOriginSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas)`',
+				call: '`deployOriginSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
 				caller: 'Anyone',
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective free-REP multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDepositAttoRep`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
-				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, completeSetCollateralAmount)`',
+				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, settlementCollateralAttoEth)`',
 				caller: '`SecurityPoolForker` only',
-				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeWeiPerGas` from the parent coordinator and a forker-owned truth auction, while retaining the parent lineage share token.',
+				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeAttoEthPerGas` from the parent coordinator and a forker-owned truth auction, while retaining the parent lineage share token.',
 				declarations: [{ name: 'deployChildSecurityPool' }],
 				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; target origin/universe slot is unclaimed; deployment arguments satisfy downstream constructors and wiring.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
@@ -693,27 +693,27 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'ebb5706c95848b7f6503366d9def241d87202ce9d55bf01a970642a8605e1ee7',
+		compiledAbiFingerprint: '09674e109c0a5f98292d5e5033bf64159551fe50048e10560b58f488aea61306',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '43889522e14a3aa075aef6b20dcff8f55408671b5daaa3cd3500e106954767c3',
+		readAbiFingerprint: '09ad16859e7cc7f00a27a03e5fcd02ec6abb509d724ce92ee855f89fdb743119',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebt`, `vaultBadDebt`, and `systemState`. Bad-debt getters are cumulative audit totals; active allowance excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalCoverageCommitmentAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebtAttoEth`, `vaultBadDebtAttoEth`, and `systemState`. Bad-debt getters are cumulative audit totals; active coverage commitment excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `attoRepToBackingUnitsRoundUp`, `backingUnitsToAttoRep`, `getTotalPoolHeldRepAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
-			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
+			'Price-sensitive withdrawal, coverage-commitment, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
 			{ name: 'securityPoolEventEmitter' },
 			{ name: 'getVaultCount' },
 			{ name: 'getActiveVaultCount' },
 			{ name: 'getVaults' },
 			{ name: 'getActiveVaults' },
-			{ name: 'sharesToCash' },
-			{ name: 'cashToShares' },
-			{ name: 'repToPoolOwnership' },
-			{ name: 'repToPoolOwnershipRoundUp' },
-			{ name: 'poolOwnershipToRep' },
-			{ name: 'getTotalRepBalance' },
-			{ name: 'totalAccruedFees' },
+			{ name: 'attoSharesToAttoEth' },
+			{ name: 'attoEthToAttoShares' },
+			{ name: 'attoRepToBackingUnits' },
+			{ name: 'attoRepToBackingUnitsRoundUp' },
+			{ name: 'backingUnitsToAttoRep' },
+			{ name: 'getTotalPoolHeldRepAttoRep' },
+			{ name: 'totalAccruedFeesAttoEth' },
 			{ name: 'getPoolAccountingSnapshot' },
 			{ name: 'getVaultFeeRemainder' },
 			{ name: 'isEscalationResolved' },
@@ -721,7 +721,7 @@ const contractReferences: ContractReference[] = [
 		readStorageDeclarations: [
 			{ name: 'questionId' },
 			{ name: 'universeId' },
-			{ name: 'initialEscalationGameDeposit' },
+			{ name: 'initialEscalationGameDepositAttoRep' },
 			{ name: 'zoltar' },
 			{ name: 'parent' },
 			{ name: 'shareToken' },
@@ -734,25 +734,25 @@ const contractReferences: ContractReference[] = [
 			{ name: 'securityPoolForker' },
 			{ name: 'truthAuction' },
 			{ name: 'securityPoolFactory' },
-			{ name: 'totalSecurityBondAllowance', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'completeSetCollateralAmount', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'poolOwnershipDenominator', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalCoverageCommitmentAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'settlementCollateralAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalRepBackingUnits', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'statoblastSecurityMultiplierBps', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'shareTokenSupply', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'totalFeesOwedToVaults', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'shareTokenSupplyAttoShares', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalClaimableVaultFeesAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'lastUpdatedFeeAccumulator', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'feeIndex', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'currentRetentionRate', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'awaitingForkContinuation', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'securityVaults', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'totalBadDebt', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
-			{ name: 'vaultBadDebt', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalBadDebtAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'vaultBadDebtAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'systemState', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
 		interactions: [
 			{
-				call: '`burnEscalationWinnerHaircut(amount)`',
+				call: '`burnEscalationWinnerHaircut(amountAttoRep)`',
 				caller: "This pool's `EscalationGame` only",
 				effect: 'Burns the winning-deposit haircut from REP already escrowed in the game.',
 				declarations: [{ name: 'burnEscalationWinnerHaircut' }],
@@ -760,17 +760,17 @@ const contractReferences: ContractReference[] = [
 				signals: '`RepBurned` and ERC-20 `Transfer`; child REP also emits `Burn`',
 			},
 			{
-				call: '`depositRep(repAmount)`',
+				call: '`depositRepToVault(repAmountAttoRep)`',
 				caller: 'Vault owner',
-				effect: 'Transfers REP into the pool and credits proportional pool ownership.',
-				declarations: [{ name: 'depositRep' }],
+				effect: 'Transfers REP into the pool and credits proportional REP backing units.',
+				declarations: [{ name: 'depositRepToVault' }],
 				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; resulting vault REP meets the minimum.',
-				signals: '`DepositRep`',
+				signals: '`RepDepositedToVault`',
 			},
 			{
 				call: '`redeemFees(vault)`',
 				caller: 'Anyone; any nonzero ETH payment is always sent to `vault`',
-				effect: "First accrues the vault's fees. If resulting unpaid fees are zero, returns without payment; otherwise clears and pays the full amount.",
+				effect: "First accrues the vault's fees. If resulting claimable fees are zero, returns without payment; otherwise clears and pays the full amount.",
 				declarations: [{ name: 'redeemFees' }],
 				preconditions: 'A nonzero payment path requires `vault` to accept ETH.',
 				signals: 'Accrual checkpoints only when accrual state changes; both `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint` for a nonzero redemption; no event when fees and accrual state are unchanged',
@@ -781,14 +781,14 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					"Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible bond capacity covers the new collateral (the pool's resulting total collateral, not merely this deposit); under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.",
+					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible coverage commitment covers the resulting settlement collateral, not merely this deposit; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
-				call: '`redeemCompleteSet(completeSetAmount)`',
+				call: '`redeemCompleteSet(amountAttoShares)`',
 				caller: 'Anyone; positive redemption requires the caller to hold the complete set',
 				effect:
-					"Burns equal balances of all three outcomes and pays `completeSetAmount * completeSetCollateralAmount / shareTokenSupply` using the pool's remaining economic claim supply as its collateral denominator. Complete-set issuance adds to that denominator, while complete-set and winning-share redemption consume it; fork-time source entitlements materialize without changing it because their claims are already reserved. Zero passes the token and accounting checks and follows the normal zero-value event, checkpoint, and ETH-send path; rejection of that ETH call reverts the transaction.",
+					"Burns equal balances of all three outcomes and pays `amountAttoShares * settlementCollateralAttoEth / shareTokenSupplyAttoShares` using the pool's remaining economic claim supply as its collateral denominator. Complete-set issuance adds to that denominator, while complete-set and winning-share redemption consume it; fork-time source entitlements materialize without changing it because their claims are already reserved. Zero passes the token and accounting checks and follows the normal zero-value event, checkpoint, and ETH-send path; rejection of that ETH call reverts the transaction.",
 				declarations: [{ name: 'redeemCompleteSet' }],
 				preconditions: 'Operational and unforked; caller owns every outcome amount requested; caller accepts the resulting ETH call, including zero value. Zero is accepted without a token balance.',
 				signals: '`CompleteSetRedeemed` and `PoolAccountingCheckpoint`',
@@ -802,21 +802,21 @@ const contractReferences: ContractReference[] = [
 				signals: '`SharesRedeemed` and `PoolAccountingCheckpoint`',
 			},
 			{
-				call: '`redeemRep(vault)`',
+				call: '`redeemRepFromVault(vault)`',
 				caller: 'Anyone; REP is always sent to `vault`',
-				effect: "Burns the vault's pool-ownership claim and returns its proportional REP.",
-				declarations: [{ name: 'redeemRep' }],
+				effect: "Burns the vault's REP backing units and returns its proportional vault REP backing.",
+				declarations: [{ name: 'redeemRepFromVault' }],
 				preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow and has redeemable REP.',
-				signals: '`RedeemRep`',
+				signals: '`RepRedeemedFromVault`',
 			},
 			{
 				call: '`depositToEscalationGame(outcome, maxAmount)`',
 				caller: 'Vault owner',
 				effect:
-					"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThreshold - 1` instead. Repeat deposits use the existing game's stored `startBond` and `nonDecisionThreshold`. Every accepted deposit removes enough vault ownership and escrows REP on the selected outcome.",
+					"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThresholdAttoRep - 1` instead. Repeat deposits use the existing game's stored `startBondAttoRep` and `nonDecisionThresholdAttoRep`. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.",
 				declarations: [{ name: 'depositToEscalationGame' }],
 				preconditions:
-					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one atomic REP unit; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict free-REP migration coverage; fresh price when allowance is nonzero.',
+					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict pool-held vault REP backing migration coverage; fresh price when coverage commitment is nonzero.',
 				signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 			},
 			{
@@ -825,7 +825,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'A nonempty list settles local deposits and pays winning REP to the immutable depositor recorded by each deposit. Liquidation cannot change that payout address. An empty list returns after the outer lifecycle checks without settlement, state change, or event.',
 				declarations: [{ name: 'withdrawFromEscalationGame' }],
 				preconditions:
-					'Game configured; operational pool; valid final outcome. If an external fork interrupted the game, parent withdrawal stays locked: winners settle in the child by carried proof, inherited losers require no transaction, and parent-lock cleanup is optional. A nonempty list additionally requires valid local indexes and one common depositor.',
+					'Game configured; operational pool; valid final outcome. If an external fork interrupted the game, parent withdrawal stays unavailable: winners settle in the child by carried proof, inherited losers require no transaction, and unresolved parent escalation-deposit accounting cleanup is optional. A nonempty list additionally requires valid local indexes and one common depositor.',
 				signals: 'Per processed deposit, escalation-game `CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout. No event for an empty list',
 			},
 			{
@@ -838,56 +838,56 @@ const contractReferences: ContractReference[] = [
 				signals: 'Per processed proof, escalation-game `CarryDepositConsumed` and `ClaimDeposit`. No event for an empty list',
 			},
 			{
-				call: '`updateCollateralAmount()`',
+				call: '`updateSettlementCollateral()`',
 				caller: 'Anyone',
 				effect:
-					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from collateral into the unallocated reserve and advances the accumulator. With positive elapsed time but zero fee-eligible allowance it clears denominator-specific remainder and advances the timestamp without charging fees.",
-				declarations: [{ name: 'updateCollateralAmount' }],
+					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible coverage commitment it clears denominator-specific remainder and advances the timestamp without charging fees.",
+				declarations: [{ name: 'updateSettlementCollateral' }],
 				preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
-				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-allowance branch; no event for an unchanged timestamp',
+				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-coverage-commitment branch; no event for an unchanged timestamp',
 			},
 			{
 				call: '`updateRetentionRate()`',
 				caller: 'Anyone',
-				effect: 'Recalculates the retention rate from current collateral and vault-assigned, fee-eligible bond allowance.',
+				effect: 'Recalculates the retention rate from current collateral and vault-assigned, fee-eligible coverage commitment.',
 				declarations: [{ name: 'updateRetentionRate' }],
-				preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero fee-eligible allowance selects the maximum retention rate.',
+				preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero fee-eligible coverage commitment selects the maximum retention rate.',
 				signals: '`PoolAccountingCheckpoint` only when the stored retention rate changes; no event for a no-op',
 			},
 			{
 				call: '`updateVaultFees(vault)`',
 				caller: 'Anyone for any address',
-				effect: 'First updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, updates active-vault membership, and returns leftover reserve to collateral once a forked pool has checkpointed all eligible allowance.',
+				effect: 'First updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, updates active-vault membership, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible coverage commitment.',
 				declarations: [{ name: 'updateVaultFees' }],
 				preconditions: 'No caller, nonzero-vault, or lifecycle restriction.',
-				signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or fee debt changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
+				signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
 			},
 			{
-				call: '`performWithdrawRep(vault, repAmount)`',
+				call: '`withdrawRepFromVault(vault, repAmountAttoRep)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
-				effect: 'Removes the requested proportional ownership, or the full ownership when the requested remainder would fall below the REP minimum, and transfers the resulting REP to `vault`.',
-				declarations: [{ name: 'performWithdrawRep' }],
-				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict free-REP migration coverage.',
-				signals: 'REP `Transfer`, `PerformWithdrawRep`, and `VaultAccountingCheckpoint`, including a zero-value transfer/event path if the trusted coordinator supplies zero',
+				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum, and transfers the resulting withdrawable REP to `vault`.',
+				declarations: [{ name: 'withdrawRepFromVault' }],
+				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict pool-held vault REP backing migration coverage.',
+				signals: 'REP `Transfer`, `RepWithdrawnFromVault`, and `VaultAccountingCheckpoint`, including a zero-value transfer/event path if the trusted coordinator supplies zero',
 			},
 			{
 				call: '`performLiquidation(...)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves the funded allowance and its fixed 5%-bonus free-REP award to the caller. Escalation claims, accrued unpaid fees, and free-REP surplus remain with the target. When the user requests at least the target's full current allowance through the coordinator, the pool's maximum-request path records any untransferred residual in `vaultBadDebt` and cumulative `totalBadDebt`, and removes it from active and fee-eligible allowance without minting ownership or socializing the bonus. If an otherwise funded slice would leave the caller below the minimum allowance, that slice is not transferred and the complete target allowance is recorded instead.",
+					"Moves the funded coverage commitment and its fixed 5%-bonus vault REP backing award to the caller. Dispute-staked REP claims, accrued claimable fees, and surplus vault REP backing remain with the target. When the user requests at least the target's full current coverage commitment through the coordinator, the pool's maximum-request path records any untransferred residual as realized attoETH-denominated bad debt in `vaultBadDebtAttoEth` and cumulative `totalBadDebtAttoEth`; the target vault and pool bear that nonrecoverable writeoff. It removes the writeoff from active and fee-eligible coverage commitment without minting REP backing units or socializing the bonus. If an otherwise funded slice would leave the caller below the minimum coverage commitment, that slice is not transferred and the complete target coverage commitment is recorded instead.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target ownership and allowance must exactly match the quote; live target state is unsafe at the current pool REP-per-ownership rate. Ordinary moved debt is capped to the amount whose complete 105% award is funded by target free REP. A partial target with remaining allowance preserves its REP and allowance floors. When debt moves, the caller satisfies both floors and remains healthy. A bad-debt-only maximum execution performs no caller transfer or position-floor check.',
-				signals: 'Fee-accrual and pre-execution target or caller `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` and the post-transfer caller checkpoint only when debt moves; `VaultBadDebtRecorded` when a residual is written off; final target and pool accounting checkpoints',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target REP backing units and coverage commitment must exactly match the quote; live target state is unsafe at the current REP-per-backing-unit rate. An ordinary coverage-commitment transfer is capped to the amount whose complete 105% award is funded by target vault REP backing. A partial target with remaining coverage commitment preserves its REP-backing and commitment floors. When commitment moves, the caller satisfies both floors and remains healthy. A bad-debt-only maximum execution performs no caller transfer or position-floor check.',
+				signals: 'Fee-accrual and pre-execution target or caller `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` and the post-transfer caller checkpoint only when coverage commitment moves; `VaultBadDebtRecorded` when a residual is written off; final target and pool accounting checkpoints',
 			},
 			{
-				call: '`performSetSecurityBondsAllowance(callerVault, amount)`',
+				call: '`executeCoverageCommitmentUpdate(callerVault, amountAttoEth)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
-				effect: 'Accrues the vault, replaces its total and fee-eligible allowance contribution, clears allowance-denominator rounding carry, updates active membership, and recalculates retention.',
-				declarations: [{ name: 'performSetSecurityBondsAllowance' }],
+				effect: 'Accrues the vault, replaces its total and fee-eligible coverage-commitment contribution, clears coverage-commitment-denominator rounding carry, updates active membership, and recalculates retention.',
+				declarations: [{ name: 'executeCoverageCommitmentUpdate' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault and aggregate pool totals each pass associated-REP pool coverage and strict free-REP migration coverage; collateral stays within vault-assigned, fee-eligible capacity; new allowance is zero or meets the minimum debt.',
-				signals: 'Accrual checkpoints as needed; retention `PoolAccountingCheckpoint` if its rate changes; always final `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when replacing an allowance with the same value',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault and aggregate pool totals each pass associated-REP pool coverage and strict pool-held vault REP backing migration coverage; settlement collateral stays within vault-assigned, fee-eligible coverage commitment; the new coverage commitment is zero or meets the minimum.',
+				signals: 'Accrual checkpoints as needed; retention `PoolAccountingCheckpoint` if its rate changes; always final `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when replacing a coverage commitment with the same value',
 			},
 			{
 				call: '`setStartingParams(...)`',
@@ -904,7 +904,7 @@ const contractReferences: ContractReference[] = [
 				effect:
 					"Sets `PoolForked`, accrues through the fork clamp, transfers the pool's entire REP balance to the forker, then makes the pool drain its configured escalation game's entire REP balance to the forker. Repeated calls are not lifecycle-guarded and transfer any balances replenished since the prior call before repeating the checkpoints.",
 				preconditions: "The pool has no inherited fixed outcome, so a fixed child cannot reopen for a later universe fork. There is no current-state guard otherwise. A configured game's drain must succeed or the entire activation reverts without propagating its reason data.",
-				signals: 'Pool REP `Transfer` always, including at zero; configured-game REP `Transfer` only for a positive game balance; accrual checkpoint when due; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
+				signals: 'Pool-held REP `Transfer` always, including at zero; configured-game REP `Transfer` only for a positive game balance; accrual checkpoint when due; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`initializeForkedEscalationGame(...)`',
@@ -947,35 +947,35 @@ const contractReferences: ContractReference[] = [
 				signals: '`SystemStateSet`, including for a repeated state',
 			},
 			{
-				call: '`configureVault(vault, poolOwnership, securityBondAllowance, vaultFeeIndex)`',
+				call: '`configureVault(vault, repBackingUnits, coverageCommitmentAttoEth, vaultFeeIndex)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureVault' }],
-				effect: 'Tracks the vault, replaces its ownership, allowance, and fee index, clears pooled fee-index remainder when allowance changes, and updates active-vault ordering.',
+				effect: 'Tracks the vault, replaces its REP backing units, coverage commitment, and fee index, clears pooled fee-index remainder when coverage commitment changes, and updates active-vault ordering.',
 				preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},
 			{
-				call: '`setOwnershipDenominator(newDenominator)`',
+				call: '`setTotalRepBackingUnits(newDenominator)`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'setOwnershipDenominator' }],
-				effect: 'Replaces the pool ownership denominator.',
+				declarations: [{ name: 'setTotalRepBackingUnits' }],
+				effect: 'Replaces the REP backing units denominator.',
 				preconditions: 'No lifecycle or value-change guard.',
-				signals: '`OwnershipDenominatorSet`, including for zero or a repeated value',
+				signals: '`TotalRepBackingUnitsSet`, including for zero or a repeated value',
 			},
 			{
-				call: '`setTotalShares(newTotalShares)`',
+				call: '`setTotalSharesAttoShares(newTotalSharesAttoShares)`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'setTotalShares' }],
-				effect: 'Replaces stored `shareTokenSupply`, the denominator used by `sharesToCash` and complete-set redemption.',
+				declarations: [{ name: 'setTotalSharesAttoShares' }],
+				effect: 'Replaces stored `shareTokenSupplyAttoShares`, the denominator used by `attoSharesToAttoEth` and complete-set redemption.',
 				preconditions: 'No lifecycle or value-change guard.',
 				signals: '`ShareTokenSupplySet`, including for zero or a repeated value',
 			},
 			{
-				call: '`setPoolFinancials(newCollateral, newTotalBondAllowance, newFeeEligibleBondAllowance)`',
+				call: '`setPoolFinancials(newSettlementCollateralAttoEth, newTotalCoverageCommitmentAttoEth, newFeeEligibleCoverageCommitmentAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setPoolFinancials' }],
-				effect: 'Replaces collateral and both allowance totals, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
-				preconditions: 'Total allowance covers collateral and fee-eligible allowance does not exceed total allowance; no lifecycle or value-change guard.',
+				effect: 'Replaces settlement collateral and both coverage-commitment totals, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
+				preconditions: 'Total coverage commitment covers settlement collateral and fee-eligible coverage commitment does not exceed total coverage commitment; no lifecycle or value-change guard.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{
@@ -987,25 +987,25 @@ const contractReferences: ContractReference[] = [
 				signals: '`AuthorizationUpdated` only on first authorization; no event when already authorized',
 			},
 			{
-				call: '`transferEth(receiver, amount)`',
+				call: '`transferEth(receiver, amountAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'transferEth' }],
-				effect: 'Reduces tracked collateral by `amount`, checkpoints the reconciliation, and calls `receiver` with that ETH. At zero amount it reduces no collateral but still emits the checkpoint and performs a zero-value call; callback rejection rolls back the transaction and checkpoint.',
-				preconditions: 'Fee liabilities are covered; `amount` fits both free pool balance and tracked collateral; `receiver` accepts the ETH call, including zero value.',
+				effect: 'Reduces tracked settlement collateral by `amount`, checkpoints the reconciliation, and calls `receiver` with that ETH. At zero amount it reduces no settlement collateral but still emits the checkpoint and performs a zero-value call; callback rejection rolls back the transaction and checkpoint.',
+				preconditions: 'Fee liabilities are covered; `amount` fits both unreserved pool ETH and tracked settlement collateral; `receiver` accepts the ETH call, including zero value.',
 				signals: '`PoolAccountingCheckpoint`, including at zero amount; no dedicated ETH-transfer event',
 			},
 			{
-				call: '`addFeeEligibleSecurityBondAllowance(vault, amount)`',
+				call: '`addFeeEligibleCoverageCommitmentAttoEth(vault, amountAttoEth)`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'addFeeEligibleSecurityBondAllowance' }],
-				effect: 'Adds newly auction-claimed security-bond allowance to the live fee denominator, clears the pooled fee-index rounding remainder, and immediately recalculates retention against the assigned denominator.',
-				preconditions: 'The resulting fee-eligible allowance cannot exceed total security-bond allowance; no lifecycle, vault, positive-amount, or value-change guard.',
+				declarations: [{ name: 'addFeeEligibleCoverageCommitmentAttoEth' }],
+				effect: 'Adds newly auction-claimed coverage commitment to the live fee denominator, clears the pooled fee-index rounding remainder, and immediately recalculates retention against the assigned denominator.',
+				preconditions: 'The resulting fee-eligible coverage commitment cannot exceed total coverage commitment; no lifecycle, vault, positive-amount, or value-change guard.',
 				signals: 'Retention-rate `PoolAccountingCheckpoint` first when the rate changes, then `VaultAccountingCheckpoint` and auction-claim `PoolAccountingCheckpoint`, including the latter two at zero amount; the calling forker emits `ClaimAuctionProceeds` only after the broader credit workflow completes',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
 				caller: "Forker, this pool's truth auction, or parent pool only",
-				effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than collateral or fees.',
+				effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
 				preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
 				signals: 'No dedicated receive event; the calling protocol step emits its own event',
@@ -1013,15 +1013,15 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '8c7458fdb53493a7885c09e85c0b971cad80664f957b1912189abc9340a8c1a9',
+		compiledAbiFingerprint: '7333ac5b75a94212d20327acb0df380364b15dd8d3dcdf57e7872c3979d1486c',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
-		readAbiFingerprint: 'aa79d2d795e90ce0f0347186328bacbb1d5e28bbf7792359569ae44fead526f2',
+		readAbiFingerprint: '082be6acbff6fabaa8fa5095520eba0eee9592a06e5aebcf188acb0d5ab5a7c4',
 		readSurface:
-			'Use `zoltar`, `forkData`, `getMigratedRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `repToPoolOwnership`, and `poolOwnershipToRep` to reconstruct fork progress and preview migration conversions.',
+			'Use `zoltar`, `forkData`, `getMigratedRepAttoRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
 		readDeclarations: [
 			{ name: 'forkData' },
-			{ name: 'getMigratedRep' },
+			{ name: 'getMigratedRepAttoRep' },
 			{ name: 'getForkActivationTime' },
 			{ name: 'isEscalationDepositClaimedDirectly' },
 			{ name: 'getEscalationDepositId' },
@@ -1032,8 +1032,8 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getOwnForkMigrationStatus' },
 			{ name: 'getMigrationProxyAddress' },
 			{ name: 'getQuestionOutcome' },
-			{ name: 'repToPoolOwnership', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' },
-			{ name: 'poolOwnershipToRep', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' },
+			{ name: 'attoRepToBackingUnits', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' },
+			{ name: 'backingUnitsToAttoRep', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' },
 		],
 		readStorageDeclarations: [{ name: 'zoltar', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' }],
 		securityBoundaryHeading: 'Child-game trust boundary',
@@ -1048,7 +1048,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
 				preconditions:
 					'Pool operational with no inherited fixed outcome; the pool is authorized by its declared share token; its universe already forked; fork state not initialized; if an escalation game exists, it reports the supplied pool from `securityPool()` when validated and the universe fork occurred before that game settled. Declared-token authorization is not configured-factory registration; see the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
+				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `DisputeStakedRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
@@ -1057,7 +1057,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
 				preconditions:
 					'Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from `securityPool()` when validated and `canTriggerOwnFork()` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome; universe not already forked. The game-local predicate does not bypass the pool guard. Unlike external-universe initiation, this entrypoint does not require declared-share-token authorization; neither path authenticates the supplied address against the configured pool factory. See the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
+				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `DisputeStakedRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`migrateRepToZoltar(securityPool, outcomeIndices)`',
@@ -1077,21 +1077,21 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					"Parent in migration window; selected fork outcome is well formed; child pool is not already deployed. The returned auction is nonzero, deployed, and has never been trusted by this forker; the child's fork-data slot is unused; and the child reports the expected parent, universe, source factory, forker, and auction. The selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). These relationship checks do not independently prove configured-factory registration.",
 				signals:
-					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `OwnershipDenominatorSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
+					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `TotalRepBackingUnitsSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
 			},
 			{
 				call: '`migrateVault(securityPool, outcomeIndex)`',
-				caller: 'Vault owner for its unlocked position',
+				caller: 'Vault owner for its non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
-				effect: "Moves the caller's currently unlocked REP ownership, allowance, fees, and collateral into one child pool. Repeat calls can have no additional unlocked state to move.",
-				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.",
+				effect: "Transfers the caller's REP backing units and coverage commitment into one child pool, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. Repeat calls can have no additional REP backing units or coverage commitment to move.",
+				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
 				signals: '`VaultMigrationCheckpoint`',
 			},
 			{
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault',
 				effect:
-					"First runs ordinary migration for the same vault, which may move its unlocked ownership, allowance, fees, and collateral to the selected child. It returns the selected child and its captured, validated escalation game to the unresolved-cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's parent unresolved-lock accounting in constant-size work and records it; the cleanup neither funds escalation backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may transfer REP backing units and coverage commitment to the selected child, checkpoint but retain claimable fees in the parent vault, and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
 				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals: 'Vault migration events plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
@@ -1105,7 +1105,7 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					'Caller equals `vault`; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies `canTriggerOwnFork()` by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, unclaimed deposit identities, and every deposit to commit `vault` as its immutable depositor.',
 				signals:
-					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `OwnershipDenominatorSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
+					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `TotalRepBackingUnitsSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildDisputeStakedRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},
 			{
 				call: '`startTruthAuction(securityPool)`',
@@ -1118,7 +1118,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected.',
+				effect: 'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, activates the child at that settlement-collateral level, and fixes bidder REP-backing-unit and coverage-commitment rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
@@ -1128,18 +1128,18 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'settleAuctionBids' }],
 				effect:
-					'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP and allowance result; a winning dust bid may receive allowance even when its REP share rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.',
+					'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP backing and coverage-commitment result; a winning dust bid may receive coverage commitment even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.',
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault and remain unsettled.',
-				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP or allowance is credited',
+				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP backing or coverage commitment is credited',
 			},
 			{
 				call: '`claimAuctionProceeds(securityPool, vault, tickIndices)`',
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect:
-					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child-pool ownership, and independently credits the bid positional allowance share. A winning dust bid can receive positive allowance when its REP share rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
+					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child REP backing units, and independently credits the bid positional coverage-commitment allocation. A winning dust bid can receive positive coverage commitment when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
 				preconditions: 'Auction finalized. A nonempty list additionally requires every index to belong to the named vault and remain unsettled.',
-				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP or allowance is credited; no event for an empty list',
+				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP backing or coverage commitment is credited; no event for an empty list',
 			},
 			{
 				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)`',
@@ -1148,7 +1148,7 @@ const contractReferences: ContractReference[] = [
 					'Allows delegated migration code to initialize a child continuation while preserving the forker as the authoritative caller and the already captured child-game identity. When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use.',
 				declarations: [{ name: 'initializeChildForkedEscalationGameIfNeeded' }],
 				preconditions: 'External caller is the forker itself; parent and child match the active migration path; a supplied nonzero game passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`ChildEscalationRepMaterialized` and escalation-continuation events when initialization is required',
+				signals: '`ChildDisputeStakedRepMaterialized` and escalation-continuation events when initialization is required',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
@@ -1161,28 +1161,28 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '73b1ed18a59fe8900998e31f2f52a1eb1b5c1ff93e97bd06d1ad0805ffa62d79',
+		compiledAbiFingerprint: 'dffe7a84d72c05c11617cbc1889ac05f0c345108e953a499894a3993e3f8a218',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'fbdb90f1e6bac72c809a951d243274a1974eea60084bdc245d3f31e070b79155',
+		readAbiFingerprint: 'b8cd990d54c5264a4fd6f231ec0099abbb82a1e9371eef8fd760c59cef08a5c2',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, `totalEscrowedRep`, `truthAuctionRepBefore`, `truthAuctionRepRemaining`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `escrowedRepByVault` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedRepAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
-			{ name: 'escrowedRepByVault', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
+			{ name: 'disputeStakedRepByVaultAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
 			{ name: 'rootClaimSourceGame', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'applyInheritedClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
 			{ name: 'applyInheritedSourceStorageBasis', sourcePath: 'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol' },
-			{ name: 'computeIterativeAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
-			{ name: 'computeTimeSinceStartFromAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
-			{ name: 'totalCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'computeIterativeAttritionCostAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'computeTimeSinceStartFromAttritionCostAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'totalCostAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getEscalationGameEndDate', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getQuestionResolution', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getFinalQuestionResolution', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'hasReachedNonDecision', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'canTriggerOwnFork', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
-			{ name: 'getBindingCapital', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
-			{ name: 'getOutcomeBalances', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'getBindingCapitalAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'getOutcomeBalancesAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getDepositsByOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' },
 			{ name: 'getDepositsByOutcomeLength', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' },
 			{ name: 'forkCarrySnapshotInitialized', sourcePath: 'solidity/contracts/peripherals/EscalationGameCarry.sol' },
@@ -1199,17 +1199,17 @@ const contractReferences: ContractReference[] = [
 			{ name: 'securityPool', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
 			{ name: 'repToken', sourcePath: 'solidity/contracts/peripherals/EscalationGameState.sol' },
 			{ name: 'activationTime', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'nonDecisionThreshold', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'startBond', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'nonDecisionThresholdAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'startBondAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'nonDecisionTimestamp', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'nonDecisionState', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkContinuation', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkElapsedAtStart', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkResumedAt', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'nodes', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'totalEscrowedRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'truthAuctionRepBefore', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
-			{ name: 'truthAuctionRepRemaining', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'totalDisputeStakedRepAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'truthAuctionRepBeforeAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'truthAuctionRepRemainingAttoRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'cumulativeClaimRetention', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'cumulativeClaimRetentionExponent', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'fixedQuestionOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
@@ -1217,19 +1217,19 @@ const contractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/peripherals/EscalationGame.sol',
 		interactions: [
 			{
-				call: '`start(startBond, nonDecisionThreshold)`',
+				call: '`start(startBondAttoRep, nonDecisionThresholdAttoRep)`',
 				caller: '`EscalationGameFactory` contract during atomic deployment',
-				effect: 'Initializes a local game and sets activation three days after deployment. For ordinary pool games, the factory lowers an oversized configured bond to `nonDecisionThreshold - 1` before this call.',
+				effect: 'Initializes a local game and sets activation three days after deployment. For ordinary pool games, the factory lowers an oversized configured bond to `nonDecisionThresholdAttoRep - 1` before this call.',
 				declarations: [{ name: 'start' }],
-				preconditions: 'Game not already started; threshold exceeds the positive start bond. Positive sub-REP atomic values are valid.',
+				preconditions: 'Game not already started; threshold exceeds the positive start bond. Positive attoREP values are valid.',
 				signals: '`GameStarted`',
 			},
 			{
-				call: '`startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking)`',
+				call: '`startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep)`',
 				caller: 'Immutable owner (`EscalationGameFactory`) during atomic continuation deployment',
 				effect: 'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time haircut/backing accounting. It does not start the remaining clock until `resumeFromFork`.',
 				declarations: [{ name: 'startFromFork' }],
-				preconditions: 'Game not started; threshold exceeds the positive start bond; inherited elapsed time is no greater than seven weeks. Positive sub-REP atomic values are valid.',
+				preconditions: 'Game not started; threshold exceeds the positive start bond; inherited elapsed time is no greater than seven weeks. Positive attoREP values are valid.',
 				signals: '`GameContinuedFromFork`',
 			},
 			{
@@ -1239,7 +1239,7 @@ const contractReferences: ContractReference[] = [
 					'Records the resume timestamp once the immutable carry commitment is installed and funded. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
-					'Fork-continuation mode; not previously resumed; immutable carry snapshot installed; aggregate REP funding complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - ⌊sourcePrincipalAtFork / 5⌋`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
+					'Fork-continuation mode; not previously resumed; immutable carry snapshot installed; aggregate REP funding complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋`, where `sourcePrincipalAtForkAttoRep` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
 				signals: '`ForkContinuationResumed`',
 			},
 			{
@@ -1287,7 +1287,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinningWithoutTransfer', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				effect:
-					"Consumes a selected local deposit and its vault escrow. The depositor's raw escrow backing decreases by the inverse-retention shares corresponding to the deposit's original principal: the principal itself with no local auction checkpoint, or `⌈originalPrincipal × truthAuctionRepBefore / truthAuctionRepRemaining⌉` after a local haircut. Other unconsumed deposits by the same depositor remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
+					"Consumes a selected local deposit and its vault escrow. The depositor's raw escrow backing decreases by the inverse-retention claim units corresponding to the deposit's original principal: the principal itself with no local auction checkpoint, or `⌈originalPrincipal × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep⌉` after a local haircut. Other unconsumed deposits by the same depositor remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
 				preconditions: 'Valid in-range supplied outcome and unsettled local deposit with sufficient escrow. Unlike the transferring form, it has no explicit non-`None` guard; neither form checks final resolution or that the outcome won.',
 				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or haircut burn',
 			},
@@ -1332,7 +1332,7 @@ const contractReferences: ContractReference[] = [
 				signals: 'REP `Transfer` for a positive balance; no event at zero balance',
 			},
 			{
-				call: '`recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipal, childRepAmount)`',
+				call: '`recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'recordForkedEscrowForOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol' }],
 				effect:
@@ -1367,19 +1367,19 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'bb0afca8ecef152a6b67c87dad9d38d20bb43615d2d3073e92473263c8b16b73',
+		compiledAbiFingerprint: 'f0f9b98b087e62efd03290bbf17c29a30770617fdc9759d0e9b2927bd2ae21e5',
 		name: 'OpenOraclePriceCoordinator',
-		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readAbiFingerprint: '2be51c82eb310480c17a2ea85927bf6ea849498a5cfa9f93c033817919ec10ce',
+		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, coverage-commitment, and liquidation operations behind it.',
+		readAbiFingerprint: 'b0a62b4ff2250eb7fb4b42e634efd780549a739ddf1f5871d9a54dc51558c107',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeWeiPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
 			{ name: 'isPriceValid' },
-			{ name: 'minimumToken1Report' },
-			{ name: 'getRequestPriceEthCost' },
-			{ name: 'getQueuedOperationEthCost' },
+			{ name: 'minimumToken1ReportAttoEth' },
+			{ name: 'getRequestPriceCostAttoEth' },
+			{ name: 'getQueuedOperationCostAttoEth' },
 			{ name: 'getSettlementCallbackGasLimit' },
 			{ name: 'getPendingOperationSlot' },
 			{ name: 'getActiveStagedOperationCount' },
@@ -1402,7 +1402,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'gasConsumedOpenOracleReportPrice' },
 			{ name: 'gasConsumedSettlement' },
 			{ name: 'gasUnitsForOneDispute' },
-			{ name: 'initialReportPriorityFeeWeiPerGas' },
+			{ name: 'initialReportPriorityFeeAttoEthPerGas' },
 			{ name: 'targetPriceErrorForDispute' },
 			{ name: 'openOracleSecurityMultiplierBps' },
 			{ name: 'settlementTime' },
@@ -1424,16 +1424,16 @@ const contractReferences: ContractReference[] = [
 		interactions: [
 			{
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
-				caller: 'Vault owner for self withdrawal/allowance; a different vault for liquidation. While a report is pending, only that report sponsor may stage more operations.',
+				caller: 'Vault owner for self withdrawal or coverage-commitment updates; a different vault for liquidation. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
 					'Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'`securityPool.isEscalationResolved()` is false; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, along with the coordinator-derived REP side and approvals, are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report. The caller must accept any positive unused-ETH refund.',
-				signals: '`StagedOperationQueued` immediately followed by `StagedOperationEscalationRepSnapshotted`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
+					'`securityPool.isEscalationResolved()` is false; valid target and nonzero amount except a zero coverage commitment; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, along with the coordinator-derived REP side and approvals, are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report. The caller must accept any positive unused-ETH refund.',
+				signals: '`StagedOperationQueued` immediately followed by `StagedOperationDisputeStakedRepSnapshotted`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
-				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialWeth)` with report funding',
+				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialWethAttoEth)` with report funding',
 				caller: 'Anyone when no fresh price or report is pending',
 				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation, then refunds any positive excess ETH through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [{ name: 'requestPrice' }],
@@ -1484,12 +1484,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '57037ae78e2547bcb28e5a683091fe0a03301902f835b0b2600bcbd112fd5dda',
+		compiledAbiFingerprint: '3368fc02187d4992d31cb535e806880c0ff8a3f5c94ebba5f3b294d490b9e928',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '3b68e6bd8e3cea9398317397c9ab93da54e67d7aa234933be4b4cdcd95e884d9',
+		readAbiFingerprint: 'a5679a3083163c66545b6f49b69ae74c2736c989ef5252333a1c14296f8b6ec7',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmount`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [
 			{ name: 'supportsInterface', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
@@ -1502,7 +1502,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'maximumOutcomeSupply' },
 			{ name: 'balanceOfOutcome' },
 			{ name: 'balanceOfShares' },
-			{ name: 'getMigratedShareAmount' },
+			{ name: 'getMigratedShareAmountAttoShares' },
 			{ name: 'getTokenId' },
 			{ name: 'getTokenIds' },
 			{ name: 'unpackTokenId' },
@@ -1553,7 +1553,7 @@ const contractReferences: ContractReference[] = [
 				preconditions:
 					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals:
-					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `EscalationRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildEscalationRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
+					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `DisputeStakedRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildDisputeStakedRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
 			},
 			{
 				call: '`authorize(securityPoolCandidate)`',
@@ -1564,7 +1564,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`AuthorizationUpdated` on first authorization; no event when the same candidate is already authorized',
 			},
 			{
-				call: '`mintCompleteSets(universeId, account, amount)`',
+				call: '`mintCompleteSets(universeId, account, amountAttoShares)`',
 				caller: 'An authorized `SecurityPool`',
 				effect: "Mints `amount` each of Invalid, Yes, and No to `account`, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.",
 				declarations: [{ name: 'mintCompleteSets' }],
@@ -1572,7 +1572,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`TransferBatch` on a successful callback',
 			},
 			{
-				call: '`burnCompleteSets(universeId, account, amount)`',
+				call: '`burnCompleteSets(universeId, account, amountAttoShares)`',
 				caller: 'An authorized `SecurityPool`',
 				effect: 'Burns `amount` each of Invalid, Yes, and No from `account`; global outcome supplies may differ.',
 				declarations: [{ name: 'burnCompleteSets' }],
@@ -1590,12 +1590,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '5df909f507764d5f4db42faa005199caa7cb7afb8752230d80e2779b5f3f1585',
+		compiledAbiFingerprint: '91e8c2f07b5945ffc1e77013b193d3d1553bbb54556bd57d562256893864b0db',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readAbiFingerprint: 'fa081bb7fcac006e561c1da8dc707503698fe77ed72f2a3aed455e8f601fdd74',
+		readAbiFingerprint: '123d0aeae2b419804e4217a211d197aa9f52faabc0be53a5956298e3004504e3',
 		readSurface:
-			'Auction summary getters are `maxRepBeingSold`, `ethRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearing`, `ethRaised`, `totalRepPurchased`, `auctionStarted`, `minBidSize`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningEth`, and `activeTickCount`. `pendingEthRefunds` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
+			'Auction summary getters are `maxRepBeingSoldAttoRep`, `ethRaiseCapAttoEth`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `ethRaisedAttoEth`, `totalRepPurchasedAttoRep`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
 		readDeclarations: [
 			{ name: 'computeClearing' },
 			{ name: 'previewFinalization' },
@@ -1610,26 +1610,26 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getBidderBidPage' },
 		],
 		readStorageDeclarations: [
-			{ name: 'maxRepBeingSold' },
-			{ name: 'ethRaiseCap' },
+			{ name: 'maxRepBeingSoldAttoRep' },
+			{ name: 'ethRaiseCapAttoEth' },
 			{ name: 'finalized' },
 			{ name: 'clearingTick' },
-			{ name: 'ethFilledAtClearing' },
-			{ name: 'ethRaised' },
-			{ name: 'totalRepPurchased' },
+			{ name: 'ethFilledAtClearingAttoEth' },
+			{ name: 'ethRaisedAttoEth' },
+			{ name: 'totalRepPurchasedAttoRep' },
 			{ name: 'auctionStarted' },
-			{ name: 'minBidSize' },
+			{ name: 'minBidSizeAttoEth' },
 			{ name: 'owner' },
 			{ name: 'underfunded' },
 			{ name: 'underfundedThreshold' },
-			{ name: 'underfundedWinningEth' },
+			{ name: 'underfundedWinningAttoEth' },
 			{ name: 'activeTickCount' },
-			{ name: 'pendingEthRefunds' },
+			{ name: 'pendingEthRefundsAttoEth' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
 			{
-				call: '`startAuction(ethRaiseCap, maxRepBeingSold)`',
+				call: '`startAuction(ethRaiseCapAttoEth, maxRepBeingSoldAttoRep)`',
 				caller: 'Auction owner (`SecurityPoolForker`) only',
 				effect: 'Starts the one-week auction and fixes its two caps and minimum bid.',
 				declarations: [{ name: 'startAuction' }],
@@ -1641,7 +1641,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Any bidder',
 				effect: "Adds ETH demand at the selected positive-price tick while extending that tick's append-only cumulative bid and refund history, including when a fully refunded tick becomes active again.",
 				declarations: [{ name: 'submitBid' }],
-				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSize`; tick maps to nonzero price.',
+				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSizeAttoEth`; tick maps to nonzero price.',
 				signals: '`BidSubmitted`',
 			},
 			{
@@ -1649,7 +1649,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Bidder for its own bids',
 				declarations: [{ name: 'refundLosingBids' }],
 				effect:
-					"A nonempty list marks the caller's bids already provably below the current clearing tick and attempts an immediate gas-bounded ETH refund. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefunds` without restoring the bid. An empty list changes no bids and makes no external call.",
+					"A nonempty list marks the caller's bids already provably below the current clearing tick and attempts an immediate gas-bounded ETH refund. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefundsAttoEth` without restoring the bid. An empty list changes no bids and makes no external call.",
 				preconditions: 'Auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to the caller and are strictly losing and unrefunded.',
 				signals: '`BidSettled` per refunded bid; `EthRefundDeferred` when a positive push fails',
 			},
@@ -1657,7 +1657,8 @@ const contractReferences: ContractReference[] = [
 				call: '`refundLosingBidsFor(bidder, tickIndices)`',
 				caller: 'Auction owner (`SecurityPoolForker`) only; public callers use `settleAuctionBids`',
 				declarations: [{ name: 'refundLosingBidsFor' }],
-				effect: "A nonempty list marks and attempts a gas-bounded refund of a named bidder's bids already provably below the current clearing tick. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefunds` without restoring the bid. An empty list changes no bids and makes no external call.",
+				effect:
+					"A nonempty list marks and attempts a gas-bounded refund of a named bidder's bids already provably below the current clearing tick. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefundsAttoEth` without restoring the bid. An empty list changes no bids and makes no external call.",
 				preconditions: 'Named bidder is nonzero; auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to that bidder and are strictly losing and unrefunded.',
 				signals: '`BidSettled` per refunded bid; `EthRefundDeferred` when a positive push fails',
 			},
@@ -1673,7 +1674,7 @@ const contractReferences: ContractReference[] = [
 				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal)`',
 				caller: 'Auction owner only',
 				effect:
-					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit pool ownership and allowance. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and allowance settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
+					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit REP backing units and coverage commitment. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and coverage-commitment settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled.',
 				signals: '`BidSettled` per processed bid; `EthRefundDeferred` when a positive push fails',
@@ -1683,7 +1684,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Bidder with deferred ETH',
 				effect: "Clears the caller's complete deferred refund and emits its withdrawal before transferring without the push-refund gas cap, so callback-created deferrals follow the clear in log order. A rejected pull reverts the transfer, clear, and event.",
 				declarations: [{ name: 'withdrawPendingEthRefund' }],
-				preconditions: 'Caller has a positive `pendingEthRefunds` balance and currently accepts ETH.',
+				preconditions: 'Caller has a positive `pendingEthRefundsAttoEth` balance and currently accepts ETH.',
 				signals: '`PendingEthRefundWithdrawn`',
 			},
 		],
@@ -2226,9 +2227,9 @@ function assertDeclarationCheckerRegression(): void {
 			ISecurityPool parent,
 			address migrationProxy,
 			address sourceGame,
-			uint256 poolRepAtFork,
-			uint256 escalationRepAtFork,
-			uint256 resultingLockedRep
+			uint256 poolRepAtForkAttoRep,
+			uint256 disputeStakedRepAtForkAttoRep,
+			uint256 resultingLockedRepAttoRep
 		) external payable {}
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
@@ -2236,9 +2237,9 @@ function assertDeclarationCheckerRegression(): void {
 			mstore(add(pointer, 0x04), parent)
 			mstore(add(pointer, 0x24), migrationProxy)
 			mstore(add(pointer, 0x44), sourceGame)
-			mstore(add(pointer, 0x64), poolRepAtFork)
-			mstore(add(pointer, 0x84), escalationRepAtFork)
-			mstore(add(pointer, 0xa4), resultingLockedRep)
+			mstore(add(pointer, 0x64), poolRepAtForkAttoRep)
+			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
+			mstore(add(pointer, 0xa4), resultingLockedRepAttoRep)
 			delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)
 		}
 	`
@@ -2246,9 +2247,9 @@ function assertDeclarationCheckerRegression(): void {
 	if (assemblyDelegateCallMetadata === undefined) throw new Error('Expected assembly delegate-call metadata')
 	assert.doesNotThrow(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture, assemblyDelegateCallMetadata))
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0x408d33da', '0x408d33db'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /hard-coded selector for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0xa4), resultingLockedRep', '0xa4), otherRep'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata argument resultingLockedRep for emitForkSnapshotEvents changed/)
+	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0xa4), resultingLockedRepAttoRep', '0xa4), otherRep'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata argument resultingLockedRepAttoRep for emitForkSnapshotEvents changed/)
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('pointer, 0xc4', 'pointer, 0xa4'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata length or target for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('uint256 resultingLockedRep', 'address resultingLockedRep'), assemblyDelegateCallMetadata), /entrypoint signatures for emitForkSnapshotEvents changed/)
+	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('uint256 resultingLockedRepAttoRep', 'address resultingLockedRepAttoRep'), assemblyDelegateCallMetadata), /entrypoint signatures for emitForkSnapshotEvents changed/)
 	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('external payable', 'external'), assemblyDelegateCallMetadata), /emitForkSnapshotEvents must remain payable/)
 	assert.deepEqual(getPublicStateChangingDeclarationNames('function mutate(uint256 value) external returns (uint256) { return value; }\nfunction inspect() public view returns (uint256) { return 1; }\nreceive() external payable {}'), ['mutate', 'receive'])
 	assert.notEqual(computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external payable {}')), computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external {}')))

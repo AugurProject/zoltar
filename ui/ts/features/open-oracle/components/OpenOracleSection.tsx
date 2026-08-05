@@ -90,7 +90,7 @@ const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> 
 	multiplier: 'open-oracle-multiplier-error',
 	protocolFee: 'open-oracle-protocol-fee-error',
 	settlementTime: 'open-oracle-settlement-time-error',
-	settlerReward: 'open-oracle-settler-reward-error',
+	settlerRewardEthAmount: 'open-oracle-settler-reward-error',
 	token1Address: 'open-oracle-token1-address-error',
 	token2Address: 'open-oracle-token2-address-error',
 }
@@ -130,7 +130,7 @@ function getWithdrawalReportModal(balance: WithdrawalBalanceKey): SelectedReport
 	return `withdraw-${balance}`
 }
 function getSelectedWithdrawalBalance(modal: SelectedReportModal): WithdrawalBalanceKey | undefined {
-	if (modal === 'withdraw-eth') return 'eth'
+	if (modal === 'withdraw-ethAttoEth') return 'ethAttoEth'
 	if (modal === 'withdraw-token1') return 'token1'
 	if (modal === 'withdraw-token2') return 'token2'
 	return undefined
@@ -465,7 +465,7 @@ export function renderSelectedReportActionSection({
 											},
 											{
 												label: openOracleCopy.settlerCredit,
-												value: <CurrencyValue value={openOracleReportDetails.settlerReward} suffix={commonCopy.eth} copyable={false} />,
+												value: <CurrencyValue value={openOracleReportDetails.settlerRewardAttoEth} suffix={commonCopy.eth} copyable={false} />,
 											},
 										]
 							}
@@ -592,7 +592,7 @@ function renderReportDetailsCard(
 		return action
 	})
 	const withdrawableBalanceItems = [
-		{ amount: openOracleWithdrawableBalances?.eth, key: 'eth' as const, symbol: commonCopy.eth, units: 18 },
+		{ amount: openOracleWithdrawableBalances?.ethAttoEth, key: 'ethAttoEth' as const, symbol: commonCopy.eth, units: 18 },
 		{ amount: openOracleWithdrawableBalances?.token1, key: 'token1' as const, symbol: openOracleReportDetails.token1Symbol, units: openOracleReportDetails.token1Decimals },
 		{ amount: openOracleWithdrawableBalances?.token2, key: 'token2' as const, symbol: openOracleReportDetails.token2Symbol, units: openOracleReportDetails.token2Decimals },
 	]
@@ -715,7 +715,7 @@ function renderReportDetailsCard(
 						},
 						{
 							label: openOracleCopy.settlerReward,
-							value: <CurrencyValue value={openOracleReportDetails.settlerReward} suffix={commonCopy.eth} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.settlerRewardAttoEth} suffix={commonCopy.eth} copyable={false} />,
 						},
 						{
 							label: openOracleCopy.escalationHalt,
@@ -944,9 +944,9 @@ export function OpenOracleSection({
 	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({
 		ethValueInput: openOracleCreateForm.ethValue,
 		isOnActiveAppChain,
-		settlerRewardInput: openOracleCreateForm.settlerReward,
+		settlerRewardInput: openOracleCreateForm.settlerRewardEthAmount,
 		walletConnected: isConnected,
-		walletEthBalance: accountState.ethBalance,
+		walletBalanceAttoEth: accountState.ethBalanceAttoEth,
 	})
 	const createGuardMessage = !isConnected || !isOnActiveAppChain || createValidation.isValid ? rawCreateGuardMessage : undefined
 	const markCreateFieldTouched = (field: OpenOracleCreateField) => setTouchedCreateFields(current => new Set([...current, field]))
@@ -968,7 +968,7 @@ export function OpenOracleSection({
 	const multiplierError = getVisibleCreateFieldError('multiplier')
 	const protocolFeeError = getVisibleCreateFieldError('protocolFee')
 	const settlementTimeError = getVisibleCreateFieldError('settlementTime')
-	const settlerRewardError = getVisibleCreateFieldError('settlerReward')
+	const settlerRewardError = getVisibleCreateFieldError('settlerRewardEthAmount')
 	const token1AddressError = getVisibleCreateFieldError('token1Address')
 	const token2AddressError = getVisibleCreateFieldError('token2Address')
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
@@ -1236,18 +1236,18 @@ export function OpenOracleSection({
 									<label className='field'>
 										<span>{openOracleCopy.settlerReward}</span>
 										<FormInput
-											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError, 'open-oracle-settler-reward-help')}
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlerRewardEthAmount'), settlerRewardError, 'open-oracle-settler-reward-help')}
 											aria-label={openOracleCopy.settlerReward}
 											inputMode='decimal'
 											invalid={settlerRewardError !== undefined}
-											onBlur={() => markCreateFieldTouched('settlerReward')}
-											onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })}
-											value={openOracleCreateForm.settlerReward}
+											onBlur={() => markCreateFieldTouched('settlerRewardEthAmount')}
+											onInput={event => onOpenOracleCreateFormChange({ settlerRewardEthAmount: event.currentTarget.value })}
+											value={openOracleCreateForm.settlerRewardEthAmount}
 										/>
 										<p id='open-oracle-settler-reward-help' className='field-help'>
 											{openOracleCopy.settlerRewardHelpText}
 										</p>
-										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError)}
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlerRewardEthAmount'), settlerRewardError)}
 									</label>
 									<label className='field'>
 										<span>{openOracleCopy.ethValueToSend}</span>
@@ -1376,7 +1376,7 @@ export function OpenOracleSection({
 										{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
 									]}
 									details={[
-										{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+										{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerRewardEthAmount || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
 										{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
 										{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
 										{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },

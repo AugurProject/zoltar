@@ -7,11 +7,11 @@ export type ArbitrageDirection = 'sell-rep' | 'buy-rep'
 
 export type ArbitrageQuote = {
 	direction: ArbitrageDirection
-	grossProceedsWeth: bigint
-	hedgeAmountRep: bigint
-	hedgeCostWeth: bigint
-	netProfitWeth: bigint
-	profitBeforeGasWeth: bigint
+	grossProceedsWethAttoEth: bigint
+	hedgeAmountAttoRep: bigint
+	hedgeCostWethAttoEth: bigint
+	netProfitWethAttoEth: bigint
+	profitBeforeGasWethAttoEth: bigint
 	tokenToSwap: Address
 }
 
@@ -48,15 +48,15 @@ export function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1
 	}
 }
 
-export function hedgeWethLimit(direction: ArbitrageDirection, quotedWeth: bigint, maximumSlippageBps: bigint) {
+export function hedgeWethLimitAttoEth(direction: ArbitrageDirection, quotedWethAttoEth: bigint, maximumSlippageBps: bigint) {
 	if (maximumSlippageBps < 0n || maximumSlippageBps > 10_000n) throw new Error('Hedge slippage must be from 0 to 10000 bps')
-	if (direction === 'sell-rep') return (quotedWeth * (10_000n - maximumSlippageBps)) / 10_000n
-	return (quotedWeth * (10_000n + maximumSlippageBps) + 9_999n) / 10_000n
+	if (direction === 'sell-rep') return (quotedWethAttoEth * (10_000n - maximumSlippageBps)) / 10_000n
+	return (quotedWethAttoEth * (10_000n + maximumSlippageBps) + 9_999n) / 10_000n
 }
 
-export function hedgeSlippageReserveWeth(direction: ArbitrageDirection, quotedWeth: bigint, maximumSlippageBps: bigint) {
-	const limit = hedgeWethLimit(direction, quotedWeth, maximumSlippageBps)
-	return direction === 'sell-rep' ? quotedWeth - limit : limit - quotedWeth
+export function hedgeSlippageReserveWethAttoEth(direction: ArbitrageDirection, quotedWethAttoEth: bigint, maximumSlippageBps: bigint) {
+	const limit = hedgeWethLimitAttoEth(direction, quotedWethAttoEth, maximumSlippageBps)
+	return direction === 'sell-rep' ? quotedWethAttoEth - limit : limit - quotedWethAttoEth
 }
 
 export function spotTwapDeviationWithinLimit(spotTick: bigint, twapTick: bigint, maximumDeviation: bigint) {
@@ -64,7 +64,7 @@ export function spotTwapDeviationWithinLimit(spotTick: bigint, twapTick: bigint,
 	return deviation <= maximumDeviation
 }
 
-export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimit: bigint) {
+export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimitAttoEth: bigint) {
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() === game.token1.toLowerCase()) {
@@ -73,50 +73,50 @@ export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'c
 	const hedgeToken2 = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	if (contribution.token2 < hedgeToken2) throw new Error('Buy hedge exceeds the token contribution')
 	return {
-		token1: contribution.token1 + buyHedgeWethLimit,
+		token1: contribution.token1 + buyHedgeWethLimitAttoEth,
 		token2: contribution.token2 - hedgeToken2,
 	}
 }
 
-export function fundedCapitalAtRiskWeth(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeWeth: bigint, signedHedgeWethLimit: bigint) {
+export function fundedCapitalAtRiskWethAttoEth(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeWethAttoEth: bigint, signedHedgeWethLimitAttoEth: bigint) {
 	if (hedgeAmountToken === 0n) return funding.token1
-	const conservativeHedgeWeth = quotedHedgeWeth > signedHedgeWethLimit ? quotedHedgeWeth : signedHedgeWethLimit
-	return funding.token1 + (funding.token2 * conservativeHedgeWeth + hedgeAmountToken - 1n) / hedgeAmountToken
+	const conservativeHedgeWethAttoEth = quotedHedgeWethAttoEth > signedHedgeWethLimitAttoEth ? quotedHedgeWethAttoEth : signedHedgeWethLimitAttoEth
+	return funding.token1 + (funding.token2 * conservativeHedgeWethAttoEth + hedgeAmountToken - 1n) / hedgeAmountToken
 }
 
-export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedWethOut: bigint, gasCostWeth: bigint): ArbitrageQuote {
-	const wethSpend = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
+export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedWethOutAttoEth: bigint, gasCostWethAttoEth: bigint): ArbitrageQuote {
+	const wethSpendAttoEth = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
 	return {
 		direction: 'sell-rep',
-		grossProceedsWeth: quotedWethOut,
-		hedgeAmountRep: game.currentAmount2,
-		hedgeCostWeth: wethSpend,
-		netProfitWeth: quotedWethOut - wethSpend - gasCostWeth,
-		profitBeforeGasWeth: quotedWethOut - wethSpend,
+		grossProceedsWethAttoEth: quotedWethOutAttoEth,
+		hedgeAmountAttoRep: game.currentAmount2,
+		hedgeCostWethAttoEth: wethSpendAttoEth,
+		netProfitWethAttoEth: quotedWethOutAttoEth - wethSpendAttoEth - gasCostWethAttoEth,
+		profitBeforeGasWethAttoEth: quotedWethOutAttoEth - wethSpendAttoEth,
 		tokenToSwap: game.token1,
 	}
 }
 
-export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token2'>, quotedWethIn: bigint, gasCostWeth: bigint): ArbitrageQuote {
-	const repNeeded = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token2'>, quotedWethInAttoEth: bigint, gasCostWethAttoEth: bigint): ArbitrageQuote {
+	const repNeededAttoRep = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	return {
 		direction: 'buy-rep',
-		grossProceedsWeth: game.currentAmount1,
-		hedgeAmountRep: repNeeded,
-		hedgeCostWeth: quotedWethIn,
-		netProfitWeth: game.currentAmount1 - quotedWethIn - gasCostWeth,
-		profitBeforeGasWeth: game.currentAmount1 - quotedWethIn,
+		grossProceedsWethAttoEth: game.currentAmount1,
+		hedgeAmountAttoRep: repNeededAttoRep,
+		hedgeCostWethAttoEth: quotedWethInAttoEth,
+		netProfitWethAttoEth: game.currentAmount1 - quotedWethInAttoEth - gasCostWethAttoEth,
+		profitBeforeGasWethAttoEth: game.currentAmount1 - quotedWethInAttoEth,
 		tokenToSwap: game.token2,
 	}
 }
 
-export function meetsProfitThreshold(quote: ArbitrageQuote, minimumProfitWeth: bigint, minimumProfitBps: bigint) {
-	if (quote.netProfitWeth < minimumProfitWeth || quote.hedgeCostWeth <= 0n) return false
-	return quote.netProfitWeth * 10_000n >= quote.hedgeCostWeth * minimumProfitBps
+export function meetsProfitThreshold(quote: ArbitrageQuote, minimumProfitWethAttoEth: bigint, minimumProfitBps: bigint) {
+	if (quote.netProfitWethAttoEth < minimumProfitWethAttoEth || quote.hedgeCostWethAttoEth <= 0n) return false
+	return quote.netProfitWethAttoEth * 10_000n >= quote.hedgeCostWethAttoEth * minimumProfitBps
 }
 
-export function calculateTrackedNetProfitEth(profitBeforeGasWeth: bigint, actualGasCostEth: bigint) {
-	return profitBeforeGasWeth - actualGasCostEth
+export function calculateTrackedNetProfitEth(profitBeforeGasWethAttoEth: bigint, actualGasCostAttoEth: bigint) {
+	return profitBeforeGasWethAttoEth - actualGasCostAttoEth
 }
 
 export function hasFreshSubmissionWindow({ currentTime, deadline, minimumRemaining, quoteBlock, submissionBlock }: { currentTime: bigint; deadline: bigint; minimumRemaining: bigint; quoteBlock: bigint; submissionBlock: bigint }) {

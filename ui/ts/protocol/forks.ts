@@ -62,21 +62,21 @@ export async function loadForkOutcomeMigrationSeedStatus(
 	})
 	if (childRepToken === zeroAddress) {
 		return {
-			childPoolRepBalance: 0n,
+			childPoolRepBalanceAttoRep: 0n,
 			childRepToken: undefined,
 			childUniverseId,
 			migrationProxyAddress,
-			pendingProxyRepBalance: 0n,
+			pendingProxyRepBalanceAttoRep: 0n,
 			seeded: false,
 		}
 	}
-	const pendingProxyRepBalance = await client.readContract({
+	const pendingProxyRepBalanceAttoRep = await client.readContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'balanceOf',
 		address: childRepToken,
 		args: [migrationProxyAddress],
 	})
-	const childPoolRepBalance =
+	const childPoolRepBalanceAttoRep =
 		childSecurityPoolAddress === undefined
 			? 0n
 			: await client.readContract({
@@ -87,17 +87,17 @@ export async function loadForkOutcomeMigrationSeedStatus(
 				})
 
 	return {
-		childPoolRepBalance,
+		childPoolRepBalanceAttoRep,
 		childRepToken,
 		childUniverseId,
 		migrationProxyAddress,
-		pendingProxyRepBalance,
-		seeded: pendingProxyRepBalance > 0n || childPoolRepBalance > 0n,
+		pendingProxyRepBalanceAttoRep,
+		seeded: pendingProxyRepBalanceAttoRep > 0n || childPoolRepBalanceAttoRep > 0n,
 	}
 }
 
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
-	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], ownForkMigrationStatusTuple, block] = await Promise.all([
+	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, settlementCollateralAttoEth, forkData, questionOutcome], ownForkMigrationStatusTuple, block] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -131,7 +131,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'completeSetCollateralAmount',
+				functionName: 'settlementCollateralAttoEth',
 				address: securityPoolAddress,
 				args: [],
 			},
@@ -158,13 +158,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const { auctionableRepAtFork, truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
-	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, escalationChildRepPerSelectedOutcome, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
+	const { auctionableRepAtForkAttoRep, truthAuctionStartedAt, migratedRepAttoRep, auctionedCoverageCommitmentAttoEth, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
+	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtForkAttoRep, escalationChildRepPerSelectedOutcomeAttoRep, escrowSourceRepAtForkAttoRep] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
 		forkOutcome,
-		migratedRep,
+		migratedRepAttoRep,
 		systemState,
 		truthAuctionStartedAt,
 	})
@@ -181,7 +181,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
-		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded, underfundedThreshold, underfundedWinningEth, storedClearingTick] = await readRequiredMulticall(client, [
+		const [computeClearingResult, ethRaiseCapAttoEth, ethRaisedAttoEth, finalized, maxRepBeingSoldAttoRep, minBidSizeAttoEth, totalRepPurchasedAttoRep, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
@@ -190,13 +190,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'ethRaiseCap',
+				functionName: 'ethRaiseCapAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'ethRaised',
+				functionName: 'ethRaisedAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -208,19 +208,19 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'maxRepBeingSold',
+				functionName: 'maxRepBeingSoldAttoRep',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'minBidSize',
+				functionName: 'minBidSizeAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'totalRepPurchased',
+				functionName: 'totalRepPurchasedAttoRep',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -238,7 +238,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-				functionName: 'underfundedWinningEth',
+				functionName: 'underfundedWinningAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
@@ -250,12 +250,12 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 		])
 		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
-		const [hitCap, computedClearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
+		const [hitCap, computedClearingTick, accumulatedBidAttoEth, bidAtClearingTickAttoEth] = computeClearingTuple
 		const clearingTick = finalized ? storedClearingTick : computedClearingTick
 		let clearingPrice: bigint | undefined
 		if (underfunded) {
-			clearingPrice = underfundedWinningEth > 0n ? underfundedThreshold : undefined
-		} else if (!(clearingTick === 0n && accumulatedEth === 0n)) {
+			clearingPrice = underfundedWinningAttoEth > 0n ? underfundedThreshold : undefined
+		} else if (!(clearingTick === 0n && accumulatedBidAttoEth === 0n)) {
 			clearingPrice = await client.readContract({
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'tickToPrice',
@@ -264,48 +264,48 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			})
 		}
 		truthAuction = {
-			accumulatedEth,
+			accumulatedBidAttoEth,
 			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
 			clearingPrice,
 			clearingTick,
-			ethAtClearingTick,
-			ethRaiseCap,
-			ethRaised,
+			bidAtClearingTickAttoEth,
+			ethRaiseCapAttoEth,
+			ethRaisedAttoEth,
 			finalized,
 			hitCap,
-			maxRepBeingSold,
-			minBidSize,
-			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
+			maxRepBeingSoldAttoRep,
+			minBidSizeAttoEth,
+			repPurchasableAtBidAttoRep: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCapAttoEth * 10n ** 18n) / clearingPrice,
 			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
-			totalRepPurchased,
+			totalRepPurchasedAttoRep,
 			underfunded,
 			underfundedThreshold: underfunded ? underfundedThreshold : undefined,
-			underfundedWinningEth,
+			underfundedWinningAttoEth,
 		}
 	}
 	return {
-		auctionedSecurityBondAllowance,
+		auctionedCoverageCommitmentAttoEth,
 		claimingAvailable: systemState === 'operational' && truthAuctionAddress !== zeroAddress,
-		completeSetCollateralAmount,
+		settlementCollateralAttoEth,
 		currentTime: block.timestamp,
 		forkOutcome,
 		forkOwnSecurityPool,
 		hasForkActivity,
 		marketDetails,
-		migratedRep,
+		migratedRepAttoRep,
 		migrationEndsAt,
 		parentSecurityPoolAddress,
 		questionOutcome: getReportingOutcomeKey(questionOutcome),
 		...(ownForkMigrationOwnFork
 			? {
 					ownForkRepBuckets: {
-						vaultRepAtFork,
-						escalationChildRepPerSelectedOutcome,
-						escrowSourceRepAtFork,
+						vaultRepAtForkAttoRep,
+						escalationChildRepPerSelectedOutcomeAttoRep,
+						escrowSourceRepAtForkAttoRep,
 					},
 				}
 			: {}),
-		auctionableRepAtFork: ownForkMigrationOwnFork ? ownForkMigrationAuctionableRepAtFork : auctionableRepAtFork,
+		auctionableRepAtForkAttoRep: ownForkMigrationOwnFork ? ownForkMigrationAuctionableRepAtFork : auctionableRepAtForkAttoRep,
 		securityPoolAddress,
 		systemState,
 		truthAuction,
@@ -374,33 +374,33 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 		universeId,
 	} satisfies ZoltarChildUniverseActionResult
 }
-async function executeZoltarMigrationAction<TCallParams extends ContractRevertReasonParams>(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amount: bigint, outcomeIndexes: bigint[], callParams: TCallParams) {
+async function executeZoltarMigrationAction<TCallParams extends ContractRevertReasonParams>(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], callParams: TCallParams) {
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action,
-		amount,
+		amountAttoRep,
 		hash,
 		outcomeIndexes,
 		universeId,
 	} satisfies ZoltarMigrationActionResult
 }
-export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
+export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint) {
 	const callParams = {
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'addRepToMigrationBalance',
-		args: [universeId, amount],
+		args: [universeId, amountAttoRep],
 	}
-	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amount, [], callParams)
+	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amountAttoRep, [], callParams)
 }
-export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
+export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[]) {
 	const callParams = {
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'splitMigrationRep',
-		args: [universeId, amount, outcomeIndexes],
+		args: [universeId, amountAttoRep, outcomeIndexes],
 	}
-	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amount, outcomeIndexes, callParams)
+	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amountAttoRep, outcomeIndexes, callParams)
 }
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(

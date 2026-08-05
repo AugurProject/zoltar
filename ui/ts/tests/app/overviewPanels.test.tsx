@@ -32,8 +32,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: undefined,
 				chainId: '0x1',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 			isConnectingWallet: false,
 			isManagingWallet: false,
@@ -60,7 +60,7 @@ describe('OverviewPanels', () => {
 			universeHasForked: false,
 			universeLabel: 'Genesis universe',
 			universePresentation: undefined,
-			universeRepBalance: undefined,
+			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
 		}
 
@@ -154,8 +154,8 @@ describe('OverviewPanels', () => {
 				accountState: {
 					address: undefined,
 					chainId: SEPOLIA_NETWORK_PROFILE.chainIdHex,
-					ethBalance: undefined,
-					wethBalance: undefined,
+					ethBalanceAttoEth: undefined,
+					wethBalanceAttoEth: undefined,
 				},
 			})
 
@@ -197,8 +197,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0xaa36a7',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 			onChangeWallet,
 			onDisconnectWallet,
@@ -224,8 +224,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address,
 				chainId: '0x1',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 		})
 
@@ -243,8 +243,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0x2105',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 		})
 
@@ -256,8 +256,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0xcc6b',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 		})
 
@@ -416,10 +416,10 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0x1',
-				ethBalance: 999999990000n * 10n ** 18n,
-				wethBalance: 10000n * 10n ** 18n,
+				ethBalanceAttoEth: 999999990000n * 10n ** 18n,
+				wethBalanceAttoEth: 10000n * 10n ** 18n,
 			},
-			universeRepBalance: 5n * 10n ** 18n,
+			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
 		await act(() => {

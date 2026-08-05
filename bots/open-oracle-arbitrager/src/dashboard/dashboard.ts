@@ -290,7 +290,7 @@ function renderPositions(positions: readonly PositionRecord[], recordCount: numb
 		let lifecycleGas = exactAmount(position.lifecycleGasCostEth, 'ETH')
 		if (manuallyReconciled && awaitingLifecycleEvidence) lifecycleGas = 'Manual evidence; RPC quorum unavailable'
 		else if (awaitingLifecycleEvidence) lifecycleGas = 'Awaiting lifecycle evidence'
-		const settlerReward = awaitingLifecycleEvidence ? 'Awaiting lifecycle evidence' : exactAmount(position.lifecycleSettlerRewardEth, 'ETH')
+		const settlerRewardAttoEth = awaitingLifecycleEvidence ? 'Awaiting lifecycle evidence' : exactAmount(position.lifecycleSettlerRewardEth, 'ETH')
 		body.append(
 			row([
 				new Date(position.openedAt).toLocaleString(),
@@ -300,7 +300,7 @@ function renderPositions(positions: readonly PositionRecord[], recordCount: numb
 				hedgedProfit,
 				awaitingEntryEvidence ? 'Awaiting entry evidence' : exactAmount(position.actualEntryGasCostEth, 'ETH'),
 				lifecycleGas,
-				settlerReward,
+				settlerRewardAttoEth,
 				exactAmount(position.realizedNetProfitEth, 'ETH'),
 				`${amount(position.withdrawnWeth, 'WETH')} · ${amount(position.withdrawnToken, position.tokenSymbol)}`,
 				link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),

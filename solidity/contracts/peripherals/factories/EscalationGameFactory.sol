@@ -55,37 +55,40 @@ contract EscalationGameFactory {
 		require(codePart != address(0x0), 'Creation code chunk deployment failed');
 	}
 
-	function deployEscalationGame(uint256 startBond, uint256 _nonDecisionThreshold) external returns (EscalationGame) {
-		require(_nonDecisionThreshold > 1, 'Escalation threshold too low');
-		if (startBond >= _nonDecisionThreshold) startBond = _nonDecisionThreshold - 1;
+	function deployEscalationGame(
+		uint256 startBondAttoRep,
+		uint256 _nonDecisionThresholdAttoRep
+	) external returns (EscalationGame) {
+		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
+		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
 		EscalationGame gameImplementation = _deployEscalationGame();
-		gameImplementation.start(startBond, _nonDecisionThreshold);
+		gameImplementation.start(startBondAttoRep, _nonDecisionThresholdAttoRep);
 		return gameImplementation;
 	}
 
 	function deployEscalationGameFromFork(
-		uint256 startBond,
-		uint256 nonDecisionThreshold,
+		uint256 startBondAttoRep,
+		uint256 nonDecisionThresholdAttoRep,
 		uint256 elapsedAtFork,
 		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
 	) external returns (EscalationGame) {
 		ISecurityPool child = ISecurityPool(payable(msg.sender));
 		ISecurityPool parent = child.parent();
 		bool winnerHaircutPaidByFork;
-		uint256 forkCarryInitialBacking;
+		uint256 forkCarryInitialBackingAttoRep;
 		if (address(parent) != address(0x0)) {
 			ISecurityPoolForker forker = ISecurityPoolForker(child.securityPoolForker());
 			winnerHaircutPaidByFork = forker.isEscalationWinnerHaircutPaidByFork(parent);
-			(, forkCarryInitialBacking, ) = forker.getOwnForkRepBuckets(parent);
+			(, forkCarryInitialBackingAttoRep, ) = forker.getOwnForkRepBuckets(parent);
 		}
 		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.startFromFork(
-			startBond,
-			nonDecisionThreshold,
+			startBondAttoRep,
+			nonDecisionThresholdAttoRep,
 			elapsedAtFork,
 			fixedQuestionOutcome,
 			winnerHaircutPaidByFork,
-			forkCarryInitialBacking
+			forkCarryInitialBackingAttoRep
 		);
 		return gameImplementation;
 	}

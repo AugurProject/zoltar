@@ -12,7 +12,7 @@ export type StagedOperationTuple = {
 	targetVault: Address
 }
 export type SecurityPoolDeploymentTuple = {
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
 	questionId: bigint
@@ -97,7 +97,7 @@ export function requireStagedOperationTupleArray(value: unknown, context: string
 function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDeploymentTuple {
 	return (
 		isObjectRecord(value) &&
-		typeof value['initialReportPriorityFeeWeiPerGas'] === 'bigint' &&
+		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
 		typeof value['parent'] === 'string' &&
 		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&

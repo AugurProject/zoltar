@@ -51,9 +51,9 @@ export const executingStagedOperation = 'Executing Staged Operation'
 export const requestingPrice = 'Requesting Price'
 export const stagedOperationExecuted = 'Staged Operation Executed'
 export const priceRequested = 'Price Requested'
-export const formatFinalizedRefundSettlementResultDetail = (allowanceLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning child-pool REP or ${allowanceLabel}.`
-export const formatWinningBidSettlementResultDetail = (allowanceLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received child-pool REP plus ${allowanceLabel}, assigning the remaining open-interest debt.`
-export const formatMixedBidSettlementResultDetail = (allowanceLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received child-pool REP plus ${allowanceLabel}, assigning the remaining open-interest debt; refund-only rows returned locked ETH.`
+export const formatFinalizedRefundSettlementResultDetail = (coverageCommitmentLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning REP backing units or ${coverageCommitmentLabel}.`
+export const formatWinningBidSettlementResultDetail = (coverageCommitmentLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${coverageCommitmentLabel}, assigning the remaining coverage commitment.`
+export const formatMixedBidSettlementResultDetail = (coverageCommitmentLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${coverageCommitmentLabel}, assigning the remaining coverage commitment; refund-only rows returned locked ETH.`
 export const childUniverseLinkedToForkPathDetail = 'The selected child universe was deployed and linked to this fork path.'
 export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & Migration.'
 export const zoltarUniverseForkSubmittedDetail = 'The selected universe fork was submitted on-chain.'
@@ -61,9 +61,9 @@ export const poolReadyForForkMigrationDetail = 'This pool entered fork handling 
 export const parentEscalationDepositsClaimedDetail = 'Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.'
 export const claimParentEscalationDeposits = 'Claim Parent Escalation Deposits'
 export const poolRepMigrationSuccessDetail = 'Pool-level REP was migrated into the selected child universe.'
-export const unresolvedEscalationMigratedDetail = 'The wallet’s parent escalation-lock accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.'
-export const clearParentEscalationLocks = 'Clear Parent Escalation Locks'
-export const vaultMigratedDetail = 'Vault REP collateral and security-bond allowance were migrated into the selected child universe.'
+export const unresolvedEscalationMigratedDetail = 'The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.'
+export const clearUnresolvedParentEscalationDepositAccounting = 'Clear Unresolved Parent Escalation-Deposit Accounting'
+export const vaultMigratedDetail = 'Vault REP backing and coverage commitment were migrated into the selected child universe.'
 export const losingBidsRefundedDetail = 'Selected losing truth-auction bids were refunded.'
 export const forkDepositSettlementSuccessDetail = 'Imported fork-carried escalation deposits were settled.'
 export const truthAuctionStartedSuccessDetail = 'Truth auction state was started for the selected child universe.'

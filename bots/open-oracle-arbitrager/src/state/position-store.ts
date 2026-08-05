@@ -125,7 +125,7 @@ function decimalField(record: Record<string, unknown>, key: string) {
 	return value
 }
 
-function decimalAmountWei(value: string) {
+function decimalAmountAttoEth(value: string) {
 	const [whole = '0', fraction = ''] = value.split('.')
 	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
 }
@@ -267,8 +267,8 @@ function parsePosition(value: unknown): PositionRecord {
 	if ((entrySubmissionBlockNumber === undefined) !== (entryTransactionNonce === undefined)) throw new Error('Position journal entry replacement recovery fields are incomplete')
 	if (record['entrySubmissionMode'] !== undefined && record['entrySubmissionMode'] !== 'private' && record['entrySubmissionMode'] !== 'public') throw new Error('Position journal entry submission mode is invalid')
 	if ((record['entrySubmissionMode'] === undefined) !== (entrySubmissionBlockNumber === undefined)) throw new Error('Position journal entry replacement recovery mode is incomplete')
-	const expectedGasCost = decimalAmountWei(decimalField(record, 'actualEntryGasCostEth')) + decimalAmountWei(decimalField(record, 'lifecycleGasCostEth'))
-	const recordedGasCost = parsedGasExpenditures.reduce((total, expenditure) => total + decimalAmountWei(expenditure.costEth), 0n)
+	const expectedGasCost = decimalAmountAttoEth(decimalField(record, 'actualEntryGasCostEth')) + decimalAmountAttoEth(decimalField(record, 'lifecycleGasCostEth'))
+	const recordedGasCost = parsedGasExpenditures.reduce((total, expenditure) => total + decimalAmountAttoEth(expenditure.costEth), 0n)
 	if (recordedGasCost !== expectedGasCost) throw new Error('Position journal gas expenditure total does not match entry and lifecycle gas')
 	const historyOutbox = record['historyOutbox'] === undefined ? undefined : parseExecutionRecord(record['historyOutbox'])
 	if (record['historyOutbox'] !== undefined && historyOutbox === undefined) throw new Error('Position journal history outbox is invalid')

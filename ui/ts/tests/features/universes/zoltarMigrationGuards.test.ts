@@ -8,14 +8,14 @@ import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
 		childUniverses: [],
-		forkThreshold: 1n,
+		forkThresholdAttoRep: 1n,
 		forkQuestionDetails: undefined,
 		forkTime: 0n,
 		forkingOutcomeIndex: 0n,
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1n,
+		totalTheoreticalSupplyAttoRep: 1n,
 		universeId: 1n,
 		...overrides,
 	}

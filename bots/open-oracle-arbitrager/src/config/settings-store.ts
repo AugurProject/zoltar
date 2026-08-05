@@ -152,9 +152,9 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const risk = requiredRecord(runtime['riskLimits'], 'Runtime risk limits')
 	const riskKeys = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth']
 	if (Object.keys(risk).some(key => !riskKeys.includes(key)) || riskKeys.some(key => !(key in risk))) throw new Error('Runtime risk limits require exactly the supported risk fields')
-	const maxPositionNotionalWeth = weth(risk['maxPositionNotionalWeth'], 'Runtime maxPositionNotionalWeth')
-	const maxTotalLockedWeth = weth(risk['maxTotalLockedWeth'], 'Runtime maxTotalLockedWeth')
-	if (maxPositionNotionalWeth > maxTotalLockedWeth) throw new Error('Runtime maxPositionNotionalWeth cannot exceed maxTotalLockedWeth')
+	const maxPositionNotionalWethAttoEth = weth(risk['maxPositionNotionalWeth'], 'Runtime maxPositionNotionalWeth')
+	const maxTotalLockedWethAttoEth = weth(risk['maxTotalLockedWeth'], 'Runtime maxTotalLockedWeth')
+	if (maxPositionNotionalWethAttoEth > maxTotalLockedWethAttoEth) throw new Error('Runtime maxPositionNotionalWethAttoEth cannot exceed maxTotalLockedWethAttoEth')
 	const maxHedgeSlippageBps = nonnegativeBigInt(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps')
 	if (maxHedgeSlippageBps > 1_000n) throw new Error('Runtime maxHedgeSlippageBps must be from 0 to 1000')
 	if (runtime['once'] && runtime['ui']) throw new Error('Runtime once and ui cannot both be enabled')
@@ -167,11 +167,11 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 		positionFile: filePath(runtime['positionFile'], 'Runtime positionFile'),
 		priceHistoryFile: filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile'),
 		riskLimits: {
-			lifecycleGasReserveWeth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
+			lifecycleGasReserveWethAttoEth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
 			maxConcurrentPositions: integer(risk['maxConcurrentPositions'], 'Runtime maxConcurrentPositions', 1, 1_000),
-			maxDailyGasSpendWeth: weth(risk['maxDailyGasSpendWeth'], 'Runtime maxDailyGasSpendWeth'),
-			maxPositionNotionalWeth,
-			maxTotalLockedWeth,
+			maxDailyGasSpendWethAttoEth: weth(risk['maxDailyGasSpendWeth'], 'Runtime maxDailyGasSpendWeth'),
+			maxPositionNotionalWethAttoEth,
+			maxTotalLockedWethAttoEth,
 		},
 		ui: runtime['ui'],
 		uiHost: runtime['uiHost'],
@@ -195,7 +195,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const strategy: MutableStrategy = {
 		maxSpotTwapTicks: 0n,
 		minimumProfitBps: 0n,
-		minimumProfitWeth: 0n,
+		minimumProfitWethAttoEth: 0n,
 		minimumRemainingBlocks: 1n,
 		minimumRemainingSeconds: 1n,
 		pollMilliseconds: 1_000,
@@ -243,11 +243,11 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 			positionFile: settings.runtime.positionFile,
 			priceHistoryFile: settings.runtime.priceHistoryFile,
 			riskLimits: {
-				lifecycleGasReserveWeth: decimalWeth(settings.runtime.riskLimits.lifecycleGasReserveWeth),
+				lifecycleGasReserveWeth: decimalWeth(settings.runtime.riskLimits.lifecycleGasReserveWethAttoEth),
 				maxConcurrentPositions: settings.runtime.riskLimits.maxConcurrentPositions,
-				maxDailyGasSpendWeth: decimalWeth(settings.runtime.riskLimits.maxDailyGasSpendWeth),
-				maxPositionNotionalWeth: decimalWeth(settings.runtime.riskLimits.maxPositionNotionalWeth),
-				maxTotalLockedWeth: decimalWeth(settings.runtime.riskLimits.maxTotalLockedWeth),
+				maxDailyGasSpendWeth: decimalWeth(settings.runtime.riskLimits.maxDailyGasSpendWethAttoEth),
+				maxPositionNotionalWeth: decimalWeth(settings.runtime.riskLimits.maxPositionNotionalWethAttoEth),
+				maxTotalLockedWeth: decimalWeth(settings.runtime.riskLimits.maxTotalLockedWethAttoEth),
 			},
 			ui: settings.runtime.ui,
 			uiHost: settings.runtime.uiHost,
@@ -256,7 +256,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		strategy: {
 			maxSpotTwapTicks: settings.strategy.maxSpotTwapTicks.toString(),
 			minimumProfitBps: settings.strategy.minimumProfitBps.toString(),
-			minimumProfitWeth: decimalWeth(settings.strategy.minimumProfitWeth),
+			minimumProfitWeth: decimalWeth(settings.strategy.minimumProfitWethAttoEth),
 			minimumRemainingBlocks: settings.strategy.minimumRemainingBlocks.toString(),
 			minimumRemainingSeconds: settings.strategy.minimumRemainingSeconds.toString(),
 			pollMilliseconds: settings.strategy.pollMilliseconds,

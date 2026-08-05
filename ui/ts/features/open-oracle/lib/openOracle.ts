@@ -66,7 +66,7 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its atomic initial report is missing.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
-export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppChain, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
+export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { ethValueInput: string; isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
@@ -75,11 +75,11 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
-	const settlerReward = tryParseDecimalInput(settlerRewardInput)
-	if (settlerReward === undefined) return 'Enter a valid settler reward.'
-	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
-	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected standalone Open Oracle report.`
+	const settlerRewardAttoEth = tryParseDecimalInput(settlerRewardInput)
+	if (settlerRewardAttoEth === undefined) return 'Enter a valid settler reward.'
+	if (ethValue < settlerRewardAttoEth) return 'ETH value to send must be at least the settler reward.'
+	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (ethValue > walletBalanceAttoEth) return `Need ${formatCurrencyBalance(ethValue - walletBalanceAttoEth)} more ETH in this wallet to create the selected standalone Open Oracle report.`
 	return undefined
 }
 
@@ -88,7 +88,7 @@ function getOpenOracleCreateAddressValidationMessage(addressInput: string, role:
 	return role === 'base' ? 'Enter a valid base token address.' : 'Enter a valid quote token address.'
 }
 
-export const OPEN_ORACLE_CREATE_FIELD_ORDER: ReadonlyArray<keyof OpenOracleCreateFormState> = ['token1Address', 'token2Address', 'exactToken1Report', 'initialToken2Amount', 'escalationHalt', 'ethValue', 'settlerReward', 'settlementTime', 'disputeDelay', 'multiplier', 'feePercentage', 'protocolFee']
+export const OPEN_ORACLE_CREATE_FIELD_ORDER: ReadonlyArray<keyof OpenOracleCreateFormState> = ['token1Address', 'token2Address', 'exactToken1Report', 'initialToken2Amount', 'escalationHalt', 'ethValue', 'settlerRewardEthAmount', 'settlementTime', 'disputeDelay', 'multiplier', 'feePercentage', 'protocolFee']
 export type OpenOracleCreateField = (typeof OPEN_ORACLE_CREATE_FIELD_ORDER)[number]
 export type OpenOracleCreateContractFieldErrors = Partial<Record<'token1Address' | 'token2Address', string>>
 export type OpenOracleCreateValidation = {
@@ -186,8 +186,8 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 
 	const ethValue = tryParseDecimalInput(form.ethValue)
 	if (ethValue === undefined) setOpenOracleCreateFieldError(fieldErrors, 'ethValue', 'Enter a valid ETH value to send.')
-	const settlerReward = tryParseDecimalInput(form.settlerReward)
-	if (settlerReward === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerReward', 'Enter a valid settler reward.')
+	const settlerRewardAttoEth = tryParseDecimalInput(form.settlerRewardEthAmount)
+	if (settlerRewardAttoEth === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', 'Enter a valid settler reward.')
 
 	const settlementTime = tryParseBigIntInput(form.settlementTime)
 	if (settlementTime === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlementTime', 'Enter a valid settlement time.')
@@ -209,7 +209,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 		initialToken2Amount !== undefined &&
 		escalationHalt !== undefined &&
 		ethValue !== undefined &&
-		settlerReward !== undefined &&
+		settlerRewardAttoEth !== undefined &&
 		settlementTime !== undefined &&
 		disputeDelay !== undefined &&
 		multiplier !== undefined &&
@@ -223,18 +223,22 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 				escalationHalt,
 				exactToken1Report,
 				initialToken2Amount,
-				ethValue,
+				ethValueAttoEth: ethValue,
 				feePercentage,
 				multiplier,
 				protocolFee,
 				settlementTime,
-				settlerReward,
+				settlerRewardAttoEth,
 				token1Address,
 				token2Address,
 			},
 			{ skipToken1MagnitudeValidation: token1Decimals === undefined },
 		)
-		if (parameterValidation !== undefined) setOpenOracleCreateFieldError(fieldErrors, parameterValidation.field, parameterValidation.message)
+		if (parameterValidation !== undefined) {
+			if (parameterValidation.field === 'settlerRewardAttoEth') setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', parameterValidation.message)
+			else if (parameterValidation.field === 'ethValueAttoEth') setOpenOracleCreateFieldError(fieldErrors, 'ethValue', parameterValidation.message)
+			else setOpenOracleCreateFieldError(fieldErrors, parameterValidation.field, parameterValidation.message)
+		}
 	}
 
 	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined)
@@ -397,12 +401,12 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
 		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
 		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
-		ethValue: parseDecimalInput(form.ethValue, 'ETH value'),
+		ethValueAttoEth: parseDecimalInput(form.ethValue, 'ETH value'),
 		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
 		multiplier: Number(parseBigIntInput(form.multiplier, 'Multiplier')),
 		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
 		settlementTime: Number(parseBigIntInput(form.settlementTime, 'Settlement time')),
-		settlerReward: parseDecimalInput(form.settlerReward, 'Settler reward'),
+		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
 		token1Address: parseAddressInput(form.token1Address, 'Base token address'),
 		token2Address: parseAddressInput(form.token2Address, 'Quote token address'),
 	}
@@ -438,10 +442,10 @@ function formatOpenOracleDisputeInsufficientBalanceMessage({ available, required
 }
 function resolveOpenOracleDisputeToken1Contribution({ feePercentage, isSelfDispute, oldAmount1, protocolFee, requiredToken1Contribution, tokenToSwap }: { feePercentage: bigint; isSelfDispute: boolean; oldAmount1: bigint; protocolFee: bigint; requiredToken1Contribution: bigint; tokenToSwap: 'token1' | 'token2' }) {
 	if (tokenToSwap === 'token1') {
-		const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		if (isSelfDispute) return requiredToken1Contribution - oldAmount1 + protocolFeeAmount
+		const protocolFeeAmountAttoEth = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		if (isSelfDispute) return requiredToken1Contribution - oldAmount1 + protocolFeeAmountAttoEth
 		const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		return requiredToken1Contribution + oldAmount1 + fee + protocolFeeAmount
+		return requiredToken1Contribution + oldAmount1 + fee + protocolFeeAmountAttoEth
 	}
 	return requiredToken1Contribution > oldAmount1 ? requiredToken1Contribution - oldAmount1 : 0n
 }
@@ -449,13 +453,13 @@ function resolveOpenOracleDisputeToken2Contribution({ feePercentage, isSelfDispu
 	if (tokenToSwap === 'token1') {
 		return newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n
 	}
-	const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+	const protocolFeeAmountAttoEth = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
 	if (isSelfDispute) {
-		const token2Needed = newAmount2 + protocolFeeAmount
+		const token2Needed = newAmount2 + protocolFeeAmountAttoEth
 		return token2Needed >= oldAmount2 ? token2Needed - oldAmount2 : 0n
 	}
 	const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-	return newAmount2 + oldAmount2 + fee + protocolFeeAmount
+	return newAmount2 + oldAmount2 + fee + protocolFeeAmountAttoEth
 }
 export function deriveOpenOracleDisputeSubmissionDetails({
 	accountAddress,

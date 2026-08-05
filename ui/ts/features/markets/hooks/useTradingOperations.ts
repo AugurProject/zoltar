@@ -11,7 +11,7 @@ import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tr
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
-import { convertCollateralAmountToShareAmount, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
+import { convertSettlementCollateralAttoEthToAttoShares, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
@@ -203,17 +203,17 @@ export function useTradingOperations(
 					}
 					if (actionName === 'createCompleteSet') {
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
-						const walletEthBalance = await dependencies.getWalletEthBalance(walletAddress)
+						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const guardMessage = getTradingMintGuardMessage({
 							accountAddress: walletAddress,
-							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
-							ethBalance: walletEthBalance,
-							feeEligibleSecurityBondAllowance: latestMintCapacity.feeEligibleSecurityBondAllowance,
+							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
+							ethBalanceAttoEth: walletBalanceAttoEth,
+							feeEligibleCoverageCommitmentAttoEth: latestMintCapacity.feeEligibleCoverageCommitmentAttoEth,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,
-							shareTokenSupply: latestMintCapacity.shareTokenSupply,
-							totalRepDeposit: latestMintCapacity.totalRepDeposit,
+							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
+							totalPoolHeldRepAttoRep: latestMintCapacity.totalPoolHeldRepAttoRep,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
@@ -221,13 +221,13 @@ export function useTradingOperations(
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
-							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
+							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							loadingTradingDetails: false,
 							redeemAmountInput: currentForm.redeemAmount,
 							shareBalances: latestTradingDetails.shareBalances,
-							shareTokenSupply: latestMintCapacity.shareTokenSupply,
+							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
@@ -284,10 +284,10 @@ export function useTradingOperations(
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
 				const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
-				const redeemCollateralAmount = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
-				const redeemShareAmount = convertCollateralAmountToShareAmount(redeemCollateralAmount, latestMintCapacity.completeSetCollateralAmount, latestMintCapacity.shareTokenSupply)
-				if (redeemShareAmount === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
-				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, redeemShareAmount)
+				const redeemAmountAttoEth = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
+				const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmountAttoEth, latestMintCapacity.settlementCollateralAttoEth, latestMintCapacity.shareTokenSupplyAttoShares)
+				if (redeemAmountAttoShares === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
+				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, redeemAmountAttoShares)
 			},
 			'Failed to redeem complete sets',
 		)

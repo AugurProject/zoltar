@@ -79,7 +79,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 										</strong>
 										<span>
 											{forkAuctionCopy.initiallyDepositedLead}
-											<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+											<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 										</span>
 										<span>
 											{claimAmount === undefined ? (
@@ -97,7 +97,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 									<summary>{commonCopy.technicalDetails}</summary>
 									<span>
 										{forkAuctionCopy.importedEntryDepthLead}
-										<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+										<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 									</span>
 								</details>
 							</div>

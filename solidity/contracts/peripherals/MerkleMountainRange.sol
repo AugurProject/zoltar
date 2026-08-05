@@ -7,12 +7,15 @@ library MerkleMountainRange {
 	function hashLeaf(
 		address depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amount,
+		uint256 amountAttoRep,
 		uint256 parentDepositIndex,
-		uint256 cumulativeAmount,
+		uint256 cumulativeAmountAttoRep,
 		uint256 sourceNodeId
 	) internal pure returns (bytes32) {
-		return keccak256(abi.encode(depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId));
+		return
+			keccak256(
+				abi.encode(depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId)
+			);
 	}
 
 	function hashParent(bytes32 left, bytes32 right) internal pure returns (bytes32) {

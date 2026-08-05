@@ -28,14 +28,14 @@ function createDeferred<T>() {
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
 		childUniverses: [],
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		forkQuestionDetails: undefined,
 		forkTime: 1n,
 		forkingOutcomeIndex: 0n,
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1000n,
+		totalTheoreticalSupplyAttoRep: 1000n,
 		universeId: 1n,
 		...overrides,
 	}
@@ -98,8 +98,8 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalance: 10n ** 19n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 10n ** 19n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -151,8 +151,8 @@ describe('useZoltarMigration', () => {
 				refreshState: async () => undefined,
 				refreshZoltarForkAccess: async () => undefined,
 				refreshZoltarUniverse: async () => undefined,
-				zoltarForkRepBalance: 10n ** 19n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 10n ** 19n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -186,7 +186,7 @@ describe('useZoltarMigration', () => {
 			expect(outcomeIndexes).toEqual([1n, 2n])
 			return {
 				action: 'splitMigrationRep' as const,
-				amount,
+				amountAttoRep: amount,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000cd' as Hash,
 				outcomeIndexes,
 				universeId,
@@ -232,8 +232,8 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalance: 100n * 10n ** 18n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 100n * 10n ** 18n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state

@@ -65,7 +65,7 @@ export function OverviewPanels({
 	universeHasForked,
 	universePresentation,
 	universeLabel,
-	universeRepBalance,
+	universeRepBalanceAttoRep,
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
@@ -186,13 +186,13 @@ export function OverviewPanels({
 					{showAccountBalances ? (
 						<>
 							<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
-								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={commonCopy.eth} compactWhenOverflow />
+								<CurrencyValue value={accountState.ethBalanceAttoEth} loading={isRefreshing && accountState.ethBalanceAttoEth === undefined} suffix={commonCopy.eth} compactWhenOverflow />
 							</MetricField>
 							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={commonCopy.weth} compactWhenOverflow />
+								<CurrencyValue value={accountState.wethBalanceAttoEth} loading={isRefreshing && accountState.wethBalanceAttoEth === undefined} suffix={commonCopy.weth} compactWhenOverflow />
 							</MetricField>
 							<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
-								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
+								<CurrencyValue value={universeRepBalanceAttoRep} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
 							</MetricField>
 						</>
 					) : undefined}

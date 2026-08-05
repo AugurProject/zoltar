@@ -147,13 +147,13 @@ export function poolSpotPriceWeth(sqrtPriceX96: bigint, token: Address, weth: Ad
 	const squared = sqrtPriceX96 * sqrtPriceX96
 	const q192 = 2n ** 192n
 	const oneToken = 10n ** BigInt(decimals)
-	const wethWei = BigInt(token.toLowerCase()) < BigInt(weth.toLowerCase()) ? (oneToken * squared) / q192 : (oneToken * q192) / squared
-	return formatUnits(wethWei, 18)
+	const wethAttoEth = BigInt(token.toLowerCase()) < BigInt(weth.toLowerCase()) ? (oneToken * squared) / q192 : (oneToken * q192) / squared
+	return formatUnits(wethAttoEth, 18)
 }
 
-export function constantProductSpotPriceWeth(reserveToken: bigint, reserveWeth: bigint, tokenDecimals: number) {
-	if (reserveToken === 0n || reserveWeth === 0n) return undefined
-	return formatUnits((reserveWeth * 10n ** BigInt(tokenDecimals)) / reserveToken, 18)
+export function constantProductSpotPriceWeth(reserveToken: bigint, reserveWethAttoEth: bigint, tokenDecimals: number) {
+	if (reserveToken === 0n || reserveWethAttoEth === 0n) return undefined
+	return formatUnits((reserveWethAttoEth * 10n ** BigInt(tokenDecimals)) / reserveToken, 18)
 }
 
 export function formatTokenAmount(value: bigint, decimals: number) {
@@ -174,12 +174,12 @@ async function loadConstantProductPools(client: ReadClient, chainId: number, tok
 		const [token0, reserves] = await Promise.all([client.readContract({ address, abi: constantProductPairAbi, functionName: 'token0' }), client.readContract({ address, abi: constantProductPairAbi, functionName: 'getReserves' })])
 		const tokenIsZero = token0.toLowerCase() === token.toLowerCase()
 		const reserveToken = tokenIsZero ? reserves[0] : reserves[1]
-		const reserveWeth = tokenIsZero ? reserves[1] : reserves[0]
+		const reserveWethAttoEth = tokenIsZero ? reserves[1] : reserves[0]
 		pools.push({
 			address,
 			fee: venue.fee,
-			liquidity: `${formatUnits(reserveToken, tokenDecimals)} token / ${formatUnits(reserveWeth, 18)} WETH`,
-			priceWeth: constantProductSpotPriceWeth(reserveToken, reserveWeth, tokenDecimals),
+			liquidity: `${formatUnits(reserveToken, tokenDecimals)} token / ${formatUnits(reserveWethAttoEth, 18)} WETH`,
+			priceWeth: constantProductSpotPriceWeth(reserveToken, reserveWethAttoEth, tokenDecimals),
 			url: `${explorerUrl}/address/${address}`,
 			venue: venue.name,
 		})

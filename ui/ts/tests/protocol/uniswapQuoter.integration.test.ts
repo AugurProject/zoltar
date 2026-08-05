@@ -34,7 +34,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 
 		void test('quotes 1 USDC → ETH and returns a plausible price', async () => {
 			const ethOut = await quoteExactInput(client, USDC_ADDRESS, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
-			// 1 USDC should buy a small fraction of ETH (more than 0 wei, less than 1 ETH)
+			// 1 USDC should buy a small fraction of ETH (more than 0 attoETH, less than 1 ETH)
 			expect(ethOut).toBeGreaterThan(0n)
 			expect(ethOut).toBeLessThan(ONE_ETH)
 		})

@@ -44,7 +44,7 @@ const report = {
 		reportTimestamp: 100n,
 		settlementTime: policy.settlementTime,
 		settlementTimestamp: 0n,
-		settlerReward: 1n,
+		settlerRewardAttoEth: 1n,
 		token1: weth,
 		token2: rep,
 	},

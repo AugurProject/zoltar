@@ -23,7 +23,7 @@
 			</section>
 			<section id="accepted-callback-price-rejection">
 				<h2>Replace a rejected price report</h2>
-				<p>If the callback entered the coordinator and emitted <code>PriceReportRejected</code>, the pending report is already cleared and queued staged operations remain active. Fund a replacement with <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code>; after a valid settlement, the bounded pending batch can execute. Do not call <code>recoverSettledPendingReport()</code> because no pending report remains.</p>
+				<p>If the callback entered the coordinator and emitted <code>PriceReportRejected</code>, the pending report is already cleared and queued staged operations remain active. Fund a replacement with <code>requestPrice(proposedRepPerEthPrice, requestedInitialWethAttoEth)</code>; after a valid settlement, the bounded pending batch can execute. Do not call <code>recoverSettledPendingReport()</code> because no pending report remains.</p>
 			</section>
 			<section id="staged-operation-result">
 				<h2>Handle the operation result</h2>

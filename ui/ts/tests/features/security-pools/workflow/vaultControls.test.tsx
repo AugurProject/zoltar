@@ -23,7 +23,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -68,7 +68,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultAddress: '',
 						},
@@ -96,11 +96,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
-						securityVaultRepBalance: 25n * 10n ** 18n,
+						walletRepBalanceAttoRep: 25n * 10n ** 18n,
 						securityVaultRepApproval: {
 							error: undefined,
 							loading: false,
@@ -144,21 +144,21 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 20_000n * 10n ** 18n,
-							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
+							totalPoolHeldRepAttoRep: 20_000n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 20_000n * 10n ** 18n,
-							securityBondAllowance: 2_500n * 10n ** 18n,
+							vaultRepBackingAttoRep: 20_000n * 10n ** 18n,
+							coverageCommitmentAttoEth: 2_500n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '10000',
-							securityBondAllowanceAmount: '',
+							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -179,9 +179,9 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000 REP or less.')
 	})
 
-	test('fills the set bond allowance input from the backed Max amount', async () => {
+	test('fills the set coverage commitment input from the backed Max amount', async () => {
 		const selectedPoolAddress = zeroAddress
-		const formChanges: Array<{ securityBondAllowanceAmount?: string }> = []
+		const formChanges: Array<{ coverageCommitmentEthAmount?: string }> = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -195,8 +195,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 9n * 10n ** 18n,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
@@ -205,15 +205,15 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						},
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 12n * 10n ** 18n,
-							securityBondAllowance: 1n * 10n ** 18n,
+							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -227,23 +227,23 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set coverage commitment' })[0] as HTMLElement)
 		})
 
-		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		const coverageCommitmentDialog = documentQueries.getByRole('dialog', { name: 'Set coverage commitment' })
 		await act(() => {
-			fireEvent.click(within(allowanceDialog).getByRole('button', { name: 'Security Bond Allowance Amount Max' }))
+			fireEvent.click(within(coverageCommitmentDialog).getByRole('button', { name: 'Coverage commitment amount Max' }))
 		})
 
-		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '0.5' })
+		expect(formChanges.at(-1)).toEqual({ coverageCommitmentEthAmount: '0.5' })
 	})
 
-	test('allows clearing the bond allowance back to zero in the workflow modal', async () => {
+	test('allows clearing the coverage commitment back to zero in the workflow modal', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
 						lastPrice: 3n * 10n ** 18n,
@@ -253,22 +253,22 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 9n * 10n ** 18n,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
-						accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
+						accountState: createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 12n * 10n ** 18n,
-							securityBondAllowance: 1n * 10n ** 18n,
+							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '0',
+							coverageCommitmentEthAmount: '0',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -282,46 +282,46 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set coverage commitment' })[0] as HTMLElement)
 		})
 
-		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
-		expect(within(allowanceDialog).queryByText(/^Blocked:/)).toBeNull()
-		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set security bond allowance')
+		const coverageCommitmentDialog = documentQueries.getByRole('dialog', { name: 'Set coverage commitment' })
+		expect(within(coverageCommitmentDialog).queryByText(/^Blocked:/)).toBeNull()
+		expectTransactionButtonEnabled(coverageCommitmentDialog as HTMLElement, 'Set coverage commitment')
 	})
 
-	test('blocks the workflow bond-allowance modal when the wallet lacks the buffered oracle bounty ETH', async () => {
+	test('blocks the coverage-commitment modal when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: false,
 						lastPrice: 3n * 10n ** 18n,
-						requestPriceEthCost: 10n * 10n ** 18n,
+						requestPriceCostAttoEth: 10n * 10n ** 18n,
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 9n * 10n ** 18n,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
-						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 12n * 10n ** 18n,
-							securityBondAllowance: 1n * 10n ** 18n,
+							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '1.5',
+							coverageCommitmentEthAmount: '1.5',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -335,11 +335,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set coverage commitment' })[0] as HTMLElement)
 		})
 
-		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
-		expectTransactionButtonDisabled(allowanceDialog as HTMLElement, 'Set security bond allowance', 'Need 7 more ETH in this wallet to queue this bond allowance update.')
+		const coverageCommitmentDialog = documentQueries.getByRole('dialog', { name: 'Set coverage commitment' })
+		expectTransactionButtonDisabled(coverageCommitmentDialog as HTMLElement, 'Set coverage commitment', 'Need 7 more ETH in this wallet to queue this coverage commitment update.')
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {
@@ -347,33 +347,33 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: false,
 						lastPrice: 3n * 10n ** 18n,
-						requestPriceEthCost: 10n * 10n ** 18n,
+						requestPriceCostAttoEth: 10n * 10n ** 18n,
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [
 						createSelectedPool({
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
-							totalRepDeposit: 9n * 10n ** 18n,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalPoolHeldRepAttoRep: 9n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
-						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
-							repDepositShare: 12n * 10n ** 18n,
-							securityBondAllowance: 1n * 10n ** 18n,
+							vaultRepBackingAttoRep: 12n * 10n ** 18n,
+							coverageCommitmentAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalSecurityBondAllowance: 2n * 10n ** 18n,
+							totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '',
+							coverageCommitmentEthAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},

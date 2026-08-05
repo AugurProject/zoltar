@@ -38,7 +38,7 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 			'Migration window closed'
 		);
 		(child, childEscalationGame) = _getOrDeployChildPool(parent, outcomeIndex);
-		_migrateVaultUnlockedState(parent, child, msg.sender);
+		_migrateNonEscrowedVaultAccounting(parent, child, msg.sender);
 		return (child, childEscalationGame);
 	}
 
@@ -48,21 +48,24 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 
 	function finalizeTruthAuctionRepair(
 		ISecurityPool securityPool,
-		uint256 auctionEthReceived,
-		uint256 parentCollateralAtFork
+		uint256 auctionSettlementCollateralReceivedAttoEth,
+		uint256 parentSettlementCollateralAtForkAttoEth
 	) public payable {
 		require(msg.value == 0, 'Auction finalization does not accept repair contributions');
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		uint256 collateralAmount = data.forkCollateralReceived + auctionEthReceived;
-		require(collateralAmount <= parentCollateralAtFork, 'Repair');
-		uint256 parentTotalSecurityBondAllowance = securityPool.parent().totalSecurityBondAllowance();
-		uint256 unmigratedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
-		uint256 totalRepPurchased = data.truthAuction.totalRepPurchased();
-		data.auctionedSecurityBondAllowance = totalRepPurchased == 0 ? 0 : unmigratedSecurityBondAllowance;
+		uint256 settlementCollateralAttoEth =
+			data.forkSettlementCollateralReceivedAttoEth + auctionSettlementCollateralReceivedAttoEth;
+		require(settlementCollateralAttoEth <= parentSettlementCollateralAtForkAttoEth, 'Repair');
+		uint256 parentTotalCoverageCommitmentAttoEth = securityPool.parent().totalCoverageCommitmentAttoEth();
+		uint256 unmigratedCoverageCommitmentAttoEth =
+			parentTotalCoverageCommitmentAttoEth - data.migratedCoverageCommitmentAttoEth;
+		uint256 totalRepPurchasedAttoRep = data.truthAuction.totalRepPurchasedAttoRep();
+		data.auctionedCoverageCommitmentAttoEth =
+			totalRepPurchasedAttoRep == 0 ? 0 : unmigratedCoverageCommitmentAttoEth;
 		securityPool.setPoolFinancials(
-			collateralAmount,
-			parentTotalSecurityBondAllowance,
-			data.migratedSecurityBondAllowance
+			settlementCollateralAttoEth,
+			parentTotalCoverageCommitmentAttoEth,
+			data.migratedCoverageCommitmentAttoEth
 		);
 		securityPool.setSystemState(SystemState.Operational);
 	}

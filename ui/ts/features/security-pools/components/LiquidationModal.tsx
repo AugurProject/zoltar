@@ -25,7 +25,7 @@ import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
-import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/marketForm.js'
+import { tryParseBigIntInput, tryParseEthAmountInput } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../../open-oracle/lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
@@ -39,8 +39,8 @@ type LiquidationModalProps = {
 	closeLiquidationModal: () => void
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	isOnActiveAppChain: boolean
-	liquidationAmount: string
-	liquidationMaxAmount: bigint | undefined
+	coverageCommitmentTransferEthAmount: string
+	maximumCoverageCommitmentTransferAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -67,7 +67,7 @@ type LiquidationModalProps = {
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	walletEthBalance?: bigint | undefined
+	walletBalanceAttoEth?: bigint | undefined
 }
 type QueuedLiquidationOperationView = {
 	amount: bigint | undefined
@@ -128,8 +128,8 @@ function renderQueuedLiquidationStatusCard({
 					<MetricGrid>
 						<MetricField label={commonCopy.stagedOperation}>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
 						{queuedLiquidationOperation.amount === undefined ? null : (
-							<MetricField label={commonCopy.amount}>
-								<CurrencyValue value={queuedLiquidationOperation.amount} />
+							<MetricField label={liquidationCopy.coverageCommitmentTransfer}>
+								<CurrencyValue precision='exact' value={queuedLiquidationOperation.amount} suffix={commonCopy.eth} />
 							</MetricField>
 						)}
 					</MetricGrid>
@@ -162,8 +162,8 @@ export function LiquidationModal({
 	closeLiquidationModal,
 	currentPoolOracleManagerDetails,
 	isOnActiveAppChain,
-	liquidationAmount,
-	liquidationMaxAmount,
+	coverageCommitmentTransferEthAmount,
+	maximumCoverageCommitmentTransferAttoEth,
 	liquidationManagerAddress,
 	liquidationFundingPreview,
 	liquidationFundingPreviewError,
@@ -190,7 +190,7 @@ export function LiquidationModal({
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onQueueLiquidation,
-	walletEthBalance,
+	walletBalanceAttoEth,
 }: LiquidationModalProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const dialogRef = useRef<HTMLElement | null>(null)
@@ -215,7 +215,7 @@ export function LiquidationModal({
 	}, [chainCurrentTimestamp, currentPoolOracleManagerDetails, liquidationFundingPreview, liquidationFundingPreviewError, liquidationManagerAddress, loadingLiquidationFundingPreview, onLoadLiquidationFundingPreview, showLiquidationModal])
 	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp
-	const liquidationAmountValue = tryParseRepAmountInput(liquidationAmount)
+	const liquidationAmountValue = tryParseEthAmountInput(coverageCommitmentTransferEthAmount)
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
@@ -232,7 +232,7 @@ export function LiquidationModal({
 			? undefined
 			: simulateLiquidation({
 					callerVaultSummary,
-					liquidationAmount: liquidationAmountValue,
+					coverageCommitmentTransferAttoEth: liquidationAmountValue,
 					repPerEthPrice: poolOraclePrice,
 					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 					targetVaultSummary,
@@ -242,11 +242,11 @@ export function LiquidationModal({
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? liquidationMaxAmount) : liquidationMaxAmount
+	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? maximumCoverageCommitmentTransferAttoEth) : maximumCoverageCommitmentTransferAttoEth
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary,
-		liquidationAmount: liquidationAmountValue,
-		maxDebtToMove: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
+		coverageCommitmentTransferAttoEth: liquidationAmountValue,
+		maxCoverageCommitmentToTransferAttoEth: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
@@ -257,7 +257,7 @@ export function LiquidationModal({
 
 		return getLiquidationFailureReason({
 			callerVaultSummary,
-			liquidationAmount: liquidationAmountValue,
+			coverageCommitmentTransferAttoEth: liquidationAmountValue,
 			repPerEthPrice: poolOraclePrice,
 			statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 			targetVaultSummary,
@@ -269,8 +269,8 @@ export function LiquidationModal({
 			: (() => {
 					return getOracleRequestEthGuardMessage({
 						actionLabel: liquidationCopy.queueLiquidationActionLabel,
-						requiredEthCost: liquidationFundingPreview?.totalWalletEthRequired,
-						walletEthBalance,
+						requiredCostAttoEth: liquidationFundingPreview?.totalWalletEthRequiredAttoEth,
+						walletBalanceAttoEth,
 					})
 				})()
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
@@ -280,7 +280,7 @@ export function LiquidationModal({
 		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined,
 		trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined,
 		sameVaultWarning,
-		liquidationAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
+		coverageCommitmentTransferEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
 		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined,
 		liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined,
 		liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined,
@@ -363,14 +363,14 @@ export function LiquidationModal({
 					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
-					<MetricField label={liquidationCopy.targetBondAllowance}>
-						<CurrencyValue value={targetVaultSummary?.securityBondAllowance} suffix={commonCopy.eth} />
+					<MetricField label={liquidationCopy.targetCoverageCommitmentAttoEth}>
+						<CurrencyValue value={targetVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
-					<MetricField label={liquidationCopy.targetFreeRep}>
-						<CurrencyValue value={targetVaultSummary?.repDepositShare} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.vaultRepBackingAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={liquidationCopy.targetEscalationRep}>
-						<CurrencyValue value={targetVaultSummary?.escalationEscrowedRep} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.targetDisputeStakedRepAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField
 						label={
@@ -381,14 +381,14 @@ export function LiquidationModal({
 					>
 						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
 					</MetricField>
-					<MetricField label={liquidationCopy.callerBondAllowance}>
-						<CurrencyValue value={callerVaultSummary?.securityBondAllowance} suffix={commonCopy.eth} />
+					<MetricField label={liquidationCopy.callerCoverageCommitmentAttoEth}>
+						<CurrencyValue value={callerVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
-					<MetricField label={liquidationCopy.callerFreeRep}>
-						<CurrencyValue value={callerVaultSummary?.repDepositShare} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
+						<CurrencyValue value={callerVaultSummary?.vaultRepBackingAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={liquidationCopy.callerEscalationRep}>
-						<CurrencyValue value={callerVaultSummary?.escalationEscrowedRep} suffix={commonCopy.rep} />
+					<MetricField label={liquidationCopy.callerDisputeStakedRepAttoRep}>
+						<CurrencyValue value={callerVaultSummary?.disputeStakedRepAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
@@ -405,7 +405,7 @@ export function LiquidationModal({
 					<label className='field'>
 						<span>{liquidationCopy.liquidationAmountEth}</span>
 						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
+							<FormInput className='field-inline-input' value={coverageCommitmentTransferEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
 							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
 								{commonCopy.max}
 							</button>
@@ -435,16 +435,16 @@ export function LiquidationModal({
 						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
 					]}
 					primary={[
-						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationSimulation?.debtToMove} suffix={commonCopy.eth} /> },
-						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtRecorded} suffix={commonCopy.eth} /> },
-						{ label: liquidationCopy.grossRepAward, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAward} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.coverageCommitmentAssumed, value: <CurrencyValue value={liquidationSimulation?.coverageCommitmentToTransferAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultRepBackingToTransferAttoRep} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
-						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequired, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequired} suffix={commonCopy.eth} /> }] : []),
+						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[
-						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.repDepositShare} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.securityBondAllowance} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.coverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={
 						liquidationExecutionMode === 'queue'
@@ -452,19 +452,24 @@ export function LiquidationModal({
 									{
 										title: liquidationCopy.fundingDetails,
 										rows: [
-											{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue value={liquidationFundingPreview?.queueOperationEthValue} suffix={commonCopy.eth} /> },
-											{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue value={liquidationFundingPreview?.wethShortfall} suffix={commonCopy.eth} /> },
-											{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequired} suffix={commonCopy.rep} /> },
-											{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequired} suffix={commonCopy.weth} /> },
+											{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue value={liquidationFundingPreview?.queueOperationValueAttoEth} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue value={liquidationFundingPreview?.wethShortfallAttoEth} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequiredAttoRep} suffix={commonCopy.rep} /> },
+											{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequiredAttoEth} suffix={commonCopy.weth} /> },
 											{
 												label: liquidationCopy.resultingWalletEth,
-												value: <CurrencyValue value={liquidationFundingPreview === undefined || walletEthBalance === undefined || liquidationFundingPreview.totalWalletEthRequired > walletEthBalance ? undefined : walletEthBalance - liquidationFundingPreview.totalWalletEthRequired} suffix={commonCopy.eth} />,
+												value: (
+													<CurrencyValue
+														value={liquidationFundingPreview === undefined || walletBalanceAttoEth === undefined || liquidationFundingPreview.totalWalletEthRequiredAttoEth > walletBalanceAttoEth ? undefined : walletBalanceAttoEth - liquidationFundingPreview.totalWalletEthRequiredAttoEth}
+														suffix={commonCopy.eth}
+													/>
+												),
 											},
 											{
 												label: liquidationCopy.resultingWalletRep,
 												value: (
 													<CurrencyValue
-														value={liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportRepRequired > liquidationFundingPreview.currentRepBalance ? undefined : liquidationFundingPreview.currentRepBalance - liquidationFundingPreview.initialReportRepRequired}
+														value={liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportRepRequiredAttoRep > liquidationFundingPreview.currentRepBalanceAttoRep ? undefined : liquidationFundingPreview.currentRepBalanceAttoRep - liquidationFundingPreview.initialReportRepRequiredAttoRep}
 														suffix={commonCopy.rep}
 													/>
 												),
@@ -474,9 +479,9 @@ export function LiquidationModal({
 												value: (
 													<CurrencyValue
 														value={
-															liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportWethRequired > liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall
+															liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportWethRequiredAttoEth > liquidationFundingPreview.currentWethBalanceAttoEth + liquidationFundingPreview.wethShortfallAttoEth
 																? undefined
-																: liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall - liquidationFundingPreview.initialReportWethRequired
+																: liquidationFundingPreview.currentWethBalanceAttoEth + liquidationFundingPreview.wethShortfallAttoEth - liquidationFundingPreview.initialReportWethRequiredAttoEth
 														}
 														suffix={commonCopy.weth}
 													/>

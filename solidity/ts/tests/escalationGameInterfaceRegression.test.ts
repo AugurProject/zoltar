@@ -108,8 +108,8 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 		storageLayout.map(entry => storageEntrySummary(entry)),
 		[
 			{ label: 'activationTime', slot: '0', offset: 0, type: 'uint256' },
-			{ label: 'nonDecisionThreshold', slot: '1', offset: 0, type: 'uint256' },
-			{ label: 'startBond', slot: '2', offset: 0, type: 'uint256' },
+			{ label: 'nonDecisionThresholdAttoRep', slot: '1', offset: 0, type: 'uint256' },
+			{ label: 'startBondAttoRep', slot: '2', offset: 0, type: 'uint256' },
 			{ label: 'lnRatioScaled', slot: '3', offset: 0, type: 'uint256' },
 			{ label: 'nonDecisionTimestamp', slot: '4', offset: 0, type: 'uint256' },
 			{ label: 'forkContinuation', slot: '5', offset: 0, type: 'bool' },
@@ -119,9 +119,9 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'nextNodeId', slot: '428', offset: 0, type: 'uint256' },
 			{ label: 'nodes', slot: '429', offset: 0, type: 'mapping(uint256 => struct Node)' },
 			{ label: 'escalationClaimBundles', slot: '430', offset: 0, type: 'mapping(address => struct EscalationClaimBundle)' },
-			{ label: 'totalEscrowedRep', slot: '431', offset: 0, type: 'uint256' },
-			{ label: 'unresolvedRepByVault', slot: '432', offset: 0, type: 'mapping(address => uint256)' },
-			{ label: 'totalLocalUnresolvedRep', slot: '433', offset: 0, type: 'uint256' },
+			{ label: 'totalDisputeStakedRepAttoRep', slot: '431', offset: 0, type: 'uint256' },
+			{ label: 'unresolvedRepByVaultAttoRep', slot: '432', offset: 0, type: 'mapping(address => uint256)' },
+			{ label: 'totalLocalUnresolvedRepAttoRep', slot: '433', offset: 0, type: 'uint256' },
 			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '434', offset: 0, type: 'mapping(address => uint256[3])' },
 			{ label: 'localUnresolvedTotalsExportedByVault', slot: '435', offset: 0, type: 'mapping(address => bool)' },
 			{
@@ -132,32 +132,32 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			},
 			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '437', offset: 0, type: 'bool' },
 			{ label: 'winnerHaircutPaidByFork', slot: '437', offset: 1, type: 'bool' },
-			{ label: 'forkCarryInitialBacking', slot: '438', offset: 0, type: 'uint256' },
-			{ label: 'forkCarryEscrowedRep', slot: '439', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryInitialBackingAttoRep', slot: '438', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryDisputeStakedRepAttoRep', slot: '439', offset: 0, type: 'uint256' },
 			{ label: 'forkCarrySourceGame', slot: '440', offset: 0, type: 'address' },
 			{ label: 'forkCarryRootClaimSourceGame', slot: '441', offset: 0, type: 'address' },
 			{ label: 'cumulativeClaimRetention', slot: '442', offset: 0, type: 'uint256' },
 			{ label: 'cumulativeClaimRetentionExponent', slot: '443', offset: 0, type: 'uint256' },
 			{ label: 'fixedQuestionOutcome', slot: '444', offset: 0, type: 'enum BinaryOutcomes.BinaryOutcome' },
 			{ label: 'nonDecisionState', slot: '444', offset: 1, type: 'enum NonDecisionState' },
-			{ label: 'forkCarryBackingExportedBeforeResume', slot: '445', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepBefore', slot: '446', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepRemaining', slot: '447', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '445', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepBeforeAttoRep', slot: '446', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepRemainingAttoRep', slot: '447', offset: 0, type: 'uint256' },
 		],
 	)
 
 	const typeTable = getStorageTypes(escalationGameOutput)
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct OutcomeState'), [
-		{ label: 'balance', slot: '0', offset: 0, type: 'uint256' },
+		{ label: 'balanceAttoRep', slot: '0', offset: 0, type: 'uint256' },
 		{ label: 'deposits', slot: '1', offset: 0, type: 'struct Deposit[]' },
 		{ label: 'snapshotLeafCount', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'snapshotPeaks', slot: '3', offset: 0, type: 'bytes32[64]' },
-		{ label: 'inheritedUnresolvedTotal', slot: '67', offset: 0, type: 'uint256' },
+		{ label: 'inheritedUnresolvedTotalAttoRep', slot: '67', offset: 0, type: 'uint256' },
 		{ label: 'currentLeafCount', slot: '68', offset: 0, type: 'uint256' },
 		{ label: 'currentPeaks', slot: '69', offset: 0, type: 'bytes32[64]' },
 		{ label: 'currentNullifierRoot', slot: '133', offset: 0, type: 'bytes32' },
 		{ label: 'localHeadNodeId', slot: '134', offset: 0, type: 'uint256' },
-		{ label: 'localUnresolvedTotal', slot: '135', offset: 0, type: 'uint256' },
+		{ label: 'localUnresolvedTotalAttoRep', slot: '135', offset: 0, type: 'uint256' },
 		{ label: 'localNodeIds', slot: '136', offset: 0, type: 'uint256[]' },
 		{ label: 'currentCarryNodeHashes', slot: '137', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
 		{ label: 'consumedParentDepositIndexes', slot: '138', offset: 0, type: 'mapping(uint256 => bool)' },
@@ -165,25 +165,25 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Deposit'), [
 		{ label: 'depositor', slot: '0', offset: 0, type: 'address' },
-		{ label: 'amount', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'cumulativeAmount', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'amountAttoRep', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'cumulativeAmountAttoRep', slot: '2', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Node'), [
 		{ label: 'parentNodeId', slot: '0', offset: 0, type: 'uint256' },
 		{ label: 'depositor', slot: '1', offset: 0, type: 'address' },
 		{ label: 'outcome', slot: '1', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
-		{ label: 'amount', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'amountAttoRep', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'parentDepositIndex', slot: '3', offset: 0, type: 'uint256' },
-		{ label: 'cumulativeAmount', slot: '4', offset: 0, type: 'uint256' },
+		{ label: 'cumulativeAmountAttoRep', slot: '4', offset: 0, type: 'uint256' },
 		{ label: 'carryLeafIndex', slot: '5', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct ForkedEscrowState'), [
-		{ label: 'sourcePrincipal', slot: '0', offset: 0, type: 'uint256' },
-		{ label: 'sourcePrincipalClaimed', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'childRep', slot: '2', offset: 0, type: 'uint256' },
-		{ label: 'childRepClaimed', slot: '3', offset: 0, type: 'uint256' },
+		{ label: 'sourcePrincipalAttoRep', slot: '0', offset: 0, type: 'uint256' },
+		{ label: 'sourcePrincipalClaimedAttoRep', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'childRepAttoRep', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'childRepClaimedAttoRep', slot: '3', offset: 0, type: 'uint256' },
 	])
-	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'escrowedRep', slot: '0', offset: 0, type: 'uint256' }])
+	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])
 })
 
 test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {

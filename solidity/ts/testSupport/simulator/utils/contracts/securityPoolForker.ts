@@ -28,23 +28,23 @@ const getQuestionOutcomeAbi = [
 ] satisfies Abi
 
 type SecurityPoolForkerForkData = {
-	auctionableRepAtFork: bigint
+	auctionableRepAtForkAttoRep: bigint
 	truthAuction: Address
 	truthAuctionStarted: bigint
-	migratedRep: bigint
-	auctionedSecurityBondAllowance: bigint
+	migratedRepAttoRep: bigint
+	auctionedCoverageCommitmentAttoEth: bigint
 	escalationElapsedAtFork: bigint
-	escalationStartBondAtFork: bigint
-	escalationNonDecisionThresholdAtFork: bigint
+	escalationStartBondAtForkAttoRep: bigint
+	escalationNonDecisionThresholdAtForkAttoRep: bigint
 	ownFork: boolean
 	unresolvedEscalationAtFork: boolean
 	outcomeIndex: bigint
 }
 
 type OwnForkRepBuckets = {
-	vaultRepAtFork: bigint
-	escalationChildRepPerSelectedOutcome: bigint
-	escrowSourceRepAtFork: bigint
+	vaultRepAtForkAttoRep: bigint
+	escalationChildRepPerSelectedOutcomeAttoRep: bigint
+	escrowSourceRepAtForkAttoRep: bigint
 }
 
 function requireQuestionOutcome(value: unknown, context: string): QuestionOutcome {
@@ -165,11 +165,11 @@ export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, secur
 		}),
 	)
 
-export const getMigratedRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getMigratedRepAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getMigratedRep',
+			functionName: 'getMigratedRepAttoRep',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
 		}),
@@ -221,14 +221,14 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		'Security pool fork data',
 	)
 	return {
-		auctionableRepAtFork: requireBigInt(data[0], 'Security pool fork data auctionable REP'),
+		auctionableRepAtForkAttoRep: requireBigInt(data[0], 'Security pool fork data auctionable REP'),
 		truthAuction: requireAddress(data[1], 'Security pool fork data truth auction'),
 		truthAuctionStarted: requireBigInt(data[2], 'Security pool fork data truth auction started'),
-		migratedRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
-		auctionedSecurityBondAllowance: requireBigInt(data[4], 'Security pool fork data auctioned security bond allowance'),
+		migratedRepAttoRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
+		auctionedCoverageCommitmentAttoEth: requireBigInt(data[4], 'Security pool fork data auctioned coverage commitment'),
 		escalationElapsedAtFork: requireBigInt(data[5], 'Security pool fork data escalation elapsed'),
-		escalationStartBondAtFork: requireBigInt(data[6], 'Security pool fork data escalation start bond'),
-		escalationNonDecisionThresholdAtFork: requireBigInt(data[7], 'Security pool fork data non-decision threshold'),
+		escalationStartBondAtForkAttoRep: requireBigInt(data[6], 'Security pool fork data escalation start bond'),
+		escalationNonDecisionThresholdAtForkAttoRep: requireBigInt(data[7], 'Security pool fork data non-decision threshold'),
 		ownFork: requireBoolean(data[8], 'Security pool fork data own fork flag'),
 		unresolvedEscalationAtFork: requireBoolean(data[9], 'Security pool fork data unresolved escalation flag'),
 		outcomeIndex: requireBigInt(data[10], 'Security pool fork data outcome index'),
@@ -246,9 +246,9 @@ export const getOwnForkRepBuckets = async (client: ReadClient, securityPoolAddre
 		'Own fork REP buckets',
 	)
 	return {
-		vaultRepAtFork: requireBigInt(repBuckets[0], 'Own fork REP bucket vault REP'),
-		escalationChildRepPerSelectedOutcome: requireBigInt(repBuckets[1], 'Own fork REP bucket per selected outcome'),
-		escrowSourceRepAtFork: requireBigInt(repBuckets[2], 'Own fork REP bucket escrow source REP'),
+		vaultRepAtForkAttoRep: requireBigInt(repBuckets[0], 'Own fork REP bucket vault REP'),
+		escalationChildRepPerSelectedOutcomeAttoRep: requireBigInt(repBuckets[1], 'Own fork REP bucket per selected outcome'),
+		escrowSourceRepAtForkAttoRep: requireBigInt(repBuckets[2], 'Own fork REP bucket escrow source REP'),
 	}
 }
 

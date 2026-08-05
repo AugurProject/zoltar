@@ -15,7 +15,7 @@ const REP_PRICE_CACHE_TTL_MILLISECONDS = 30_000
 type PriceSource = 'v4' | 'v3' | 'mock'
 
 type RepPrices = {
-	repPerEthPrice: bigint | undefined // REP in wei-style token units received for 1 ETH
+	repPerEthPrice: bigint | undefined // REP in attoETH-style token units received for 1 ETH
 	repPerEthFailure: RepPriceFailure | undefined
 	repPerEthSource: PriceSource | undefined
 	repPerEthSourceUrl: string | undefined

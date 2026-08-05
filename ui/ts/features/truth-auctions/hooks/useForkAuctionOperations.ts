@@ -316,7 +316,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
-			'Failed to clear parent escalation locks',
+			'Failed to clear unresolved parent escalation-deposit accounting',
 		)
 
 	const startTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
@@ -338,14 +338,14 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			return runForkAuctionAction(
 				'submitBid',
 				async (walletAddress, details, isCurrentSelection) => {
-					const walletEthBalance = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
+					const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					const bidGuardMessage = getTruthAuctionBidGuardMessage({
 						accountAddress: walletAddress,
 						currentTimestamp: details.currentTime,
 						isOnActiveAppChain: true,
 						submitBidAmountInput: submittedBidAmountInput,
 						truthAuction: details.truthAuction,
-						walletEthBalance,
+						walletBalanceAttoEth,
 					})
 					if (bidGuardMessage !== undefined) throw new Error(bidGuardMessage)
 					const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(submittedBidPriceInput)

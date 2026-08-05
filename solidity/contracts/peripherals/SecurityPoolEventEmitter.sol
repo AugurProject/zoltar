@@ -16,27 +16,27 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 	event PoolAccountingCheckpoint(
 		AccountingReason reason,
 		address indexed vault,
-		uint256 completeSetCollateralAmount,
-		uint256 totalSecurityBondAllowance,
-		uint256 feeEligibleSecurityBondAllowance,
-		uint256 totalFeesOwedToVaults,
-		uint256 unallocatedFeeReserve,
+		uint256 settlementCollateralAttoEth,
+		uint256 totalCoverageCommitmentAttoEth,
+		uint256 feeEligibleCoverageCommitmentAttoEth,
+		uint256 totalClaimableVaultFeesAttoEth,
+		uint256 unallocatedAccruedFeesAttoEth,
 		uint256 feeIndex,
 		uint256 feeIndexRemainder,
 		uint256 totalFeesOwedRemainder,
-		uint256 uncheckpointedFeeEligibleAllowance,
+		uint256 uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
 		uint256 lastUpdatedFeeAccumulator,
 		uint256 currentRetentionRate
 	);
 	event VaultAccountingCheckpoint(
 		address indexed vault,
-		uint256 poolOwnershipAmount,
-		uint256 securityBondAllowance,
-		uint256 unpaidEthFees,
+		uint256 repBackingUnits,
+		uint256 coverageCommitmentAttoEth,
+		uint256 claimableFeesAttoEth,
 		uint256 feeIndex,
 		uint256 vaultFeeRemainder,
-		uint256 resultingPoolOwnershipDenominator,
-		uint256 resultingFeeEligibleSecurityBondAllowance
+		uint256 resultingTotalRepBackingUnits,
+		uint256 resultingFeeEligibleCoverageCommitmentAttoEth
 	);
 
 	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
@@ -59,15 +59,15 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		emit PoolAccountingCheckpoint(
 			reason,
 			vault,
-			snapshot.completeSetCollateralAmount,
-			snapshot.totalSecurityBondAllowance,
-			snapshot.feeEligibleSecurityBondAllowance,
-			snapshot.totalFeesOwedToVaults,
-			snapshot.unallocatedFeeReserve,
+			snapshot.settlementCollateralAttoEth,
+			snapshot.totalCoverageCommitmentAttoEth,
+			snapshot.feeEligibleCoverageCommitmentAttoEth,
+			snapshot.totalClaimableVaultFeesAttoEth,
+			snapshot.unallocatedAccruedFeesAttoEth,
 			snapshot.feeIndex,
 			snapshot.feeIndexRemainder,
 			snapshot.totalFeesOwedRemainder,
-			snapshot.uncheckpointedFeeEligibleAllowance,
+			snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
 			snapshot.lastUpdatedFeeAccumulator,
 			snapshot.currentRetentionRate
 		);
@@ -75,32 +75,32 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 
 	function emitVaultAccountingCheckpoint(address vault) external payable {
 		bytes32 vaultSlot = keccak256(abi.encode(vault, SECURITY_VAULTS_SLOT));
-		uint256 poolOwnershipAmount;
-		uint256 securityBondAllowance;
-		uint256 unpaidEthFees;
+		uint256 repBackingUnits;
+		uint256 coverageCommitmentAttoEth;
+		uint256 claimableFeesAttoEth;
 		uint256 vaultFeeIndex;
 		uint256 vaultFeeRemainder;
-		uint256 resultingPoolOwnershipDenominator;
-		uint256 resultingFeeEligibleSecurityBondAllowance;
+		uint256 resultingTotalRepBackingUnits;
+		uint256 resultingFeeEligibleCoverageCommitmentAttoEth;
 		bytes32 vaultFeeRemainderSlot = keccak256(abi.encode(vault, VAULT_FEE_REMAINDERS_SLOT));
 		assembly {
-			poolOwnershipAmount := sload(vaultSlot)
-			securityBondAllowance := sload(add(vaultSlot, 1))
-			unpaidEthFees := sload(add(vaultSlot, 2))
+			repBackingUnits := sload(vaultSlot)
+			coverageCommitmentAttoEth := sload(add(vaultSlot, 1))
+			claimableFeesAttoEth := sload(add(vaultSlot, 2))
 			vaultFeeIndex := sload(add(vaultSlot, 3))
 			vaultFeeRemainder := sload(vaultFeeRemainderSlot)
-			resultingPoolOwnershipDenominator := sload(3)
-			resultingFeeEligibleSecurityBondAllowance := sload(12)
+			resultingTotalRepBackingUnits := sload(3)
+			resultingFeeEligibleCoverageCommitmentAttoEth := sload(12)
 		}
 		emit VaultAccountingCheckpoint(
 			vault,
-			poolOwnershipAmount,
-			securityBondAllowance,
-			unpaidEthFees,
+			repBackingUnits,
+			coverageCommitmentAttoEth,
+			claimableFeesAttoEth,
 			vaultFeeIndex,
 			vaultFeeRemainder,
-			resultingPoolOwnershipDenominator,
-			resultingFeeEligibleSecurityBondAllowance
+			resultingTotalRepBackingUnits,
+			resultingFeeEligibleCoverageCommitmentAttoEth
 		);
 	}
 
@@ -108,27 +108,33 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		ISecurityPool parent,
 		address migrationProxy,
 		address sourceGame,
-		uint256 poolRepAtFork,
-		uint256 escalationRepAtFork,
-		uint256 resultingLockedRep
+		uint256 poolRepAtForkAttoRep,
+		uint256 disputeStakedRepAtForkAttoRep,
+		uint256 resultingLockedRepAttoRep
 	) external payable {
 		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
 		if (data.unresolvedEscalationAtFork) {
-			emit EscalationRepDrainedAtFork(parent, sourceGame, escalationRepAtFork);
+			emit DisputeStakedRepDrainedAtFork(parent, sourceGame, disputeStakedRepAtForkAttoRep);
 		}
-		emit ParentRepLocked(parent, migrationProxy, poolRepAtFork, escalationRepAtFork, resultingLockedRep);
+		emit ParentRepLocked(
+			parent,
+			migrationProxy,
+			poolRepAtForkAttoRep,
+			disputeStakedRepAtForkAttoRep,
+			resultingLockedRepAttoRep
+		);
 		emit SecurityPoolForkSnapshot(
 			parent,
 			migrationProxy,
 			data.ownFork,
 			data.unresolvedEscalationAtFork,
-			data.collateralAtFork,
-			poolRepAtFork,
-			data.auctionableRepAtFork,
-			data.escalationSourceRepAtFork,
-			data.escalationChildRepAtFork,
-			data.escalationStartBondAtFork,
-			data.escalationNonDecisionThresholdAtFork,
+			data.settlementCollateralAtForkAttoEth,
+			poolRepAtForkAttoRep,
+			data.auctionableRepAtForkAttoRep,
+			data.escalationSourceRepAtForkAttoRep,
+			data.escalationChildRepAtForkAttoRep,
+			data.escalationStartBondAtForkAttoRep,
+			data.escalationNonDecisionThresholdAtForkAttoRep,
 			data.escalationElapsedAtFork,
 			data.escalationSnapshotId
 		);

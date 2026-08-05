@@ -26,7 +26,7 @@ export type OpenOracleGame = {
 	reportTimestamp: bigint
 	settlementTime: bigint
 	settlementTimestamp: bigint
-	settlerReward: bigint
+	settlerRewardAttoEth: bigint
 	token1: Address
 	token2: Address
 }
@@ -54,7 +54,7 @@ const OPEN_ORACLE_GAME_COMPONENTS = [
 	{ name: 'settlementTime', type: 'uint48' },
 	{ name: 'escalationHalt', type: 'uint128' },
 	{ name: 'protocolFeeRecipient', type: 'address' },
-	{ name: 'settlerReward', type: 'uint96' },
+	{ name: 'settlerRewardAttoEth', type: 'uint96' },
 	{ name: 'token2', type: 'address' },
 	{ name: 'numReports', type: 'uint24' },
 	{ name: 'disputeDelay', type: 'uint24' },
@@ -114,7 +114,7 @@ export function encodeOpenOracleStatePreimagePacked(preimage: OpenOracleStatePre
 	writePackedUint(bytes, 90, 6, game.settlementTime)
 	writePackedUint(bytes, 96, 16, game.escalationHalt)
 	writePackedAddress(bytes, 112, game.protocolFeeRecipient)
-	writePackedUint(bytes, 132, 12, game.settlerReward)
+	writePackedUint(bytes, 132, 12, game.settlerRewardAttoEth)
 	writePackedAddress(bytes, 144, game.token2)
 	writePackedUint(bytes, 164, 3, game.numReports)
 	writePackedUint(bytes, 167, 3, game.disputeDelay)
@@ -145,7 +145,7 @@ export function decodeOpenOracleStatePreimage(data: Hex, reportId: bigint): Open
 			settlementTime: readPackedUint(bytes, 90, 6),
 			escalationHalt: readPackedUint(bytes, 96, 16),
 			protocolFeeRecipient: readPackedAddress(bytes, 112),
-			settlerReward: readPackedUint(bytes, 132, 12),
+			settlerRewardAttoEth: readPackedUint(bytes, 132, 12),
 			token2: readPackedAddress(bytes, 144),
 			numReports: readPackedUint(bytes, 164, 3),
 			disputeDelay: readPackedUint(bytes, 167, 3),
@@ -177,7 +177,7 @@ export function getOpenOracleGameTuple(game: OpenOracleGame) {
 		game.settlementTime,
 		game.escalationHalt,
 		game.protocolFeeRecipient,
-		game.settlerReward,
+		game.settlerRewardAttoEth,
 		game.token2,
 		game.numReports,
 		game.disputeDelay,

@@ -58,17 +58,17 @@ export function SecurityPoolSummaryMetrics({
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaults}>{pool.vaultCount.toString()}</MetricField>
 				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
-				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeWeiPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
+				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeAttoEthPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>
 				{showTotalBacking ? (
-					<MetricField label={securityPoolCopy.totalFreeRep}>
-						<CurrencyValue value={pool.totalRepDeposit} suffix={commonCopy.rep} />
+					<MetricField label={securityPoolCopy.totalPoolHeldRepAttoRep}>
+						<CurrencyValue value={pool.totalPoolHeldRepAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
-					<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} /> / <CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
+					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
 				</MetricField>
 				{children}
 			</MetricGrid>
@@ -92,9 +92,9 @@ export function SecurityPoolSummaryMetrics({
 					</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalFreeRep}</span>
+					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldRepAttoRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
-						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalRepDeposit} suffix={commonCopy.rep} />
+						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalPoolHeldRepAttoRep} suffix={commonCopy.rep} />
 					</strong>
 				</div>
 			</div>
@@ -110,20 +110,20 @@ export function SecurityPoolSummaryMetrics({
 					<ProgressMeter
 						className='security-pool-hero-meter'
 						label={securityPoolCopy.openInterestMinted}
-						maxValue={pool.totalSecurityBondAllowance}
+						maxValue={pool.totalCoverageCommitmentAttoEth}
 						secondaryValue={
 							<span className='detail'>
 								{securityPoolCopy.maxLead}
-								<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
+								<CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
 							</span>
 						}
 						tone={getToneRatioThreshold({
-							ratio: getVisualRatio({ value: pool.completeSetCollateralAmount, maxValue: pool.totalSecurityBondAllowance }),
+							ratio: getVisualRatio({ value: pool.settlementCollateralAttoEth, maxValue: pool.totalCoverageCommitmentAttoEth }),
 							successThreshold: 0.6,
 							warningThreshold: 0.85,
 						})}
-						value={pool.completeSetCollateralAmount}
-						valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} />}
+						value={pool.settlementCollateralAttoEth}
+						valueText={<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} />}
 					/>
 				</div>
 			</div>

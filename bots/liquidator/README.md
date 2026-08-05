@@ -7,9 +7,10 @@ execution requires an explicit signer, independent read RPC quorum, execution
 flag, and non-zero deployment addresses.
 
 The bot owns an ordinary vault under its signer address in each selected pool. A
-liquidation transfers bond allowance and bonus-priced REP from the target into
-that vault. Because the seized REP is deliberately insufficient to collateralize
-the transferred allowance by itself, the bot deposits the minimum additional REP
+liquidation transfers coverage commitment and a 5%-bonus vault REP backing award,
+represented by REP backing units, from the target into that vault. Because this REP
+backing award is deliberately insufficient to collateralize the transferred coverage commitment
+by itself, the bot deposits the minimum additional REP
 needed to reach its configured target health before submitting an immediate
 liquidation. For stale prices it pre-funds against a configurable higher price
 bound before queueing the operation, so settlement within that operator-approved
@@ -69,11 +70,11 @@ policy to another universe tree; this also supports the external genesis REP
 token, which does not expose a Zoltar accessor.
 
 When `allowAutomaticVaultMigrations` is enabled, the bot looks for a selected
-forked parent pool where its signer has an unlocked vault and one deployed direct
+forked parent pool where its signer has non-escrowed vault accounting and one deployed direct
 child universe is approved. During the protocol's eight-week migration window
 it calls the
 parent's `SecurityPoolForker.migrateVault(parent, outcomeIndex)`. The migration
-moves the signer's complete unlocked vault to the chosen child and atomically
+moves the signer's complete non-escrowed vault accounting to the chosen child and atomically
 creates the child security pool when it does not exist. The bot does not split a
 parent vault across outcomes. Once the child becomes operational, normal vault
 maintenance and liquidation continue there because the next registry scan
@@ -216,18 +217,18 @@ the total-source quorum.
 
 Amounts use 18-decimal ETH or REP units in the operator JSON.
 
-- `minimumLiquidationDebtEth` and `maximumLiquidationDebtEth` bound target debt.
+- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentAttoEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
 - `minimumRewardValueEth` filters the fixed-bonus value before gas.
 - `maximumGasCostEth` caps the padded EIP-1559 gas limit actually signed for
   every automated action.
 - `maximumOracleRequestCostEth` caps fresh-price bounty funding.
-- `maximumRepPerPool` and `maximumTotalDeployedRep` bound liquidation
+- `maximumRepPerPoolRep` and `maximumTotalDeployedRep` bound liquidation
   acquisitions and every automatic maintenance deposit.
-- `walletRepReserve` remains outside pools.
+- `walletRepReserveRep` remains outside pools.
 - `vaultTopUpHealthBps` triggers maintenance.
 - `vaultTargetHealthBps` is the post-deposit and post-liquidation target.
 - `vaultWithdrawHealthBps` must exceed the target and gates surplus withdrawals.
-- `minimumRepWithdrawal` avoids small staged withdrawals.
+- `minimumRepWithdrawalRep` avoids small staged withdrawals.
 - `redeemFeesAboveEth` controls ETH fee redemption.
 - `stalePriceFundingBufferBps` conservatively pre-funds the liquidator vault before a stale-price operation is queued.
 - `fallbackRepPerEthPrice` is used only for a never-seeded stale coordinator.
@@ -308,6 +309,6 @@ The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 retry, and transaction-submission primitives live in `../shared`.
 
 > Live liquidation is experimental. Use a dedicated low-balance signer, begin on
-> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool allowance
+> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool coverage commitment
 > remains an economic obligation even when the fixed liquidation bonus is
 > positive.

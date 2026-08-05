@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { acquireLiquidatorExecutionLocks, acquireLiquidatorExecutionLocksForShutdown, liquidatorDashboardLifecycle } from '../../src/core/process-lock.ts'
+import { acquireLiquidatorExecutionLocks, liquidatorDashboardLifecycle } from '../../src/core/process-lock.ts'
 
 const temporaryDirectories: string[] = []
 const releases: Array<() => Promise<void>> = []
@@ -160,6 +160,7 @@ test('always drains the dashboard when polling fails', async () => {
 					return Promise.resolve()
 				},
 			})
+			void dashboardLifecycle
 			throw new Error('poll failed')
 		})(),
 	).rejects.toThrow('poll failed')

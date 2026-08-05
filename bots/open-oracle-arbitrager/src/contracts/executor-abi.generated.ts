@@ -30,7 +30,7 @@ export const openOracleArbitrageExecutorAbi = [
 			{
 				indexed: false,
 				internalType: 'uint256',
-				name: 'hedgeAmountWeth',
+				name: 'hedgeAmountWethAttoEth',
 				type: 'uint256',
 			},
 			{
@@ -91,7 +91,7 @@ export const openOracleArbitrageExecutorAbi = [
 			{
 				indexed: false,
 				internalType: 'uint256',
-				name: 'settlerReward',
+				name: 'settlerRewardAttoEth',
 				type: 'uint256',
 			},
 		],
@@ -203,7 +203,7 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						internalType: 'uint96',
-						name: 'settlerReward',
+						name: 'settlerRewardAttoEth',
 						type: 'uint96',
 					},
 					{
@@ -354,7 +354,7 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						internalType: 'uint96',
-						name: 'settlerReward',
+						name: 'settlerRewardAttoEth',
 						type: 'uint96',
 					},
 					{
@@ -503,7 +503,7 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						internalType: 'uint256',
-						name: 'hedgeWethLimit',
+						name: 'hedgeWethLimitAttoEth',
 						type: 'uint256',
 					},
 					{
@@ -575,7 +575,7 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						internalType: 'uint96',
-						name: 'settlerReward',
+						name: 'settlerRewardAttoEth',
 						type: 'uint96',
 					},
 					{
@@ -776,7 +776,7 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						internalType: 'uint96',
-						name: 'settlerReward',
+						name: 'settlerRewardAttoEth',
 						type: 'uint96',
 					},
 					{

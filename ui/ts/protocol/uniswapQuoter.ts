@@ -314,24 +314,24 @@ export async function quoteBestExactInput(client: ReadClient, tokenIn: Address, 
 	return result.amountOut
 }
 
-// Returns how much ETH (in wei) you receive for swapping `amountIn` of `token`
+// Returns how much ETH (in attoETH) you receive for swapping `amountIn` of `token`
 export async function quoteTokenForEth(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	return quoteExactInput(client, token, ETH_ADDRESS, amountIn, poolConfig)
 }
 
-// Returns how much `token` (in token's native units) you receive for swapping `amountIn` ETH (in wei)
+// Returns how much `token` (in token's native units) you receive for swapping `amountIn` ETH (in attoETH)
 export async function quoteEthForToken(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	return quoteExactInput(client, ETH_ADDRESS, token, amountIn, poolConfig)
 }
 
 // Convenience: REP → ETH using the default pool config
-export async function quoteRepForEth(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
+export async function quoteRepForEth(client: ReadClient, repAmountAttoRep: bigint): Promise<bigint> {
+	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, repAmountAttoRep)
 }
 
 // Convenience: ETH → REP using the default pool config
-export async function quoteEthForRep(client: ReadClient, ethAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmount)
+export async function quoteEthForRep(client: ReadClient, ethAmountAttoEth: bigint): Promise<bigint> {
+	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmountAttoEth)
 }
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
@@ -443,9 +443,9 @@ export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address
 	return result.amountOut
 }
 
-// Returns how much WETH (= ETH) you receive for `repAmount` REP via Uniswap V3 (1% pool).
-export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
+// Returns how much WETH (= ETH) you receive for `repAmountAttoRep` REP via Uniswap V3 (1% pool).
+export async function quoteRepForEthV3(client: ReadClient, repAmountAttoRep: bigint): Promise<bigint> {
+	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, repAmountAttoRep)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────
@@ -453,6 +453,6 @@ export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): P
 // Pool ID: 0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
-export async function quoteRepForUsdcV4WithSource(client: ReadClient, repAmount: bigint) {
-	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), repAmount, [REP_USDC_V4_POOL])
+export async function quoteRepForUsdcV4WithSource(client: ReadClient, repAmountAttoRep: bigint) {
+	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), repAmountAttoRep, [REP_USDC_V4_POOL])
 }

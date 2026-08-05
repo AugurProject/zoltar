@@ -543,7 +543,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
 				args: [100n],
 			}),
 		)
@@ -641,7 +641,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
 				args: [10n],
 			}),
 		)
@@ -690,7 +690,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
 				args: [100n],
 			}),
 		)

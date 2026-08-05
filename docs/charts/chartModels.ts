@@ -21,7 +21,7 @@ type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
 	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed escalation interval (% of interval)', y: 'Required bond (% of non-decision threshold)' },
-	'fig-statoblast-retention-utilization': { x: 'Fee-eligible allowance utilization (%)', y: 'Annualized open-interest fee (%)' },
+	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
 	'plot-open-oracle-integration-2': { x: 'Censorship duration (steps)', y: 'Cost or payoff (ETH)' },
 	'plot-statoblast-whitepaper-7': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
@@ -54,7 +54,7 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		price,
 		totalEth: activeBids.filter(bid => bid.price === price).reduce((sum, bid) => sum + bid.eth, 0),
 	}))
-	let accumulatedEth = 0
+	let accumulatedBidEth = 0
 	let clearingPrice = 0
 	let ethFilledAtClearing = 0
 	let funded = false
@@ -63,14 +63,14 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 	const demandPoints: AuctionModel['demandPoints'] = []
 	const chartRepByKey = new Map<AuctionBidInput['key'], number>()
 	for (const tick of ticks) {
-		if (accumulatedEth > 0 && accumulatedEth / tick.price > repInventory) {
+		if (accumulatedBidEth > 0 && accumulatedBidEth / tick.price > repInventory) {
 			funded = true
 			clearingPrice = lastValidPrice
 			ethFilledAtClearing = lastValidEthAtTick
 			break
 		}
-		const ethToTake = Math.min(tick.totalEth, Math.max(0, ethRaiseCap - accumulatedEth))
-		const newAccumulatedEth = accumulatedEth + ethToTake
+		const ethToTake = Math.min(tick.totalEth, Math.max(0, ethRaiseCap - accumulatedBidEth))
+		const newAccumulatedEth = accumulatedBidEth + ethToTake
 		const candidateRep = newAccumulatedEth / tick.price
 		demandPoints.push({ cumulativeRep: candidateRep, price: tick.price })
 		for (const bid of tick.bids) {
@@ -79,18 +79,18 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		if (candidateRep >= repInventory) {
 			funded = true
 			clearingPrice = tick.price
-			ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * tick.price - accumulatedEth))
-			accumulatedEth += ethFilledAtClearing
+			ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * tick.price - accumulatedBidEth))
+			accumulatedBidEth += ethFilledAtClearing
 			break
 		}
 		if (newAccumulatedEth >= ethRaiseCap) {
 			funded = true
 			clearingPrice = tick.price
 			ethFilledAtClearing = ethToTake
-			accumulatedEth = newAccumulatedEth
+			accumulatedBidEth = newAccumulatedEth
 			break
 		}
-		accumulatedEth = newAccumulatedEth
+		accumulatedBidEth = newAccumulatedEth
 		lastValidPrice = tick.price
 		lastValidEthAtTick = ethToTake
 	}
@@ -109,15 +109,15 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 			}
 		}
 	} else {
-		const winningEth = activeBids.reduce((sum, bid) => sum + bid.eth, 0)
-		accumulatedEth = winningEth
-		if (winningEth > 0) {
+		const winningEthAmount = activeBids.reduce((sum, bid) => sum + bid.eth, 0)
+		accumulatedBidEth = winningEthAmount
+		if (winningEthAmount > 0) {
 			for (const bid of activeBids) {
-				repByKey.set(bid.key, (bid.eth * repInventory) / winningEth)
+				repByKey.set(bid.key, (bid.eth * repInventory) / winningEthAmount)
 			}
 		}
 		clearingPrice = qualificationPrice
-		effectivePrice = winningEth > 0 ? winningEth / repInventory : 0
+		effectivePrice = winningEthAmount > 0 ? winningEthAmount / repInventory : 0
 	}
 
 	const results = bids.map(bid => {
@@ -134,15 +134,15 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		clearingPrice,
 		demandPoints,
 		effectivePrice,
-		ethRaised: accumulatedEth,
+		ethRaised: accumulatedBidEth,
 		mode: funded ? 'uniform' : 'underfunded',
 		qualificationPrice,
 	}
 }
 
 export function calculateCollateralRepairModel(
-	parentCollateral: number,
-	forkCollateralReceived: number,
+	parentSettlementCollateral: number,
+	forkSettlementCollateralReceived: number,
 	auctionRaised: number,
 ): {
 	initialShortfall: number
@@ -150,8 +150,8 @@ export function calculateCollateralRepairModel(
 	remainingShortfall: number
 	repairEth: number
 } {
-	const received = Math.min(Math.max(forkCollateralReceived, 0), Math.max(parentCollateral, 0))
-	const initialShortfall = Math.max(0, parentCollateral - received)
+	const received = Math.min(Math.max(forkSettlementCollateralReceived, 0), Math.max(parentSettlementCollateral, 0))
+	const initialShortfall = Math.max(0, parentSettlementCollateral - received)
 	const repairEth = Math.min(Math.max(auctionRaised, 0), initialShortfall)
 	return {
 		initialShortfall,
@@ -205,36 +205,36 @@ export function calculateOracleSecurityModel(input: {
 	}
 }
 
-const atomicScale = 1_000_000_000_000_000_000n
+const attoRepPerRep = 1_000_000_000_000_000_000n
 
 export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }): {
 	accepted: number
-	acceptedAtomic: bigint
-	effectiveStartBondAtomic: bigint
+	acceptedAttoRep: bigint
+	effectiveStartBondAttoRep: bigint
 	noAfter: number
-	noAfterAtomic: bigint
+	noAfterAttoRep: bigint
 	previewReverts: boolean
 	threshold: number
 	tieAdjusted: boolean
 } {
 	const threshold = Math.max(input.nonDecisionThreshold, 1)
-	const thresholdAtomic = BigInt(Math.round(threshold * Number(atomicScale)))
-	const enteredStartBondAtomic = BigInt(Math.round(input.startBond * Number(atomicScale)))
-	const effectiveStartBondAtomic = !input.repeatDeposit && enteredStartBondAtomic >= thresholdAtomic ? thresholdAtomic - 1n : enteredStartBondAtomic
-	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAtomic <= 0n || enteredStartBondAtomic >= thresholdAtomic)
-	const nonDecisionReached = [input.invalidBalance, input.yesBalance, input.noBalance].filter(balance => BigInt(Math.round(balance * Number(atomicScale))) >= thresholdAtomic).length >= 2
+	const thresholdAttoRep = BigInt(Math.round(threshold * Number(attoRepPerRep)))
+	const enteredStartBondAttoRep = BigInt(Math.round(input.startBond * Number(attoRepPerRep)))
+	const effectiveStartBondAttoRep = !input.repeatDeposit && enteredStartBondAttoRep >= thresholdAttoRep ? thresholdAttoRep - 1n : enteredStartBondAttoRep
+	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAttoRep <= 0n || enteredStartBondAttoRep >= thresholdAttoRep)
+	const nonDecisionReached = [input.invalidBalance, input.yesBalance, input.noBalance].filter(balance => BigInt(Math.round(balance * Number(attoRepPerRep))) >= thresholdAttoRep).length >= 2
 	const room = Math.max(0, threshold - input.noBalance)
 	const clipped = Math.min(input.proposedDeposit, room)
 	const maxBefore = Math.max(input.invalidBalance, input.yesBalance, input.noBalance)
 	const tieAdjusted = input.noBalance + clipped === maxBefore && input.noBalance + clipped < threshold
-	const clippedAtomic = BigInt(Math.round(clipped * Number(atomicScale)))
-	const acceptedAtomicPreview = tieAdjusted && clippedAtomic > 0n ? clippedAtomic - 1n : clippedAtomic
-	const noAfterAtomicPreview = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomicPreview
-	const previewReverts = invalidStoredParameters || nonDecisionReached || input.noBalance >= threshold || BigInt(Math.round(input.proposedDeposit * Number(atomicScale))) < effectiveStartBondAtomic || (acceptedAtomicPreview < effectiveStartBondAtomic && noAfterAtomicPreview !== thresholdAtomic)
-	const acceptedAtomic = previewReverts ? 0n : acceptedAtomicPreview
-	const accepted = Number(acceptedAtomic) / Number(atomicScale)
-	const noAfterAtomic = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomic
-	return { accepted, acceptedAtomic, effectiveStartBondAtomic, noAfter: input.noBalance + accepted, noAfterAtomic, previewReverts, threshold, tieAdjusted }
+	const clippedAttoRep = BigInt(Math.round(clipped * Number(attoRepPerRep)))
+	const acceptedPreviewAttoRep = tieAdjusted && clippedAttoRep > 0n ? clippedAttoRep - 1n : clippedAttoRep
+	const noAfterPreviewAttoRep = BigInt(Math.round(input.noBalance * Number(attoRepPerRep))) + acceptedPreviewAttoRep
+	const previewReverts = invalidStoredParameters || nonDecisionReached || input.noBalance >= threshold || BigInt(Math.round(input.proposedDeposit * Number(attoRepPerRep))) < effectiveStartBondAttoRep || (acceptedPreviewAttoRep < effectiveStartBondAttoRep && noAfterPreviewAttoRep !== thresholdAttoRep)
+	const acceptedAttoRep = previewReverts ? 0n : acceptedPreviewAttoRep
+	const accepted = Number(acceptedAttoRep) / Number(attoRepPerRep)
+	const noAfterAttoRep = BigInt(Math.round(input.noBalance * Number(attoRepPerRep))) + acceptedAttoRep
+	return { accepted, acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + accepted, noAfterAttoRep, previewReverts, threshold, tieAdjusted }
 }
 
 export function calculateResolutionModel(input: { invalidBalance: number; noBalance: number; runningCost: number; yesBalance: number }): { atCost: number; result: 'Invalid' | 'No' | 'None' | 'Yes' } {
@@ -264,7 +264,7 @@ export function calculateAnnualizedRetentionFeePercent(utilizationPercent: numbe
 }
 
 export type ForkThresholdPoint = {
-	forkThreshold: number
+	forkThresholdRep: number
 	generation: number
 	theoreticalSupply: number
 }
@@ -273,7 +273,7 @@ export function calculateForkThresholdSeries(generationCount: number, genesisThe
 	return Array.from({ length: Math.max(0, generationCount) }, (_, generation) => {
 		const theoreticalSupply = genesisTheoreticalSupply * 0.99 ** generation
 		return {
-			forkThreshold: theoreticalSupply / 20,
+			forkThresholdRep: theoreticalSupply / 20,
 			generation,
 			theoreticalSupply,
 		}

@@ -101,7 +101,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -164,7 +164,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -244,7 +244,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -290,7 +290,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '10000',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -298,7 +298,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								action: 'queueWithdrawRep',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000be',
 								stagedExecution: {
-									errorMessage: 'Local Security Bond Allowance broken',
+									errorMessage: 'Local Coverage commitment broken',
 									operation: 'withdrawRep',
 									operationId: 8n,
 									success: false,
@@ -320,7 +320,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+			expect(dialogQueries.getByText('Local Coverage commitment broken')).not.toBeNull()
 			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 		})
 
@@ -377,7 +377,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Coverage commitment broken',
 								operation: 'liquidation',
 								operationId: 13n,
 								success: false,
@@ -393,7 +393,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
 			const dialogQueries = within(dialog)
 			expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+			expect(dialogQueries.getByText('Local Coverage commitment broken')).not.toBeNull()
 		})
 	})
 
@@ -424,7 +424,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -474,7 +474,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -506,23 +506,23 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								reportingLoadCalls.push('refresh')
 							},
 							reportingDetails: {
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentTime: 3n,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: selectedPoolAddress,
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'not-started',
 								systemState: 'operational',
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 12_000n,
+								viewerPoolHeldVaultRepBackingAttoRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 12_000n,
+								viewerVaultDisputeStakedRepAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 12_000n,
 							},
 						}),
 						securityPoolAddress: selectedPoolAddress,
@@ -530,7 +530,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 						securityVault: createSecurityVaultProps({
 							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
 							securityVaultResult: {
-								action: 'depositRep',
+								action: 'depositRepToVault',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000df',
 							},
 						}),
@@ -586,7 +586,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -636,7 +636,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -677,7 +677,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000d3',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Coverage commitment broken',
 								operation: 'liquidation',
 								operationId: 14n,
 								success: false,
@@ -692,7 +692,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -733,7 +733,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -775,23 +775,23 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								reportingLoadCalls.push('refresh')
 							},
 							reportingDetails: {
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentTime: 3n,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: selectedPoolAddress,
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'not-started',
 								systemState: 'operational',
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 12_000n,
+								viewerPoolHeldVaultRepBackingAttoRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 12_000n,
+								viewerVaultDisputeStakedRepAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 12_000n,
 							},
 						}),
 						securityPoolAddress: selectedPoolAddress,
@@ -801,7 +801,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},
@@ -832,7 +832,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							action: 'executeStagedOperation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000ce',
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Coverage commitment broken',
 								operation: 'withdrawRep',
 								operationId: 12n,
 								success: false,
@@ -852,7 +852,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								coverageCommitmentEthAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultAddress: zeroAddress,
 							},

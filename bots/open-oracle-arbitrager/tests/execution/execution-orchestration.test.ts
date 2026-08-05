@@ -127,7 +127,7 @@ describe('funded execution orchestration', () => {
 				tokenSymbol: 'REP',
 			},
 			hedgePool: address,
-			hedgeWethLimit: 13n,
+			hedgeWethLimitAttoEth: 13n,
 			newAmount1: 17n,
 			newAmount2: 19n,
 			openOracle: reporter,
@@ -159,7 +159,7 @@ describe('funded execution orchestration', () => {
 					reportTimestamp: 0,
 					settlementTime: 0,
 					settlementTimestamp: 0,
-					settlerReward: 0n,
+					settlerRewardAttoEth: 0n,
 					token1: address,
 					token2: reporter,
 				},
@@ -224,9 +224,9 @@ describe('funded execution orchestration', () => {
 			lifecycleWithdrawalMismatch({
 				currentReporter: false,
 				expectedToken: 10n,
-				expectedWeth: 20n,
+				expectedWethAttoEth: 20n,
 				holderToken: 10_000n,
-				holderWeth: 20_000n,
+				holderWethAttoEth: 20_000n,
 				willSettle: false,
 			}),
 		).toBe('Position was replaced; exact returned assets require manual reconciliation')
@@ -253,8 +253,8 @@ describe('funded execution orchestration', () => {
 			},
 		}))
 		expect(await receiptGasExpendituresWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'lifecycle 7', [firstReceipt, secondReceipt])).toEqual([
-			{ costWei: 210_000n, minedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
-			{ costWei: 420_000n, minedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
+			{ costAttoEth: 210_000n, minedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
+			{ costAttoEth: 420_000n, minedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
 		])
 	})
 

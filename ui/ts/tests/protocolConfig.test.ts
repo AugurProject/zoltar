@@ -53,7 +53,7 @@ describe('protocolConfig', () => {
 		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, (4n * ONE_REP).toString())
 		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
 			forkBurnDivisor: '9',
-			initialEscalationGameDeposit: (5n * ONE_REP).toString(),
+			initialEscalationGameDepositAttoRep: (5n * ONE_REP).toString(),
 		})
 
 		expect(
@@ -63,14 +63,14 @@ describe('protocolConfig', () => {
 		).toEqual({
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDeposit: 5n * ONE_REP,
+			initialEscalationGameDepositAttoRep: 5n * ONE_REP,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDeposit: ONE_REP - 1n })).toThrow('initialEscalationGameDeposit must be at least 1 REP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: ONE_REP - 1n })).toThrow('initialEscalationGameDepositAttoRep must be at least 1 REP')
 	})
 
 	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {
@@ -95,7 +95,7 @@ describe('protocolConfig', () => {
 
 		expect(
 			getMainnetProtocolConfig({
-				initialEscalationGameDeposit: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDeposit.toString(),
+				initialEscalationGameDepositAttoRep: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
 			}),
 		).toEqual(MAINNET_PROTOCOL_CONFIG)
 	})

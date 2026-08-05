@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../../../features/security-pools/lib/securityVaultGuards.js'
+import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetCoverageCommitmentGuardMessage, getVaultWithdrawGuardMessage } from '../../../features/security-pools/lib/securityVaultGuards.js'
 
 const ETH = 10n ** 18n
 
@@ -13,7 +13,7 @@ describe('security vault guards', () => {
 				approvalSatisfied: true,
 				depositAmount: 1n,
 				isDepositBelowMinimum: false,
-				repBalanceGap: undefined,
+				walletRepShortfallAttoRep: undefined,
 			}),
 		).toBeUndefined()
 
@@ -22,7 +22,7 @@ describe('security vault guards', () => {
 				approvalSatisfied: false,
 				depositAmount: 0n,
 				isDepositBelowMinimum: false,
-				repBalanceGap: undefined,
+				walletRepShortfallAttoRep: undefined,
 			}),
 		).toBeUndefined()
 
@@ -31,7 +31,7 @@ describe('security vault guards', () => {
 				approvalSatisfied: false,
 				depositAmount: 1n,
 				isDepositBelowMinimum: false,
-				repBalanceGap: undefined,
+				walletRepShortfallAttoRep: undefined,
 			}),
 		).toBe('Approve enough REP before depositing.')
 
@@ -40,7 +40,7 @@ describe('security vault guards', () => {
 				approvalSatisfied: true,
 				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
-				repBalanceGap: 2n * 10n ** 18n,
+				walletRepShortfallAttoRep: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 2 more REP in this wallet.')
 
@@ -49,92 +49,92 @@ describe('security vault guards', () => {
 				approvalSatisfied: true,
 				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
-				repBalanceGap: undefined,
+				walletRepShortfallAttoRep: undefined,
 			}),
 		).toBeUndefined()
 	})
 
-	test('blocks withdraw, allowance, and claim actions until their deterministic prerequisites are met', () => {
+	test('coverage commitment', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
-				escalationEscrowedRep: 1n,
-				requiredEthCost: undefined,
+				disputeStakedRepAttoRep: 1n,
+				requiredCostAttoEth: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n,
-				withdrawableRepAmount: 1n,
-				walletEthBalance: 1n,
+				withdrawableRepAmountAttoRep: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('Settle escalation deposits before withdrawing REP.')
 
 		expect(
 			getVaultWithdrawGuardMessage({
-				requiredEthCost: undefined,
+				requiredCostAttoEth: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n,
-				withdrawableRepAmount: 1n,
-				walletEthBalance: 1n,
+				withdrawableRepAmountAttoRep: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBeUndefined()
 
 		expect(
 			getVaultWithdrawGuardMessage({
-				requiredEthCost: undefined,
+				requiredCostAttoEth: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 0n,
-				withdrawableRepAmount: 2_500n * 10n ** 18n,
-				walletEthBalance: 1n,
+				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBeUndefined()
 
 		expect(
 			getVaultWithdrawGuardMessage({
-				requiredEthCost: undefined,
+				requiredCostAttoEth: undefined,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 10_000n * 10n ** 18n,
-				withdrawableRepAmount: 2_500n * 10n ** 18n,
-				walletEthBalance: 1n,
+				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('Reduce the withdrawal to 2 500 REP or less.')
 
 		expect(
-			getVaultSetSecurityBondAllowanceGuardMessage({
-				maxSecurityBondAllowanceAmount: undefined,
-				requiredEthCost: undefined,
-				securityBondAllowanceAmount: undefined,
+			getVaultSetCoverageCommitmentGuardMessage({
+				maxCoverageCommitmentAttoEthAmount: undefined,
+				requiredCostAttoEth: undefined,
+				coverageCommitmentAttoEthAmount: undefined,
 				stagedOperationTimeoutMinutes: 5n,
-				walletEthBalance: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Enter a valid security bond allowance.')
+		).toBe('Enter a valid coverage commitment.')
 
 		expect(
-			getVaultSetSecurityBondAllowanceGuardMessage({
-				maxSecurityBondAllowanceAmount: undefined,
-				requiredEthCost: undefined,
-				securityBondAllowanceAmount: 0n,
+			getVaultSetCoverageCommitmentGuardMessage({
+				maxCoverageCommitmentAttoEthAmount: undefined,
+				requiredCostAttoEth: undefined,
+				coverageCommitmentAttoEthAmount: 0n,
 				stagedOperationTimeoutMinutes: 5n,
-				walletEthBalance: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBeUndefined()
 
 		expect(
-			getVaultSetSecurityBondAllowanceGuardMessage({
-				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
-				requiredEthCost: undefined,
-				securityBondAllowanceAmount: 5n * 10n ** 17n,
+			getVaultSetCoverageCommitmentGuardMessage({
+				maxCoverageCommitmentAttoEthAmount: 5n * 10n ** 18n,
+				requiredCostAttoEth: undefined,
+				coverageCommitmentAttoEthAmount: 5n * 10n ** 17n,
 				stagedOperationTimeoutMinutes: 5n,
-				walletEthBalance: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Enter at least 1 ETH for a non-zero allowance.')
+		).toBe('Enter at least 1 ETH for a non-zero coverage commitment.')
 
 		expect(
-			getVaultSetSecurityBondAllowanceGuardMessage({
-				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
-				requiredEthCost: undefined,
-				securityBondAllowanceAmount: 6n * 10n ** 18n,
+			getVaultSetCoverageCommitmentGuardMessage({
+				maxCoverageCommitmentAttoEthAmount: 5n * 10n ** 18n,
+				requiredCostAttoEth: undefined,
+				coverageCommitmentAttoEthAmount: 6n * 10n ** 18n,
 				stagedOperationTimeoutMinutes: 5n,
-				walletEthBalance: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Reduce the security bond allowance to 5 ETH or less.')
+		).toBe('Reduce the coverage commitment to 5 ETH or less.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
@@ -145,8 +145,8 @@ describe('security vault guards', () => {
 				isPriceValid: false,
 				isOnActiveAppChain: false,
 				pendingReportId: 0n,
-				requiredEthCost: 1n,
-				walletEthBalance: 1n,
+				requiredCostAttoEth: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
 
@@ -157,8 +157,8 @@ describe('security vault guards', () => {
 				isPriceValid: false,
 				isOnActiveAppChain: true,
 				pendingReportId: 9n,
-				requiredEthCost: 1n,
-				walletEthBalance: 1n,
+				requiredCostAttoEth: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('A pending price report already exists for this pool.')
 
@@ -169,8 +169,8 @@ describe('security vault guards', () => {
 				isOnActiveAppChain: true,
 				isPriceValid: true,
 				pendingReportId: 0n,
-				requiredEthCost: 1n,
-				walletEthBalance: 1n,
+				requiredCostAttoEth: 1n,
+				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('The current oracle price is still valid.')
 
@@ -213,31 +213,31 @@ describe('security vault guards', () => {
 				isPriceValid: false,
 				isOnActiveAppChain: true,
 				pendingReportId: 0n,
-				requiredEthCost: 10n * ETH,
-				walletEthBalance: 5n * ETH,
+				requiredCostAttoEth: 10n * ETH,
+				walletBalanceAttoEth: 5n * ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to request a new price.')
 
 		expect(
 			getVaultWithdrawGuardMessage({
 				bufferRequiredEthCost: true,
-				requiredEthCost: 10n * ETH,
+				requiredCostAttoEth: 10n * ETH,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n * ETH,
-				withdrawableRepAmount: 5n * ETH,
-				walletEthBalance: 5n * ETH,
+				withdrawableRepAmountAttoRep: 5n * ETH,
+				walletBalanceAttoEth: 5n * ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to queue this REP withdrawal.')
 
 		expect(
-			getVaultSetSecurityBondAllowanceGuardMessage({
-				maxSecurityBondAllowanceAmount: undefined,
+			getVaultSetCoverageCommitmentGuardMessage({
+				maxCoverageCommitmentAttoEthAmount: undefined,
 				bufferRequiredEthCost: true,
-				requiredEthCost: 10n * ETH,
-				securityBondAllowanceAmount: 0n,
+				requiredCostAttoEth: 10n * ETH,
+				coverageCommitmentAttoEthAmount: 0n,
 				stagedOperationTimeoutMinutes: 5n,
-				walletEthBalance: 5n * ETH,
+				walletBalanceAttoEth: 5n * ETH,
 			}),
-		).toBe('Need 7 more ETH in this wallet to queue this bond allowance update.')
+		).toBe('Need 7 more ETH in this wallet to queue this coverage commitment update.')
 	})
 })

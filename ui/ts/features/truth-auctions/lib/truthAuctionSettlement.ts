@@ -26,10 +26,10 @@ export type TruthAuctionSettlementSelectionState = {
 }
 
 export type TruthAuctionSettlementSelectionEstimate = {
-	estimatedAssignedBondAllowance: bigint | undefined
-	estimatedEthRefunded: bigint
+	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
+	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
-	estimatedRepClaimed: bigint
+	estimatedRepClaimedAttoRep: bigint
 }
 
 export function getTruthAuctionSettlementBidKey(bid: Pick<TruthAuctionBidView, 'bidIndex' | 'tick'>) {
@@ -83,38 +83,46 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 	}
 }
 
-export function getTruthAuctionSettlementSelectionEstimate({ auctionedSecurityBondAllowance, selectedRows, truthAuction }: { auctionedSecurityBondAllowance: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
-	let estimatedEthRefunded = 0n
-	let estimatedRepClaimed = 0n
+export function getTruthAuctionSettlementSelectionEstimate({
+	auctionedCoverageCommitmentAttoEth,
+	selectedRows,
+	truthAuction,
+}: {
+	auctionedCoverageCommitmentAttoEth: bigint | undefined
+	selectedRows: TruthAuctionSettlementBidRow[]
+	truthAuction: TruthAuctionMetrics | undefined
+}): TruthAuctionSettlementSelectionEstimate {
+	let estimatedRefundedAttoEth = 0n
+	let estimatedRepClaimedAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
-	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningEth > 0n && truthAuction.totalRepPurchased > 0n
+	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningAttoEth > 0n && truthAuction.totalRepPurchasedAttoRep > 0n
 	let underfundedRemainder = 0n
 
 	for (const row of selectedRows) {
 		const estimate = getTruthAuctionBidSettlementEstimate(row.bid, truthAuction)
-		estimatedEthRefunded += estimate.refundedEthAmount
+		estimatedRefundedAttoEth += estimate.refundedBidAmountAttoEth
 		if (shouldCarryUnderfundedRemainder && row.disposition.canPrefillSettle) {
-			const numerator = row.bid.ethAmount * truthAuction.totalRepPurchased + underfundedRemainder
-			estimatedRepClaimed += numerator / truthAuction.underfundedWinningEth
-			underfundedRemainder = numerator % truthAuction.underfundedWinningEth
+			const numerator = row.bid.bidAmountAttoEth * truthAuction.totalRepPurchasedAttoRep + underfundedRemainder
+			estimatedRepClaimedAttoRep += numerator / truthAuction.underfundedWinningAttoEth
+			underfundedRemainder = numerator % truthAuction.underfundedWinningAttoEth
 		} else {
-			estimatedRepClaimed += estimate.purchasedRepAmount
+			estimatedRepClaimedAttoRep += estimate.purchasedRepAmountAttoRep
 		}
 	}
 
-	let estimatedAssignedBondAllowance: bigint | undefined = 0n
-	if (estimatedRepClaimed > 0n) {
-		if (truthAuction === undefined || truthAuction.totalRepPurchased === 0n || auctionedSecurityBondAllowance === undefined) {
-			estimatedAssignedBondAllowance = undefined
+	let estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined = 0n
+	if (estimatedRepClaimedAttoRep > 0n) {
+		if (truthAuction === undefined || truthAuction.totalRepPurchasedAttoRep === 0n || auctionedCoverageCommitmentAttoEth === undefined) {
+			estimatedAssignedCoverageCommitmentAttoEth = undefined
 		} else {
-			estimatedAssignedBondAllowance = (auctionedSecurityBondAllowance * estimatedRepClaimed) / truthAuction.totalRepPurchased
+			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedRepClaimedAttoRep) / truthAuction.totalRepPurchasedAttoRep
 		}
 	}
 
 	return {
-		estimatedAssignedBondAllowance,
-		estimatedEthRefunded,
-		estimatedRepClaimed,
+		estimatedAssignedCoverageCommitmentAttoEth,
+		estimatedRefundedAttoEth,
+		estimatedRepClaimedAttoRep,
 	}
 }
 

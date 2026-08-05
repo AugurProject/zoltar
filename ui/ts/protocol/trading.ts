@@ -9,14 +9,14 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
-	completeSetCollateralAmount: bigint
-	feeEligibleSecurityBondAllowance: bigint
-	shareTokenSupply: bigint
-	totalRepDeposit: bigint
-	totalSecurityBondAllowance: bigint
+	settlementCollateralAttoEth: bigint
+	feeEligibleCoverageCommitmentAttoEth: bigint
+	shareTokenSupplyAttoShares: bigint
+	totalPoolHeldRepAttoRep: bigint
+	totalCoverageCommitmentAttoEth: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupply, totalRepDeposit] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldRepAttoRep] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -25,30 +25,30 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'shareTokenSupply',
+			functionName: 'shareTokenSupplyAttoShares',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalRepBalance',
+			functionName: 'getTotalPoolHeldRepAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
 	])
 	return {
-		completeSetCollateralAmount: poolAccountingSnapshot.completeSetCollateralAmount,
-		feeEligibleSecurityBondAllowance: poolAccountingSnapshot.feeEligibleSecurityBondAllowance,
-		shareTokenSupply,
-		totalRepDeposit,
-		totalSecurityBondAllowance: poolAccountingSnapshot.totalSecurityBondAllowance,
+		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
+		feeEligibleCoverageCommitmentAttoEth: poolAccountingSnapshot.feeEligibleCoverageCommitmentAttoEth,
+		shareTokenSupplyAttoShares,
+		totalPoolHeldRepAttoRep,
+		totalCoverageCommitmentAttoEth: poolAccountingSnapshot.totalCoverageCommitmentAttoEth,
 	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {
 		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 		return {
-			maxRedeemableCompleteSets: undefined,
+			maxRedeemableCompleteSetsAttoShares: undefined,
 			shareBalances: undefined,
 			universeId,
 		}
@@ -75,12 +75,12 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	})
 	if (!isBigintTriple(shareBalancesResult)) throw new Error('Unexpected trading share balances response')
 	const shareBalances: TradingShareBalances = {
-		invalid: shareBalancesResult[0],
-		no: shareBalancesResult[2],
-		yes: shareBalancesResult[1],
+		invalidAttoShares: shareBalancesResult[0],
+		noAttoShares: shareBalancesResult[2],
+		yesAttoShares: shareBalancesResult[1],
 	}
 	return {
-		maxRedeemableCompleteSets: getMinBigintValue([shareBalances.invalid, shareBalances.yes, shareBalances.no]),
+		maxRedeemableCompleteSetsAttoShares: getMinBigintValue([shareBalances.invalidAttoShares, shareBalances.yesAttoShares, shareBalances.noAttoShares]),
 		shareBalances,
 		universeId,
 	}

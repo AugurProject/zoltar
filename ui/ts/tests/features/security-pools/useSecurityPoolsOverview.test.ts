@@ -46,28 +46,28 @@ function createMarketDetails(questionId: string): MarketDetails {
 
 function createListedSecurityPool(questionId: string, securityPoolAddress: Address = zeroAddress): ListedSecurityPool {
 	return {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
-		feeEligibleSecurityBondAllowance: 0n,
+		feeEligibleCoverageCommitmentAttoEth: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
 		hasLoadedVaults: false,
-		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(questionId),
-		migratedRep: 0n,
+		migratedRepAttoRep: 0n,
 		parent: zeroAddress,
 		questionId,
 		questionOutcome: 'none',
 		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 0n,
+		totalPoolHeldRepAttoRep: 0n,
+		totalCoverageCommitmentAttoEth: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -286,15 +286,15 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		const dependencies = createSecurityPoolsOverviewDependencies({
 			createConnectedReadClient: mock(() => readClient),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 1n,
-				currentWethBalance: 1n,
+				currentRepBalanceAttoRep: 1n,
+				currentWethBalanceAttoEth: 1n,
 				initialReportAmount2: 1n,
-				maximumInitialWeth: 1n,
-				minimumToken1Report: 1n,
+				maximumInitialWethAttoEth: 1n,
+				minimumToken1ReportAttoEth: 1n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: zeroAddress,
-				requestedInitialWeth: 0n,
-				wethShortfall: 0n,
+				requestedInitialWethAttoEth: 0n,
+				wethShortfallAttoEth: 0n,
 			})),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
@@ -340,7 +340,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).liquidationTargetVault).toBe(targetVaultB)
-		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).coverageCommitmentTransferEthAmount).toBe('3')
 		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 	})
 
@@ -360,15 +360,15 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		const dependencies = createSecurityPoolsOverviewDependencies({
 			createConnectedReadClient: mock(() => readClient),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 1n,
-				currentWethBalance: 1n,
+				currentRepBalanceAttoRep: 1n,
+				currentWethBalanceAttoEth: 1n,
 				initialReportAmount2: 1n,
-				maximumInitialWeth: 1n,
-				minimumToken1Report: 1n,
+				maximumInitialWethAttoEth: 1n,
+				minimumToken1ReportAttoEth: 1n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: zeroAddress,
-				requestedInitialWeth: 0n,
-				wethShortfall: 0n,
+				requestedInitialWethAttoEth: 0n,
+				wethShortfallAttoEth: 0n,
 			})),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
@@ -412,7 +412,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		})
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).coverageCommitmentTransferEthAmount).toBe('3')
 		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 		expect(requireHookState(hookState).securityPoolLiquidationError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')

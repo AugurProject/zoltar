@@ -23,9 +23,9 @@ contract ShareToken is ERC1155, IShareToken {
 	// Forked source shares remain as branch-independent entitlements. Once an
 	// account materializes any branch, its source balance is locked so a transfer
 	// cannot let both sender and receiver reproduce the same claim.
-	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmount;
+	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
 	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
-	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 shareAmount);
+	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 amountAttoShares);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
@@ -93,28 +93,28 @@ contract ShareToken is ERC1155, IShareToken {
 		}
 	}
 
-	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
+	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
-		require(_cashAmount > 0, 'Exchange rate undefined');
+		require(amountAttoShares > 0, 'Exchange rate undefined');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
-			_values[i] = _cashAmount;
+			_values[i] = amountAttoShares;
 		}
 
 		_mintBatch(_account, _tokenIds, _values);
 	}
 
-	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external {
+	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
-			_values[i] = _amount;
+			_values[i] = amountAttoShares;
 		}
 
 		_burnBatch(_owner, _tokenIds, _values);
@@ -123,11 +123,11 @@ contract ShareToken is ERC1155, IShareToken {
 	function burnTokenIdAndGetRemainingSupply(
 		uint256 _tokenId,
 		address _owner
-	) external returns (uint256 balance, uint256 remainingSupply) {
+	) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares) {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn this token id');
-		balance = balanceOf(_owner, _tokenId);
-		_burn(_owner, _tokenId, balance);
-		remainingSupply = totalSupply(_tokenId);
+		balanceAttoShares = balanceOf(_owner, _tokenId);
+		_burn(_owner, _tokenId, balanceAttoShares);
+		remainingSupplyAttoShares = totalSupply(_tokenId);
 	}
 
 	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
@@ -137,40 +137,43 @@ contract ShareToken is ERC1155, IShareToken {
 	function totalSupplyForOutcome(
 		uint248 _universeId,
 		BinaryOutcomes.BinaryOutcome _outcome
-	) public view returns (uint256) {
+	) public view returns (uint256 totalSupplyAttoShares) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return totalSupply(_tokenId);
 	}
 
-	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupply) {
-		maximumSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
-		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
-		uint256 noSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
-		if (yesSupply > maximumSupply) maximumSupply = yesSupply;
-		if (noSupply > maximumSupply) maximumSupply = noSupply;
+	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupplyAttoShares) {
+		maximumSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
+		uint256 yesSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
+		uint256 noSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
+		if (yesSupplyAttoShares > maximumSupplyAttoShares) maximumSupplyAttoShares = yesSupplyAttoShares;
+		if (noSupplyAttoShares > maximumSupplyAttoShares) maximumSupplyAttoShares = noSupplyAttoShares;
 	}
 
 	function balanceOfOutcome(
 		uint248 _universeId,
 		BinaryOutcomes.BinaryOutcome _outcome,
 		address _account
-	) public view returns (uint256) {
+	) public view returns (uint256 balanceAttoShares) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return balanceOf(_account, _tokenId);
 	}
 
-	function balanceOfShares(uint248 _universeId, address _account) public view returns (uint256[3] memory balances) {
-		balances[0] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Invalid));
-		balances[1] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Yes));
-		balances[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
+	function balanceOfShares(
+		uint248 _universeId,
+		address _account
+	) public view returns (uint256[3] memory balancesAttoShares) {
+		balancesAttoShares[0] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Invalid));
+		balancesAttoShares[1] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Yes));
+		balancesAttoShares[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
 	}
 
-	function getMigratedShareAmount(
+	function getMigratedShareAmountAttoShares(
 		uint256 fromId,
 		uint248 targetUniverseId,
 		address account
 	) external view returns (uint256) {
-		return migratedShareAmount[fromId][targetUniverseId][account];
+		return migratedShareAmountAttoShares[fromId][targetUniverseId][account];
 	}
 
 	function getTokenId(
@@ -198,8 +201,8 @@ contract ShareToken is ERC1155, IShareToken {
 		require(zoltar.getForkTime(universeId) > 0, 'ShareToken universe has not forked, so shares cannot migrate');
 		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
-		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
-		require(fromIdBalance > 0, 'ShareToken holder has no balance to migrate from the source token id');
+		uint256 fromIdBalanceAttoShares = balanceOf(msg.sender, fromId);
+		require(fromIdBalanceAttoShares > 0, 'ShareToken holder has no balance to migrate from the source token id');
 
 		(, uint256 questionId, , , ) = zoltar.universes(universeId);
 		uint256 targetOutcomeIndexesLength = targetOutcomeIndexes.length;
@@ -246,16 +249,19 @@ contract ShareToken is ERC1155, IShareToken {
 		bool migratedAnyShares;
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint248 targetUniverseId = targetUniverseIds[i];
-			uint256 alreadyMigratedAmount = migratedShareAmount[fromId][targetUniverseId][msg.sender];
-			require(alreadyMigratedAmount <= fromIdBalance, 'ShareToken migrated amount exceeds source balance');
-			uint256 shareAmount = fromIdBalance - alreadyMigratedAmount;
-			if (shareAmount == 0) continue;
-			migratedShareAmount[fromId][targetUniverseId][msg.sender] = fromIdBalance;
+			uint256 alreadyMigratedAttoShares = migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender];
+			require(
+				alreadyMigratedAttoShares <= fromIdBalanceAttoShares,
+				'ShareToken migrated amount exceeds source balance'
+			);
+			uint256 amountAttoShares = fromIdBalanceAttoShares - alreadyMigratedAttoShares;
+			if (amountAttoShares == 0) continue;
+			migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender] = fromIdBalanceAttoShares;
 			migratedSourceBalanceLocked[fromId][msg.sender] = true;
 			migratedAnyShares = true;
 			uint256 toId = getChildId(fromId, targetUniverseId);
-			_mint(msg.sender, toId, shareAmount);
-			emit Migrate(msg.sender, fromId, toId, shareAmount);
+			_mint(msg.sender, toId, amountAttoShares);
+			emit Migrate(msg.sender, fromId, toId, amountAttoShares);
 		}
 		require(migratedAnyShares, 'ShareToken has no new shares to migrate');
 	}

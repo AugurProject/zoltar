@@ -744,8 +744,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Loading vault…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP COLLATERAL AMOUNT')
-			await driver.setInputByLabel('REP Collateral Amount', '1')
+			await driver.waitForBodyText('REP BACKING')
+			await driver.setInputByLabel('REP backing', '1')
 			let depositReady = false
 			for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
@@ -779,8 +779,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Loading vault…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP COLLATERAL AMOUNT')
-			await driver.setInputByLabel('REP Collateral Amount', '20000000')
+			await driver.waitForBodyText('REP BACKING')
+			await driver.setInputByLabel('REP backing', '20000000')
 			let reportingDepositReady = false
 			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
@@ -875,7 +875,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyText('Pool-level REP was migrated into the selected child universe.')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
-			await driver.waitForBodyText('Vault REP collateral and security-bond allowance were migrated into the selected child universe.')
+			await driver.waitForBodyText('Vault REP backing and coverage commitment were migrated into the selected child universe.')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)

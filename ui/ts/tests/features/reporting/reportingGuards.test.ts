@@ -17,7 +17,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Connect a wallet before reporting on a question.')
@@ -33,7 +33,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: undefined,
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Select an outcome side before reporting on a question.')
@@ -49,7 +49,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 0n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Enter a valid report amount greater than zero.')
@@ -67,7 +67,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'missing',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Loading reporting details.')
@@ -83,7 +83,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'not-started',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -99,7 +99,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -117,7 +117,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -135,13 +135,13 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
 	})
 
-	test('blocks reporting when the vault lacks unlocked REP or the contribution preview is invalid', () => {
+	test('blocks reporting when the vault lacks pool-held REP backing or the contribution preview is invalid', () => {
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 5n * 10n ** 18n,
@@ -153,10 +153,10 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 2n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 2n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Need 3 more unlocked REP in your vault before reporting.')
+		).toBe("Deposit 3 more REP into your vault's pool-held backing before reporting.")
 
 		expect(
 			getReportingReportGuardMessage({
@@ -169,7 +169,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Increase the report amount slightly to avoid a tie at the minimum bond.')
@@ -185,10 +185,10 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 0n,
+				viewerPoolHeldVaultRepBackingAttoRep: 0n,
 				viewerVaultExists: false,
 			}),
-		).toBe('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
+		).toBe('Reporting moves pool-held REP backing from your security vault into dispute-staked REP. Deposit REP into your vault before reporting.')
 	})
 
 	test('blocks reporting when the contribution would exceed the remaining selected-side threshold capacity', () => {
@@ -203,7 +203,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Only 2 REP remains before the selected side reaches the threshold.')
@@ -219,7 +219,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('No remaining contribution capacity is available on the selected side.')

@@ -9,7 +9,7 @@ import {
 	peripherals_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
-import { getMigrationRepBalance, getUniverseData, getUniverseTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from '../peripherals/fixture'
@@ -21,15 +21,15 @@ const poolAccountingCheckpointEvent = {
 	inputs: [
 		{ name: 'reason', type: 'uint8', indexed: false },
 		{ name: 'vault', type: 'address', indexed: true },
-		{ name: 'completeSetCollateralAmount', type: 'uint256', indexed: false },
-		{ name: 'totalSecurityBondAllowance', type: 'uint256', indexed: false },
-		{ name: 'feeEligibleSecurityBondAllowance', type: 'uint256', indexed: false },
-		{ name: 'totalFeesOwedToVaults', type: 'uint256', indexed: false },
-		{ name: 'unallocatedFeeReserve', type: 'uint256', indexed: false },
+		{ name: 'settlementCollateralAttoEth', type: 'uint256', indexed: false },
+		{ name: 'totalCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
+		{ name: 'feeEligibleCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
+		{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', indexed: false },
+		{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', indexed: false },
 		{ name: 'feeIndex', type: 'uint256', indexed: false },
 		{ name: 'feeIndexRemainder', type: 'uint256', indexed: false },
 		{ name: 'totalFeesOwedRemainder', type: 'uint256', indexed: false },
-		{ name: 'uncheckpointedFeeEligibleAllowance', type: 'uint256', indexed: false },
+		{ name: 'uncheckpointedFeeEligibleCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
 		{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', indexed: false },
 		{ name: 'currentRetentionRate', type: 'uint256', indexed: false },
 	],
@@ -46,15 +46,15 @@ const poolAccountingSnapshotAbi = [
 				name: 'snapshot',
 				type: 'tuple',
 				components: [
-					{ name: 'completeSetCollateralAmount', type: 'uint256' },
-					{ name: 'totalSecurityBondAllowance', type: 'uint256' },
-					{ name: 'feeEligibleSecurityBondAllowance', type: 'uint256' },
-					{ name: 'totalFeesOwedToVaults', type: 'uint256' },
-					{ name: 'unallocatedFeeReserve', type: 'uint256' },
+					{ name: 'settlementCollateralAttoEth', type: 'uint256' },
+					{ name: 'totalCoverageCommitmentAttoEth', type: 'uint256' },
+					{ name: 'feeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
+					{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
+					{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
 					{ name: 'feeIndex', type: 'uint256' },
 					{ name: 'feeIndexRemainder', type: 'uint256' },
 					{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-					{ name: 'uncheckpointedFeeEligibleAllowance', type: 'uint256' },
+					{ name: 'uncheckpointedFeeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
 					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
 					{ name: 'currentRetentionRate', type: 'uint256' },
 				],
@@ -71,13 +71,13 @@ const securityPoolForkSnapshotEvent = {
 		{ name: 'migrationProxy', type: 'address', indexed: true },
 		{ name: 'ownFork', type: 'bool', indexed: false },
 		{ name: 'unresolvedEscalation', type: 'bool', indexed: false },
-		{ name: 'collateralAtFork', type: 'uint256', indexed: false },
-		{ name: 'poolRepAtFork', type: 'uint256', indexed: false },
-		{ name: 'auctionableRepAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationSourceRepAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationChildRepAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationStartBondAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationNonDecisionThresholdAtFork', type: 'uint256', indexed: false },
+		{ name: 'settlementCollateralAtForkAttoEth', type: 'uint256', indexed: false },
+		{ name: 'poolRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'auctionableRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'escalationSourceRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'escalationChildRepAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'escalationStartBondAtForkAttoRep', type: 'uint256', indexed: false },
+		{ name: 'escalationNonDecisionThresholdAtForkAttoRep', type: 'uint256', indexed: false },
 		{ name: 'escalationElapsedAtFork', type: 'uint256', indexed: false },
 		{ name: 'escalationSnapshotId', type: 'bytes32', indexed: false },
 	],
@@ -96,15 +96,15 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 		args: {
 			reason: 0n,
 			vault: zeroAddress,
-			completeSetCollateralAmount: 1n,
-			totalSecurityBondAllowance: 2n,
-			feeEligibleSecurityBondAllowance: 2n,
-			totalFeesOwedToVaults: 0n,
-			unallocatedFeeReserve: 0n,
+			settlementCollateralAttoEth: 1n,
+			totalCoverageCommitmentAttoEth: 2n,
+			feeEligibleCoverageCommitmentAttoEth: 2n,
+			totalClaimableVaultFeesAttoEth: 0n,
+			unallocatedAccruedFeesAttoEth: 0n,
 			feeIndex: 0n,
 			feeIndexRemainder: 0n,
 			totalFeesOwedRemainder: 0n,
-			uncheckpointedFeeEligibleAllowance: 0n,
+			uncheckpointedFeeEligibleCoverageCommitmentAttoEth: 0n,
 			lastUpdatedFeeAccumulator: 1n,
 			currentRetentionRate: 1n,
 		},
@@ -119,15 +119,15 @@ describe('event-only replay', () => {
 			blockHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
 			blockNumber: 2n,
 			transactionHash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-			args: { ...canonicalLog.args, completeSetCollateralAmount: 3n, lastUpdatedFeeAccumulator: 2n },
+			args: { ...canonicalLog.args, settlementCollateralAttoEth: 3n, lastUpdatedFeeAccumulator: 2n },
 		})
 		const fullState = replayZoltarEvents([orphanedLog, canonicalLog, canonicalLog])
 		const emitter = canonicalLog.emitter
-		if (fullState.pools.get(emitter)?.completeSetCollateralAmount !== 3n) throw new Error('ordered replay did not apply the later block')
+		if (fullState.pools.get(emitter)?.settlementCollateralAttoEth !== 3n) throw new Error('ordered replay did not apply the later block')
 		if (fullState.identities.size !== 2) throw new Error('duplicate canonical event identity was not ignored')
 
 		const rolledBack = replayZoltarEvents([orphanedLog, canonicalLog], new Set<Hex>([orphanedLog.blockHash]))
-		if (rolledBack.pools.get(emitter)?.completeSetCollateralAmount !== 1n) throw new Error('orphaned block was not removed')
+		if (rolledBack.pools.get(emitter)?.settlementCollateralAttoEth !== 1n) throw new Error('orphaned block was not removed')
 		if (getCanonicalEventIdentity(canonicalLog) !== getCanonicalEventIdentity({ ...canonicalLog })) throw new Error('canonical identity is not deterministic')
 	})
 
@@ -140,13 +140,13 @@ describe('event-only replay', () => {
 				eventName: 'VaultAccountingCheckpoint',
 				args: {
 					vault,
-					poolOwnershipAmount: 10n,
-					securityBondAllowance: 3n,
-					unpaidEthFees: 1n,
+					repBackingUnits: 10n,
+					coverageCommitmentAttoEth: 3n,
+					claimableFeesAttoEth: 1n,
 					feeIndex: 4n,
 					vaultFeeRemainder: 7n,
-					resultingPoolOwnershipDenominator: 10n,
-					resultingFeeEligibleSecurityBondAllowance: 3n,
+					resultingTotalRepBackingUnits: 10n,
+					resultingFeeEligibleCoverageCommitmentAttoEth: 3n,
 				},
 			}),
 		])
@@ -206,7 +206,7 @@ describe('event-only replay', () => {
 				forkingOutcomeIndex: 0n,
 				reputationToken: genesisRep,
 				parentUniverseId: 0n,
-				universeTheoreticalSupply: 100n,
+				universeTheoreticalSupplyAttoRep: 100n,
 			},
 		})
 		const forkBurn = createReplayLog({
@@ -227,9 +227,9 @@ describe('event-only replay', () => {
 				universeId: 0n,
 				questionId: 9n,
 				forkTime: 30n,
-				forkThreshold: 40n,
-				migrationRepBalance: 36n,
-				universeTheoreticalSupply: 60n,
+				forkThresholdAttoRep: 40n,
+				migrationRepBalanceAttoRep: 36n,
+				universeTheoreticalSupplyAttoRep: 60n,
 			},
 		})
 
@@ -238,8 +238,8 @@ describe('event-only replay', () => {
 		if (tokenBalances?.get(holder) !== 60n) throw new Error('genesis REP holder balance mismatch')
 		if (tokenBalances.get(burn) !== 40n) throw new Error('genesis REP burn-address balance mismatch')
 		if (replayed.repSupply.get(genesisRep) !== 100n) throw new Error('genesis REP supply mismatch')
-		if (replayed.universeForks.get('0')?.migrationRepBalance !== 36n) throw new Error('genesis universe fork state mismatch')
-		if (replayed.universes.get('0')?.universeTheoreticalSupply !== 60n) throw new Error('genesis universe supply checkpoint mismatch')
+		if (replayed.universeForks.get('0')?.migrationRepBalanceAttoRep !== 36n) throw new Error('genesis universe fork state mismatch')
+		if (replayed.universes.get('0')?.universeTheoreticalSupplyAttoRep !== 60n) throw new Error('genesis universe supply checkpoint mismatch')
 	})
 
 	test('pool discovery retains earlier setup logs and expands ERC1155 batches by token id', () => {
@@ -310,9 +310,9 @@ describe('event-only replay', () => {
 					universeId: 1n,
 					questionId: 2n,
 					statoblastSecurityMultiplierBps: 30_000n,
-					initialReportPriorityFeeWeiPerGas: 10n,
+					initialReportPriorityFeeAttoEthPerGas: 10n,
 					currentRetentionRate: 4n,
-					completeSetCollateralAmount: 0n,
+					settlementCollateralAttoEth: 0n,
 				},
 			}),
 			createReplayLog({
@@ -321,9 +321,9 @@ describe('event-only replay', () => {
 				logIndex: 9,
 				args: { account: holder, actor: holder, authorized: true },
 			}),
-			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 6, args: { activationTime: 10n, startBond: 2n, nonDecisionThreshold: 20n } }),
+			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 6, args: { activationTime: 10n, startBondAttoRep: 2n, nonDecisionThresholdAttoRep: 20n } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 7, args: { escalationGame: game } }),
-			createReplayLog({ emitter: unrecognizedGame, eventName: 'GameStarted', logIndex: 10, args: { activationTime: 10n, startBond: 2n, nonDecisionThreshold: 20n } }),
+			createReplayLog({ emitter: unrecognizedGame, eventName: 'GameStarted', logIndex: 10, args: { activationTime: 10n, startBondAttoRep: 2n, nonDecisionThresholdAttoRep: 20n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs, new Set(), new Set([factory]))
@@ -332,7 +332,7 @@ describe('event-only replay', () => {
 		if (replayed.authorizations.has(unrecognizedEmitter)) throw new Error('unrecognized authorization emitter was accepted')
 		if (replayed.escalationLifecycles.get(game)?.activationTime !== 10n) throw new Error('initial game lifecycle was not retained')
 		if (replayed.escalationLifecycles.has(unrecognizedGame)) throw new Error('unrecognized escalation-game emitter was accepted')
-		if (replayed.pools.get(pool)?.completeSetCollateralAmount !== 1n) throw new Error('pool initialization checkpoint was not retained')
+		if (replayed.pools.get(pool)?.settlementCollateralAttoEth !== 1n) throw new Error('pool initialization checkpoint was not retained')
 		if (replayed.coordinators.get(coordinator)?.checkpointReason !== 0n) throw new Error('coordinator setup checkpoint was not retained')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(1n)?.get(holder) !== 7n) throw new Error('token 1 holder balance mismatch')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(2n)?.get(receiver) !== 3n) throw new Error('token 2 receiver balance mismatch')
@@ -381,7 +381,7 @@ describe('event-only replay', () => {
 					forkingOutcomeIndex: 0n,
 					reputationToken: repToken,
 					parentUniverseId: 0n,
-					universeTheoreticalSupply: 100n,
+					universeTheoreticalSupplyAttoRep: 100n,
 				},
 			}),
 			createReplayLog({
@@ -393,9 +393,9 @@ describe('event-only replay', () => {
 					universeId: 0n,
 					questionId: 9n,
 					forkTime: 21n,
-					forkThreshold: 10n,
-					migrationRepBalance: 9n,
-					universeTheoreticalSupply: 90n,
+					forkThresholdAttoRep: 10n,
+					migrationRepBalanceAttoRep: 9n,
+					universeTheoreticalSupplyAttoRep: 90n,
 				},
 			}),
 			createReplayLog({ emitter: coordinator, eventName: 'SecurityPoolSet', logIndex: 3, args: { securityPool: pool } }),
@@ -462,9 +462,9 @@ describe('event-only replay', () => {
 					amount: 3n,
 					queuedAt: 27n,
 					validForSeconds: 300n,
-					snapshotTargetOwnership: 11n,
-					snapshotTargetAllowance: 12n,
-					snapshotTotalRep: 13n,
+					snapshotTargetBackingUnits: 11n,
+					snapshotTargetCoverageCommitmentAttoEth: 12n,
+					snapshotTotalPoolHeldRepAttoRep: 13n,
 					snapshotDenominator: 14n,
 					isPendingSlot: true,
 				},
@@ -501,13 +501,13 @@ describe('event-only replay', () => {
 				emitter: firstGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 0,
-				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmount: 10n, parentDepositIndex: 1n, cumulativeRepAmount: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmountAttoRep: 10n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 10n },
 			}),
 			createReplayLog({
 				emitter: secondGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor: secondVault, repAmount: 20n, parentDepositIndex: 1n, cumulativeRepAmount: 20n },
+				args: { nodeId: 1n, outcome: 1n, depositor: secondVault, repAmountAttoRep: 20n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 20n },
 			}),
 			createReplayLog({
 				emitter: firstCoordinator,
@@ -521,9 +521,9 @@ describe('event-only replay', () => {
 					amount: 3n,
 					queuedAt: 10n,
 					validForSeconds: 300n,
-					snapshotTargetOwnership: 5n,
-					snapshotTargetAllowance: 6n,
-					snapshotTotalRep: 7n,
+					snapshotTargetBackingUnits: 5n,
+					snapshotTargetCoverageCommitmentAttoEth: 6n,
+					snapshotTotalPoolHeldRepAttoRep: 7n,
 					snapshotDenominator: 8n,
 					isPendingSlot: true,
 				},
@@ -540,9 +540,9 @@ describe('event-only replay', () => {
 					amount: 4n,
 					queuedAt: 11n,
 					validForSeconds: 600n,
-					snapshotTargetOwnership: 9n,
-					snapshotTargetAllowance: 10n,
-					snapshotTotalRep: 11n,
+					snapshotTargetBackingUnits: 9n,
+					snapshotTargetCoverageCommitmentAttoEth: 10n,
+					snapshotTotalPoolHeldRepAttoRep: 11n,
 					snapshotDenominator: 12n,
 					isPendingSlot: false,
 				},
@@ -566,25 +566,25 @@ describe('event-only replay', () => {
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 0,
-				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmount: 100n, parentDepositIndex: 0n, cumulativeRepAmount: 100n },
+				args: { nodeId: 1n, outcome: 1n, depositor: firstVault, repAmountAttoRep: 100n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmount: 50n, parentDepositIndex: 0n, cumulativeRepAmount: 50n },
+				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmountAttoRep: 50n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 50n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'DepositOnOutcome',
 				logIndex: 2,
-				args: { depositor: firstVault, outcome: 1n, repAmount: 100n, depositIndex: 0n, cumulativeRepAmount: 100n, resultingVaultEscrowedRep: 100n, resultingTotalEscrowedRep: 100n },
+				args: { depositor: firstVault, outcome: 1n, repAmountAttoRep: 100n, depositIndex: 0n, cumulativeRepAmountAttoRep: 100n, resultingVaultDisputeStakedRepAttoRep: 100n, resultingTotalDisputeStakedRepAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'DepositOnOutcome',
 				logIndex: 3,
-				args: { depositor: secondVault, outcome: 2n, repAmount: 50n, depositIndex: 0n, cumulativeRepAmount: 50n, resultingVaultEscrowedRep: 50n, resultingTotalEscrowedRep: 150n },
+				args: { depositor: secondVault, outcome: 2n, repAmountAttoRep: 50n, depositIndex: 0n, cumulativeRepAmountAttoRep: 50n, resultingVaultDisputeStakedRepAttoRep: 50n, resultingTotalDisputeStakedRepAttoRep: 150n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -596,7 +596,7 @@ describe('event-only replay', () => {
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 5,
-				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, repAmount: 1n, parentDepositIndex: 0n, cumulativeRepAmount: 1n },
+				args: { nodeId: 3n, outcome: 0n, depositor: postResumeVault, repAmountAttoRep: 1n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 1n },
 			}),
 		]
 
@@ -608,12 +608,12 @@ describe('event-only replay', () => {
 		if (firstBundle === undefined || secondBundle === undefined || postResumeBundle === undefined) throw new Error('claim bundles missing')
 		expect(firstBundle.depositor).toBe(firstVault)
 		expect(secondBundle.depositor).toBe(secondVault)
-		expect((firstBundle.claimRepShares * 90n) / 150n).toBe(60n)
-		expect((secondBundle.claimRepShares * 90n) / 150n).toBe(30n)
+		expect((firstBundle.claimRepUnits * 90n) / 150n).toBe(60n)
+		expect((secondBundle.claimRepUnits * 90n) / 150n).toBe(30n)
 		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(90n)
 		expect(replayed.escalationResolutionBalances.get(game)).toEqual([1n, 60n, 30n])
-		expect(postResumeBundle.claimRepShares).toBe(2n)
-		expect((postResumeBundle.claimRepShares * 90n) / 150n).toBe(1n)
+		expect(postResumeBundle.claimRepUnits).toBe(2n)
+		expect((postResumeBundle.claimRepUnits * 90n) / 150n).toBe(1n)
 	})
 
 	test('local carry consumption updates peaks before a recursive fork checkpoint', () => {
@@ -626,14 +626,14 @@ describe('event-only replay', () => {
 		const childLeaf = hashCarryLeaf(depositor, 1n, 5n, 7n, 15n, 1n)
 		const consumedChildRoot = hashParent(parentLeaf, zeroHash)
 		const logs = [
-			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			createReplayLog({
 				emitter: parentGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmount: 10n, parentDepositIndex: 0n, cumulativeRepAmount: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
 			}),
-			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 0n } }),
+			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
 			createReplayLog({
 				emitter: childGame,
 				eventName: 'ForkCarryCheckpoint',
@@ -644,15 +644,15 @@ describe('event-only replay', () => {
 					carryRoots: [zeroHash, parentLeaf, zeroHash],
 					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 1n, 0n],
-					unresolvedTotals: [0n, 10n, 0n],
-					resolutionBalances: [0n, 10n, 0n],
+					unresolvedTotalsAttoRep: [0n, 10n, 0n],
+					resolutionBalancesAttoRep: [0n, 10n, 0n],
 				},
 			}),
 			createReplayLog({
 				emitter: childGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 4,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmount: 5n, parentDepositIndex: 7n, cumulativeRepAmount: 15n },
+				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 5n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 15n },
 			}),
 			createReplayLog({
 				emitter: childGame,
@@ -663,14 +663,14 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor,
 					outcome: 1n,
-					repAmount: 5n,
+					repAmountAttoRep: 5n,
 					reason: 0n,
-					resultingUnresolvedTotal: 10n,
+					resultingUnresolvedTotalAttoRep: 10n,
 					resultingNullifierRoot: zeroHash,
 					resultingCarryRoot: consumedChildRoot,
 				},
 			}),
-			createReplayLog({ emitter: grandchildGame, eventName: 'GameContinuedFromFork', logIndex: 6, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 0n } }),
+			createReplayLog({ emitter: grandchildGame, eventName: 'GameContinuedFromFork', logIndex: 6, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
 			createReplayLog({
 				emitter: grandchildGame,
 				eventName: 'ForkCarryCheckpoint',
@@ -681,8 +681,8 @@ describe('event-only replay', () => {
 					carryRoots: [zeroHash, consumedChildRoot, zeroHash],
 					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 2n, 0n],
-					unresolvedTotals: [0n, 10n, 0n],
-					resolutionBalances: [0n, 15n, 0n],
+					unresolvedTotalsAttoRep: [0n, 10n, 0n],
+					resolutionBalancesAttoRep: [0n, 15n, 0n],
 				},
 			}),
 		]
@@ -698,9 +698,9 @@ describe('event-only replay', () => {
 		const continuationGame = '0x2222222222222222222222222222222222222222'
 		const zeroHash = `0x${'0'.repeat(64)}` as Hex
 		const logs = [
-			createReplayLog({ emitter: localGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: localGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			createReplayLog({ emitter: localGame, eventName: 'NonDecisionReached', logIndex: 1, args: { nonDecisionTimestamp: 20n } }),
-			createReplayLog({ emitter: continuationGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 5n } }),
+			createReplayLog({ emitter: continuationGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 5n } }),
 			createReplayLog({
 				emitter: continuationGame,
 				eventName: 'ForkCarryCheckpoint',
@@ -711,8 +711,8 @@ describe('event-only replay', () => {
 					carryRoots: [zeroHash, zeroHash, zeroHash],
 					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 0n, 0n],
-					unresolvedTotals: [0n, 0n, 0n],
-					resolutionBalances: [100n, 100n, 0n],
+					unresolvedTotalsAttoRep: [0n, 0n, 0n],
+					resolutionBalancesAttoRep: [100n, 100n, 0n],
 				},
 			}),
 			createReplayLog({ emitter: continuationGame, eventName: 'InheritedThresholdTie', logIndex: 4, args: { sourceGame: localGame } }),
@@ -739,7 +739,7 @@ describe('event-only replay', () => {
 			emitter: continuationGame,
 			eventName: 'GameContinuedFromFork',
 			logIndex: 1,
-			args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 5n },
+			args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 5n },
 		})
 		const inheritedTie = createReplayLog({
 			emitter: continuationGame,
@@ -751,7 +751,7 @@ describe('event-only replay', () => {
 		expect(() => replayZoltarEvents([continued, inheritedTie])).toThrow('inherited threshold tie requires a preceding fork carry checkpoint')
 
 		const checkpointLogs = [
-			createReplayLog({ emitter: otherGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: otherGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			continued,
 			createReplayLog({
 				emitter: continuationGame,
@@ -763,8 +763,8 @@ describe('event-only replay', () => {
 					carryRoots: [zeroHash, zeroHash, zeroHash],
 					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 0n, 0n],
-					unresolvedTotals: [0n, 0n, 0n],
-					resolutionBalances: [100n, 100n, 0n],
+					unresolvedTotalsAttoRep: [0n, 0n, 0n],
+					resolutionBalancesAttoRep: [100n, 100n, 0n],
 				},
 			}),
 			inheritedTie,
@@ -783,14 +783,14 @@ describe('event-only replay', () => {
 		const snapshotId = `0x${'1'.repeat(64)}` as Hex
 		const parentLeaf = hashCarryLeaf(depositor, 1n, 10n, 0n, 10n, 1n)
 		const logs = [
-			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			createReplayLog({
 				emitter: parentGame,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, repAmount: 10n, parentDepositIndex: 0n, cumulativeRepAmount: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor, repAmountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
 			}),
-			createReplayLog({ emitter: forker, eventName: 'EscalationRepDrainedAtFork', logIndex: 2, args: { parentPool, sourceGame: parentGame, repAmount: 10n } }),
+			createReplayLog({ emitter: forker, eventName: 'DisputeStakedRepDrainedAtFork', logIndex: 2, args: { parentPool, sourceGame: parentGame, repAmountAttoRep: 10n } }),
 			createReplayLog({
 				emitter: forker,
 				eventName: 'SecurityPoolForkSnapshot',
@@ -800,13 +800,13 @@ describe('event-only replay', () => {
 					migrationProxy,
 					ownFork: true,
 					unresolvedEscalation: true,
-					collateralAtFork: 0n,
-					poolRepAtFork: 0n,
-					auctionableRepAtFork: 0n,
-					escalationSourceRepAtFork: 10n,
-					escalationChildRepAtFork: 0n,
-					escalationStartBondAtFork: 1n,
-					escalationNonDecisionThresholdAtFork: 100n,
+					settlementCollateralAtForkAttoEth: 0n,
+					poolRepAtForkAttoRep: 0n,
+					auctionableRepAtForkAttoRep: 0n,
+					escalationSourceRepAtForkAttoRep: 10n,
+					escalationChildRepAtForkAttoRep: 0n,
+					escalationStartBondAtForkAttoRep: 1n,
+					escalationNonDecisionThresholdAtForkAttoRep: 100n,
 					escalationElapsedAtFork: 0n,
 					escalationSnapshotId: snapshotId,
 				},
@@ -820,14 +820,14 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor,
 					outcome: 1n,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					reason: 0n,
-					resultingUnresolvedTotal: 0n,
+					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: zeroHash,
 					resultingCarryRoot: zeroHash,
 				},
 			}),
-			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 5, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 0n } }),
+			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 5, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
 			createReplayLog({
 				emitter: childGame,
 				eventName: 'ForkCarryCheckpoint',
@@ -838,8 +838,8 @@ describe('event-only replay', () => {
 					carryRoots: [zeroHash, parentLeaf, zeroHash],
 					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 1n, 0n],
-					unresolvedTotals: [0n, 10n, 0n],
-					resolutionBalances: [0n, 10n, 0n],
+					unresolvedTotalsAttoRep: [0n, 10n, 0n],
+					resolutionBalancesAttoRep: [0n, 10n, 0n],
 				},
 			}),
 		]
@@ -862,32 +862,32 @@ describe('event-only replay', () => {
 				emitter: zoltar,
 				eventName: 'UniverseInitialized',
 				logIndex: 0,
-				args: { universeId: 1n, forkTime: 0n, forkQuestionId: 0n, forkingOutcomeIndex: 0n, reputationToken: parentRep, parentUniverseId: 0n, universeTheoreticalSupply: 100n },
+				args: { universeId: 1n, forkTime: 0n, forkQuestionId: 0n, forkingOutcomeIndex: 0n, reputationToken: parentRep, parentUniverseId: 0n, universeTheoreticalSupplyAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: zoltar,
 				eventName: 'UniverseForked',
 				logIndex: 1,
-				args: { forker, universeId: 1n, questionId: 8n, forkTime: 10n, forkThreshold: 20n, migrationRepBalance: 18n, universeTheoreticalSupply: 80n },
+				args: { forker, universeId: 1n, questionId: 8n, forkTime: 10n, forkThresholdAttoRep: 20n, migrationRepBalanceAttoRep: 18n, universeTheoreticalSupplyAttoRep: 80n },
 			}),
 			createReplayLog({
 				emitter: zoltar,
 				eventName: 'MigrationRepAdded',
 				logIndex: 2,
-				args: { migrator, universeId: 1n, amount: 5n, migrationRepBalance: 5n, universeTheoreticalSupply: 75n },
+				args: { migrator, universeId: 1n, amountAttoRep: 5n, migrationRepBalanceAttoRep: 5n, universeTheoreticalSupplyAttoRep: 75n },
 			}),
 			createReplayLog({
 				emitter: zoltar,
 				eventName: 'DeployChild',
 				logIndex: 3,
-				args: { deployer: forker, universeId: 1n, outcomeIndex: 2n, childUniverseId: 9n, childReputationToken: childRep, childUniverseTheoreticalSupply: 98n },
+				args: { deployer: forker, universeId: 1n, outcomeIndex: 2n, childUniverseId: 9n, childReputationToken: childRep, childUniverseTheoreticalSupplyAttoRep: 98n },
 			}),
 		]
 
 		const replayed = replayZoltarEvents(logs)
-		if (replayed.migrationRepBalances.get('1')?.get(forker) !== 18n) throw new Error('fork initiator migration balance mismatch')
-		if (replayed.migrationRepBalances.get('1')?.get(migrator) !== 5n) throw new Error('later migration balance mismatch')
-		if (replayed.universes.get('1')?.universeTheoreticalSupply !== 75n) throw new Error('parent universe supply mismatch')
+		if (replayed.migrationRepBalancesAttoRep.get('1')?.get(forker) !== 18n) throw new Error('fork initiator migration balance mismatch')
+		if (replayed.migrationRepBalancesAttoRep.get('1')?.get(migrator) !== 5n) throw new Error('later migration balance mismatch')
+		if (replayed.universes.get('1')?.universeTheoreticalSupplyAttoRep !== 75n) throw new Error('parent universe supply mismatch')
 		if (replayed.universes.get('9')?.forkQuestionId !== 8n) throw new Error('child fork question mismatch')
 	})
 
@@ -910,24 +910,24 @@ describe('event-only replay', () => {
 					universeId: 1n,
 					questionId: 2n,
 					statoblastSecurityMultiplierBps: 30_000n,
-					initialReportPriorityFeeWeiPerGas: 10n,
+					initialReportPriorityFeeAttoEthPerGas: 10n,
 					currentRetentionRate: 4n,
-					completeSetCollateralAmount: 5n,
+					settlementCollateralAttoEth: 5n,
 				},
 			}),
-			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupply: 40n } }),
-			createReplayLog({ emitter: pool, eventName: 'OwnershipDenominatorSet', logIndex: 2, args: { poolOwnershipDenominator: 50n } }),
+			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupplyAttoShares: 40n } }),
+			createReplayLog({ emitter: pool, eventName: 'TotalRepBackingUnitsSet', logIndex: 2, args: { totalRepBackingUnits: 50n } }),
 			createReplayLog({ emitter: pool, eventName: 'AwaitingForkContinuationSet', logIndex: 3, args: { awaitingForkContinuation: true } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 4, args: { escalationGame: game } }),
-			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferred: 60n, currentRetentionRate: 70n, systemState: 1n } }),
+			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferredAttoRep: 60n, currentRetentionRate: 70n, systemState: 1n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs)
 		if (replayed.poolDeployments.get(pool)?.statoblastSecurityMultiplierBps !== 30_000n) throw new Error('child security multiplier mismatch')
 		if (replayed.completeSetSupplies.get(pool) !== 40n) throw new Error('child share-token supply mismatch')
 		const poolState = replayed.poolStates.get(pool)
-		if (poolState?.shareTokenSupply !== 40n) throw new Error('child pool share-token state mismatch')
-		if (poolState.poolOwnershipDenominator !== 50n) throw new Error('child ownership denominator mismatch')
+		if (poolState?.shareTokenSupplyAttoShares !== 40n) throw new Error('child pool share-token state mismatch')
+		if (poolState.totalRepBackingUnits !== 50n) throw new Error('child backingUnits denominator mismatch')
 		if (poolState.systemState !== 1n || !poolState.forkModeActive) throw new Error('child system state mismatch')
 		if (poolState.awaitingForkContinuation !== true) throw new Error('child continuation state mismatch')
 		if (poolState.escalationGame !== game) throw new Error('child escalation-game relationship mismatch')
@@ -942,12 +942,12 @@ describe('event-only replay', () => {
 		const rootA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 		const rootB = `0x${'0'.repeat(64)}` as Hex
 		const logs = [
-			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 10n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 10n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor: vault, repAmount: 10n, parentDepositIndex: 5n, cumulativeRepAmount: 10n },
+				args: { nodeId: 1n, outcome: 1n, depositor: vault, repAmountAttoRep: 10n, parentDepositIndex: 5n, cumulativeRepAmountAttoRep: 10n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -956,11 +956,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: vault,
 					outcome: 1n,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					depositIndex: 0n,
-					cumulativeRepAmount: 10n,
-					resultingVaultEscrowedRep: 10n,
-					resultingTotalEscrowedRep: 10n,
+					cumulativeRepAmountAttoRep: 10n,
+					resultingVaultDisputeStakedRepAttoRep: 10n,
+					resultingTotalDisputeStakedRepAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -972,9 +972,9 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor: vault,
 					outcome: 1n,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					reason: 0n,
-					resultingUnresolvedTotal: 0n,
+					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: rootA,
 					resultingCarryRoot: rootB,
 				},
@@ -987,13 +987,13 @@ describe('event-only replay', () => {
 					depositor: vault,
 					outcome: 1n,
 					parentDepositIndex: 5n,
-					originalDepositAmount: 10n,
-					amountToWithdraw: 9n,
-					burnAmount: 1n,
+					originalDepositAmountAttoRep: 10n,
+					amountToWithdrawAttoRep: 9n,
+					burnAmountAttoRep: 1n,
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, escrowedRepByVault: 0n, totalEscrowedRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 5, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'ForkedEscrowRecorded',
@@ -1001,20 +1001,20 @@ describe('event-only replay', () => {
 				args: {
 					depositor: vault,
 					outcome: 2n,
-					sourcePrincipalTotal: 20n,
-					childRepTotal: 15n,
-					escrowedRepByVault: 15n,
-					totalEscrowedRep: 15n,
-					outcomeBalance: 20n,
+					sourcePrincipalTotalAttoRep: 20n,
+					childRepTotalAttoRep: 15n,
+					disputeStakedRepByVaultAttoRep: 15n,
+					totalDisputeStakedRepAttoRep: 15n,
+					outcomeBalanceAttoRep: 20n,
 				},
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'ForkedEscrowClaimed',
 				logIndex: 7,
-				args: { depositor: vault, outcome: 2n, sourcePrincipalClaimed: 10n, childRepClaimed: 8n },
+				args: { depositor: vault, outcome: 2n, sourcePrincipalClaimedAttoRep: 10n, childRepClaimedAttoRep: 8n },
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 8, args: { vault, escrowedRepByVault: 7n, totalEscrowedRep: 7n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 8, args: { vault, disputeStakedRepByVaultAttoRep: 7n, totalDisputeStakedRepAttoRep: 7n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'ForkedEscrowExported',
@@ -1022,18 +1022,18 @@ describe('event-only replay', () => {
 				args: {
 					vault,
 					repReceiver: receiver,
-					sourcePrincipalByOutcome: [0n, 0n, 10n],
-					childRepByOutcome: [0n, 0n, 7n],
-					totalChildRepToTransfer: 7n,
+					sourcePrincipalByOutcomeAttoRep: [0n, 0n, 10n],
+					childRepByOutcomeAttoRep: [0n, 0n, 7n],
+					totalChildRepToTransferAttoRep: 7n,
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, escrowedRepByVault: 0n, totalEscrowedRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 10, args: { vault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
 				logIndex: 11,
-				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmount: 4n, parentDepositIndex: 7n, cumulativeRepAmount: 4n },
+				args: { nodeId: 2n, outcome: 2n, depositor: secondVault, repAmountAttoRep: 4n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 4n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -1042,11 +1042,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: secondVault,
 					outcome: 2n,
-					repAmount: 4n,
+					repAmountAttoRep: 4n,
 					depositIndex: 0n,
-					cumulativeRepAmount: 4n,
-					resultingVaultEscrowedRep: 4n,
-					resultingTotalEscrowedRep: 4n,
+					cumulativeRepAmountAttoRep: 4n,
+					resultingVaultDisputeStakedRepAttoRep: 4n,
+					resultingTotalDisputeStakedRepAttoRep: 4n,
 				},
 			}),
 			createReplayLog({
@@ -1056,26 +1056,26 @@ describe('event-only replay', () => {
 				args: {
 					vault: secondVault,
 					repReceiver: receiver,
-					principalByOutcome: [0n, 0n, 4n],
-					principalToTransfer: 4n,
+					principalByOutcomeAttoRep: [0n, 0n, 4n],
+					principalToTransferAttoRep: 4n,
 					transferredRep: true,
 				},
 			}),
-			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, escrowedRepByVault: 0n, totalEscrowedRep: 0n } }),
-			createReplayLog({ emitter: game, eventName: 'ResidualRepSweptToSecurityPool', logIndex: 15, args: { amount: 2n } }),
+			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedRepAttoRep: 0n } }),
+			createReplayLog({ emitter: game, eventName: 'ResidualRepSweptToSecurityPool', logIndex: 15, args: { amountAttoRep: 2n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs.toReversed())
 		const deposit = replayed.escalationDeposits.get(game)?.get('1:5')
 		if (deposit?.nodeId !== 1n || !deposit.consumed) throw new Error('stable local deposit identity mismatch')
 		if (replayed.escalationConsumptions.get(game)?.get('5:1')?.reason !== 0n) throw new Error('carry consumption mismatch')
-		if (replayed.escalationClaims.get(game)?.get('1:5')?.amountToWithdraw !== 9n) throw new Error('claim accounting mismatch')
+		if (replayed.escalationClaims.get(game)?.get('1:5')?.amountToWithdrawAttoRep !== 9n) throw new Error('claim accounting mismatch')
 		if (replayed.escalationVaultEscrowedRep.get(game)?.get(vault) !== 0n) throw new Error('vault escrow mismatch')
 		if (replayed.escalationTotalEscrowedRep.get(game) !== 0n) throw new Error('total escrow mismatch')
 		if (replayed.escalationLocalUnresolvedByVault.get(game)?.get(secondVault)?.[2] !== 0n) throw new Error('vault unresolved export mismatch')
 		const forkedEscrow = replayed.escalationForkedEscrow.get(game)?.get(`${vault}:2`)
-		if (forkedEscrow?.sourcePrincipalClaimed !== 20n || forkedEscrow.childRepClaimed !== 15n) throw new Error('forked escrow settlement mismatch')
-		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransfer !== 7n) throw new Error('forked escrow export mismatch')
+		if (forkedEscrow?.sourcePrincipalClaimedAttoRep !== 20n || forkedEscrow.childRepClaimedAttoRep !== 15n) throw new Error('forked escrow settlement mismatch')
+		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransferAttoRep !== 7n) throw new Error('forked escrow export mismatch')
 		if (replayed.escalationResidualRepSwept.get(game) !== 2n) throw new Error('residual REP sweep mismatch')
 	})
 
@@ -1094,18 +1094,18 @@ describe('event-only replay', () => {
 					childPool,
 					vault,
 					outcomeIndex,
-					migratedRepDelta: 1n,
-					resultingChildMigratedRepTotal: 1n,
-					resultingParentPoolOwnershipAmount: 0n,
-					resultingParentSecurityBondAllowance: 0n,
-					resultingChildPoolOwnershipAmount: 1n,
-					resultingChildSecurityBondAllowance: 1n,
-					resultingParentPoolOwnershipDenominator: 0n,
-					resultingChildPoolOwnershipDenominator: 1n,
-					resultingParentTotalSecurityBondAllowance: 0n,
-					resultingChildTotalSecurityBondAllowance: 1n,
-					collateralDelta: 0n,
-					cumulativeCollateralTransferred: 0n,
+					migratedRepDeltaAttoRep: 1n,
+					resultingChildMigratedRepTotalAttoRep: 1n,
+					resultingParentRepBackingUnits: 0n,
+					resultingParentCoverageCommitmentAttoEth: 0n,
+					resultingChildRepBackingUnits: 1n,
+					resultingChildCoverageCommitmentAttoEth: 1n,
+					resultingParentTotalRepBackingUnits: 0n,
+					resultingChildTotalRepBackingUnits: 1n,
+					resultingParentTotalCoverageCommitmentAttoEth: 0n,
+					resultingChildTotalCoverageCommitmentAttoEth: 1n,
+					settlementCollateralTransferredAttoEth: 0n,
+					cumulativeSettlementCollateralTransferredAttoEth: 0n,
 				},
 			})
 
@@ -1143,14 +1143,14 @@ describe('event-only replay', () => {
 					outcomeIndex: 2n,
 					childUniverseId: 9n,
 					childReputationToken: repToken,
-					childUniverseTheoreticalSupply: 100n,
+					childUniverseTheoreticalSupplyAttoRep: 100n,
 				},
 			}),
 			createReplayLog({
 				emitter: zoltar,
 				eventName: 'MigrationRepAdded',
 				logIndex: 1,
-				args: { migrator, universeId: 1n, amount: 10n, migrationRepBalance: 10n, universeTheoreticalSupply: 90n },
+				args: { migrator, universeId: 1n, amountAttoRep: 10n, migrationRepBalanceAttoRep: 10n, universeTheoreticalSupplyAttoRep: 90n },
 			}),
 			createReplayLog({
 				emitter: zoltar,
@@ -1162,8 +1162,8 @@ describe('event-only replay', () => {
 					universeId: 1n,
 					outcomeIndex: 2n,
 					childUniverseId: 9n,
-					amount: 10n,
-					childMigrationRepAmount: 10n,
+					amountAttoRep: 10n,
+					childMigrationRepAmountAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -1185,22 +1185,22 @@ describe('event-only replay', () => {
 					universeId: 9n,
 					questionId: 12n,
 					statoblastSecurityMultiplierBps: 30_000n,
-					initialReportPriorityFeeWeiPerGas: 10n,
+					initialReportPriorityFeeAttoEthPerGas: 10n,
 					currentRetentionRate: 4n,
-					completeSetCollateralAmount: 0n,
+					settlementCollateralAttoEth: 0n,
 				},
 			}),
 			createReplayLog({
 				emitter: pool,
 				eventName: 'CompleteSetCreated',
 				logIndex: 5,
-				args: { creator: migrator, ethAmount: 5n, sharesMinted: 5n, resultingShareTokenSupply: 5n, resultingCollateral: 5n },
+				args: { creator: migrator, settlementCollateralProvidedAttoEth: 5n, completeSetsMintedAttoShares: 5n, resultingShareTokenSupplyAttoShares: 5n, resultingSettlementCollateralAttoEth: 5n },
 			}),
 			createReplayLog({
 				emitter: game,
 				eventName: 'GameStarted',
 				logIndex: 6,
-				args: { activationTime: 10n, startBond: 10n, nonDecisionThreshold: 100n },
+				args: { activationTime: 10n, startBondAttoRep: 10n, nonDecisionThresholdAttoRep: 100n },
 			}),
 			createReplayLog({
 				emitter: game,
@@ -1210,9 +1210,9 @@ describe('event-only replay', () => {
 					nodeId: 1n,
 					outcome: 1n,
 					depositor: migrator,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					parentDepositIndex: 0n,
-					cumulativeRepAmount: 10n,
+					cumulativeRepAmountAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -1222,11 +1222,11 @@ describe('event-only replay', () => {
 				args: {
 					depositor: migrator,
 					outcome: 1n,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					depositIndex: 0n,
-					cumulativeRepAmount: 10n,
-					resultingVaultEscrowedRep: 10n,
-					resultingTotalEscrowedRep: 10n,
+					cumulativeRepAmountAttoRep: 10n,
+					resultingVaultDisputeStakedRepAttoRep: 10n,
+					resultingTotalDisputeStakedRepAttoRep: 10n,
 				},
 			}),
 			createReplayLog({
@@ -1238,9 +1238,9 @@ describe('event-only replay', () => {
 					sourceNodeId: 1n,
 					depositor: migrator,
 					outcome: 1n,
-					repAmount: 10n,
+					repAmountAttoRep: 10n,
 					reason: 0n,
-					resultingUnresolvedTotal: 0n,
+					resultingUnresolvedTotalAttoRep: 0n,
 					resultingNullifierRoot: rootC,
 					resultingCarryRoot: rootA,
 				},
@@ -1255,7 +1255,7 @@ describe('event-only replay', () => {
 				emitter: auction,
 				eventName: 'AuctionFinalized',
 				logIndex: 11,
-				args: { clearingTick: -1n, grossEthAccepted: 5n, repSold: 8n, ethFilledAtClearingTick: 5n, funded: true },
+				args: { clearingTick: -1n, grossAcceptedAttoEth: 5n, repSoldAttoRep: 8n, bidAtClearingTickAttoEth: 5n, funded: true },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -1269,9 +1269,9 @@ describe('event-only replay', () => {
 					amount: 2n,
 					queuedAt: 21n,
 					validForSeconds: 300n,
-					snapshotTargetOwnership: 5n,
-					snapshotTargetAllowance: 6n,
-					snapshotTotalRep: 7n,
+					snapshotTargetBackingUnits: 5n,
+					snapshotTargetCoverageCommitmentAttoEth: 6n,
+					snapshotTotalPoolHeldRepAttoRep: 7n,
 					snapshotDenominator: 8n,
 					isPendingSlot: true,
 				},
@@ -1287,7 +1287,7 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents(logs.toReversed())
 		if (replayed.universeChildren.get('1')?.get(2n) !== '9') throw new Error('child universe relationship mismatch')
 		if (replayed.universeRepTokens.get('9') !== repToken) throw new Error('child REP token mismatch')
-		if (replayed.migrationRepBalances.get('1')?.get(migrator) !== 10n) throw new Error('migration REP balance mismatch')
+		if (replayed.migrationRepBalancesAttoRep.get('1')?.get(migrator) !== 10n) throw new Error('migration REP balance mismatch')
 		if (replayed.childMigrationRepAmounts.get('1')?.get(migrator)?.get('9') !== 10n) throw new Error('child migration REP mismatch')
 		if (replayed.repBalances.get(repToken.toLowerCase())?.get(migrator) !== 10n) throw new Error('REP balance mismatch')
 		if (replayed.repSupply.get(repToken.toLowerCase()) !== 10n) throw new Error('REP supply mismatch')
@@ -1395,10 +1395,10 @@ describe('event-only replay', () => {
 		const storedOriginPriorityFee = await client.readContract({
 			address: addresses.priceOracleManagerAndOperatorQueuer,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'initialReportPriorityFeeWeiPerGas',
+			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
 		})
-		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeWeiPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
+		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
 		if (replayed.pools.get(addresses.securityPool)?.reason !== 5n) throw new Error('origin pool initialization checkpoint was not replayed')
 		if (replayed.coordinators.get(addresses.priceOracleManagerAndOperatorQueuer)?.securityPool !== addresses.securityPool) {
@@ -1409,7 +1409,7 @@ describe('event-only replay', () => {
 	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const validForSeconds = 300n
-		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.SetSecurityBondsAllowance, client.account.address, fixture.reportBond, validForSeconds)
+		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.SetCoverageCommitment, client.account.address, fixture.reportBond, validForSeconds)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const replayLogs = (await getContractReplayLogs(coordinator, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
 		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
@@ -1431,10 +1431,10 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.amount, storedOperation[3], 'queued amount replay mismatch')
 		strictEqualTypeSafe(operation.queuedAt, storedOperation[4], 'queued timestamp replay mismatch')
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetOwnership, storedOperation[6], 'queued ownership snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetAllowance, storedOperation[7], 'queued allowance snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetEscalationRep, storedOperation[8], 'queued escalation REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalRep, storedOperation[9], 'queued REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[6], 'queued backingUnits snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetCoverageCommitmentAttoEth, storedOperation[7], 'coverage commitment')
+		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedRepAttoRep, storedOperation[8], 'queued dispute-staked REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalPoolHeldRepAttoRep, storedOperation[9], 'queued REP snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotDenominator, storedOperation[10], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
@@ -1518,11 +1518,11 @@ describe('event-only replay', () => {
 			client.readContract({
 				address: child.priceOracleManagerAndOperatorQueuer,
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				functionName: 'initialReportPriorityFeeWeiPerGas',
+				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'completeSetCollateralAmount', args: [] }),
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', args: [] }),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
@@ -1546,9 +1546,9 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
-		strictEqualTypeSafe(deployment.initialReportPriorityFeeWeiPerGas, storedPriorityFee, 'child priority fee replay mismatch')
+		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')
 		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
-		strictEqualTypeSafe(deployment.completeSetCollateralAmount, storedCollateral, 'child collateral replay mismatch')
+		strictEqualTypeSafe(deployment.settlementCollateralAttoEth, storedCollateral, 'child collateral replay mismatch')
 		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
 		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
 			throw new Error('child continuation lifecycle was not replayed')
@@ -1595,20 +1595,20 @@ describe('event-only replay', () => {
 
 		const parentStorage = await getUniverseData(client, fixture.genesisUniverse)
 		const childStorage = await getUniverseData(client, childUniverseId)
-		const parentSupply = await getUniverseTheoreticalSupply(client, fixture.genesisUniverse)
-		const childSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
+		const parentSupply = await getUniverseTheoreticalSupplyAttoRep(client, fixture.genesisUniverse)
+		const childSupply = await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId)
 		strictEqualTypeSafe(replayedParent.forkTime, parentStorage.forkTime, 'parent universe fork time replay mismatch')
 		strictEqualTypeSafe(replayedParent.forkQuestionId, parentStorage.forkQuestionId, 'parent universe fork question replay mismatch')
-		strictEqualTypeSafe(replayedParent.universeTheoreticalSupply, parentSupply, 'parent universe supply replay mismatch')
+		strictEqualTypeSafe(replayedParent.universeTheoreticalSupplyAttoRep, parentSupply, 'parent universe supply replay mismatch')
 		strictEqualTypeSafe(replayedChild.forkQuestionId, childStorage.forkQuestionId, 'child universe fork question replay mismatch')
 		strictEqualTypeSafe(replayedChild.forkingOutcomeIndex, childStorage.forkingOutcomeIndex, 'child universe outcome replay mismatch')
 		strictEqualTypeSafe(replayedChild.reputationToken, childStorage.reputationToken, 'child REP address replay mismatch')
 		strictEqualTypeSafe(replayedChild.parentUniverseId, childStorage.parentUniverseId.toString(), 'child parent universe replay mismatch')
-		strictEqualTypeSafe(replayedChild.universeTheoreticalSupply, childSupply, 'child universe supply replay mismatch')
-		const migrationBalances = replayed.migrationRepBalances.get(universeId)
+		strictEqualTypeSafe(replayedChild.universeTheoreticalSupplyAttoRep, childSupply, 'child universe supply replay mismatch')
+		const migrationBalances = replayed.migrationRepBalancesAttoRep.get(universeId)
 		if (migrationBalances === undefined || migrationBalances.size === 0) throw new Error('migration balances were not replayed')
 		for (const [migrator, migrationBalance] of migrationBalances) {
-			strictEqualTypeSafe(migrationBalance, await getMigrationRepBalance(client, fixture.genesisUniverse, migrator), `migration balance replay mismatch for ${migrator}`)
+			strictEqualTypeSafe(migrationBalance, await getMigrationRepBalanceAttoRep(client, fixture.genesisUniverse, migrator), `migration balance replay mismatch for ${migrator}`)
 		}
 	})
 
@@ -1622,7 +1622,7 @@ describe('event-only replay', () => {
 		}
 		for (let updateIndex = 0; updateIndex < 6; updateIndex += 1) {
 			await mockWindow.advanceTime((nextRandom() % 7n) + 1n)
-			await fixture.updateCollateralAmount(client, scenario.yesSecurityPool.securityPool)
+			await fixture.updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
 		}
 		await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, client.account.address)
 		await mockWindow.advanceTime((nextRandom() % 17n) + 3n)
@@ -1634,7 +1634,7 @@ describe('event-only replay', () => {
 		for (const vault of checkpointVaults) await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
 		for (let updateIndex = 0; updateIndex < 4; updateIndex += 1) {
 			await mockWindow.advanceTime((nextRandom() % 5n) + 1n)
-			await fixture.updateCollateralAmount(client, scenario.yesSecurityPool.securityPool)
+			await fixture.updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
 		}
 		for (const vault of checkpointVaults.toReversed()) await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
 		for (const vault of checkpointVaults) await fixture.redeemFees(client, scenario.yesSecurityPool.securityPool, vault)
@@ -1645,15 +1645,15 @@ describe('event-only replay', () => {
 		const replayedPool = replayedState.pools.get(scenario.yesSecurityPool.securityPool)
 		if (replayedPool === undefined) throw new Error('seeded pool accounting replay state missing')
 		const snapshot = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: poolAccountingSnapshotAbi, functionName: 'getPoolAccountingSnapshot', args: [] })
-		strictEqualTypeSafe(replayedPool.completeSetCollateralAmount, snapshot.completeSetCollateralAmount, 'seeded collateral replay mismatch')
-		strictEqualTypeSafe(replayedPool.totalSecurityBondAllowance, snapshot.totalSecurityBondAllowance, 'seeded total allowance replay mismatch')
-		strictEqualTypeSafe(replayedPool.feeEligibleSecurityBondAllowance, snapshot.feeEligibleSecurityBondAllowance, 'seeded fee-eligible allowance replay mismatch')
-		strictEqualTypeSafe(replayedPool.totalFeesOwedToVaults, snapshot.totalFeesOwedToVaults, 'seeded fee liability replay mismatch')
-		strictEqualTypeSafe(replayedPool.unallocatedFeeReserve, snapshot.unallocatedFeeReserve, 'seeded fee reserve replay mismatch')
+		strictEqualTypeSafe(replayedPool.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'seeded collateral replay mismatch')
+		strictEqualTypeSafe(replayedPool.totalCoverageCommitmentAttoEth, snapshot.totalCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayedPool.feeEligibleCoverageCommitmentAttoEth, snapshot.feeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayedPool.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'seeded fee liability replay mismatch')
+		strictEqualTypeSafe(replayedPool.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'seeded fee reserve replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndex, snapshot.feeIndex, 'seeded fee-index replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndexRemainder, snapshot.feeIndexRemainder, 'seeded fee-index remainder replay mismatch')
 		strictEqualTypeSafe(replayedPool.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'seeded total-fee remainder replay mismatch')
-		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleAllowance, snapshot.uncheckpointedFeeEligibleAllowance, 'seeded uncheckpointed allowance replay mismatch')
+		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
 		strictEqualTypeSafe(replayedPool.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'seeded accumulator replay mismatch')
 		strictEqualTypeSafe(replayedPool.currentRetentionRate, snapshot.currentRetentionRate, 'seeded retention-rate replay mismatch')
 
@@ -1667,27 +1667,27 @@ describe('event-only replay', () => {
 				functionName: 'getVaultFeeRemainder',
 				args: [vault],
 			})
-			strictEqualTypeSafe(replayedVault.poolOwnershipAmount, storedVault.repDepositShare, `seeded ownership replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.securityBondAllowance, storedVault.securityBondAllowance, `seeded allowance replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.unpaidEthFees, storedVault.unpaidEthFees, `seeded unpaid-fees replay mismatch for ${vault}`)
+			strictEqualTypeSafe(replayedVault.repBackingUnits, storedVault.vaultRepBackingAttoRep, `seeded backingUnits replay mismatch for ${vault}`)
+			strictEqualTypeSafe(replayedVault.coverageCommitmentAttoEth, storedVault.coverageCommitmentAttoEth, `seeded coverageCommitmentAttoEth replay mismatch for ${vault}`)
+			strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVault.claimableFeesAttoEth, `seeded unpaid-fees replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.feeIndex, storedVault.feeIndex, `seeded vault fee-index replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.vaultFeeRemainder, storedVaultFeeRemainder, `seeded vault fee remainder replay mismatch for ${vault}`)
 		}
 		const replayedPoolState = replayedState.poolStates.get(scenario.yesSecurityPool.securityPool)
 		if (replayedPoolState === undefined) throw new Error('seeded child pool state replay missing')
-		const storedShareSupply = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'shareTokenSupply', args: [] })
-		const storedOwnershipDenominator = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'poolOwnershipDenominator', args: [] })
+		const storedShareSupply = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'shareTokenSupplyAttoShares', args: [] })
+		const storedBackingUnitsDenominator = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] })
 		const storedSystemState = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] })
 		const storedAwaitingContinuation = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'awaitingForkContinuation', args: [] })
 		const storedEscalationGame = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })
-		strictEqualTypeSafe(replayedPoolState.shareTokenSupply, storedShareSupply, 'seeded child share supply replay mismatch')
-		strictEqualTypeSafe(replayedPoolState.poolOwnershipDenominator, storedOwnershipDenominator, 'seeded child ownership denominator replay mismatch')
+		strictEqualTypeSafe(replayedPoolState.shareTokenSupplyAttoShares, storedShareSupply, 'seeded child share supply replay mismatch')
+		strictEqualTypeSafe(replayedPoolState.totalRepBackingUnits, storedBackingUnitsDenominator, 'seeded child backingUnits denominator replay mismatch')
 		strictEqualTypeSafe(replayedPoolState.systemState, storedSystemState, 'seeded child system state replay mismatch')
 		strictEqualTypeSafe(replayedPoolState.awaitingForkContinuation ?? false, storedAwaitingContinuation, 'seeded child continuation state replay mismatch')
 		strictEqualTypeSafe(replayedPoolState.escalationGame ?? zeroAddress, storedEscalationGame, 'seeded child escalation-game replay mismatch')
 	})
 
-	test('actual vault checkpoints carry a fractional fee entitlement into a later whole wei', async () => {
+	test('actual vault checkpoints carry a fractional fee entitlement into a later whole attoETH', async () => {
 		const pool = securityPoolAddresses.securityPool
 		const vault = client.account.address
 		const storedVaultBefore = await fixture.getSecurityVault(client, pool, vault)
@@ -1718,8 +1718,8 @@ describe('event-only replay', () => {
 			args: [vault],
 		})
 		const vaultAfterFirstCheckpoint = await fixture.getSecurityVault(client, pool, vault)
-		strictEqualTypeSafe(remainderAfterFirstCheckpoint, fixture.PRICE_PRECISION - 1n, 'first checkpoint should preserve the sub-wei vault entitlement')
-		strictEqualTypeSafe(vaultAfterFirstCheckpoint.unpaidEthFees, storedVaultBefore.unpaidEthFees, 'fractional entitlement alone should not credit a whole wei')
+		strictEqualTypeSafe(remainderAfterFirstCheckpoint, fixture.PRICE_PRECISION - 1n, 'first checkpoint should preserve the sub-attoETH vault entitlement')
+		strictEqualTypeSafe(vaultAfterFirstCheckpoint.claimableFeesAttoEth, storedVaultBefore.claimableFeesAttoEth, 'fractional entitlement alone should not credit a whole attoETH')
 
 		await mockWindow.addStateOverrides({
 			[pool]: {
@@ -1742,15 +1742,15 @@ describe('event-only replay', () => {
 			functionName: 'getVaultFeeRemainder',
 			args: [vault],
 		})
-		strictEqualTypeSafe(storedVaultAfter.unpaidEthFees, storedVaultBefore.unpaidEthFees + 1n, 'the carried fraction plus one fee-index unit should credit one whole wei')
-		strictEqualTypeSafe(storedRemainderAfter, 0n, 'whole-wei credit should consume the carried fraction exactly')
-		strictEqualTypeSafe(replayedVault.unpaidEthFees, storedVaultAfter.unpaidEthFees, 'replayed whole-wei vault credit mismatch')
+		strictEqualTypeSafe(storedVaultAfter.claimableFeesAttoEth, storedVaultBefore.claimableFeesAttoEth + 1n, 'the carried fraction plus one fee-index unit should credit one whole attoETH')
+		strictEqualTypeSafe(storedRemainderAfter, 0n, 'whole-attoETH credit should consume the carried fraction exactly')
+		strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVaultAfter.claimableFeesAttoEth, 'replayed whole-attoETH vault credit mismatch')
 		strictEqualTypeSafe(replayedVault.vaultFeeRemainder, storedRemainderAfter, 'replayed final vault fee remainder mismatch')
 	})
 
 	test('zero fee eligibility emits an authoritative accounting checkpoint matching storage', async () => {
 		await mockWindow.advanceTime(10n)
-		const transactionHash = await fixture.updateCollateralAmount(client, securityPoolAddresses.securityPool)
+		const transactionHash = await fixture.updateSettlementCollateral(client, securityPoolAddresses.securityPool)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const logs = await client.getLogs({
 			address: securityPoolAddresses.securityPool,
@@ -1787,15 +1787,15 @@ describe('event-only replay', () => {
 			args: {
 				reason: checkpointLog.args.reason,
 				vault: checkpointLog.args.vault,
-				completeSetCollateralAmount: checkpointLog.args.completeSetCollateralAmount,
-				totalSecurityBondAllowance: checkpointLog.args.totalSecurityBondAllowance,
-				feeEligibleSecurityBondAllowance: checkpointLog.args.feeEligibleSecurityBondAllowance,
-				totalFeesOwedToVaults: checkpointLog.args.totalFeesOwedToVaults,
-				unallocatedFeeReserve: checkpointLog.args.unallocatedFeeReserve,
+				settlementCollateralAttoEth: checkpointLog.args.settlementCollateralAttoEth,
+				totalCoverageCommitmentAttoEth: checkpointLog.args.totalCoverageCommitmentAttoEth,
+				feeEligibleCoverageCommitmentAttoEth: checkpointLog.args.feeEligibleCoverageCommitmentAttoEth,
+				totalClaimableVaultFeesAttoEth: checkpointLog.args.totalClaimableVaultFeesAttoEth,
+				unallocatedAccruedFeesAttoEth: checkpointLog.args.unallocatedAccruedFeesAttoEth,
 				feeIndex: checkpointLog.args.feeIndex,
 				feeIndexRemainder: checkpointLog.args.feeIndexRemainder,
 				totalFeesOwedRemainder: checkpointLog.args.totalFeesOwedRemainder,
-				uncheckpointedFeeEligibleAllowance: checkpointLog.args.uncheckpointedFeeEligibleAllowance,
+				uncheckpointedFeeEligibleCoverageCommitmentAttoEth: checkpointLog.args.uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
 				lastUpdatedFeeAccumulator: checkpointLog.args.lastUpdatedFeeAccumulator,
 				currentRetentionRate: checkpointLog.args.currentRetentionRate,
 			},
@@ -1808,23 +1808,23 @@ describe('event-only replay', () => {
 			functionName: 'getPoolAccountingSnapshot',
 			args: [],
 		})
-		strictEqualTypeSafe(replayed.completeSetCollateralAmount, snapshot.completeSetCollateralAmount, 'collateral checkpoint mismatch')
-		strictEqualTypeSafe(replayed.totalSecurityBondAllowance, snapshot.totalSecurityBondAllowance, 'total allowance checkpoint mismatch')
-		strictEqualTypeSafe(replayed.feeEligibleSecurityBondAllowance, snapshot.feeEligibleSecurityBondAllowance, 'fee-eligible allowance checkpoint mismatch')
-		strictEqualTypeSafe(replayed.totalFeesOwedToVaults, snapshot.totalFeesOwedToVaults, 'vault fee liability checkpoint mismatch')
-		strictEqualTypeSafe(replayed.unallocatedFeeReserve, snapshot.unallocatedFeeReserve, 'unallocated reserve checkpoint mismatch')
+		strictEqualTypeSafe(replayed.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'collateral checkpoint mismatch')
+		strictEqualTypeSafe(replayed.totalCoverageCommitmentAttoEth, snapshot.totalCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayed.feeEligibleCoverageCommitmentAttoEth, snapshot.feeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayed.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'vault fee liability checkpoint mismatch')
+		strictEqualTypeSafe(replayed.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'unallocated reserve checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndex, snapshot.feeIndex, 'fee-index checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndexRemainder, snapshot.feeIndexRemainder, 'fee-index remainder checkpoint mismatch')
 		strictEqualTypeSafe(replayed.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'total fee remainder checkpoint mismatch')
-		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleAllowance, snapshot.uncheckpointedFeeEligibleAllowance, 'uncheckpointed eligibility checkpoint mismatch')
+		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, 'uncheckpointed eligibility checkpoint mismatch')
 		strictEqualTypeSafe(replayed.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'fee accumulator checkpoint mismatch')
 		strictEqualTypeSafe(replayed.currentRetentionRate, snapshot.currentRetentionRate, 'retention-rate checkpoint mismatch')
 		strictEqualTypeSafe(replayed.vault, zeroAddress, 'accrual checkpoint should not attribute a vault')
 	})
 
 	test('external forks emit one canonical pool snapshot after REP is locked', async () => {
-		const poolRepAtFork = await fixture.getTotalRepBalance(client, securityPoolAddresses.securityPool)
-		const collateralAtFork = await fixture.getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const poolRepAtForkAttoRep = await fixture.getTotalPoolHeldRepAttoRep(client, securityPoolAddresses.securityPool)
+		const settlementCollateralAtForkAttoEth = await fixture.getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 		const transactionHash = await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay fork source')
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const forker = fixture.getInfraContractAddresses().securityPoolForker
@@ -1844,9 +1844,9 @@ describe('event-only replay', () => {
 			args: [securityPoolAddresses.securityPool],
 		})
 		strictEqualTypeSafe(snapshotLog.args.migrationProxy, expectedMigrationProxy, 'migration proxy snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.collateralAtFork, collateralAtFork, 'fork collateral snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.poolRepAtFork, poolRepAtFork, 'fork REP snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.auctionableRepAtFork, poolRepAtFork, 'external-fork auctionable REP mismatch')
+		strictEqualTypeSafe(snapshotLog.args.settlementCollateralAtForkAttoEth, settlementCollateralAtForkAttoEth, 'fork collateral snapshot mismatch')
+		strictEqualTypeSafe(snapshotLog.args.poolRepAtForkAttoRep, poolRepAtForkAttoRep, 'fork REP snapshot mismatch')
+		strictEqualTypeSafe(snapshotLog.args.auctionableRepAtForkAttoRep, poolRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
 		strictEqualTypeSafe(snapshotLog.args.ownFork, false, 'external fork should not be marked as own fork')
 		strictEqualTypeSafe(snapshotLog.args.unresolvedEscalation, false, 'test fork should not report unresolved escalation')
 	})

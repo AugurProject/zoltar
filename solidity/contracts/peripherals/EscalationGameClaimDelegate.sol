@@ -9,7 +9,10 @@ interface IEscalationClaimGameContext {
 }
 
 interface IEscalationClaimCheckpointSource {
-	function applyInheritedClaimRetention(uint256 amount, uint256 parentDepositIndex) external view returns (uint256);
+	function applyInheritedClaimRetention(
+		uint256 amountAttoRep,
+		uint256 parentDepositIndex
+	) external view returns (uint256);
 	function rootClaimSourceGame() external view returns (address);
 }
 
@@ -21,10 +24,13 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		return forkCarryRootClaimSourceGame == address(0x0) ? address(this) : forkCarryRootClaimSourceGame;
 	}
 
-	function applyInheritedClaimRetention(uint256 amount, uint256 parentDepositIndex) external view returns (uint256) {
+	function applyInheritedClaimRetention(
+		uint256 amountAttoRep,
+		uint256 parentDepositIndex
+	) external view returns (uint256) {
 		address encodedSourceGame = address(uint160(parentDepositIndex >> 96));
 		address sourceGame = encodedSourceGame == address(0x0) ? forkCarryRootClaimSourceGame : encodedSourceGame;
-		if (sourceGame == address(0x0) || sourceGame == address(this)) return amount;
+		if (sourceGame == address(0x0) || sourceGame == address(this)) return amountAttoRep;
 		(bool mantissaSuccess, bytes memory mantissaData) = sourceGame.staticcall(
 			abi.encodeWithSignature('cumulativeClaimRetention()')
 		);
@@ -40,35 +46,31 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 				(cumulativeClaimRetentionExponent == sourceExponent && cumulativeClaimRetention <= sourceMantissa),
 			'Claim retention order'
 		);
-		uint256 retained = Math.mulDiv(amount, cumulativeClaimRetention, sourceMantissa);
+		uint256 retained = Math.mulDiv(amountAttoRep, cumulativeClaimRetention, sourceMantissa);
 		uint256 exponentDifference = cumulativeClaimRetentionExponent - sourceExponent;
 		return exponentDifference >= 256 ? 0 : retained >> exponentDifference;
 	}
 
 	function applyInheritedSourceStorageBasis(
-		uint256 amount,
-		uint256 cumulativeAmount,
+		uint256 amountAttoRep,
+		uint256 cumulativeAmountAttoRep,
 		uint256 parentDepositIndex
 	) external view returns (uint256) {
 		address sourceGame = forkCarrySourceGame;
-		if (sourceGame == address(0x0)) return amount;
-		require(cumulativeAmount >= amount, 'Carry cumulative low');
-		uint256 retainedCumulativeAmount = IEscalationClaimCheckpointSource(sourceGame).applyInheritedClaimRetention(
-			cumulativeAmount,
-			parentDepositIndex
-		);
-		uint256 retainedPreviousAmount = IEscalationClaimCheckpointSource(sourceGame).applyInheritedClaimRetention(
-			cumulativeAmount - amount,
-			parentDepositIndex
-		);
-		require(retainedCumulativeAmount >= retainedPreviousAmount, 'Carry retention order');
-		return retainedCumulativeAmount - retainedPreviousAmount;
+		if (sourceGame == address(0x0)) return amountAttoRep;
+		require(cumulativeAmountAttoRep >= amountAttoRep, 'Carry cumulative low');
+		uint256 retainedCumulativeAmountAttoRep = IEscalationClaimCheckpointSource(sourceGame)
+			.applyInheritedClaimRetention(cumulativeAmountAttoRep, parentDepositIndex);
+		uint256 retainedPreviousAmountAttoRep = IEscalationClaimCheckpointSource(sourceGame)
+			.applyInheritedClaimRetention(cumulativeAmountAttoRep - amountAttoRep, parentDepositIndex);
+		require(retainedCumulativeAmountAttoRep >= retainedPreviousAmountAttoRep, 'Carry retention order');
+		return retainedCumulativeAmountAttoRep - retainedPreviousAmountAttoRep;
 	}
 
 	function initializeForkClaimCheckpoint(address sourceGame) external {
 		require(msg.sender == IEscalationClaimGameContext(address(this)).securityPool(), 'Only pool');
 		require(sourceGame == forkCarrySourceGame, 'Claim source');
-		require(truthAuctionRepBefore == 0, 'Haircut applied');
+		require(truthAuctionRepBeforeAttoRep == 0, 'Haircut applied');
 		address rootSource = IEscalationClaimCheckpointSource(sourceGame).rootClaimSourceGame();
 		forkCarryRootClaimSourceGame = rootSource == address(0x0) ? sourceGame : rootSource;
 		(bool retentionSuccess, bytes memory retentionData) = sourceGame.staticcall(

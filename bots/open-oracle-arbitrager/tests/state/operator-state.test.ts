@@ -31,7 +31,7 @@ function strategy(): MutableStrategy {
 	return {
 		maxSpotTwapTicks: 100n,
 		minimumProfitBps: 100n,
-		minimumProfitWeth: 10n ** 16n,
+		minimumProfitWethAttoEth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
 		pollMilliseconds: 12_000,
@@ -59,7 +59,7 @@ describe('operator strategy settings', () => {
 	test('validates and applies every runtime-adjustable setting', () => {
 		const current = strategy()
 		expect(updateStrategyFromRequest(current, settings())).toEqual(settings())
-		expect(current.minimumProfitWeth).toBe(25n * 10n ** 15n)
+		expect(current.minimumProfitWethAttoEth).toBe(25n * 10n ** 15n)
 		expect(current.maxSpotTwapTicks).toBe(75n)
 	})
 
@@ -82,8 +82,8 @@ describe('operator strategy settings', () => {
 		expect(
 			gameCapitalSnapshot(
 				[
-					{ currentAmount1: 2n * 10n ** 18n, currentAmount2: 3n, settlerReward: 10n ** 17n, token1: weth, token2: address },
-					{ currentAmount1: 4n * 10n ** 18n, currentAmount2: 5n, settlerReward: 2n * 10n ** 17n, token1: nativeEth, token2: address },
+					{ currentAmount1: 2n * 10n ** 18n, currentAmount2: 3n, settlerRewardAttoEth: 10n ** 17n, token1: weth, token2: address },
+					{ currentAmount1: 4n * 10n ** 18n, currentAmount2: 5n, settlerRewardAttoEth: 2n * 10n ** 17n, token1: nativeEth, token2: address },
 				],
 				weth,
 			),

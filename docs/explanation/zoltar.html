@@ -159,18 +159,18 @@
 					<h2>3. Fork Thresholds and REP Economics</h2>
 					<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 				</div>
-				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThreshold</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
+				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThresholdAttoRep</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
 				<p>Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.</p>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../reference/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../reference/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP behavior</a>, and <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
 				<div class="equation" id="eq-zoltar-fork-threshold">
-					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = ⌊totalTheoreticalRepSupply / forkThresholdDivisor⌋">
+					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThresholdAttoRep = ⌊totalTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌋">
 						<mrow>
-							<mi>forkThreshold</mi>
+							<mi>forkThresholdAttoRep</mi>
 							<mo>=</mo>
 							<mrow>
 								<mo form="prefix" stretchy="true">⌊</mo>
 								<mfrac>
-									<mi>totalTheoreticalRepSupply</mi>
+									<mi>totalTheoreticalRepSupplyAttoRep</mi>
 									<mi>forkThresholdDivisor</mi>
 								</mfrac>
 								<mo form="postfix" stretchy="true">⌋ </mo>
@@ -179,34 +179,34 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Fork Threshold</span>With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
 				</div>
-				<p>After triggering the fork, the full threshold leaves the parent universe: <code>forkUniverse</code> removes that parent REP and reduces parent theoretical supply by the full threshold. The burn divisor then controls the child-REP minting credit. With <code>forkBurnDivisor = 5</code>, the uncredited haircut is <code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold. The remaining <code>forkThreshold - ⌊forkThreshold / 5⌋</code> becomes migration credit: equivalently <code>⌈4 × forkThreshold / 5⌉</code>, approximately 80%.</p>
+				<p>After triggering the fork, the full threshold leaves the parent universe: <code>forkUniverse</code> removes that parent REP and reduces parent theoretical supply by the full threshold. The burn divisor then controls the child-REP minting credit. With <code>forkBurnDivisor = 5</code>, the uncredited haircut is <code>⌊forkThresholdAttoRep / 5⌋</code>, approximately 20% of the threshold. The remaining <code>forkThresholdAttoRep - ⌊forkThresholdAttoRep / 5⌋</code> becomes migration credit: equivalently <code>⌈4 × forkThresholdAttoRep / 5⌉</code>, approximately 80%.</p>
 				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code>. This caps the uncredited haircut at 20%: a larger haircut can leave an <a href="./statoblast.html#migration">own-fork escalation continuation</a>—the child game carrying unresolved deposits after its pool's escalation game triggers the universe fork—with less REP than its maximum winning payout.</p>
 				<div class="equation" id="eq-zoltar-fork-burn">
-					<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋">
+					<math display="block" aria-label="uncredited fork haircut in attoREP equals floor fork threshold in attoREP divided by fork burn divisor" data-source="uncreditedForkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋">
 						<mrow>
-							<mi>uncreditedForkHaircut</mi>
+							<mi>uncreditedForkHaircutAttoRep</mi>
 							<mo>=</mo>
 							<mo form="prefix" stretchy="true">⌊</mo>
 							<mfrac>
-								<mi>forkThreshold</mi>
+								<mi>forkThresholdAttoRep</mi>
 								<mi>forkBurnDivisor</mi>
 							</mfrac>
 							<mo form="postfix" stretchy="true">⌋</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is <code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold deposit and rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
+					<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is <code>⌊forkThresholdAttoRep / 5⌋</code>, approximately 20% of the threshold deposit and rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
 				</div>
 				<div class="equation" id="eq-zoltar-initiator-migration-balance">
-					<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
+					<math display="block" aria-label="fork initiator migration balance in attoREP equals fork threshold in attoREP minus uncredited fork haircut in attoREP" data-source="forkInitiatorMigrationBalanceAttoRep = forkThresholdAttoRep - uncreditedForkHaircutAttoRep">
 						<mrow>
-							<mi>forkInitiatorMigrationBalance</mi>
+							<mi>forkInitiatorMigrationBalanceAttoRep</mi>
 							<mo>=</mo>
-							<mi>forkThreshold</mi>
+							<mi>forkThresholdAttoRep</mi>
 							<mo>-</mo>
-							<mi>uncreditedForkHaircut</mi>
+							<mi>uncreditedForkHaircutAttoRep</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives <code>forkThreshold - ⌊forkThreshold / 5⌋ = ⌈4 × forkThreshold / 5⌉</code>: approximately 80% of the threshold, rounded up when the threshold is not divisible by five.</p>
+					<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives <code>forkThresholdAttoRep - ⌊forkThresholdAttoRep / 5⌋ = ⌈4 × forkThresholdAttoRep / 5⌉</code>: approximately 80% of the threshold, rounded up when the threshold is not divisible by five.</p>
 				</div>
 				<div class="implementation-grid">
 					<div class="implementation-note">
@@ -254,12 +254,12 @@
 							<tr>
 								<td><code>forkBurnDivisor</code></td>
 								<td><code>5</code></td>
-								<td>Constructor immutable with a minimum value of <code>5</code>. The initiator receives the threshold minus <code>⌊forkThreshold / forkBurnDivisor⌋</code> as migration credit.</td>
+								<td>Constructor immutable with a minimum value of <code>5</code>. The initiator receives the threshold minus <code>⌊forkThresholdAttoRep / forkBurnDivisor⌋</code> as migration credit.</td>
 							</tr>
 							<tr>
 								<td><code>forkThresholdDivisor</code></td>
 								<td><code>20</code></td>
-								<td>Constructor immutable. Fork threshold is <code>⌊totalTheoreticalRepSupply / forkThresholdDivisor⌋</code>; the default deployment value makes it about 5% of supply.</td>
+								<td>Constructor immutable. Fork threshold is <code>⌊totalTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌋</code>; the default deployment value makes it about 5% of supply.</td>
 							</tr>
 						</tbody>
 					</table>

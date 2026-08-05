@@ -49,7 +49,7 @@ describe('OpenOracle arbitrage executor', () => {
 		reportTimestamp: 1,
 		settlementTime: 100,
 		settlementTimestamp: 0,
-		settlerReward: 0n,
+		settlerRewardAttoEth: 0n,
 		token1,
 		token2,
 	})
@@ -217,7 +217,7 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [
 					{
 						expectedParentBlockHash: block.hash,
-						hedgeWethLimit: 900n,
+						hedgeWethLimitAttoEth: 900n,
 						newAmount1: 1_200n,
 						newAmount2: 900n,
 						openOracle: target,
@@ -347,7 +347,7 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [
 					{
 						expectedParentBlockHash: parentBlockHash,
-						hedgeWethLimit: 900n,
+						hedgeWethLimitAttoEth: 900n,
 						newAmount1: 1_200n,
 						newAmount2: 900n,
 						openOracle: target,
@@ -389,7 +389,7 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [
 					{
 						expectedParentBlockHash: parentBlockHash,
-						hedgeWethLimit: 1_100n,
+						hedgeWethLimitAttoEth: 1_100n,
 						newAmount1: 1_200n,
 						newAmount2: 1_300n,
 						openOracle: target,
@@ -433,7 +433,7 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [
 					{
 						expectedParentBlockHash: parentBlockHash,
-						hedgeWethLimit: 900n,
+						hedgeWethLimitAttoEth: 900n,
 						newAmount1: 1_200n,
 						newAmount2: 900n,
 						openOracle: target,
@@ -478,7 +478,7 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [
 					{
 						expectedParentBlockHash: parentBlockHash,
-						hedgeWethLimit: 1_100n,
+						hedgeWethLimitAttoEth: 1_100n,
 						newAmount1: 1_200n,
 						newAmount2: 1_300n,
 						openOracle: target,

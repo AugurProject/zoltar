@@ -18,8 +18,8 @@ export type CentralizedMarketSettings = {
 	maximumDexDeviationBps: bigint
 	maximumObservationAgeMilliseconds: number
 	maximumVenueDispersionBps: bigint
-	minimumAskDepthEth: bigint
-	minimumBidDepthEth: bigint
+	minimumAskDepthAttoEth: bigint
+	minimumBidDepthAttoEth: bigint
 	minimumSourceCount: number
 	orderBookLimit: number
 	requestTimeoutMilliseconds: number
@@ -27,15 +27,15 @@ export type CentralizedMarketSettings = {
 	sources: readonly CentralizedMarketSource[]
 	venueConsensus?: {
 		allowSingleGroupFallback: boolean
-		dexProbeDepthEth: bigint
+		dexProbeDepthAttoEth: bigint
 		dexSources: readonly {
 			feeBps: number
 			pair: `0x${string}`
 			sourceId: string
 		}[]
 		maximumGroupDeviationBps: bigint
-		minimumDexAskDepthEth: bigint
-		minimumDexBidDepthEth: bigint
+		minimumDexAskDepthAttoEth: bigint
+		minimumDexBidDepthAttoEth: bigint
 		minimumDexSourceCount: number
 		minimumSourceObservationCount: number
 		minimumSourceObservationSpanMilliseconds: number
@@ -45,10 +45,10 @@ export type CentralizedMarketSettings = {
 
 export type CentralizedMarketObservation = {
 	assetId: string
-	askDepthEth: bigint
+	askDepthAttoEth: bigint
 	bestAskQuote: string
 	bestBidQuote: string
-	bidDepthEth: bigint
+	bidDepthAttoEth: bigint
 	chainId: number
 	exchangeId: string
 	ethTickerTimestamp: number | undefined
@@ -61,8 +61,8 @@ export type CentralizedMarketObservation = {
 
 export type CentralizedMarketEstimate = {
 	assetId: string
-	askDepthEth: bigint
-	bidDepthEth: bigint
+	askDepthAttoEth: bigint
+	bidDepthAttoEth: bigint
 	chainId: number
 	maximumPriceRepPerEth: bigint
 	minimumPriceRepPerEth: bigint
@@ -211,11 +211,11 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 					if (typeof consensus['allowSingleGroupFallback'] !== 'boolean') throw new Error('centralizedMarkets.venueConsensus.allowSingleGroupFallback must be a boolean')
 					return {
 						allowSingleGroupFallback: consensus['allowSingleGroupFallback'],
-						dexProbeDepthEth: decimalEth(consensus['dexProbeDepthEth'], 'centralizedMarkets.venueConsensus.dexProbeDepthEth'),
+						dexProbeDepthAttoEth: decimalEth(consensus['dexProbeDepthEth'], 'centralizedMarkets.venueConsensus.dexProbeDepthEth'),
 						dexSources,
 						maximumGroupDeviationBps: BigInt(integer(consensus['maximumGroupDeviationBps'], 'centralizedMarkets.venueConsensus.maximumGroupDeviationBps', 1, 10_000)),
-						minimumDexAskDepthEth: decimalEth(consensus['minimumDexAskDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexAskDepthEth'),
-						minimumDexBidDepthEth: decimalEth(consensus['minimumDexBidDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexBidDepthEth'),
+						minimumDexAskDepthAttoEth: decimalEth(consensus['minimumDexAskDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexAskDepthEth'),
+						minimumDexBidDepthAttoEth: decimalEth(consensus['minimumDexBidDepthEth'], 'centralizedMarkets.venueConsensus.minimumDexBidDepthEth'),
 						minimumDexSourceCount: integer(consensus['minimumDexSourceCount'], 'centralizedMarkets.venueConsensus.minimumDexSourceCount', 1, 100),
 						minimumSourceObservationCount: integer(consensus['minimumSourceObservationCount'], 'centralizedMarkets.venueConsensus.minimumSourceObservationCount', 1, 100),
 						minimumSourceObservationSpanMilliseconds: integer(consensus['minimumSourceObservationSpanMilliseconds'], 'centralizedMarkets.venueConsensus.minimumSourceObservationSpanMilliseconds', 0, 3_600_000),
@@ -240,8 +240,8 @@ export function parseCentralizedMarketSettings(value: unknown): CentralizedMarke
 		maximumDexDeviationBps,
 		maximumObservationAgeMilliseconds,
 		maximumVenueDispersionBps,
-		minimumAskDepthEth: decimalEth(settings['minimumAskDepthEth'], 'centralizedMarkets.minimumAskDepthEth'),
-		minimumBidDepthEth: decimalEth(settings['minimumBidDepthEth'], 'centralizedMarkets.minimumBidDepthEth'),
+		minimumAskDepthAttoEth: decimalEth(settings['minimumAskDepthEth'], 'centralizedMarkets.minimumAskDepthEth'),
+		minimumBidDepthAttoEth: decimalEth(settings['minimumBidDepthEth'], 'centralizedMarkets.minimumBidDepthEth'),
 		minimumSourceCount,
 		orderBookLimit: integer(settings['orderBookLimit'], 'centralizedMarkets.orderBookLimit', 1, 1_000),
 		requestTimeoutMilliseconds: integer(settings['requestTimeoutMilliseconds'], 'centralizedMarkets.requestTimeoutMilliseconds', 250, 60_000),
@@ -290,8 +290,8 @@ export function serializeCentralizedMarketSettings(settings: CentralizedMarketSe
 		maximumDexDeviationBps: Number(settings.maximumDexDeviationBps),
 		maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
 		maximumVenueDispersionBps: Number(settings.maximumVenueDispersionBps),
-		minimumAskDepthEth: formatFixed(settings.minimumAskDepthEth),
-		minimumBidDepthEth: formatFixed(settings.minimumBidDepthEth),
+		minimumAskDepthEth: formatFixed(settings.minimumAskDepthAttoEth),
+		minimumBidDepthEth: formatFixed(settings.minimumBidDepthAttoEth),
 		minimumSourceCount: settings.minimumSourceCount,
 		orderBookLimit: settings.orderBookLimit,
 		requestTimeoutMilliseconds: settings.requestTimeoutMilliseconds,
@@ -306,11 +306,11 @@ export function serializeCentralizedMarketSettings(settings: CentralizedMarketSe
 			: {
 					venueConsensus: {
 						allowSingleGroupFallback: settings.venueConsensus.allowSingleGroupFallback,
-						dexProbeDepthEth: formatFixed(settings.venueConsensus.dexProbeDepthEth),
+						dexProbeDepthEth: formatFixed(settings.venueConsensus.dexProbeDepthAttoEth),
 						dexSources: settings.venueConsensus.dexSources,
 						maximumGroupDeviationBps: Number(settings.venueConsensus.maximumGroupDeviationBps),
-						minimumDexAskDepthEth: formatFixed(settings.venueConsensus.minimumDexAskDepthEth),
-						minimumDexBidDepthEth: formatFixed(settings.venueConsensus.minimumDexBidDepthEth),
+						minimumDexAskDepthEth: formatFixed(settings.venueConsensus.minimumDexAskDepthAttoEth),
+						minimumDexBidDepthEth: formatFixed(settings.venueConsensus.minimumDexBidDepthAttoEth),
 						minimumDexSourceCount: settings.venueConsensus.minimumDexSourceCount,
 						minimumSourceObservationCount: settings.venueConsensus.minimumSourceObservationCount,
 						minimumSourceObservationSpanMilliseconds: settings.venueConsensus.minimumSourceObservationSpanMilliseconds,
@@ -326,10 +326,10 @@ export function marketConsensusSettings(settings: CentralizedMarketSettings): Ma
 		maximumGroupDeviationBps: settings.venueConsensus?.maximumGroupDeviationBps ?? settings.maximumDexDeviationBps,
 		maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
 		maximumVenueDispersionBps: settings.maximumVenueDispersionBps,
-		minimumAskDepthEthPerSource: settings.venueConsensus?.minimumDexAskDepthEth ?? 0n,
-		minimumBidDepthEthPerSource: settings.venueConsensus?.minimumDexBidDepthEth ?? 0n,
-		minimumCexAskDepthEth: settings.minimumAskDepthEth,
-		minimumCexBidDepthEth: settings.minimumBidDepthEth,
+		minimumAskDepthAttoEthPerSource: settings.venueConsensus?.minimumDexAskDepthAttoEth ?? 0n,
+		minimumBidDepthAttoEthPerSource: settings.venueConsensus?.minimumDexBidDepthAttoEth ?? 0n,
+		minimumCexAskDepthAttoEth: settings.minimumAskDepthAttoEth,
+		minimumCexBidDepthAttoEth: settings.minimumBidDepthAttoEth,
 		minimumCexSourceCount: settings.minimumSourceCount,
 		minimumDexSourceCount: settings.venueConsensus?.minimumDexSourceCount ?? 2,
 		minimumSourceObservationCount: settings.venueConsensus?.minimumSourceObservationCount ?? 1,
@@ -345,8 +345,8 @@ export function centralizedMarketConsensusObservations(estimate: CentralizedMark
 		return [
 			{
 				assetId: observation.assetId,
-				askDepthEth: observation.askDepthEth,
-				bidDepthEth: observation.bidDepthEth,
+				askDepthAttoEth: observation.askDepthAttoEth,
+				bidDepthAttoEth: observation.bidDepthAttoEth,
 				chainId: observation.chainId,
 				kind: 'cex' as const,
 				observationId: `${observation.exchangeId}:${observation.orderBookTimestamp.toString()}:${(observation.ethTickerTimestamp ?? observation.orderBookTimestamp).toString()}`,
@@ -368,16 +368,16 @@ export function serializeCentralizedMarketEstimate(estimate: CentralizedMarketEs
 	if (estimate === undefined) return undefined
 	return {
 		assetId: estimate.assetId,
-		askDepthEth: formatFixed(estimate.askDepthEth),
-		bidDepthEth: formatFixed(estimate.bidDepthEth),
+		askDepthEth: formatFixed(estimate.askDepthAttoEth),
+		bidDepthEth: formatFixed(estimate.bidDepthAttoEth),
 		chainId: estimate.chainId,
 		maximumPriceRepPerEth: formatFixed(estimate.maximumPriceRepPerEth),
 		minimumPriceRepPerEth: formatFixed(estimate.minimumPriceRepPerEth),
 		observations: estimate.observations.map(observation => ({
-			askDepthEth: formatFixed(observation.askDepthEth),
+			askDepthEth: formatFixed(observation.askDepthAttoEth),
 			bestAskQuote: observation.bestAskQuote,
 			bestBidQuote: observation.bestBidQuote,
-			bidDepthEth: formatFixed(observation.bidDepthEth),
+			bidDepthEth: formatFixed(observation.bidDepthAttoEth),
 			chainId: observation.chainId,
 			exchangeId: observation.exchangeId,
 			ethTickerTimestamp: observation.ethTickerTimestamp === undefined ? undefined : new Date(observation.ethTickerTimestamp).toISOString(),
@@ -469,14 +469,14 @@ async function observeSource(source: CentralizedMarketSource, settings: Centrali
 	if (bestBid > bestAsk) throw new Error(`${source.exchangeId} order book is crossed`)
 	const midpoint = (bestBid + bestAsk) / 2
 	const quotePerEth = ethTicker === undefined ? 1 : tickerPrice(ethTicker)
-	const bidDepthEth = quoteDepth(orderBook.bids, midpoint, settings.depthBps, 'bid') / quotePerEth
-	const askDepthEth = quoteDepth(orderBook.asks, midpoint, settings.depthBps, 'ask') / quotePerEth
+	const bidDepthAttoEth = quoteDepth(orderBook.bids, midpoint, settings.depthBps, 'bid') / quotePerEth
+	const askDepthAttoEth = quoteDepth(orderBook.asks, midpoint, settings.depthBps, 'ask') / quotePerEth
 	return {
 		assetId,
-		askDepthEth: fixed(askDepthEth, `${source.exchangeId} ask depth`),
+		askDepthAttoEth: fixed(askDepthAttoEth, `${source.exchangeId} ask depth`),
 		bestAskQuote: bestAsk.toString(),
 		bestBidQuote: bestBid.toString(),
-		bidDepthEth: fixed(bidDepthEth, `${source.exchangeId} bid depth`),
+		bidDepthAttoEth: fixed(bidDepthAttoEth, `${source.exchangeId} bid depth`),
 		chainId,
 		exchangeId: source.exchangeId,
 		ethTickerTimestamp: optionalTimestamp(ethTicker?.timestamp),
@@ -515,8 +515,8 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	if (fresh.length === 0) {
 		return {
 			assetId,
-			askDepthEth: 0n,
-			bidDepthEth: 0n,
+			askDepthAttoEth: 0n,
+			bidDepthAttoEth: 0n,
 			chainId: settings.assetChainId,
 			maximumPriceRepPerEth: 0n,
 			minimumPriceRepPerEth: 0n,
@@ -532,14 +532,14 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	const priceRepPerEth = median(prices)
 	const dispersionBps = priceRepPerEth === 0n ? BPS : ((maximumPriceRepPerEth - minimumPriceRepPerEth) * BPS) / priceRepPerEth
 	if (dispersionBps > settings.maximumVenueDispersionBps) reasons.push(`CEX venue dispersion is ${dispersionBps.toString()} bps`)
-	const bidDepthEth = fresh.reduce((total, observation) => total + observation.bidDepthEth, 0n)
-	const askDepthEth = fresh.reduce((total, observation) => total + observation.askDepthEth, 0n)
-	if (bidDepthEth < settings.minimumBidDepthEth) reasons.push('CEX bid depth is below the configured minimum')
-	if (askDepthEth < settings.minimumAskDepthEth) reasons.push('CEX ask depth is below the configured minimum')
+	const bidDepthAttoEth = fresh.reduce((total, observation) => total + observation.bidDepthAttoEth, 0n)
+	const askDepthAttoEth = fresh.reduce((total, observation) => total + observation.askDepthAttoEth, 0n)
+	if (bidDepthAttoEth < settings.minimumBidDepthAttoEth) reasons.push('CEX bid depth is below the configured minimum')
+	if (askDepthAttoEth < settings.minimumAskDepthAttoEth) reasons.push('CEX ask depth is below the configured minimum')
 	return {
 		assetId,
-		askDepthEth,
-		bidDepthEth,
+		askDepthAttoEth,
+		bidDepthAttoEth,
 		chainId: settings.assetChainId,
 		maximumPriceRepPerEth,
 		minimumPriceRepPerEth,

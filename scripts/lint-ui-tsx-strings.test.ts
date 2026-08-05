@@ -102,8 +102,8 @@ test('lint-ui-tsx-strings rejects direct children and factory-call literals', ()
 })
 
 test('lint-ui-tsx-strings ignores lowercase helper mode tokens passed to render helpers', () => {
-	const bidFailures = lintSourceText('ui/ts/components/TestRenderHelperMode.tsx', "export function TestRenderHelperMode() { function renderDebtNotice() { return <>{renderTruthAuctionDebtNotice('bid')}</> } return renderDebtNotice() }")
-	const settlementFailures = lintSourceText('ui/ts/components/TestRenderHelperSettlementMode.tsx', "export function TestRenderHelperSettlementMode() { const renderDebtNotice = () => <>{renderTruthAuctionDebtNotice('settlement', true)}</>; return renderDebtNotice() }")
+	const bidFailures = lintSourceText('ui/ts/components/TestRenderHelperMode.tsx', "export function TestRenderHelperMode() { function renderCoverageCommitmentNotice() { return <>{renderTruthAuctionCoverageCommitmentNotice('bid')}</> } return renderCoverageCommitmentNotice() }")
+	const settlementFailures = lintSourceText('ui/ts/components/TestRenderHelperSettlementMode.tsx', "export function TestRenderHelperSettlementMode() { const renderCoverageCommitmentNotice = () => <>{renderTruthAuctionCoverageCommitmentNotice('settlement', true)}</>; return renderCoverageCommitmentNotice() }")
 
 	expect(bidFailures).toHaveLength(0)
 	expect(settlementFailures).toHaveLength(0)

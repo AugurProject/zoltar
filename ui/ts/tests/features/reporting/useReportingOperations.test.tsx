@@ -31,12 +31,12 @@ function createDeferred<T>() {
 function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
 		bindingCapital: 10n,
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: 2n,
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
-		forkThreshold: 40n,
+		forkThresholdAttoRep: 40n,
 		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',
@@ -53,7 +53,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 			startTime: 1n,
 			title: 'Will this resolve?',
 		},
-		nonDecisionThreshold: 20n,
+		nonDecisionThresholdAttoRep: 20n,
 		questionOutcome: 'none',
 		securityPoolAddress,
 		sides: [
@@ -62,17 +62,17 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
-		startBond: 1n,
+		startBondAttoRep: 1n,
 		status: 'active',
-		totalCost: 0n,
+		totalCostAttoRep: 0n,
 		systemState: 'operational',
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 8n,
+		viewerPoolHeldVaultRepBackingAttoRep: 8n,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 2n,
-		viewerVaultRepDepositShare: 10n,
+		viewerVaultDisputeStakedRepAttoRep: 2n,
+		viewerVaultRepBackingAttoRep: 10n,
 		...overrides,
 	}
 }
@@ -227,16 +227,16 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingError).toBeUndefined()
 		expect(requireHookState(hookState).loadingReportingDetails).toBe(false)
 		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
-		expect(requireHookState(hookState).reportingDetails?.viewerVaultAvailableEscalationRep).toBe(8n)
-		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepDepositShare).toBe(10n)
+		expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(8n)
+		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepBackingAttoRep).toBe(10n)
 	})
 
 	test('reportOutcome blocks pre-start contributions that would exceed the remaining selected-side threshold capacity', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const latestDetails: ReportingDetails = {
-			completeSetCollateralAmount: 1n,
+			settlementCollateralAttoEth: 1n,
 			currentTime: 150n,
-			forkThreshold: 40n * REP,
+			forkThresholdAttoRep: 40n * REP,
 			marketDetails: {
 				answerUnit: '',
 				createdAt: 1n,
@@ -252,19 +252,19 @@ describe('useReportingOperations', () => {
 				startTime: 1n,
 				title: 'Will this resolve?',
 			},
-			nonDecisionThreshold: 20n * REP,
+			nonDecisionThresholdAttoRep: 20n * REP,
 			questionOutcome: 'none',
 			securityPoolAddress,
-			startBond: 1n * REP,
+			startBondAttoRep: 1n * REP,
 			status: 'not-started',
 			systemState: 'operational',
 			universeId: 1n,
 			settlementState: 'locked',
 			parentWithdrawalEnabled: false,
-			viewerVaultAvailableEscalationRep: 8n * REP,
+			viewerPoolHeldVaultRepBackingAttoRep: 8n * REP,
 			viewerVaultExists: true,
-			viewerVaultEscrowedRep: 0n,
-			viewerVaultRepDepositShare: 8n * REP,
+			viewerVaultDisputeStakedRepAttoRep: 0n,
+			viewerVaultRepBackingAttoRep: 8n * REP,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)
 		const reportOutcomeInSecurityPool = mock(async () => {
@@ -358,8 +358,8 @@ describe('useReportingOperations', () => {
 			createReportingDetails(securityPoolAddress, {
 				sides: [
 					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 1n, depositor: zeroAddress }] },
+					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 1n, depositor: zeroAddress }] },
 				],
 				settlementState: 'resolved',
 				parentWithdrawalEnabled: true,
@@ -408,7 +408,7 @@ describe('useReportingOperations', () => {
 			createReportingDetails(securityPoolAddress, {
 				settlementState: 'migration-expired',
 				sides: [
-					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
 					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 					{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 				],
@@ -453,14 +453,14 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning carried proofs in the finalized child; the optional parent-lock cleanup window has closed')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning carried proofs in the finalized child; the optional unresolved parent escalation-deposit accounting cleanup window has closed')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const latestDetails = createReportingDetails(securityPoolAddress, {
 			sides: [
-				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
 				{
 					balance: 5n,
 					deposits: [],
@@ -468,8 +468,8 @@ describe('useReportingOperations', () => {
 					key: 'yes',
 					label: 'Yes',
 					userDeposits: [
-						{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress },
-						{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress },
+						{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress },
+						{ amountAttoRep: 2n, cumulativeAmountAttoRep: 3n, depositIndex: 1n, depositor: zeroAddress },
 					],
 				},
 				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
@@ -479,8 +479,8 @@ describe('useReportingOperations', () => {
 		})
 		const refreshedDetails = createReportingDetails(securityPoolAddress, {
 			sides: [
-				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress }] },
+				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 2n, cumulativeAmountAttoRep: 3n, depositIndex: 1n, depositor: zeroAddress }] },
 				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			settlementState: 'resolved',
@@ -571,7 +571,7 @@ describe('useReportingOperations', () => {
 		const firstPoolDetails = createReportingDetails(firstPoolAddress, {
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			settlementState: 'resolved',
@@ -580,8 +580,8 @@ describe('useReportingOperations', () => {
 		const secondPoolDetails = createReportingDetails(secondPoolAddress, {
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 4n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 2n, depositIndex: 2n, depositor: zeroAddress }] },
-				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 3n, cumulativeAmount: 3n, depositIndex: 3n, depositor: zeroAddress }] },
+				{ balance: 4n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 2n, cumulativeAmountAttoRep: 2n, depositIndex: 2n, depositor: zeroAddress }] },
+				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amountAttoRep: 3n, cumulativeAmountAttoRep: 3n, depositIndex: 3n, depositor: zeroAddress }] },
 			],
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,

@@ -33,7 +33,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { createActionAvailability } from '../../../lib/actionAvailability.js'
 import { sameAddress } from '../../../lib/address.js'
 import { assertNever } from '../../../lib/assert.js'
-import { AUCTIONED_BOND_ALLOWANCE_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
+import { AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
@@ -141,12 +141,12 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-function renderTruthAuctionDebtNotice(showRefundOnlySettlementCopy = false) {
+function renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCopy = false) {
 	if (showRefundOnlySettlementCopy) {
 		return (
 			<WarningSurface as='section' surface='flat' variant='compact'>
 				<p className='detail'>
-					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
+					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}
 				</p>
 			</WarningSurface>
 		)
@@ -155,23 +155,23 @@ function renderTruthAuctionDebtNotice(showRefundOnlySettlementCopy = false) {
 	return (
 		<WarningSurface as='section' surface='flat' variant='compact'>
 			<p className='detail'>
-				<strong>{forkAuctionCopy.formatWinningClaimAllowanceHeadline(AUCTIONED_BOND_ALLOWANCE_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
+				<strong>{forkAuctionCopy.formatWinningClaimCoverageCommitmentHeadline(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}
 			</p>
 		</WarningSurface>
 	)
 }
 
 function renderTruthAuctionSettlementSelectionSummary({
-	estimatedAssignedBondAllowance,
-	estimatedEthRefunded,
-	estimatedRepClaimed,
+	estimatedAssignedCoverageCommitmentAttoEth,
+	estimatedRefundedAttoEth,
+	estimatedRepClaimedAttoRep,
 	selectedClaimCount,
 	selectedRefundCount,
 	selectedRowCount,
 }: {
-	estimatedAssignedBondAllowance: bigint | undefined
-	estimatedEthRefunded: bigint
-	estimatedRepClaimed: bigint | undefined
+	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
+	estimatedRefundedAttoEth: bigint
+	estimatedRepClaimedAttoRep: bigint | undefined
 	selectedClaimCount: number
 	selectedRefundCount: number
 	selectedRowCount: number
@@ -180,18 +180,18 @@ function renderTruthAuctionSettlementSelectionSummary({
 
 	const summaryDescription = (() => {
 		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
-			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 		}
 		if (selectedClaimCount > 0) {
-			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 		}
-		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 	})()
 
-	const refundDescription = estimatedEthRefunded > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
+	const refundDescription = estimatedRefundedAttoEth > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
 	let roundingDescription: string | undefined
 	if (selectedClaimCount > 0) {
-		if (estimatedRepClaimed === undefined) {
+		if (estimatedRepClaimedAttoRep === undefined) {
 			roundingDescription = forkAuctionCopy.underfundedWinningClaimUnavailable
 		} else {
 			roundingDescription = forkAuctionCopy.settlementRoundingNotice
@@ -207,9 +207,9 @@ function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedBids, value: selectedRowCount.toString() },
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
-				{ label: forkAuctionCopy.estimatedRepClaimed, value: estimatedRepClaimed === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRepClaimed} suffix={commonCopy.rep} /> },
-				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_BOND_ALLOWANCE_LABEL), value: estimatedAssignedBondAllowance === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedBondAllowance} suffix={commonCopy.eth} /> },
-				{ label: forkAuctionCopy.estimatedEthRefunded, value: <CurrencyValue value={estimatedEthRefunded} suffix={commonCopy.eth} /> },
+				{ label: forkAuctionCopy.estimatedRepClaimedAttoRep, value: estimatedRepClaimedAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRepClaimedAttoRep} suffix={commonCopy.rep} /> },
+				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL), value: estimatedAssignedCoverageCommitmentAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
 			{refundDescription === undefined ? undefined : <p className='detail'>{refundDescription}</p>}
@@ -280,7 +280,7 @@ function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurity
 						<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
 							<div className='fork-workflow-child-pool-card-copy'>
 								<strong>{pool.questionOutcome === 'none' ? forkAuctionCopy.pendingOutcome : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
-								<span>{pool.systemState === 'operational' ? commonCopy.operational : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
+								<span>{pool.systemState === 'operational' ? commonCopy.operational : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRepAttoRep: pool.migratedRepAttoRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
 							</div>
 							<div className='fork-workflow-child-pool-card-meta'>
 								<span>
@@ -318,11 +318,11 @@ function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEndsA
 	return undefined
 }
 
-function getTruthAuctionBypassReason({ migratedRep, parentCollateralAmount, auctionableRepAtFork }: { migratedRep: bigint; parentCollateralAmount: bigint | undefined; auctionableRepAtFork: bigint | undefined }) {
-	if (parentCollateralAmount === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
-	if (auctionableRepAtFork === undefined) return undefined
-	if (auctionableRepAtFork === 0n) return forkAuctionCopy.truthAuctionNoRepDetail
-	if (migratedRep >= auctionableRepAtFork) return forkAuctionCopy.childUniverseFullyMigratedDetail
+function getTruthAuctionBypassReason({ migratedRepAttoRep, parentSettlementCollateralAttoEthAmount, auctionableRepAtForkAttoRep }: { migratedRepAttoRep: bigint; parentSettlementCollateralAttoEthAmount: bigint | undefined; auctionableRepAtForkAttoRep: bigint | undefined }) {
+	if (parentSettlementCollateralAttoEthAmount === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
+	if (auctionableRepAtForkAttoRep === undefined) return undefined
+	if (auctionableRepAtForkAttoRep === 0n) return forkAuctionCopy.truthAuctionNoRepDetail
+	if (migratedRepAttoRep >= auctionableRepAtForkAttoRep) return forkAuctionCopy.childUniverseFullyMigratedDetail
 	return undefined
 }
 
@@ -518,9 +518,9 @@ export function ForkAuctionSection({
 	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
 	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
 	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
-	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticClaimedParentEscalationRep, setPendingParentEscalationClaimSelection } = useForkAuctionInteractionState({
+	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticClaimedParentDisputeStakedRep, setPendingParentEscalationClaimSelection } = useForkAuctionInteractionState({
 		accountAddress: accountState.address,
-		connectedWalletEscrowedRep: connectedWalletVaultSummary?.escalationEscrowedRep,
+		connectedWalletDisputeStakedRepAttoRep: connectedWalletVaultSummary?.disputeStakedRepAttoRep,
 		forkAuctionActiveAction,
 		forkAuctionError,
 		forkAuctionResult,
@@ -529,10 +529,10 @@ export function ForkAuctionSection({
 		securityPoolAddress,
 		startTruthAuctionSecurityPoolAddress: selectedAuctionPoolAddress,
 	})
-	const effectiveEscrowedRepInEscalationGame = (() => {
+	const effectiveDisputeStakedRepAttoRep = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
-		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticClaimedParentEscalationRep) {
-			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticClaimedParentEscalationRep
+		if (connectedWalletVaultSummary.disputeStakedRepAttoRep > optimisticClaimedParentDisputeStakedRep) {
+			return connectedWalletVaultSummary.disputeStakedRepAttoRep - optimisticClaimedParentDisputeStakedRep
 		}
 		return 0n
 	})()
@@ -574,8 +574,8 @@ export function ForkAuctionSection({
 				<>
 					<p className='detail'>{forkAuctionCopy.migratedBalancesForThisOutcome}</p>
 					{renderWorkflowMetricGrid([
-						{ label: forkAuctionCopy.selectedOutcomeRepCollateral, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.repDepositShare ?? 0n} suffix={commonCopy.rep} /> },
-						{ label: forkAuctionCopy.selectedOutcomeSecurityBondAllowance, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.securityBondAllowance ?? 0n} suffix={commonCopy.eth} /> },
+						{ label: forkAuctionCopy.selectedOutcomeRepCollateral, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.vaultRepBackingAttoRep ?? 0n} suffix={commonCopy.rep} /> },
+						{ label: forkAuctionCopy.selectedOutcomeCoverageCommitmentAttoEth, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.coverageCommitmentAttoEth ?? 0n} suffix={commonCopy.eth} /> },
 					])}
 				</>
 			)
@@ -584,9 +584,9 @@ export function ForkAuctionSection({
 		return (
 			<>
 				{renderWorkflowMetricGrid([
-					{ label: commonCopy.repCollateral, value: <CurrencyValue value={connectedWalletVaultSummary.repDepositShare} suffix={commonCopy.rep} /> },
-					{ label: commonCopy.securityBondAllowance, value: <CurrencyValue value={connectedWalletVaultSummary.securityBondAllowance} suffix={commonCopy.eth} /> },
-					{ label: commonCopy.escrowedRep, value: <CurrencyValue value={effectiveEscrowedRepInEscalationGame ?? 0n} suffix={commonCopy.rep} /> },
+					{ label: commonCopy.repCollateral, value: <CurrencyValue value={connectedWalletVaultSummary.vaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
+					{ label: commonCopy.coverageCommitmentAttoEth, value: <CurrencyValue value={connectedWalletVaultSummary.coverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+					{ label: commonCopy.disputeStakedRepAttoRep, value: <CurrencyValue value={effectiveDisputeStakedRepAttoRep ?? 0n} suffix={commonCopy.rep} /> },
 				])}
 				<div className='form-grid fork-workflow-outcome-selector'>
 					<label className='field'>
@@ -602,10 +602,10 @@ export function ForkAuctionSection({
 			</>
 		)
 	})()
-	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.repDepositShare > 0n || connectedWalletVaultSummary.securityBondAllowance > 0n)
-	const hasWalletParentEscalationClaimBalance = effectiveEscrowedRepInEscalationGame !== undefined && effectiveEscrowedRepInEscalationGame > 0n
+	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.vaultRepBackingAttoRep > 0n || connectedWalletVaultSummary.coverageCommitmentAttoEth > 0n)
+	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedRepAttoRep !== undefined && effectiveDisputeStakedRepAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
-	const claimParentEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletEscrowedRepEmpty : undefined
+	const claimParentEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletDisputeStakedRepEmpty : undefined
 	const totalUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + side.userDeposits.length, 0)
 	const hasUnresolvedMigrationDeposits = totalUnresolvedMigrationDepositCount > 0
 	const importedForkSettlementSides = activeReportingDetails?.sides.filter(side => side.importedUserDeposits.length > 0) ?? []
@@ -617,8 +617,8 @@ export function ForkAuctionSection({
 	const submittedBidPrice = enteredBidPreview?.submittedPrice
 	const enteredBidTick = enteredBidPreview?.tick
 	const enteredBidAmount = tryParseTruthAuctionAmountInput(forkAuctionForm.submitBidAmount)
-	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, submittedBidPrice)
-	const resultingBidEthBalance = enteredBidAmount === undefined || accountState.ethBalance === undefined || enteredBidAmount > accountState.ethBalance ? undefined : accountState.ethBalance - enteredBidAmount
+	const estimatedRepAttoRep = estimateBidRep(forkAuctionForm.submitBidAmount, submittedBidPrice)
+	const resultingBidEthBalance = enteredBidAmount === undefined || accountState.ethBalanceAttoEth === undefined || enteredBidAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - enteredBidAmount
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
 	const truthAuctionFallback = (() => {
@@ -700,10 +700,10 @@ export function ForkAuctionSection({
 	const hasStartedSelectedTruthAuctionTimeline = hasStartedTruthAuction || truthAuctionStatus !== undefined || selectedStage === 'auction' || selectedStage === 'settlement' || currentWorkflowStage === 'auction' || currentWorkflowStage === 'settlement'
 	const activeTickSummaries = truthAuctionBookData.tickSummaries
 	const truthAuctionOverviewProgress = getTruthAuctionOverviewProgress(truthAuctionStatus, activeTickSummaries)
-	const displayedEthRaised = truthAuctionOverviewProgress?.ethRaised ?? truthAuctionStatus?.ethRaised ?? 0n
-	const displayedRepSold = truthAuctionOverviewProgress?.repSold ?? truthAuctionStatus?.totalRepPurchased ?? 0n
-	const ethRaisedProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedEthRaised, truthAuctionStatus.ethRaiseCap)
-	const repSoldProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedRepSold, truthAuctionStatus.maxRepBeingSold)
+	const displayedEthRaisedAttoEth = truthAuctionOverviewProgress?.ethRaisedAttoEth ?? truthAuctionStatus?.ethRaisedAttoEth ?? 0n
+	const displayedRepSoldAttoRep = truthAuctionOverviewProgress?.repSoldAttoRep ?? truthAuctionStatus?.totalRepPurchasedAttoRep ?? 0n
+	const ethRaisedProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedEthRaisedAttoEth, truthAuctionStatus.ethRaiseCapAttoEth)
+	const repSoldProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedRepSoldAttoRep, truthAuctionStatus.maxRepBeingSoldAttoRep)
 	const truthAuctionDepthPoints = buildTruthAuctionDepthPoints({
 		enteredBidTick,
 		selectedBookTick,
@@ -713,13 +713,13 @@ export function ForkAuctionSection({
 	const selectedLoadedTickSummary = selectedBookTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === selectedBookTick)
 	const previewTickSummary = enteredBidTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === enteredBidTick)
 	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined)
-	const maxTickEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalEth > maximumEth ? point.currentTotalEth : maximumEth), 0n)
+	const maxTickAttoEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalBidAttoEth > maximumEth ? point.currentTotalBidAttoEth : maximumEth), 0n)
 	const ethRaisedCapDisplay =
 		truthAuctionStatus === undefined ? (
 			truthAuctionFallback
 		) : (
 			<Fragment>
-				<CurrencyValue value={displayedEthRaised} suffix={commonCopy.eth} /> / <CurrencyValue value={truthAuctionStatus.ethRaiseCap} suffix={commonCopy.eth} />
+				<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={truthAuctionStatus.ethRaiseCapAttoEth} suffix={commonCopy.eth} />
 			</Fragment>
 		)
 	const clearingPriceDisplay = truthAuctionStatus === undefined ? truthAuctionFallback : renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)
@@ -755,7 +755,7 @@ export function ForkAuctionSection({
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
 	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
-		auctionedSecurityBondAllowance: selectedAuctionContext?.auctionedSecurityBondAllowance,
+		auctionedCoverageCommitmentAttoEth: selectedAuctionContext?.auctionedCoverageCommitmentAttoEth,
 		selectedRows: selectedSettlementBidRows,
 		truthAuction: truthAuctionStatus,
 	})
@@ -765,15 +765,15 @@ export function ForkAuctionSection({
 			selectionHasRefunds: settlementSelectionHasRefunds,
 			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 		}) ?? 'refundLosingBids'
-	const showRefundOnlySettlementDebtNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
+	const showRefundOnlySettlementCoverageCommitmentNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = forkAuctionCopy.settleSelectedBids
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 		if (settlementSelectionMode === 'refund') {
-			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
-			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 		}
-		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
 	})()
 	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
 	const auctionBidRows = buildTruthAuctionBidRows({
@@ -826,7 +826,7 @@ export function ForkAuctionSection({
 			isOnActiveAppChain,
 			submitBidAmountInput: forkAuctionForm.submitBidAmount,
 			truthAuction: truthAuctionStatus,
-			walletEthBalance: accountState.ethBalance,
+			walletBalanceAttoEth: accountState.ethBalanceAttoEth,
 		})
 	})()
 	const startTruthAuctionGuardMessage = getStartTruthAuctionGuardMessage({
@@ -845,7 +845,7 @@ export function ForkAuctionSection({
 		return (
 			<div className='notice success'>
 				<p>
-					<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {truthAuctionStatus.finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
+					<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {truthAuctionStatus.finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
 					{truthAuctionEndsAt === undefined ? undefined : (
 						<Fragment>
 							{forkAuctionCopy.endedAtLead}
@@ -875,9 +875,9 @@ export function ForkAuctionSection({
 	})()
 	const isVaultMigrationComplete = hasCompletedVaultMigration || (connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance)
 	const truthAuctionBypassReason = getTruthAuctionBypassReason({
-		migratedRep: selectedAuctionContext?.migratedRep ?? selectedAuctionChildPool?.migratedRep ?? 0n,
-		parentCollateralAmount: forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount,
-		auctionableRepAtFork: forkAuctionDetails?.auctionableRepAtFork,
+		migratedRepAttoRep: selectedAuctionContext?.migratedRepAttoRep ?? selectedAuctionChildPool?.migratedRepAttoRep ?? 0n,
+		parentSettlementCollateralAttoEthAmount: forkAuctionDetails?.settlementCollateralAttoEth ?? previewPool?.settlementCollateralAttoEth,
+		auctionableRepAtForkAttoRep: forkAuctionDetails?.auctionableRepAtForkAttoRep,
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
@@ -1086,14 +1086,14 @@ export function ForkAuctionSection({
 					]}
 					primary={[
 						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
-						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedRep} suffix={commonCopy.rep} /> },
+						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedRepAttoRep} suffix={commonCopy.rep} /> },
 					]}
 					details={[
 						{ label: forkAuctionCopy.enteredBidPrice, value: enteredBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(enteredBidPrice) },
 						{ label: forkAuctionCopy.submittedTickPrice, value: submittedBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(submittedBidPrice) },
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
 					]}
-					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidDebtRisk]}
+					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCoverageCommitmentRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
@@ -1138,9 +1138,9 @@ export function ForkAuctionSection({
 		tone?: 'primary' | 'secondary'
 	}) => (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
-			{description === undefined ? undefined : <p className='detail'>{description}</p>}
+			{description === undefined || selectionSummary !== undefined ? undefined : <p className='detail'>{description}</p>}
 			{selectionSummary}
-			{renderTruthAuctionDebtNotice(showRefundOnlySettlementDebtNotice)}
+			{selectionSummary === undefined ? renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCoverageCommitmentNotice) : undefined}
 			<div className='actions'>
 				{renderStageActionButton({
 					action,
@@ -1188,9 +1188,9 @@ export function ForkAuctionSection({
 		if (forkAuctionDetails?.migrationEndsAt !== undefined) return forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION
 		return undefined
 	})()
-	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionableRepAtFork} suffix={commonCopy.rep} />
-	const migrationRepDisplay = renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
-	const migrationCollateralDisplay = renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
+	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionableRepAtForkAttoRep} suffix={commonCopy.rep} />
+	const migrationRepDisplay = renderMetricValue(forkAuctionDetails?.migratedRepAttoRep ?? previewPool?.migratedRepAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
+	const migrationSettlementCollateralDisplay = renderMetricValue(forkAuctionDetails?.settlementCollateralAttoEth ?? previewPool?.settlementCollateralAttoEth, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
 	const migrationEndsDisplay = (() => {
 		if (forkAuctionDetails === undefined) return migrationSummaryText
@@ -1207,17 +1207,17 @@ export function ForkAuctionSection({
 		{ label: forkAuctionCopy.started, value: startedDisplay },
 		{ label: commonCopy.ends, value: endsDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
-		{ label: forkAuctionCopy.repPurchased, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.clearingPrice, value: clearingPriceDisplay },
-		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} /> },
-		{ label: forkAuctionCopy.minBidSize, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSize} suffix={commonCopy.eth} /> },
-		{ label: forkAuctionCopy.maxRepBeingSold, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSold} suffix={commonCopy.rep} /> },
+		{ label: AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.minBidSizeAttoEth, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.maxRepBeingSoldAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSoldAttoRep} suffix={commonCopy.rep} /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} /> },
+		{ label: AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.settlementAvailable, value: settlementAvailableDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
-		{ label: forkAuctionCopy.repPurchased, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 	]
 	const auctionOutcomeSelector = (
 		<div className='form-grid fork-workflow-outcome-selector'>
@@ -1234,16 +1234,16 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
-				auctionedBondAllowanceDisplay={selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} />}
+				auctionedCoverageCommitmentAttoEthDisplay={selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)}
-				displayedEthRaised={displayedEthRaised}
-				displayedRepSold={displayedRepSold}
+				displayedEthRaisedAttoEth={displayedEthRaisedAttoEth}
+				displayedRepSoldAttoRep={displayedRepSoldAttoRep}
 				endsDisplay={endsDisplay}
-				ethRaiseCap={truthAuctionStatus.ethRaiseCap}
+				ethRaiseCapAttoEth={truthAuctionStatus.ethRaiseCapAttoEth}
 				ethRaisedProgress={ethRaisedProgress}
-				maxRepBeingSold={truthAuctionStatus.maxRepBeingSold}
-				minBidSize={truthAuctionStatus.minBidSize}
+				maxRepBeingSoldAttoRep={truthAuctionStatus.maxRepBeingSoldAttoRep}
+				minBidSizeAttoEth={truthAuctionStatus.minBidSizeAttoEth}
 				repSoldProgress={repSoldProgress}
 				startedDisplay={startedDisplay}
 				winningThresholdPriceDisplay={winningThresholdPrice === undefined ? undefined : renderTruthAuctionPriceValue(winningThresholdPrice)}
@@ -1262,14 +1262,14 @@ export function ForkAuctionSection({
 					</div>
 					<div className='fork-workflow-summary-stat-group'>
 						<div className='fork-workflow-summary-stat-copy'>
-							<span>{forkAuctionCopy.migratedRep}</span>
+							<span>{forkAuctionCopy.migratedRepAttoRep}</span>
 							<strong>{migrationRepDisplay}</strong>
 						</div>
 					</div>
 					<div className='fork-workflow-summary-stat-group'>
 						<div className='fork-workflow-summary-stat-copy'>
-							<span>{forkAuctionCopy.collateral}</span>
-							<strong>{migrationCollateralDisplay}</strong>
+							<span>{forkAuctionCopy.settlementCollateral}</span>
+							<strong>{migrationSettlementCollateralDisplay}</strong>
 						</div>
 					</div>
 				</div>
@@ -1282,14 +1282,14 @@ export function ForkAuctionSection({
 			{forkAuctionDetails?.ownForkRepBuckets === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.advancedDiagnostics}>
 					<div className='fork-workflow-summary-metrics'>
-						<MetricField label={forkAuctionCopy.poolRepAtFork}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix={commonCopy.rep} />
+						<MetricField label={forkAuctionCopy.poolRepAtForkAttoRep}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtForkAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={forkAuctionCopy.escalationChildRepPerSelectedOutcome}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcome} suffix={commonCopy.rep} />
+						<MetricField label={forkAuctionCopy.escalationChildRepPerSelectedOutcomeAttoRep}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={forkAuctionCopy.escrowSourceRepAtFork}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix={commonCopy.rep} />
+						<MetricField label={forkAuctionCopy.escrowSourceRepAtForkAttoRep}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtForkAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</div>
 				</ReadOnlyDetailAccordion>
@@ -1303,7 +1303,7 @@ export function ForkAuctionSection({
 				clearingTick={truthAuctionStatus.clearingTick}
 				hasMoreTickSummaries={hasMoreTickSummaries}
 				loadingTruthAuctionBook={loadingTruthAuctionBook}
-				maxTickEth={maxTickEth}
+				maxTickAttoEth={maxTickAttoEth}
 				onLoadNextTickPage={loadNextTickPage}
 				onSelectTick={selectTruthAuctionTick}
 				renderPriceValue={renderTruthAuctionPriceValue}
@@ -1380,9 +1380,9 @@ export function ForkAuctionSection({
 			idleLabel: settlementActionLabel,
 			pendingLabel: settlementActionPendingLabel,
 			selectionSummary: renderTruthAuctionSettlementSelectionSummary({
-				estimatedAssignedBondAllowance: settlementSelectionEstimate.estimatedAssignedBondAllowance,
-				estimatedEthRefunded: settlementSelectionEstimate.estimatedEthRefunded,
-				estimatedRepClaimed: settlementSelectionEstimate.estimatedRepClaimed,
+				estimatedAssignedCoverageCommitmentAttoEth: settlementSelectionEstimate.estimatedAssignedCoverageCommitmentAttoEth,
+				estimatedRefundedAttoEth: settlementSelectionEstimate.estimatedRefundedAttoEth,
+				estimatedRepClaimedAttoRep: settlementSelectionEstimate.estimatedRepClaimedAttoRep,
 				selectedClaimCount: selectedClaimSettlementBidRows.length,
 				selectedRefundCount: selectedRefundSettlementBidRows.length,
 				selectedRowCount: selectedSettlementBidRows.length,
@@ -1515,7 +1515,7 @@ export function ForkAuctionSection({
 						{accountState.address === undefined ? undefined : (
 							<>
 								{hasUnresolvedMigrationState ? (
-									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateUnresolvedEscalationLocks} variant='embedded'>
+									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.clearUnresolvedParentEscalationDepositAccounting} variant='embedded'>
 										<p className='detail'>
 											<LoadingAwareText>
 												{(() => {
@@ -1543,13 +1543,13 @@ export function ForkAuctionSection({
 																	details: [
 																		<>
 																			{forkAuctionCopy.initiallyDepositedLead}
-																			<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+																			<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 																		</>,
 																	],
 																	secondaryDetails: [
 																		<>
 																			{forkAuctionCopy.entryDepthLead}
-																			<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+																			<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 																		</>,
 																	],
 																}))}
@@ -1575,7 +1575,7 @@ export function ForkAuctionSection({
 								) : (
 									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.claimResolvedParentEscalationDeposits} variant='embedded'>
 										<p className='detail'>{forkAuctionCopy.resolvedParentDepositClaimDetail}</p>
-										{connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? <p className='detail'>{forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail}</p> : undefined}
+										{connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? <p className='detail'>{forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail}</p> : undefined}
 										{loadingReportingDetails ? (
 											<p className='detail'>
 												<LoadingText>{forkAuctionCopy.walletEscalationDepositsLoading}</LoadingText>
@@ -1595,7 +1595,7 @@ export function ForkAuctionSection({
 															details: [
 																<>
 																	{forkAuctionCopy.initiallyDepositedLead}
-																	<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+																	<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 																</>,
 																claimAmount === undefined ? (
 																	forkAuctionCopy.worthNowPendingClaimFinalization
@@ -1609,7 +1609,7 @@ export function ForkAuctionSection({
 															secondaryDetails: [
 																<>
 																	{forkAuctionCopy.entryDepthLead}
-																	<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+																	<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 																</>,
 															],
 														}
@@ -1648,7 +1648,7 @@ export function ForkAuctionSection({
 										</>
 									)}
 									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
-										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? forkAuctionCopy.poolRepAlreadyMigratedDetail : forkAuctionCopy.poolRepStagedForVaultMigrationDetail}</p>
+										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalanceAttoRep > 0n ? forkAuctionCopy.poolRepAlreadyMigratedDetail : forkAuctionCopy.poolRepStagedForVaultMigrationDetail}</p>
 									)}
 									<div className='actions'>
 										{renderStageActionButton({
@@ -1714,7 +1714,7 @@ export function ForkAuctionSection({
 
 						{hasStartedTruthAuction ? undefined : (
 							<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
+								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}</p>
 								{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 								{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 								<div className='actions'>

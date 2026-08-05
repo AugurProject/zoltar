@@ -26,13 +26,13 @@ bun run ui:serve</code></pre>
 			</section>
 			<section id="inspect-the-pool">
 				<h2>Inspect the security pool</h2>
-				<p>In the selected pool, compare pool collateral, open interest, REP backing, and the vault directory. Open the seeded vault and confirm that it has a positive REP deposit and active security-bond allowance. A complete set consists of one share for every outcome and is backed by ETH; the vault's REP supports pool capacity rather than one trade.</p>
+				<p>In the selected pool, compare settlement collateral, open interest, REP backing, and the vault directory. Open the seeded vault and confirm that it has positive vault REP backing and an active coverage commitment. A complete set consists of one share for every outcome and is backed by ETH; the vault's REP supports pool capacity rather than one trade.</p>
 				<p><strong>Checkpoint:</strong> the pool has one funded vault and is operational.</p>
 			</section>
 			<section id="create-and-redeem">
 				<h2>Inspect complete-set capacity</h2>
 				<p>Open the pool's trading view and locate the complete-set collateral, share supply, and remaining mint capacity. A creation mints one share for every outcome together; redemption consumes a complete outcome set. Keep this pass read-only so the expected fixture checkpoints remain stable.</p>
-				<p><strong>Checkpoint:</strong> mint capacity is derived from fee-eligible security-bond allowance rather than from the displayed REP balance alone.</p>
+				<p><strong>Checkpoint:</strong> mint capacity is derived from fee-eligible coverage commitment rather than from the displayed REP balance alone.</p>
 			</section>
 			<section id="follow-resolution">
 				<h2>Inspect the reporting boundary</h2>

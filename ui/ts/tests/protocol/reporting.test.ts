@@ -13,10 +13,10 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
-const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
+const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
-function hashCarryLeafForTest(depositor: Address, outcome: bigint, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) {
-	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+function hashCarryLeafForTest(depositor: Address, outcome: bigint, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) {
+	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 }
 
 function hashCarryParentForTest(left: Hex, right: Hex) {
@@ -62,10 +62,10 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 }
 
 describe('reporting protocol client', () => {
-	test('loadReportingDetails keeps proof deposits visible after optional parent-lock cleanup', async () => {
+	test('loadReportingDetails keeps proof deposits visible after optional unresolved parent escalation-deposit accounting cleanup', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const unlockedPoolClaim = 70n
+		const poolHeldVaultRepBackingAttoRep = 70n
 		const escrowedRep = 30n
 		const client = {
 			getBlock: async () => createBlockWithTimestamp(88n),
@@ -75,15 +75,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -97,17 +97,17 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return escrowedRep
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return escrowedRep
 				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [true, escrowedRep, [false, true, false]]
-				if (request.functionName === 'poolOwnershipToRep') return unlockedPoolClaim
+				if (request.functionName === 'backingUnitsToAttoRep') return poolHeldVaultRepBackingAttoRep
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
-					return args[0] === 1 ? [{ amount: escrowedRep, cumulativeAmount: escrowedRep, depositor: viewerAddress }] : []
+					return args[0] === 1 ? [{ amountAttoRep: escrowedRep, cumulativeAmountAttoRep: escrowedRep, depositor: viewerAddress }] : []
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
@@ -116,13 +116,13 @@ describe('reporting protocol client', () => {
 		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
-		expect(details.viewerVaultRepDepositShare).toBe(unlockedPoolClaim)
-		expect(details.viewerVaultEscrowedRep).toBe(escrowedRep)
-		expect(details.viewerVaultAvailableEscalationRep).toBe(unlockedPoolClaim)
+		expect(details.viewerVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
+		expect(details.viewerVaultDisputeStakedRepAttoRep).toBe(escrowedRep)
+		expect(details.viewerPoolHeldVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
 		expect(details.viewerEscalationMigrationEntitlement).toEqual({
 			initialized: true,
 			materializedByOutcome: { invalid: false, yes: true, no: false },
-			totalCurrentRep: escrowedRep,
+			totalCurrentRepAttoRep: escrowedRep,
 		})
 		const yesSide = details.sides.find(side => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')
@@ -141,15 +141,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -163,9 +163,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return 9n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -173,7 +173,7 @@ describe('reporting protocol client', () => {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
 					if (args[0] === 1) {
-						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+						return [{ amountAttoRep: 9n, cumulativeAmountAttoRep: 17n, depositor: viewerAddress }]
 					}
 					return []
 				}
@@ -204,15 +204,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -226,9 +226,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return 9n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -236,7 +236,7 @@ describe('reporting protocol client', () => {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
 					if (args[0] === 1) {
-						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+						return [{ amountAttoRep: 9n, cumulativeAmountAttoRep: 17n, depositor: viewerAddress }]
 					}
 					return []
 				}
@@ -264,7 +264,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 9n
+				if (request.functionName === 'getForkThresholdAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -277,8 +277,8 @@ describe('reporting protocol client', () => {
 		expect(details.questionOutcome).toBe('yes')
 		expect(details.settlementState).toBe('resolved')
 		expect(details.parentWithdrawalEnabled).toBe(false)
-		expect(details.nonDecisionThreshold).toBe(5n)
-		expect(details.startBond).toBe(4n)
+		expect(details.nonDecisionThresholdAttoRep).toBe(5n)
+		expect(details.startBondAttoRep).toBe(4n)
 	})
 
 	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
@@ -295,7 +295,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') {
 					forkContinuationRead = true
@@ -324,7 +324,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -347,7 +347,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -368,14 +368,14 @@ describe('reporting protocol client', () => {
 		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
 		const readCalls: bigint[] = []
 		const firstPage = Array.from({ length: 30 }, (_, index) => ({
-			amount: index === 29 ? 0n : BigInt(index + 1),
-			cumulativeAmount: BigInt(index + 1),
+			amountAttoRep: index === 29 ? 0n : BigInt(index + 1),
+			cumulativeAmountAttoRep: BigInt(index + 1),
 			depositor,
 		}))
 		const secondPage = [
 			{
-				amount: 31n,
-				cumulativeAmount: 31n,
+				amountAttoRep: 31n,
+				cumulativeAmountAttoRep: 31n,
 				depositor,
 			},
 		]
@@ -396,7 +396,7 @@ describe('reporting protocol client', () => {
 
 		expect(readCalls).toEqual([0n, 30n])
 		expect(deposits).toHaveLength(30)
-		expect(deposits.some(deposit => deposit.amount === 0n)).toBe(false)
+		expect(deposits.some(deposit => deposit.amountAttoRep === 0n)).toBe(false)
 		expect(deposits[28]?.depositIndex).toBe(28n)
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
@@ -404,7 +404,7 @@ describe('reporting protocol client', () => {
 	test('loadEscalationDeposits rejects malformed deposit pages instead of dropping entries', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getDepositsByOutcome') {
-				return [{ amount: 1n, cumulativeAmount: 1n, depositor: 'not-an-address' }]
+				return [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }]
 			}
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -479,21 +479,21 @@ describe('reporting protocol client', () => {
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const firstLeaf = {
-			amount: 3n,
-			cumulativeAmount: 3n,
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
 			depositor: firstDepositor,
 			parentDepositIndex: 0n,
 			sourceNodeId: 1n,
 		}
 		const secondLeaf = {
-			amount: 5n,
-			cumulativeAmount: 8n,
+			amountAttoRep: 5n,
+			cumulativeAmountAttoRep: 8n,
 			depositor: secondDepositor,
 			parentDepositIndex: 1n,
 			sourceNodeId: 2n,
 		}
-		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amount, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmount, firstLeaf.sourceNodeId)
-		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amount, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmount, secondLeaf.sourceNodeId)
+		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
+		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
@@ -532,8 +532,8 @@ describe('reporting protocol client', () => {
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
 					if (!Array.isArray(args)) throw new Error('Expected node args')
-					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amount, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmount, 1n]
-					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amount, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmount, 0n]
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
 					throw new Error(`Unexpected node id: ${String(args[0])}`)
 				}
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
@@ -559,21 +559,21 @@ describe('reporting protocol client', () => {
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
-			amount: 3n,
-			cumulativeAmount: 3n,
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
 			depositor,
 			parentDepositIndex: 9n,
 			sourceNodeId: 1n,
 		}
 		const childLocalLeaf = {
-			amount: 1n,
-			cumulativeAmount: 4n,
+			amountAttoRep: 1n,
+			cumulativeAmountAttoRep: 4n,
 			depositor,
 			parentDepositIndex: 1n,
 			sourceNodeId: 2n,
 		}
-		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, inheritedLeaf.sourceNodeId)
-		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amount, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmount, childLocalLeaf.sourceNodeId)
+		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
+		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, childLocalLeaf.sourceNodeId)
 		const parentCarryRoot = hashCarryParentForTest(inheritedLeafHash, childLocalLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = parentCarryRoot
@@ -621,10 +621,10 @@ describe('reporting protocol client', () => {
 				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
 				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
-					return [0n, childLocalLeaf.depositor, 1, childLocalLeaf.amount, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmount, 1n]
+					return [0n, childLocalLeaf.depositor, 1, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, 1n]
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
-					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, 0n]
+					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, 0n]
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') {
 					return [[childLocalLeaf], 0n]
@@ -652,20 +652,20 @@ describe('reporting protocol client', () => {
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
-			amount: 3n,
-			cumulativeAmount: 3n,
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
 			depositor,
 			parentDepositIndex: 9n,
 			sourceNodeId: 1n,
 		}
 		const settledLocalLeaf = {
-			amount: 1n,
-			cumulativeAmount: 4n,
+			amountAttoRep: 1n,
+			cumulativeAmountAttoRep: 4n,
 			depositor,
 			parentDepositIndex: 1n,
 			sourceNodeId: 2n,
 		}
-		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, inheritedLeaf.sourceNodeId)
+		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, zeroHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
@@ -697,10 +697,10 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'securityPoolForker') return securityPoolForkerAddress
 				if (request.functionName === 'isEscalationDepositClaimedDirectly') return false
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
-					return [0n, settledLocalLeaf.depositor, 1, settledLocalLeaf.amount, settledLocalLeaf.parentDepositIndex, settledLocalLeaf.cumulativeAmount, 1n]
+					return [0n, settledLocalLeaf.depositor, 1, settledLocalLeaf.amountAttoRep, settledLocalLeaf.parentDepositIndex, settledLocalLeaf.cumulativeAmountAttoRep, 1n]
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
-					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, 0n]
+					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, 0n]
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[inheritedLeaf], 0n]
@@ -724,10 +724,10 @@ describe('reporting protocol client', () => {
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
-		const firstLeaf = { amount: 3n, cumulativeAmount: 3n, depositor, parentDepositIndex: 9n, sourceNodeId: 1n }
-		const secondLeaf = { amount: 5n, cumulativeAmount: 8n, depositor, parentDepositIndex: 10n, sourceNodeId: 2n }
-		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amount, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmount, firstLeaf.sourceNodeId)
-		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amount, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmount, secondLeaf.sourceNodeId)
+		const firstLeaf = { amountAttoRep: 3n, cumulativeAmountAttoRep: 3n, depositor, parentDepositIndex: 9n, sourceNodeId: 1n }
+		const secondLeaf = { amountAttoRep: 5n, cumulativeAmountAttoRep: 8n, depositor, parentDepositIndex: 10n, sourceNodeId: 2n }
+		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
+		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
@@ -763,8 +763,8 @@ describe('reporting protocol client', () => {
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
 					if (!Array.isArray(args)) throw new Error('Expected node args')
-					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amount, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmount, 1n]
-					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amount, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmount, 0n]
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[secondLeaf, firstLeaf], 0n]
@@ -787,13 +787,13 @@ describe('reporting protocol client', () => {
 			{ leafCount: 6, targetGlobalIndex: 5, targetPeakIndex: 1n },
 		]) {
 			const leaves = Array.from({ length: leafCount }, (_, index) => ({
-				amount: BigInt(index + 1),
-				cumulativeAmount: BigInt(((index + 1) * (index + 2)) / 2),
+				amountAttoRep: BigInt(index + 1),
+				cumulativeAmountAttoRep: BigInt(((index + 1) * (index + 2)) / 2),
 				depositor,
 				parentDepositIndex: BigInt(100 + index),
 				sourceNodeId: BigInt(index + 1),
 			}))
-			const leafHashes = leaves.map(leaf => hashCarryLeafForTest(leaf.depositor, 1n, leaf.amount, leaf.parentDepositIndex, leaf.cumulativeAmount, leaf.sourceNodeId))
+			const leafHashes = leaves.map(leaf => hashCarryLeafForTest(leaf.depositor, 1n, leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, leaf.sourceNodeId))
 			const snapshotPeaks = buildCarrySnapshotPeaksForTest(leafHashes)
 			const targetLeaf = leaves[targetGlobalIndex]
 			if (targetLeaf === undefined) throw new Error('Missing target test leaf')
@@ -819,7 +819,7 @@ describe('reporting protocol client', () => {
 						const nodeIndex = Number(args[0] - 1n)
 						const leaf = leaves[nodeIndex]
 						if (leaf === undefined) throw new Error(`Unexpected node id: ${args[0].toString()}`)
-						return [args[0] - 1n, leaf.depositor, 1, leaf.amount, leaf.parentDepositIndex, leaf.cumulativeAmount, BigInt(nodeIndex)]
+						return [args[0] - 1n, leaf.depositor, 1, leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, BigInt(nodeIndex)]
 					}
 					if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[...leaves].reverse(), 0n]
 					if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
@@ -911,9 +911,9 @@ describe('reporting protocol client', () => {
 		const result = await withdrawForkedEscalationDeposits(asWriteClient(client), securityPoolAddress, 'yes', [
 			{
 				depositor: vaultAddress,
-				amount: 5n,
+				amountAttoRep: 5n,
 				parentDepositIndex: 3n,
-				cumulativeAmount: 8n,
+				cumulativeAmountAttoRep: 8n,
 				sourceNodeId: 2n,
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
@@ -933,9 +933,9 @@ describe('reporting protocol client', () => {
 		expect(decodedCall.args[1]).toMatchObject([
 			{
 				depositor: vaultAddress,
-				amount: 5n,
+				amountAttoRep: 5n,
 				parentDepositIndex: 3n,
-				cumulativeAmount: 8n,
+				cumulativeAmountAttoRep: 8n,
 				sourceNodeId: 2n,
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],

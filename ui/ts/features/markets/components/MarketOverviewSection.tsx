@@ -61,16 +61,16 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 						{hasForked ? (
 							<>
 								<MetricField label={commonCopy.forkTime}>{loadingZoltarUniverse ? commonCopy.loadingWithEllipsis : <TimestampValue timestamp={rootUniverse.forkTime} />}</MetricField>
-								<MetricField label={commonCopy.forkThreshold}>
-									<CurrencyValue value={rootUniverse.forkThreshold} suffix={commonCopy.rep} />
+								<MetricField label={commonCopy.forkThresholdAttoRep}>
+									<CurrencyValue value={rootUniverse.forkThresholdAttoRep} suffix={commonCopy.rep} />
 								</MetricField>
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
 							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
 						</MetricField>
-						<MetricField label={marketCopy.totalTheoreticalSupply}>
-							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix={commonCopy.rep} />
+						<MetricField label={marketCopy.totalTheoreticalSupplyAttoRep}>
+							<CurrencyValue value={rootUniverse.totalTheoreticalSupplyAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</DataGrid>
 					{hasForked ? (

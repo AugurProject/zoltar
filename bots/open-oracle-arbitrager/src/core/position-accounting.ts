@@ -1,16 +1,16 @@
 import type { ArbitrageDirection } from '#core/strategy'
 
-export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualHedgeWeth: bigint, currentAmount1: bigint, feeWeth: bigint, protocolFeeWeth: bigint) {
-	const openOracleWeth = currentAmount1 + feeWeth + protocolFeeWeth
-	return direction === 'sell-rep' ? actualHedgeWeth - openOracleWeth : currentAmount1 - actualHedgeWeth
+export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualHedgeWethAttoEth: bigint, currentAmount1: bigint, feeWethAttoEth: bigint, protocolFeeWethAttoEth: bigint) {
+	const openOracleWeth = currentAmount1 + feeWethAttoEth + protocolFeeWethAttoEth
+	return direction === 'sell-rep' ? actualHedgeWethAttoEth - openOracleWeth : currentAmount1 - actualHedgeWethAttoEth
 }
 
-export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, settlerReward: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
-	return hedgedProfitBeforeGas + settlerReward - entryGasCost - lifecycleGasCost
+export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, settlerRewardAttoEth: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
+	return hedgedProfitBeforeGas + settlerRewardAttoEth - entryGasCost - lifecycleGasCost
 }
 
-export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeWeth: bigint, actualHedgeWeth: bigint) {
-	return direction === 'sell-rep' ? quotedProfitBeforeGas + actualHedgeWeth - quotedHedgeWeth : quotedProfitBeforeGas + quotedHedgeWeth - actualHedgeWeth
+export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeWethAttoEth: bigint, actualHedgeWethAttoEth: bigint) {
+	return direction === 'sell-rep' ? quotedProfitBeforeGas + actualHedgeWethAttoEth - quotedHedgeWethAttoEth : quotedProfitBeforeGas + quotedHedgeWethAttoEth - actualHedgeWethAttoEth
 }
 
 export function expectedWithdrawalToken2(direction: ArbitrageDirection, currentAmount2: bigint, newAmount2: bigint) {

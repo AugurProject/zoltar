@@ -300,19 +300,19 @@ const positionDerivedSnapshot = operatorSnapshot(
 		blockTimestamp: Math.floor((now - 4_000) / 1_000).toString(),
 		centralizedMarket: {
 			assetId: rep,
-			askDepthEth: 63n * 10n ** 17n,
-			bidDepthEth: 71n * 10n ** 17n,
+			askDepthAttoEth: 63n * 10n ** 17n,
+			bidDepthAttoEth: 71n * 10n ** 17n,
 			chainId: 1,
 			maximumPriceRepPerEth: 1042n * 10n ** 16n,
 			minimumPriceRepPerEth: 1031n * 10n ** 16n,
 			observations: [
-				{ assetId: rep, askDepthEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: 38n * 10n ** 17n, chainId: 1, ethTickerTimestamp: now, exchangeId: 'kraken', observedAt: now, orderBookTimestamp: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', usesEthTicker: true },
+				{ assetId: rep, askDepthAttoEth: 34n * 10n ** 17n, bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthAttoEth: 38n * 10n ** 17n, chainId: 1, ethTickerTimestamp: now, exchangeId: 'kraken', observedAt: now, orderBookTimestamp: now, priceRepPerEth: 1031n * 10n ** 16n, repMarket: 'REP/USD', usesEthTicker: true },
 				{
 					assetId: rep,
-					askDepthEth: 29n * 10n ** 17n,
+					askDepthAttoEth: 29n * 10n ** 17n,
 					bestAskQuote: '0.097',
 					bestBidQuote: '0.096',
-					bidDepthEth: 33n * 10n ** 17n,
+					bidDepthAttoEth: 33n * 10n ** 17n,
 					chainId: 1,
 					ethTickerTimestamp: undefined,
 					exchangeId: 'coinbase',
@@ -330,14 +330,14 @@ const positionDerivedSnapshot = operatorSnapshot(
 		marketConsensus: {
 			assetId: rep,
 			cex: {
-				askDepthEth: 63n * 10n ** 17n,
-				bidDepthEth: 71n * 10n ** 17n,
+				askDepthAttoEth: 63n * 10n ** 17n,
+				bidDepthAttoEth: 71n * 10n ** 17n,
 				kind: 'cex',
 				maximumPriceRepPerEth: 1042n * 10n ** 16n,
 				minimumPriceRepPerEth: 1031n * 10n ** 16n,
 				observations: [
-					{ assetId: rep, askDepthEth: 34n * 10n ** 17n, bidDepthEth: 38n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'kraken:1', observedAt: now, priceRepPerEth: 1031n * 10n ** 16n, sourceId: 'kraken' },
-					{ assetId: rep, askDepthEth: 29n * 10n ** 17n, bidDepthEth: 33n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'coinbase:1', observedAt: now, priceRepPerEth: 1042n * 10n ** 16n, sourceId: 'coinbase' },
+					{ assetId: rep, askDepthAttoEth: 34n * 10n ** 17n, bidDepthAttoEth: 38n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'kraken:1', observedAt: now, priceRepPerEth: 1031n * 10n ** 16n, sourceId: 'kraken' },
+					{ assetId: rep, askDepthAttoEth: 29n * 10n ** 17n, bidDepthAttoEth: 33n * 10n ** 17n, chainId: 1, kind: 'cex', observationId: 'coinbase:1', observedAt: now, priceRepPerEth: 1042n * 10n ** 16n, sourceId: 'coinbase' },
 				],
 				priceRepPerEth: 10365n * 10n ** 15n,
 				reasons: [],
@@ -345,14 +345,14 @@ const positionDerivedSnapshot = operatorSnapshot(
 			},
 			chainId: 1,
 			dex: {
-				askDepthEth: 48n * 10n ** 17n,
-				bidDepthEth: 52n * 10n ** 17n,
+				askDepthAttoEth: 48n * 10n ** 17n,
+				bidDepthAttoEth: 52n * 10n ** 17n,
 				kind: 'dex',
 				maximumPriceRepPerEth: 1041n * 10n ** 16n,
 				minimumPriceRepPerEth: 1037n * 10n ** 16n,
 				observations: [
-					{ assetId: rep, askDepthEth: 24n * 10n ** 17n, bidDepthEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v2:1', observedAt: now, priceRepPerEth: 1037n * 10n ** 16n, sourceId: 'uniswap-v2' },
-					{ assetId: rep, askDepthEth: 24n * 10n ** 17n, bidDepthEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v3:1', observedAt: now, priceRepPerEth: 1041n * 10n ** 16n, sourceId: 'uniswap-v3' },
+					{ assetId: rep, askDepthAttoEth: 24n * 10n ** 17n, bidDepthAttoEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v2:1', observedAt: now, priceRepPerEth: 1037n * 10n ** 16n, sourceId: 'uniswap-v2' },
+					{ assetId: rep, askDepthAttoEth: 24n * 10n ** 17n, bidDepthAttoEth: 26n * 10n ** 17n, chainId: 1, kind: 'dex', observationId: 'uniswap-v3:1', observedAt: now, priceRepPerEth: 1041n * 10n ** 16n, sourceId: 'uniswap-v3' },
 				],
 				priceRepPerEth: 1039n * 10n ** 16n,
 				reasons: [],
@@ -382,7 +382,7 @@ const positionDerivedSnapshot = operatorSnapshot(
 	{
 		maxSpotTwapTicks: 120n,
 		minimumProfitBps: 100n,
-		minimumProfitWeth: 10n ** 16n,
+		minimumProfitWethAttoEth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
 		pollMilliseconds: 12_000,
@@ -391,7 +391,7 @@ const positionDerivedSnapshot = operatorSnapshot(
 	{ minimumRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 	{ publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
 	{ execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedWallet: undefined, savedWallet: wallet, wallet },
-	{ lifecycleGasReserveWeth: 10n ** 16n, maxConcurrentPositions: 2, maxDailyGasSpendWeth: 5n * 10n ** 16n, maxPositionNotionalWeth: 5n * 10n ** 18n, maxTotalLockedWeth: 10n * 10n ** 18n },
+	{ lifecycleGasReserveWethAttoEth: 10n ** 16n, maxConcurrentPositions: 2, maxDailyGasSpendWethAttoEth: 5n * 10n ** 16n, maxPositionNotionalWethAttoEth: 5n * 10n ** 18n, maxTotalLockedWethAttoEth: 10n * 10n ** 18n },
 )
 
 const snapshot = {

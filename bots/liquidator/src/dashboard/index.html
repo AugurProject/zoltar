@@ -199,16 +199,16 @@
 					</div>
 					<form id="strategy-form">
 						<fieldset id="strategy-fields" class="form-grid" disabled>
-							<label>Minimum debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
-							<label>Maximum debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Minimum coverage commitment (ETH)<input name="minimumLiquidationCoverageCommitmentEth" inputmode="decimal" /></label>
+							<label>Maximum coverage commitment (ETH)<input name="maximumLiquidationCoverageCommitmentEth" inputmode="decimal" /></label>
 							<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
 							<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
 							<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
 							<label>Fallback REP / ETH price<input name="fallbackRepPerEthPrice" inputmode="decimal" /></label>
-							<label>Wallet REP reserve<input name="walletRepReserve" inputmode="decimal" /></label>
-							<label>REP per pool limit<input name="maximumRepPerPool" inputmode="decimal" /></label>
+							<label>Wallet REP reserve<input name="walletRepReserveRep" inputmode="decimal" /></label>
+							<label>REP per pool limit<input name="maximumRepPerPoolRep" inputmode="decimal" /></label>
 							<label>Total deployed REP limit<input name="maximumTotalDeployedRep" inputmode="decimal" /></label>
-							<label>Minimum REP withdrawal<input name="minimumRepWithdrawal" inputmode="decimal" /></label>
+							<label>Minimum REP withdrawal<input name="minimumRepWithdrawalRep" inputmode="decimal" /></label>
 							<label>Redeem fees above (ETH)<input name="redeemFeesAboveEth" inputmode="decimal" /></label>
 							<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label>
 							<label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label>
@@ -219,7 +219,7 @@
 								>Candidate priority
 								<select name="candidatePriority">
 									<option value="largest-bonus">Largest bonus</option>
-									<option value="largest-debt">Largest debt</option>
+									<option value="largest-coverage-commitment">Largest coverage commitment</option>
 									<option value="lowest-top-up">Lowest REP top-up</option>
 								</select>
 							</label>

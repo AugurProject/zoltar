@@ -60,8 +60,8 @@ describe('TruthAuctionBidsSection', () => {
 				rows={[
 					{
 						bidder: walletAddress,
-						cumulativeEth: 5n,
-						ethAmount: 2n,
+						cumulativeBidAttoEth: 5n,
+						bidAmountAttoEth: 2n,
 						key: 'aggregate:11:1',
 						price: 42n,
 						statusLabel: 'Winning',
@@ -188,7 +188,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 				renderPriceValue={renderPriceValue}
 				rows={[
 					{
-						ethAmount: 2n,
+						bidAmountAttoEth: 2n,
 						key: 'viewer:11:1',
 						price: 42n,
 						settlementControl: {

@@ -176,7 +176,7 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
 	const zoltarAddress = getDeploymentStepAddress('zoltar')
-	const [repToken, universe, forkTime, forkThreshold, forkBurnDivisor] = await readRequiredMulticall(client, [
+	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getRepToken',
@@ -197,7 +197,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		},
 		{
 			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkThreshold',
+			functionName: 'getForkThresholdAttoRep',
 			address: zoltarAddress,
 			args: [universeId],
 		},
@@ -210,9 +210,9 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	])
 	if (repToken === zeroAddress) return undefined
 
-	const totalTheoreticalSupply = await client.readContract({
+	const totalTheoreticalSupplyAttoRep = await client.readContract({
 		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupply',
+		functionName: 'getTotalTheoreticalSupplyAttoRep',
 		address: repToken,
 		args: [],
 	})
@@ -332,13 +332,13 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		childUniverses,
 		forkBurnDivisor,
 		forkQuestionDetails,
-		forkThreshold,
+		forkThresholdAttoRep,
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,
 		parentUniverseId,
 		reputationToken: repToken,
-		totalTheoreticalSupply,
+		totalTheoreticalSupplyAttoRep,
 		universeId,
 		zoltarAddress,
 	}

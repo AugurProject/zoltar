@@ -31,8 +31,8 @@ contract SecurityPoolMigrationProxy {
 	}
 
 	// Burns parent-universe REP into this proxy's migration balance.
-	function lockRep(uint256 amount) external onlyOwner {
-		zoltar.addRepToMigrationBalance(universeId, amount);
+	function lockRep(uint256 amountAttoRep) external onlyOwner {
+		zoltar.addRepToMigrationBalance(universeId, amountAttoRep);
 	}
 
 	// Triggers the underlying Zoltar fork using this proxy as the migrator.
@@ -42,11 +42,11 @@ contract SecurityPoolMigrationProxy {
 
 	// Mints child-universe REP into this proxy's address so the forker can later
 	// route each balance to the matching child security pool.
-	function splitToChild(uint256 amount, uint256[] calldata outcomeIndices) external onlyOwner {
-		zoltar.splitMigrationRep(universeId, amount, outcomeIndices);
+	function splitToChild(uint256 amountAttoRep, uint256[] calldata outcomeIndices) external onlyOwner {
+		zoltar.splitMigrationRep(universeId, amountAttoRep, outcomeIndices);
 	}
 
-	function sweepChildRep(address receiver, ReputationToken childRepToken, uint256 amount) external onlyOwner {
-		IERC20(address(childRepToken)).safeTransfer(receiver, amount);
+	function sweepChildRep(address receiver, ReputationToken childRepToken, uint256 amountAttoRep) external onlyOwner {
+		IERC20(address(childRepToken)).safeTransfer(receiver, amountAttoRep);
 	}
 }

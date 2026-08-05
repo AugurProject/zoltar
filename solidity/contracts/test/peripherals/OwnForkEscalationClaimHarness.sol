@@ -2,55 +2,67 @@
 pragma solidity 0.8.35;
 
 contract OwnForkEscalationClaimHarness {
-	function previewOwnForkEscalationOwnershipToCredit(
-		uint256 childRepAmount,
-		uint256 childOwnershipDenominator,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256 ownershipToCredit) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		require(childRepAmount > 0, 'Own-fork child REP amount must be positive');
-		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
-		ownershipToCredit =
-			(childRepAmount * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
+	function previewOwnForkEscalationBackingUnitsToCredit(
+		uint256 childRepAmountAttoRep,
+		uint256 childBackingUnitsDenominator,
+		uint256 auctionableRepAtForkAttoRep
+	) external pure returns (uint256 backingUnitsToCredit) {
+		require(auctionableRepAtForkAttoRep > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childRepAmountAttoRep > 0, 'Own-fork child REP amount must be positive');
+		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
+		backingUnitsToCredit =
+			(childRepAmountAttoRep * childBackingUnitsDenominator + auctionableRepAtForkAttoRep - 1) /
+			auctionableRepAtForkAttoRep;
 	}
 
-	function previewOwnForkEscalationOwnershipSequence(
-		uint256[] calldata childRepAmounts,
-		uint256 childOwnershipDenominator,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256[] memory ownershipCredits, uint256 totalOwnershipClaimed) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
-		ownershipCredits = new uint256[](childRepAmounts.length);
-		uint256 childRepClaimed = 0;
-		uint256 ownershipClaimed = 0;
-		for (uint256 index = 0; index < childRepAmounts.length; index++) {
-			childRepClaimed += childRepAmounts[index];
-			uint256 nextOwnershipClaimed =
-				(childRepClaimed * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
-			uint256 ownershipToCredit = nextOwnershipClaimed - ownershipClaimed;
-			ownershipCredits[index] = ownershipToCredit;
-			ownershipClaimed = nextOwnershipClaimed;
+	function previewOwnForkEscalationBackingUnitsSequence(
+		uint256[] calldata childRepAmountsAttoRep,
+		uint256 childBackingUnitsDenominator,
+		uint256 auctionableRepAtForkAttoRep
+	) external pure returns (uint256[] memory backingUnitsCredits, uint256 totalBackingUnitsClaimed) {
+		require(auctionableRepAtForkAttoRep > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
+		backingUnitsCredits = new uint256[](childRepAmountsAttoRep.length);
+		uint256 childRepClaimedAttoRep = 0;
+		uint256 backingUnitsClaimed = 0;
+		for (uint256 index = 0; index < childRepAmountsAttoRep.length; index++) {
+			childRepClaimedAttoRep += childRepAmountsAttoRep[index];
+			uint256 nextBackingUnitsClaimed =
+				(childRepClaimedAttoRep * childBackingUnitsDenominator + auctionableRepAtForkAttoRep - 1) /
+					auctionableRepAtForkAttoRep;
+			uint256 backingUnitsToCredit = nextBackingUnitsClaimed - backingUnitsClaimed;
+			backingUnitsCredits[index] = backingUnitsToCredit;
+			backingUnitsClaimed = nextBackingUnitsClaimed;
 		}
-		totalOwnershipClaimed = ownershipClaimed;
+		totalBackingUnitsClaimed = backingUnitsClaimed;
 	}
 
-	function previewOwnForkEscalationCollateralSequence(
-		uint256[] calldata childRepAmounts,
-		uint256 parentCollateralAtFork,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256[] memory collateralTransfers, uint256 totalCollateralTransferred) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		collateralTransfers = new uint256[](childRepAmounts.length);
-		uint256 childRepTransferred = 0;
-		uint256 collateralTransferred = 0;
-		for (uint256 index = 0; index < childRepAmounts.length; index++) {
-			childRepTransferred += childRepAmounts[index];
-			uint256 nextCollateralTransferred =
-				(parentCollateralAtFork * childRepTransferred + auctionableRepAtFork - 1) / auctionableRepAtFork;
-			collateralTransfers[index] = nextCollateralTransferred - collateralTransferred;
-			collateralTransferred = nextCollateralTransferred;
+	function previewOwnForkEscalationSettlementCollateralSequence(
+		uint256[] calldata childRepAmountsAttoRep,
+		uint256 parentSettlementCollateralAtForkAttoEth,
+		uint256 auctionableRepAtForkAttoRep
+	)
+		external
+		pure
+		returns (
+			uint256[] memory settlementCollateralTransfersAttoEth,
+			uint256 totalSettlementCollateralTransferredAttoEth
+		)
+	{
+		require(auctionableRepAtForkAttoRep > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		settlementCollateralTransfersAttoEth = new uint256[](childRepAmountsAttoRep.length);
+		uint256 childRepTransferredAttoRep = 0;
+		uint256 settlementCollateralTransferredAttoEth = 0;
+		for (uint256 index = 0; index < childRepAmountsAttoRep.length; index++) {
+			childRepTransferredAttoRep += childRepAmountsAttoRep[index];
+			uint256 nextSettlementCollateralTransferredAttoEth =
+				(parentSettlementCollateralAtForkAttoEth * childRepTransferredAttoRep +
+					auctionableRepAtForkAttoRep -
+					1) / auctionableRepAtForkAttoRep;
+			settlementCollateralTransfersAttoEth[index] =
+				nextSettlementCollateralTransferredAttoEth - settlementCollateralTransferredAttoEth;
+			settlementCollateralTransferredAttoEth = nextSettlementCollateralTransferredAttoEth;
 		}
-		totalCollateralTransferred = collateralTransferred;
+		totalSettlementCollateralTransferredAttoEth = settlementCollateralTransferredAttoEth;
 	}
 }

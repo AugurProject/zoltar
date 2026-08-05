@@ -410,10 +410,10 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 	return Number.isFinite(value) ? value : fallback
 }
 
-function formatAtomicRep(value: bigint): string {
+function formatRepFromAttoRep(valueAttoRep: bigint): string {
 	const scale = 1_000_000_000_000_000_000n
-	const whole = value / scale
-	const fraction = (value % scale).toString().padStart(18, '0')
+	const whole = valueAttoRep / scale
+	const fraction = (valueAttoRep % scale).toString().padStart(18, '0')
 	return `${whole}.${fraction}`
 }
 
@@ -423,7 +423,7 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 		const elapsed = index / 60
 		return {
 			elapsed,
-			requiredRep: normalizedEscalationCost(elapsed),
+			requiredRepFraction: normalizedEscalationCost(elapsed),
 		}
 	})
 	const start = curve[0]
@@ -443,23 +443,23 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 			areaY(curve, {
 				fill: 'var(--gold-soft, #f3e4c6)',
 				x: 'elapsed',
-				y: 'requiredRep',
+				y: 'requiredRepFraction',
 			}),
 			lineY(curve, {
 				stroke: 'var(--gold, #8a5d18)',
 				strokeWidth: 3,
 				x: 'elapsed',
-				y: 'requiredRep',
+				y: 'requiredRepFraction',
 			}),
-			ruleY([start.requiredRep], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			ruleY([end.requiredRep], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			ruleY([start.requiredRepFraction], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			ruleY([end.requiredRepFraction], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
 			dot([start, end], {
 				fill: (_datum, index) => (index === 0 ? 'var(--green, #1d735d)' : 'var(--red, #99453f)'),
 				r: 6,
 				x: 'elapsed',
-				y: 'requiredRep',
+				y: 'requiredRepFraction',
 			}),
-			text([{ elapsed: start.elapsed, label: `start bond ${(start.requiredRep * 100).toFixed(1)}%`, requiredRep: start.requiredRep }], {
+			text([{ elapsed: start.elapsed, label: `start bond ${(start.requiredRepFraction * 100).toFixed(1)}%`, requiredRepFraction: start.requiredRepFraction }], {
 				dx: 9,
 				dy: -10,
 				fill: 'var(--green, #1d735d)',
@@ -467,9 +467,9 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 				text: 'label',
 				textAnchor: 'start',
 				x: 'elapsed',
-				y: 'requiredRep',
+				y: 'requiredRepFraction',
 			}),
-			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', requiredRep: end.requiredRep }], {
+			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', requiredRepFraction: end.requiredRepFraction }], {
 				dx: -9,
 				dy: 14,
 				fill: 'var(--red, #99453f)',
@@ -477,7 +477,7 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 				text: 'label',
 				textAnchor: 'end',
 				x: 'elapsed',
-				y: 'requiredRep',
+				y: 'requiredRepFraction',
 			}),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
@@ -501,11 +501,11 @@ function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
 		marks: [
 			areaY(generations, { fill: 'var(--blue-soft, #dceaf8)', x: 'generation', y: 'theoreticalSupply' }),
 			lineY(generations, { stroke: 'var(--blue, #245f9f)', strokeWidth: 3, x: 'generation', y: 'theoreticalSupply' }),
-			lineY(generations, { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '6,4', strokeWidth: 2, x: 'generation', y: 'forkThreshold' }),
+			lineY(generations, { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '6,4', strokeWidth: 2, x: 'generation', y: 'forkThresholdRep' }),
 			text(
 				[
 					{ generation: 15, label: 'theoretical supply', value: generations[15]?.theoreticalSupply ?? 0 },
-					{ generation: 15, label: 'next fork threshold', value: generations[15]?.forkThreshold ?? 0 },
+					{ generation: 15, label: 'next fork threshold', value: generations[15]?.forkThresholdRep ?? 0 },
 				],
 				{ dy: -8, fill: datum => (datum.label === 'theoretical supply' ? 'var(--blue, #245f9f)' : 'var(--gold, #8a5d18)'), fontWeight: 650, text: 'label', x: 'generation', y: 'value' },
 			),
@@ -1031,14 +1031,14 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
 	const example = mount.closest('#collateral-repair-example')
-	const parentCollateral = Math.max(readInput(example, 'parentCollateral', 50), 0)
-	const model = calculateCollateralRepairModel(parentCollateral, readInput(example, 'forkCollateralReceived', 47.5), readInput(example, 'auctionRaised', 2.5))
+	const parentSettlementCollateral = Math.max(readInput(example, 'parentSettlementCollateral', 50), 0)
+	const model = calculateCollateralRepairModel(parentSettlementCollateral, readInput(example, 'forkSettlementCollateralReceived', 47.5), readInput(example, 'auctionRaised', 2.5))
 	const parts = [
 		{ kind: 'Migration-routed', x1: 0, x2: model.received },
 		{ kind: 'Auction repair', x1: model.received, x2: model.received + model.repairEth },
 	]
 	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. Migration routed ${model.received.toFixed(2)} ETH and the auction repairs ${model.repairEth.toFixed(2)} ETH toward the ${parentCollateral.toFixed(2)} ETH target, leaving ${model.remainingShortfall.toFixed(2)} ETH unfilled.`,
+		ariaDescription: `${spec.ariaDescription}. Migration routed ${model.received.toFixed(2)} ETH and the auction repairs ${model.repairEth.toFixed(2)} ETH toward the ${parentSettlementCollateral.toFixed(2)} ETH target, leaving ${model.remainingShortfall.toFixed(2)} ETH unfilled.`,
 		ariaLabel: spec.ariaLabel,
 		color: {
 			domain: ['Migration-routed', 'Auction repair'],
@@ -1051,11 +1051,11 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 		marginTop: 52,
 		marks: [
 			barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }),
-			ruleX([parentCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			ruleX([parentSettlementCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 }),
 			text(
 				[
-					{ kind: 'Migration-routed', label: '■ Migration-routed', value: parentCollateral * 0.24 },
-					{ kind: 'Auction repair', label: '■ Auction repair', value: parentCollateral * 0.68 },
+					{ kind: 'Migration-routed', label: '■ Migration-routed', value: parentSettlementCollateral * 0.24 },
+					{ kind: 'Auction repair', label: '■ Auction repair', value: parentSettlementCollateral * 0.68 },
 				],
 				{
 					dy: -55,
@@ -1066,7 +1066,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 					y: () => 'Child collateral',
 				},
 			),
-			text([{ label: `target ${parentCollateral.toFixed(2)} ETH`, value: parentCollateral }], {
+			text([{ label: `target ${parentSettlementCollateral.toFixed(2)} ETH`, value: parentSettlementCollateral }], {
 				dx: -6,
 				dy: -55,
 				fontSize: 12,
@@ -1078,7 +1078,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, Math.max(parentCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
+		x: { domain: [0, Math.max(parentSettlementCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
 		y: { label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.remainingShortfall === 0 ? 'repaired' : 'partial'
@@ -1209,10 +1209,10 @@ function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 		{ balance: yesBalance, phase: 'After', side: 'Yes' },
 		{ balance: model.noAfter, phase: 'After', side: 'No' },
 	]
-	const acceptedLabel = model.tieAdjusted ? formatAtomicRep(model.acceptedAtomic) : model.accepted.toFixed(6)
-	const noAfterLabel = model.tieAdjusted ? formatAtomicRep(model.noAfterAtomic) : model.noAfter.toFixed(6)
+	const acceptedLabel = model.tieAdjusted ? formatRepFromAttoRep(model.acceptedAttoRep) : model.accepted.toFixed(6)
+	const noAfterLabel = model.tieAdjusted ? formatRepFromAttoRep(model.noAfterAttoRep) : model.noAfter.toFixed(6)
 	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. This is a ${repeatDeposit ? 'repeat deposit into an existing game' : 'first deposit that creates the game'} with an effective start bond of ${formatAtomicRep(model.effectiveStartBondAtomic)} REP. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
+		ariaDescription: `${spec.ariaDescription}. This is a ${repeatDeposit ? 'repeat deposit into an existing game' : 'first deposit that creates the game'} with an effective start bond of ${formatRepFromAttoRep(model.effectiveStartBondAttoRep)} REP. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
 		ariaLabel: spec.ariaLabel,
 		color: {
 			domain: ['Invalid', 'Yes', 'No'],

@@ -11,7 +11,7 @@ type PendingParentEscalationClaimSelection = {
 
 type UseForkAuctionInteractionStateParameters = {
 	accountAddress: Address | undefined
-	connectedWalletEscrowedRep: bigint | undefined
+	connectedWalletDisputeStakedRepAttoRep: bigint | undefined
 	forkAuctionActiveAction: ForkAuctionSectionProps['forkAuctionActiveAction']
 	forkAuctionError: string | undefined
 	forkAuctionResult: ForkAuctionSectionProps['forkAuctionResult']
@@ -21,13 +21,13 @@ type UseForkAuctionInteractionStateParameters = {
 	startTruthAuctionSecurityPoolAddress: Address | undefined
 }
 
-export function useForkAuctionInteractionState({ accountAddress, connectedWalletEscrowedRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
+export function useForkAuctionInteractionState({ accountAddress, connectedWalletDisputeStakedRepAttoRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
 	const [pendingStartTruthAuctionSecurityPoolAddress, setPendingStartTruthAuctionSecurityPoolAddress] = useState<Address | undefined>(undefined)
 	const isStartTruthAuctionInProgressState = startTruthAuctionSecurityPoolAddress !== undefined && sameAddress(pendingStartTruthAuctionSecurityPoolAddress, startTruthAuctionSecurityPoolAddress)
 	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
 	const [hasCompletedVaultMigration, setHasCompletedVaultMigration] = useState(false)
 	const [pendingParentEscalationClaimSelection, setPendingParentEscalationClaimSelection] = useState<PendingParentEscalationClaimSelection | undefined>(undefined)
-	const [optimisticClaimedParentEscalationRep, setOptimisticClaimedParentEscalationRep] = useState(0n)
+	const [optimisticClaimedParentDisputeStakedRep, setOptimisticClaimedParentDisputeStakedRep] = useState(0n)
 	const previousVaultMigrationContextKeyRef = useRef<string | undefined>(undefined)
 	const vaultMigrationActionStartedRef = useRef(false)
 
@@ -39,7 +39,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 		vaultMigrationActionStartedRef.current = false
 		setHasCompletedVaultMigration(false)
 		setPendingParentEscalationClaimSelection(undefined)
-		setOptimisticClaimedParentEscalationRep(0n)
+		setOptimisticClaimedParentDisputeStakedRep(0n)
 	}, [accountAddress, securityPoolAddress])
 
 	useEffect(() => {
@@ -57,19 +57,19 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 		setHasCompletedVaultMigration(true)
 		setIsVaultMigrationPending(false)
 		setPendingParentEscalationClaimSelection(undefined)
-		if (connectedWalletEscrowedRep !== undefined) {
-			setOptimisticClaimedParentEscalationRep(currentReduction => currentReduction + connectedWalletEscrowedRep)
+		if (connectedWalletDisputeStakedRepAttoRep !== undefined) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + connectedWalletDisputeStakedRepAttoRep)
 		}
-	}, [connectedWalletEscrowedRep, forkAuctionResult, securityPoolAddress])
+	}, [connectedWalletDisputeStakedRepAttoRep, forkAuctionResult, securityPoolAddress])
 
 	useEffect(() => {
 		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'claimParentEscalationDeposits' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress) || pendingParentEscalationClaimSelection === undefined) {
 			return
 		}
 		const claimSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingParentEscalationClaimSelection.outcome)
-		const claimedRep = claimSide?.userDeposits.filter(deposit => pendingParentEscalationClaimSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amount, 0n)
-		if (claimedRep !== undefined && claimedRep > 0n) {
-			setOptimisticClaimedParentEscalationRep(currentReduction => currentReduction + claimedRep)
+		const claimedRepAttoRep = claimSide?.userDeposits.filter(deposit => pendingParentEscalationClaimSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amountAttoRep, 0n)
+		if (claimedRepAttoRep !== undefined && claimedRepAttoRep > 0n) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + claimedRepAttoRep)
 		}
 		setPendingParentEscalationClaimSelection(undefined)
 	}, [forkAuctionResult, pendingParentEscalationClaimSelection, reportingDetails, securityPoolAddress])
@@ -110,8 +110,8 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	}, [forkAuctionActiveAction, forkAuctionError])
 
 	useEffect(() => {
-		setOptimisticClaimedParentEscalationRep(0n)
-	}, [connectedWalletEscrowedRep])
+		setOptimisticClaimedParentDisputeStakedRep(0n)
+	}, [connectedWalletDisputeStakedRepAttoRep])
 
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
@@ -131,7 +131,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 		hasCompletedVaultMigration,
 		isStartTruthAuctionInProgressState,
 		isVaultMigrationPending,
-		optimisticClaimedParentEscalationRep,
+		optimisticClaimedParentDisputeStakedRep,
 		setPendingParentEscalationClaimSelection,
 	}
 }

@@ -229,10 +229,10 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 											label: securityPoolCopy.openInterestMinted,
 											value: (
 												<span className='comparison-record-value-stack'>
-													<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
+													<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
 													<span className='detail'>
 														{securityPoolCopy.maxLead}
-														<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} copyable={false} />
+														<CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} copyable={false} />
 													</span>
 												</span>
 											),

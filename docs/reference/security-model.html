@@ -46,7 +46,7 @@
 					</li>
 					<li id="assumption-a04" value="4" data-assumption="A04">
 						<h3>Participants can mobilize REP to raise an alarm</h3>
-						<p>Market participants can mobilize enough vault-backed REP through security-vault operators to fund an early competing <code>Invalid</code>, <code>Yes</code>, or <code>No</code> deposit and keep the local contest active while additional capital reacts.</p>
+						<p>Market participants can mobilize enough vault-backed REP through vault owners to fund an early competing <code>Invalid</code>, <code>Yes</code>, or <code>No</code> deposit and keep the local contest active while additional capital reacts.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A wrong local outcome can become final before better-capitalized participants enter.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#escalation">escalation resolution</a>, <a href="../explanation/escalation-game.html#accounting-invariants">escalation accounting</a>, and <a href="./operator-guardrails.html#escalation-resolution-and-deposits">operator guardrails</a>.</p>
 					</li>
@@ -248,7 +248,7 @@
 					</li>
 					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
-						<p>The selected parameter relationships keep the fork threshold and haircut economically meaningful, the initial escalation deposit affordable, the pool multiplier and effective free-REP multiplier large enough for their distinct coverage roles, the effective free-REP multiplier at least the 10,500-BPS liquidation-award reserve, the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is distinct from <code>openOracleSecurityMultiplierBps</code>.</p>
+						<p>The selected parameter relationships keep the fork threshold and haircut economically meaningful, the initial escalation deposit affordable, the pool multiplier and effective pool-held vault REP backing multiplier large enough for their distinct coverage roles, the effective pool-held vault REP backing multiplier at least the 10,500-BPS liquidation-award reserve, the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is distinct from <code>openOracleSecurityMultiplierBps</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or internally inconsistent immutable parameters can defeat the economic or liveness argument even when the canonical contracts function exactly as configured.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#parameters">Statoblast parameters</a>, <a href="../explanation/zoltar.html#economics">fork economics</a>, <a href="../explanation/liquidations.html#incentives">liquidation economics</a>, <a href="../explanation/open-oracle.html#parameters">oracle parameters</a>, and <a href="../explanation/open-oracle.html#attack-model">oracle attack model</a>.</p>
 					</li>

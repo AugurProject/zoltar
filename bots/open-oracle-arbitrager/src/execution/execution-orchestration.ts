@@ -21,7 +21,7 @@ export function buildHedgeExecutionPayload(parameters: {
 	expectedParentBlockHash: Hex
 	executionIntent: Omit<ExecutionIntent, 'pool' | 'poolFee'>
 	hedgePool: Address
-	hedgeWethLimit: bigint
+	hedgeWethLimitAttoEth: bigint
 	newAmount1: bigint
 	newAmount2: bigint
 	openOracle: Address
@@ -39,7 +39,7 @@ export function buildHedgeExecutionPayload(parameters: {
 		},
 		hedgeRequest: {
 			expectedParentBlockHash: parameters.expectedParentBlockHash,
-			hedgeWethLimit: parameters.hedgeWethLimit,
+			hedgeWethLimitAttoEth: parameters.hedgeWethLimitAttoEth,
 			newAmount1: parameters.newAmount1,
 			newAmount2: parameters.newAmount2,
 			openOracle: parameters.openOracle,
@@ -72,9 +72,9 @@ export function lifecycleAllowanceMismatch(allowances: { token1: bigint; token2:
 	return undefined
 }
 
-export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedWeth: bigint; holderToken: bigint; holderWeth: bigint; willSettle: boolean }) {
+export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedWethAttoEth: bigint; holderToken: bigint; holderWethAttoEth: bigint; willSettle: boolean }) {
 	if (!parameters.currentReporter) return 'Position was replaced; exact returned assets require manual reconciliation'
-	if (!parameters.willSettle && (parameters.holderWeth <= parameters.expectedWeth || parameters.holderToken <= parameters.expectedToken)) {
+	if (!parameters.willSettle && (parameters.holderWethAttoEth <= parameters.expectedWethAttoEth || parameters.holderToken <= parameters.expectedToken)) {
 		return 'Position does not have its exact withdrawable OpenOracle balances'
 	}
 	return undefined
@@ -375,7 +375,7 @@ export async function receiptGasExpendituresWithQuorum(readers: readonly Receipt
 					const milliseconds = block.timestamp * 1_000n
 					if (milliseconds < 0n || milliseconds > 8_640_000_000_000_000n) throw new Error(`${label} receipt block timestamp is outside the supported date range`)
 					return {
-						costWei: receipt.gasUsed * receipt.effectiveGasPrice,
+						costAttoEth: receipt.gasUsed * receipt.effectiveGasPrice,
 						minedAt: new Date(Number(milliseconds)).toISOString(),
 						transactionHash: receipt.transactionHash,
 					}

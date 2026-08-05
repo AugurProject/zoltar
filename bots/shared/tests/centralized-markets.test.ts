@@ -53,10 +53,10 @@ const settings = parseCentralizedMarketSettings({
 function observation(exchangeId: string, priceRepPerEth: bigint, timestamp = 10_000): CentralizedMarketObservation {
 	return {
 		assetId: REP_ASSET,
-		askDepthEth: 2n * 10n ** 18n,
+		askDepthAttoEth: 2n * 10n ** 18n,
 		bestAskQuote: '10.1',
 		bestBidQuote: '9.9',
-		bidDepthEth: 2n * 10n ** 18n,
+		bidDepthAttoEth: 2n * 10n ** 18n,
 		chainId: 1,
 		exchangeId,
 		ethTickerTimestamp: timestamp,
@@ -140,6 +140,9 @@ describe('centralized market observations', () => {
 				minimumTotalSourceCount: 3,
 			},
 		})
+		expect(configured.minimumAskDepthAttoEth).toBe(2n * 10n ** 18n)
+		expect(configured.venueConsensus?.dexProbeDepthAttoEth).toBe(1n * 10n ** 18n)
+		expect(serializeCentralizedMarketSettings(configured).minimumAskDepthEth).toBe('2')
 		expect(serializeCentralizedMarketSettings(configured).venueConsensus).toEqual({
 			allowSingleGroupFallback: false,
 			dexProbeDepthEth: '1',
@@ -233,7 +236,7 @@ describe('centralized market observations', () => {
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, minimumSourceCount: 1, sources: settings.sources.slice(0, 1) })).toBe(false)
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, maximumObservationAgeMilliseconds: 5_000 })).toBe(false)
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, maximumObservationAgeMilliseconds: Number.POSITIVE_INFINITY })).toBe(false)
-		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, minimumAskDepthEth: -1n })).toBe(false)
+		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, minimumAskDepthAttoEth: -1n })).toBe(false)
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, maximumVenueDispersionBps: 10_001n })).toBe(false)
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, minimumSourceCount: -1 })).toBe(false)
 		expect(centralizedMarketConfigurationAllowsExecution({ ...settings, sources: [{ ...firstCex, exchangeId: 'Alpha' }, settings.sources[1] ?? firstCex] })).toBe(false)

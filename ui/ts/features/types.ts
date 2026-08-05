@@ -105,12 +105,12 @@ export type OutcomeSelectionListProps = {
 export type VaultMetricGridProps = {
 	className?: string
 	layout?: 'grid' | 'preview'
-	escalationEscrowedRep?: bigint | undefined
+	disputeStakedRepAttoRep?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
-	repDepositShare: bigint | undefined
+	vaultRepBackingAttoRep: bigint | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	securityBondAllowance: bigint | undefined
-	unpaidEthFees: bigint | undefined
+	coverageCommitmentAttoEth: bigint | undefined
+	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
 export type DeploymentSectionProps = {
@@ -133,7 +133,7 @@ export type OverviewPanelsProps = {
 	isManagingWallet: boolean
 	walletBootstrapComplete: boolean
 	parentUniverseId: bigint | undefined
-	universeRepBalance: bigint | undefined
+	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
@@ -218,12 +218,12 @@ export type MarketRouteContentProps = {
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
-	zoltarForkRepBalance: bigint | undefined
+	zoltarForkRepBalanceAttoRep: bigint | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
-	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
+	zoltarMigrationChildRepBalancesAttoRep: Record<string, bigint | undefined>
 	zoltarMigrationPending: boolean
-	zoltarMigrationPreparedRepBalance: bigint | undefined
+	zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarQuestionsError: string | undefined
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
@@ -263,8 +263,8 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 
 type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
-	liquidationAmount: string
-	liquidationMaxAmount: bigint | undefined
+	coverageCommitmentTransferEthAmount: string
+	maximumCoverageCommitmentTransferAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -315,7 +315,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestEthValue: bigint) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number
@@ -350,11 +350,11 @@ export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onDepositRep: () => void
+	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
-	onRedeemRep: () => void
-	onSetSecurityBondAllowance: () => void
+	onRedeemRepFromVault: () => void
+	onSetCoverageCommitment: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
@@ -363,7 +363,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultForm: SecurityVaultFormState
 	securityVaultMissing: boolean
 	securityVaultRepApproval: TokenApprovalState
-	securityVaultRepBalance: bigint | undefined
+	walletRepBalanceAttoRep: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined
@@ -379,8 +379,8 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
-	selectedPoolTotalRepDeposit?: bigint | undefined
-	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
+	selectedPoolTotalPoolHeldRepAttoRep?: bigint | undefined
+	selectedPoolTotalCoverageCommitmentAttoEth?: bigint | undefined
 	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean

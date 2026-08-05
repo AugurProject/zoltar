@@ -30,14 +30,14 @@ function createDeferred<T>() {
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
 		childUniverses: [],
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		forkQuestionDetails: undefined,
 		forkTime: 1n,
 		forkingOutcomeIndex: 0n,
 		hasForked: false,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1000n,
+		totalTheoreticalSupplyAttoRep: 1000n,
 		universeId: 1n,
 		...overrides,
 	}
@@ -458,7 +458,7 @@ describe('useZoltarFork', () => {
 
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(2)
 		expect(loadZoltarForkAccess.mock.calls[1]?.[3]).toEqual([deployedChildUniverse])
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({ '2': 10n })
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 	})
 
 	test('drops another accounts child REP balance when the replacement read fails', async () => {
@@ -509,16 +509,16 @@ describe('useZoltarFork', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarForkAccess()
 		})
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({ '2': 10n })
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 
 		render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS }), renderedComponent.container)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({})
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarForkAccess()
 		})
 
 		expect(loadZoltarForkAccess.mock.calls[1]?.[0]).toBe(NEXT_WALLET_ADDRESS)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({})
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 	})
 
 	test('keeps fork access cleared when an earlier account load resolves after disconnect', async () => {
@@ -559,7 +559,7 @@ describe('useZoltarFork', () => {
 		})
 
 		render(h(Harness, { accountAddress: undefined }), renderedComponent.container)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({})
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 
 		await act(async () => {
 			deferred.resolve(createForkAccessResults())
@@ -572,8 +572,8 @@ describe('useZoltarFork', () => {
 
 		const state = requireHookState(hookState)
 		expect(state.zoltarForkApproval.value).toBeUndefined()
-		expect(state.zoltarForkRepBalance).toBeUndefined()
-		expect(state.zoltarMigrationPreparedRepBalance).toBeUndefined()
-		expect(state.zoltarMigrationChildRepBalances).toEqual({})
+		expect(state.zoltarForkRepBalanceAttoRep).toBeUndefined()
+		expect(state.zoltarMigrationPreparedRepBalanceAttoRep).toBeUndefined()
+		expect(state.zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 	})
 })

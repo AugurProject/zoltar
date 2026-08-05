@@ -32,8 +32,8 @@ const readCarryNode = async (client: CarryProofReadClient, escalationGameAddress
 
 export const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
 
-export const hashCarryLeaf = (depositor: Address, outcome: bigint | number, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
-	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, BigInt(outcome), amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+export const hashCarryLeaf = (depositor: Address, outcome: bigint | number, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) =>
+	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, BigInt(outcome), amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 
 export const computeForkContinuationParentDepositIndex = (escalationGameAddress: Address, outcome: bigint | number, depositIndex: bigint) => (BigInt(escalationGameAddress) << 96n) | (BigInt(outcome) << 88n) | depositIndex
 
@@ -101,9 +101,9 @@ export const createCarryProof = async (client: CarryProofReadClient, escalationG
 	}
 	return {
 		depositor: node[1],
-		amount: node[3],
+		amountAttoRep: node[3],
 		parentDepositIndex: parameters.parentDepositIndex,
-		cumulativeAmount: node[5],
+		cumulativeAmountAttoRep: node[5],
 		sourceNodeId,
 		leafIndex: parameters.leafIndex,
 		merkleMountainRangeSiblings: parameters.merkleMountainRangeSiblings,

@@ -12,10 +12,10 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { approveAndDepositRep } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
-import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep, redeemRep, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
-import { getNonDecisionThreshold } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { approveAndDepositRepToVault } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { depositToEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
 	peripherals_EscalationGame_EscalationGame,
@@ -35,7 +35,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const getUserRepClaim = async (client: WriteClient, securityPoolAddress: Address) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	return await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
+	return await backingUnitsToAttoRep(client, securityPoolAddress, vault.vaultRepBackingAttoRep)
 }
 
 describe('Escalation Game Fork Threshold Test', () => {
@@ -82,7 +82,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await createQuestion(client, questionData, outcomes)
 
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		await approveAndDepositRep(client, 1000n * 10n ** 18n, questionId)
+		await approveAndDepositRepToVault(client, 1000n * 10n ** 18n, questionId)
 
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	})
@@ -98,11 +98,11 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const escalationGameAddress = securityPoolAddresses.escalationGame
 
 		// Get escalation threshold (fixed)
-		const escalationThreshold = await getNonDecisionThreshold(client, escalationGameAddress)
+		const escalationThreshold = await getNonDecisionThresholdAttoRep(client, escalationGameAddress)
 
 		// Get current total supply of REP
 		const repToken = getRepTokenAddress(genesisUniverse)
-		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
+		const initialTotalSupply = await getTotalTheoreticalSupplyAttoRep(client, repToken)
 
 		// Ensure initial fork threshold > escalationThreshold (should be twice)
 		const initialForkThreshold = initialTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
@@ -153,7 +153,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			}),
 		)
 		const actualForkThreshold = 25n * 10n ** 18n
-		const nonDecisionThreshold = 100n * 10n ** 18n
+		const nonDecisionThresholdAttoRep = 100n * 10n ** 18n
 		const winningDeposit = 40n * 10n ** 18n
 		const gameEndDate = 10_000_000n
 		const zoltar = await deployContract(
@@ -182,11 +182,11 @@ describe('Escalation Game Fork Threshold Test', () => {
 				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
 				address: harness,
 				functionName: 'configureBoundary',
-				args: [gameEndDate, nonDecisionThreshold, winningDeposit],
+				args: [gameEndDate, nonDecisionThresholdAttoRep, winningDeposit],
 			}),
 		)
 
-		const expectedScaledPayout = (winningDeposit * actualForkThreshold) / nonDecisionThreshold
+		const expectedScaledPayout = (winningDeposit * actualForkThreshold) / nonDecisionThresholdAttoRep
 		for (const boundaryCase of [
 			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate - 1n, name: 'one second before' },
 			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate, name: 'exactly at' },
@@ -200,13 +200,13 @@ describe('Escalation Game Fork Threshold Test', () => {
 					args: [boundaryCase.forkTime],
 				}),
 			)
-			const [amountToWithdraw, burnAmount] = await client.readContract({
+			const [amountToWithdrawAttoRep, burnAmount] = await client.readContract({
 				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
 				address: harness,
 				functionName: 'computeWinningWithdrawal',
 				args: [winningDeposit, winningDeposit],
 			})
-			assert.strictEqual(amountToWithdraw, boundaryCase.expectedPayout, `${boundaryCase.name} game end should preserve the documented fork-threshold payout boundary`)
+			assert.strictEqual(amountToWithdrawAttoRep, boundaryCase.expectedPayout, `${boundaryCase.name} game end should preserve the documented fork-threshold payout boundary`)
 			assert.strictEqual(burnAmount, 0n, 'the single-sided boundary harness should not create a reward haircut')
 		}
 	})
@@ -216,12 +216,12 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const firstDeposit = depositAmount / 2n
 		const secondDeposit = depositAmount - firstDeposit
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attacker, depositAmount, questionId)
+		await approveAndDepositRepToVault(attacker, depositAmount, questionId)
 
 		await mockWindow.setTime(questionEndDate + 1n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondDeposit)
-		const configuredThreshold = await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame)
+		const configuredThreshold = await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame)
 		await mockWindow.advanceTime(10n * DAY)
 		const victimWalletBeforeFirstSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
@@ -259,7 +259,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const reducedForkThreshold = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: getZoltarAddress(),
-			functionName: 'getForkThreshold',
+			functionName: 'getForkThresholdAttoRep',
 			args: [genesisUniverse],
 		})
 		assert.ok(reducedForkThreshold < configuredThreshold, 'real post-fork migration should reduce the live threshold below the finalized game threshold')
@@ -280,15 +280,15 @@ describe('Escalation Game Fork Threshold Test', () => {
 		)
 
 		const attackerWalletBefore = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
-		await redeemRep(attacker, securityPoolAddresses.securityPool, attacker.account.address)
+		await redeemRepFromVault(attacker, securityPoolAddresses.securityPool, attacker.account.address)
 		const attackerWalletAfter = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
-		assert.strictEqual(attackerWalletAfter - attackerWalletBefore, depositAmount, 'remaining pool ownership must redeem only its original REP, not a winner haircut')
+		assert.strictEqual(attackerWalletAfter - attackerWalletBefore, depositAmount, 'remaining REP backing units must redeem only its original REP, not a winner haircut')
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
 		const depositAmount = 1n * 10n ** 18n
 		const repToken = getRepTokenAddress(genesisUniverse)
-		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
+		const initialTotalSupply = await getTotalTheoreticalSupplyAttoRep(client, repToken)
 		const approximateForkThreshold = initialTotalSupply / 10n / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const oddForkThreshold = approximateForkThreshold % 2n === 0n ? approximateForkThreshold + 1n : approximateForkThreshold
 		const overriddenTotalSupply = oddForkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
@@ -310,20 +310,20 @@ describe('Escalation Game Fork Threshold Test', () => {
 			await client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
-				functionName: 'initialEscalationGameDeposit',
+				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
-			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit,
+			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
 			'initial escalation deposit should match deployment config',
 		)
-		assert.strictEqual(await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
+		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 
 	test.each([
-		{ name: 'even', forkThreshold: 100n },
-		{ name: 'odd', forkThreshold: 101n },
-	])('uses ceiling-half non-decision funding boundaries for an $name fork threshold', async ({ forkThreshold }) => {
-		const overriddenTotalSupply = forkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		{ name: 'even', forkThresholdAttoRep: 100n },
+		{ name: 'odd', forkThresholdAttoRep: 101n },
+	])('uses ceiling-half non-decision funding boundaries for an $name fork threshold', async ({ forkThresholdAttoRep }) => {
+		const overriddenTotalSupply = forkThresholdAttoRep * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		await mockWindow.addStateOverrides({
 			[getZoltarAddress()]: {
@@ -333,20 +333,20 @@ describe('Escalation Game Fork Threshold Test', () => {
 			},
 		})
 
-		const nonDecisionThreshold = await client.readContract({
+		const nonDecisionThresholdAttoRep = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: getZoltarAddress(),
-			functionName: 'getNonDecisionThreshold',
+			functionName: 'getNonDecisionThresholdAttoRep',
 			args: [genesisUniverse],
 		})
-		const expectedThreshold = (forkThreshold + 1n) / 2n
-		const twoOutcomeTotal = 2n * nonDecisionThreshold
+		const expectedThreshold = (forkThresholdAttoRep + 1n) / 2n
+		const twoOutcomeTotal = 2n * nonDecisionThresholdAttoRep
 
-		assert.strictEqual(nonDecisionThreshold, expectedThreshold, 'non-decision should use ceiling division by two')
-		assert.ok(twoOutcomeTotal >= forkThreshold, 'two threshold outcomes must always fund the fork threshold')
-		assert.ok(2n * (nonDecisionThreshold - 1n) < forkThreshold, 'one wei less on both outcomes must remain below fork funding')
-		assert.strictEqual(forkThreshold - 1n >= twoOutcomeTotal, false, 'F - 1 total REP must never fund two threshold outcomes')
-		assert.strictEqual(forkThreshold >= twoOutcomeTotal, forkThreshold % 2n === 0n, 'exactly F total REP funds two threshold outcomes only when F is even')
-		assert.strictEqual(forkThreshold + 1n >= twoOutcomeTotal, true, 'F + 1 total REP must fund two threshold outcomes')
+		assert.strictEqual(nonDecisionThresholdAttoRep, expectedThreshold, 'non-decision should use ceiling division by two')
+		assert.ok(twoOutcomeTotal >= forkThresholdAttoRep, 'two threshold outcomes must always fund the fork threshold')
+		assert.ok(2n * (nonDecisionThresholdAttoRep - 1n) < forkThresholdAttoRep, 'one attoREP less on both outcomes must remain below fork funding')
+		assert.strictEqual(forkThresholdAttoRep - 1n >= twoOutcomeTotal, false, 'F - 1 total REP must never fund two threshold outcomes')
+		assert.strictEqual(forkThresholdAttoRep >= twoOutcomeTotal, forkThresholdAttoRep % 2n === 0n, 'exactly F total REP funds two threshold outcomes only when F is even')
+		assert.strictEqual(forkThresholdAttoRep + 1n >= twoOutcomeTotal, true, 'F + 1 total REP must fund two threshold outcomes')
 	})
 })

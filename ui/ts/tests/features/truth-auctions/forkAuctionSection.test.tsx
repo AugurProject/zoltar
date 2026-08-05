@@ -17,8 +17,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -86,8 +86,8 @@ function createReportingForm(overrides: Partial<ReportingFormState> = {}): Repor
 
 function createReportingDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDeposit {
 	return {
-		amount: 10n,
-		cumulativeAmount: 10n,
+		amountAttoRep: 10n,
+		cumulativeAmountAttoRep: 10n,
 		depositIndex: 0n,
 		depositor: zeroAddress,
 		...overrides,
@@ -97,15 +97,15 @@ function createReportingDeposit(overrides: Partial<EscalationDeposit> = {}): Esc
 function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
 		bindingCapital: 5n,
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRequiredBond: 1n,
 		currentTime: 3n,
 		escalationEndTime: 50n,
 		escalationGameAddress: getAddress('0x00000000000000000000000000000000000000fa'),
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: 100n,
+		nonDecisionThresholdAttoRep: 100n,
 		questionOutcome: 'none',
 		securityPoolAddress: PARENT_POOL_ADDRESS,
 		settlementState: 'locked',
@@ -114,36 +114,36 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
-		startBond: 1n,
+		startBondAttoRep: 1n,
 		status: 'active',
 		systemState: 'operational',
 		universeId: 1n,
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 0n,
+		viewerPoolHeldVaultRepBackingAttoRep: 0n,
 		viewerVaultExists: false,
-		viewerVaultEscrowedRep: 0n,
-		viewerVaultRepDepositShare: 0n,
+		viewerVaultDisputeStakedRepAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 0n,
 		activationTime: 1n,
-		totalCost: 1n,
+		totalCostAttoRep: 1n,
 		...overrides,
 	}
 }
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedSecurityBondAllowance: 0n,
+		auctionedCoverageCommitmentAttoEth: 0n,
 		claimingAvailable: false,
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedRepAttoRep: 1n,
 		migrationEndsAt: 100n,
 		parentSecurityPoolAddress: zeroAddress,
 		questionOutcome: 'yes',
-		auctionableRepAtFork: 0n,
+		auctionableRepAtForkAttoRep: 0n,
 		securityPoolAddress: PARENT_POOL_ADDRESS,
 		systemState: 'forkTruthAuction',
 		truthAuction: undefined,
@@ -156,27 +156,27 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 
 function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleSecurityBondAllowance: 0n,
+		feeEligibleCoverageCommitmentAttoEth: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
-		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedRepAttoRep: 1n,
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
 		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: '0x00000000000000000000000000000000000000f1',
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 0n,
+		totalPoolHeldRepAttoRep: 0n,
+		totalCoverageCommitmentAttoEth: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -371,23 +371,23 @@ describe('ForkAuctionSection', () => {
 						claimingAvailable: true,
 						systemState: 'operational',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 10n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: true,
 							hitCap: true,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 0n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 					}),
 					selectedStageView: 'settlement',
@@ -473,9 +473,9 @@ describe('ForkAuctionSection', () => {
 					forkAuctionDetails: createForkAuctionDetails({
 						forkOwnSecurityPool: true,
 						ownForkRepBuckets: {
-							vaultRepAtFork: 12n,
-							escalationChildRepPerSelectedOutcome: 9n,
-							escrowSourceRepAtFork: 18n,
+							vaultRepAtForkAttoRep: 12n,
+							escalationChildRepPerSelectedOutcomeAttoRep: 9n,
+							escrowSourceRepAtForkAttoRep: 18n,
 						},
 						systemState: 'forkMigration',
 						truthAuction: undefined,
@@ -489,9 +489,9 @@ describe('ForkAuctionSection', () => {
 
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
-		expect(documentQueries.getByText('Pool REP At Fork')).not.toBeNull()
-		expect(documentQueries.getByText('Escalation Child REP per Selected Outcome')).not.toBeNull()
-		expect(documentQueries.getByText('Escrow Source REP At Fork')).not.toBeNull()
+		expect(documentQueries.getByText('Pool-held REP at fork')).not.toBeNull()
+		expect(documentQueries.getByText('Dispute-staked REP per selected outcome')).not.toBeNull()
+		expect(documentQueries.getByText('Dispute-staked REP source at fork')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -516,16 +516,16 @@ describe('ForkAuctionSection', () => {
 
 		documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
-		expect(documentQueries.queryByText('Pool REP At Fork')).toBeNull()
-		expect(documentQueries.queryByText('Escalation Child REP per Selected Outcome')).toBeNull()
-		expect(documentQueries.queryByText('Escrow Source REP At Fork')).toBeNull()
+		expect(documentQueries.queryByText('Pool-held REP at fork')).toBeNull()
+		expect(documentQueries.queryByText('Dispute-staked REP per selected outcome')).toBeNull()
+		expect(documentQueries.queryByText('Dispute-staked REP source at fork')).toBeNull()
 	})
 
 	test('disables unresolved escalation migration after the migration window closes', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ab')
 		const unresolvedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -551,8 +551,8 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultEscrowedRep: 12n,
-						viewerVaultRepDepositShare: 12n,
+						viewerVaultDisputeStakedRepAttoRep: 12n,
+						viewerVaultRepBackingAttoRep: 12n,
 					}),
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: {
@@ -570,16 +570,16 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(
 			documentQueries.getByText(
-				'First migrates this wallet’s unlocked vault ownership, allowance, fees, and collateral to the selected child, then clears its three parent outcome totals in constant-size work. This is not required to fund escalation backing or claim a winning carried proof; inherited losers require no claim transaction.',
+				'First transfers this wallet’s REP backing units and coverage commitment to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
 			),
 		).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear parent locks for Yes' })
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
 	})
 
-	test('renders unresolved parent-lock loading with the shared accessible spinner', async () => {
+	test('renders unresolved parent escalation-deposit accounting loading with the shared accessible spinner', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ac')
 		const unresolvedDeposit = createReportingDeposit({ depositor: walletAddress })
 		const renderedComponent = await renderIntoDocument(
@@ -601,9 +601,9 @@ describe('ForkAuctionSection', () => {
 							{ balance: 10n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						viewerVaultEscrowedRep: 10n,
+						viewerVaultDisputeStakedRepAttoRep: 10n,
 						viewerVaultExists: true,
-						viewerVaultRepDepositShare: 10n,
+						viewerVaultRepBackingAttoRep: 10n,
 					}),
 					selectedStageView: 'migration',
 				}),
@@ -611,8 +611,8 @@ describe('ForkAuctionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const loadingStatus = within(document.body).getByText('Loading parent escalation locks for the connected wallet…')
-		expect(loadingStatus.textContent).toContain('Loading parent escalation locks for the connected wallet…')
+		const loadingStatus = within(document.body).getByText('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
+		expect(loadingStatus.textContent).toContain('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
 		expect(loadingStatus.getAttribute('role')).toBe('status')
 		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
 	})
@@ -620,8 +620,8 @@ describe('ForkAuctionSection', () => {
 	test('keeps an exported escalation entitlement available for another selected child', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
 		const consumedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -633,10 +633,10 @@ describe('ForkAuctionSection', () => {
 			systemState: 'forkMigration',
 			vaults: [
 				{
-					escalationEscrowedRep: 0n,
-					repDepositShare: 0n,
-					securityBondAllowance: 0n,
-					unpaidEthFees: 0n,
+					disputeStakedRepAttoRep: 0n,
+					vaultRepBackingAttoRep: 0n,
+					coverageCommitmentAttoEth: 0n,
+					claimableFeesAttoEth: 0n,
 					vaultAddress: walletAddress,
 				},
 			],
@@ -668,9 +668,9 @@ describe('ForkAuctionSection', () => {
 						viewerEscalationMigrationEntitlement: {
 							initialized: true,
 							materializedByOutcome: { invalid: false, yes: true, no: false },
-							totalCurrentRep: 12n,
+							totalCurrentRepAttoRep: 12n,
 						},
-						viewerVaultEscrowedRep: 0n,
+						viewerVaultDisputeStakedRepAttoRep: 0n,
 					}),
 					securityPools: [parentPool, createChildPool({ questionOutcome: 'yes' })],
 					selectedStageView: 'migration',
@@ -680,9 +680,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Parent lock accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
+		expect(documentQueries.getByText('Unresolved parent escalation-deposit accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear parent locks for No' })
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
 		fireEvent.click(button)
@@ -692,8 +692,8 @@ describe('ForkAuctionSection', () => {
 	test('does not fall back to direct parent-deposit claims after unresolved escalation cleanup expires', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ae')
 		const unresolvedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -711,8 +711,8 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultEscrowedRep: 12n,
-						viewerVaultRepDepositShare: 12n,
+						viewerVaultDisputeStakedRepAttoRep: 12n,
+						viewerVaultRepBackingAttoRep: 12n,
 					}),
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: {
@@ -728,10 +728,10 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The optional parent-lock cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Parent Escalation Locks' })).not.toBeNull()
+		expect(documentQueries.getByText('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Unresolved Parent Escalation-Deposit Accounting' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Clear parent locks for Yes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
 
@@ -754,10 +754,10 @@ describe('ForkAuctionSection', () => {
 					previewPool: createChildPool({
 						vaults: [
 							{
-								escalationEscrowedRep: 0n,
-								repDepositShare: 20n,
-								securityBondAllowance: 3n,
-								unpaidEthFees: 0n,
+								disputeStakedRepAttoRep: 0n,
+								vaultRepBackingAttoRep: 20n,
+								coverageCommitmentAttoEth: 3n,
+								claimableFeesAttoEth: 0n,
 								vaultAddress: walletAddress,
 							},
 						],
@@ -792,8 +792,8 @@ describe('ForkAuctionSection', () => {
 								deposits: [],
 								importedUserDeposits: [
 									{
-										amount: 12n,
-										cumulativeAmount: 6n,
+										amountAttoRep: 12n,
+										cumulativeAmountAttoRep: 6n,
 										depositor: walletAddress,
 										parentDepositIndex: 9n,
 									},
@@ -837,8 +837,8 @@ describe('ForkAuctionSection', () => {
 								deposits: [],
 								importedUserDeposits: [
 									{
-										amount: 12n,
-										cumulativeAmount: 6n,
+										amountAttoRep: 12n,
+										cumulativeAmountAttoRep: 6n,
 										depositor: walletAddress,
 										parentDepositIndex: 9n,
 									},
@@ -970,23 +970,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1034,23 +1034,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1106,23 +1106,23 @@ describe('ForkAuctionSection', () => {
 				securityPoolAddress: currentChildPool.securityPoolAddress,
 				systemState: 'forkTruthAuction',
 				truthAuction: {
-					accumulatedEth: 0n,
+					accumulatedBidAttoEth: 0n,
 					auctionEndsAt: 604_801n,
 					clearingPrice: 1n,
 					clearingTick: 0n,
-					ethAtClearingTick: 0n,
-					ethRaiseCap: 1n,
-					ethRaised: 0n,
+					bidAtClearingTickAttoEth: 0n,
+					ethRaiseCapAttoEth: 1n,
+					ethRaisedAttoEth: 0n,
 					finalized: false,
 					hitCap: false,
-					maxRepBeingSold: 1n,
-					minBidSize: 1n,
-					repPurchasableAtBid: undefined,
+					maxRepBeingSoldAttoRep: 1n,
+					minBidSizeAttoEth: 1n,
+					repPurchasableAtBidAttoRep: undefined,
 					timeRemaining: 604_796n,
-					totalRepPurchased: 0n,
+					totalRepPurchasedAttoRep: 0n,
 					underfunded: false,
 					underfundedThreshold: undefined,
-					underfundedWinningEth: 0n,
+					underfundedWinningAttoEth: 0n,
 				},
 				truthAuctionAddress: currentChildPool.truthAuctionAddress,
 				truthAuctionStartedAt: 1n,
@@ -1153,7 +1153,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('makes the auctioned bond allowance and debt transfer explicit during bidding', async () => {
+	test('makes the auctioned coverage commitment transfer explicit during bidding', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1166,35 +1166,35 @@ describe('ForkAuctionSection', () => {
 				createProps({
 					accountState: createAccountState({
 						address: getAddress('0x00000000000000000000000000000000000000aa'),
-						ethBalance: 10n ** 18n,
+						ethBalanceAttoEth: 10n ** 18n,
 					}),
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedSecurityBondAllowance: 7n,
+						auctionedCoverageCommitmentAttoEth: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1209,9 +1209,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned coverage commitment')).not.toBeNull()
 		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
-		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool security-bond allowance.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool coverage commitment.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
@@ -1227,7 +1227,7 @@ describe('ForkAuctionSection', () => {
 				createProps({
 					accountState: createAccountState({
 						address: getAddress('0x00000000000000000000000000000000000000aa'),
-						ethBalance: 10n ** 18n,
+						ethBalanceAttoEth: 10n ** 18n,
 					}),
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
@@ -1238,23 +1238,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1290,7 +1290,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1299,23 +1299,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: 0n,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1352,7 +1352,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1361,23 +1361,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							ethRaiseCapAttoEth: 1n,
+							ethRaisedAttoEth: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxRepBeingSoldAttoRep: 1n,
+							minBidSizeAttoEth: 1n,
+							repPurchasableAtBidAttoRep: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalRepPurchasedAttoRep: 0n,
 							underfunded: false,
 							underfundedThreshold: 0n,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1411,7 +1411,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'migration',
 					forkAuctionDetails: createForkAuctionDetails({
 						forkOutcome: 'none',
-						migratedRep: 0n,
+						migratedRepAttoRep: 0n,
 						systemState: 'poolForked',
 						truthAuction: undefined,
 						truthAuctionStartedAt: 0n,
@@ -1485,7 +1485,7 @@ describe('ForkAuctionSection', () => {
 		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 		expect(within(migrationCard).getByText('REP At Fork')).not.toBeNull()
 		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
-		expect(within(migrationCard).getByText('Collateral')).not.toBeNull()
+		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
 	})
 
 	test('shows a closed migration badge once the truth auction timeline has started', async () => {

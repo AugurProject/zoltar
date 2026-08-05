@@ -16,7 +16,7 @@ interface IOpenOracleDispute {
 		uint48 settlementTime;
 		uint128 escalationHalt;
 		address protocolFeeRecipient;
-		uint96 settlerReward;
+		uint96 settlerRewardAttoEth;
 		address token2;
 		uint24 numReports;
 		uint24 disputeDelay;
@@ -169,7 +169,7 @@ contract OpenOracleArbitrageExecutor {
 		uint24 poolFee;
 		uint128 newAmount1;
 		uint128 newAmount2;
-		uint256 hedgeWethLimit;
+		uint256 hedgeWethLimitAttoEth;
 		uint256 swapDeadline;
 		bytes32 expectedParentBlockHash;
 	}
@@ -202,7 +202,7 @@ contract OpenOracleArbitrageExecutor {
 		uint256 contribution1;
 		uint256 contribution2;
 		uint256 hedgeAmountToken2;
-		uint256 hedgeAmountWeth;
+		uint256 hedgeAmountWethAttoEth;
 	}
 
 	struct V4SwapCallbackData {
@@ -218,7 +218,7 @@ contract OpenOracleArbitrageExecutor {
 		uint256 indexed reportId,
 		bool boughtToken2,
 		uint256 hedgeAmountToken2,
-		uint256 hedgeAmountWeth,
+		uint256 hedgeAmountWethAttoEth,
 		uint256 contribution1,
 		uint256 contribution2
 	);
@@ -230,7 +230,7 @@ contract OpenOracleArbitrageExecutor {
 		uint256 amount1,
 		address token2,
 		uint256 amount2,
-		uint256 settlerReward
+		uint256 settlerRewardAttoEth
 	);
 
 	event ReplacementCreditWithdrawn(
@@ -304,7 +304,7 @@ contract OpenOracleArbitrageExecutor {
 	}
 
 	/// @notice Atomically hedges the OpenOracle replacement exposure and funds the dispute.
-	/// @dev `hedgeWethLimit` is the minimum WETH output when selling token2 and the maximum WETH
+	/// @dev `hedgeWethLimitAttoEth` is the minimum WETH output when selling token2 and the maximum WETH
 	///      input when buying token2. The caller remains the OpenOracle reporter and owns all
 	///      immediate and eventual OpenOracle balances.
 	function hedgeAndDispute(
@@ -352,9 +352,11 @@ contract OpenOracleArbitrageExecutor {
 		_approveExact(token1, request.openOracle, 0);
 		_approveExact(token2, request.openOracle, 0);
 
-		uint256 wethRefund =
-			result.boughtToken2 ? request.hedgeWethLimit - result.hedgeAmountWeth : result.hedgeAmountWeth;
-		if (wethRefund != 0) token1.safeTransfer(msg.sender, wethRefund);
+		uint256 wethRefundAttoEth =
+			result.boughtToken2
+				? request.hedgeWethLimitAttoEth - result.hedgeAmountWethAttoEth
+				: result.hedgeAmountWethAttoEth;
+		if (wethRefundAttoEth != 0) token1.safeTransfer(msg.sender, wethRefundAttoEth);
 		require(token1.balanceOf(address(this)) == balances.executorToken1, 'Token1 transfer amount was not exact');
 		require(token2.balanceOf(address(this)) == balances.executorToken2, 'Token2 transfer amount was not exact');
 		require(
@@ -371,7 +373,7 @@ contract OpenOracleArbitrageExecutor {
 			helper.reportId,
 			result.boughtToken2,
 			result.hedgeAmountToken2,
-			result.hedgeAmountWeth,
+			result.hedgeAmountWethAttoEth,
 			result.contribution1,
 			result.contribution2
 		);
@@ -450,10 +452,10 @@ contract OpenOracleArbitrageExecutor {
 		entered = true;
 
 		IOpenOracleLifecycle openOracle = IOpenOracleLifecycle(request.openOracle);
-		uint256 settlerReward;
+		uint256 settlerRewardAttoEth;
 		if (game.currentReporter == msg.sender && game.settlementTimestamp == 0) {
 			openOracle.settle(helper.reportId, game, helper);
-			settlerReward = game.settlerReward;
+			settlerRewardAttoEth = game.settlerRewardAttoEth;
 		}
 
 		uint256 walletBalance1 = IERC20(game.token1).balanceOf(msg.sender);
@@ -476,14 +478,14 @@ contract OpenOracleArbitrageExecutor {
 			IERC20(game.token2).balanceOf(msg.sender) == walletBalance2 + request.amount2,
 			'OpenOracle lifecycle token2 receipt was not exact'
 		);
-		if (settlerReward != 0) {
-			uint256 walletEthBalance = msg.sender.balance;
+		if (settlerRewardAttoEth != 0) {
+			uint256 walletBalanceAttoEth = msg.sender.balance;
 			require(
-				openOracle.withdrawTo(address(0), settlerReward, msg.sender) == settlerReward,
+				openOracle.withdrawTo(address(0), settlerRewardAttoEth, msg.sender) == settlerRewardAttoEth,
 				'OpenOracle lifecycle settler reward withdrawal was not exact'
 			);
 			require(
-				msg.sender.balance == walletEthBalance + settlerReward,
+				msg.sender.balance == walletBalanceAttoEth + settlerRewardAttoEth,
 				'OpenOracle lifecycle settler reward receipt was not exact'
 			);
 		}
@@ -495,7 +497,7 @@ contract OpenOracleArbitrageExecutor {
 			request.amount1,
 			game.token2,
 			request.amount2,
-			settlerReward
+			settlerRewardAttoEth
 		);
 		entered = false;
 	}
@@ -571,15 +573,21 @@ contract OpenOracleArbitrageExecutor {
 			_fee(game.currentAmount2, game.feePercentage) +
 			_fee(game.currentAmount2, game.protocolFee);
 		require(result.contribution2 >= result.hedgeAmountToken2, 'OpenOracle buy hedge exceeds token2 contribution');
-		_pullExact(token1, result.contribution1 + request.hedgeWethLimit, balances.executorToken1);
+		_pullExact(token1, result.contribution1 + request.hedgeWethLimitAttoEth, balances.executorToken1);
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
 		if (request.venue == 2) {
-			result.hedgeAmountWeth = _executeV4Hedge(request, game.token1, game.token2, result.hedgeAmountToken2, true);
+			result.hedgeAmountWethAttoEth = _executeV4Hedge(
+				request,
+				game.token1,
+				game.token2,
+				result.hedgeAmountToken2,
+				true
+			);
 		} else {
-			_approveExact(token1, request.router, request.hedgeWethLimit);
+			_approveExact(token1, request.router, request.hedgeWethLimitAttoEth);
 		}
 		if (request.venue == 0) {
-			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
+			result.hedgeAmountWethAttoEth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
 				IUniswapV3SwapRouter.ExactOutputSingleParams({
 					tokenIn: game.token1,
 					tokenOut: game.token2,
@@ -587,7 +595,7 @@ contract OpenOracleArbitrageExecutor {
 					recipient: address(this),
 					deadline: request.swapDeadline,
 					amountOut: result.hedgeAmountToken2,
-					amountInMaximum: request.hedgeWethLimit,
+					amountInMaximum: request.hedgeWethLimitAttoEth,
 					sqrtPriceLimitX96: 0
 				})
 			);
@@ -597,17 +605,20 @@ contract OpenOracleArbitrageExecutor {
 			path[1] = game.token2;
 			uint256[] memory amounts = IUniswapV2Router(request.router).swapTokensForExactTokens(
 				result.hedgeAmountToken2,
-				request.hedgeWethLimit,
+				request.hedgeWethLimitAttoEth,
 				path,
 				address(this),
 				request.swapDeadline
 			);
 			require(amounts.length == 2 && amounts[1] == result.hedgeAmountToken2, 'Uniswap V2 buy amounts invalid');
-			result.hedgeAmountWeth = amounts[0];
+			result.hedgeAmountWethAttoEth = amounts[0];
 		} else {
 			require(request.venue == 2, 'Unsupported hedge venue');
 		}
-		require(result.hedgeAmountWeth <= request.hedgeWethLimit, 'Uniswap buy hedge exceeded maximum WETH');
+		require(
+			result.hedgeAmountWethAttoEth <= request.hedgeWethLimitAttoEth,
+			'Uniswap buy hedge exceeded maximum WETH'
+		);
 		if (request.venue != 2) _approveExact(token1, request.router, 0);
 		return result;
 	}
@@ -624,7 +635,7 @@ contract OpenOracleArbitrageExecutor {
 		_pullExact(token1, result.contribution1, balances.executorToken1);
 		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
 		if (request.venue == 2) {
-			result.hedgeAmountWeth = _executeV4Hedge(
+			result.hedgeAmountWethAttoEth = _executeV4Hedge(
 				request,
 				game.token1,
 				game.token2,
@@ -635,7 +646,7 @@ contract OpenOracleArbitrageExecutor {
 			_approveExact(token2, request.router, result.hedgeAmountToken2);
 		}
 		if (request.venue == 0) {
-			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
+			result.hedgeAmountWethAttoEth = IUniswapV3SwapRouter(request.router).exactInputSingle(
 				IUniswapV3SwapRouter.ExactInputSingleParams({
 					tokenIn: game.token2,
 					tokenOut: game.token1,
@@ -643,7 +654,7 @@ contract OpenOracleArbitrageExecutor {
 					recipient: address(this),
 					deadline: request.swapDeadline,
 					amountIn: result.hedgeAmountToken2,
-					amountOutMinimum: request.hedgeWethLimit,
+					amountOutMinimum: request.hedgeWethLimitAttoEth,
 					sqrtPriceLimitX96: 0
 				})
 			);
@@ -653,17 +664,20 @@ contract OpenOracleArbitrageExecutor {
 			path[1] = game.token1;
 			uint256[] memory amounts = IUniswapV2Router(request.router).swapExactTokensForTokens(
 				result.hedgeAmountToken2,
-				request.hedgeWethLimit,
+				request.hedgeWethLimitAttoEth,
 				path,
 				address(this),
 				request.swapDeadline
 			);
 			require(amounts.length == 2 && amounts[0] == result.hedgeAmountToken2, 'Uniswap V2 sell amounts invalid');
-			result.hedgeAmountWeth = amounts[1];
+			result.hedgeAmountWethAttoEth = amounts[1];
 		} else {
 			require(request.venue == 2, 'Unsupported hedge venue');
 		}
-		require(result.hedgeAmountWeth >= request.hedgeWethLimit, 'Uniswap sell hedge received too little WETH');
+		require(
+			result.hedgeAmountWethAttoEth >= request.hedgeWethLimitAttoEth,
+			'Uniswap sell hedge received too little WETH'
+		);
 		if (request.venue != 2) _approveExact(token2, request.router, 0);
 		return result;
 	}
@@ -674,11 +688,11 @@ contract OpenOracleArbitrageExecutor {
 		address token,
 		uint256 amount,
 		bool buyToken
-	) private returns (uint256 hedgeAmountWeth) {
+	) private returns (uint256 hedgeAmountWethAttoEth) {
 		_v4TickSpacing(request.poolFee);
 		require(amount <= uint256(uint128(type(int128).max)), 'Uniswap V4 hedge amount exceeds signed delta bounds');
-		uint256 ethBalance = address(this).balance;
-		if (buyToken) IWETH(weth).withdraw(request.hedgeWethLimit);
+		uint256 ethBalanceAttoEth = address(this).balance;
+		if (buyToken) IWETH(weth).withdraw(request.hedgeWethLimitAttoEth);
 		activeV4PoolManager = request.router;
 		bytes memory callbackData = abi.encode(
 			V4SwapCallbackData({
@@ -686,7 +700,7 @@ contract OpenOracleArbitrageExecutor {
 				poolFee: request.poolFee,
 				buyToken: buyToken,
 				amount: amount,
-				limit: request.hedgeWethLimit
+				limit: request.hedgeWethLimitAttoEth
 			})
 		);
 		activeV4CallbackHash = keccak256(callbackData);
@@ -695,10 +709,14 @@ contract OpenOracleArbitrageExecutor {
 			activeV4PoolManager == address(0) && activeV4CallbackHash == bytes32(0),
 			'Uniswap V4 callback was not consumed'
 		);
-		hedgeAmountWeth = abi.decode(encodedResult, (uint256));
-		uint256 expectedEth = buyToken ? request.hedgeWethLimit - hedgeAmountWeth : hedgeAmountWeth;
-		require(address(this).balance == ethBalance + expectedEth, 'Uniswap V4 native balance delta was not exact');
-		if (expectedEth != 0) IWETH(weth).deposit{ value: expectedEth }();
+		hedgeAmountWethAttoEth = abi.decode(encodedResult, (uint256));
+		uint256 expectedAttoEth =
+			buyToken ? request.hedgeWethLimitAttoEth - hedgeAmountWethAttoEth : hedgeAmountWethAttoEth;
+		require(
+			address(this).balance == ethBalanceAttoEth + expectedAttoEth,
+			'Uniswap V4 native balance delta was not exact'
+		);
+		if (expectedAttoEth != 0) IWETH(weth).deposit{ value: expectedAttoEth }();
 	}
 
 	function _v4TickSpacing(uint24 poolFee) private pure returns (int24) {

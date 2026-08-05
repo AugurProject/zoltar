@@ -3,7 +3,7 @@ import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 type ProtocolConfig = {
 	forkBurnDivisor: bigint
 	forkThresholdDivisor: bigint
-	initialEscalationGameDeposit: bigint
+	initialEscalationGameDepositAttoRep: bigint
 }
 
 type ProtocolConfigInput = Partial<{
@@ -26,11 +26,11 @@ function readProcessEnv(name: string): string | undefined {
 function getEnvironmentProtocolConfigOverrides(): ProtocolConfigInput {
 	const forkBurnDivisor = readProcessEnv('ZOLTAR_FORK_BURN_DIVISOR')
 	const forkThresholdDivisor = readProcessEnv('ZOLTAR_FORK_THRESHOLD_DIVISOR')
-	const initialEscalationGameDeposit = readProcessEnv('ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT')
+	const initialEscalationGameDepositAttoRep = readProcessEnv('ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT')
 	return {
 		...(forkBurnDivisor === undefined ? {} : { forkBurnDivisor }),
 		...(forkThresholdDivisor === undefined ? {} : { forkThresholdDivisor }),
-		...(initialEscalationGameDeposit === undefined ? {} : { initialEscalationGameDeposit }),
+		...(initialEscalationGameDepositAttoRep === undefined ? {} : { initialEscalationGameDepositAttoRep }),
 	}
 }
 
@@ -45,11 +45,11 @@ function getGlobalProtocolConfigOverrides(): ProtocolConfigInput {
 	if (typeof rawConfig !== 'object' || rawConfig === null) return {}
 	const forkBurnDivisor = readProtocolConfigOverrideValue(rawConfig, 'forkBurnDivisor')
 	const forkThresholdDivisor = readProtocolConfigOverrideValue(rawConfig, 'forkThresholdDivisor')
-	const initialEscalationGameDeposit = readProtocolConfigOverrideValue(rawConfig, 'initialEscalationGameDeposit')
+	const initialEscalationGameDepositAttoRep = readProtocolConfigOverrideValue(rawConfig, 'initialEscalationGameDepositAttoRep')
 	return {
 		...(forkBurnDivisor === undefined ? {} : { forkBurnDivisor }),
 		...(forkThresholdDivisor === undefined ? {} : { forkThresholdDivisor }),
-		...(initialEscalationGameDeposit === undefined ? {} : { initialEscalationGameDeposit }),
+		...(initialEscalationGameDepositAttoRep === undefined ? {} : { initialEscalationGameDepositAttoRep }),
 	}
 }
 
@@ -68,17 +68,17 @@ function parseConfigBigInt(value: bigint | number | string | undefined, field: k
 function validateProtocolConfig(config: ProtocolConfigInput): ProtocolConfig {
 	const forkBurnDivisor = parseConfigBigInt(config.forkBurnDivisor, 'forkBurnDivisor')
 	const forkThresholdDivisor = parseConfigBigInt(config.forkThresholdDivisor, 'forkThresholdDivisor')
-	const initialEscalationGameDeposit = parseConfigBigInt(config.initialEscalationGameDeposit, 'initialEscalationGameDeposit')
+	const initialEscalationGameDepositAttoRep = parseConfigBigInt(config.initialEscalationGameDepositAttoRep, 'initialEscalationGameDepositAttoRep')
 	if (forkThresholdDivisor === undefined) throw new Error('Protocol config forkThresholdDivisor is required')
 	if (forkBurnDivisor === undefined) throw new Error('Protocol config forkBurnDivisor is required')
-	if (initialEscalationGameDeposit === undefined) throw new Error('Protocol config initialEscalationGameDeposit is required')
+	if (initialEscalationGameDepositAttoRep === undefined) throw new Error('Protocol config initialEscalationGameDepositAttoRep is required')
 	if (forkThresholdDivisor <= 1n) throw new Error('Protocol config forkThresholdDivisor must be greater than 1')
 	if (forkBurnDivisor < 5n) throw new Error('Protocol config forkBurnDivisor must be at least 5')
-	if (initialEscalationGameDeposit < 10n ** 18n) throw new Error('Protocol config initialEscalationGameDeposit must be at least 1 REP')
+	if (initialEscalationGameDepositAttoRep < 10n ** 18n) throw new Error('Protocol config initialEscalationGameDepositAttoRep must be at least 1 REP')
 	return {
 		forkBurnDivisor,
 		forkThresholdDivisor,
-		initialEscalationGameDeposit,
+		initialEscalationGameDepositAttoRep,
 	}
 }
 

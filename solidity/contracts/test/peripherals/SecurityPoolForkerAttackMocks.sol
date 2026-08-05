@@ -27,7 +27,7 @@ contract SecurityPoolForkerMaliciousEventEmitter {
 	}
 
 	function emitForkSnapshotEvents(ISecurityPool, address, address, uint256, uint256, uint256) external {
-		targetPool.transferEth(receiver, targetPool.completeSetCollateralAmount());
+		targetPool.transferEth(receiver, targetPool.settlementCollateralAttoEth());
 	}
 }
 
@@ -74,7 +74,7 @@ contract SecurityPoolForkerFakePoolMock {
 
 	function activateForkMode() external pure {}
 
-	function completeSetCollateralAmount() external pure returns (uint256) {
+	function settlementCollateralAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -112,9 +112,9 @@ contract SecurityPoolForkerAttackParentMock {
 	IShareToken private immutable configuredShareToken;
 	uint256 private immutable configuredQuestionId;
 	uint256 private immutable configuredStatoblastSecurityMultiplierBps;
-	uint256 private immutable configuredCompleteSetCollateralAmount;
-	uint256 private immutable configuredTotalSecurityBondAllowance;
-	uint256 private immutable configuredPoolOwnershipDenominator;
+	uint256 private immutable configuredSettlementCollateralAttoEth;
+	uint256 private immutable configuredTotalCoverageCommitmentAttoEth;
+	uint256 private immutable configuredTotalRepBackingUnits;
 
 	constructor(
 		uint248 configuredUniverse,
@@ -122,8 +122,8 @@ contract SecurityPoolForkerAttackParentMock {
 		IShareToken configuredShareTokenAddress,
 		uint256 configuredQuestion,
 		uint256 configuredMultiplier,
-		uint256 configuredCollateralAmount,
-		uint256 configuredBondAllowance,
+		uint256 settlementCollateralAttoEth_,
+		uint256 configuredCoverageCommitmentAttoEth,
 		uint256 configuredDenominator
 	) {
 		configuredSystemState = SystemState.PoolForked;
@@ -132,9 +132,9 @@ contract SecurityPoolForkerAttackParentMock {
 		configuredShareToken = configuredShareTokenAddress;
 		configuredQuestionId = configuredQuestion;
 		configuredStatoblastSecurityMultiplierBps = configuredMultiplier;
-		configuredCompleteSetCollateralAmount = configuredCollateralAmount;
-		configuredTotalSecurityBondAllowance = configuredBondAllowance;
-		configuredPoolOwnershipDenominator = configuredDenominator;
+		configuredSettlementCollateralAttoEth = settlementCollateralAttoEth_;
+		configuredTotalCoverageCommitmentAttoEth = configuredCoverageCommitmentAttoEth;
+		configuredTotalRepBackingUnits = configuredDenominator;
 	}
 
 	function systemState() external view returns (SystemState) {
@@ -161,16 +161,16 @@ contract SecurityPoolForkerAttackParentMock {
 		return configuredStatoblastSecurityMultiplierBps;
 	}
 
-	function completeSetCollateralAmount() external view returns (uint256) {
-		return configuredCompleteSetCollateralAmount;
+	function settlementCollateralAttoEth() external view returns (uint256) {
+		return configuredSettlementCollateralAttoEth;
 	}
 
-	function totalSecurityBondAllowance() external view returns (uint256) {
-		return configuredTotalSecurityBondAllowance;
+	function totalCoverageCommitmentAttoEth() external view returns (uint256) {
+		return configuredTotalCoverageCommitmentAttoEth;
 	}
 
-	function poolOwnershipDenominator() external view returns (uint256) {
-		return configuredPoolOwnershipDenominator;
+	function totalRepBackingUnits() external view returns (uint256) {
+		return configuredTotalRepBackingUnits;
 	}
 
 	function authorizeChildPool(ISecurityPool) external pure {}
@@ -258,20 +258,20 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 		returns (
 			bytes32[64][3] memory carryPeaks,
 			uint256[3] memory carryLeafCounts,
-			uint256[3] memory carryTotals,
+			uint256[3] memory carryTotalsAttoRep,
 			bytes32[3] memory nullifierRoots
 		)
 	{}
 
-	function getOutcomeBalances() external pure returns (uint256[3] memory outcomeBalances) {}
+	function getOutcomeBalancesAttoRep() external pure returns (uint256[3] memory outcomeBalances) {}
 
 	function getForkCarryRoots() external pure returns (bytes32[3] memory carryRoots) {}
 
-	function startBond() external pure returns (uint256) {
+	function startBondAttoRep() external pure returns (uint256) {
 		return 1;
 	}
 
-	function nonDecisionThreshold() external pure returns (uint256) {
+	function nonDecisionThresholdAttoRep() external pure returns (uint256) {
 		return 1;
 	}
 
@@ -288,7 +288,7 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 	function claimDepositForWinningWithoutTransfer(
 		uint256,
 		BinaryOutcomes.BinaryOutcome
-	) external view returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
+	) external view returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		return (configuredDepositor, configuredClaimAmount, configuredClaimAmount);
 	}
 
@@ -375,17 +375,17 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		configuredEscalationGame.drainToForker(msg.sender);
 	}
 
-	function updateCollateralAmount() external pure {}
+	function updateSettlementCollateral() external pure {}
 
-	function completeSetCollateralAmount() external pure returns (uint256) {
+	function settlementCollateralAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
-	function totalSecurityBondAllowance() external pure returns (uint256) {
+	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
-	function poolOwnershipDenominator() external pure returns (uint256) {
+	function totalRepBackingUnits() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -399,9 +399,9 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		external
 		pure
 		returns (
-			uint256 poolOwnership,
-			uint256 securityBondAllowance,
-			uint256 repInEscalationGame,
+			uint256 repBackingUnits,
+			uint256 coverageCommitmentAttoEth,
+			uint256 disputeStakedRepAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}
@@ -507,7 +507,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		return configuredRepToken;
 	}
 
-	function setOwnershipDenominator(uint256) external pure {}
+	function setTotalRepBackingUnits(uint256) external pure {}
 
 	function awaitingForkContinuation() external view returns (bool) {
 		return awaitingContinuation;
@@ -539,9 +539,9 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		external
 		pure
 		returns (
-			uint256 poolOwnership,
-			uint256 securityBondAllowance,
-			uint256 repInEscalationGame,
+			uint256 repBackingUnits,
+			uint256 coverageCommitmentAttoEth,
+			uint256 disputeStakedRepAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}
@@ -554,11 +554,11 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		if (operationalMode) useSecondOperationalEscalationGame = true;
 	}
 
-	function poolOwnershipDenominator() external pure returns (uint256) {
+	function totalRepBackingUnits() external pure returns (uint256) {
 		return 0;
 	}
 
-	function totalSecurityBondAllowance() external pure returns (uint256) {
+	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 }

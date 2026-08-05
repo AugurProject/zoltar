@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import type { MarketDetails } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { tryParseDecimalInput } from '../../../lib/decimal.js'
@@ -17,10 +17,10 @@ export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecur
 export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei: string) {
 	const input = initialReportPriorityFeeGwei.trim()
 	if (input === '') return 'Enter an initial-report priority fee in gwei.'
-	const priorityFeeWeiPerGas = tryParseDecimalInput(input, 9)
-	if (priorityFeeWeiPerGas === undefined) return 'Enter a gwei value with at most 9 decimal places.'
-	if (priorityFeeWeiPerGas <= 0n) return 'Initial-report priority fee must be greater than 0 gwei.'
-	if (priorityFeeWeiPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
+	const priorityFeeAttoEthPerGas = tryParseDecimalInput(input, 9)
+	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a gwei value with at most 9 decimal places.'
+	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0 gwei.'
+	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
 	return undefined
 }
 

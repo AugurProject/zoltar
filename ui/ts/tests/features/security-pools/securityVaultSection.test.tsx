@@ -17,8 +17,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -26,15 +26,15 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 10n,
-		escalationEscrowedRep: 3n * 10n ** 18n,
+		disputeStakedRepAttoRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
-		poolOwnershipDenominator: 1n,
-		repDepositShare: 12n * 10n ** 18n,
+		totalRepBackingUnits: 1n,
+		vaultRepBackingAttoRep: 12n * 10n ** 18n,
 		repToken: zeroAddress,
-		securityBondAllowance: 2n * 10n ** 18n,
+		coverageCommitmentAttoEth: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
-		totalSecurityBondAllowance: 3n * 10n ** 18n,
-		unpaidEthFees: 1n * 10n ** 18n,
+		totalCoverageCommitmentAttoEth: 3n * 10n ** 18n,
+		claimableFeesAttoEth: 1n * 10n ** 18n,
 		universeId: 1n,
 		vaultAddress: zeroAddress,
 		...overrides,
@@ -46,11 +46,11 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onDepositRep: () => undefined,
+		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
-		onRedeemRep: () => undefined,
-		onSetSecurityBondAllowance: () => undefined,
+		onRedeemRepFromVault: () => undefined,
+		onSetCoverageCommitment: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
 		oracleManagerDetails: undefined,
@@ -64,7 +64,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		securityVaultForm: {
 			depositAmount: '',
 			repWithdrawAmount: '',
-			securityBondAllowanceAmount: '',
+			coverageCommitmentEthAmount: '',
 			securityPoolAddress: zeroAddress,
 			selectedVaultAddress: zeroAddress,
 		},
@@ -74,7 +74,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 			loading: false,
 			value: 8n * 10n ** 18n,
 		},
-		securityVaultRepBalance: undefined,
+		walletRepBalanceAttoRep: undefined,
 		securityVaultResult: undefined,
 		selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 		showHeader: false,
@@ -97,8 +97,8 @@ function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVault
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
-		queuedOperationEthCost: 0n,
-		requestPriceEthCost: 0n,
+		queuedOperationCostAttoEth: 0n,
+		requestPriceCostAttoEth: 0n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
@@ -137,19 +137,19 @@ describe('SecurityVaultSection', () => {
 		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
 		if (!(selectedVaultCard instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		const selectedVaultQueries = within(selectedVaultCard)
-		expect(selectedVaultQueries.getByText('Free REP')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Vault REP backing')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
-		expect(selectedVaultQueries.getByText('Escalation REP')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
 	})
 
-	test('keeps nonzero escalation REP visible in the embedded selected-vault action summary', async () => {
+	test('keeps nonzero dispute-staked REP visible in the embedded selected-vault action summary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SelectedVaultSummarySection
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				securityBondAllowance={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ escalationEscrowedRep: 3n * 10n ** 18n })}
+				coverageCommitmentAttoEth={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedRepAttoRep: 3n * 10n ** 18n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
 				variant='embedded'
@@ -157,19 +157,19 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const escalationMetric = within(document.body).getByText('Escalation REP').closest('.security-pool-browse-vault-row-kpi')
-		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded escalation REP metric')
+		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded dispute-staked REP metric')
 		expect(escalationMetric.textContent).toContain('3.00 REP')
 	})
 
-	test('keeps zero escalation REP explicit in the embedded selected-vault action summary', async () => {
+	test('keeps zero dispute-staked REP explicit in the embedded selected-vault action summary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SelectedVaultSummarySection
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				securityBondAllowance={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ escalationEscrowedRep: 0n })}
+				coverageCommitmentAttoEth={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
 				variant='embedded'
@@ -177,8 +177,8 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const escalationMetric = within(document.body).getByText('Escalation REP').closest('.security-pool-browse-vault-row-kpi')
-		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded escalation REP metric')
+		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded dispute-staked REP metric')
 		expect(escalationMetric.textContent).toContain('0 REP')
 	})
 
@@ -192,7 +192,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
 						selectedVaultAddress: zeroAddress,
 					},
@@ -205,7 +205,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
 		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
-		expect(documentQueries.queryByText('Refresh the vault before setting a security bond allowance.')).toBeNull()
+		expect(documentQueries.queryByText('Refresh the vault before setting a coverage commitment.')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 
@@ -231,10 +231,10 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						escalationEscrowedRep: 0n,
-						repDepositShare: 0n,
-						securityBondAllowance: 0n,
-						unpaidEthFees: 1n * 10n ** 18n,
+						disputeStakedRepAttoRep: 0n,
+						vaultRepBackingAttoRep: 0n,
+						coverageCommitmentAttoEth: 0n,
+						claimableFeesAttoEth: 1n * 10n ** 18n,
 					}),
 				})}
 			/>,
@@ -256,7 +256,7 @@ describe('SecurityVaultSection', () => {
 						universeHasForked: true,
 					}),
 					securityVaultDetails: createSecurityVaultDetails({
-						unpaidEthFees: 0n,
+						claimableFeesAttoEth: 0n,
 					}),
 				})}
 			/>,
@@ -285,7 +285,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -305,7 +305,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
-	test('uses neutral missing-state copy when a bond allowance update succeeds before manager state is visible', async () => {
+	test('uses neutral missing-state copy when a coverage commitment update succeeds before manager state is visible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -317,12 +317,12 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
 					securityVaultResult: {
-						action: 'queueSetSecurityBondAllowance',
+						action: 'queueSetCoverageCommitmentAttoEth',
 						hash: '0x02',
 					},
 				})}
@@ -331,10 +331,40 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Set bond allowance' }))
-		const dialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Set coverage commitment' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Set coverage commitment' })
 		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
+	})
+
+	test('labels queued vault operation amounts with exact human units', async () => {
+		for (const queuedCase of [
+			{ action: 'queueWithdrawRep' as const, amountLabel: 'REP withdrawal', amountText: '5 REP', operation: 'withdrawRep' as const, openLabel: 'Withdraw REP' },
+			{ action: 'queueSetCoverageCommitmentAttoEth' as const, amountLabel: 'Coverage commitment', amountText: '5 ETH', operation: 'setCoverageCommitment' as const, openLabel: 'Set coverage commitment' },
+		]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({
+							pendingOperation: { amount: 5n * 10n ** 18n, initiatorVault: zeroAddress, operation: queuedCase.operation, operationId: 7n, targetVault: zeroAddress },
+							pendingOperationSlotId: 7n,
+							pendingSettlementOperationIds: [7n],
+						}),
+						securityVaultResult: { action: queuedCase.action, hash: '0x01' },
+					})}
+				/>,
+			)
+			try {
+				const documentQueries = within(document.body)
+				fireEvent.click(documentQueries.getByRole('button', { name: queuedCase.openLabel }))
+				const dialog = documentQueries.getByRole('dialog', { name: queuedCase.openLabel })
+				expect(within(dialog).getByText(queuedCase.amountLabel)).not.toBeNull()
+				expect(within(dialog).getByText(queuedCase.amountText)).not.toBeNull()
+			} finally {
+				await renderedComponent.cleanup()
+			}
+		}
 	})
 
 	test('shows the shared failed badge when a queued withdrawal fails', async () => {
@@ -409,8 +439,8 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const lifecycleReason = documentQueries.getByText('Vault collateral actions are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
-		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set bond allowance']) {
+		const lifecycleReason = documentQueries.getByText('REP-backing deposits, REP withdrawals, and coverage-commitment updates are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
+		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set coverage commitment']) {
 			const button = documentQueries.getByRole('button', { name: actionLabel })
 			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
 			expectTransactionButtonDisabled(document.body, actionLabel)
@@ -427,7 +457,7 @@ describe('SecurityVaultSection', () => {
 					accountState: createAccountState({ address: undefined }),
 					modalFirst: true,
 					poolState: createEndedPoolState(),
-					securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
 				})}
 			/>,
 		)
@@ -445,7 +475,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -471,7 +501,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: otherVaultAddress,
 					},
@@ -490,12 +520,12 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						escalationEscrowedRep: 0n,
-						repDepositShare: 0n,
-						securityBondAllowance: 0n,
-						unpaidEthFees: 0n,
+						disputeStakedRepAttoRep: 0n,
+						vaultRepBackingAttoRep: 0n,
+						coverageCommitmentAttoEth: 0n,
+						claimableFeesAttoEth: 0n,
 					}),
-					securityVaultRepBalance: 0n,
+					walletRepBalanceAttoRep: 0n,
 				})}
 			/>,
 		)
@@ -513,10 +543,10 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						escalationEscrowedRep: 0n,
-						repDepositShare: 0n,
-						securityBondAllowance: 0n,
-						unpaidEthFees: 0n,
+						disputeStakedRepAttoRep: 0n,
+						vaultRepBackingAttoRep: 0n,
+						coverageCommitmentAttoEth: 0n,
+						claimableFeesAttoEth: 0n,
 					}),
 				})}
 			/>,
@@ -532,7 +562,7 @@ describe('SecurityVaultSection', () => {
 		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected deposit transaction context')
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
-		expect(depositDialogQueries.getByText('REP Collateral Amount')).not.toBeNull()
+		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
 		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
 		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
 		expect(
@@ -542,7 +572,7 @@ describe('SecurityVaultSection', () => {
 		).toBe(true)
 	})
 
-	test('fills the security bond allowance input from the backed Max amount', async () => {
+	test('fills the coverage commitment input from the backed Max amount', async () => {
 		const formChanges: Partial<SecurityVaultSectionProps['securityVaultForm']>[] = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -552,8 +582,8 @@ describe('SecurityVaultSection', () => {
 					},
 					oracleManagerDetails: createOracleManagerDetails(),
 					securityVaultDetails: createSecurityVaultDetails({
-						repDepositShare: 6n * 10n ** 18n,
-						securityBondAllowance: 0n,
+						vaultRepBackingAttoRep: 6n * 10n ** 18n,
+						coverageCommitmentAttoEth: 0n,
 					}),
 				})}
 			/>,
@@ -562,16 +592,16 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 
-		const maxButton = documentQueries.getAllByRole('button', { name: 'Security Bond Allowance Amount Max' })[0]
-		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected allowance Max button')
+		const maxButton = documentQueries.getAllByRole('button', { name: 'Coverage commitment amount Max' })[0]
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('coverage commitment')
 		maxButton.focus()
 		expect(document.activeElement).toBe(maxButton)
 		fireEvent.click(maxButton)
 
-		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.333333333333333333' })
+		expect(formChanges.at(-1)).toEqual({ coverageCommitmentEthAmount: '1.333333333333333333' })
 	})
 
-	test('allows setting the security bond allowance to zero', async () => {
+	test('allows setting the coverage commitment to zero', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -579,7 +609,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '0',
+						coverageCommitmentEthAmount: '0',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -588,25 +618,25 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
+		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
 	})
 
-	test('allows a non-zero bond allowance when the oracle price is stale but fresh-report funding is available', async () => {
+	test('allows a non-zero coverage commitment when the oracle price is stale but fresh-report funding is available', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					accountState: createAccountState({
-						ethBalance: 2n * 10n ** 18n,
+						ethBalanceAttoEth: 2n * 10n ** 18n,
 					}),
 					oracleManagerDetails: {
 						...createOracleManagerDetails(),
 						isPriceValid: false,
-						requestPriceEthCost: 1n,
+						requestPriceCostAttoEth: 1n,
 					},
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -615,7 +645,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
+		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
 	})
 
 	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
@@ -623,18 +653,18 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					accountState: createAccountState({
-						ethBalance: 2n * 10n ** 18n,
+						ethBalanceAttoEth: 2n * 10n ** 18n,
 					}),
 					oracleManagerDetails: {
 						...createOracleManagerDetails(),
 						isPriceValid: false,
-						requestPriceEthCost: 1n,
+						requestPriceCostAttoEth: 1n,
 					},
-					securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -646,18 +676,18 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
-	test('blocks free REP withdrawal while escalation deposits remain unsettled', async () => {
+	test('blocks pool-held vault REP backing withdrawal while escalation deposits remain unsettled', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					securityVaultDetails: createSecurityVaultDetails({
-						escalationEscrowedRep: 3n * 10n ** 18n,
-						repDepositShare: 20n * 10n ** 18n,
+						disputeStakedRepAttoRep: 3n * 10n ** 18n,
+						vaultRepBackingAttoRep: 20n * 10n ** 18n,
 					}),
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -677,13 +707,13 @@ describe('SecurityVaultSection', () => {
 						oracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
 							priceValidUntilTimestamp: 10n,
-							requestPriceEthCost: 1n * 10n ** 18n,
+							requestPriceCostAttoEth: 1n * 10n ** 18n,
 						}),
-						securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedRepAttoRep: 0n }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -693,7 +723,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Set security bond allowance', 'Need 1.2 more ETH in this wallet to queue this bond allowance update.')
+		expectTransactionButtonDisabled(document.body, 'Set coverage commitment', 'Need 1.2 more ETH in this wallet to queue this coverage commitment update.')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
 	})
 
@@ -705,16 +735,16 @@ describe('SecurityVaultSection', () => {
 						oracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
 							priceValidUntilTimestamp: 10n,
-							requestPriceEthCost: 1n * 10n ** 18n,
+							requestPriceCostAttoEth: 1n * 10n ** 18n,
 						}),
 						securityVaultDetails: createSecurityVaultDetails({
-							escalationEscrowedRep: 0n,
-							repDepositShare: 13n * 10n ** 18n,
+							disputeStakedRepAttoRep: 0n,
+							vaultRepBackingAttoRep: 13n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							coverageCommitmentEthAmount: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultAddress: zeroAddress,
 						},
@@ -724,7 +754,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
+		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
@@ -767,7 +797,7 @@ describe('SecurityVaultSection', () => {
 		expect(document.body.textContent?.includes('This queued self-service operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
-	test('blocks non-zero security bond allowances below the minimum', async () => {
+	test('blocks non-zero coverage commitments below the minimum', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -775,7 +805,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '0.5',
+						coverageCommitmentEthAmount: '0.5',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -784,7 +814,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Set security bond allowance', 'Enter at least 1 ETH for a non-zero allowance.')
+		expectTransactionButtonDisabled(document.body, 'Set coverage commitment', 'Enter at least 1 ETH for a non-zero coverage commitment.')
 	})
 
 	test('does not render a local vault transaction status card', async () => {
@@ -792,7 +822,7 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					securityVaultResult: {
-						action: 'depositRep',
+						action: 'depositRepToVault',
 						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 					},
 				})}
@@ -812,16 +842,16 @@ describe('SecurityVaultSection', () => {
 					oracleManagerDetails: createOracleManagerDetails(),
 					poolState: createEndedPoolState(),
 					securityVaultDetails: createSecurityVaultDetails({
-						escalationEscrowedRep: 0n,
+						disputeStakedRepAttoRep: 0n,
 					}),
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						securityBondAllowanceAmount: '1',
+						coverageCommitmentEthAmount: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
-					securityVaultRepBalance: 10n * 10n ** 18n,
+					walletRepBalanceAttoRep: 10n * 10n ** 18n,
 				})}
 			/>,
 		)
@@ -829,7 +859,7 @@ describe('SecurityVaultSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set security bond allowance')
+		expectTransactionButtonDisabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
 	})
 
@@ -841,7 +871,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: zeroAddress,
 					},
@@ -850,7 +880,7 @@ describe('SecurityVaultSection', () => {
 						loading: false,
 						value: 0n,
 					},
-					securityVaultRepBalance: 10n * 10n ** 18n,
+					walletRepBalanceAttoRep: 10n * 10n ** 18n,
 				})}
 			/>,
 		)
@@ -920,7 +950,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultAddress: '0x00000000000000000000000000000000000000a1',
 					},
@@ -948,7 +978,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						securityBondAllowanceAmount: '',
+						coverageCommitmentEthAmount: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
 						selectedVaultAddress: zeroAddress,
 					},

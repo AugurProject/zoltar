@@ -72,7 +72,7 @@ async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoo
 			const originId = await client.readContract({
 				abi: securityPoolFactoryAbi,
 				address: settings.deployment.securityPoolFactory,
-				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeWeiPerGas],
+				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas],
 				functionName: 'getOriginId',
 			})
 			return {
@@ -467,7 +467,7 @@ async function main() {
 						const desiredPools = parseDesiredPools(
 							Reflect.get(value, 'desiredPools') ??
 								settings.desiredPools.map(pool => ({
-									initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+									initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 									questionId: pool.questionId.toString(),
 									statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
 									universeId: pool.universeId.toString(),
@@ -569,6 +569,7 @@ async function main() {
 			})
 		: undefined
 	await using dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
+	void dashboardLifecycle
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -699,7 +700,7 @@ async function main() {
 				}
 				state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
-					state.walletEth = await client.getBalance({ address: state.wallet })
+					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {
@@ -743,7 +744,7 @@ async function main() {
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
 					if (selected !== undefined) {
-						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.debtToMove.toString()}:${selected.pool.lastPrice.toString()}`
+						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.coverageCommitmentToTransferAttoEth.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)
 							lastDryRunKey = dryRunKey

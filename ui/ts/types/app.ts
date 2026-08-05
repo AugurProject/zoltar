@@ -28,8 +28,8 @@ export type WriteOperationsParameters = {
 export type AccountState = {
 	address: Address | undefined
 	chainId: string | undefined
-	ethBalance: bigint | undefined
-	wethBalance: bigint | undefined
+	ethBalanceAttoEth: bigint | undefined
+	wethBalanceAttoEth: bigint | undefined
 }
 
 export type MarketFormState = {
@@ -53,7 +53,7 @@ export type SecurityPoolFormState = {
 
 export type SecurityVaultFormState = {
 	depositAmount: string
-	securityBondAllowanceAmount: string
+	coverageCommitmentEthAmount: string
 	repWithdrawAmount: string
 	selectedVaultAddress: string
 	securityPoolAddress: string
@@ -79,7 +79,7 @@ export type OpenOracleCreateFormState = {
 	multiplier: string
 	protocolFee: string
 	settlementTime: string
-	settlerReward: string
+	settlerRewardEthAmount: string
 	token1Address: string
 	token2Address: string
 	disputeDelay: string

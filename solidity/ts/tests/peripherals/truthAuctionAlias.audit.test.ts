@@ -148,7 +148,7 @@ describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', ()
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
 		assert.strictEqual(await getETHBalance(client, attackReceiver.account.address), receiverBalanceBefore, 'rejected fake lineage must receive no accepted bid ETH')
-		assert.strictEqual((await getETHBalance(client, yesSecurityPool.securityPool)) - canonicalPoolBalanceBefore, expectedEthToBuy, 'canonical child should receive every accepted bid wei')
+		assert.strictEqual((await getETHBalance(client, yesSecurityPool.securityPool)) - canonicalPoolBalanceBefore, expectedEthToBuy, 'canonical child should receive every accepted bid attoETH')
 		assert.strictEqual(
 			await client.readContract({
 				abi: test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackChildMock.abi,

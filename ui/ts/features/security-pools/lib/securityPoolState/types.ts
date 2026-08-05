@@ -6,10 +6,10 @@ export type SecurityPoolForkStage = 'disabled' | 'initiate' | 'migration' | 'auc
 
 export type SecurityPoolActionId =
 	| 'approveRep'
-	| 'depositRep'
+	| 'depositRepToVault'
 	| 'queueWithdrawRep'
-	| 'redeemRep'
-	| 'queueSetSecurityBondAllowance'
+	| 'redeemRepFromVault'
+	| 'queueSetCoverageCommitmentAttoEth'
 	| 'redeemFees'
 	| 'createCompleteSet'
 	| 'redeemCompleteSet'
