@@ -253,10 +253,11 @@
 				</figure>
 				<p>Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.</p>
 				<div class="equation" id="eq-statoblast-rep-eth-price">
-					<math display="block" aria-label="REP per ETH price equals REP amount in attoREP times price precision divided by ETH amount in attoETH" data-source="repPerEthPrice = repAmountAttoRep \cdot pricePrecision / ethAmountAttoEth">
+					<math display="block" aria-label="REP per ETH price equals the floor of REP amount in attoREP times price precision divided by ETH amount in attoETH" data-source="repPerEthPrice = \left\lfloor repAmountAttoRep \cdot pricePrecision / ethAmountAttoEth \right\rfloor">
 						<mrow>
 							<mi>repPerEthPrice</mi>
 							<mo>=</mo>
+							<mo>&#x230A;</mo>
 							<mfrac>
 								<mrow>
 									<mi>repAmountAttoRep</mi>
@@ -265,51 +266,12 @@
 								</mrow>
 								<mi>ethAmountAttoEth</mi>
 							</mfrac>
+							<mo>&#x230B;</mo>
 						</mrow>
 					</math>
 					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span><code>repPerEthPrice</code> is stored as scaled REP units per ETH, and <code>pricePrecision</code> is the fixed scale factor that keeps REP-side and ETH-side terms in the same integer math units.</p>
 				</div>
-				<p>Statoblast uses the REP/ETH price to compare REP backing with ETH-denominated obligations. Vault owners choose their coverage commitment. A new coverage commitment must satisfy two conditions: total associated REP clears the pool multiplier, and REP outside escalation strictly clears the effective pool-held vault REP backing multiplier: the greater of the halfway migration multiplier and the 10,500-BPS liquidation-award reserve. The aggregate pool totals must independently satisfy both conditions under the same helper. Only vaults are liquidation targets. <code>BPS_DENOMINATOR = 10_000</code> converts the stored Statoblast multiplier from basis points. In the equations below, <code>valueScale = pricePrecision × BPS_DENOMINATOR</code> keeps both comparisons in exact integer units.</p>
-				<div class="equation" id="eq-statoblast-coverage-commitment-backing">
-					<math display="block" aria-label="coverage commitment admission requires non-strict associated REP coverage and strict pool-held vault REP backing migration coverage" data-source="associatedRepAttoRep * pricePrecision * BPS_DENOMINATOR >= coverageCommitmentAttoEth * poolSecurityMultiplierBps * repPerEthPrice; coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep * pricePrecision * BPS_DENOMINATOR > coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repPerEthPrice">
-						<mtable>
-							<mtr
-								><mtd><mi>associatedRepAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi></mtd
-								><mtd><mo>&ge;</mo></mtd
-								><mtd><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>poolSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi></mtd></mtr
-							>
-							<mtr
-								><mtd><mi>migrationHealthy</mi></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mo>(</mo><mi>coverageCommitmentAttoEth</mi><mo>=</mo><mn>0</mn><mo>)</mo><mo>&#x2228;</mo><mo>(</mo><mi>poolHeldVaultRepBackingAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>&gt;</mo><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi><mo>)</mo></mtd></mtr
-							>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Coverage Commitment Admission</span> Setting a coverage commitment cannot make the affected vault immediately liquidatable under either health condition, and aggregate pool totals must independently clear both inequalities.</p>
-				</div>
-				<div class="equation" id="eq-statoblast-liquidation-condition">
-					<math display="block" aria-label="a vault is liquidatable when ordinary associated REP coverage fails or strict pool-held vault REP backing migration coverage fails" data-source="ordinaryUnsafe = coverageCommitmentAttoEth * poolSecurityMultiplierBps * repPerEthPrice > associatedRepAttoRep * pricePrecision * BPS_DENOMINATOR; migrationUnsafe = coverageCommitmentAttoEth > 0 and coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repPerEthPrice >= poolHeldVaultRepBackingAttoRep * pricePrecision * BPS_DENOMINATOR; liquidatable = ordinaryUnsafe or migrationUnsafe">
-						<mtable>
-							<mtr
-								><mtd><mi>ordinaryUnsafe</mi></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>poolSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi><mo>&gt;</mo><mi>associatedRepAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi></mtd></mtr
-							>
-							<mtr
-								><mtd><mi>migrationUnsafe</mi></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mo>(</mo><mi>coverageCommitmentAttoEth</mi><mo>&gt;</mo><mn>0</mn><mo>)</mo><mo>&#x2227;</mo><mo>(</mo><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi><mo>&ge;</mo><mi>poolHeldVaultRepBackingAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>)</mo></mtd></mtr
-							>
-							<mtr
-								><mtd><mi>liquidatable</mi></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mi>ordinaryUnsafe</mi><mo>&#x2228;</mo><mi>migrationUnsafe</mi></mtd></mtr
-							>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Liquidation Condition</span> Associated REP includes pool-held vault REP backing and locally attributed escrow in the current game for ordinary underwriting. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="../explanation/liquidations.html">liquidation design</a> gives the full accounting rationale. Migration safety counts only pool-held vault REP backing and is strict for positive coverage commitments. Its effective multiplier is floored at 10,500 BPS so an admitted position normally reserves the complete liquidation award even at the 10,002-BPS minimum pool multiplier. Equality is unsafe; zero coverage commitment is explicitly healthy because it routes no OI. The coordinator's price threshold is the lower of the two floored thresholds because that condition fails first.</p>
-				</div>
-				<p>Equality at ordinary pool-coverage admission is permitted because that liquidation test uses the strict inverse inequality. Migration coverage is strict: REP outside escalation must be worth more than coverage commitment times the effective pool-held vault REP backing multiplier, including the 105% liquidation reserve floor. Later REP withdrawals and escalation deposits cannot violate either vault condition or either aggregate condition while the coverage commitment remains active. All operands are atomic integers: the contract compares the products exactly, while a derived maximum coverage commitment rounds the quotient down. The pool-wide maximum uses that floored aggregate ceiling minus the coverage commitments already assigned to other vaults. Liquidation requires the target to be liquidatable, caps ordinary moved coverage commitment to the amount whose complete 105% award is funded by target pool-held vault REP backing, and verifies that the caller remains safe. A maximum request records any untransferred residual as bad debt and removes it from active coverage commitment rather than assigning undercompensated or sub-minimum coverage commitment.</p>
+				<p>Statoblast uses the REP/ETH price to compare REP backing with ETH-denominated obligations. Vault owners choose their coverage commitment. Admission for each affected vault requires sufficient total associated REP and, for positive commitments, strictly sufficient pool-held vault REP backing under the effective migration multiplier. Aggregate pool totals must independently pass the same conditions, and only vaults are liquidation targets. The <a href="../explanation/liquidations.html#rule">liquidation design owns the exact integer equations</a>, including the 10,500-BPS liquidation-award reserve and the critical boundary: equality passes ordinary coverage admission but is unsafe for migration coverage. Later REP withdrawals and escalation deposits cannot violate either vault condition or either aggregate condition while the coverage commitment remains active.</p>
 				<h3>Complete Sets</h3>
 				<p>Traders and liquidity providers can mint complete sets by calling <code>createCompleteSet</code> with ETH. For each complete-set unit, the pool mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> ERC-1155 share through <code>ShareToken</code>. The deposited ETH increases <code>settlementCollateralAttoEth</code>.</p>
 				<ul>
@@ -346,47 +308,43 @@
 					<p class="diagram-caption"><span class="figure-label">Pool Accounting</span>REP backing units and fee accounting use separate proportional ledgers: REP backing units track vault REP backing, which is not automatically withdrawable REP, while the fee index tracks decayed ETH settlement collateral owed to vaults.</p>
 				</figure>
 				<div class="equation" id="eq-statoblast-rep-backing-units-conversion">
-					<math display="block" aria-label="REP backing units equals REP amount times REP backing units denominator divided by total REP balance, and REP amount equals REP backing units times total REP balance divided by REP backing units denominator" data-source="repBackingUnits = repAmountAttoRep \cdot totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep; repAmountAttoRep = repBackingUnits \cdot totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits">
+					<math display="block" aria-label="REP deposits mint amount times price precision backing units when the backing ledger or pool-held REP balance is empty, otherwise the floor of amount times total backing units divided by pool-held REP; converting backing units to REP returns zero for an empty backing ledger and otherwise floors the proportional conversion" data-source="attoRepToBackingUnits(repAmountAttoRep) = repAmountAttoRep * PRICE_PRECISION if totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0, otherwise \left\lfloor repAmountAttoRep * totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep \right\rfloor; backingUnitsToAttoRep(repBackingUnits) = 0 if totalRepBackingUnits = 0, otherwise \left\lfloor repBackingUnits * totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits \right\rfloor">
 						<mtable>
-							<mtr>
-								<mtd>
-									<mi>repBackingUnits</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mfrac>
-										<mrow>
-											<mi>repAmountAttoRep</mi>
-											<mo>&#x22C5;</mo>
-											<mi>totalRepBackingUnits</mi>
-										</mrow>
-										<mi>totalPoolHeldRepBalanceAttoRep</mi>
-									</mfrac>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>repAmountAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mfrac>
-										<mrow>
-											<mi>repBackingUnits</mi>
-											<mo>&#x22C5;</mo>
-											<mi>totalPoolHeldRepBalanceAttoRep</mi>
-										</mrow>
-										<mi>totalRepBackingUnits</mi>
-									</mfrac>
-								</mtd>
-							</mtr>
+							<mtr
+								><mtd><mi>attoRepToBackingUnits</mi><mo>(</mo><mi>repAmountAttoRep</mi><mo>)</mo></mtd
+								><mtd><mo>=</mo></mtd
+								><mtd><mi>repAmountAttoRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mtd
+								><mtd><mtext>if the ledger or pool-held REP balance is empty</mtext></mtd></mtr
+							>
+							<mtr
+								><mtd></mtd><mtd><mo>=</mo></mtd
+								><mtd
+									><mo>&#x230A;</mo
+									><mfrac
+										><mrow><mi>repAmountAttoRep</mi><mo>&#x22C5;</mo><mi>totalRepBackingUnits</mi></mrow
+										><mi>totalPoolHeldRepBalanceAttoRep</mi></mfrac
+									><mo>&#x230B;</mo></mtd
+								><mtd><mtext>otherwise</mtext></mtd></mtr
+							>
+							<mtr
+								><mtd><mi>backingUnitsToAttoRep</mi><mo>(</mo><mi>repBackingUnits</mi><mo>)</mo></mtd
+								><mtd><mo>=</mo></mtd
+								><mtd><mn>0</mn></mtd
+								><mtd><mtext>if the backing ledger is empty</mtext></mtd></mtr
+							>
+							<mtr
+								><mtd></mtd><mtd><mo>=</mo></mtd
+								><mtd
+									><mo>&#x230A;</mo
+									><mfrac
+										><mrow><mi>repBackingUnits</mi><mo>&#x22C5;</mo><mi>totalPoolHeldRepBalanceAttoRep</mi></mrow
+										><mi>totalRepBackingUnits</mi></mfrac
+									><mo>&#x230B;</mo></mtd
+								><mtd><mtext>otherwise</mtext></mtd></mtr
+							>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="equation-label">REP Backing Unit Conversion</span>Vault REP backing is represented as REP backing units against the current pool-held REP balance and total REP backing units.</p>
+					<p class="equation-caption"><span class="equation-label">REP Backing Unit Conversion</span>The bootstrap branch establishes <code>PRICE_PRECISION</code> backing units per attoREP. Once both totals are nonzero, each conversion floors integer division exactly as the contract does.</p>
 				</div>
 				<h3>Solvency Operations and Liquidation</h3>
 				<p>Withdrawals, coverage commitment changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves only coverage commitment whose complete fixed 5%-bonus award is funded by target pool-held vault REP backing to a caller vault that remains healthy. Escalation claims never move and remain payable only to their committed depositors. Accrued fees and pool-held vault REP backing surplus remain exclusively claimable by the target vault. A request at least equal to the target's full coverage commitment records untransferred residual coverage commitment as bad debt and removes it from active capacity without minting REP backing units or diluting other holders. A partial target with remaining coverage commitment preserves its REP and coverage commitment floors; any funded move leaves the caller above both floors. A bad-debt-only maximum execution transfers nothing to the caller, including when the otherwise funded slice would create sub-minimum caller coverage commitment.</p>
@@ -832,13 +790,7 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Migration-powered REP</span>Escalation claims are excluded.</p>
 				</div>
-				<div class="equation" id="eq-statoblast-migration-security">
-					<math display="block" aria-label="pool-held vault REP backing in attoREP times price precision and the basis-point denominator is strictly greater than coverage commitment in attoETH times the migration security multiplier in basis points and the REP per ETH price" data-source="poolHeldVaultRepBackingAttoRep * pricePrecision * BPS_DENOMINATOR > coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repPerEthPrice">
-						<mrow><mi>poolHeldVaultRepBackingAttoRep</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi><mo>&gt;</mo><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi></mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Migration security</span>This is the strict migration branch of the <a href="#eq-statoblast-coverage-commitment-backing">canonical coverage-commitment health equation</a>; actual OI routing is calculated separately.</p>
-				</div>
-				<p>The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so pool-held vault REP backing normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../explanation/liquidations.html#rule">liquidation design</a>. There is no coverage commitment-independent fraction of associated REP that must remain available: escalation capacity depends on the vault's current coverage commitment, REP price, and integer rounding, and a zero-coverage commitment vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.</p>
+				<p>Migration safety uses only pool-held vault REP backing and is strict for every positive coverage commitment: equality is unsafe. The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so pool-held vault REP backing normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../explanation/liquidations.html#rule">liquidation design</a>. There is no coverage commitment-independent fraction of associated REP that must remain available: escalation capacity depends on the vault's current coverage commitment, REP price, and integer rounding, and a zero-coverage commitment vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.</p>
 				<p>A vault's migrated OI share is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and coverage commitment to one selected child, clears those two parent fields, and separately routes proportional pool-level settlement collateral. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration weight across sibling universes.</p>
 
 				<table>

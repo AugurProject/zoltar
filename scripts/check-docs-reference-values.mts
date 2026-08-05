@@ -131,9 +131,11 @@ function assertTruthAuctionCombinedRepCapDocs(): void {
 
 function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(securityPoolUtils, /return\s+poolHeldVaultRepBackingAttoRep \* valueScale >\s+coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repEthPrice;/)
-	assert.match(whitepaperStatoblast, /data-source="poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)
+	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)
 	assert.ok(!whitepaperStatoblast.includes('migratedOpenInterestValue'), 'the migration security inequality must use coverage commitment rather than routed OI')
-	assert.match(whitepaperStatoblast, /valueScale = pricePrecision × BPS_DENOMINATOR/)
+	assert.match(liquidationHtml, /valueScale = pricePrecision × BPS_DENOMINATOR/)
+	assert.match(whitepaperStatoblast, /liquidation design owns the exact integer equations/)
+	assert.match(whitepaperStatoblast, /equality passes ordinary coverage admission but is unsafe for migration coverage/)
 	assert.doesNotMatch(securityPoolUtils, /function calculateLiquidationTransfer\(/, 'the obsolete bonus-priced liquidation preview must not remain externally callable')
 	const externalPureFunctions = [...securityPoolUtils.matchAll(/function\s+(\w+)\([^{}]*?\)\s+external\s+pure/g)].map(match => match[1])
 	assert.deepEqual(externalPureFunctions, ['calculateFeeAccrual', 'calculateVaultFee', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'isLiquidationBeyondMinPriceDistance', 'calculateRetentionRate'], 'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors')
@@ -609,8 +611,8 @@ function assertLiquidationFullCloseDocs(): void {
 	for (const documentedClaim of [
 		'data-source="grossRepAwardAttoRep = ⌈coverageCommitmentTransferredAttoEth * repPerEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) / (PRICE_PRECISION * BPS_DENOMINATOR)⌉"',
 		'data-source="maximumFundedCoverageCommitmentAttoEth = ⌊transferableVaultRepBackingAttoRep * PRICE_PRECISION * BPS_DENOMINATOR / (repPerEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))⌋"',
-		'data-source="value(poolHeldVaultRepBackingAttoRep + disputeStakedRepAttoRep) >= coverageCommitmentAttoEth * poolSecurityMultiplier"',
-		'data-source="coverageCommitmentAttoEth = 0 or value(poolHeldVaultRepBackingAttoRep) > coverageCommitmentAttoEth * migrationSecurityMultiplier"',
+		'data-source="associatedRepAttoRep * pricePrecision * BPS_DENOMINATOR >= coverageCommitmentAttoEth * poolSecurityMultiplierBps * repPerEthPrice"',
+		'data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep * pricePrecision * BPS_DENOMINATOR > coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repPerEthPrice"',
 		'A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them.',
 		'The 105% quote is paid from pool-held vault REP backing',
 		'A donation that does not cross either live health boundary cannot stop execution; even a small donation can stop it when the target is sufficiently close to a boundary.',
@@ -853,19 +855,9 @@ function assertContractInteractionDistinctions(): void {
 		assert.match(diagramSpecs, new RegExp(`"data-flow": "${flow}"`), `Statoblast asset flow must include ${flow}`)
 	}
 	assert.doesNotMatch(diagramSpecs, /"data-flow": "share-token-to-trader-redemption"/)
-	assert.match(
-		whitepaperStatoblast,
-		/data-source="associatedRepAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice; coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/,
-	)
-	assert.match(
-		whitepaperStatoblast,
-		/data-source="ordinaryUnsafe = coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice > associatedRepAttoRep \* pricePrecision \* BPS_DENOMINATOR; migrationUnsafe = coverageCommitmentAttoEth > 0 and coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice >= poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR; liquidatable = ordinaryUnsafe or migrationUnsafe"/,
-	)
-	assert.match(
-		whitepaperStatoblast.replaceAll(/\s+/g, ' '),
-		/Associated REP includes pool-held vault REP backing and locally attributed escrow in the current game for ordinary underwriting\. Inherited carry remains aggregate commitment backing, with each leaf's depositor retained as its immutable payout owner and no per-vault child health credit; the <a href="\.\.\/explanation\/liquidations\.html">liquidation design<\/a> gives the full accounting rationale\./,
-	)
-	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or value\(poolHeldVaultRepBackingAttoRep\) > coverageCommitmentAttoEth \* migrationSecurityMultiplier"/)
+	assert.match(liquidationHtml, /data-source="associatedRepAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice"/)
+	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)
+	assert.match(whitepaperStatoblast.replaceAll(/\s+/g, ' '), /<a href="\.\.\/explanation\/liquidations\.html#rule">liquidation design owns the exact integer equations<\/a>[\s\S]*equality passes ordinary coverage admission but is unsafe for migration coverage/)
 	assert.match(
 		liquidationHtml,
 		/reservedBackingUnits = ⌈MIN_REP_DEPOSIT_ATTO_REP × totalRepBackingUnits \/ totalRepAttoRep⌉[\s\S]*reserve is at least the target backing units, no partial coverage commitment or REP transfer is fundable[\s\S]*transferableVaultRepBackingAttoRep = ⌊\(targetBackingUnits - reservedBackingUnits\) × totalRepAttoRep \/ totalRepBackingUnits⌋[\s\S]*maximum request[\s\S]*requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth[\s\S]*transferableVaultRepBackingAttoRep = ⌊targetBackingUnits × totalRepAttoRep \/ totalRepBackingUnits⌋[\s\S]*user queues that amount through the coordinator[\s\S]*pool's maximum-request path/,
@@ -899,7 +891,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(whitepaperStatoblast, /data-source="coverageCommitmentAttoEth \* statoblastSecurityMultiplierBps \* repPerEthPrice > repBacking/)
 	assert.match(
 		whitepaperStatoblast,
-		/A new coverage commitment must satisfy two conditions: total\s+associated REP clears the pool multiplier, and REP outside escalation\s+strictly clears the effective pool-held vault REP backing multiplier: the greater of the\s+halfway migration multiplier and the 10,500-BPS liquidation-award reserve\. The aggregate pool totals must\s+independently satisfy both conditions under the same helper\. Only vaults are\s+liquidation targets/,
+		/Admission for each affected vault requires sufficient total associated REP and, for positive commitments, strictly sufficient pool-held vault REP backing under the effective migration multiplier\. Aggregate pool totals must independently pass the same conditions, and only vaults are liquidation targets/,
 	)
 	assert.match(securityPool, /function _requirePoolCoverage\([\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*totalPoolHeldRepAttoRep,\s*totalDisputeStakedRepAttoRep,\s*totalCoverageCommitmentAttoEthValue/)
 	assert.match(securityPool, /function executeCoverageCommitmentUpdate\([\s\S]*SecurityPoolUtils\.isVaultHealthy\([\s\S]*'Vault commitment'[\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*getTotalPoolHeldRepAttoRep\(\),\s*_getTotalDisputeStakedRep\(\),\s*totalCoverageCommitmentAttoEth[\s\S]*'Pool commitment'/)
