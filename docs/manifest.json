@@ -2,8 +2,8 @@
 	"sections": [
 		{
 			"id": "tutorials",
-			"title": "Tutorials",
-			"description": "Learn the protocol by completing guided, safe exercises."
+			"title": "Guided tours",
+			"description": "Inspect deterministic protocol states in simulation; the first tour includes one resettable transaction."
 		},
 		{
 			"id": "how-to",
@@ -112,7 +112,7 @@
 		},
 		{
 			"path": "how-to/recover-oracle-operation.html",
-			"title": "Recover an oracle-assisted operation",
+			"title": "Recover an oracle-backed operation",
 			"summary": "Diagnose and recover a staged operation after settlement or callback rejection.",
 			"section": "how-to",
 			"topic": "Operations",
@@ -120,8 +120,8 @@
 		},
 		{
 			"path": "how-to/stage-oracle-operation.html",
-			"title": "Stage and recover an oracle-backed operation",
-			"summary": "Preflight, stage, verify, and recover a price-sensitive operation.",
+			"title": "Stage an oracle-backed operation",
+			"summary": "Preflight, fund, stage, and verify a price-sensitive operation before handing failures to recovery.",
 			"section": "how-to",
 			"topic": "Operations",
 			"keywords": ["OpenOracle", "staging", "price", "recovery"]

@@ -21,6 +21,8 @@
 				<h2>Validate manifest freshness</h2>
 				<p>The repository command checks both the Mainnet and Sepolia deployment manifests; its output identifies which manifest is stale. Select the intended chain ID before comparing addresses.</p>
 				<pre><code>bun run check:mainnet-deployment:current</code></pre>
+				<p>Expected result: zero exit status and a report naming the current manifest and validation source. A non-zero exit status means at least one manifest is not fresh; preserve the output rather than proceeding.</p>
+				<pre><code>bun run check:mainnet-deployment:current</code></pre>
 				<p>A non-zero result means at least one manifest is not fresh. Preserve the command output, selected manifest hash, chain ID, and verification block in the report before continuing with RPC checks.</p>
 			</section>
 			<section id="verify-runtime-code">

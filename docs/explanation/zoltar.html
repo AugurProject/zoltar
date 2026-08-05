@@ -19,7 +19,7 @@
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders may migrate or split their claims across one or more selected branches.</p>
+				<p>Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders can convert parent REP into a migration balance and use that balance to mint REP in one or more child universes.</p>
 
 				<p>The design closely follows the <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a> model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value.</p>
 
@@ -38,7 +38,7 @@
 						<p><code>ZoltarQuestionData</code> stores the question and defines its valid answer space.</p>
 					</div>
 					<div class="timeline-card">
-						<b>2. Disagreement persists</b>
+						<b>2. A fork is triggered</b>
 						<p>After the question end date, any address able to supply the threshold REP can call <code>forkUniverse</code>. Zoltar does not verify that a disagreement exists; applications decide when a fork is justified.</p>
 					</div>
 					<div class="timeline-card">
@@ -54,7 +54,7 @@
 						<p>Migration balances mint child REP into one or more selected branches.</p>
 					</div>
 					<div class="timeline-card">
-						<b>6. Coordination concentrates value</b>
+						<b>6. Applications and users choose where to continue</b>
 						<p>The protocol does not pick a winner. Users and applications decide where durable activity continues.</p>
 					</div>
 				</div>
@@ -65,7 +65,7 @@
 					<h2>1. System Overview</h2>
 					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 				</div>
-				<p>Zoltar has one job: define the valid universes that higher-level applications can rely on. It does not implement the market, collateral, or underwriting system built on top of it elsewhere in the repo. Its role is narrower and more fundamental:</p>
+				<p>Zoltar has one responsibility: define and account for branching universes. It does not implement the market, collateral, or underwriting system built on top of it elsewhere in the repo. Its role is narrower and more fundamental:</p>
 				<ul class="clean-list">
 					<li>register questions</li>
 					<li>encode valid answer spaces</li>
@@ -133,6 +133,12 @@
 					<p class="equation-caption"><span class="equation-label">Child Universe Id</span>Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
 				</div>
 				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
+				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches; it does not duplicate Statoblast ETH collateral. If a Statoblast vault migrates only to the Yes child, its application-level collateral and obligations follow Statoblast's separate migration rules.</div>
+				<pre><code>Genesis
+├── Yes: Alice holds 100 Yes-REP
+│   ├── Option A: Alice may later mint 100 Yes/A-REP
+│   └── Option B: Alice may later mint 100 Yes/B-REP
+└── No: Alice holds 100 No-REP</code></pre>
 
 				<figure class="diagram" id="fig-zoltar-fork-branch-set" aria-labelledby="universe-diagram-title">
 					<p class="diagram-title" id="universe-diagram-title">Universe Tree</p>

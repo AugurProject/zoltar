@@ -21,6 +21,52 @@
 				<h2>Prepare a deposit</h2>
 				<p>Choose an eligible outcome and calculate the accepted REP amount from current state. Read <code>securityVaults(msg.sender)</code>, <code>getPoolAccountingSnapshot()</code>, <code>priceOracleManagerAndOperatorQueuer().isPriceValid()</code>, and the game's round/deadline. The pool entrypoint is <code>depositToEscalationGame(outcome, maximumDepositAttoRep)</code>; it escrows the caller vault's pool-held REP backing, not a wallet transfer, so no REP approval is required. Coverage-bearing pools require a fresh price and post-deposit coverage checks must pass.</p>
 			</section>
+			<section id="worked-deposit-example">
+				<h2>Worked deposit and deadline example</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Field</th>
+							<th>Illustrative value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Current tentative outcome</td>
+							<td><code>Yes</code></td>
+						</tr>
+						<tr>
+							<td>Current binding REP</td>
+							<td><code>100 REP</code></td>
+						</tr>
+						<tr>
+							<td>Challenging outcome</td>
+							<td><code>No</code></td>
+						</tr>
+						<tr>
+							<td>Maximum amount offered</td>
+							<td><code>250 REP</code></td>
+						</tr>
+						<tr>
+							<td>Amount accepted by the game</td>
+							<td><code>200 REP</code></td>
+						</tr>
+						<tr>
+							<td>Previous deadline</td>
+							<td><code>2026-08-10 12:00 UTC</code></td>
+						</tr>
+						<tr>
+							<td>New deadline</td>
+							<td><code>2026-08-12 18:00 UTC</code></td>
+						</tr>
+						<tr>
+							<td>New tentative outcome</td>
+							<td><code>No</code></td>
+						</tr>
+					</tbody>
+				</table>
+				<p>The caller supplies a maximum, not a guaranteed transfer. The game applies its accepted-deposit calculation to current binding REP, round, curve, vault backing, and deadline state; any excess remains unaccepted. The new deadline is derived from the updated curve and can move only according to the contract's deadline rule, not according to the caller's chosen timestamp. Verify the deposit event's accepted amount, outcome, round, and deadline fields. The next deposit is valid only while the game remains active and its state has not advanced. Local settlement requires the game to be resolved; non-decision enables the fork path.</p>
+			</section>
 			<section id="advance-the-round">
 				<h2>Advance the round</h2>
 				<p>Submit the deposit and require the <code>DepositToEscalationGame</code> event, updated side/round, and deadline in the receipt. The game reaches a local result through its own time and state rules; the pool's claim action is <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>, while an own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the round again because another participant may have advanced it. Record the claim and independent evidence for the underlying answer.</p>

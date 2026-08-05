@@ -16,7 +16,7 @@
 			<section id="freeze-the-candidate">
 				<h2>Freeze the candidate</h2>
 				<ol>
-					<li>Choose the exact commit and create a release-candidate tag.</li>
+					<li>Choose and record the exact release-candidate commit. Do not create the final signed release tag yet.</li>
 					<li>Install from the lockfile and initialize generated contract dependencies in a clean checkout with <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
 					<li>Record Bun, Solidity compiler, Foundry, and operating-system versions.</li>
 					<li>Confirm the worktree is clean before producing artifacts.</li>
@@ -63,7 +63,7 @@ known_limitations:</code></pre>
 			</section>
 			<section id="release-gate">
 				<h2>Release gate</h2>
-				<p>No-go conditions are a dirty worktree, mismatched lockfile, failed or unexplained check, stale generated output, changed immutable parameter, artifact mismatch, or unreproducible clean-room build. Have a second machine or clean checkout reproduce the hashes before tagging. After deployment, continue with <a href="./verify-deployment.html">deployment verification</a>.</p>
+				<p>No-go conditions are a dirty worktree, mismatched lockfile, failed or unexplained check, stale generated output, an immutable-parameter change that is unreviewed, unexplained, absent from the economic analysis, or missing corresponding test and documentation updates, an artifact mismatch, or an unreproducible clean-room build. Have a second machine or clean checkout reproduce the hashes before creating the final signed release tag. This is an immutable contract release: deployed contracts cannot be paused, upgraded, or administratively rescued. After deployment, continue with <a href="./verify-deployment.html">deployment verification</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

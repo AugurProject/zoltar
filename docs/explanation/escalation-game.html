@@ -16,6 +16,48 @@
 				<p>The main boundary starts with one shared storage layout. The inherited game stack owns most counters, escrow, carry state, and settlement effects. Size-sensitive mutation paths run through layout-compatible <code>EscalationGameDepositDelegate</code> and <code>EscalationGameClaimDelegate</code> modules using <code>delegatecall</code>, so those writes still land in the game. The external <code>EscalationGameProofVerifier</code> owns storage-free proof and logarithm helpers. That separation keeps verification math reusable and testable without giving it authority to consume deposits, advance nullifiers, or move accounting totals.</p>
 				<p>Refactors usually hit four pressure points: storage ownership, accounting invariants, interface drift, and bytecode headroom. Those are the places where the contract split has to stay explicit or the architecture stops buying clarity.</p>
 			</header>
+			<section id="lifecycle-first">
+				<h2>One-Game Lifecycle</h2>
+				<p>An escalation game lets participants challenge the current tentative outcome by committing increasing amounts of REP. Each accepted deposit changes the game's supported outcome and deadline. The game either reaches a locally settled outcome or reaches the protocol's non-decision condition and continues through a Zoltar fork.</p>
+				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Field</th>
+							<th>Illustrative value</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Current tentative outcome</td>
+							<td><code>Yes</code></td>
+							<td>The outcome currently supported by the game.</td>
+						</tr>
+						<tr>
+							<td>Current binding REP</td>
+							<td><code>100 REP</code></td>
+							<td>Capital the challenger must meet or exceed according to the accepted-deposit formula.</td>
+						</tr>
+						<tr>
+							<td>Challenging outcome / maximum offered</td>
+							<td><code>No / 250 REP</code></td>
+							<td>The caller offers an upper bound; the game accepts only the amount allowed by current state.</td>
+						</tr>
+						<tr>
+							<td>Accepted amount</td>
+							<td><code>200 REP</code></td>
+							<td>Illustrative result after applying the deployed round and vault-backing rules; excess is not silently accepted.</td>
+						</tr>
+						<tr>
+							<td>Deadline</td>
+							<td><code>2026-08-10 12:00 → 2026-08-12 18:00 UTC</code></td>
+							<td>The new deadline is derived from the updated game curve and cannot be inferred from the caller's wall-clock choice.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>The receipt's deposit event supplies the accepted amount, outcome, round, and deadline. A later deposit is valid only while the game is active, the outcome is eligible, the caller has enough vault-backed REP, and the current deadline and round checks pass. Settlement requires the game to be locally resolved; a non-decision instead enables the fork-continuation path.</p>
+			</section>
 
 			<section id="module-split">
 				<h2>Module Split</h2>
@@ -110,7 +152,7 @@
 				<h2>Accounting Invariants</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../reference/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP behavior</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../reference/security-model.html#assumption-a20">A20 proof-data availability</a>, and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
 				<p>Safe refactors keep the local REP and unresolved-deposit counters in sync. Before aggregate export, every active vault lock appears in both its vault-local counter and the corresponding global total. Aggregate export is optional cleanup: it clears those counters and the parent vault's escrow, while the individual deposit rows remain only as canonical proof material and no longer represent parent logical authorization or physical escrow.</p>
-				<p>Child initialization copies the authenticated carry totals and funds the child game once at the applicable aggregate rate: one child REP per effective source REP for an unrelated fork, or the already-haircut aggregate backing for the escalation's own fork. It does not allocate that backing among vaults. After the child resolves, only proofs for winning deposits may settle. Any caller may relay a proof through the pool, while the committed depositor of the non-tradeable claim receives the winning payout from the aggregate game balance. The committed depositor remains the immutable payout owner. Inherited losing principal becomes terminal without a per-leaf transaction; local losing deposits still follow the ordinary local settlement rules.</p>
+				<p>Child initialization copies the authenticated carry totals and funds the child game once at the applicable aggregate rate: one child REP per effective source REP for an unrelated fork, or the already-haircut aggregate backing for the escalation's own fork. It does not allocate that backing among vaults. After the child resolves, only proofs for winning deposits may settle. Any caller may relay a proof through the pool, while the committed depositor of the non-transferable claim receives the winning payout from the aggregate game balance. The committed depositor remains the immutable payout owner. Inherited losing principal becomes terminal without a per-leaf transaction; local losing deposits still follow the ordinary local settlement rules.</p>
 				<p>The stable parent deposit identifier has two domains. In ordinary games it stays equal to the local <code>depositIndex</code>. In fork-continuation games it packs the creating game, outcome, and local index as <code>(uint256(uint160(address(this))) &lt;&lt; 96) | (uint256(outcomeIndex) &lt;&lt; 88) | depositIndex</code>. The address occupies 160 bits, the outcome occupies eight bits, and the local index occupies 88 bits. This reversible layout lets settlement recover the exact claim registry without a lookup table, so a child-local deposit and a grandchild-local deposit can never reuse the same carry/nullifier key just because both were appended at local index zero. That same identifier is stored in carry leaves, emitted by <code>LocalDepositAppended</code>, <code>CarryDepositConsumed</code>, and <code>ClaimDeposit</code>, returned by <code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through <code>consumedParentDepositIndexes</code>.</p>
 				<table>
 					<thead>
@@ -271,8 +313,8 @@
 			</section>
 			<section id="one-game-lifecycle">
 				<h2>One-game lifecycle recap</h2>
-				<p>One escalation game follows this loop: a claim is opened, conflicting deposits grow the response threshold, the deadline changes as deposits arrive, and the game either settles locally or reaches a fork continuation. The deposit delegate records deposits, the claim delegate records claims and withdrawals, settlement decides the local result, and the forker installs child continuation state. Shared storage makes those transitions one game even though bytecode is split across modules.</p>
-				<p>The external verifier supplies evidence about the underlying question; it does not own the game’s accounting. The module split and external verifier keep the transition surface small enough for deployment limits, but they also make interface snapshots and delegate-call boundaries release-critical implementation facts.</p>
+				<p>One escalation game follows this loop: a claim is opened, conflicting deposits grow the response threshold, the deadline changes as deposits arrive, and the game either settles locally or reaches a fork continuation. The deposit delegate records deposits and other size-sensitive mutations. The claim delegate initializes and calculates inherited retention checkpoints. The inherited settlement modules process claims and withdrawals.</p>
+				<p>The external verifier validates Merkle Mountain Range proofs, nullifier proofs, and proof-derived accounting values. It does not evaluate the real-world answer to the question and does not own the game's accounting. The module split and verifier keep the transition surface small enough for deployment limits, while interface snapshots and delegate-call boundaries remain release-critical implementation facts.</p>
 			</section>
 		</main>
 		<script src="../assets/js/protocolTerms.js"></script>

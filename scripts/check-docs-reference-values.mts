@@ -705,7 +705,7 @@ function assertOperationalGuideSemantics(): void {
 	assert.match(diagramSpecs, /"d": "M 380 140 H 410 V 65 H 440"/)
 	assert.match(diagramSpecs, /"d": "M 380 140 H 410 V 215 H 440"/)
 	assert.match(auctionDesign, /TruthAuctionFinalized activates the child immediately and bypasses AuctionStarted, bidding, and bid settlement/)
-	assert.match(auctionDesign, /If all required REP migrated or no repair ETH is required[\s\S]*activates the child immediately without <code>AuctionStarted<\/code>[\s\S]*Otherwise[\s\S]*<code>AuctionStarted<\/code>[\s\S]*one-week bidding window/)
+	assert.match(auctionDesign, /After migration closes, the forker either activates a child immediately when no repair is needed or opens a bounded auction[\s\S]*auction clearing determines how much ETH is retained/)
 	assert.doesNotMatch(auctionDesign, /forker then starts the underlying auction/)
 	assert.equal(auctionDesign.match(/forkResumedAt \+ 3 days/g)?.length ?? 0, 1, 'truth-auction explanation must state the canonical post-resume deadline once')
 	assert.match(liquidationGuide, /requestPriceIfNeededAndStageOperation\(Liquidation[\s\S]*ExecutedStagedOperation/)
@@ -729,7 +729,7 @@ function assertOperationalGuideSemantics(): void {
 		observablePredicates?: Record<string, string | string[]>
 		outcomes?: Array<{ trigger?: string; preconditions?: string[]; outcomes?: string[] }>
 		functions?: Record<string, string>
-		eventSignatures?: Record<string, string>
+		eventDeclarations?: Record<string, string>
 	}
 	assert.deepEqual(coordinatorSchema.observablePredicates, {
 		cache: ['fresh-cache', 'stale-cache'],
@@ -750,7 +750,7 @@ function assertOperationalGuideSemantics(): void {
 		.filter(item => item.type === 'event' && item.name !== undefined)
 		.map(item => item.name as string)
 		.toSorted()
-	assert.deepEqual(Object.keys(coordinatorSchema.eventSignatures ?? {}).toSorted(), abiEvents, 'coordinator event inventory must match the compiled ABI')
+	assert.deepEqual(Object.keys(coordinatorSchema.eventDeclarations ?? {}).toSorted(), abiEvents, 'coordinator event inventory must match the compiled ABI')
 	assert.match(priceCoordinator, /event PriceRequested\([\s\S]*event StagedOperationQueued\([\s\S]*event StagedOperationDisputeStakedRepSnapshotted\(/)
 	assert.match(openOracleCoordinatorReference, /PRICE_VALID_FOR_SECONDS = 5 minutes[\s\S]*MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes[\s\S]*OPEN_INTEREST_DIVIDER = 100/)
 	assert.match(prepareReleaseGuide, /bun run ui:build:prod:current\s+git diff --check/)

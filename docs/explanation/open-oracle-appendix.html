@@ -12,6 +12,37 @@
 			<header>
 				<p><a href="./open-oracle.html">OpenOracle integration hub</a></p>
 				<h1>OpenOracle design appendix</h1>
+				<p><strong>Document status:</strong> Detailed design and research record. This appendix includes historical rationale and release-specific examples. It is not the canonical source for current contract signatures, deployed values, or operational procedures.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Looking for</th>
+							<th>Use</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Economic rationale and historical design choices</td>
+							<td>This appendix</td>
+						</tr>
+						<tr>
+							<td>Current coordinator state and events</td>
+							<td><a href="../reference/open-oracle-coordinator.html">Coordinator reference</a></td>
+						</tr>
+						<tr>
+							<td>Staging an operation</td>
+							<td><a href="../how-to/stage-oracle-operation.html">Staging how-to</a></td>
+						</tr>
+						<tr>
+							<td>Recovering an operation</td>
+							<td><a href="../how-to/recover-oracle-operation.html">Recovery how-to</a></td>
+						</tr>
+						<tr>
+							<td>Current deployment addresses and values</td>
+							<td><a href="../how-to/verify-deployment.html">Deployment verification</a></td>
+						</tr>
+					</tbody>
+				</table>
 				<p>Statoblast uses <code>OpenOracle</code> for one narrow job: getting a fresh REP/ETH price when a pool needs to check solvency. It does not use OpenOracle to decide market truth; truth still comes from local escalation and, if necessary, Zoltar forks.</p>
 				<p>The core lifecycle is simple. A user stages a liquidation, withdrawal, or coverage-commitment update with the pool's coordinator. The coordinator requests OpenOracle when needed, and after settlement it either executes the restricted pool action with that fresh price or leaves a recovery path if execution conditions no longer hold.</p>
 				<p>A stale or missing price sends solvency-sensitive operations into staging because Statoblast would rather delay a withdrawal, liquidation, or coverage-commitment change than let an old REP/ETH quote distort pool solvency checks.</p>

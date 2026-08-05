@@ -15,7 +15,45 @@
 			</header>
 			<section id="when-to-use">
 				<h2>Runbook scope</h2>
-				<p>This runbook is the operator hub for a reviewed deployment. The focused transaction guides below cover individual jobs. Record the chain ID, deployment manifest, pool address, block number, and operator identity before acting. Treat all amounts as <code>attoETH</code>, <code>attoREP</code>, or <code>attoShares</code> exactly as named by the ABI.</p>
+				<p>This runbook is the operator hub for a reviewed deployment. “Operator” means the actor appropriate to the job, not one privileged account. Record the chain ID, deployment manifest, pool address, block number, and actor identity before acting. Treat all amounts as <code>attoETH</code>, <code>attoREP</code>, or <code>attoShares</code> exactly as named by the ABI.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Job</th>
+							<th>Authorized or expected actor</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Deposit REP</td>
+							<td>Vault owner</td>
+						</tr>
+						<tr>
+							<td>Change coverage commitment</td>
+							<td>Vault owner through coordinator</td>
+						</tr>
+						<tr>
+							<td>Withdraw REP</td>
+							<td>Vault owner through coordinator</td>
+						</tr>
+						<tr>
+							<td>Redeem final vault REP</td>
+							<td>Any caller; paid to the named vault</td>
+						</tr>
+						<tr>
+							<td>Advance public transition</td>
+							<td>Permissionless keeper</td>
+						</tr>
+						<tr>
+							<td>Liquidate unsafe vault</td>
+							<td>Healthy liquidator vault</td>
+						</tr>
+						<tr>
+							<td>Run truth-auction transition</td>
+							<td>Permissionless caller or bidder as applicable</td>
+						</tr>
+					</tbody>
+				</table>
 			</section>
 			<section id="confirm-identity">
 				<h2>Confirm pool identity</h2>
@@ -68,7 +106,7 @@
 					<li>The chain, manifest, pool, universe, and question match the reviewed deployment.</li>
 					<li>The transaction receipt is final under the deployment's stated finality policy.</li>
 					<li>Expected events and resulting getters agree, including units.</li>
-					<li>No pending price operation, unexpected lifecycle transition, or unaccounted balance remains.</li>
+					<li>The operation created for this task is executed or explicitly recorded for recovery; no unexplained operation created by this procedure remains pending.</li>
 				</ul>
 			</section>
 		</main>

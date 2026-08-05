@@ -17,6 +17,19 @@
 				<h2>Economic purpose</h2>
 				<p>A cached price is convenient but expires. A stale price cannot safely authorize a withdrawal, coverage change, or liquidation, so the coordinator stages the operation behind a new report. Report size, duration, liquidity, and correction incentives trade off cost against the ability to keep a price current.</p>
 			</section>
+			<section id="fresh-price-boundary">
+				<h2>What requires a fresh price</h2>
+				<p>Withdrawals, coverage-commitment changes, and liquidations change how much REP security backs ETH-denominated pool exposure. The coordinator therefore checks the REP/ETH price immediately when the cached value is fresh or stages the operation behind a new report when it is stale. A fresh price does not bypass the pool's downstream vault-health, lifecycle, or snapshot checks.</p>
+			</section>
+			<section id="report-lifecycle">
+				<h2>One report lifecycle</h2>
+				<p><code>operation requested → cached price checked → immediate execution or report opened → report corrected or left unchanged → report settled → coordinator accepts or rejects → queued operation performs its own safety checks</code>.</p>
+				<figure class="diagram" id="fig-open-oracle-lifecycle">
+					<div class="lifecycle-flow" role="img" aria-label="OpenOracle report lifecycle from operation request through independent callback acceptance and operation checks">operation requested → cached price checked → immediate execution or report opened → correction window → settlement → callback acceptance or rejection → independent operation checks</div>
+					<p class="diagram-caption"><span class="figure-label">Report lifecycle</span>Report acceptance and operation success are separate outcomes.</p>
+				</figure>
+				<p>For a worked price, a settled report with <code>amount1 = 0.8 WETH</code> and <code>amount2 = 1,600 REP</code> produces <code>lastPrice = 1,600 / 0.8 = 2,000 REP/ETH</code>, represented onchain as <code>2,000 × 10¹⁸</code>. The coordinator then applies that accepted price to each queued operation's own pool checks.</p>
+			</section>
 			<section id="security-intuition">
 				<h2>Security intuition</h2>
 				<p>The triggering sponsor funds the initial report, an independent corrector can replace it before settlement, and a settler closes the report after the dispute window. Settlement makes a report usable; it does not prove that the external price is correct. A callback then lets the coordinator accept or reject the report, while each queued operation still undergoes its own pool-specific checks.</p>
@@ -24,7 +37,14 @@
 			</section>
 			<section id="alternatives-and-boundaries">
 				<h2>Boundaries and alternatives</h2>
-				<p>Using a stale cached price would reduce latency but expose pool solvency to old market information. Sharing one global operation queue would simplify deployment but couple unrelated pools. Per-pool coordinators preserve local pending state and freshness decisions.</p>
+				<p>Using a stale cached price would reduce latency but expose pool solvency to old market information. Reading a DEX spot price is simpler but exposes the operation to pool liquidity and manipulation; a TWAP reduces instantaneous manipulation but introduces lag; a conventional external feed may reduce report mechanics while adding an external trust and update dependency. Sharing one global operation queue would simplify deployment but couple unrelated pools. Per-pool coordinators preserve local pending state and freshness decisions.</p>
+				<h3>Guarantees and non-guarantees</h3>
+				<ul>
+					<li>Settlement proves that the report followed OpenOracle's settlement process; it does not prove that the external-market price is objectively correct.</li>
+					<li>A valid cached price does not bypass downstream vault and pool checks.</li>
+					<li>The coordinator does not cap the total economic value of operations that may use one accepted price.</li>
+					<li>Correction and settlement remain dependent on capital, inclusion, and available chain data.</li>
+				</ul>
 				<p>Exact states, fields, limits, events, and deployment values are in the <a href="../reference/open-oracle-coordinator.html">OpenOracle coordinator reference</a>. Operator calls and recovery branches are in <a href="../how-to/stage-oracle-operation.html">Stage and recover an oracle-backed operation</a> and <a href="../how-to/recover-oracle-operation.html">Recover an oracle-assisted operation</a>.</p>
 			</section>
 		</main>

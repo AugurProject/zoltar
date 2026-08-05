@@ -11,7 +11,7 @@
 		<main>
 			<header>
 				<h1>Build a reorg-safe event indexer</h1>
-				<p>Build a replayable reducer that reconstructs Zoltar-owned protocol state from canonical logs and recovers deterministically from chain reorganizations.</p>
+				<p>Build a replayable reducer that reconstructs Zoltar and Statoblast protocol state from canonical logs and recovers deterministically from chain reorganizations.</p>
 			</header>
 			<section id="prerequisites">
 				<h2>Prerequisites and acceptance result</h2>
@@ -55,11 +55,15 @@ reduced_state   (entity_id, version, payload, primary key (entity_id, version))<
 			</section>
 			<section id="checkpoint-and-verify">
 				<h2>Checkpoint and verify</h2>
-				<p>Persist reducer state with the canonical block hash and reducer version. Use a finality depth appropriate to the network, and never publish a checkpoint before its block is canonical. At each checkpoint, compare reconstructed state with documented storage getters. A mismatch is an audit signal; do not silently patch event-derived state.</p>
+				<p>Persist reducer state with the canonical block hash and reducer version. Use the deployment's stated confirmation or finality policy before publishing a checkpoint. At each checkpoint, compare reconstructed state with documented storage getters. A mismatch is an audit signal; do not silently patch event-derived state.</p>
 			</section>
 			<section id="handle-reorganizations">
 				<h2>Handle reorganizations</h2>
-				<p>When a stored block hash becomes noncanonical, discard affected events, restore the checkpoint's versioned state snapshot before the removed block, and replay the replacement branch. Alternatively replay all retained canonical logs from the schema anchor. Never merge events from deployments or schema segments by event name alone. Use the <a href="../reference/event-stream.html">event-stream reference</a> for exact schemas and reducers.</p>
+				<p>Detect a reorganization when the next block's <code>parentHash</code> does not equal the stored canonical head hash; removed-log notifications are an additional signal, not the sole detection mechanism. Discard affected events, restore the checkpoint's versioned state snapshot before the replacement, and replay the new branch. Alternatively replay all retained canonical logs from the schema anchor. Never merge events from deployments or schema segments by event name alone. Use the <a href="../reference/event-stream.html">event-stream reference</a> for exact schemas and reducers.</p>
+				<pre><code>fixture logs: PoolCreated → VaultDeposited → CompleteSetCreated → PriceReported
+replacement branch: same prefix, alternate PriceReported block hash
+expected final state: one pool, one funded vault, one complete-set delta, accepted price
+expected state hash: record the generated fixture hash with reducer version</code></pre>
 			</section>
 			<section id="acceptance-tests">
 				<h2>Acceptance tests</h2>

@@ -11,7 +11,7 @@
 		<main>
 			<header>
 				<h1>Migrate through a fork</h1>
-				<p>Select a child branch, then apply the deadline and materialization rule for each position type. Not every claim expires with the child-creation window.</p>
+				<p>Identify the child universe the application intends to support, then apply the deadline and materialization rule for each position type. Zoltar represents the branch; it does not verify that the branch is the objectively correct answer. Not every position expires with the child-creation window.</p>
 			</header>
 			<section id="verify-the-fork">
 				<h2>Verify the fork</h2>
@@ -24,7 +24,7 @@
 			<section id="decision-tree">
 				<h2>Choose the procedure from the asset</h2>
 				<ul>
-					<li>Raw Zoltar REP held by a user: approve Genesis REP when required, call <code>addRepToMigrationBalance(universeId, amountAttoRep)</code>, then <code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code>.</li>
+					<li>Raw Zoltar REP held by a user: approve Genesis REP when required, call <code>addRepToMigrationBalance(universeId, amountAttoRep)</code>, then <code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code>. The exact ABI name is <code>outcomeIndexes</code>; use it consistently in the request and reconciliation record.</li>
 					<li>REP already locked in the security-pool migration proxy: call <code>migrateRepToZoltar(pool, outcomeIndices)</code>.</li>
 					<li>Ordinary vault: the vault owner calls <code>migrateVault(pool, outcomeIndex)</code> within the pool-local migration window.</li>
 					<li>Unresolved escalation: the vault owner calls <code>migrateVaultWithUnresolvedEscalation(pool, vault, childOutcomeIndex)</code>; entitlement initialization is lazy inside this call.</li>

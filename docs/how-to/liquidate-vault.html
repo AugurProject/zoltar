@@ -15,7 +15,7 @@
 			</header>
 			<section id="verify-the-target">
 				<h2>Verify the target</h2>
-				<p>Read <code>systemState()</code>, <code>getPoolAccountingSnapshot()</code>, <code>securityVaults(targetVault)</code>, <code>getTotalPoolHeldAttoRep()</code>, and the coordinator's pending-operation and price-validity state. Calculate the funded allowance and liquidator health from the same block. Do not depend on a cached UI label.</p>
+				<p>Read <code>systemState()</code>, <code>getPoolAccountingSnapshot()</code>, <code>securityVaults(targetVault)</code>, <code>getTotalPoolHeldAttoRep()</code>, and the coordinator's pending-operation and price-validity state. Calculate the funded coverage commitment, REP award, backing units transferred, target residual/bad debt, and liquidator post-transaction health from the same block. Do not depend on a cached UI label.</p>
 			</section>
 			<section id="preview-the-call">
 				<h2>Preview the call</h2>
@@ -38,7 +38,7 @@
 			</section>
 			<section id="execute-and-check">
 				<h2>Execute and check the result</h2>
-				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's pool-held vault REP backing funded the complete award, the transferred coverage commitment and REP backing units reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A failed callback is not a successful liquidation.</p>
+				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's pool-held vault REP backing funded the complete award, the transferred coverage commitment and REP backing units reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A successful receipt must include <code>VaultLiquidated</code> when coverage moves, plus the relevant accounting checkpoints. A failed callback is not a successful liquidation.</p>
 			</section>
 			<section id="expected-result">
 				<h2>Expected result and events</h2>
@@ -46,7 +46,7 @@
 			</section>
 			<section id="partial-and-maximum">
 				<h2>Partial versus maximum requests</h2>
-				<p>For a partial request, verify the target remains healthy or intentionally remains liquidatable under the new state. For a maximum request, reconcile transferred commitment, funded award, and residual bad debt separately. Strict health comparisons and rounding direction are explained in <a href="../explanation/liquidations.html">Liquidation economics</a>.</p>
+				<p>For a partial request, determine whether the remaining target position is healthy. If it remains liquidatable, calculate the next bounded liquidation from the new state rather than reusing the previous request. For a maximum request, reconcile transferred commitment, funded award, and residual bad debt separately. Strict health comparisons and rounding direction are explained in <a href="../explanation/liquidations.html">Liquidation economics</a>.</p>
 			</section>
 			<section id="recover-or-repeat">
 				<h2>Recover or repeat</h2>

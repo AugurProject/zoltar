@@ -31,12 +31,12 @@ bun run ui:serve</code></pre>
 			</section>
 			<section id="create-and-redeem">
 				<h2>Inspect complete-set capacity</h2>
-				<p>Open the pool's trading view and locate the complete-set collateral, share supply, and remaining mint capacity. A creation mints one share for every outcome together; redemption consumes a complete outcome set. Keep this pass read-only so the expected fixture checkpoints remain stable.</p>
+				<p>Open the pool's trading view and record the baseline complete-set collateral, share supply, and remaining mint capacity. A creation mints one share for every outcome together; redemption consumes a complete outcome set. Compare these values with the post-transaction state in the next step.</p>
 				<p><strong>Checkpoint:</strong> mint capacity is derived from fee-eligible coverage commitment rather than from the displayed REP balance alone.</p>
 			</section>
 			<section id="make-a-resettable-change">
 				<h2>Mint one resettable complete set</h2>
-				<p>Use the preselected <strong>Simulation QA account</strong>, choose the smallest enabled amount, and submit <strong>Mint complete sets</strong>. Confirm the <code>CompleteSetCreated</code> event, the ETH decrease, and one additional share for every outcome. If the action is unavailable, record the disabled-state reason and continue with the production call <code>createCompleteSet()</code> in the reference.</p>
+				<p>Use the preselected <strong>Simulation QA account</strong>, choose the smallest enabled amount, and submit <strong>Mint complete sets</strong>. Record the amount submitted, ETH balance before and after, each outcome-share balance and total supply before and after, and every field of <code>CompleteSetCreated</code>. Each outcome-share balance and total supply must increase by exactly the submitted complete-set amount.</p>
 				<p>Reset by refreshing the simulation URL or restarting the UI server. The expected post-reset checkpoint is the original seeded vault and share supply.</p>
 			</section>
 			<section id="follow-resolution">

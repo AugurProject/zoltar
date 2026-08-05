@@ -14,6 +14,7 @@
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a23">A23 verified canonical deployments</a> and <a href="../reference/security-model.html#assumption-a24">A24 client and RPC integrity</a>.</p>
 				<p><code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not measure protocol readiness or initialization success. It only reports which configured deployment-step addresses currently contain runtime bytecode.</p>
 				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and frontends need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
+				<p class="security-assumption-ref"><strong>Scope:</strong> Mainnet and Sepolia manifests · source release: unreleased · verify the selected manifest, chain ID, block, and manifest hash with <a href="../how-to/verify-deployment.html">deployment verification</a>.</p>
 			</header>
 
 			<section id="mask">

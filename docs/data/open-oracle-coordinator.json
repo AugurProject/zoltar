@@ -46,7 +46,7 @@
 		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetCoverageCommitment" },
 		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
 	},
-	"eventSignatures": {
+	"eventDeclarations": {
 		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
 		"RepEthPriceSet": "RepEthPriceSet(uint256 price)",
 		"PriceRequested": "PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)",

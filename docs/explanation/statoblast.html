@@ -15,12 +15,21 @@
 					<p class="paper-status">draft</p>
 				</div>
 				<h1>Augur Statoblast White Paper</h1>
-				<p class="paper-meta">Draft design paper · current source snapshot · canonical entries: <a href="./truth-auctions.html">truth auctions</a>, <a href="./open-oracle.html">OpenOracle</a>, and <a href="./liquidations.html">liquidations</a>.</p>
-				<p class="paper-meta">Section labels distinguish protocol requirements, current implementation, security assumptions, and illustrative rationale. Confirm release, chain, and commit before treating a parameter or address as deployment truth.</p>
+				<p class="paper-meta">Status: Draft design paper · Source commit: <code>11fefa00f</code> · Applicable release: unreleased · Last reviewed: 2026-08-05 · Canonical detailed pages: <a href="./truth-auctions.html">truth auctions</a>, <a href="./open-oracle.html">OpenOracle</a>, and <a href="./liquidations.html">liquidations</a>.</p>
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and uses a local escalation game before invoking a Zoltar fork when the game reaches non-decision. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<div class="callout">
+					<strong>Statoblast does not:</strong>
+					<ul>
+						<li>register or define question answer spaces;</li>
+						<li>determine the objectively true branch;</li>
+						<li>provide secondary-market trading;</li>
+						<li>duplicate ETH collateral across child universes;</li>
+						<li>guarantee that a truth auction fully repairs a child.</li>
+					</ul>
+				</div>
 				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
 				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
 				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>
@@ -70,7 +79,7 @@
 							<tr>
 								<td>User mental model</td>
 								<td>One pool, one final outcome, direct redemption.</td>
-								<td>Choose the child universe that retains value, migrate positions, then settle there.</td>
+								<td>Choose the child universe the application supports or where coordination is expected to continue, migrate eligible positions, and settle there.</td>
 							</tr>
 						</tbody>
 					</table>

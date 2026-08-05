@@ -12,6 +12,7 @@
 			<header>
 				<h1>Run a truth auction</h1>
 				<p>Operate a child-pool repair auction after migration without overstating the collateral it can raise.</p>
+				<p><strong>Terms:</strong> the <em>repair target</em> is the ETH needed to restore the child pool's required collateral; the <em>ETH cap</em> limits accepted repair ETH; the <em>REP cap</em> limits auctionable child REP; the <em>clearing tick</em> is the uniform-price tick selected at finalization; <em>funded</em> means the clearing result reaches the required repair target, while <em>underfunded</em> means accepted demand leaves an impairment.</p>
 			</header>
 			<section id="confirm-eligibility">
 				<h2>Confirm eligibility</h2>
@@ -45,6 +46,34 @@
 				<p>After finalization, process bounded pages with <code>settleAuctionBids</code> or <code>claimAuctionProceeds</code>. Winning and partial allocations credit REP backing units and the corresponding coverage commitment to the named bidder vault; losing and unused ETH is refunded. A failed gas-bounded refund push is recorded in <code>pendingEthRefundsAttoEth</code>, which the bidder can pull with <code>withdrawPendingEthRefund()</code>. These calls are permissionless and may be repeated with new bid indexes until all claims and refunds are settled.</p>
 			</section>
 			<section id="check-the-result">
+				<h2>Numeric scenarios</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Scenario</th>
+							<th>Inputs</th>
+							<th>Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>No auction needed</td>
+							<td>Repair target: <code>0 ETH</code>; REP sale cap: <code>100 REP</code></td>
+							<td>Child activates immediately; <code>AuctionStarted</code> is not emitted.</td>
+						</tr>
+						<tr>
+							<td>Fully repaired</td>
+							<td>Repair target: <code>10 ETH</code>; REP cap: <code>100 REP</code>; ETH submitted: <code>14 ETH</code></td>
+							<td><code>10 ETH</code> accepted, <code>4 ETH</code> refunded, <code>80 REP</code> allocated, impairment <code>0 ETH</code>.</td>
+						</tr>
+						<tr>
+							<td>Underfunded</td>
+							<td>Repair target: <code>10 ETH</code>; REP cap: <code>100 REP</code>; ETH submitted and accepted: <code>6 ETH</code></td>
+							<td><code>100 REP</code> allocated, remaining impairment <code>4 ETH</code>; the finalization receipt supplies the resulting factor.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>A bidder submits ETH with <code>auction.submitBid{value: bidAttoEth}(tick)</code>. Finalization and later bounded bid settlement reconcile accepted ETH, refunds, REP allocation, coverage commitment, and pending refund liability.</p>
 				<h2>Check the result</h2>
 				<p>Determine whether the child reached complete backing or only accepted the repair supported by demand. A successfully finalized underfunded auction is complete and leaves the child operational but economically impaired; weak ETH demand alone does not require a retry. Reconcile backing and retry finalization only when the transaction reverted because an escalation continuation lacked aggregate REP backing. Use <code>resumeForkedEscalationGame()</code> only when the child is already operational and still marked as awaiting continuation. Use the <a href="../explanation/truth-auctions.html">auction explanation</a> for clearing formulas and worked examples.</p>
 			</section>

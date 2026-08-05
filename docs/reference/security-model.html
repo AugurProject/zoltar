@@ -21,6 +21,37 @@
 					<a href="#excluded-guarantees">Excluded guarantees</a>
 				</nav>
 			</header>
+			<section id="orientation">
+				<h2>Security-model orientation</h2>
+				<p>This catalogue protects REP, ETH settlement collateral, outcome shares, vault backing, escalation deposits, child-universe accounting, and the integrity of event-derived state.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Boundary</th>
+							<th>Examples</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Trusted protocol components</td>
+							<td>Zoltar, security pools, share tokens, coordinators, forkers, and their configured delegates.</td>
+						</tr>
+						<tr>
+							<td>External dependencies</td>
+							<td>OpenOracle, WETH/REP token behavior, Ethereum execution and finality, RPCs, wallets, and proof data.</td>
+						</tr>
+						<tr>
+							<td>Untrusted actors</td>
+							<td>Traders, vault owners, liquidators, disputers, bidders, settlers, keepers, and indexers.</td>
+						</tr>
+						<tr>
+							<td>Failure outcomes</td>
+							<td>Reverted calls, delayed transitions, underfunded child repair, stale prices, incorrect external data, or unreconstructable history.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>The assumptions below explain what must remain true for these assets and transitions to retain their intended safety or liveness properties; they are not additional contract guarantees.</p>
+			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
 				<h2 id="assumptions-value">Participation and coordination</h2>
