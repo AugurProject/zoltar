@@ -63,11 +63,8 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			'Target safe'
 		);
 		uint256 backingUnitsToTransfer;
-		(
-			coverageCommitmentToTransferAttoEth,
-			vaultAttoRepBackingToTransfer,
-			backingUnitsToTransfer
-		) = SecurityPoolUtils.calculateBundledLiquidationTransfer(
+		(coverageCommitmentToTransferAttoEth, vaultAttoRepBackingToTransfer, backingUnitsToTransfer) = SecurityPoolUtils
+			.calculateBundledLiquidationTransfer(
 				securityVaults[targetVault].repBackingUnits,
 				snapshotTargetCoverageCommitmentAttoEth,
 				requestedCommitmentTransferAttoEth,

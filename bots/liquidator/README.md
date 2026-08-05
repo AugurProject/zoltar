@@ -225,7 +225,7 @@ the total-source quorum.
 
 Amounts use 18-decimal ETH or REP units in the operator JSON.
 
-- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
+- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentAttoEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
 - `minimumRewardValueEth` filters the fixed-bonus value before gas.
 - `maximumGasCostEth` caps the padded EIP-1559 gas limit actually signed for
   every automated action.

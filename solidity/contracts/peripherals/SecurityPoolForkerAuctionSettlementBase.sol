@@ -32,10 +32,7 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		if (amountAttoRep > 0) require(auctionRepBackingUnitsPerAttoRep > 0, 'Rate');
 		uint256 auctionRepBackingUnits = amountAttoRep * auctionRepBackingUnitsPerAttoRep;
 		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
-		require(
-			nextClaimedAuctionRepBackingUnits <= totalAttoRepPurchased * auctionRepBackingUnitsPerAttoRep,
-			'REP'
-		);
+		require(nextClaimedAuctionRepBackingUnits <= totalAttoRepPurchased * auctionRepBackingUnitsPerAttoRep, 'REP');
 		uint256 nextClaimedAuctionedCoverageCommitmentAttoEth =
 			data.claimedAuctionedCoverageCommitmentAttoEth + newCoverageCommitmentAttoEth;
 		require(nextClaimedAuctionedCoverageCommitmentAttoEth <= data.auctionedCoverageCommitmentAttoEth, 'Commitment');

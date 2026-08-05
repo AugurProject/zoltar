@@ -563,8 +563,7 @@ contract SecurityPool is SecurityPoolStorage {
 		string memory errorMessage
 	) private pure {
 		require(
-			attoRepAmount >= SecurityPoolUtils.MIN_REP_DEPOSIT_ATTO_REP ||
-				(allowZeroBalance && attoRepAmount == 0),
+			attoRepAmount >= SecurityPoolUtils.MIN_REP_DEPOSIT_ATTO_REP || (allowZeroBalance && attoRepAmount == 0),
 			errorMessage
 		);
 	}

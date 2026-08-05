@@ -85,7 +85,7 @@ describe('liquidator settings', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)
 		expect(parsed.strategy.maximumAttoRepPerPool).toBe(10_000n * 10n ** 18n)
-		expect(parsed.strategy.minimumLiquidationCoverageCommitmentEth).toBe(10n ** 18n)
+		expect(parsed.strategy.minimumLiquidationCoverageCommitmentAttoEth).toBe(10n ** 18n)
 		expect(parsed.strategy.walletAttoRepReserve).toBe(100n * 10n ** 18n)
 		const serialized = serializedSettings(parsed)
 		expect(serialized.strategy.maximumGasCostEth).toBe('0.02')

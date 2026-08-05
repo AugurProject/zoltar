@@ -135,7 +135,7 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		snapshotTargetBackingUnits: target.backingUnits,
 		snapshotTotalPoolHeldAttoRep: pool.totalAttoRep,
 	})
-	if (transfer.coverageCommitmentToTransferAttoEth < strategy.minimumLiquidationCoverageCommitmentEth) return undefined
+	if (transfer.coverageCommitmentToTransferAttoEth < strategy.minimumLiquidationCoverageCommitmentAttoEth) return undefined
 	if (!isUnsafeVault(transfer.vaultAttoRepBackingToTransfer, transfer.coverageCommitmentToTransferAttoEth, pool.multiplierBps, pool.price)) {
 		return undefined
 	}

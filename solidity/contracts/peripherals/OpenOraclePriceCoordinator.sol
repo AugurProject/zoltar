@@ -353,9 +353,7 @@ contract OpenOraclePriceCoordinator {
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEth();
 		uint256 initialWethReportAttoEth =
-			requestedInitialAttoWeth > minimumWethReportAttoEth
-				? requestedInitialAttoWeth
-				: minimumWethReportAttoEth;
+			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
 		uint256 initialRepReportAttoRep = Math.mulDiv(
 			initialWethReportAttoEth,
 			proposedRepPerEthPrice,

@@ -641,8 +641,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		SecurityPoolForkerForkData storage parentData
 	) private view returns (uint256 settlementCollateralToRaiseAttoEth) {
 		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		if (poolAuctionableRepAtForkAttoRep == 0 || data.migratedAttoRep >= poolAuctionableRepAtForkAttoRep)
-			return 0;
+		if (poolAuctionableRepAtForkAttoRep == 0 || data.migratedAttoRep >= poolAuctionableRepAtForkAttoRep) return 0;
 		if (data.forkSettlementCollateralReceivedAttoEth >= parentSettlementCollateralAttoEth) return 0;
 		// Migration rounds each branch's cumulative collateral target up. Auction only
 		// the exact unfilled snapshot remainder so final collateral cannot exceed it.
@@ -658,8 +657,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
 		uint256 disputeStakedAttoRep = _getEscalationAuctionableRep(securityPool, parentData);
 		uint256 combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + disputeStakedAttoRep;
-		uint256 migratedRepHaircutAttoRep =
-			data.migratedAttoRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR;
+		uint256 migratedRepHaircutAttoRep = data.migratedAttoRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR;
 		if (migratedRepHaircutAttoRep >= combinedAuctionableAttoRep) return 0;
 		uint256 cap = combinedAuctionableAttoRep - migratedRepHaircutAttoRep;
 		if (cap == combinedAuctionableAttoRep && address(securityPool.escalationGame()) != address(0x0)) cap -= 1;

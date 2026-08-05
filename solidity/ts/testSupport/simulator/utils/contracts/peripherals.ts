@@ -116,17 +116,7 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
 	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer), value)
 
-export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (
-	client: WriteClient,
-	priceOracleManagerAndOperatorQueuer: Address,
-	operation: OperationType,
-	targetVault: Address,
-	amount: bigint,
-	validForSeconds: bigint,
-	proposedRepPerEthPrice: bigint,
-	value: bigint,
-	requestedInitialAttoWeth = 0n,
-) => {
+export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice: bigint, value: bigint, requestedInitialAttoWeth = 0n) => {
 	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
 	if (shouldRequestPrice) {
 		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialAttoWeth)

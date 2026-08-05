@@ -59,13 +59,14 @@ function findUnsuffixedAtomicEthBigintIdentifier(source: string) {
 		const identifier = match[1]
 		if (identifier === undefined) continue
 		const namesEthUnit = identifier.startsWith('eth') || identifier.startsWith('weth') || identifier.includes('Eth') || identifier.includes('Weth')
-		if (namesEthUnit && !identifier.includes('AttoEth') && !identifier.includes('PerEth') && !identifier.includes('Ethereum')) return identifier
+		const namesAtomicEthUnit = identifier.startsWith('attoEth') || identifier.startsWith('attoWeth') || identifier.includes('AttoEth') || identifier.includes('AttoWeth')
+		if (namesEthUnit && !namesAtomicEthUnit && !identifier.includes('PerEth') && !identifier.includes('Ethereum')) return identifier
 	}
 	return undefined
 }
 
 if (findUnsuffixedAtomicEthBigintIdentifier('type Unsafe = { wethRefund: bigint }') !== 'wethRefund') throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed atomic WETH declaration')
-if (findUnsuffixedAtomicEthBigintIdentifier('type Safe = { wethRefundAttoEth: bigint; priceRepPerEth: bigint }') !== undefined) throw new Error('Unit terminology checker rejected canonical attoETH or REP-per-ETH declarations')
+if (findUnsuffixedAtomicEthBigintIdentifier('type Safe = { wethRefundAttoEth: bigint; requestedInitialAttoWeth: bigint; attoEthRaiseCap: bigint; priceRepPerEth: bigint }') !== undefined) throw new Error('Unit terminology checker rejected canonical atomic ETH/WETH or REP-per-ETH declarations')
 if (!missingAtomicSuffixIdentifiers.test('const initialWeth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an inferred unsuffixed atomic WETH value')
 if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new Error('Unit terminology checker negative fixture did not detect an ambiguous atomic scale constant')
 if (!vaultContainerActingAsCaller.test('the vault invokes migration')) throw new Error('Unit terminology checker negative fixture did not detect a vault container acting as a caller')

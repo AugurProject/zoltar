@@ -99,12 +99,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 		maxAttoRepBeingSold = _maxAttoRepBeingSold;
 		attoEthRaiseCap = _attoEthRaiseCap;
-		underfundedThreshold = Math.mulDiv(
-			_attoEthRaiseCap,
-			PRICE_PRECISION,
-			_maxAttoRepBeingSold,
-			Math.Rounding.Ceil
-		);
+		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
 		auctionStarted = block.timestamp;
 		minBidSizeAttoEth = _attoEthRaiseCap / MIN_BID_SIZE_DIVISOR;
 		if (minBidSizeAttoEth < 1) minBidSizeAttoEth = 1;

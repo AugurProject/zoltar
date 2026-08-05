@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = 'ec4aae2b0f393ea313f2beac34d8b2212d5e816a897d9450bae34929d69f3b4a'
+const expectedProductionSoliditySourceFingerprint = '9746e40a8de65c04034660ae970defc50ecc220fe886b27ddf0261349b37550c'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -329,7 +329,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '650724acb47f809ac28ffaf1a160fe5a86b304de80d157881aa55cfe2056d6b2'
+const referencedEventAbiFingerprint = '2912c2ac272e5f9d98e61e5034c14408d4fccd4ffa20b6b51c15ae75d3237e73'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -474,12 +474,12 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '73f9aad63165cacbff5bd02fd57a6b5a3f73737545018ecdf152c46f905c8c32',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'f7e70b36683703f5b6e23f0d3430e433a0436b0061f3f16e80433e71c2f9b0b3',
-	'solidity/contracts/peripherals/SecurityPool.sol': '9e6cca595916aeb3a3535504e033a7695402f1adbf157e076dca8f32afc199bb',
+	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'bd6c688818463887fe5caf84cdfbaf037c3138dd36abdf69f65a77381ecf8e44',
+	'solidity/contracts/peripherals/SecurityPool.sol': 'd7502ad42866b7bd50bb3eb0fc34d0be429834b08a968f5561b50ab1048de4e7',
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'bda62dec35e08fdbe8173a1b1464743e4250e119df60a66248dd2e3170765139',
+	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'af052a0723644556a488b365d578205eb331e53a1e47fff8b869ff77fab9c7ef',
 	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '618aed7f3f8bdfd50267b9d7533db3f489f45715f1cd448f5107f67631814d34',
 	'solidity/contracts/peripherals/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/peripherals/tokens/ShareToken.sol': '2a3339ca5db0ccabc2bc10318ff3baf52273b90837f01683d3e5147a13fd2d0d',
@@ -693,10 +693,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '5f1e4d86897c214d702507b8f47bfe2ca39c967906f2c8d19c1fbcee7cf5ed4f',
+		compiledAbiFingerprint: '969c06b939f28326001626365363af430b66a7927c3156766aa2589176266bd3',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '09ad16859e7cc7f00a27a03e5fcd02ec6abb509d724ce92ee855f89fdb743119',
+		readAbiFingerprint: '788faaada85aee4f3cc7fa486d83e6b1d5376e9736d404120a69d5a8c82959e4',
 		readSurface:
 			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalCoverageCommitmentAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebtAttoEth`, `vaultBadDebtAttoEth`, and `systemState`. Bad-debt getters are cumulative audit totals; active coverage commitment excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `attoRepToBackingUnitsRoundUp`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
@@ -1013,10 +1013,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'c3b05b0c6c2b7b73a920c2ff07615b6c00e2dc372a2f529a7d8efe808d23f97e',
+		compiledAbiFingerprint: '530598316337711bf3272d1fe05b7cb2761bc065fa91014339e893d1612acc91',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
-		readAbiFingerprint: '082be6acbff6fabaa8fa5095520eba0eee9592a06e5aebcf188acb0d5ab5a7c4',
+		readAbiFingerprint: '66d0db5b32477fc4876e6af49fe7cc6a2fdfd15a0d33648b4fc8cef48dc7a556',
 		readSurface:
 			'Use `zoltar`, `forkData`, `getMigratedAttoRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
 		readDeclarations: [
@@ -1161,10 +1161,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'dffe7a84d72c05c11617cbc1889ac05f0c345108e953a499894a3993e3f8a218',
+		compiledAbiFingerprint: 'de9a3d77115e9b244ebd9291cc37cc31329d97ba54f0b06c4ad19e683be00855',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'b8cd990d54c5264a4fd6f231ec0099abbb82a1e9371eef8fd760c59cef08a5c2',
+		readAbiFingerprint: 'ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d',
 		readSurface:
 			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
@@ -1367,7 +1367,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'e1caab0f5475a2700a2422625504278ed103050b0c918c85a4343e8823b819f4',
+		compiledAbiFingerprint: 'bc0868f818b5286199dc8824dfee5ab8447dc2ae4a4d1a3470cc68f49b61a556',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, coverage-commitment, and liquidation operations behind it.',
 		readAbiFingerprint: 'ffa866abf9af610b796116aafe1af8755b7f09381b1ca344863eb6bb7d929cea',
@@ -1590,10 +1590,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '91e8c2f07b5945ffc1e77013b193d3d1553bbb54556bd57d562256893864b0db',
+		compiledAbiFingerprint: '6f20a0fe018a4bdccffb6fe5fa9e210feffc1fd62175043dcc4012427b1f3b26',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readAbiFingerprint: '123d0aeae2b419804e4217a211d197aa9f52faabc0be53a5956298e3004504e3',
+		readAbiFingerprint: 'fd6ddcfc7a043f79ac1fcdc7dfe1b2697970b0fe5f499a740350165f4a30fb35',
 		readSurface:
 			'Auction summary getters are `maxAttoRepBeingSold`, `attoEthRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `attoEthRaised`, `totalAttoRepPurchased`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
 		readDeclarations: [

@@ -56,9 +56,8 @@ contract OwnForkEscalationClaimHarness {
 		for (uint256 index = 0; index < childRepAmountsAttoRep.length; index++) {
 			childRepTransferredAttoRep += childRepAmountsAttoRep[index];
 			uint256 nextSettlementCollateralTransferredAttoEth =
-				(parentSettlementCollateralAtForkAttoEth * childRepTransferredAttoRep +
-					auctionableAttoRepAtFork -
-					1) / auctionableAttoRepAtFork;
+				(parentSettlementCollateralAtForkAttoEth * childRepTransferredAttoRep + auctionableAttoRepAtFork - 1) /
+					auctionableAttoRepAtFork;
 			settlementCollateralTransfersAttoEth[index] =
 				nextSettlementCollateralTransferredAttoEth - settlementCollateralTransferredAttoEth;
 			settlementCollateralTransferredAttoEth = nextSettlementCollateralTransferredAttoEth;
