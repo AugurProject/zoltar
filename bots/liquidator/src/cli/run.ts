@@ -326,7 +326,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}),
 			})
 		: undefined
-	await using dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -462,7 +462,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				}
 				state.lastScanAt = new Date().toISOString()
 				if (state.wallet !== undefined) {
-					state.walletEth = await client.getBalance({ address: state.wallet })
+					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {

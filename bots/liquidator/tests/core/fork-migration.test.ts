@@ -350,7 +350,7 @@ describe('fork migration strategy', () => {
 			...parent,
 			stagedOperations: [
 				{
-					amount: 1n,
+					operationAmountAttoRepOrAttoEth: 1n,
 					id: 1n,
 					initiatorVault: wallet,
 					isPendingSettlement: true,

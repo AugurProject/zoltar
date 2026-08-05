@@ -142,8 +142,8 @@ describe('liquidator execution safety', () => {
 		expect(() =>
 			assertRepLimits({
 				currentPoolRepAttoRep: 90n,
-				currentPoolHeldRepBalanceAttoRep: 150n,
-				depositAmount: 11n,
+				currentTotalRepAttoRep: 150n,
+				depositAmountAttoRep: 11n,
 				maximumPoolRepAttoRep: 100n,
 				maximumTotalRepAttoRep: 1_000n,
 			}),
@@ -151,8 +151,8 @@ describe('liquidator execution safety', () => {
 		expect(() =>
 			assertRepLimits({
 				currentPoolRepAttoRep: 50n,
-				currentPoolHeldRepBalanceAttoRep: 195n,
-				depositAmount: 6n,
+				currentTotalRepAttoRep: 195n,
+				depositAmountAttoRep: 6n,
 				maximumPoolRepAttoRep: 100n,
 				maximumTotalRepAttoRep: 200n,
 			}),
@@ -162,10 +162,10 @@ describe('liquidator execution safety', () => {
 	test('counts REP acquired by liquidation toward both exposure limits', () => {
 		expect(() =>
 			assertRepLimits({
-				acquiredAmount: 20n,
+				acquiredAmountAttoRep: 20n,
 				currentPoolRepAttoRep: 70n,
-				currentPoolHeldRepBalanceAttoRep: 100n,
-				depositAmount: 11n,
+				currentTotalRepAttoRep: 100n,
+				depositAmountAttoRep: 11n,
 				maximumPoolRepAttoRep: 100n,
 				maximumTotalRepAttoRep: 1_000n,
 			}),
@@ -296,7 +296,7 @@ describe('liquidator execution safety', () => {
 			hasStagedLiquidation(
 				[
 					{
-						amount: 1n,
+						operationAmountAttoRepOrAttoEth: 1n,
 						id: 7n,
 						initiatorVault: getAddress('0x0000000000000000000000000000000000000020'),
 						isPendingSettlement: true,

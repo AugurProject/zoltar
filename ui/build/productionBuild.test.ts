@@ -872,7 +872,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Fork & Migration')
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
 			await driver.clickButton('Migrate pool to Yes universe')
-			await driver.waitForBodyText('Pool-level REP was migrated into the selected child universe.')
+			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
 			await driver.waitForBodyText('Vault REP backing and coverage commitment were migrated into the selected child universe.')

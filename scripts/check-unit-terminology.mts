@@ -7,7 +7,8 @@ const protectedVendorPath = 'solidity/contracts/peripherals/openOracle/OpenOracl
 const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'scripts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
-const legacyTerminology = /free[ -]?rep|freerep|pool[ -]?ownership|poolOwnership|security[ -]?bond|securityBond|bond[ -]?allowance|bondAllowance|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
+const legacyTerminology =
+	/free[ -]?rep|freerep|pool[ -]?ownership|poolOwnership|security[ -]?bond|securityBond|bond[ -]?allowance|bondAllowance|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
 const missingAtomicSuffixIdentifiers =
 	/\b(?:ethBalance|wethBalance|requestPriceEthCost|getRequestPriceEthCost|getQueuedOperationEthCost|ethCost|queuedOperationEthCost|totalAccruedFees|requiredEthCost|walletEthBalance|liquidationMaxAmount|netProfitWeth|winningEth|candidateWinningEth|activeCumulativeEth|provisionalEthRaised|acceptedEth|profitBeforeGasWeth|wethRefund|expectedEth|initialWeth|pendingReportMaxSettlementBaseFee|calculateOracleMinimumWethReport|snapshotDenominator|snapshotPoolHeldRepBalanceAttoRep|snapshotPoolHeldRepBalanceBackingUnits)\b/
 const formattedAtomicStringField = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*string\b/

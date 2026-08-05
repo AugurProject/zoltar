@@ -418,13 +418,13 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 export async function executeLiquidation(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, candidate: LiquidationCandidate, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!pool.isPriceValid) assertStaleLiquidationExposureBound(candidate)
 	const topUpRepAttoRep = pool.isPriceValid
-		? candidate.topUpRepAttoRep
+		? candidate.topUpAttoRep
 		: conservativeStaleTopUp({
 				callerCoverageCommitmentAttoEth: pool.botVault.coverageCommitmentAttoEth,
 				callerRepAttoRep: pool.botVault.vaultRepBackingAttoRep,
 				coverageCommitmentToTransferAttoEth: candidate.coverageCommitmentToTransferAttoEth,
 				fallbackPrice: settings.strategy.fallbackRepPerEthPrice,
-				minimumTopUp: candidate.topUpRepAttoRep,
+				minimumTopUp: candidate.topUpAttoRep,
 				multiplierBps: pool.multiplierBps,
 				referencePrice: pool.lastPrice,
 				safetyBps: settings.strategy.stalePriceFundingBufferBps,
@@ -535,7 +535,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 
 export function dryRunCandidate(state: RuntimeState, candidate: LiquidationCandidate) {
 	recordActivity(state, {
-		details: `pool=${candidate.pool.address} target=${candidate.target.address} coverageCommitmentTransferAttoEth=${candidate.coverageCommitmentToTransferAttoEth.toString()} repTopUpAttoRep=${candidate.topUpRepAttoRep.toString()} bonusAttoEth=${candidate.bonusValueAttoEth.toString()}`,
+		details: `pool=${candidate.pool.address} target=${candidate.target.address} coverageCommitmentTransferAttoEth=${candidate.coverageCommitmentToTransferAttoEth.toString()} repTopUpAttoRep=${candidate.topUpAttoRep.toString()} bonusAttoEth=${candidate.bonusValueAttoEth.toString()}`,
 		kind: 'liquidation',
 		message: 'Liquidation candidate selected',
 		status: 'dry-run',
