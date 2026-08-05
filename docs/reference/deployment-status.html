@@ -111,6 +111,72 @@
 				<p>Indices <code>0...255</code> are supported. A deployment process with more than <code>256</code> tracked addresses must split status across multiple masks or use a different representation.</p>
 			</section>
 
+			<section id="interpretation">
+				<h2>Interpretation and Verification Boundaries</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Evidence</th>
+							<th>What it proves</th>
+							<th>What it does not prove</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Bit set</td>
+							<td>Runtime bytecode exists at the configured address.</td>
+							<td>Correct bytecode, constructor values, wiring, permissions, or operational readiness.</td>
+						</tr>
+						<tr>
+							<td>Bit clear</td>
+							<td>No runtime bytecode was observed at that address by this call.</td>
+							<td>Whether the address is intentionally empty or the manifest is wrong.</td>
+						</tr>
+						<tr>
+							<td>Manifest match</td>
+							<td>The decoder used the intended ordered address list for the network.</td>
+							<td>That deployed code matches the release or that RPC responses are honest.</td>
+						</tr>
+						<tr>
+							<td>Full deployment verification</td>
+							<td>Code hashes, required wiring, permissions, and manifest provenance can be checked together.</td>
+							<td>Economic safety or future operational liveness.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>Use <a href="../how-to/verify-deployment.html">Verify a deployment</a> for the complete code-hash, wiring, permission, and manifest check. The <code>getDeploymentMask()</code> return type is <code>uint256</code>; the constructor reverts when more than 256 addresses are supplied.</p>
+				<h3>Static decoder test vectors</h3>
+				<table>
+					<thead>
+						<tr>
+							<th>Mask</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>0x0</code></td>
+							<td>No tracked constructor address contains runtime code.</td>
+						</tr>
+						<tr>
+							<td><code>0x1</code></td>
+							<td>Only constructor address index 0 is present.</td>
+						</tr>
+						<tr>
+							<td><code>0x5</code></td>
+							<td>Constructor address indices 0 and 2 are present.</td>
+						</tr>
+						<tr>
+							<td><code>2^255</code></td>
+							<td>Only the highest supported bit, index 255, is present.</td>
+						</tr>
+					</tbody>
+				</table>
+				<noscript
+					><p>The interactive tables require JavaScript. The ordered source lists are available in the <a href="../mainnet-deployment-addresses.json">Mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> manifests; bit <code>i</code> always corresponds to the <code>i</code>th constructor address after excluding <code>deploymentStatusOracle</code>.</p></noscript
+				>
+			</section>
+
 			<section id="sources">
 				<h2>Sources</h2>
 				<ul>

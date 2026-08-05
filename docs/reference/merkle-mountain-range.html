@@ -55,6 +55,47 @@
 				<p>Hash order matters. Internal nodes always hash <code>left</code> before <code>right</code>, so proofs are position-sensitive inside each peak.</p>
 			</section>
 
+			<section id="encoding">
+				<h2>Normative Encoding</h2>
+				<p>The leaf ABI types are <code>(address,uint8,uint256,uint256,uint256,uint256)</code>, in the order <code>depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId</code>. <code>outcome</code> is the Solidity enum ordinal. Leaf hashing uses standard ABI word padding through <code>abi.encode</code>; parent hashing uses the 64 raw bytes from <code>abi.encodePacked(left, right)</code>. There is no additional domain separator.</p>
+				<pre><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
+    parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId))
+parentHash = keccak256(abi.encodePacked(left, right))
+root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
+				<p>Proof verification rejects an empty or out-of-range peak, <code>leafIndex &gt;= 2^peakHeight</code>, a sibling array whose length is not <code>peakHeight + peakCount - 1</code>, a nullifier path whose length is not <code>64</code>, a root mismatch, or an already-consumed nullifier.</p>
+				<h3>Two-leaf conformance vector</h3>
+				<table>
+					<thead>
+						<tr>
+							<th>Input or intermediate</th>
+							<th>Value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Leaf 0 ABI values</td>
+							<td><code>0x0000000000000000000000000000000000000001, 0, 1, 0, 1, 0</code></td>
+						</tr>
+						<tr>
+							<td>Leaf 0 hash</td>
+							<td><code>0xb01042d963a0c261d64893dfb7e1f221c93ef608653cb92f9ca2c8899ca4572b</code></td>
+						</tr>
+						<tr>
+							<td>Leaf 1 ABI values</td>
+							<td><code>0x0000000000000000000000000000000000000002, 1, 2, 1, 2, 1</code></td>
+						</tr>
+						<tr>
+							<td>Leaf 1 hash</td>
+							<td><code>0xe0ca39e8852dc96783e8b8f0859cfbf155338f9144ba4b9fdd6af847299fc867</code></td>
+						</tr>
+						<tr>
+							<td>Peak 1 / root</td>
+							<td><code>0x1c9c7f3c2c8bebf92ce393deb5dccdd253f2b10084af72defb5dcd4486832b27</code></td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
 			<section id="peaks">
 				<h2>Peaks And The 64-Peak Bound</h2>
 				<p>The carry snapshot stores one peak per set bit in the leaf count. The system fixes <code>MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64</code>, and carry initialization requires each snapshot leaf count to be less than <code>2^64</code>.</p>
