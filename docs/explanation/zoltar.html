@@ -130,7 +130,7 @@
 					<p class="equation-caption"><span class="equation-label">Child Universe Id</span>Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
 				</div>
 				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
-				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches; it does not duplicate Statoblast ETH collateral. If a Statoblast vault migrates only to the Yes child, its application-level collateral and obligations follow Statoblast's separate migration rules.</div>
+				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches.</div>
 				<pre><code>Genesis
 ├── Yes: Alice holds 100 Yes-REP
 │   ├── Option A: Alice may later mint 100 Yes/A-REP
@@ -183,7 +183,7 @@
 					<p class="equation-caption"><span class="equation-label">Fork Threshold</span>With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
 				</div>
 				<p>After triggering the fork, the full threshold leaves the parent universe: <code>forkUniverse</code> removes that parent REP and reduces parent theoretical supply by the full threshold. The burn divisor then controls the child-REP minting credit. With <code>forkBurnDivisor = 5</code>, the uncredited haircut is <code>⌊forkThresholdAttoRep / 5⌋</code>, approximately 20% of the threshold. The remaining <code>forkThresholdAttoRep - ⌊forkThresholdAttoRep / 5⌋</code> becomes migration credit: equivalently <code>⌈4 × forkThresholdAttoRep / 5⌉</code>, approximately 80%.</p>
-				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code>. This caps the uncredited haircut at 20%: a larger haircut can leave an <a href="./statoblast.html#migration">own-fork escalation continuation</a>—the child game carrying unresolved deposits after its pool's escalation game triggers the universe fork—with less REP than its maximum winning payout.</p>
+				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code>. This caps the uncredited haircut at 20%</p>
 				<div class="equation" id="eq-zoltar-fork-burn">
 					<math display="block" aria-label="uncredited fork haircut in attoREP equals floor fork threshold in attoREP divided by fork burn divisor" data-source="uncreditedForkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋">
 						<mrow>
@@ -434,7 +434,7 @@
 				<p>At the Zoltar layer, market type support comes from how questions and outcomes are encoded in <a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>.</p>
 				<ul class="clean-list">
 					<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
-					<li>binary questions, represented by the higher-level Statoblast convention of categorical <code>Yes</code> and <code>No</code> labels plus the implicit <code>Invalid</code> resolution</li>
+					<li>binary questions, </li>
 					<li>scalar questions, implemented as a tick-based numeric range with no categorical labels</li>
 				</ul>
 				<p>Zoltar can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose narrower market shapes on top of it. It defines answer spaces and forkable resolution state, not the collateralized trading mechanics that may later be attached to those questions.</p>
@@ -473,8 +473,8 @@
 			</section>
 			<section id="branch-example" class="paper-section">
 				<h2>A branch-tree example</h2>
-				<p>A genesis universe contains a binary question. A fork creates a Yes child and a No child; a holder can split REP across both children, and an application can later choose which child pool to materialize. The split is an explicit accounting transition, not a claim that both answers are simultaneously true or that application collateral is duplicated.</p>
-				<p>Zoltar determines universe identity, REP balances, and fork relationships. It does not determine which child has durable economic value, market payouts, application-specific collateral migration, or local dispute outcomes. Those boundaries are why applications such as Statoblast must define their own migration and repair rules.</p>
+				<p>A genesis universe contains a binary question. A fork creates a Yes child and a No child; a holder can split REP across both children, and an application can later choose which child universe to materialize. The split is an explicit accounting transition, not a claim that both answers are simultaneously true or that application collateral is duplicated.</p>
+				<p>Zoltar determines universe identity, REP balances, and fork relationships. It does not determine which child has durable economic value, market payouts, application-specific collateral migration, or local dispute outcomes. Those boundaries are why applications must define their own migration and repair rules.</p>
 			</section>
 		</main>
 
