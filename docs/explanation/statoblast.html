@@ -161,7 +161,23 @@
 				<p>If the Escalation Game fails to reach consensus and enough REP has been committed to satisfy Zoltar's fork threshold, the game triggers a Zoltar fork and the fork resolution process begins.</p>
 				<p>A Statoblast security pool can also enter the fork resolution process when an unrelated Zoltar fork occurs. For example, another Statoblast pool or an entirely different application built on Zoltar may trigger a fork that affects the same universe. In either case, the pool must migrate to the resulting child universes, run truth auction if needed and continue operation there.</p>
 
-				<p> TODO: add a picture of timeline: (split)escalation game fork / unrelated fork -> migration period -> auction period -> operational pool</p>
+				<figure class="diagram" id="fig-statoblast-fork-state-machine">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"></div>
+					<p class="diagram-caption"><span class="figure-label">Fork Timeline</span></p>
+				</figure>
+
+				<p>Fork Steps</p>
+				<ol>
+					<li>The parent pool enters fork mode.</li>
+					<li>Anyone canto deploy a child pool for a valid fork outcome.</li>
+					<li>Vault owners can migrate their REP to one child of their choosing. The claimable fees remain in the child pool and can be withdrawn, the pool stops to generate yield for vaults. The child pool starts to generate yield</li>
+					<li>Unresolved ongoing escalation games fork into child pools and the games continue after a pause</li>
+					<li>Truth auction starts to recover missing open interest (if there's any)</li>
+					<li>Truth auction ends, auction participants can claim their bought locked REP and security commitments</li>
+					<li>Vault owners claim winning own-fork escalation deposits; the own-fork path is open only during the parent migration window. A successful direct claim invalidates that stable deposit identity in every current and future child continuation.
+					</li>
+					<li>Shares migrate into new universes</code>. </li>
+				</ol>
 
 				<h3> 8 week migration</h3>
 				<p>All vault holders have 8 weeks time to choose which universe they believe is correct by migrating their REP accordingly. REP that did not migrate is burnt. Since the system includes open interest in external assets (ETH), each migrating REP holder also transfers a proportional share of the open interest to the universe they select. E.g. 1% of all REP can move 1% of the total open interest to the universe where that REP is migrated. This open interest belongs to all of the markets in the original universe (both forking and non-forking markets).</p>
@@ -273,533 +289,38 @@
 				<p>Migration safety uses only pool-held vault REP backing and is strict for every positive coverage commitment: equality is unsafe. The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so pool-held vault REP backing normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../explanation/liquidations.html#rule">liquidation design</a>. There is no coverage commitment-independent fraction of associated REP that must remain available: escalation capacity depends on the vault's current coverage commitment, REP price, and integer rounding, and a zero-coverage commitment vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.</p>
 				<p>A vault's migrated OI share is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and coverage commitment to one selected child, clears those two parent fields, and separately routes proportional pool-level settlement collateral. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration weight across sibling universes.</p>
 
-
-				<h3>1 week Truth Auction</h3>
+				<h3>One week Truth Auction</h3>
 
 				<a href = "truth-auctions.html">read more from here on how truth auction is implemented</a>
 
-
-				<figure class="diagram" id="fig-statoblast-fork-state-machine">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">Contract states and conditional transition functions from an operational parent through migration and bounded truth-auction settlement to an operational child.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Fork State Machine</span>When fork handling is activated, the parent moves to <code>PoolForked</code>; child pools do migration and optional auction repair. Only a child whose legitimate routed collateral and accepted bid ETH have been accounted returns to operational mode. Finalization rejects explicit contribution ETH, while forced ETH remains unaccounted surplus. A previously finalized pool affected by a late unrelated fork is the separate stored-state case described above.</p>
-				</figure>
-				<ul>
-					<li>The parent pool enters fork mode.</li>
-					<li>Anyone can call <code>createChildUniverse</code> to deploy a child pool for a valid fork outcome.</li>
-					<li>Vault owners can call <code>migrateVault</code> to transfer their REP backing units and coverage commitment to one child. The call checkpoints but retains claimable fees in the parent vault and separately routes proportional pool-level settlement collateral. Cleanup of unresolved parent escalation-deposit accounting remains optional.</li>
-					<li>A forked unresolved game initializes each selected child with one canonical carry snapshot and one aggregate backing transfer. Unrelated forks carry the game REP 1:1; the escalation's own fork carries it after the single winner haircut. No vault migration call is required to fund or authorize claims.</li>
-					<li>After final resolution, anyone may relay winning inherited proofs; the authenticated deposit selects the claim, and its committed depositor is paid. Inherited losers need no proof calls, while local losing deposits retain ordinary settlement.</li>
-					<li>
-						Unresolved parent escalation-deposit accounting cleanup is optional and vault-scoped; the
-						<a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">operator cleanup reference</a>
-						owns wrapper ordering and constant-size export details.
-					</li>
-					<li>
-						Vault owners claim winning own-fork escalation deposits through
-						<code>claimForkedEscalationDeposits</code>; the own-fork path is open only during the parent migration window. A successful direct claim invalidates that stable deposit identity in every current and future child continuation.
-					</li>
-					<li>
-						Shares migrate independently through
-						<code>ShareToken.migrate</code>.
-					</li>
-				</ul>
-				<p id="branch-capital-reproduction-risk">REP migration and share migration intentionally reproduce a source position into every selected child branch. A share source remains as a transfer-locked entitlement after first use, and each child balance is colored by a distinct universe, so this is not a same-universe double claim. Integrations must nevertheless keep branch balance sheets separate: summing child REP or shares as though all branches were simultaneously redeemable in one economic universe overstates capital.</p>
-				<p>The migration API is not a single generic “fork migrator” role. Child creation is permissionless, <code>migrateVault</code> always acts on the caller’s own security vault, and the unresolved-escalation and own-fork-claim entry points require the affected vault owner as caller. This matters for off-chain automation because a keeper can help with liveness, but it cannot migrate another owner's security-vault accounting or claim another depositor's dispute-staked REP.</p>
-				<h3>Fork Migration Contract Trace</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Step</th>
-								<th>Function</th>
-								<th>State changed</th>
-								<th>Reason for the boundary</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Activate fork mode</td>
-								<td><code>initiateSecurityPoolFork</code></td>
-								<td>Parent pool enters fork handling and snapshots auctionable REP.</td>
-								<td>Normal pool accounting stops before child migration begins.</td>
-							</tr>
-							<tr>
-								<td>Create child branch</td>
-								<td><code>createChildUniverse</code></td>
-								<td>Deploys or locates the child universe and child pool.</td>
-								<td>Child pools are lazy because not every branch may be used.</td>
-							</tr>
-							<tr>
-								<td>Migrate vault</td>
-								<td><code>migrateVault</code></td>
-								<td>Transfers caller-vault REP backing units and coverage commitment, retains checkpointed claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral.</td>
-								<td>Only the vault owner can decide which child branch receives its position.</td>
-							</tr>
-							<tr>
-								<td>Repair shortfall</td>
-								<td><code>startTruthAuction</code>, <code>finalizeTruthAuction</code></td>
-								<td>Sells child REP for ETH and sets auction backing-unit rates.</td>
-								<td>Repair is optional and bounded by actual child-pool settlement-collateral needs.</td>
-							</tr>
-							<tr>
-								<td>Resume child pool</td>
-								<td>Forker-controlled pool setters</td>
-								<td>Returns the child to operational mode after migration and auction settlement.</td>
-								<td>The child accounts only routed collateral and accepted bid ETH; donations are rejected.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<figure class="diagram" id="fig-statoblast-migration-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-migration-flow" data-plot-width="860" data-plot-height="330" role="img" aria-label="Fork migration responsibilities"><span class="plot-chart-fallback">After a Zoltar fork, Statoblast migrates vaults, collateral, and shares. Child creation separately reproduces unresolved escalation state and aggregate backing once.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Pool Migration Flow</span>The Zoltar fork and Statoblast pool migration are related, but they are not the same contract step.</p>
-				</figure>
-				<h3>Migration Proxy Identity</h3>
-				<p>Statoblast does not send every pool migration call to Zoltar directly from the forker. Instead, <code>SecurityPoolForker</code> lazily deploys one deterministic <code>SecurityPoolMigrationProxy</code> per parent pool. That proxy is the stable <code>msg.sender</code> for Zoltar's migration ledger, so one parent pool has one predictable migration identity across <code>lockRep</code>, <code>forkUniverse</code>, <code>splitToChild</code>, and child REP sweeping.</p>
-				<p>The address is predictable, but prefunding it does not create pool migration credit. Fork accounting measures REP newly routed through the proxy and Zoltar’s migration ledger; any ERC-20 balance already at the address remains isolated surplus and is not swept into a child on the pool’s behalf.</p>
-				<figure class="diagram" id="fig-statoblast-migration-proxy">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-migration-proxy" data-plot-width="920" data-plot-height="300" role="img" aria-label="Pool-specific migration proxy"><span class="plot-chart-fallback">The forker controls one deterministic proxy per parent pool, and the proxy is the caller recorded by Zoltar migration accounting.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Migration Proxy</span>The proxy is a thin adapter, but it is economically important because Zoltar accounts migration balances by caller.</p>
-				</figure>
-				<div class="callout">Every selected continuation receives the complete parent game snapshot. It also receives the applicable aggregate backing once: complete game REP for an unrelated fork, or post-haircut game REP when the escalation paid for its own fork. A winning carry proof authenticates the original deposit and pays its committed depositor using the <a href="../explanation/escalation-game.html#claim-ownership">immutable carry commitment</a>. The child can resume after its pool becomes operational and aggregate funding is complete; it does not copy per-claim state or wait for vault migration or cleanup calls.</div>
-				<p>During vault migration, the forker also ensures the child pool is backed by enough child-universe REP for the cumulative migrated REP credited to that child. It tracks how much REP has already been split for each parent-pool/outcome pair and only splits the shortfall before sweeping child REP into the child pool. The migration-proxy and child-backing guardrails are collected in <a href="../reference/operator-guardrails.html#fork-migration">Fork Migration</a> .</p>
-				<figure class="diagram" id="fig-statoblast-proportional-migration">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent REP backing units normally determine a floored migrated REP delta. When cumulative migrated backing units reach the parent total, the final migration routes the remaining REP delta into the selected child. Parent-wide cumulative routed REP sets the collateral ceiling, and only its new per-call delta is credited to the selected child.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Proportional Migration</span>Vault migration normally floors each REP-backing-unit-based REP delta. When cumulative migrated backing units reach the parent total, the final migration reconciles the remaining REP delta into the selected child. Across outcomes, the parent-wide cumulative REP allocation sets one collateral ceiling; the selected child receives only the increase produced by its current migration.</p>
-				</figure>
-				<div class="equation" id="eq-statoblast-fork-migration-proportion">
-					<math display="block" aria-label="migration REP denominator in attoREP at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; the provisional migrated REP delta in attoREP equals the floor of vault REP backing units times the migration REP denominator in attoREP divided by the parent total REP backing units; when cumulative migrated backing units equal the parent total, the final migration routes all remaining attoREP in the fork bucket into the selected child" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \cdot migrationRepDenominatorAtForkAttoRep / parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits ? migrationRepDenominatorAtForkAttoRep - priorMigratedAttoRep : provisionalMigratedRepDeltaAttoRep">
-						<mtable columnalign="right center left" rowspacing="0.8em">
-							<mtr>
-								<mtd>
-									<mi>migrationRepDenominatorAtForkAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo>{</mo>
-										<mtable columnalign="left left" rowspacing="0.35em">
-											<mtr>
-												<mtd>
-													<mi>vaultRepAtForkAttoRep</mi>
-												</mtd>
-												<mtd>
-													<mtext>if </mtext>
-													<mi>ownFork</mi>
-												</mtd>
-											</mtr>
-											<mtr>
-												<mtd>
-													<mi>auctionableAttoRepAtFork</mi>
-												</mtd>
-												<mtd>
-													<mtext>otherwise</mtext>
-												</mtd>
-											</mtr>
-										</mtable>
-									</mrow>
-								</mtd>
-							</mtr>
-
-							<mtr>
-								<mtd>
-									<mi>provisionalMigratedRepDeltaAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo fence="true">&#x230A;</mo>
-										<mfrac>
-											<mrow>
-												<mi>vaultRepBackingUnits</mi>
-												<mo>&#x22C5;</mo>
-												<mi>migrationRepDenominatorAtForkAttoRep</mi>
-											</mrow>
-											<mi>parentTotalRepBackingUnits</mi>
-										</mfrac>
-										<mo fence="true">&#x230B;</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>migratedRepDeltaAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo>{</mo>
-										<mtable columnalign="left left" rowspacing="0.35em">
-											<mtr>
-												<mtd>
-													<mrow>
-														<mi>migrationRepDenominatorAtForkAttoRep</mi>
-														<mo>&#x2212;</mo>
-														<mi>priorMigratedAttoRep</mi>
-													</mrow>
-												</mtd>
-												<mtd>
-													<mtext>if </mtext>
-													<mi>cumulativeMigratedRepBackingUnits</mi>
-													<mo>=</mo>
-													<mi>parentTotalRepBackingUnits</mi>
-												</mtd>
-											</mtr>
-											<mtr>
-												<mtd>
-													<mi>provisionalMigratedRepDeltaAttoRep</mi>
-												</mtd>
-												<mtd>
-													<mtext>otherwise</mtext>
-												</mtd>
-											</mtr>
-										</mtable>
-									</mrow>
-								</mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Fork Migration Proportion</span>Ordinary vault migration normally floors the vault's REP backing-unit share against the pool-held REP bucket for that fork type. When cumulative migrated backing units equal the parent total, the final migration routes the exact remaining REP delta into the selected child.</p>
-				</div>
-				<p>The equation above gives the provisional REP-backing-unit proportion. The forker tracks cumulative migrated parent REP backing units independently for every child when reconciling that child's REP remainder. Collateral rounding uses different, parent-wide counters shared by migrations to every outcome: cumulative REP allocated for settlement collateral and cumulative settlement collateral already transferred. Each migration advances the parent-wide ceiling and credits only that new delta to its selected child, so interleaved child migrations can assign a rounding attoETH to a different child than a child-local ceiling would. Both external and own-fork transfers use one fixed, fee-exclusive fork snapshot plus this parent-wide cumulative ceiling accounting, so complete REP-backing-unit migration transfers the complete REP and settlement-collateral snapshots without manufacturing an auction shortfall from individual REP rounding. An external fork is already known when <code>activateForkMode</code> checkpoints and records that snapshot. The own-fork snapshot uses this order: <code>activateForkMode</code> changes the pool state and checkpoints through the pre-fork fee horizon; the proxy creates the universe fork; a fork-time checkpoint covers the newly exposed question-end-to-fork interval at the retained operational rate; then <code>settlementCollateralAtForkAttoEth</code> records the resulting fee-exclusive settlement collateral in the fork-neutral snapshot shared by both paths. Truth-auction repair subtracts the child's actual cumulative routed settlement collateral from that snapshot to set the settlement-collateral shortfall as its ETH raise target; actual repair still depends on auction demand, clearing, and tick-level integer rounding. Before either migration path clears the parent coverage commitment, it also checkpoints the vault's earned fees. Each ETH transfer subtracts from parent settlement collateral and is limited to the pool balance above <code>totalAccruedFeesAttoEth()</code>, keeping both the unallocated reserve and assigned claimable vault fees funded in the parent.</p>
-				<div class="equation" id="eq-statoblast-fork-collateral-ceiling">
-					<math display="block" aria-label="parent-wide cumulative settlement collateral target in attoETH after migration equals the ceiling of parent settlement collateral in attoETH at fork times parent-wide cumulative REP in attoREP allocated for settlement collateral divided by the migration REP denominator in attoREP at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; the settlement collateral delta credited to the selected child equals that parent-wide cumulative target minus parent-wide cumulative settlement collateral already transferred; the actual selected-child delta in attoETH is the minimum of the requested delta and current parent settlement collateral" data-source="migrationRepDenominatorAtForkAttoRep = ownFork ? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; parentWideCumulativeSettlementCollateralTargetAttoEth = ⌈parentSettlementCollateralAtForkAttoEth \cdot parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep / migrationRepDenominatorAtForkAttoRep⌉; selectedChildSettlementCollateralDeltaAttoEth = parentWideCumulativeSettlementCollateralTargetAttoEth - parentWideSettlementCollateralAlreadyTransferredAttoEth; actualSelectedChildSettlementCollateralDeltaAttoEth = min(selectedChildSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth)">
-						<mtable>
-							<mtr>
-								<mtd>
-									<mi>parentWideCumulativeSettlementCollateralTargetAttoEth</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-									<mo form="prefix" stretchy="true">⌈</mo>
-									<mfrac>
-										<mrow>
-											<mi>parentSettlementCollateralAtForkAttoEth</mi>
-											<mo>&#x22C5;</mo>
-											<mi>parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep</mi>
-										</mrow>
-										<mi>migrationRepDenominatorAtForkAttoRep</mi>
-									</mfrac>
-									<mo form="postfix" stretchy="true">⌉</mo>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>selectedChildSettlementCollateralDeltaAttoEth</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-									<mi>parentWideCumulativeSettlementCollateralTargetAttoEth</mi>
-									<mo>-</mo>
-									<mi>parentWideSettlementCollateralAlreadyTransferredAttoEth</mi>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>actualSelectedChildSettlementCollateralDeltaAttoEth</mi></mtd>
-								<mtd> <mo>=</mo><mi>min</mi><mo>(</mo><mi>selectedChildSettlementCollateralDeltaAttoEth</mi><mo>,</mo><mi>parentSettlementCollateralAttoEth</mi><mo>)</mo> </mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Fork Collateral Ceiling</span>The forker recomputes one parent-wide cumulative collateral target across every child outcome, subtracts the parent-wide collateral already transferred, and credits only that per-call delta to the selected child, capped by collateral that does not back accrued parent fees.</p>
-				</div>
-				<p>Own-fork migration has one extra accounting split. The pool and its active escalation game both contribute REP to the fork, but the child-universe REP returning from Zoltar is a single auctionable migration balance. Statoblast splits that balance into a vault bucket and an escalation bucket before child migration resumes.</p>
-				<figure class="diagram" id="fig-statoblast-own-fork-rep-buckets">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-own-fork-rep-buckets" data-plot-width="940" data-plot-height="340" role="img" aria-label="Own-fork REP bucket split"><span class="plot-chart-fallback">Pool-held REP and unresolved dispute-staked REP enter one Zoltar fork balance. Ordinary pool-held REP remains in the vault bucket at 1:1, while the fork haircut is deducted from escalation aggregate backing.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Own-Fork REP Buckets</span>In an own fork, the drained escalation-game REP pays the fork haircut and the remainder becomes aggregate child backing. Ordinary pool-held REP forms the vault bucket without a haircut.</p>
-				</figure>
-				<div class="equation" id="eq-statoblast-own-fork-rep-buckets">
-					<math display="block" aria-label="fork haircut in attoREP equals fork threshold in attoREP divided by fork burn divisor, escalation child REP in attoREP equals dispute-staked REP minus the haircut, vault REP in attoREP equals auctionable REP minus escalation child REP, and selected child escalation backing in attoREP equals escalation child REP" data-source="forkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋; escalationChildRepAtForkAttoRep = disputeStakedRepToForkAttoRep - forkHaircutAttoRep; vaultRepAtForkAttoRep = auctionableAttoRepAtFork - escalationChildRepAtForkAttoRep; selectedChildEscalationBackingAttoRep = escalationChildRepAtForkAttoRep">
-						<mtable>
-							<mtr>
-								<mtd><mi>forkHaircutAttoRep</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd
-									><mo form="prefix" stretchy="true">⌊</mo><mfrac><mi>forkThresholdAttoRep</mi><mi>forkBurnDivisor</mi></mfrac
-									><mo form="postfix" stretchy="true">⌋</mo></mtd
-								>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>escalationChildRepAtForkAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>disputeStakedRepToForkAttoRep</mi>
-									<mo>-</mo>
-									<mi>forkHaircutAttoRep</mi>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>vaultRepAtForkAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>auctionableAttoRepAtFork</mi>
-									<mo>-</mo>
-									<mi>escalationChildRepAtForkAttoRep</mi>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>selectedChildEscalationBackingAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>escalationChildRepAtForkAttoRep</mi>
-								</mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Own-Fork Bucket Allocation</span>The escalation bucket pays the configured fork haircut exactly once. The vault bucket preserves ordinary pool-held REP 1:1, and each selected child receives the same post-haircut aggregate escalation backing once.</p>
-				</div>
-				<p>When a pool forks while its escalation game is unresolved, the parent forker snapshots the unresolved game’s <code>startBondAttoRep</code>, <code>nonDecisionThresholdAttoRep</code>, elapsed escalation time, actual per-outcome balances, carry totals, peaks, leaf counts, and nullifier roots. External unrelated forks reserve the drained game's complete REP at 1:1. The escalation's own fork reserves it after the winner haircut has been paid through Zoltar. Each selected child pool can initialize its own paused fork-continuation escalation game from that canonical snapshot and receives the complete aggregate game backing once. The continuation preserves the parent live <code>Invalid</code>, <code>Yes</code>, and <code>No</code> balances, each unresolved deposit’s original outcome, stable parent deposit index, and payout ordering. The authenticated winning proof is the claim authorization; it pays the committed depositor directly from aggregate backing without a preceding vault migration.</p>
-				<p>The continuation game remains paused during the migration window so child deployment and vault migration do not silently consume escalation time. While the child pool is waiting for continuation processing, <code>SecurityPool.depositToEscalationGame</code> rejects new live child deposits through the <code>awaitingForkContinuation</code> guard. Operational activation needs no per-claim continuation work. The child already holds the immutable carry root/count and retention checkpoint, so the wait guard can clear in one call once aggregate backing is complete. Child deployment, vault migration, and auction finalization therefore remain independent of reporter count. Before the remaining clock can start, <code>resumeFromFork</code> verifies aggregate REP funding. An unrelated fork must cover effective unresolved principal one-to-one. When the escalation's own fork already paid the winner haircut through Zoltar, its recorded initial backing must cover at least <code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>. The game's live balance must cover that initial backing minus child REP already exported by valid direct claims before resume. An underfunded child therefore remains paused instead of reaching a resolution it cannot pay. An inactive vault cannot make other users pay to process its position or delay a fully funded child continuation.</p>
-				<p id="source-principal-at-fork">In that formula, <code>sourcePrincipalAtForkAttoRep</code> is the aggregate raw unresolved principal installed in the continuation's fork snapshot: the sum across outcomes of stored <code>inheritedUnresolvedTotalAttoRep</code> and <code>localUnresolvedTotalAttoRep</code> before effective direct-claim deductions. It is not the post-claim effective carry total or the child game's current REP balance.</p>
-				<ol>
-					<li>The parent pool forks, stores canonical unresolved escalation state, and escrows the game's aggregate dispute-staked REP once.</li>
-					<li>Each selected child pool is created in a child universe and marks itself as awaiting fork continuation.</li>
-					<li>Each created child initializes a paused continuation escalation game from that snapshot and receives the full aggregate escalation backing once.</li>
-					<li>After the migration window and any required truth auction, the child pool becomes operational. A permissionless call clears the wait marker and resumes the paused continuation game after its aggregate REP funding check passes; it copies no claims or owners.</li>
-				</ol>
-				<p>A continuation pool can fork again only when it has no inherited fixed outcome. Within that pool-level boundary, its game can become eligible by inheriting a threshold tie at snapshot initialization or by recording a local non-decision after resuming. The game-local <code>canTriggerOwnFork()</code> predicate returns true for a local non-decision, but it does not bypass the pool's fixed-outcome guard. When both levels are eligible, the forker stores the game's current balances, carry totals, peaks, leaf counts, and current nullifier roots after any prior proof consumption. It drains and escrows the remaining aggregate dispute-staked REP once. Each selected grandchild receives that same canonical snapshot and full remaining backing once; winning proofs remain their own authorization. Escalation can therefore branch recursively with Zoltar universes without replaying spent proofs or requiring other vaults to migrate. Before consuming a carried proof, the forker derives a stable global deposit id as <code>keccak256(abi.encode(securityPoolFactory, originId, uint8(outcomeIndex), parentDepositIndex))</code>. A direct claim recorded anywhere in that factory-scoped origin lineage therefore blocks the corresponding descendant proof with one mapping lookup.</p>
-				<p id="recursive-fork-depth-risk">Recursive continuation adds another descendant branch to the migration lifecycle described here. The normative recursive-fork gas-bound requirement, current enforcement status, and evidence are maintained in <a href="../reference/invariants.html#ext-05">EXT-05</a>. Total historical data and offchain proof coordination can still grow as more forks occur.</p>
-				<p>For example, suppose Zoltar has two ended questions: “Did London record a temperature of at least 30 °C on August 1, 2030?” and “Did the Atlas protocol upgrade activate by July 1, 2031?” A security pool in the Genesis universe is still escalating the London-temperature question. Before that escalation resolves, a caller invokes <code>Zoltar.forkUniverse</code> with the unrelated, already ended Atlas-upgrade question, causing Zoltar to fork the Genesis universe. Each resulting child universe represents one possible answer to the Atlas-upgrade question. The pool's unresolved London-temperature escalation migrates into selected child universes as separate paused continuation games, one in each selected child universe. After a continuation resumes, it still disputes the London-temperature question. Because the unrelated fork did not give the continuation pool a fixed outcome, an inherited threshold tie or a later local non-decision lets a caller invoke the security-pool fork path, causing Zoltar to fork that child universe again. The first fork therefore creates branches for the possible answers to the unrelated Atlas-upgrade question; the recursive fork creates branches for the possible answers to the pool's original London-temperature question.</p>
-				<figure class="diagram" id="fig-statoblast-recursive-continuation">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-recursive-continuation" data-plot-width="980" data-plot-height="520" role="img" aria-label="Recursive fork-continuation flow"><span class="plot-chart-fallback">A caller invokes Zoltar to fork a universe while one of its security pools has an unresolved escalation. Later, migration into selected child branches deploys child pools and initializes paused continuation games. Canonical snapshot state supplies each selected child's proof baseline, aggregate REP supplies physical backing once, and authenticated winning proofs pay the depositor committed by the continuation-local claim identity. Only a continuation pool without a fixed outcome may fork again; within that boundary, a local non-decision or inherited threshold tie makes its game eligible for the security-pool fork path.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Recursive Continuation</span>Each child continuation game receives the same canonical proof snapshot and aggregate backing. Winning proofs remain claimable without vault migration. Only a child pool without a fixed outcome can export the carry into another fork generation; within that boundary, a local non-decision or inherited threshold tie makes its game eligible.</p>
-				</figure>
-				<figure class="diagram" id="fig-statoblast-carry-snapshot">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-carry-snapshot" data-plot-width="920" data-plot-height="470" role="img" aria-label="Separate recursive continuation accounting lanes"><span class="plot-chart-fallback">Current balances, carry, and nullifiers form the canonical next snapshot. Remaining aggregate REP funds child backing once. Winning proofs authenticate the original deposit while payout goes to its committed depositor; inherited losers retire without proofs.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Recursive Accounting</span>The next canonical snapshot and aggregate backing move once per selected child. At final resolution, a winning proof authenticates the deposit while payout goes to its committed depositor; inherited losing principal retires without proof transactions.</p>
-				</figure>
-				<p>The inherited-carry baseline is implemented with Merkle Mountain Range peaks and nullifier roots so a child game can consume proofs without replaying already-spent parent deposits. New child deposits are tracked separately as local carry. Proof settlement is per requested winning leaf, not a depositor-wide loop. Immutable peaks and leaves remain the proof commitment even if separate parent cleanup occurs.</p>
-				<p>Payout ownership is immutable and auction retention does not form another ancestry chain. Each child stores only carry commitments and source-to-current retention, so liquidation performs no claim work and payout avoids work proportional to recursive-fork depth. This keeps mandatory onchain work bounded and prevents strategic fork depth from disabling continuation or reviving already-consumed principal. The <a href="../explanation/escalation-game.html#claim-ownership">escalation-game claim architecture</a> owns the commitment, retention representation, storage-basis conversion, and rounding rules.</p>
-				<p>A carried proof's source principal authenticates the leaf and decrements inherited unresolved principal. Normal winning-payout math then pays the committed depositor from aggregate child backing, so a reward may exceed the proof principal without per-vault scaling. Cumulative-prefix retention computes each leaf's immediate-source storage-basis amount as <code>retained(cumulativeAmountAttoRep) - retained(cumulativeAmountAttoRep - amountAttoRep)</code>. These floored prefix differences telescope to the aggregate checkpoint in every proof order, preventing phantom unresolved principal. Direct parent claims reduce effective inherited principal by outcome and remain blocked from a second payout in every descendant. Once the final winner's proofs are consumed, inherited losers have retired, local deposits are settled, and no local escrow remains, residual REP can be swept back to the security pool.</p>
-				<h3>Recursive Continuation Example</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Step</th>
-								<th>Example state</th>
-								<th>What carries forward</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Parent fork</td>
-								<td>In this external-fork example, source REP converts to child REP one-for-one. A parent game has <code>12 REP</code> unresolved on <code>Yes</code> and <code>8 REP</code> unresolved on <code>No</code>.</td>
-								<td>
-									The fork snapshot preserves both original outcomes and parent deposit indexes; the one-for-one conversion makes the child backing
-									<code>20 REP</code>.
-								</td>
-							</tr>
-							<tr>
-								<td>Child continuation</td>
-								<td>
-									The preferred child receives the complete <code>20 REP</code>
-									aggregate backing once and resumes with the inherited carry.
-								</td>
-								<td>Winning inherited proofs authenticate the original deposit and pay the claim's committed depositor; new deposits are tracked as local child state.</td>
-							</tr>
-							<tr>
-								<td>New local activity</td>
-								<td>After resume, users add <code>5 REP</code> to <code>Invalid</code> and <code>7 REP</code> to <code>Yes</code>.</td>
-								<td>The next snapshot combines inherited carry, local carry, and spent-proof nullifiers.</td>
-							</tr>
-							<tr>
-								<td>Second fork</td>
-								<td>This unrelated continuation has no fixed outcome and did not inherit a threshold tie. When new activity records a local non-decision, <code>canTriggerOwnFork()</code> becomes true.</td>
-								<td>The same predicate also accepts an inherited threshold tie without a fixed outcome. The forker stores the current carry state and nullifier roots and escrows the remaining aggregate dispute-staked REP; each selected grandchild receives the full remaining backing once; winning proofs need no vault migration there.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
 				<h3 id="child-outcome-resolution">Child Outcome Resolution</h3>
-				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome index as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational. When a continuation game exists, it uses the same result for carried-deposit settlement only after its remaining continuation deadline. Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question. A child created by an unrelated fork without an inherited fixed result uses a local escalation result only if that escalation ended before the universe forked; otherwise it remains unresolved until continuation or later state produces an outcome. The <code>ownFork</code> flag changes accounting, not question semantics.</p>
-				<p>This finality is also a collateral-accounting boundary. Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply. A later fork must not reclassify a surviving sibling outcome token as winning against that reduced denominator.</p>
-				<p>The same boundary closes new local escalation deposits. A fixed-outcome pool cannot use another fork to export a local non-decision, while local settlement rejects deposits after non-decision. Accepting new REP in that state would therefore convert the depositor's pool-held vault REP backing into dispute-staked REP and block REP redemption. Carried winning proofs from the parent continuation remain claimable through their separate withdrawal path.</p>
+				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational. </p>
+
 				<figure class="diagram" id="fig-statoblast-system-decision-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="500" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.</span></div>
-					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The main path is simple, but the unresolved continuation loop matters: a child without a fixed outcome can become the parent of the next fork generation. A fixed-outcome child settles without re-entering the loop.</p>
+					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span></p>
 				</figure>
-				<div class="equation" id="eq-statoblast-truth-auction-shortfall">
-					<math display="block" aria-label="settlement collateral shortfall in attoETH equals the greater of zero and parent settlement collateral in attoETH at fork minus settlement collateral in attoETH actually received through migration" data-source="settlementCollateralShortfallAttoEth = max(0, parentSettlementCollateralAtForkAttoEth - forkSettlementCollateralReceivedAttoEth)">
-						<mrow>
-							<mi>settlementCollateralShortfallAttoEth</mi>
-							<mo>=</mo>
-							<mi>max</mi>
-							<mo>(</mo>
-							<mn>0</mn>
-							<mo>,</mo>
-							<mi>parentSettlementCollateralAtForkAttoEth</mi>
-							<mo>-</mo>
-							<mi>forkSettlementCollateralReceivedAttoEth</mi>
-							<mo>)</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Auction Shortfall</span>The truth auction targets the exact parent snapshot not already received by the child. <code>forkSettlementCollateralReceivedAttoEth</code> sums actual routed transfers after cumulative-ceiling calculation and the parent’s available-collateral cap; nominal migrated REP is not substituted.</p>
-				</div>
-				<details class="interactive-example" id="collateral-repair-example">
-					<summary>Adjust child collateral repair</summary>
-					<p>In this example, the parent obligations still require 50 ETH of settlement collateral and the child actually received 47.5 ETH of settlement collateral through routed, capped migration transfers. That leaves an exact 2.5 ETH shortfall before any repair auction raises more ETH. After the deadline, the child activates with the settlement collateral actually migrated and raised; finalizer contribution ETH is rejected. Each child branch is sized against its own received settlement collateral and remaining shortfall.</p>
-					<div class="example-grid">
-						<label>
-							Parent settlement collateral
-							<input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" />
-							<span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span>
-						</label>
-						<label>
-							Migration-routed collateral received
-							<input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" />
-							<span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span>
-						</label>
-						<label>
-							Auction ETH raised
-							<input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" />
-							<span class="example-value" data-example-value="auctionRaised">2.5 ETH</span>
-						</label>
-					</div>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Routed collateral received</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
-						<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
-						<div><span>Unfilled target after auction</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
-						<div><span>Activation behavior</span><output data-example-output="repairStatus">no contribution required</output></div>
-					</div>
-				</details>
-			</section>
 
-			<section class="paper-section" id="shares">
-				shares stuff
-				<p>Shares can materialize across forks. <code>ShareToken.migrate</code> preserves a parent-universe token id as a persistent entitlement and mints child-universe token ids for selected valid, non-malformed fork outcomes.</p>
+				<h3>Shares migration</h3>
+				<p>When a fork occurs, complete sets and shares split. The trader of one universe can split their shares into all universes, receiving the same amount of shares in each universe that they had in parent universe</p>
 				<figure class="diagram" id="fig-statoblast-share-migration">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
 				</figure>
-				<p>If none of the selected children has received a source entitlement, the first call materializes the full current source balance in each selected child. On a later call, each child receives only <code>current source balance - amount already materialized</code>. If every selected delta is zero, the call reverts. The canonical guarantees are <a href="../reference/invariants.html#fork-10"><code>FORK-10</code></a>, <a href="../reference/invariants.html#share-04"><code>SHARE-04</code></a>, and <a href="../reference/invariants.html#fork-11"><code>FORK-11</code></a>.</p>
-				<p>At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That <code>shareTokenSupplyAttoShares</code> includes materialized ERC-1155 balances and fork-time entitlements that can materialize later. In the healthy case this corresponds to a clean <code>1:1</code> redemption outcome against the economic meaning of a complete-set claim, subject to collateral accounting remaining intact through migration and any required auction repair.</p>
-				<div class="equation" id="eq-statoblast-share-redemption">
-					<math display="block" aria-label="settlement collateral payout in attoETH equals floor of burned winning shares in attoShares times economic claim supply in attoShares divided into settlement collateral in attoETH" data-source="settlementCollateralPayoutAttoEth = ⌊winningSharesBurnedAttoShares \cdot settlementCollateralAttoEth / economicClaimSupplyBeforeBurnAttoShares⌋">
-						<mrow>
-							<mi>settlementCollateralPayoutAttoEth</mi>
-							<mo>=</mo>
-							<mo form="prefix" stretchy="true">⌊</mo>
-							<mfrac>
-								<mrow>
-									<mi>winningSharesBurnedAttoShares</mi>
-									<mo>&#x22C5;</mo>
-									<mi>settlementCollateralAttoEth</mi>
-								</mrow>
-								<mi>economicClaimSupplyBeforeBurnAttoShares</mi>
-							</mfrac>
-							<mo form="postfix" stretchy="true">⌋</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Share Redemption</span>The remaining economic claim supply reserves collateral for both materialized winners and winning fork entitlements that arrive later.</p>
-				</div>
-				<p>The important edge case is fork recovery. If a child pool emerges from migration with incomplete collateral, the truth auction sells REP for ETH so the child pool can restore the collateral base needed for clean redemption. If multiple target outcomes are selected during share migration, the holder’s source entitlement remains and its unmaterialized balance is minted into each selected child.</p>
 			</section>
 			<section class="paper-section" id="oracle">
 				<div class="section-heading">
 					<h2>9. REP/ETH Price Oracle</h2>
 					<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 				</div>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 arbitrage incentives</a>, <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a17">A17 corrector capability</a>, <a href="../reference/security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="../reference/security-model.html#assumption-a19">A19 observable correctable price</a>, <a href="../reference/security-model.html#assumption-a06">A06 settlement executors</a>, and <a href="../reference/security-model.html#assumption-a20">A20 report-state availability</a>.</p>
-				<p>The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and coverage-commitment updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has an active coverage commitment. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path.</p>
-				<p>The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="../explanation/open-oracle-appendix.html#statoblast-integration">OpenOracle integration</a> guide.</p>
-				<p>If the last price is stale, solvency-sensitive operations can be queued until a valid report is settled. The coordinator then replays the pending operation against the fresh price. Escalation deposits are the exception: they require a fresh price when coverage commitment is outstanding, but they revert instead of entering the staged callback queue. This price path is only for security backing against ETH collateral.</p>
+
+				<p> Statoblast requires REP/ETH price to be able to be able to know it security status. Its utmost importance for security pool to have more REP locked into it than it has open interest. To make this happen, Statoblast needs access to REP/ETH price feed.</p>
+				<p> Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a> please read more about how that is integrated here <a href="../explanation/open-oracle-appendix.html#statoblast-integration">OpenOracle integration.</a></p>
+
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow"><span class="plot-chart-fallback">A solvency-sensitive operation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
 					<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately; a stale price moves operations into a pending-settlement path whose callback batch is capped at four operations but whose duration is unbounded under paid rolling disputes.</p>
 				</figure>
-			</section>
-
-			<section class="paper-section" id="security">
-				<div class="section-heading">
-					<h2>10. Assumptions and Security Model</h2>
-					<a class="anchor-link" href="#security" aria-label="Link to Security Model">#</a>
-				</div>
-				<p>The <a href="../reference/security-model.html">Protocol Security Model</a> defines assumptions A01–A28 and the guarantees deliberately excluded from the protocol model.</p>
-				<p class="security-assumption-ref"><strong>Primary economic assumptions:</strong> <a href="../reference/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../reference/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../reference/security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="../reference/security-model.html#assumption-a12">A12 truth-auction demand</a>, <a href="../reference/security-model.html#assumption-a14">A14 REP economic backing</a>, and <a href="../reference/security-model.html#assumption-a05">A05 lineage access value</a>.</p>
-				<ul>
-					<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
-					<li>Profitable oracle corrections must receive timely inclusion; this is an assumption, not an onchain guarantee.</li>
-					<li>Truth-auction demand may be insufficient, in which case the child activates with the collateral actually migrated and raised.</li>
-					<li>Usable value depends on users and capital coordinating on the child branches they continue to support.</li>
-				</ul>
-				<p>Zoltar creates child universes, while Statoblast carries underwriting state, collateral accounting, and outcome-share claims into child pools. REP migration, proportional collateral migration, and truth-auction repair can rebuild usable market state, but none of those mechanisms independently identifies truth or guarantees full collateral repair.</p>
-			</section>
-
-			<section class="paper-section" id="parameters">
-				<div class="section-heading">
-					<h2>11. Parameter Sources</h2>
-					<a class="anchor-link" href="#parameters" aria-label="Link to Parameter Sources">#</a>
-				</div>
-				<p class="security-assumption-ref"><strong>Security assumption:</strong> <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Parameter family</th>
-							<th>Canonical source</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Universe fork thresholds and haircuts</td>
-							<td><a href="./zoltar.html#economics">Zoltar fork economics</a></td>
-						</tr>
-						<tr>
-							<td>Escalation timing, thresholds, and rewards</td>
-							<td><a href="#escalation">Escalation Game</a></td>
-						</tr>
-						<tr>
-							<td>Migration and truth-auction timing and bounds</td>
-							<td><a href="../explanation/truth-auctions.html#lifecycle">Truth Auction lifecycle</a></td>
-						</tr>
-						<tr>
-							<td>Liquidation constants and solvency limits</td>
-							<td><a href="../explanation/liquidations.html#punitive-liquidation">Bonus-priced liquidation</a></td>
-						</tr>
-						<tr>
-							<td>REP/ETH coordinator and OpenOracle values</td>
-							<td><a href="../reference/open-oracle-coordinator.html#parameters">OpenOracle parameters</a></td>
-						</tr>
-						<tr>
-							<td>Carry-proof peak and nullifier bounds</td>
-							<td><a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
-
-			<section class="paper-section" id="constraints">
-				<div class="section-heading">
-					<h2>12. Implementation Constraints</h2>
-					<a class="anchor-link" href="#constraints" aria-label="Link to Implementation Constraints">#</a>
-				</div>
-				<ul>
-					<li>Origin security pools currently support the exact categorical market shape <code>Yes / No</code>, with <code>Invalid</code> added as the third trading and resolution outcome.</li>
-					<li>Statoblast issues transferable shares and manages redemption and migration, but does not provide secondary-market trading.</li>
-					<li>Zoltar fork economics are constructor-configured.</li>
-					<li>Retention-rate bounds and several oracle and auction parameters are fixed constants in the current implementation.</li>
-					<li>The retention-rate curve in <code>SecurityPoolUtils</code> is heuristic rather than final market design.</li>
-				</ul>
 			</section>
 		</main>
 

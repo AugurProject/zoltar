@@ -661,3 +661,52 @@
 				<h3>Clearing and Settlement</h3>
 				<p>The <a href="../explanation/truth-auctions.html#clearing">Truth Auction design</a> owns tick pricing, cap selection, underfunded qualification, and the interactive examples; its <a href="../explanation/truth-auctions.html#settlement">settlement section</a> owns allocation rounding and recovery behavior. The <a href="../reference/security-model.html#assumption-a12">security model</a> separately states efficient REP-to-ETH auction conversion as an explicit assumption.</p>
 			</section>
+
+
+				<div class="equation" id="eq-statoblast-truth-auction-shortfall">
+					<math display="block" aria-label="settlement collateral shortfall in attoETH equals the greater of zero and parent settlement collateral in attoETH at fork minus settlement collateral in attoETH actually received through migration" data-source="settlementCollateralShortfallAttoEth = max(0, parentSettlementCollateralAtForkAttoEth - forkSettlementCollateralReceivedAttoEth)">
+						<mrow>
+							<mi>settlementCollateralShortfallAttoEth</mi>
+							<mo>=</mo>
+							<mi>max</mi>
+							<mo>(</mo>
+							<mn>0</mn>
+							<mo>,</mo>
+							<mi>parentSettlementCollateralAtForkAttoEth</mi>
+							<mo>-</mo>
+							<mi>forkSettlementCollateralReceivedAttoEth</mi>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Auction Shortfall</span>The truth auction targets the exact parent snapshot not already received by the child. <code>forkSettlementCollateralReceivedAttoEth</code> sums actual routed transfers after cumulative-ceiling calculation and the parent’s available-collateral cap; nominal migrated REP is not substituted.</p>
+				</div>
+				<details class="interactive-example" id="collateral-repair-example">
+					<summary>Adjust child collateral repair</summary>
+					<p>In this example, the parent obligations still require 50 ETH of settlement collateral and the child actually received 47.5 ETH of settlement collateral through routed, capped migration transfers. That leaves an exact 2.5 ETH shortfall before any repair auction raises more ETH. After the deadline, the child activates with the settlement collateral actually migrated and raised; finalizer contribution ETH is rejected. Each child branch is sized against its own received settlement collateral and remaining shortfall.</p>
+					<div class="example-grid">
+						<label>
+							Parent settlement collateral
+							<input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" />
+							<span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span>
+						</label>
+						<label>
+							Migration-routed collateral received
+							<input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" />
+							<span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span>
+						</label>
+						<label>
+							Auction ETH raised
+							<input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" />
+							<span class="example-value" data-example-value="auctionRaised">2.5 ETH</span>
+						</label>
+					</div>
+					<div class="example-visual">
+						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
+					</div>
+					<div class="example-output-grid">
+						<div><span>Routed collateral received</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
+						<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
+						<div><span>Unfilled target after auction</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
+						<div><span>Activation behavior</span><output data-example-output="repairStatus">no contribution required</output></div>
+					</div>
+				</details>
