@@ -25,8 +25,6 @@
 				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
 
 				<p> It is designed so that: </p>
-
-				<p>Statoblast achieves this through a combination of economic incentives, cryptographic guarantees, and decentralized dispute resolution. In particular, it is designed to:</p>
 				<ul>
 					<li>Honest reporting is economically rewarded.</li>
 					<li>Dishonest reporting becomes increasingly expensive.</li>
@@ -34,9 +32,7 @@
 					<li>Markets continue operating even when participants fundamentally disagree.</li>
 					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
 				</ul>
-				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
-				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
-				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>
+
 			</section>
 
 			<section class="paper-section" id="overview">
@@ -44,275 +40,101 @@
 					<h2>1. System Overview</h2>
 					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 				</div>
-				<p>The stack has two protocol identities. <code>Zoltar</code> is the base truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur Statoblast</code> is the application layer that adds market collateral, underwriting, local disputes, migration, and collateral repair. For the base oracle layer, see <a href="./zoltar.html">zoltar.html</a>.</p>
-				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery.</p>
+				<p>Statoblast consists of two separate protocol identities. <a href="./zoltar.html">Zoltar</a> is the base forking oracle layer for universes, questions, and REP branching. Augur Statoblast is the prediction market layer that adds market collateral (open interest), local disputes and fork resolution mechanisms</p>
+				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork.</p>
 				<ol>
 					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
-					<li>Vault owners fund security vaults with REP backing, and users mint ETH-backed complete sets.</li>
-					<li>After question end, disputes first try to resolve locally through the escalation game.</li>
-					<li>If local resolution reaches non-decision, Statoblast can trigger a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution. In either case, a separate pool-fork activation snapshots the parent before child-pool migration begins.</li>
-					<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
+					<li>Vault owners deposit REP into security vaults, while traders deposit ETH to mint complete sets. Each complete set is backed by ETH and secured by REP from the vaults worth at least as much as the deposited ETH.</li>
+					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
+					<li>In the unfortunate case where the the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.
+					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder in each pool decides which market outcome is correct, migrate their REP there a long with an equal share of ETH market collateral.</li>
+					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href = 'truth-auction.html'>Truth Auction</a> to repair that collateral gap.</li>
 					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
 				</ol>
-				<h3>Happy Path vs Recovery Path</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Checkpoint</th>
-								<th>Happy path</th>
-								<th>Recovery path</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Resolution trigger</td>
-								<td>Escalation picks a single local winner before non-decision.</td>
-								<td>The pool's own non-decision triggers Zoltar, or an unrelated external Zoltar fork interrupts the pool; pool-fork activation is a separate step.</td>
-							</tr>
-							<tr>
-								<td>Where state settles</td>
-								<td>The original pool remains the settlement venue.</td>
-								<td>Vaults, shares, and collateral accounting can migrate into child pools. Each child receives one canonical unresolved-escalation snapshot and aggregate backing; winners later settle by proof.</td>
-							</tr>
-							<tr>
-								<td>Collateral condition</td>
-								<td>Winning shares redeem against the existing ETH collateral base.</td>
-								<td>A child pool may need truth-auction repair before redemptions are clean.</td>
-							</tr>
-							<tr>
-								<td>User mental model</td>
-								<td>One pool, one final outcome, direct redemption.</td>
-								<td>Choose the child universe the application supports or where coordination is expected to continue, migrate eligible positions, and settle there.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<figure class="diagram" id="fig-statoblast-actor-swimlanes">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-actor-swimlanes" data-plot-width="980" data-plot-height="430" role="img" aria-label="Actor swimlane lifecycle"><span class="plot-chart-fallback">Trader, vault owner, and protocol responsibilities across minting, reporting, forking, migration, auction repair, and redemption.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Actor Swimlanes</span>The same lifecycle looks different by role</p>
-				</figure>
-				<p>Statoblast is not an exchange venue. It issues transferable ERC-1155 outcome shares and manages redemption, migration, and collateral accounting; secondary market trading sits outside this protocol.</p>
-			</section>
 
-			<section class="paper-section" id="architecture">
-				<div class="section-heading">
-					<h2>2. Architecture</h2>
-					<a class="anchor-link" href="#architecture" aria-label="Link to Architecture">#</a>
-				</div>
-				<p class="lede">A Statoblast lineage begins with one origin <code>SecurityPool</code> and includes the descendant child pools created after forks. It sits between two independent oracle boundaries: Zoltar supplies question and universe identity, while OpenOracle supplies contestable REP/ETH prices through a pool-specific coordinator. Each contract owns only its part of the lineage's state.</p>
-				<div class="architecture-map" aria-label="Statoblast architecture layers">
-					<div class="architecture-map-heading">
-						<div>
-							<span class="architecture-eyebrow">Authority map</span>
-							<h3>One lineage, three architectural layers</h3>
-						</div>
-						<p>Follow the map from durable identity, through the market ledger, to services that decide, price, migrate, and repair it. Every contract box is a separate storage and authority boundary.</p>
-					</div>
-					<ol class="architecture-layers">
-						<li class="architecture-layer architecture-layer-foundation">
-							<div class="architecture-layer-label">
-								<span>01</span>
-								<div>
-									<b>Truth and identity</b>
-									<small>Arrows show direct call direction</small>
-								</div>
-							</div>
-							<div class="architecture-components">
-								<div class="architecture-component">
-									<code>ZoltarQuestionData</code>
-									<p>Registers the question and its valid answer encoding.</p>
-								</div>
-								<div class="architecture-arrow" aria-hidden="true">←</div>
-								<div class="architecture-component">
-									<code>Zoltar</code>
-									<p>Owns universe identity, branch creation, and the migration ledger.</p>
-								</div>
-								<div class="architecture-arrow" aria-hidden="true">→</div>
-								<div class="architecture-component">
-									<code>ReputationToken</code>
-									<p>Owns REP balances and theoretical supply within one universe.</p>
-								</div>
-							</div>
-						</li>
-						<li class="architecture-layer architecture-layer-ledger">
-							<div class="architecture-layer-label">
-								<span>02</span>
-								<div>
-									<b>Market lineage ledger</b>
-									<small>Held across one origin pool and its descendants</small>
-								</div>
-							</div>
-							<div class="architecture-components">
-								<div class="architecture-component">
-									<code>SecurityPoolFactory</code>
-									<p>Binds an eligible binary question to a universe and deploys an origin pool.</p>
-								</div>
-								<div class="architecture-arrow" aria-hidden="true">→</div>
-								<div class="architecture-component architecture-component-primary">
-									<code>SecurityPool</code>
-									<p>Owns its settlement collateral, security-vault REP backing accounting, coverage commitments, fees, lifecycle status, and the pointer to its escalation game.</p>
-								</div>
-								<div class="architecture-arrow" aria-hidden="true">↔</div>
-								<div class="architecture-component">
-									<code>ShareToken</code>
-									<p>Tracks universe-aware Invalid, Yes, and No claims, and materializes unminted child claims during migration.</p>
-								</div>
-							</div>
-						</li>
-						<li class="architecture-layer architecture-layer-services">
-							<div class="architecture-layer-label">
-								<span>03</span>
-								<div>
-									<b>Bounded services</b>
-									<small>Invoked for one specialized transition</small>
-								</div>
-							</div>
-							<div class="architecture-service-grid">
-								<div class="architecture-component">
-									<strong>Decide locally</strong>
-									<a href="../explanation/escalation-game.html"><code>EscalationGame</code></a>
-									<p>Owns outcome deposits, balances, carry commitments, replay state, and resolution state; it verifies caller-supplied carry proofs and resolves locally unless contention reaches a non-decision.</p>
-								</div>
-								<div class="architecture-component">
-									<strong>Stage guarded operations</strong>
-									<code>OpenOraclePriceCoordinator</code>
-									<p>Owns cached price and staged-operation state. A vault owner or liquidator stages with it; after obtaining a fresh accepted price, it invokes the pool.</p>
-								</div>
-								<div class="architecture-component">
-									<strong>Report REP/ETH price</strong>
-									<code>OpenOracle</code>
-									<p>Owns report games and reporter balances; the coordinator requests and accepts its contestable REP/ETH reports.</p>
-								</div>
-								<div class="architecture-component">
-									<strong>Create child pools</strong>
-									<code>SecurityPoolForker</code>
-									<p>Snapshots the parent pool, deploys selected child pools, routes vault accounting and collateral, and installs continuation backing.</p>
-								</div>
-								<div class="architecture-component">
-									<strong>Route branch REP</strong>
-									<a href="../reference/operator-guardrails.html#fork-migration"><code>SecurityPoolMigrationProxy</code></a>
-									<p>Provides one stable caller identity, calls Zoltar to lock, fork, and split REP, then transfers materialized child REP directly to its receiver.</p>
-								</div>
-								<div class="architecture-component">
-									<strong>Attempt collateral repair</strong>
-									<a href="../explanation/truth-auctions.html"><code>UniformPriceDualCapBatchAuction</code></a>
-									<p>When a shortfall remains, sells auctionable child REP for as much ETH as demand supplies; activation counts only actual accepted ETH.</p>
-								</div>
-							</div>
-						</li>
-					</ol>
-				</div>
-				<div class="architecture-path" aria-label="Statoblast lifecycle control path">
-					<p class="architecture-path-title">Control path</p>
-					<ol>
-						<li><span>Deploy</span><b>Factory binds question + universe</b></li>
-						<li><span>Operate</span><b>Pool accounts for collateral, REP, and shares</b></li>
-						<li><span>Resolve</span><b>Escalation settles locally or exposes non-decision</b></li>
-						<li><span>Continue</span><b>Forker creates selected children; the auction may attempt remaining shortfall repair</b></li>
-					</ol>
-				</div>
-				<div class="callout architecture-boundary-note">
-					<strong>Keep the oracle roles separate.</strong>
-					Zoltar answers “which truth branch is this?” OpenOracle answers “what is REP worth in ETH for this guarded operation?” Neither oracle owns the pool's collateral ledger, and the truth auction answers neither question.
-				</div>
+				<p>TODO: add here a diagram of the above as a decision diagram</p>
 			</section>
 
 			<section class="paper-section" id="roles">
 				<div class="section-heading">
-					<h2>3. Core Economic Roles</h2>
-					<a class="anchor-link" href="#roles" aria-label="Link to Core Economic Roles">#</a>
+					<h2>2. Protocol participants</h2>
+					<a class="anchor-link" href="#roles" aria-label="Link to Protocol participants">#</a>
 				</div>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, and <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
-				<ul>
-					<li>Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built.</li>
-					<li>Vault owners deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time.</li>
-					<li>Traders mint complete sets with ETH and hold transferable outcome shares; secondary-market execution is external to Statoblast.</li>
-					<li>Vault owners can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends so the local escalation process can settle locally or force a non-decision.</li>
-					<li>Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation stores unresolved escalation commitments and aggregate backing once without copying individual claims. Winning proofs can be relayed permissionlessly and pay the original depositor committed in each leaf.</li>
-					<li>Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral.</li>
-					<li>Liquidators move undercollateralized coverage commitment away from unsafe vaults.</li>
-					<li>Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for vault-health accounting, not a truth outcome for the question itself.</li>
-				</ul>
+				<section>
+					<h3>Traders / Liquidity providers</h3>
+					<ul>
+						<li>
+							Deposit ETH to mint complete sets containing transferable <code>Yes</code>, <code>No</code>, and <code>Invalid</code> outcome shares.
+						</li>
+						<li>Pay time-based fees in ETH to vault owners for the duration that the complete sets remain outstanding.
+						</li>
+						<li> Trade by splitting complete sets into their individual outcome shares. This trading occurs outside the protocol.</li>
+						<li> Burn complete sets to recover ETH before resolution, or redeem individual winning shares for ETH after the market resolves. </li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>Vault owners</h3>
+					<ul>
+						<li>Deposit REP into a security pool.</li>
+						<li>Provide REP-backed security capacity for traders.</li>
+						<li> Receive time-based fees in ETH from traders holding outstanding complete sets.
+						</li>
+						<li> Participate in the Escalation Game after the market ends. </li>
+						<li> Choose where to migrate their REP and allocated share of open interest ETH after a fork. </li>
+						<li> Keep the value of their REP backing above the amount required to secure their allocated open interest.
+</li>
+						<li> Trigger OpenOracle games when a REP/ETH price is required for a protocol operation. </li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>REP holders</h3>
+					<ul>
+						<li>Decide whether to create a security pool for a question.</li>
+						<li>Decide whether to participate in an existing security pool.</li>
+						<li> Split their REP into outcome-specific child-universe REP during a Zoltar fork.
+						</li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>OpenOracle disputers</h3>
+					<p> OpenOracle disputers, such as arbitrage bots, monitor active OpenOracle games and challenge inaccurate REP/ETH prices when doing so offers a profitable arbitrage opportunity. </p>
+				</section>
+
+				<section>
+					<h3>Truth auction participants</h3>
+					<p> After a Zoltar fork, truth auction participants provide ETH to acquire REP-backed positions from an auction. Their ETH helps repair missing open-interest collateral in a child security pool. </p>
+				</section>
+
+				<section>
+					<h3>Liquidators and keepers</h3>
+					<p> Liquidators and keepers monitor vault health and execute profitable liquidations when a vault no longer satisfies the protocol's required backing condition: </p>
+					<pre><code>value of REP backing ≥ security multiplier × open interest secured</code></pre>
+				</section>
 			</section>
 
 			<section class="paper-section" id="pools">
 				<div class="section-heading">
-					<h2>4. Security Pools</h2>
+					<h2>3. Security Pools</h2>
 					<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 				</div>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../reference/security-model.html#assumption-a14">A14 REP economic backing</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="../reference/security-model.html#assumption-a23">A23 canonical deployment</a>, <a href="../reference/security-model.html#assumption-a15">A15 intended question selection</a>, <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>, <a href="../reference/security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, <a href="../reference/security-model.html#assumption-a24">A24 client and wallet integrity</a>, and <a href="../reference/security-model.html#assumption-a28">A28 account authority</a>.</p>
-				<p class="lede">A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault owners deposit REP, choose coverage commitment, and underwrite ETH-backed complete sets in that pool's local accounting ledger.</p>
-				<h3>Vault accounting terminology</h3>
-				<dl>
-					<dt>Security vault and vault owner</dt>
-					<dd>A security vault is the accounting container for REP backing, coverage commitment, fees, dispute participation, health, and liquidation. Its controlling address is the <em>vault owner</em>.</dd>
-					<dt>Pool-held REP and vault REP backing</dt>
-					<dd>Pool-held REP is held directly by <code>SecurityPool</code>. A vault's proportional attribution is its vault REP backing, represented by REP backing units. Those units do not convey ETH settlement collateral, outcome shares, fee reserves, contracts, governance, or ownership of the pool itself. Pool-held REP is not automatically withdrawable REP.</dd>
-					<dt>Dispute-staked and withdrawable REP</dt>
-					<dd>Locally dispute-staked REP remains attributed to its vault while escrowed in that pool's escalation game. Inherited fork-continuation backing instead remains aggregate and does not count toward any child vault's health or migration power, although each carried claim retains its committed depositor. <a href="../reference/invariants.html#esc-01">ESC-01</a> defines the formal reconciliation. Withdrawable REP is the amount available only after all health, minimum-position, lifecycle, and dispute constraints are applied.</dd>
-					<dt>Vault migration accounting</dt>
-					<dd>Vault migration transfers REP backing units and coverage commitment to one child. It checkpoints but retains claimable fees in the parent vault, and separately routes a proportional amount of pool-level settlement collateral. Dispute-staked REP follows its escalation claim path.</dd>
-					<dt>Coverage commitment, attoETH, attoREP, and attoShares</dt>
-					<dd>A coverage commitment is the market exposure a vault agrees to secure and is denominated in attoETH. attoETH, attoREP, and attoShares name the protocol's existing atomic ETH, REP, and outcome-share accounting domains; this terminology change does not alter numerical scales or rounding. The UI formats these atomic values as ordinary ETH, REP, and shares.</dd>
-					<dt>REP backing and settlement collateral</dt>
-					<dd>REP backing secures vault commitments. ETH settlement collateral separately backs complete sets and outcome claims. Vault health compares qualifying REP backing with coverage commitment using the existing REP/ETH price and multiplier rules.</dd>
-				</dl>
-				<p>Origin pools are narrower than the general Zoltar question model. The factory requires the question to exist, the universe to be unforked, the universe REP token to be present, and the question to have exactly two categorical labels in this order: <code>Yes</code>, then <code>No</code>. <code>Invalid</code> is added by Statoblast as the third trading and resolution outcome; it is not one of the two origin-pool labels checked by the factory. The factory also records each deployment and exposes paged deployment-history reads for indexers and UIs.</p>
-				<div class="callout">Origin pool validation intentionally lives above Zoltar. Zoltar accepts global questions; Statoblast's factory decides which question shape is eligible for the current security-pool implementation.</div>
-				<p>Pool-related addresses are deterministic and their lineage identity commits to the origin's immutable <code>initialReportPriorityFeeAttoEthPerGas</code>. Origins configured with different priority fees therefore cannot share a pool or share-token namespace, while children inherit their origin's configuration. The <a href="../reference/operator-guardrails.html#security-pool-guardrails">Operator Reference</a> owns the exact address and registry-key derivations.</p>
-				<p>An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.</p>
-				<figure class="diagram" id="fig-statoblast-asset-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-asset-flow" data-plot-width="960" data-plot-height="430" role="img" aria-label="ETH, REP, shares, and fee flow"><span class="plot-chart-fallback">Users send ETH to the security pool, which mints shares. A redemption request goes to the pool; the pool burns the relevant shares and pays ETH. Vault owners send REP and receive fees; fork repair can sell child REP for ETH.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Asset Flow</span>The pool is the accounting hub: ETH backs complete sets, REP backs underwriting, fees accrue to vaults, and child REP can be monetized to repair child collateral after a fork.</p>
-				</figure>
-				<p>Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.</p>
-				<div class="equation" id="eq-statoblast-rep-eth-price">
-					<math display="block" aria-label="REP per ETH price equals the floor of REP amount in attoREP times price precision divided by ETH amount in attoETH" data-source="repPerEthPrice = \left\lfloor attoRepAmount \cdot pricePrecision / ethAmountAttoEth \right\rfloor">
-						<mrow>
-							<mi>repPerEthPrice</mi>
-							<mo>=</mo>
-							<mo>&#x230A;</mo>
-							<mfrac>
-								<mrow>
-									<mi>attoRepAmount</mi>
-									<mo>&#x22C5;</mo>
-									<mi>pricePrecision</mi>
-								</mrow>
-								<mi>ethAmountAttoEth</mi>
-							</mfrac>
-							<mo>&#x230B;</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span><code>repPerEthPrice</code> is stored as scaled REP units per ETH, and <code>pricePrecision</code> is the fixed scale factor that keeps REP-side and ETH-side terms in the same integer math units.</p>
-				</div>
-				<p>Statoblast uses the REP/ETH price to compare REP backing with ETH-denominated obligations. Vault owners choose their coverage commitment. Admission for each affected vault requires sufficient total associated REP and, for positive commitments, strictly sufficient pool-held vault REP backing under the effective migration multiplier. Aggregate pool totals must independently pass the same conditions, and only vaults are liquidation targets. The <a href="../explanation/liquidations.html#rule">liquidation design owns the exact integer equations</a>, including the 10,500-BPS liquidation-award reserve and the critical boundary: equality passes ordinary coverage admission but is unsafe for migration coverage. Later REP withdrawals and escalation deposits cannot violate either vault condition or either aggregate condition while the coverage commitment remains active.</p>
-				<h3>Complete Sets</h3>
-				<p>Traders and liquidity providers can mint complete sets by calling <code>createCompleteSet</code> with ETH. For each complete-set unit, the pool mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> ERC-1155 share through <code>ShareToken</code>. The deposited ETH increases <code>settlementCollateralAttoEth</code>.</p>
-				<ul>
-					<li>While the pool is operational, a full complete set can be burned with <code>redeemCompleteSet</code> to recover its pro rata share of collateral. A child uses its remaining economic claim supply as the denominator, including fork-time claims whose ERC-1155 balances have not materialized there yet.</li>
-					<li>After the fork route finalizes an outcome, users can redeem winning outcome shares through <code>redeemShares</code>.</li>
-					<li>The pool rejects a mint when the resulting collateral would exceed vault-assigned, fee-eligible coverage commitment. Coverage commitment reserved for an unclaimed truth-auction winner cannot secure new open interest until settlement attaches it to that winner's vault. A positive deposit must also convert to at least one complete-set unit.</li>
-				</ul>
+				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP backing: <code>value of REP backing ≥ security multiplier × secured open interest</code>. </p>
+
+				<p>This requirement protects outcome-share holders by making dishonest behavior economically unprofitable. If a vault owner attempts to manipulate the market's resolution, the REP they risk losing should be worth more than any potential gain. The protocol therefore rewards behavior that supports correct resolution and penalizes behavior that threatens it.</p>
+
 				<h3>Fee Extraction and Retention Rate</h3>
-				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned coverage commitment. Vault checkpoints turn whole-attoETH entitlements from that reserve into claimable vault fees.</p>
-				<p>The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
-				<ul>
-					<li><code>settlementCollateralAttoEth</code> starts higher and decays gradually.</li>
-					<li><code>totalClaimableVaultFeesAttoEth</code> grows only when a vault checkpoints whole-attoETH fees that it can redeem; accrued but not yet checkpointed fees remain in a separate pool reserve.</li>
-					<li><code>feeIndex</code> tracks vault fee accounting.</li>
-					<li><code>currentRetentionRate</code> changes as utilization changes.</li>
-				</ul>
+				<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
+				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned coverage commitment. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
+				<p> TODO: move the fee calculation logic into a separate html file and link it to here, this page should give such a short summary on why theres fees, how they are broadly captured</p>
+				<p>Retention follows a piecewise heuristic. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
 
-				<p>Retention follows a piecewise heuristic in <code>SecurityPoolUtils.calculateRetentionRate</code>. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
-
-				<p>Read as a user-facing metric, that retention curve becomes the annualized open-interest fee shown in the UI. At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>
+				<p>At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>
 				<figure class="diagram" id="fig-statoblast-retention-utilization">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across fee-eligible coverage commitment utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from roughly 10% at zero utilization to roughly 50% at 80% utilization, then remains flat because the retention rate has reached its minimum.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Retention and Utilization</span>The chart applies the onchain piecewise retention formula and the UI's annualization formula to the exact current constants. The 80% rule marks the point where the minimum per-second retention rate begins to apply.</p>
+					<p class="diagram-caption"><span class="figure-label">Piecewise retention formula</span> The 80% rule marks the point where the minimum per-second retention rate begins to apply.</p>
 				</figure>
-
-				<p>When <code>feeEligibleCoverageCommitmentAttoEth == 0</code>, the pool sets <code>feeIndexDelta</code> and <code>reserveCredit</code> to zero, clears <code>feeIndexRemainder</code>, leaves collateral unchanged, and advances the accumulator to the clamped current time. This prevents unclaimed auction coverage commitment from earning retroactive fees. The remaining fee-index equations apply only when fee-eligible coverage commitment is positive.</p>
 
 				<p>Fee accrual is lazy: state-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault against that index. Fractional amounts remain in explicit remainders until they accumulate into whole attoETH, so callers do not need to iterate over every vault when time advances.</p>
 				<p>Fee accrual is time-clamped. The pool extracts collateral into fees only until the question end time while the universe remains unforked; after the universe forks, the fee accumulator is instead clamped to the fork time. Retention-rate updates no-op outside <code>Operational</code> mode or when the recalculated rate is unchanged. While operational, utilization uses vault-assigned, fee-eligible coverage commitment; zero eligible coverage commitment selects the maximum retention rate. Unclaimed auction coverage commitment therefore cannot change the live fee curve.</p>
