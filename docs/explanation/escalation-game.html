@@ -3,704 +3,100 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>EscalationGame Architecture</title>
+		<title>Escalation Game</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>EscalationGame Architecture</h1>
-				<p><strong>Mental model:</strong> claims become conflicting deposits, deadlines change with the game, and the result is local settlement or fork continuation.</p>
-				<p><code>EscalationGame</code> is split so storage ownership, settlement accounting, and proof math do not blur together inside one contract body. The point of the split is not stylistic. Contributors need to know which module is allowed to mutate live game state, which module is only reconstructing proof-derived values, and which invariants a refactor must preserve.</p>
-				<p>The main boundary starts with one shared storage layout. The inherited game stack owns most counters, escrow, carry state, and settlement effects. Size-sensitive mutation paths run through layout-compatible <code>EscalationGameDepositDelegate</code> and <code>EscalationGameClaimDelegate</code> modules using <code>delegatecall</code>, so those writes still land in the game. The external <code>EscalationGameProofVerifier</code> owns storage-free proof and logarithm helpers. That separation keeps verification math reusable and testable without giving it authority to consume deposits, advance nullifiers, or move accounting totals.</p>
-				<p>Refactors usually hit four pressure points: storage ownership, accounting invariants, interface drift, and bytecode headroom. Those are the places where the contract split has to stay explicit or the architecture stops buying clarity.</p>
+				<h1>EscalationGame</h1>
 			</header>
 			<section id="lifecycle-first">
-				<h2>One-Game Lifecycle</h2>
-				<p>An escalation game lets participants challenge the current tentative outcome by committing increasing amounts of REP. Each accepted deposit recomputes the leader and deadline; it may leave the leading outcome unchanged when the challenger does not overtake it. The game either reaches a locally settled outcome or reaches the protocol's non-decision condition and continues through a Zoltar fork.</p>
-				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Field</th>
-							<th>Contract-derived example</th>
-							<th>Meaning</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Outcome balances before deposit</td>
-							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 150 REP</code></td>
-							<td>The leader is Yes and the binding capital is the median: <code>median(0, 200, 150) = 150 REP</code>.</td>
-						</tr>
-						<tr>
-							<td>Current tentative outcome</td>
-							<td><code>Yes</code> leads with <code>200 REP</code>; <code>No</code> has <code>150 REP</code>.</td>
-							<td>The outcome currently supported by the game.</td>
-						</tr>
-						<tr>
-							<td>Game parameters</td>
-							<td><code>startBond = 100 REP</code>; <code>nonDecisionThreshold = 350 REP</code></td>
-							<td>Values read from <code>startBondAttoRep()</code> and <code>nonDecisionThresholdAttoRep()</code>.</td>
-						</tr>
-						<tr>
-							<td>Challenging outcome / maximum offered</td>
-							<td><code>No / 250 REP</code></td>
-							<td>The caller offers an upper bound; the game accepts only the amount allowed by current state.</td>
-						</tr>
-						<tr>
-							<td>Accepted amount</td>
-							<td><code>200 REP</code>; cumulative No balance becomes <code>350 REP</code></td>
-							<td>The preview accepts only the <code>200 REP</code> room below the threshold; the remaining <code>50 REP</code> is not transferred.</td>
-						</tr>
-						<tr>
-							<td>Outcome balances after deposit</td>
-							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 350 REP</code></td>
-							<td>The new leader is No and binding capital is <code>median(0, 200, 350) = 200 REP</code>.</td>
-						</tr>
-						<tr>
-							<td>Deadline</td>
-							<td><code>activationTime + time(150 REP) → activationTime + time(200 REP)</code></td>
-							<td>After the deposit, <code>getBindingCapitalAttoRep()</code> is <code>200 REP</code>; <code>getEscalationGameEndDate()</code> applies <code>computeTimeSinceStartFromAttritionCostAttoRep</code>.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p>The preview and <code>DepositToEscalationGame</code> receipt supply the accepted amount and cumulative balance. The updated leader is <code>No</code> because <code>350 REP &gt; 200 REP</code>. A later deposit is valid only while the game is active, the outcome is eligible, the caller has enough vault-backed REP, and the current state checks pass. Settlement requires the game to be locally resolved; a non-decision instead enables the fork-continuation path.</p>
+				<p class="lede">When a market ends, Statoblast attempts to resolve its outcome by running an Escalation Game based on <a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md">The Isonzo Front</a>. Participants escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. Each deposit adds to that outcome's cumulative balance; it does not have to outbid the previous deposit or the current leader. The accepted deposit must normally meet the game's starting bond, unless it fills the selected outcome to the non-decision threshold.</p>
+
+				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path. </p>
+
+				<p>When a Statoblast market ends, anyone can deploy and start the escalation game by depositing 1 REP into it. After the game has been started, there's 3 day period where anyone can deposit REP to challenge the outcome. If there's no-one has challenged the initial depositer by 3 day period, the security pool is finalized as that outcome However, if the outcome is challenged, the escalation game starts.</p>
+				<p>If the escalation game raises enough rep, the escalation game ends and the Statoblast escalation game forks zoltar.</p>
+
+				<p>(convert this into an image)<strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
+
 			</section>
 
-			<section id="module-split">
-				<h2>Module Split</h2>
-				<p>The first question in this stack is always ownership: which file is allowed to mutate which part of the game. The state-owning modules form one inheritance ladder over <code>EscalationGameStorage</code>. The deposit and claim delegates use the same layout and may mutate it only while the game invokes it with <code>delegatecall</code>. The proof verifier stays outside both mutation paths because it should never write live game state.</p>
-				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split">
-					<div class="plot-chart" data-plot-chart="fig-escalation-game-module-split" data-plot-width="920" data-plot-height="360" role="img" aria-label="EscalationGame module split between inherited state modules, deposit and claim delegates, and the external proof verifier"><span class="plot-chart-fallback">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. Deposit and claim delegates use the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit and claim delegates mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
-				</figure>
-				<div class="equation" id="eq-escalation-game-outcome-carry">
-					<math display="block" aria-label="current carry total in attoREP equals effective inherited unresolved total in attoREP plus local unresolved total in attoREP" data-source="currentCarryTotalAttoRep = effectiveInheritedUnresolvedTotalAttoRep + localUnresolvedTotalAttoRep">
-						<mrow>
-							<mi>currentCarryTotalAttoRep</mi>
-							<mo>=</mo>
-							<mi>effectiveInheritedUnresolvedTotalAttoRep</mi>
-							<mo>+</mo>
-							<mi>localUnresolvedTotalAttoRep</mi>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Carry Ownership Boundary</span>Effective inherited principal starts from the stored inherited unresolved total, which carried-proof consumption decrements, and subtracts cumulative principal claimed directly in the immediate parent. After final resolution it is also zero for every inherited losing outcome. Local losing deposits are not part of that shortcut and retain their normal local settlement path.</p>
-				</div>
+			<section id="escalation">
+				<h2>Escalation</h2>
+				<p>The escalation game's running time can be extended by any participant who deposits more than the current total on the leading outcome. The game functions as a war of attrition: escalating the game becomes increasingly expensive over time. The cost to participate grows exponentially, following this formula:</p>
 
-				<COPIED>
-<p><code>SecurityPoolFactory</code> requires its configured <code>initialEscalationGameDepositAttoRep</code> to be at least <code>1 REP</code>, copies that value into every deployed <code>SecurityPool</code>, and admits a new origin pool only while its live non-decision threshold exceeds the configured bond. An existing pool can outlive that relationship because REP burns reduce the tracked theoretical supply. On the first post-end deposit, the <code>SecurityPool</code> passes its stored bond and the current threshold to <code>EscalationGameFactory</code>. That game factory preserves the bond when possible and otherwise substitutes <code>nonDecisionThresholdAttoRep - 1</code>. Positive attoREP bonds below one whole REP remain valid; a threshold of one attoREP or less has no positive smaller bond and cannot initialize a game.</p>
-				<div class="equation" id="eq-statoblast-escalation-cost">
-					<math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)">
-						<mrow>
-							<mi>requiredEscalationCost</mi>
-							<mo>(</mo>
-							<mi>elapsedEscalationTime</mi>
-							<mo>)</mo>
-							<mo>=</mo>
-							<mi>startingBondAmount</mi>
-							<mo>&#x22C5;</mo>
-							<mi>exp</mi>
-							<mo>(</mo>
-							<mfrac>
-								<mrow>
-									<mi>ln</mi>
-									<mo>(</mo>
-									<mfrac>
-										<mi>nonDecisionThresholdAmount</mi>
-										<mi>startingBondAmount</mi>
-									</mfrac>
-									<mo>)</mo>
-									<mo>&#x22C5;</mo>
-									<mi>elapsedEscalationTime</mi>
-								</mrow>
-								<mi>fullEscalationInterval</mi>
-							</mfrac>
-							<mo>)</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Escalation Cost Curve</span>The required dispute bond rises exponentially from the starting bond to the non-decision threshold over the full interval.</p>
-				</div>
-				<ul>
-					<li><code>requiredEscalationCost(0) = startingBondAmount</code>.</li>
-					<li><code>requiredEscalationCost(fullEscalationInterval) = nonDecisionThresholdAmount</code>.</li>
-					<li>The cost rises monotonically between those endpoints.</li>
-				</ul>
-				<p>The plot below is an illustrative normalized instance with <code>ln(nonDecisionThresholdAttoRep / startingBond) = 2.4</code>. It uses the parameterized curve implemented by <code>totalCostAttoRep()</code> and <code>computeIterativeAttritionCostAttoRep</code>: early deposits face the starting bond, while sustained late disagreement approaches the non-decision threshold. The plotted curve is the continuous model; Solidity computes it with fixed-point integer approximation using <code>SCALE = 1e6</code> and clamps the endpoints. Ratio normalization extracts whole powers of two before approximating the residual logarithm, including exact power-of-two ratios whose residual is zero.</p>
 				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential escalation bond curve from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The required bond rises exponentially from the start bond to the non-decision threshold over the full escalation interval.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span>Delay becomes increasingly expensive without jumping immediately to the non-decision threshold: early disagreement can settle locally, while sustained late disagreement becomes costly enough to justify the non-decision path.</p>
+					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span>
+						<math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)">
+							<mrow>
+								<mi>requiredEscalationCost</mi>
+								<mo>(</mo>
+								<mi>elapsedEscalationTime</mi>
+								<mo>)</mo>
+								<mo>=</mo>
+								<mi>startingBondAmount</mi>
+								<mo>&#x22C5;</mo>
+								<mi>exp</mi>
+								<mo>(</mo>
+								<mfrac>
+									<mrow>
+										<mi>ln</mi>
+										<mo>(</mo>
+										<mfrac>
+											<mi>nonDecisionThresholdAmount</mi>
+											<mi>startingBondAmount</mi>
+										</mfrac>
+										<mo>)</mo>
+										<mo>&#x22C5;</mo>
+										<mi>elapsedEscalationTime</mi>
+									</mrow>
+									<mi>fullEscalationInterval</mi>
+								</mfrac>
+								<mo>)</mo>
+							</mrow>
+						</math>
+					</p>
 				</figure>
-				<p>Escalation deposits enter through <code>SecurityPool.depositToEscalationGame</code>. The first valid deposit after question end deploys the game, sets <code>activationTime = block.timestamp + 3 days</code>, and records the game’s starting parameters. Later deposits can continue only while the pool is operational, the game has resumed if it came from a fork continuation, and the child pool is not still waiting for continuation processing.</p>
-				<p>The security pool wrapper first previews the accepted amount, then removes the corresponding vault REP backing units with round-up accounting, checks the vault and pool remain solvent, enforces the minimum remaining REP rule, and transfers REP into the escalation game from the caller's existing vault position rather than from wallet-held REP. If the pool has any active coverage commitment, the call also requires a fresh REP/ETH oracle price before the deposit can proceed. Inside the game, the proposed amount must be at least <code>startBondAttoRep</code>. The recorded amount must be positive and either at least <code>startBondAttoRep</code> or exactly fill the selected outcome to <code>nonDecisionThresholdAttoRep</code>.</p>
-				<p>The game rejects invalid targets, full outcomes, and post-non-decision deposits. Accepted deposits are clipped to the selected outcome's remaining room, and the game applies a small tie-avoidance adjustment when a below-threshold deposit would otherwise make two outcomes share the maximum balance.</p>
-				<h3>Escalation Deposit Trace</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Step</th>
-								<th>Contract area</th>
-								<th>State or check</th>
-								<th>Why it matters</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Preview amount</td>
-								<td><code>EscalationGame.previewDepositOnOutcome</code></td>
-								<td>Computes accepted amount, threshold room, and tie adjustment.</td>
-								<td>The submitted maximum is not always the recorded deposit.</td>
-							</tr>
-							<tr>
-								<td>Remove vault REP backing units</td>
-								<td><code>SecurityPool.depositToEscalationGame</code></td>
-								<td>Burns REP backing units with round-up accounting and checks solvency.</td>
-								<td>Escalation uses existing vault-backed REP, not wallet-held REP.</td>
-							</tr>
-							<tr>
-								<td>Transfer REP</td>
-								<td><code>SecurityPool</code> to <code>EscalationGame</code></td>
-								<td>Moves accepted REP into local game custody.</td>
-								<td>The game can later settle, export, or carry that dispute-staked REP.</td>
-							</tr>
-							<tr>
-								<td>Record deposit</td>
-								<td><code>EscalationGame.recordDepositFromSecurityPool</code></td>
-								<td>Updates outcome balances, unresolved totals, and deposit indexes.</td>
-								<td>Those indexes are the handles used by later withdrawal and fork paths.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<details class="interactive-example" id="escalation-deposit-example">
-					<summary>Adjust escalation deposit clipping and tie avoidance</summary>
-					<p>The accepted deposit is capped by remaining room under the non-decision threshold. If a below-threshold deposit would tie the current leading outcome, the game reduces the accepted amount by one attoREP. In first-deposit mode, outcome balances are fixed at zero and the start-bond slider is the pool's configured bond, copied from <code>SecurityPoolFactory</code> when the pool was deployed. The <code>SecurityPool</code> passes that bond and the current threshold to <code>EscalationGameFactory</code>; when the bond is at or above the live threshold, the game factory uses an effective bond of <code>nonDecisionThresholdAttoRep - 1</code> attoREP. In repeat-deposit mode, the sliders instead represent an existing game's balances and stored parameters; no factory normalization is reapplied.</p>
-					<div class="example-grid">
-						<label>
-							Deposit lifecycle
-							<input type="range" min="0" max="1" step="1" value="0" data-example-input="depositLifecycle" />
-							<span class="example-value" data-example-value="depositLifecycle">First deposit (factory creates game)</span>
-						</label>
-						<label>
-							Invalid balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="invalidBalance" />
-							<span class="example-value" data-example-value="invalidBalance">0 REP</span>
-						</label>
-						<label>
-							Yes balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="yesBalance" />
-							<span class="example-value" data-example-value="yesBalance">0 REP</span>
-						</label>
-						<label>
-							No balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="noBalance" />
-							<span class="example-value" data-example-value="noBalance">0 REP</span>
-						</label>
-						<label>
-							Proposed deposit to No
-							<input type="range" min="0" max="20" step="1" value="5" data-example-input="proposedDeposit" />
-							<span class="example-value" data-example-value="proposedDeposit">5 REP</span>
-						</label>
-						<label>
-							<span data-example-text="startBondLabel">Configured start bond</span>
-							<input type="range" min="1" max="10" step="1" value="2" data-example-input="startBond" />
-							<span class="example-value" data-example-value="startBond">2 REP</span>
-						</label>
-						<label>
-							<span data-example-text="thresholdInputLabel">Live non-decision threshold</span>
-							<input type="range" min="5" max="25" step="1" value="10" data-example-input="nonDecisionThreshold" />
-							<span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span>
-						</label>
-					</div>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-7" data-plot-width="760" data-plot-height="230" role="img" aria-label="Escalation deposit accepted amount"><span class="plot-chart-fallback">Escalation deposit accepted amount</span></div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Room on No</span><output data-example-output="remainingRoom">10 REP</output></div>
-						<div><span data-example-text="effectiveStartBondLabel">Effective start bond</span><output data-example-output="effectiveStartBond">2 REP</output></div>
-						<div><span>Accepted amount</span><output data-example-output="acceptedAmount">5 REP</output></div>
-						<div><span>Adjustment</span><output data-example-output="depositAdjustment">accepted as proposed</output></div>
-						<div><span>Post-deposit condition</span><output data-example-output="depositCondition">No ends at 5 REP</output></div>
-					</div>
-				</details>
-				<details class="interactive-example" id="resolution-edge-example">
-					<summary>Adjust escalation resolution edge cases</summary>
-					<p>The resolution helper first checks whether at least two outcomes meet the running cost. If that unresolved test does not apply and all three balances are zero, the helper returns <code>Invalid</code>. Otherwise, a strict <code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead wins. Valid deposits prevent tied maxima below non-decision by reducing the accepted amount by one attoREP, or reverting if that adjusted amount becomes invalid. Continuation snapshots preserve the parent balances exactly, including tied maxima below <code>nonDecisionThresholdAttoRep</code>, so all selected children begin from the same unresolved state.</p>
-					<div class="example-grid">
-						<label>
-							Invalid balance
-							<input type="range" min="0" max="20" step="1" value="4" data-example-input="invalidBalance" />
-							<span class="example-value" data-example-value="invalidBalance">4 REP</span>
-						</label>
-						<label>
-							Yes balance
-							<input type="range" min="0" max="20" step="1" value="6" data-example-input="yesBalance" />
-							<span class="example-value" data-example-value="yesBalance">6 REP</span>
-						</label>
-						<label>
-							No balance
-							<input type="range" min="0" max="20" step="1" value="7" data-example-input="noBalance" />
-							<span class="example-value" data-example-value="noBalance">7 REP</span>
-						</label>
-						<label>
-							Running total cost
-							<input type="range" min="1" max="20" step="1" value="5" data-example-input="runningCost" />
-							<span class="example-value" data-example-value="runningCost">5 REP</span>
-						</label>
-					</div>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-8" data-plot-width="760" data-plot-height="210" role="img" aria-label="Resolution balances against running cost"><span class="plot-chart-fallback">Resolution balances against running cost</span></div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Outcomes at or above cost</span><output data-example-output="outcomesAtCost">2</output></div>
-						<div><span>Resolution helper returns</span><output data-example-output="resolutionResult">None</output></div>
-						<div><span>Reason</span><output data-example-output="resolutionReason">two outcomes still contest the cost</output></div>
-					</div>
-				</details>
-				<p>The contract exposes both directions of this curve: it can compute the required cost from elapsed time, and it can derive the effective end time from the final binding capital. Before activation, <code>totalCostAttoRep()</code> is zero. In fork-continuation games, elapsed time can be inherited from a parent game and then resume later instead of restarting from zero.</p>
-				<figure class="diagram" id="fig-statoblast-non-decision-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-non-decision-flow" data-plot-width="860" data-plot-height="365" role="img" aria-label="Escalation thresholds"><span class="plot-chart-fallback">Outcome balances are compared to running total cost for local resolution and to the fixed non-decision threshold for a local game's fork eligibility. A pool with an inherited fixed outcome rejects both new local deposits and fork activation.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Non-Decision Flow</span>A live unresolved contest is not the same as the stronger non-decision condition. This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork()</code> true. A pool with an inherited fixed outcome rejects the deposits that could create this state and still rejects <code>activateForkMode()</code>.</p>
-				</figure>
-				<p>Payouts depend on final binding capital, the median of the three outcome balances. Winning capital inside the reward-eligible window shares a fixed reward pool; excess winning capital receives principal only.</p>
-				<p>If time expires without non-decision, the resolution ordering in the interactive example above applies. A local deposit that brings a second outcome to <code>nonDecisionThresholdAttoRep</code> records <code>nonDecisionState = Local</code> and <code>nonDecisionTimestamp</code>, then makes the game-local <code>canTriggerOwnFork()</code> predicate true. That predicate does not override pool finality: a pool with an inherited fixed outcome rejects new <code>depositToEscalationGame</code> calls before they can create a local non-decision and still rejects <code>activateForkMode()</code>. A fork continuation instead records <code>nonDecisionState = InheritedThresholdTie</code> when its preserved balances already meet that condition, without rebasing balances or fabricating a local timestamp. Both explicit states close further deposits. A continuation with a fixed child outcome follows its remaining clock and settles to that outcome; one without a fixed outcome can open its own fork directly.</p>
-				<p>For the exact resolution ordering, empty-game fallback, deposit clipping, carry batching, and residual sweep rules, see <a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">Escalation Resolution and Deposits</a>.</p>
-				<p>The median matters because the game is trying to detect whether disagreement remains live across multiple sides, not merely whether one side has accumulated the most stake. <code>binding capital</code> measures the level at which the contest is still jointly sustained by competing outcomes, which is why it drives timeout and payout logic.</p>
-				<figure class="diagram" id="fig-statoblast-payout-regions">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-payout-regions" data-plot-width="860" data-plot-height="220" role="img" aria-label="Escalation payout regions"><span class="plot-chart-fallback">Winning deposits below binding capital and in the safety boundary share rewards, while excess receives principal only.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Payout Regions</span>Winning deposits below binding capital and in the safety boundary share rewards, while excess receives principal only.</p>
-				</figure>
-				<div class="equation" id="eq-statoblast-escalation-winning-payout">
-					<math display="block" aria-label="all payout amounts are in attoREP; reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when fork time is at or before the scheduled escalation game end date and the actual fork threshold is lower" data-source="rewardEligibleCapAttoRep = bindingCapitalAttoRep + ⌊bindingCapitalAttoRep / excessRewardWindowDivisor⌋; rewardBonusPoolAttoRep = ⌊bindingCapitalAttoRep \cdot 3 / 5⌋; burnAmountAttoRep = ⌊rewardEligibleDepositAttoRep \cdot ⌊bindingCapitalAttoRep \cdot 2 / 5⌋ / rewardEligiblePrincipalAttoRep⌋; amountToWithdrawAttoRep = depositAmountAttoRep + ⌊rewardEligibleDepositAttoRep \cdot rewardBonusPoolAttoRep / rewardEligiblePrincipalAttoRep⌋; scaledWithdrawalAttoRep = ⌊amountToWithdrawAttoRep \cdot actualForkThresholdAttoRep / nonDecisionThresholdAttoRep⌋ when forkTime &lt;= escalationGameEndDate and actualForkThresholdAttoRep &lt; nonDecisionThresholdAttoRep">
-						<mtable>
-							<mtr>
-								<mtd>
-									<mi>rewardEligibleCapAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>bindingCapitalAttoRep</mi>
-									<mo>+</mo>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mi>bindingCapitalAttoRep</mi>
-											<mi>excessRewardWindowDivisor</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>rewardBonusPoolAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>bindingCapitalAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mn>3</mn>
-											</mrow>
-											<mn>5</mn>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>burnAmountAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDepositAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mrow>
-													<mo form="prefix" stretchy="true">⌊</mo>
-													<mfrac>
-														<mrow>
-															<mi>bindingCapitalAttoRep</mi>
-															<mo>&#x22C5;</mo>
-															<mn>2</mn>
-														</mrow>
-														<mn>5</mn>
-													</mfrac>
-													<mo form="postfix" stretchy="true">⌋</mo>
-												</mrow>
-											</mrow>
-											<mi>rewardEligiblePrincipalAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>amountToWithdrawAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>depositAmountAttoRep</mi>
-									<mo>+</mo>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDepositAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mi>rewardBonusPoolAttoRep</mi>
-											</mrow>
-											<mi>rewardEligiblePrincipalAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>scaledWithdrawalAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>amountToWithdrawAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mi>actualForkThresholdAttoRep</mi>
-											</mrow>
-											<mi>nonDecisionThresholdAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-									<mspace linebreak="newline" />
-									<mtext> if forkTime &lt;= escalationGameEndDate and actualForkThresholdAttoRep &lt; nonDecisionThresholdAttoRep</mtext>
-								</mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Winning Payout</span>Reward-eligible winning principal shares the 60% bonus pool pro rata, while a 40% haircut is charged exactly once. If the escalation itself triggers the universe fork, Zoltar collects that haircut from the aggregate escalation backing; otherwise settlement burns it directly. Low fork thresholds scale the payout down when no fork is recorded or the recorded universe <code>forkTime</code> is at or before the scheduled <code>escalationGameEndDate</code>. When <code>forkTime</code> is strictly later than the scheduled <code>escalationGameEndDate</code>, the withdrawal calculation substitutes the configured <code>nonDecisionThresholdAttoRep</code> for the actual fork threshold, restoring the unscaled payout schedule for unclaimed winning deposits. Amounts withdrawn earlier are not revisited. All amounts are attoREP, and every Solidity division floors before the next step.</p>
-				</div>
-				<ul>
-					<li>The binding-capital region defines a fixed reward pool.</li>
-					<li><code>40%</code> of that binding-capital region is the winner haircut, so the remaining <code>60%</code> becomes the reward pool.</li>
-					<li>
-						The reward-eligible cap is
-						<code>bindingCapitalAmount + ⌊bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR⌋</code>.
-					</li>
-					<li>The region between binding capital and that cap is the safety boundary.</li>
-					<li>Winning capital above the reward-eligible cap is excess and receives principal only.</li>
-				</ul>
+
+				<p>TODO: make x axis to be time, make curve to start at 0 days, then add 3 day grace period and then add the exponential part, the start bond should not be 9.1%, its wrong</p>
+
+				<p>TODO: ADD a simple javascript game where you can click to add funds to YES,NO,INVALID time and where timer ticks to resolve the game</p>
+			</section>
+			<section id="payouts">
+				<h2>The game end</h2>
+
+				<p>The game can end two ways</p>
+				<ol>
+					<li>The required escalation game increased high enough that only one side was able to keep up with it: That side wins and Statoblast finalizes on that outcome</li>
+					<li>Two sides have reached the maximal deposit amount: Statoblast triggers a fork</li>
+				</ol>
+
+				After the game has ended, the escalation game rewards the winning side (on fork, both sides are rewarded) and burns some fraction of the deposited REP to make it costly to delay the game unnecessarily.
+
+				TODO explain these nicely
+
+				[binding capital][safety boundary][excess]
+				[reward eglible cap              ]
+				 - payout
+
 				<div class="callout">
 					Example: if final binding capital is <code>10 REP</code>, the reward-eligible cap is <code>15 REP</code>, the safety boundary is <code>(10 REP, 15 REP]</code>, and the reward pool is <code>6 REP</code>. If the winning side contributes <code>15 REP</code> inside that reward-eligible window, each <code>5 REP</code> deposit receives <code>7 REP</code>. Winning depth above <code>15 REP</code>
 					receives principal back with no share of the reward pool.
 				</div>
-				<p>Settlement uses different calls for local withdrawal, own-fork direct claims, optional unresolved parent escalation-deposit accounting cleanup, and child proof claims. The distinction matters because local withdrawal settles deposit indexes, while continuation games settle inherited winners by proof and retire inherited losers without a call.</p>
-				<h3>Escalation Settlement Call Matrix</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Entry point</th>
-								<th>Used when</th>
-								<th>Claim unit</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td><code>withdrawFromEscalationGame</code></td>
-								<td>A local game reaches a final outcome without non-decision and no earlier universe fork interrupted it. This includes the ordinary no-fork lifecycle.</td>
-								<td>Local deposit indexes for one original depositor per call; payout goes to that committed depositor.</td>
-							</tr>
-							<tr>
-								<td><code>claimForkedEscalationDeposits</code></td>
-								<td>A non-decision fork exists and the vault owner claims winning parent deposits for a selected outcome.</td>
-								<td>Winning parent deposit indexes; own-fork claims pay the ordinary winning reward in child REP to the committed depositor. The escalation's own fork has already removed the winner haircut from aggregate backing, so the claim does not burn it again.</td>
-							</tr>
-							<tr>
-								<td><code>migrateVaultWithUnresolvedEscalation</code></td>
-								<td>Optional cleanup after an own or external fork captured unresolved parent escalation-deposit accounting before the game finalized.</td>
-								<td>
-									The affected vault owner invokes the wrapper for their security vault's unresolved parent escalation-deposit totals. See the
-									<a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">operator cleanup reference</a>
-									for ordering, scope, and proof independence.
-								</td>
-							</tr>
-							<tr>
-								<td><code>withdrawForkedEscalationDeposits</code></td>
-								<td>A child continuation game finalized; only inherited winning deposits are claimable, while inherited losers require no call.</td>
-								<td>Carried-deposit proofs for one original depositor per call; the proof's committed depositor is immutable payout ownership.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-<p>The pool removes REP backing units and escrows REP when the user deposits into the local game. Settlement does not re-mint those REP backing units: a winner receives the ordinary winning payout as wallet REP, while a losing settlement clears escrow without a payout. An own-fork direct claim uses the same winning reward math and releases pre-funded child REP from the selected child's aggregate backing to the immutable depositor committed in the claim leaf, using the retention and rounding rule documented in the <a href="../explanation/escalation-game.html#claim-ownership">escalation architecture</a>. It is not a claim-time conversion and does not mint child-REP backing units. Own-fork direct claims must still be submitted before the parent migration window closes.</p>
-				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault-owner address. For a direct claim, that vault owner must be the deposit's committed depositor; their authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on that owner's security vault and its unresolved parent dispute-staked REP accounting.</p>
-				<p>External Zoltar forks interrupt the escalation game. This is called continuation. The canonical continuation lifecycle lives in <a href="#migration">Forks and Migration</a>. This section only distinguishes the settlement entry points and their caller permissions.</p>
-				<p>Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
-				</COPIED>
 
+				<h3>Escalation game continuation</h3>
 
+				In AugurV2, when a fork hapens, it cancels all currently running escalation games, the players are refunded. This opens an attack vector for the oracle, discussed more in
+				<a href = "https://github.com/AugurProject/oracle-research/blob/main/Zoltar%20Forks%20Should%20Not%20Cancel%20Escalation%20Games.md">Zoltar Forks Should Not Cancel Escalation Games</a>. The fix to the issue is to fork escalation games. This is called continuation. </p>
 
-				<table>
-					<thead>
-						<tr>
-							<th>Module</th>
-							<th>Owns</th>
-							<th>Why that boundary exists</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td><code>EscalationGameTypes.sol</code></td>
-							<td>Constants and structs shared across the stack.</td>
-							<td>Common types stay stable even when execution modules move.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameStorage.sol</code></td>
-							<td>The storage layout shared by the inherited game stack and both mutation delegates.</td>
-							<td>Keeping the layout in one base contract makes delegate writes target the same slots as direct game writes.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameState.sol</code></td>
-							<td>Events, constructor wiring, access control, and primitive escrow and unresolved counters over the shared layout.</td>
-							<td>All inherited modules need one authoritative state-management surface.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameCalculations.sol</code></td>
-							<td>Pure and view attrition, resolution, accepted-deposit, and payout math.</td>
-							<td>Readers can review formulas without reading mutation paths at the same time.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameCarry.sol</code></td>
-							<td>Fork carry snapshots, Merkle Mountain Range state, nullifier roots, proof verification calls, and local carry consumption.</td>
-							<td>Carry logic is where proof-derived history starts affecting live state.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameEscrow.sol</code></td>
-							<td>Local and direct-claim escrow records, per-vault aggregate outcome totals, one-time export state, and residual-sweep guards.</td>
-							<td>Optional parent-vault cleanup stays constant-size because it clears three outcome totals without scanning deposit history. Child continuation claims use aggregate game backing rather than copied per-vault escrow.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameSettlement.sol</code></td>
-							<td>Claim, withdraw, proof-backed settlement, residual sweeping, and public deposit pagination.</td>
-							<td>Settlement is the place where user-visible balances actually move.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGame.sol</code></td>
-							<td>Factory-owner-only start and fork-continuation initialization entrypoints, pool-only resume and local-deposit wrappers, and the forker-only auction-haircut wrapper.</td>
-							<td>The top-level contract and inherited wrappers validate callers and delegate size-sensitive mutation while preserving the public surface and game-address events.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameDepositDelegate.sol</code></td>
-							<td><code>recordDeposit</code> and <code>recordForkedEscrowForOutcome</code>; <code>applyTruthAuctionHaircut</code> and <code>resumeFromFork</code>; <code>consumeEscrowedRepForOwner</code> and <code>consumeUnresolvedRepForClaimOwners</code>; <code>creditClaimOwners</code> and <code>creditExternalClaimOwners</code>; node and carry-leaf creation; and their events.</td>
-							<td>Moving these cohesive mutation paths behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership, caller authority, or the recognized game address that emits logs.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameClaimDelegate.sol</code></td>
-							<td>Source-to-current retention checkpoint initialization and inherited retention calculations.</td>
-							<td>One shared claim implementation keeps every game's runtime deployable while making recursive-fork work independent of ancestry depth. Delegatecall preserves the game as the state and event address.</td>
-						</tr>
-						<tr>
-							<td><code>EscalationGameProofVerifier.sol</code></td>
-							<td>Storage-free Merkle Mountain Range, nullifier proof, and logarithm helpers.</td>
-							<td>Proof and attrition helpers can be reused and audited separately because they do not mutate game state. Logarithm normalization preserves extracted powers of two even when the residual term is exactly zero.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p>This order matters. New modules should join the inheritance ladder only when they truly need the full state surface. If a helper can compute a value without touching storage, it belongs in the proof verifier, a free function, or a test helper instead of widening the mutable stack.</p>
-				<p>For the carry-proof data structure itself, including leaf fields, peak bagging, the 64-peak bound, and nullifier replay protection, see <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
+				<p>Escalation game continuation uses <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a> and nullifier roots to migrate user game deposits, without requiring expensive data copying efforts onchain.</p>
+
 			</section>
 
-			<section id="accounting-invariants">
-				<h2>Accounting Invariants</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../reference/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP behavior</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../reference/security-model.html#assumption-a20">A20 proof-data availability</a>, and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
-				<p>Safe refactors keep the local REP and unresolved-deposit counters in sync. Before aggregate export, every active vault lock appears in both its vault-local counter and the corresponding global total. Aggregate export is optional cleanup: it clears those counters and the parent vault's escrow, while the individual deposit rows remain only as canonical proof material and no longer represent parent logical authorization or physical escrow.</p>
-				<p>Child initialization copies the authenticated carry totals and funds the child game once at the applicable aggregate rate: one child REP per effective source REP for an unrelated fork, or the already-haircut aggregate backing for the escalation's own fork. It does not allocate that backing among vaults. After the child resolves, only proofs for winning deposits may settle. Any caller may relay a proof through the pool, while the committed depositor of the non-transferable claim receives the winning payout from the aggregate game balance. The committed depositor remains the immutable payout owner. Inherited losing principal becomes terminal without a per-leaf transaction; local losing deposits still follow the ordinary local settlement rules.</p>
-				<p>The stable parent deposit identifier has two domains. In ordinary games it stays equal to the local <code>depositIndex</code>. In fork-continuation games it packs the creating game, outcome, and local index as <code>(uint256(uint160(address(this))) &lt;&lt; 96) | (uint256(outcomeIndex) &lt;&lt; 88) | depositIndex</code>. The address occupies 160 bits, the outcome occupies eight bits, and the local index occupies 88 bits. This reversible layout lets settlement recover the exact claim registry without a lookup table, so a child-local deposit and a grandchild-local deposit can never reuse the same carry/nullifier key just because both were appended at local index zero. That same identifier is stored in carry leaves, emitted by <code>LocalDepositAppended</code>, <code>CarryDepositConsumed</code>, and <code>ClaimDeposit</code>, returned by <code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through <code>consumedParentDepositIndexes</code>.</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Invariant</th>
-							<th>What must remain true</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Escrow totals</td>
-							<td><code>totalDisputeStakedAttoRep</code> equals effective active REP locks after any auction retention. <code>disputeStakedRepByVaultAttoRep(vault)</code> returns only locally attributed escrow in that game. A continuation's inherited carry remains aggregate backing committed by its MMR; the leaf depositor remains the immutable payout owner, but receives no per-vault child health credit.</td>
-						</tr>
-						<tr>
-							<td>Local unresolved totals</td>
-							<td><code>totalLocalUnresolvedAttoRep</code> equals the sum of unresolved local deposits, and <code>unresolvedRepByVaultAttoRep[vault]</code> is that vault's local component.</td>
-						</tr>
-						<tr>
-							<td>Outcome carry</td>
-							<td>For each outcome, <code>currentCarryTotalAttoRep == effectiveInheritedUnresolvedTotalAttoRep + localUnresolvedTotalAttoRep</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.</td>
-						</tr>
-						<tr>
-							<td>Active local deposit</td>
-							<td>Before aggregate export, <code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active unresolved parent escalation-deposit accounting.</td>
-						</tr>
-						<tr>
-							<td>Local deposit consumption</td>
-							<td>Individual settlement, claim, or index-selected export must zero that deposit, mark its stable parent deposit index consumed, reduce unresolved totals, and update the current carry snapshot.</td>
-						</tr>
-						<tr>
-							<td>Aggregate vault export</td>
-							<td>The optional fixed-cost parent cleanup clears only the vault's three outcome aggregates and escrow counters. It preserves individual deposit rows and the canonical carry commitment, and child funding or proof claims do not depend on calling it.</td>
-						</tr>
-						<tr>
-							<td>Winning carried proof</td>
-							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the committed depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
-						</tr>
-						<tr>
-							<td>Continuation funding</td>
-							<td>
-								An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool-held REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../explanation/statoblast.html#migration">fork-migration derivation</a> and <a href="../reference/invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
-							</td>
-						</tr>
-						<tr>
-							<td>Inherited losing outcome</td>
-							<td>After final resolution, inherited principal on every losing outcome contributes zero to live carry and the residual-sweep guard. No losing depositor or third party must submit its leaf.</td>
-						</tr>
-						<tr>
-							<td>Direct parent claim identity</td>
-							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="../explanation/statoblast.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p id="claim-ownership">Claims are non-transferable commitments rather than tokens or mutable ownership bundles. Each carry leaf commits the original depositor, outcome, amount, stable parent index, cumulative amount, and source node. A child stores only the immutable MMR peaks and leaf count, nullifier root, aggregate carry totals, and normalized retention checkpoint. It never copies per-claim or per-owner state from its parent. The fixed 64-entry peak frontier is logarithmic commitment storage supporting up to <code>2^64 - 1</code> leaves; it is not a 64-reporter or 64-portfolio cap. Settlement supplies a leaf proof and nullifier proof, pays the committed depositor, and consumes that stable index once. Liquidation does not inspect or move claims and therefore cannot omit, select, or acquire them. It transfers only the 5%-bonus pool-held vault REP backing award, while accrued fees and all escalation claims remain with the target. Settlement relay arrays remain caller-sized for liveness and should be submitted in gas-bounded chunks; they do not expand stored owner sets or impose descendant-copy work.</p>
-				<p>Claim ownership is immutable. There are no owner slots, portfolio registries, global participant caps, or ownership transitions to exhaust.</p>
-				<p>Continuation-local stable deposit indexes encode the game that created the claim, while unencoded root indexes use the root-source checkpoint. Auction loss uses a cumulative normalized binary mantissa and exponent: a descendant compares its checkpoint with the creating game's checkpoint and applies that one ratio to the proof amount and curve position. Carry consumption allocates source-basis rounding by cumulative leaf prefixes—retained current prefix minus retained previous prefix—so every proof order telescopes to the aggregate checkpoint total without phantom residual principal. Renormalizing the mantissa after every haircut means the index cannot underflow merely because many recursive forks occurred; only the final REP-base-unit result may correctly floor to zero. Recursive depth adds neither storage traversal nor a liquidation loop.</p>
-				<p>Local deposit consumption removes the raw claim units corresponding to that deposit's effective original principal. With no local auction checkpoint this is the original principal; after a local haircut it is the ceiling of <code>originalPrincipal × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep</code>. This inverse-retention conversion removes the exact storage-basis backing while leaving every other unconsumed deposit intact.</p>
-				<p>The game's fallback delegates retention-checkpoint calculations to the shared claim module. There are no owner, portfolio, or import selectors. Auction retention is also available through the game's ordinary public storage getters.</p>
-				<p>The highest-risk paths already have regression coverage. Scenario tests exercise consumed local carry leaves, constant-size unresolved-vault export, and lazy child materialization, while <code>escalationGameInterfaceRegression.test.ts</code> snapshots the inherited storage layout so refactors do not silently move live slots.</p>
-			</section>
-
-			<section id="interface-drift">
-				<h2>Interface Drift</h2>
-				<p>Public-surface changes need an explicit review trail because a split architecture makes accidental ABI drift easy to miss. The ABI snapshot and bytecode snapshot are there to prove that a surface change was intentional rather than an unnoticed side effect of refactoring one of the modules.</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Artifact</th>
-							<th>Location</th>
-							<th>Refresh command</th>
-							<th>Why it matters</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>ABI snapshot</td>
-							<td><code>solidity/ts/tests/fixtures/escalationGameAbi.snapshot</code></td>
-							<td><code>bun run update:escalation-game-abi-snapshot</code></td>
-							<td>Detects intentional or accidental changes to public functions, events, errors, and tuple shapes.</td>
-						</tr>
-						<tr>
-							<td>Runtime bytecode snapshot</td>
-							<td><code>solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json</code></td>
-							<td><code>bun run update:escalation-game-bytecode-snapshot</code></td>
-							<td>Shows whether executable behavior changed after metadata is stripped from the runtime hash.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p>Review the snapshot diff together with the Solidity diff. If the change was not deliberate, fix the contract rather than normalizing the drift by updating the fixture.</p>
-			</section>
-
-			<section id="deployment-bytecode">
-				<h2>Deployment and Bytecode</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a23">A23 verified deployment</a>, and <a href="../reference/security-model.html#assumption-a26">A26 executable Ethereum gas bounds</a>.</p>
-				<p>The proof verifier, deposit delegate, and claim delegate splits also exist because bytecode headroom is tight. Keeping proof math and the cohesive deposit mutation path outside the deployed game bytecode keeps the contract under the current bytecode budgets and leaves only limited headroom for small execution changes without collapsing the public game contract into an unreviewable blob.</p>
-				<div class="table-scroll" role="region" aria-label="Escalation game bytecode measurements" tabindex="0">
-					<table>
-						<thead>
-							<tr>
-								<th>Measurement</th>
-								<th>Current value</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Creation bytecode</td>
-								<td><code>36,188</code> bytes</td>
-							</tr>
-							<tr>
-								<td>Deployed bytecode</td>
-								<td><code>23,924</code> bytes</td>
-							</tr>
-							<tr>
-								<td>Project deployed-bytecode budget headroom</td>
-								<td><code>652</code> bytes below <code>24,576</code></td>
-							</tr>
-							<tr>
-								<td>EIP-170 headroom</td>
-								<td><code>652</code> bytes below <code>24,576</code></td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<p>The factory keeps this creation bytecode in two fixed code-storage carriers and reconstructs it with two <code>EXTCODECOPY</code> operations. Each carrier stays below EIP-170, and deploying bytecode as code is much cheaper than initializing one storage slot for every 32-byte word. This choice keeps deterministic factory deployment below the block gas limit; the two-part shape is fixed, so game creation does not introduce a user-sized loop.</p>
-				<p>Any Solidity change can also move deterministic deployment addresses, because address derivation uses init code. After contract changes, regenerate and review every network deployment manifest with the normal artifact workflow. Follow the <a href="../reference/operator-guardrails.html#launch-release-checklist">Operator Reference launch release checklist</a> when those addresses intentionally change.</p>
-				<p>For gas-sensitive work, measure instead of assuming. Scenario tests are the first line of defense, and <code>bun run gas-costs</code> is the follow-up when deployment or settlement costs are part of the change.</p>
-			</section>
-
-			<section id="future-extraction">
-				<h2>Future Extraction Criteria</h2>
-				<p>A module should be extracted only when the ownership boundary becomes clearer after the split. File count by itself is not a reason. The question is whether the new boundary would reduce review risk by making state mutation, proof math, or settlement authority easier to see.</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Possible extraction</th>
-							<th>Only do it when</th>
-							<th>Do not do it when</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>More math helpers</td>
-							<td>The logic is storage-free and can be tested independently.</td>
-							<td>The helper still needs <code>outcomeState</code>, <code>securityPool</code>, or live mutation context.</td>
-						</tr>
-						<tr>
-							<td>More proof helpers</td>
-							<td>The caller still owns nullifier advancement, consumed-index accounting, and escrow or carry mutations.</td>
-							<td>The helper would start deciding which proof effects are consumed onchain.</td>
-						</tr>
-						<tr>
-							<td>Separate deployed escrow or settlement contracts</td>
-							<td>A concrete bytecode-limit or upgradeability need appears.</td>
-							<td>The split would create extra trust, approval, or accounting surfaces without solving a live constraint.</td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
-			<section id="one-game-lifecycle">
-				<h2>One-game lifecycle recap</h2>
-				<p>One escalation game follows this loop: a claim is opened, conflicting deposits grow the response threshold, the deadline changes as deposits arrive, and the game either settles locally or reaches a fork continuation. The deposit delegate records deposits and other size-sensitive mutations. The claim delegate initializes and calculates inherited retention checkpoints. The inherited settlement modules process claims and withdrawals.</p>
-				<p>The external verifier validates Merkle Mountain Range proofs, nullifier proofs, and proof-derived accounting values. It does not evaluate the real-world answer to the question and does not own the game's accounting. The module split and verifier keep the transition surface small enough for deployment limits, while interface snapshots and delegate-call boundaries remain release-critical implementation facts.</p>
-			</section>
 		</main>
 		<script src="../assets/js/protocolTerms.js"></script>
 		<script src="../assets/js/termTooltips.js"></script>
