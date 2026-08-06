@@ -55,12 +55,12 @@
 			</section>
 			<section id="worked-call">
 				<h2>Worked call</h2>
-				<p>Illustrative fixture values for <code>SetCoverageCommitment</code>: target vault <code>0x…</code>, new commitment <code>5 ETH</code>, stale price, request cost <code>0.003 ETH</code>, requested initial WETH <code>0.5 WETH</code>, minimum required WETH <code>0.8 WETH</code>, proposed price <code>2 REP/ETH</code>, and <code>msg.value = 0.003 ETH</code>. The coordinator pulls <code>0.8 WETH</code> after the sponsor approves it and derives the REP side using the exact contract formula; the nominal side is <code>1.6 REP</code> before formula-specific rounding and minimum-report constraints.</p>
+				<p>Record the target, operation amount, current price validity, request cost, minimum WETH report amount, proposed price, and selected initial WETH from the same block. Do not copy values from this page: the coordinator derives the required WETH and REP amounts from deployment parameters, current base fee, and the requested operation.</p>
 				<pre><code>requestPriceIfNeededAndStageOperation(
   SetCoverageCommitment, targetVault, 5 ETH, validForSeconds,
   2 REP/ETH, 0.5 WETH
 ){ value: 0.003 ETH }</code></pre>
-				<p>Verify <code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, and <code>PriceRequested</code>. Treat these values as illustrative unless the fixture records the same base fee and coordinator parameters.</p>
+				<p>Verify <code>StagedOperationQueued</code>, <code>StagedOperationDisputeStakedRepSnapshotted</code>, and <code>PriceRequested</code> when the stale branch opens a report.</p>
 			</section>
 			<section id="stage">
 				<h2>Stage the operation</h2>

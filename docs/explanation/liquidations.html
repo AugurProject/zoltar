@@ -81,9 +81,10 @@
 					<p class="equation-caption"><span class="equation-label">Associated REP liquidation threshold</span><code>associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × poolSecurityMultiplierBps)⌋</code>. The migration threshold is <code>⌊snapshotTargetVaultRepBackingAttoRep × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × migrationSecurityMultiplierBps)⌋</code>, where <code>migrationSecurityMultiplierBps = max(BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)</code>. Execution uses <code>thresholdPrice = min(associatedRepThreshold, migrationThreshold)</code>, requires <code>currentPrice &gt; thresholdPrice</code>, and then requires <code>⌊(currentPrice - thresholdPrice) × BPS_DENOMINATOR / currentPrice⌋ ≥ minPriceDistanceBps</code>; equality and prices below the threshold fail.</p>
 				</div>
 				<div class="example" id="liquidation-numeric-example">
-					<h3>Numeric example</h3>
-					<p>For an illustrative price of <code>2 REP / ETH</code> and a 5% award, moving <code>10 ETH</code> of coverage requires <code>⌈10 × 2 × 1.05⌉ = 21 REP</code>. If the target has 30 REP of transferable backing, a 10-ETH partial request moves 10 ETH and 21 REP before the protocol's backing-unit conversion and rounding fields are applied. The following is a conceptual maximum-request calculation, not a predicted receipt: assume the target's full 10-ETH commitment is requested, the pool's backing-unit ratio is configured so that 14.7 REP is transferable, and the caller is already healthy after accepting a 7-ETH slice. The funded cap is <code>⌊14.7 / 2.1⌋ = 7 ETH</code>; the remaining 3 ETH is residual bad debt. The unrounded award is <code>7 × 2 × 1.05 = 14.7 REP</code>. The contract performs the ceiling at integer attoREP precision, not whole-REP precision: <code>14.7 REP = 14.7 × 10¹⁸ attoREP</code>, so this exact example does not change the displayed value. For a one-attoREP boundary example, an unrounded award of <code>14.7000000000000000001 REP</code> becomes <code>14.700000000000000001 REP</code>. The receipt's <code>VaultLiquidated</code> event and accounting checkpoint are authoritative for final rounded amounts; the target reserve is zero on the maximum-request path.</p>
-					<table aria-label="Illustrative liquidation before and after ledger">
+					<h3>Separate partial and maximum examples</h3>
+					<p>Use <code>2 REP / ETH</code> and the fixed 5% award for these accounting examples. The unrounded award for <code>7 ETH</code> is <code>7 × 2 × 1.05 = 14.7 REP</code>. The contract ceilings at integer attoREP precision, so <code>14.7 REP</code> remains <code>14.7 REP</code>; an unrounded <code>14.7000000000000000001 REP</code> becomes <code>14.700000000000000001 REP</code>. Backing-unit conversion can change the reported transfer, so <code>VaultLiquidated</code> is authoritative for the receipt.</p>
+					<h4>Partial request</h4>
+					<table aria-label="Partial liquidation before and after ledger">
 						<thead>
 							<tr>
 								<th>Position</th>
@@ -96,14 +97,14 @@
 							<tr>
 								<td>Target coverage commitment</td>
 								<td>10 ETH</td>
-								<td>−7 ETH</td>
-								<td>3 ETH, or 0 with 3 ETH bad debt on maximum request</td>
+								<td>−7 ETH transferred</td>
+								<td>3 ETH</td>
 							</tr>
 							<tr>
 								<td>Target pool-held REP</td>
-								<td>14.7 REP</td>
+								<td>30 REP</td>
 								<td>−14.7 REP</td>
-								<td>0</td>
+								<td>15.3 REP</td>
 							</tr>
 							<tr>
 								<td>Target accrued fees</td>
@@ -132,7 +133,63 @@
 							<tr>
 								<td>Pool bad debt</td>
 								<td>0</td>
-								<td>+3 ETH on maximum request</td>
+								<td>unchanged</td>
+								<td>0</td>
+							</tr>
+						</tbody>
+					</table>
+					<h4>Maximum request</h4>
+					<p>Request at least the target's full <code>10 ETH</code> commitment while only <code>7 ETH</code> is fundable from <code>14.7 REP</code>. The maximum path transfers the funded <code>7 ETH</code> and award, writes off the untransferred <code>3 ETH</code> as bad debt, and leaves the target with zero active coverage commitment.</p>
+					<table aria-label="Maximum liquidation before and after ledger">
+						<thead>
+							<tr>
+								<th>Position</th>
+								<th>Before</th>
+								<th>Transfer/change</th>
+								<th>After</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Target coverage commitment</td>
+								<td>10 ETH</td>
+								<td>−7 ETH; −3 ETH bad debt</td>
+								<td>0 ETH active commitment</td>
+							</tr>
+							<tr>
+								<td>Target pool-held REP</td>
+								<td>14.7 REP transferable</td>
+								<td>−14.7 REP award</td>
+								<td>0 REP transferable</td>
+							</tr>
+							<tr>
+								<td>Target accrued fees</td>
+								<td>1 ETH</td>
+								<td>unchanged</td>
+								<td>1 ETH</td>
+							</tr>
+							<tr>
+								<td>Target escalation claims</td>
+								<td>5 REP claim units</td>
+								<td>unchanged</td>
+								<td>5 REP claim units</td>
+							</tr>
+							<tr>
+								<td>Liquidator coverage commitment</td>
+								<td>2 ETH</td>
+								<td>+7 ETH</td>
+								<td>9 ETH</td>
+							</tr>
+							<tr>
+								<td>Liquidator REP backing</td>
+								<td>20 REP</td>
+								<td>+14.7 REP</td>
+								<td>34.7 REP</td>
+							</tr>
+							<tr>
+								<td>Pool bad debt</td>
+								<td>0</td>
+								<td>+3 ETH</td>
 								<td>3 ETH</td>
 							</tr>
 						</tbody>

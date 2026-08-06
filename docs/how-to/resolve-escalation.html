@@ -27,17 +27,17 @@
 					<thead>
 						<tr>
 							<th>Field</th>
-							<th>Illustrative value</th>
+							<th>Contract-derived value</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr>
 							<td>Current tentative outcome</td>
-							<td><code>Yes</code></td>
+							<td><code>Yes</code> balance <code>200 REP</code>; <code>No</code> balance <code>150 REP</code></td>
 						</tr>
 						<tr>
 							<td>Current binding REP</td>
-							<td><code>100 REP</code></td>
+							<td><code>startBond = 100 REP</code>; threshold <code>350 REP</code></td>
 						</tr>
 						<tr>
 							<td>Challenging outcome</td>
@@ -53,11 +53,11 @@
 						</tr>
 						<tr>
 							<td>Previous deadline</td>
-							<td><code>2026-08-10 12:00 UTC</code></td>
+							<td><code>activationTime + time(150 REP)</code></td>
 						</tr>
 						<tr>
 							<td>New deadline</td>
-							<td><code>2026-08-12 18:00 UTC</code></td>
+							<td><code>activationTime + time(200 REP)</code></td>
 						</tr>
 						<tr>
 							<td>New tentative outcome</td>
@@ -65,11 +65,11 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>The caller supplies a maximum, not a guaranteed transfer. The game applies its accepted-deposit calculation to current binding REP, round, curve, vault backing, and deadline state; any excess remains unaccepted. The new deadline is derived from the updated curve and can move only according to the contract's deadline rule, not according to the caller's chosen timestamp. Verify the deposit event's accepted amount, outcome, round, and deadline fields. The next deposit is valid only while the game remains active and its state has not advanced. Local settlement requires the game to be resolved; non-decision enables the fork path.</p>
+				<p>Read <code>previewDepositOnOutcome(No, 250 REP)</code> first. With these balances, room is <code>350 − 150 = 200 REP</code>, so the preview returns accepted amount <code>200 REP</code> and cumulative No balance <code>350 REP</code>; the remaining <code>50 REP</code> is not transferred. The leader changes to No. Read <code>getBindingCapitalAttoRep()</code> and <code>getEscalationGameEndDate()</code> again after the deposit: the deadline changes from the curve time for <code>150 REP</code> to the curve time for <code>200 REP</code>. Submit <code>depositToEscalationGame(No, 250 REP)</code> and require <code>DepositToEscalationGame</code> plus the game-level deposit events. The next deposit is valid only while the game remains active and its state has not advanced.</p>
 			</section>
 			<section id="advance-the-round">
 				<h2>Advance the round</h2>
-				<p>Submit the deposit and require the <code>DepositToEscalationGame</code> event, updated side/round, and deadline in the receipt. The game reaches a local result through its own time and state rules; the pool's claim action is <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>, while an own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the round again because another participant may have advanced it. Record the claim and independent evidence for the underlying answer.</p>
+				<p>Approve no REP: the pool escrows REP backing already held by the caller's vault. Submit the call from that vault, then re-read balances, leader, binding capital, and end date from the receipt block. The pool's claim action is <code>withdrawFromEscalationGame(outcome, proofs)</code>, while an own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the current state and quote again because another participant may have advanced it.</p>
 			</section>
 			<section id="settle-or-fork">
 				<h2>Settle or enter fork handling</h2>

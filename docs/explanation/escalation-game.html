@@ -24,20 +24,20 @@
 					<thead>
 						<tr>
 							<th>Field</th>
-							<th>Illustrative value</th>
+							<th>Contract-derived example</th>
 							<th>Meaning</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr>
 							<td>Current tentative outcome</td>
-							<td><code>Yes</code></td>
+							<td><code>Yes</code> leads with <code>200 REP</code>; <code>No</code> has <code>150 REP</code>.</td>
 							<td>The outcome currently supported by the game.</td>
 						</tr>
 						<tr>
 							<td>Current binding REP</td>
-							<td><code>100 REP</code></td>
-							<td>Capital the challenger must meet or exceed according to the accepted-deposit formula.</td>
+							<td><code>startBond = 100 REP</code>; <code>nonDecisionThreshold = 350 REP</code></td>
+							<td>Values read from <code>startBondAttoRep()</code> and <code>nonDecisionThresholdAttoRep()</code>.</td>
 						</tr>
 						<tr>
 							<td>Challenging outcome / maximum offered</td>
@@ -46,17 +46,17 @@
 						</tr>
 						<tr>
 							<td>Accepted amount</td>
-							<td><code>200 REP</code></td>
-							<td>Illustrative result after applying the deployed round and vault-backing rules; excess is not silently accepted.</td>
+							<td><code>200 REP</code>; cumulative No balance becomes <code>350 REP</code></td>
+							<td>The preview accepts only the <code>200 REP</code> room below the threshold; the remaining <code>50 REP</code> is not transferred.</td>
 						</tr>
 						<tr>
 							<td>Deadline</td>
-							<td><code>2026-08-10 12:00 → 2026-08-12 18:00 UTC</code></td>
-							<td>The new deadline is derived from the updated game curve and cannot be inferred from the caller's wall-clock choice.</td>
+							<td><code>activationTime + time(150 REP) → activationTime + time(200 REP)</code></td>
+							<td>After the deposit, <code>getBindingCapitalAttoRep()</code> is <code>200 REP</code>; <code>getEscalationGameEndDate()</code> applies <code>computeTimeSinceStartFromAttritionCostAttoRep</code>.</td>
 						</tr>
 					</tbody>
 				</table>
-				<p>The receipt's deposit event supplies the accepted amount, outcome, round, and deadline. A later deposit is valid only while the game is active, the outcome is eligible, the caller has enough vault-backed REP, and the current deadline and round checks pass. Settlement requires the game to be locally resolved; a non-decision instead enables the fork-continuation path.</p>
+				<p>The preview and <code>DepositToEscalationGame</code> receipt supply the accepted amount and cumulative balance. The updated leader is <code>No</code> because <code>350 REP &gt; 200 REP</code>. A later deposit is valid only while the game is active, the outcome is eligible, the caller has enough vault-backed REP, and the current state checks pass. Settlement requires the game to be locally resolved; a non-decision instead enables the fork-continuation path.</p>
 			</section>
 
 			<section id="module-split">

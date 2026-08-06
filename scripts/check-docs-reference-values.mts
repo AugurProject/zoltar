@@ -31,6 +31,7 @@ const contractArtifacts = JSON.parse(await readFile('solidity/artifacts/Contract
 const coordinatorAbi = contractArtifacts.contracts['contracts/peripherals/OpenOraclePriceCoordinator.sol']?.['OpenOraclePriceCoordinator']?.abi ?? []
 const liquidationGuide = normalizeHtmlSource(await readFile('docs/how-to/liquidate-vault.html', 'utf8'))
 const oracleRecoveryGuide = normalizeHtmlSource(await readFile('docs/how-to/recover-oracle-operation.html', 'utf8'))
+const oracleStagingGuide = normalizeHtmlSource(await readFile('docs/how-to/stage-oracle-operation.html', 'utf8'))
 const escalationGuide = normalizeHtmlSource(await readFile('docs/how-to/resolve-escalation.html', 'utf8'))
 const operateSecurityPoolGuide = normalizeHtmlSource(await readFile('docs/how-to/operate-security-pool.html', 'utf8'))
 const indexerGuide = normalizeHtmlSource(await readFile('docs/how-to/build-event-indexer.html', 'utf8'))
@@ -719,7 +720,7 @@ function assertOperationalGuideSemantics(): void {
 	assert.match(forkMigrationGuide, /shareToken\.migrate\(fromId, targetOutcomeIndexes\)[\s\S]*existing child/)
 	assert.match(forkMigrationGuide, /REP already locked in the security-pool migration proxy:[\s\S]*migrateRepToZoltar\(pool, outcomeIndices\)/)
 	assert.match(forkMigrationTutorial, /advances beyond the pool-local migration window[\s\S]*does not provide a resettable vault-migration write[\s\S]*migration how-to/)
-	assert.match(oracleRecoveryGuide, /Fresh price[\s\S]*First stale operation[\s\S]*Report already pending[\s\S]*Rejected report/)
+	assert.match(oracleStagingGuide, /Fresh cache[\s\S]*First stale request[\s\S]*Pending report[\s\S]*Rejected report/)
 	assert.match(oracleTutorial, /StagedOperationQueued[\s\S]*StagedOperationDisputeStakedRepSnapshotted[\s\S]*PriceRequested/)
 	assert.match(disputedTutorial, /withdrawForkedEscalationDeposits\(outcome, proofs\)[\s\S]*withdrawFromEscalationGame\(outcome, depositIndexes\)/)
 	assert.match(openOracleSchema, /"schemaVersion": 3[\s\S]*OpenOraclePriceCoordinator\.sol[\s\S]*"recoveryEligibility"[\s\S]*"PriceReportRejected"[\s\S]*"CoordinatorStateCheckpoint"/)
