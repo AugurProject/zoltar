@@ -2,8 +2,8 @@
 	"sections": [
 		{
 			"id": "tutorials",
-			"title": "Guided tours",
-			"description": "Inspect deterministic protocol states in simulation; the first tour includes one resettable transaction."
+			"title": "Tutorials",
+			"description": "Inspect deterministic protocol states in simulation; the first tutorial includes one resettable transaction."
 		},
 		{
 			"id": "how-to",

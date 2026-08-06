@@ -18,7 +18,7 @@
 			</header>
 			<section id="lifecycle-first">
 				<h2>One-Game Lifecycle</h2>
-				<p>An escalation game lets participants challenge the current tentative outcome by committing increasing amounts of REP. Each accepted deposit changes the game's supported outcome and deadline. The game either reaches a locally settled outcome or reaches the protocol's non-decision condition and continues through a Zoltar fork.</p>
+				<p>An escalation game lets participants challenge the current tentative outcome by committing increasing amounts of REP. Each accepted deposit recomputes the leader and deadline; it may leave the leading outcome unchanged when the challenger does not overtake it. The game either reaches a locally settled outcome or reaches the protocol's non-decision condition and continues through a Zoltar fork.</p>
 				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
 				<table>
 					<thead>
@@ -29,6 +29,11 @@
 						</tr>
 					</thead>
 					<tbody>
+						<tr>
+							<td>Outcome balances before deposit</td>
+							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 150 REP</code></td>
+							<td>The leader is Yes and the binding capital is the median: <code>median(0, 200, 150) = 150 REP</code>.</td>
+						</tr>
 						<tr>
 							<td>Current tentative outcome</td>
 							<td><code>Yes</code> leads with <code>200 REP</code>; <code>No</code> has <code>150 REP</code>.</td>
@@ -48,6 +53,11 @@
 							<td>Accepted amount</td>
 							<td><code>200 REP</code>; cumulative No balance becomes <code>350 REP</code></td>
 							<td>The preview accepts only the <code>200 REP</code> room below the threshold; the remaining <code>50 REP</code> is not transferred.</td>
+						</tr>
+						<tr>
+							<td>Outcome balances after deposit</td>
+							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 350 REP</code></td>
+							<td>The new leader is No and binding capital is <code>median(0, 200, 350) = 200 REP</code>.</td>
 						</tr>
 						<tr>
 							<td>Deadline</td>

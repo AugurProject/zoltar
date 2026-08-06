@@ -207,7 +207,7 @@
 						<h3>Question selection remains aligned with user intent</h3>
 						<p>Interfaces and users verify the immutable question ID and metadata when selecting a market or pool, and the question has evidence and wording from which participants can reach an outcome or intentionally choose <code>Invalid</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a >, <a href="../explanation/zoltar.html#questions">question identity</a>, and <a href="../explanation/statoblast.html#pools">pool selection</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a>, <a href="../explanation/zoltar.html#questions">question identity</a>, and <a href="../explanation/statoblast.html#pools">pool selection</a>.</p>
 					</li>
 				</ol>
 			</section>
@@ -257,7 +257,7 @@
 						<h3>Genesis REP and configured WETH obey the required accounting model</h3>
 						<p>Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the configured genesis REP burn sink remains inaccessible. On mainnet these token behaviors are external assumptions. On Sepolia, the reviewed <a href="../../solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> and <a href="../../solidity/contracts/peripherals/WETH9.sol"><code>WETH9</code></a> enforce issuance and transfer behavior, provided A23 verifies their deployed bytecode and wiring and A26 preserves Ethereum execution. The configured burn sink's inaccessibility remains an external assumption on Sepolia as well as mainnet. Canonical child REP is likewise implemented by the reviewed <code>ReputationToken</code> contract rather than being an additional external-token assumption.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or WETH value.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a >, <a href="../explanation/zoltar.html#economics">genesis REP handling</a>, and <a href="../explanation/open-oracle-appendix.html#openoracle-role">oracle token pair</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a>, <a href="../explanation/zoltar.html#economics">genesis REP handling</a>, and <a href="../explanation/open-oracle-appendix.html#openoracle-role">oracle token pair</a>.</p>
 					</li>
 					<li id="assumption-a22" value="22" data-assumption="A22">
 						<h3>Participant-controlled recipients can accept required asset deliveries</h3>

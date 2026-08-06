@@ -61,7 +61,7 @@ reduced_state   (entity_id, version, payload, primary key (entity_id, version))<
 				<h2>Handle reorganizations</h2>
 				<p>Detect a reorganization when the next block's <code>parentHash</code> does not equal the stored canonical head hash; removed-log notifications are an additional signal, not the sole detection mechanism. Discard affected events, restore the checkpoint's versioned state snapshot before the replacement, and replay the new branch. Alternatively replay all retained canonical logs from the schema anchor. Never merge events from deployments or schema segments by event name alone. Use the <a href="../reference/event-stream.html">event-stream reference</a> for exact schemas and reducers.</p>
 				<pre><code>fixture logs: PoolCreated → VaultDeposited → CompleteSetCreated → PriceReported
-replacement branch: same prefix, alternate PriceReported block hash
+noncanonical replacement branch: same prefix, alternate PriceReported block hash
 expected final state: one pool, one funded vault, one complete-set delta, accepted price
 expected state hash: record the generated fixture hash with reducer version</code></pre>
 			</section>

@@ -24,10 +24,8 @@
 			<section id="report-lifecycle">
 				<h2>One report lifecycle</h2>
 				<p><code>operation requested → cached price checked → immediate execution or report opened → report corrected or left unchanged → report settled → coordinator accepts or rejects → queued operation performs its own safety checks</code>.</p>
-				<figure class="diagram" id="fig-open-oracle-lifecycle">
-					<div class="lifecycle-flow" role="img" aria-label="OpenOracle report lifecycle from operation request through independent callback acceptance and operation checks">operation requested → cached price checked → immediate execution or report opened → correction window → settlement → callback acceptance or rejection → independent operation checks</div>
-					<p class="diagram-caption"><span class="figure-label">Report lifecycle</span>Report acceptance and operation success are separate outcomes.</p>
-				</figure>
+				<div class="lifecycle-flow" role="img" aria-label="OpenOracle report lifecycle from operation request through independent callback acceptance and operation checks">operation requested → cached price checked → immediate execution or report opened → correction window → settlement → callback acceptance or rejection → independent operation checks</div>
+				<p><strong>Report lifecycle.</strong> Report acceptance and operation success are separate outcomes.</p>
 				<p>For a worked price, a settled report with <code>amount1 = 0.8 WETH</code> and <code>amount2 = 1,600 REP</code> produces <code>lastPrice = 1,600 / 0.8 = 2,000 REP/ETH</code>, represented onchain as <code>2,000 × 10¹⁸</code>. The coordinator then applies that accepted price to each queued operation's own pool checks.</p>
 			</section>
 			<section id="security-intuition">

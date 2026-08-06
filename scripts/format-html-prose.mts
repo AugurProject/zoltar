@@ -114,6 +114,7 @@ export function formatParagraphsOnSingleLines(html: string): string {
 			.replace(/\s*\r?\n\s*/g, ' ')
 			.replace(/(<p\b[^>]*>)\s+/i, '$1')
 			.replace(/\s+(<\/p>)$/i, '$1')
+			.replace(/<\/a\s+>/gi, '</a>')
 		formattedHtml = `${formattedHtml.slice(0, span.start)}${formattedParagraph}${formattedHtml.slice(span.end)}`
 	}
 	return formattedHtml

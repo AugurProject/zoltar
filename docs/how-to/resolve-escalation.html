@@ -32,6 +32,10 @@
 					</thead>
 					<tbody>
 						<tr>
+							<td>Outcome balances before deposit</td>
+							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 150 REP</code></td>
+						</tr>
+						<tr>
 							<td>Current tentative outcome</td>
 							<td><code>Yes</code> balance <code>200 REP</code>; <code>No</code> balance <code>150 REP</code></td>
 						</tr>
@@ -52,6 +56,10 @@
 							<td><code>200 REP</code></td>
 						</tr>
 						<tr>
+							<td>Binding capital after deposit</td>
+							<td><code>median(Invalid 0, Yes 200, No 350) = 200 REP</code></td>
+						</tr>
+						<tr>
 							<td>Previous deadline</td>
 							<td><code>activationTime + time(150 REP)</code></td>
 						</tr>
@@ -65,11 +73,11 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>Read <code>previewDepositOnOutcome(No, 250 REP)</code> first. With these balances, room is <code>350 − 150 = 200 REP</code>, so the preview returns accepted amount <code>200 REP</code> and cumulative No balance <code>350 REP</code>; the remaining <code>50 REP</code> is not transferred. The leader changes to No. Read <code>getBindingCapitalAttoRep()</code> and <code>getEscalationGameEndDate()</code> again after the deposit: the deadline changes from the curve time for <code>150 REP</code> to the curve time for <code>200 REP</code>. Submit <code>depositToEscalationGame(No, 250 REP)</code> and require <code>DepositToEscalationGame</code> plus the game-level deposit events. The next deposit is valid only while the game remains active and its state has not advanced.</p>
+				<p>Read <code>previewDepositOnOutcome(No, 250 REP)</code> first. With these balances, room is <code>350 − 150 = 200 REP</code>, so the preview returns accepted amount <code>200 REP</code> and cumulative No balance <code>350 REP</code>; the remaining <code>50 REP</code> is not transferred. The game recomputes the leader and binding capital as <code>median(0, 200, 350) = 200 REP</code>; in this example No becomes the leader, but an accepted deposit does not always change the leader. Read <code>getBindingCapitalAttoRep()</code> and <code>getEscalationGameEndDate()</code> again after the deposit: the deadline changes from the curve time for <code>150 REP</code> to the curve time for <code>200 REP</code>. Submit <code>depositToEscalationGame(No, 250 REP)</code> and require <code>DepositToEscalationGame</code> plus the game-level deposit events. The next deposit is valid only while the game remains active and its state has not advanced.</p>
 			</section>
 			<section id="advance-the-round">
 				<h2>Advance the round</h2>
-				<p>Approve no REP: the pool escrows REP backing already held by the caller's vault. Submit the call from that vault, then re-read balances, leader, binding capital, and end date from the receipt block. The pool's claim action is <code>withdrawFromEscalationGame(outcome, proofs)</code>, while an own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the current state and quote again because another participant may have advanced it.</p>
+				<p>Approve no REP: the pool escrows REP backing already held by the caller's vault. Submit the call from that vault, then re-read balances, leader, binding capital, and end date from the receipt block. The local pool claim action is <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>; reserve <code>withdrawForkedEscalationDeposits(outcome, proofs)</code> for forked withdrawals. An own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the current state and quote again because another participant may have advanced it.</p>
 			</section>
 			<section id="settle-or-fork">
 				<h2>Settle or enter fork handling</h2>
