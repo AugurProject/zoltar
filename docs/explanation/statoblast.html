@@ -15,21 +15,25 @@
 					<p class="paper-status">draft</p>
 				</div>
 				<h1>Augur Statoblast White Paper</h1>
-				<p class="paper-meta">Status: Draft design paper · Source commit: <code>11fefa00f</code> · Applicable release: unreleased · Last reviewed: 2026-08-05 · Canonical detailed pages: <a href="./truth-auctions.html">truth auctions</a>, <a href="./open-oracle.html">OpenOracle</a>, and <a href="./liquidations.html">liquidations</a>.</p>
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and uses a local escalation game before invoking a Zoltar fork when the game reaches non-decision. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
-				<div class="callout">
-					<strong>Statoblast does not:</strong>
-					<ul>
-						<li>register or define question answer spaces;</li>
-						<li>determine the objectively true branch;</li>
-						<li>provide secondary-market trading;</li>
-						<li>duplicate ETH collateral across child universes;</li>
-						<li>guarantee that a truth auction fully repairs a child.</li>
-					</ul>
-				</div>
+				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
+
+				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href = 'escalation-game.html'>escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
+
+				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
+
+				<p> It is designed so that: </p>
+
+				<p>Statoblast achieves this through a combination of economic incentives, cryptographic guarantees, and decentralized dispute resolution. In particular, it is designed to:</p>
+				<ul>
+					<li>Honest reporting is economically rewarded.</li>
+					<li>Dishonest reporting becomes increasingly expensive.</li>
+					<li>Anyone can challenge an incorrect resolution by risking REP.</li>
+					<li>Markets continue operating even when participants fundamentally disagree.</li>
+					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
+				</ul>
 				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
 				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
 				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>

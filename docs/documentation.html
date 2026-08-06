@@ -14,7 +14,7 @@
 				<h1>Introduction to Statoblast</h1>
 				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
 
-				<p> After a market ends, Statoblast attempts to resolve the market through a REP-backed escalation game. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
+				<p> After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href = 'escalation-game.html'>escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
 
 				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
 
@@ -29,7 +29,7 @@
 					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
 				</ul>
 			</header>
-			<a> TODO, add a simple decision diagrem here: market creted -> market is being traded -> market ends -> escalation game -(split) market resolves -> trader settlement / fork happens -> migration/truth auction -> trader settlement</a>
+			<a> TODO, add a simple decision diagrem here: market creted -> market is being traded -> market ends -> escalation game -(split) market resolves -> trader settlement OR fork happens -> migration/truth auction -> trader settlement</a>
 			<a> add a button to goto next page</a>
 		</main>
 		<script src="./assets/js/docsData.js"></script>

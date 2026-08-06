@@ -164,7 +164,7 @@
 		{
 			"path": "explanation/statoblast.html",
 			"title": "Statoblast protocol",
-			"summary": "The application layer, from markets and pools through resolution and migration.",
+			"summary": "A binary prediction market protocol",
 			"section": "explanation",
 			"topic": "Protocol",
 			"keywords": ["Statoblast", "markets", "security pools", "overview"]
