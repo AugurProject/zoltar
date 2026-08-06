@@ -183,6 +183,8 @@
 				<h3> 8 week migration</h3>
 				<p>All vault holders have 8 weeks time to choose which universe they believe is correct by migrating their REP accordingly. REP that did not migrate is burnt. Since the system includes open interest in external assets (ETH), each migrating REP holder also transfers a proportional share of the open interest to the universe they select. E.g. 1% of all REP can move 1% of the total open interest to the universe where that REP is migrated. This open interest belongs to all of the markets in the original universe (both forking and non-forking markets).</p>
 
+				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, migrated REP backing units and coverage commitments, and converted child-universe REP backing that actually move into it.</p>
+
 				<p>For this mechanism to remain secure, the value of the <b>REP being migrated must exceed the value of the Open Interest it moves</b>. Otherwise, a malicious vault could shift a significant portion of open interest to a universe in which they hold favorable positions.</p>
 
 				<div class="callout">
@@ -280,7 +282,7 @@
 					</ul>
 				</div>
 
-<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
+				<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
 				<div class="equation" id="eq-statoblast-migration-powered-rep">
 					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredAttoRep = vaultTotalAssociatedAttoRep - vaultEscalationGameAttoRep">
 						<mrow><mi>vaultMigrationPoweredAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameAttoRep</mi></mrow>
