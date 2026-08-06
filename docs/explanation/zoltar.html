@@ -11,11 +11,9 @@
 		<main id="main-content">
 			<header class="hero">
 				<div class="hero-label-row">
-					<p class="kicker"><span class="layer-dot" aria-hidden="true"></span>Branching Oracle Base Layer</p>
 					<p class="paper-status">Draft</p>
 				</div>
 				<h1>Zoltar White Paper</h1>
-				<p><strong>Mental model:</strong> Zoltar makes explicit universe branches and REP splits; applications decide their own collateral, payouts, and local disputes.</p>
 			</header>
 
 			<section class="paper-section" id="abstract">
@@ -73,7 +71,7 @@
 					<li>mint and burn child-universe REP</li>
 					<li>turn migration balances into selected child REP</li>
 				</ul>
-				<p>In practice, that means an application can register a question, trigger a fork after that question ends, and consume the child-universe structure that Zoltar defines. Only Zoltar can mint the child-universe <code>ReputationToken</code>; genesis REP is separately deployed and supplied to Zoltar. Mainnet uses the existing external REP deployment, while Sepolia uses the reviewed deterministic genesis deployment.</p>
+				<p>In practice, that means an application can register a question, trigger a fork after that question ends, and consume the child-universe structure that Zoltar defines. Only Zoltar can mint the child-universe <code>ReputationToken</code>; genesis REP is separately deployed and supplied to Zoltar. Zoltar cannot never mint more REP into a single universe than its parent has REP.</p>
 
 				<h3>Zoltar Contracts</h3>
 				<ul class="contract-list">
@@ -101,7 +99,6 @@
 					<h2>2. Universe Model</h2>
 					<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
 				</div>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a23">A23 verified deployment</a>, <a href="../reference/security-model.html#assumption-a26">A26 Ethereum execution</a>, and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic identity</a>.</p>
 				<p>A universe is one branch of protocol state. The <a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:</p>
 				<ul class="clean-list">
 					<li><code>forkTime</code>: when the universe forked</li>
@@ -168,7 +165,6 @@
 				</div>
 				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThresholdAttoRep</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
 				<p>Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.</p>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../reference/security-model.html#assumption-a08">A08 REP valuation</a>, <a href="../reference/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../reference/security-model.html#assumption-a21">A21 genesis REP behavior</a>, and <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
 				<div class="equation" id="eq-zoltar-fork-threshold">
 					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThresholdAttoRep = ⌊totalTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌋">
 						<mrow>
@@ -279,7 +275,7 @@
 					<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
 				</div>
 				<p>Once a universe forks, child universes can be deployed lazily through <code>deployChild</code>. A user can also add more REP into the migration balance with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.</p>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a09">A09 truthful-branch value</a>, <a href="../reference/security-model.html#assumption-a11">A11 practical migration</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, and <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
+
 				<p>For categorical questions, <code>Invalid</code> and any in-range categorical outcome are allowed, while out-of-range values are rejected. For scalar questions, only well-formed scalar encodings are allowed.</p>
 				<p>The fork question defines the child-branch shape for the whole universe. A child branch may therefore be keyed by <code>Invalid</code>, a categorical outcome index, or a scalar encoding depending on which parent-universe question <code>forkUniverse</code> used for the fork. Downstream applications should treat that branch selector as universe-level metadata rather than assume every child branch is binary.</p>
 				<div class="implementation-grid">
@@ -312,7 +308,7 @@
 					<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
 				</div>
 				<p>Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain. This is the security model's <a href="../reference/security-model.html#excluded-guarantee-eg01">EG01 truth-selection exclusion</a>.</p>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../reference/security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a05">A05 lineage access value</a>, and <a href="../reference/security-model.html#assumption-a15">A15 intended resolvable questions</a>.</p>
+
 				<ul class="clean-list">
 					<li>users can choose which child universe (or child universes) to continue using after a fork</li>
 					<li>users prefer to continue in the universes they regard as truthful</li>
