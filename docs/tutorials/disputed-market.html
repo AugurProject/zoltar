@@ -30,8 +30,12 @@
 			</section>
 			<section id="observe-the-boundary">
 				<h2>Inspect recovery state</h2>
-				<p>Open the Yes child's truth-auction view. The fixture has advanced beyond the migration window, started the auction, and seeded ten bids at three price levels. This auction repairs child backing; it does not decide whether Yes is true.</p>
+				<p>Open the Yes child's truth-auction view. The fixture has advanced beyond the migration window, started the auction, and seeded ten bids at three price levels. This tutorial preserves the seeded snapshot; the simulation banner's <strong>+1 week</strong> control is available for an exploratory run, while <a href="../how-to/run-truth-auction.html">the auction how-to</a> defines the production finalization procedure.</p>
 				<p><strong>Checkpoint:</strong> the auction bidbook contains ten bids and remains distinct from the parent escalation deposits.</p>
+			</section>
+			<section id="cause-one-change">
+				<h2>Trace the carried-deposit boundary</h2>
+				<p>Inspect the seeded carried deposits and record their parent indexes, outcomes, and claimability. The production action is <code>Settle selected deposits</code>, backed by <code>withdrawForkedEscalationDeposits(outcome, proofs)</code>; ordinary local deposits instead use <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>. This fixture intentionally leaves finalization and proof submission to the focused how-tos. Reloading the scenario returns the same deterministic dispute.</p>
 			</section>
 			<section id="finish">
 				<h2>What you learned</h2>

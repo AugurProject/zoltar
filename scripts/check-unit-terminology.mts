@@ -43,7 +43,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 		'docs/explanation/statoblast.html',
 		/\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|rewardEligibleCap|bindingCapital|rewardBonusPool|burnAmount|rewardEligibleDeposit|rewardEligiblePrincipal|depositAmount|scaledWithdrawal|actualForkThreshold|vaultMigrationPoweredRep|vaultTotalAssociatedRep|vaultEscalationGameRep|sourcePrincipalAtFork|inheritedUnresolvedTotal|localUnresolvedTotal)\b/,
 	],
-	['docs/explanation/open-oracle.html', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|priorityFeeReport|baseFeeReport|openInterestReport|initialWethReport)\b/],
+	['docs/explanation/open-oracle-appendix.html', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|priorityFeeReport|baseFeeReport|openInterestReport|initialWethReport)\b/],
 	['docs/explanation/escalation-game.html', /\b(?:currentCarryTotal|effectiveInheritedUnresolvedTotal|localUnresolvedTotal)\b/],
 	['docs/explanation/liquidations.html', /\bbonusRepQuote\b/],
 	['docs/explanation/truth-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],

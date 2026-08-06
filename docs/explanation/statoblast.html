@@ -15,10 +15,21 @@
 					<p class="paper-status">draft</p>
 				</div>
 				<h1>Augur Statoblast White Paper</h1>
+				<p class="paper-meta">Status: Draft design paper · Source commit: <code>11fefa00f</code> · Applicable release: unreleased · Last reviewed: 2026-08-05 · Canonical detailed pages: <a href="./truth-auctions.html">truth auctions</a>, <a href="./open-oracle.html">OpenOracle</a>, and <a href="./liquidations.html">liquidations</a>.</p>
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and tries to settle disputes locally before forcing Zoltar to fork. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<p>Augur Statoblast is a binary prediction market built on top of Zoltar. It creates security pools scoped to individual questions, lets traders mint and redeem ETH-backed shares, lets vault owners fund security vaults with REP backing, and uses a local escalation game before invoking a Zoltar fork when the game reaches non-decision. Statoblast assumes <a href="../reference/security-model.html">Protocol Security Model</a>.</p>
+				<div class="callout">
+					<strong>Statoblast does not:</strong>
+					<ul>
+						<li>register or define question answer spaces;</li>
+						<li>determine the objectively true branch;</li>
+						<li>provide secondary-market trading;</li>
+						<li>duplicate ETH collateral across child universes;</li>
+						<li>guarantee that a truth auction fully repairs a child.</li>
+					</ul>
+				</div>
 				<p>The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault owners choose a child by migrating their vault positions, and the forker materializes the corresponding child REP.</p>
 				<p>Proportional pool-level settlement collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough settlement collateral to fully back their inherited open interest.</p>
 				<p>After the migration window ends, each undercollateralized child pool may run its own <a href="../explanation/truth-auctions.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports.</p>
@@ -68,7 +79,7 @@
 							<tr>
 								<td>User mental model</td>
 								<td>One pool, one final outcome, direct redemption.</td>
-								<td>Choose the child universe that retains value, migrate positions, then settle there.</td>
+								<td>Choose the child universe the application supports or where coordination is expected to continue, migrate eligible positions, and settle there.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -368,7 +379,7 @@
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
 				</figure>
-				<p>If none of the selected children has received a source entitlement, the first call materializes the full current source balance in each selected child. On a later call, each child receives only <code>current source balance - amount already materialized</code>. If every selected delta is zero, the call reverts. The canonical guarantees are <a href="../reference/invariants.html#fork-10"><code>FORK-10</code></a >, <a href="../reference/invariants.html#share-04"><code>SHARE-04</code></a >, and <a href="../reference/invariants.html#fork-11"><code>FORK-11</code></a >.</p>
+				<p>If none of the selected children has received a source entitlement, the first call materializes the full current source balance in each selected child. On a later call, each child receives only <code>current source balance - amount already materialized</code>. If every selected delta is zero, the call reverts. The canonical guarantees are <a href="../reference/invariants.html#fork-10"><code>FORK-10</code></a>, <a href="../reference/invariants.html#share-04"><code>SHARE-04</code></a>, and <a href="../reference/invariants.html#fork-11"><code>FORK-11</code></a>.</p>
 				<p>At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That <code>shareTokenSupplyAttoShares</code> includes materialized ERC-1155 balances and fork-time entitlements that can materialize later. In the healthy case this corresponds to a clean <code>1:1</code> redemption outcome against the economic meaning of a complete-set claim, subject to collateral accounting remaining intact through migration and any required auction repair.</p>
 				<div class="equation" id="eq-statoblast-share-redemption">
 					<math display="block" aria-label="settlement collateral payout in attoETH equals floor of burned winning shares in attoShares times economic claim supply in attoShares divided into settlement collateral in attoETH" data-source="settlementCollateralPayoutAttoEth = ⌊winningSharesBurnedAttoShares \cdot settlementCollateralAttoEth / economicClaimSupplyBeforeBurnAttoShares⌋">
@@ -1328,7 +1339,7 @@
 				</div>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 arbitrage incentives</a>, <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a17">A17 corrector capability</a>, <a href="../reference/security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="../reference/security-model.html#assumption-a19">A19 observable correctable price</a>, <a href="../reference/security-model.html#assumption-a06">A06 settlement executors</a>, and <a href="../reference/security-model.html#assumption-a20">A20 report-state availability</a>.</p>
 				<p>The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and coverage-commitment updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has an active coverage commitment. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path.</p>
-				<p>The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration</a> guide.</p>
+				<p>The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="../explanation/open-oracle-appendix.html#statoblast-integration">OpenOracle integration</a> guide.</p>
 				<p>If the last price is stale, solvency-sensitive operations can be queued until a valid report is settled. The coordinator then replays the pending operation against the fresh price. Escalation deposits are the exception: they require a fresh price when coverage commitment is outstanding, but they revert instead of entering the staged callback queue. This price path is only for security backing against ETH collateral.</p>
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow"><span class="plot-chart-fallback">A solvency-sensitive operation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
@@ -1384,7 +1395,7 @@
 						</tr>
 						<tr>
 							<td>REP/ETH coordinator and OpenOracle values</td>
-							<td><a href="../explanation/open-oracle.html#parameters">OpenOracle parameters</a></td>
+							<td><a href="../reference/open-oracle-coordinator.html#parameters">OpenOracle parameters</a></td>
 						</tr>
 						<tr>
 							<td>Carry-proof peak and nullifier bounds</td>

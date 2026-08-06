@@ -11,32 +11,55 @@
 		<main>
 			<header>
 				<h1>Verify a protocol deployment</h1>
-				<p>Complete these checks before presenting any deployment as canonical or allowing clients to sign against it.</p>
+				<p>This guide combines one automated manifest-freshness check with manual runtime verification. The repository does not currently provide a complete verifier for bytecode, wiring, permissions, and operational readiness; do not describe this procedure as an automated verifier.</p>
 			</header>
 			<section id="select-the-manifest">
 				<h2>Select the manifest</h2>
 				<p>Start from the reviewed release manifest for the intended chain. Do not discover a canonical address from an untrusted interface, RPC response, or transaction history alone. Confirm chain ID and genesis block before comparing addresses.</p>
 			</section>
+			<section id="run-the-verifier">
+				<h2>Automated: validate manifest freshness</h2>
+				<p>The repository command checks both the Mainnet and Sepolia deployment manifests; its output identifies which manifest is stale. Select the intended chain ID before comparing addresses.</p>
+				<pre><code>bun run check:mainnet-deployment:current</code></pre>
+				<p>Expected result: zero exit status and a report naming the current manifest and validation source. A non-zero exit status means at least one manifest is not fresh; preserve the output rather than proceeding.</p>
+				<p>This is the only automated check supplied by this guide. Preserve its output, the selected manifest hash, chain ID, and verification block before continuing with the manual checks.</p>
+			</section>
 			<section id="verify-runtime-code">
-				<h2>Verify runtime code</h2>
+				<h2>Manual: verify runtime code</h2>
 				<ol>
 					<li>Fetch runtime bytecode independently from at least two RPC providers.</li>
 					<li>Hash it and compare it with the reviewed artifact.</li>
 					<li>Reject missing code, proxy indirection not named by the design, or a mismatch at any required address.</li>
 					<li>Verify external Genesis REP and WETH implementations and behavior separately.</li>
 				</ol>
+				<p>Record one result for each address: <code>eth_getCode</code> present, runtime hash equal, and provider responses equal. A code-present result alone is not a hash match.</p>
+			</section>
+			<section id="normalize-code">
+				<h2>Manual: normalize and hash code</h2>
+				<p>Compare deployed runtime code with the runtime artifact, not creation bytecode. Record whether metadata, linked-library addresses, constructor immutables, or proxy indirection are part of the reviewed build. Never strip bytes ad hoc to make a hash match; document the exact normalization rule and artifact source.</p>
 			</section>
 			<section id="verify-wiring">
-				<h2>Verify contract wiring</h2>
-				<p>Read constructor-derived and immutable relationships from the deployed contracts. Confirm the Zoltar registry, question data, factories, root universe, REP token, WETH, pool components, coordinator, auction, and escalation modules point to the addresses in the release evidence.</p>
+				<h2>Manual: verify contract wiring and permissions</h2>
+				<p>Read constructor-derived and immutable relationships from the deployed contracts. Confirm the Zoltar registry, question data, factories, root universe, REP token, WETH, pool components, coordinator, auction, and escalation modules point to the addresses in the release evidence. Mark permissions and lifecycle readiness separately from wiring.</p>
 			</section>
 			<section id="read-deployment-progress">
-				<h2>Read deployment progress</h2>
+				<h2>Manual: read deployment progress</h2>
 				<p>Use <code>DeploymentStatusOracle.getDeploymentMask()</code> only to determine which configured step addresses contain runtime bytecode. A full mask is not proof of correct initialization or wiring. Interpret the bits using the <a href="../reference/deployment-status.html">deployment status reference</a>.</p>
 			</section>
 			<section id="publish-verification">
-				<h2>Publish verification</h2>
-				<p>Record chain ID, block number, address set, bytecode hashes, wiring results, RPC sources, and verifier identity. If any result is unknown, do not label the deployment canonical.</p>
+				<h2>Publish the manual report</h2>
+				<p>Record chain ID, block number, manifest hash, address set, bytecode hashes, wiring results, RPC sources, and verifier identity. Separate <em>code present</em>, <em>code hash correct</em>, <em>wiring correct</em>, <em>permissions correct</em>, and <em>operationally ready</em>. If any result is unknown, do not label the deployment canonical.</p>
+				<pre><code>{
+  "chainId": "…",
+  "blockNumber": "…",
+  "manifestHash": "…",
+  "code": "pass|fail",
+  "hashes": "pass|fail",
+  "wiring": "pass|fail",
+  "permissions": "pass|fail",
+  "operational": "pass|fail",
+  "rpcSources": []
+}</code></pre>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

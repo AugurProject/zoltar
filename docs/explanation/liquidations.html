@@ -11,12 +11,13 @@
 		<main>
 			<header>
 				<h1>Liquidation Design</h1>
-				<p>Liquidation transfers only the coverage commitment whose complete fixed 5% award can be paid from an unsafe vault's pool-held vault REP backing. Non-tradeable escalation claims, accrued vault fees, and pool-held vault REP backing above the award never transfer. A maximum request records any untransferred residual as bad debt and removes it from active pool coverage commitment instead of underpaying the liquidator or diluting other holders.</p>
+				<p>A vault becomes liquidatable when its REP security no longer supports its coverage commitment at the current REP/ETH price. Liquidation transfers a bounded portion of that coverage commitment to a healthy liquidator vault.</p>
+				<p>For every unit of coverage transferred, the liquidator must receive the full fixed REP award. The protocol therefore transfers only the portion whose award can be fully funded from the target vault's pool-held REP. Non-transferable claims, accrued fees, and surplus REP remain with the target. On a maximum request, any coverage that cannot be transferred is recorded as bad debt.</p>
 			</header>
 
 			<section id="position-model">
 				<h2>Position Model and Actors</h2>
-				<p>The <dfn>target vault</dfn> is the unsafe position being reduced, and the <dfn>liquidator vault</dfn> is the healthy position accepting its liabilities. Each vault can hold an ETH-denominated coverage commitment, pool-held vault REP backing represented by REP backing units, accrued fees, and non-tradeable escalation claims. Locally attributed escrow records REP deposited by that vault in the current game and counts toward current-game health. Inherited continuation backing remains aggregate until a committed deposit proof is settled and does not receive per-vault child health credit.</p>
+				<p>The <dfn>target vault</dfn> is the unsafe position being reduced, and the <dfn>liquidator vault</dfn> is the healthy position accepting its liabilities. Each vault can hold an ETH-denominated coverage commitment, pool-held vault REP backing represented by REP backing units, accrued fees, and non-transferable escalation claims. Locally attributed escrow records REP deposited by that vault in the current game and counts toward current-game health. Inherited continuation backing remains aggregate until a committed deposit proof is settled and does not receive per-vault child health credit.</p>
 				<p>Execution first caps the coverage commitment slice to the amount whose fixed 5%-bonus REP award is fully funded. Only that pool-held vault REP backing and funded coverage commitment move. Accrued fees and escalation claims stay with the target vault, and the liquidator must remain healthy after assuming the funded coverage commitment and receiving its complete award.</p>
 			</section>
 
@@ -66,6 +67,133 @@
 						>
 					</math>
 					<p class="equation-caption"><span class="equation-label">Funded coverage commitment cap</span>In an initialized pool, a partial request first computes <code>reservedBackingUnits = ⌈MIN_REP_DEPOSIT_ATTO_REP × totalRepBackingUnits / totalAttoRep⌉</code>. If that reserve is at least the target backing units, no partial coverage commitment or REP transfer is fundable. Otherwise, <code>transferableVaultRepBackingAttoRep = ⌊(targetBackingUnits - reservedBackingUnits) × totalAttoRep / totalRepBackingUnits⌋</code>. A <dfn>maximum request</dfn> asks for at least the target's full current coverage commitment (<code>requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth</code>); it uses <code>transferableVaultRepBackingAttoRep = ⌊targetBackingUnits × totalAttoRep / totalRepBackingUnits⌋</code>. The user queues that amount through the coordinator, which calls the pool; the pool's maximum-request path records remaining coverage commitment through the bad-debt backstop. With a zero denominator, backing units convert at <code>PRICE_PRECISION</code>; with nonzero total REP backing units and zero pool-held REP, the available amount is zero.</p>
+				</div>
+				<div class="equation" id="eq-liquidation-price-guard">
+					<math display="block" aria-label="associated REP threshold uses snapshot target backing and dispute staked REP" data-source="associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth * poolSecurityMultiplierBps)⌋">
+						<mrow
+							><mi>associatedRepThreshold</mi><mo>=</mo><mo>⌊</mo
+							><mfrac
+								><mrow><mo>(</mo><mi>snapshotTargetVaultRepBackingAttoRep</mi><mo>+</mo><mi>snapshotDisputeStakedAttoRep</mi><mo>)</mo><mo>×</mo><mi>PRICE_PRECISION</mi><mo>×</mo><mi>BPS_DENOMINATOR</mi></mrow
+								><mrow><mi>snapshotTargetCoverageCommitmentAttoEth</mi><mo>×</mo><mi>poolSecurityMultiplierBps</mi></mrow></mfrac
+							><mo>⌋</mo></mrow
+						>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Associated REP liquidation threshold</span><code>associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × poolSecurityMultiplierBps)⌋</code>. The migration threshold is <code>⌊snapshotTargetVaultRepBackingAttoRep × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × migrationSecurityMultiplierBps)⌋</code>, where <code>migrationSecurityMultiplierBps = max(BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)</code>. Execution uses <code>thresholdPrice = min(associatedRepThreshold, migrationThreshold)</code>, requires <code>currentPrice &gt; thresholdPrice</code>, and then requires <code>⌊(currentPrice - thresholdPrice) × BPS_DENOMINATOR / currentPrice⌋ ≥ minPriceDistanceBps</code>; equality and prices below the threshold fail.</p>
+				</div>
+				<div class="example" id="liquidation-numeric-example">
+					<h3>Separate partial and maximum examples</h3>
+					<p>Use <code>2 REP / ETH</code> and the fixed 5% award for these accounting examples. The unrounded award for <code>7 ETH</code> is <code>7 × 2 × 1.05 = 14.7 REP</code>. The contract ceilings at integer attoREP precision, so <code>14.7 REP</code> remains <code>14.7 REP</code>; an unrounded <code>14.7000000000000000001 REP</code> becomes <code>14.700000000000000001 REP</code>. Backing-unit conversion can change the reported transfer, so <code>VaultLiquidated</code> is authoritative for the receipt.</p>
+					<h4>Partial request</h4>
+					<table aria-label="Partial liquidation before and after ledger">
+						<thead>
+							<tr>
+								<th>Position</th>
+								<th>Before</th>
+								<th>Transfer/change</th>
+								<th>After</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Target coverage commitment</td>
+								<td>10 ETH</td>
+								<td>−7 ETH transferred</td>
+								<td>3 ETH</td>
+							</tr>
+							<tr>
+								<td>Target pool-held REP</td>
+								<td>30 REP</td>
+								<td>−14.7 REP</td>
+								<td>15.3 REP</td>
+							</tr>
+							<tr>
+								<td>Target accrued fees</td>
+								<td>1 ETH</td>
+								<td>unchanged</td>
+								<td>1 ETH</td>
+							</tr>
+							<tr>
+								<td>Target escalation claims</td>
+								<td>5 REP claim units</td>
+								<td>unchanged</td>
+								<td>5 REP claim units</td>
+							</tr>
+							<tr>
+								<td>Liquidator coverage commitment</td>
+								<td>2 ETH</td>
+								<td>+7 ETH</td>
+								<td>9 ETH</td>
+							</tr>
+							<tr>
+								<td>Liquidator REP backing</td>
+								<td>20 REP</td>
+								<td>+14.7 REP</td>
+								<td>34.7 REP</td>
+							</tr>
+							<tr>
+								<td>Pool bad debt</td>
+								<td>0</td>
+								<td>unchanged</td>
+								<td>0</td>
+							</tr>
+						</tbody>
+					</table>
+					<h4>Maximum request</h4>
+					<p>Request at least the target's full <code>10 ETH</code> commitment while only <code>7 ETH</code> is fundable from <code>14.7 REP</code>. The maximum path transfers the funded <code>7 ETH</code> and award, writes off the untransferred <code>3 ETH</code> as bad debt, and leaves the target with zero active coverage commitment.</p>
+					<table aria-label="Maximum liquidation before and after ledger">
+						<thead>
+							<tr>
+								<th>Position</th>
+								<th>Before</th>
+								<th>Transfer/change</th>
+								<th>After</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Target coverage commitment</td>
+								<td>10 ETH</td>
+								<td>−7 ETH; −3 ETH bad debt</td>
+								<td>0 ETH active commitment</td>
+							</tr>
+							<tr>
+								<td>Target pool-held REP</td>
+								<td>14.7 REP transferable</td>
+								<td>−14.7 REP award</td>
+								<td>0 REP transferable</td>
+							</tr>
+							<tr>
+								<td>Target accrued fees</td>
+								<td>1 ETH</td>
+								<td>unchanged</td>
+								<td>1 ETH</td>
+							</tr>
+							<tr>
+								<td>Target escalation claims</td>
+								<td>5 REP claim units</td>
+								<td>unchanged</td>
+								<td>5 REP claim units</td>
+							</tr>
+							<tr>
+								<td>Liquidator coverage commitment</td>
+								<td>2 ETH</td>
+								<td>+7 ETH</td>
+								<td>9 ETH</td>
+							</tr>
+							<tr>
+								<td>Liquidator REP backing</td>
+								<td>20 REP</td>
+								<td>+14.7 REP</td>
+								<td>34.7 REP</td>
+							</tr>
+							<tr>
+								<td>Pool bad debt</td>
+								<td>0</td>
+								<td>+3 ETH</td>
+								<td>3 ETH</td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
 				<p>Integer execution rounds the award up, converts it to REP backing units with another ceiling, and converts those backing units back to the reported REP amount with a floor. The ceilings ensure the liquidator receives at least the complete attoREP award. The <code>vaultRepBackingTransferredAttoRep</code> field in <code>VaultLiquidated</code> reports this final post-conversion amount; target surplus never substitutes for an underfunded award.</p>
 				<figure class="diagram" id="fig-liquidation-punitive-flow">

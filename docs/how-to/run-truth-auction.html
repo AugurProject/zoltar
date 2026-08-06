@@ -12,6 +12,7 @@
 			<header>
 				<h1>Run a truth auction</h1>
 				<p>Operate a child-pool repair auction after migration without overstating the collateral it can raise.</p>
+				<p><strong>Terms:</strong> the <em>repair target</em> is the ETH needed to restore the child pool's required collateral; the <em>ETH cap</em> limits accepted repair ETH; the <em>REP cap</em> limits auctionable child REP; the <em>clearing tick</em> is the price tick selected at finalization. In <code>AuctionFinalized</code>, <code>funded == true</code> means demand reached one auction cap and the auction used the uniform-clearing branch. It does not mean that the child received its full repair target. Compare <code>grossAcceptedAttoEth</code> with the ETH cap to determine whether the child was fully repaired; <code>funded == false</code> is the underfunded branch.</p>
 			</header>
 			<section id="confirm-eligibility">
 				<h2>Confirm eligibility</h2>
@@ -20,6 +21,10 @@
 			<section id="record-the-caps">
 				<h2>Record the caps</h2>
 				<p>Record the ETH repair target, auctionable child REP, dispute-staked REP contribution, bid window, and settlement parameters. The ETH target and REP inventory are independent caps; demand can leave the auction underfunded.</p>
+			</section>
+			<section id="bidder-preflight">
+				<h2>Bidder preflight</h2>
+				<p>Read <code>maxAttoRepBeingSold()</code>, <code>attoEthRaiseCap()</code>, <code>minBidSizeAttoEth()</code>, <code>auctionStarted()</code>, and <code>finalized()</code>. For each selected tick, read <code>tickToPrice(tick)</code>, <code>getTickSummary(tick)</code>, and the bidder's balance. A bid is ETH value in attoETH and the tick is the auction's signed price index.</p>
 			</section>
 			<section id="start-and-monitor">
 				<h2>Start and monitor bidding</h2>
@@ -30,18 +35,81 @@
 					<li>Once a clearing price is already binding, losing bids below it may be refunded before finalization through <code>settleAuctionBids</code> or the auction's public refund path.</li>
 					<li>Do not promise a fill or final price before finalization.</li>
 				</ol>
+				<p>Bid with <code>submitBid(int256 tick)</code> and record <code>BidSubmitted</code>. Never infer an allocation before <code>AuctionFinalized</code>.</p>
 			</section>
 			<section id="clear-and-finalize">
 				<h2>Finalize and activate</h2>
-				<p>After the bid window, call <code>finalizeTruthAuction(securityPool)</code>. The bounded finalization computes the clearing result, transfers the ETH actually raised into child collateral, fixes the REP and coverage commitment conversion rates, conditionally applies a haircut when purchased REP removes a positive escalation allocation, and makes the child operational. If a required continuation lacks aggregate backing, the resumption attempt reverts finalization; reconcile backing and retry. Finalization does not settle individual bids, credit bidder vaults, or deliver their refunds.</p>
+				<p>After the bid window, use <code>previewFinalization()</code>, then call <code>finalizeTruthAuction(securityPool)</code>. The bounded finalization computes the clearing result, transfers only ETH actually raised, conditionally applies a haircut when purchased REP removes a positive escalation allocation, and makes the child operational. A resumption attempt reverts finalization when a required continuation lacks aggregate backing; reconcile backing and retry. Finalization does not settle individual bids, credit bidder vaults, or deliver their refunds.</p>
 			</section>
 			<section id="settle-individual-bids">
 				<h2>Settle individual bids</h2>
 				<p>After finalization, process bounded pages with <code>settleAuctionBids</code> or <code>claimAuctionProceeds</code>. Winning and partial allocations credit REP backing units and the corresponding coverage commitment to the named bidder vault; losing and unused ETH is refunded. A failed gas-bounded refund push is recorded in <code>pendingEthRefundsAttoEth</code>, which the bidder can pull with <code>withdrawPendingEthRefund()</code>. These calls are permissionless and may be repeated with new bid indexes until all claims and refunds are settled.</p>
 			</section>
 			<section id="check-the-result">
+				<h2>Numeric scenarios</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Scenario</th>
+							<th>Inputs</th>
+							<th>Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>No auction needed</td>
+							<td>Repair target: <code>0 ETH</code>; REP sale cap: <code>100 REP</code></td>
+							<td>Child activates immediately; <code>AuctionStarted</code> is not emitted.</td>
+						</tr>
+						<tr>
+							<td>Cap-bound and fully repaired</td>
+							<td>Repair target/ETH cap: <code>10 ETH</code>; REP cap: <code>100 REP</code>; ETH submitted: <code>14 ETH</code></td>
+							<td><code>funded == true</code>; <code>10 ETH</code> accepted, <code>4 ETH</code> refunded, and the child has no auction shortfall.</td>
+						</tr>
+						<tr>
+							<td>Cap-bound but not fully repaired</td>
+							<td>Repair target/ETH cap: <code>10 ETH</code>; REP cap: <code>100 REP</code>; demand reaches the REP cap at a price that accepts <code>6 ETH</code></td>
+							<td><code>funded == true</code>; the REP cap binds, but <code>6 ETH</code> is accepted and the child retains a <code>4 ETH</code> impairment.</td>
+						</tr>
+						<tr>
+							<td>Underfunded branch</td>
+							<td>Repair target: <code>10 ETH</code>; REP cap: <code>100 REP</code>; ETH submitted and accepted: <code>6 ETH</code></td>
+							<td><code>funded == false</code>; qualifying bids receive the REP cap, and the child retains the unraised repair shortfall.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>A bidder submits ETH with <code>auction.submitBid{value: bidAttoEth}(tick)</code>. Finalization and later bounded bid settlement reconcile accepted ETH, refunds, REP allocation, coverage commitment, and pending refund liability.</p>
 				<h2>Check the result</h2>
-				<p>Determine whether the child reached complete backing or only accepted the repair supported by demand. A successfully finalized underfunded auction is complete and leaves the child operational but economically impaired; weak ETH demand alone does not require a retry. Reconcile backing and retry finalization only when the transaction reverted because an escalation continuation lacked aggregate REP backing. Use <code>resumeForkedEscalationGame()</code> only when the child is already operational and still marked as awaiting continuation. Use the <a href="../explanation/truth-auctions.html">auction explanation</a> for clearing formulas and worked examples.</p>
+				<p>Determine whether the child reached complete backing by comparing accepted ETH with the repair target, not by reading <code>funded</code> alone. A successfully finalized underfunded auction is complete and leaves the child operational but economically impaired; weak demand alone does not require a retry. Reconcile backing and retry finalization only when the transaction reverted because an escalation continuation lacked aggregate REP backing. Use <code>resumeForkedEscalationGame()</code> only when the child is already operational and still marked as awaiting continuation. Use the <a href="../explanation/truth-auctions.html">auction explanation</a> for clearing formulas and worked examples.</p>
+			</section>
+			<section id="three-outcomes">
+				<h2>Reconcile the three outcomes</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Outcome</th>
+							<th>Evidence</th>
+							<th>Next action</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>No auction</td>
+							<td>Immediate <code>TruthAuctionFinalized</code> or no repair required</td>
+							<td>Verify child operational and stop.</td>
+						</tr>
+						<tr>
+							<td>Cap-bound clearing</td>
+							<td><code>AuctionFinalized.funded == true</code>; compare <code>grossAcceptedAttoEth</code> with <code>attoEthRaiseCap</code> because REP-cap-first clearing can still leave an ETH shortfall.</td>
+							<td>Settle bids; reconcile accepted ETH, the repair cap, REP sold, and any haircut before calling the child fully repaired.</td>
+						</tr>
+						<tr>
+							<td>Underfunded</td>
+							<td><code>funded == false</code></td>
+							<td>Record accepted repair and haircut; do not retry merely for weak demand. Full ETH repair is a separate comparison: <code>grossAcceptedAttoEth == attoEthRaiseCap</code>.</td>
+						</tr>
+					</tbody>
+				</table>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

@@ -1234,7 +1234,7 @@ async function checkEscalationDepositExample(): Promise<void> {
 }
 
 async function checkDynamicWethReportExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'initial-report-estimator-example')
+	const example = await loadInteractiveExample('docs/explanation/open-oracle-appendix.html', 'initial-report-estimator-example')
 
 	try {
 		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
@@ -1347,7 +1347,7 @@ await checkInteractiveToolControls()
 await checkInvariantCatalogStates()
 checkExactRepCapEquality()
 
-const openOracleHtml = await readFile('docs/explanation/open-oracle.html', 'utf8')
+const openOracleHtml = await readFile('docs/explanation/open-oracle-appendix.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')

@@ -13,7 +13,7 @@
 				<h1>Statoblast And Zoltar Invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
 				<p>The catalog separates local contract guards from cross-contract properties and economic assumptions. It also records launch-critical properties that the current contracts do not preserve. A documented implementation choice is not automatically a safe invariant.</p>
-				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for assumptions A01–A28. The <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a> owns funded and underfunded clearing mechanics, while <a href="../explanation/open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a> owns the oracle notional and residual-loss analysis.</p>
+				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for assumptions A01–A28. The <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a> owns funded and underfunded clearing mechanics, while <a href="../explanation/open-oracle-appendix.html#intentional-economic-tradeoffs">OpenOracle Integration</a> owns the oracle notional and residual-loss analysis.</p>
 				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="260" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Invariant Dependency</span>Correct callers are necessary but insufficient. Their actions must conserve assets, every mandatory state transition must remain reachable, and the named participation and inclusion assumptions must hold where the protocol deliberately relies on economic incentives.</p>
@@ -1062,7 +1062,7 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="vault-04">
-						<summary><code>VAULT-04</code><span class="invariant-title">Escalation claims are non-tradeable and migration-neutral</span></summary>
+						<summary><code>VAULT-04</code><span class="invariant-title">Escalation claims are non-transferable and migration-neutral</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">An escalation claim is permanently bound to the depositor committed in its carry leaf and has no transfer path or parent-OI migration power. Liquidation cannot read, move, or acquire it. Final settlement pays the committed depositor after proof verification and replay protection.</div>

@@ -11,11 +11,15 @@
 		<main>
 			<header>
 				<h1>Liquidate an unsafe vault</h1>
-				<p>Transfer unsafe coverage commitment and its target-funded pool-held vault REP backing award into a non-liquidatable liquidator vault using the correct fresh-price path.</p>
+				<p>Preview and execute one bounded liquidation using current pool accounting and the correct fresh-price path.</p>
 			</header>
 			<section id="verify-the-target">
 				<h2>Verify the target</h2>
-				<p>Inspect the target vault's coverage commitment, pool-held vault REP backing, dispute-staked REP, pending liquidation state, and pool lifecycle. Calculate health using current protocol values. Do not depend on a cached UI label when the execution transaction will use fresher state.</p>
+				<p>Read <code>systemState()</code>, <code>getPoolAccountingSnapshot()</code>, <code>securityVaults(targetVault)</code>, <code>getTotalPoolHeldAttoRep()</code>, and the coordinator's pending-operation and price-validity state. Calculate the funded coverage commitment, REP award, backing units transferred, target residual/bad debt, and liquidator post-transaction health from the same block. Do not depend on a cached UI label.</p>
+			</section>
+			<section id="preview-the-call">
+				<h2>Preview the call</h2>
+				<p>Record <code>requestedCommitmentTransferAttoEth</code>, <code>snapshotTargetBackingUnits</code>, <code>snapshotTargetCoverageCommitmentAttoEth</code>, <code>snapshotTotalPoolHeldAttoRep</code>, and <code>snapshotTotalRepBackingUnits</code> from the same read. The coordinator invalidates a queued liquidation when the target backing units or target coverage commitment changes. The two pool-total snapshots are queue-time inputs forwarded to the downstream call; the pool recomputes live transfer amounts and does not use those totals as stale guards. A maximum request may leave residual coverage as bad debt; it does not create external collateral.</p>
 			</section>
 			<section id="prepare-the-liquidator">
 				<h2>Prepare the liquidator</h2>
@@ -25,19 +29,36 @@
 				<h2>Stage on the correct price path</h2>
 				<ol>
 					<li>Preview the transferable coverage commitment, complete target-funded pool-held vault REP backing award, and any residual bad debt from a maximum request.</li>
-					<li>Stage the operation through the pool's price coordinator.</li>
+					<li>Call <code>requestPriceIfNeededAndStageOperation(Liquidation, targetVault, requestedCommitmentTransferAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth)</code> from the liquidator vault with <code>msg.value</code> covering any coordinator bounty or queued-operation cost.</li>
 					<li>If the cached REP/ETH price is fresh, the staged operation executes immediately and no report is created.</li>
 					<li>If the price is stale, the requester sponsors the OpenOracle bounty and initial position; track the report and correction window through settlement.</li>
 					<li>Re-evaluate target and liquidator state before any later execution.</li>
 				</ol>
+				<p>A fresh price can execute immediately. A first stale operation opens and funds the report; an operation behind an existing pending report is submitted by its sponsor without a second report bounty. After a rejected report, call <code>requestPrice(...)</code> separately to refresh the queued work. A successful later execution emits <code>ExecutedStagedOperation</code> and calls the pool's downstream <code>performLiquidation(...)</code>.</p>
 			</section>
 			<section id="execute-and-check">
 				<h2>Execute and check the result</h2>
-				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's pool-held vault REP backing funded the complete award, the transferred coverage commitment and REP backing units reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A failed callback is not a successful liquidation.</p>
+				<p>Verify the coordinator's execution result on either the immediate fresh-price path or after a valid report settles. Confirm the target's pool-held vault REP backing funded the complete award, the transferred coverage commitment and REP backing units reached the liquidator, a maximum request recorded only the untransferred residual as bad debt, and pool conservation properties still hold. A successful receipt must include <code>VaultLiquidated</code> when coverage moves, plus the relevant accounting checkpoints. A failed callback is not a successful liquidation.</p>
+			</section>
+			<section id="expected-result">
+				<h2>Expected result and events</h2>
+				<p>Require a successful coordinator receipt and a resulting <code>PoolAccountingCheckpoint</code> and <code>VaultAccountingCheckpoint</code>. The target's coverage and funded REP award move according to the preview; accrued fees and claims remain with the original vault. If the receipt contains a price rejection or callback failure, treat the liquidation as unexecuted and follow recovery rather than retrying identical parameters.</p>
+			</section>
+			<section id="partial-and-maximum">
+				<h2>Partial versus maximum requests</h2>
+				<p>For a partial request, determine whether the remaining target position is healthy. If it remains liquidatable, calculate the next bounded liquidation from the new state rather than reusing the previous request. For a maximum request, reconcile transferred commitment, funded award, and residual bad debt separately. Strict health comparisons and rounding direction are explained in <a href="../explanation/liquidations.html">Liquidation economics</a>.</p>
 			</section>
 			<section id="recover-or-repeat">
 				<h2>Recover or repeat</h2>
 				<p>If execution conditions changed, use <a href="./recover-oracle-operation.html">the staged-operation recovery path</a>. If the target remains unsafe, calculate a new bounded chunk from current state; do not replay stale parameters. The <a href="../explanation/liquidations.html">liquidation explanation</a> owns the economic rationale and formulas.</p>
+			</section>
+			<section id="completion-checklist">
+				<h2>Completion checklist</h2>
+				<ul>
+					<li>Receipt is final and emitted events match the preview.</li>
+					<li>Target, liquidator, pool accounting, and token balances reconcile.</li>
+					<li>No stale pending operation remains; otherwise record its operation ID and branch to recovery.</li>
+				</ul>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

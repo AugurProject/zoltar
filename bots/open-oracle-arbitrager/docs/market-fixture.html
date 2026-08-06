@@ -44,7 +44,7 @@
 				</div>
 				<p>Under only those two constructed report scenarios, the fixture produced pre-gas results of <code data-fixture-field="sellProfitWeth">-0.255235735754674523 WETH</code> for the sell-REP correction and <code data-fixture-field="buyProfitWeth">-0.626254311426940506 WETH</code> for the buy-REP correction. Both modeled paths were unprofitable before gas; the result does not generalize to another report size, deviation, fee schedule, pool, block, or gas cost.</p>
 				<p>Run <code>bun ./scripts/check-market-fixture.mts</code> to reproduce the calculations. Set <code>OPEN_ORACLE_ARCHIVE_RPC_URL</code> to also replay the pinned block and quotes. Operators must repeat the analysis against current executable liquidity before taking risk; this dated fixture does not establish that a profitable corrector exists now.</p>
-				<p>Implementation and test evidence: <a href="/scripts/check-market-fixture.mts"><code>check-market-fixture.mts</code></a >, <a href="/src/core/strategy.ts"><code>strategy.ts</code></a >, and <a href="/documentation/reference#profit-and-history-semantics">the arbitrager profit model</a>.</p>
+				<p>Implementation and test evidence: <a href="/scripts/check-market-fixture.mts"><code>check-market-fixture.mts</code></a>, <a href="/src/core/strategy.ts"><code>strategy.ts</code></a>, and <a href="/documentation/reference#profit-and-history-semantics">the arbitrager profit model</a>.</p>
 			</section>
 		</main>
 	</body>

@@ -1,0 +1,133 @@
+{
+	"schemaVersion": 3,
+	"scope": "complete-coordinator-state-and-public-ABI-index",
+	"source": "solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol",
+	"observablePredicates": {
+		"cache": ["fresh-cache", "stale-cache"],
+		"report": ["no-pending-report", "pending-report"],
+		"operations": ["zero-active-operations", "one-or-more-active-operations"],
+		"recoveryEligibility": "pendingReportId != 0 && OpenOracle storedGame(pendingReportId).settlementTimestamp != 0"
+	},
+	"outcomes": [
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["fresh-cache"],
+			"outcomes": ["StagedOperationQueued", "ExecutedStagedOperation", "no pending report is created", "the staged operation is consumed; active count returns to its prior value"]
+		},
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["stale-cache", "no-pending-report", "caller supplies request bounty"],
+			"outcomes": ["StagedOperationQueued", "PriceRequested", "pending report exists", "operation is in the pending callback batch"]
+		},
+		{
+			"trigger": "requestPriceIfNeededAndStageOperation",
+			"preconditions": ["stale-cache", "pending-report", "msg.sender == pendingReportSponsor"],
+			"outcomes": ["StagedOperationQueued", "operation joins the pending settlement list or remains active according to the bounded batch rules", "pending report remains pending"]
+		},
+		{
+			"trigger": "openOracleCallback",
+			"preconditions": ["pending-report"],
+			"outcomes": ["pending report fields are cleared before report validation", "PriceReported or PriceReportRejected", "accepted callback updates the cache and executes only the bounded pending batch", "rejected callback leaves active operations for later execution or replacement"]
+		},
+		{
+			"trigger": "recoverSettledPendingReport",
+			"preconditions": ["recoveryEligibility"],
+			"outcomes": ["PendingReportRecovered", "PendingOperationRecoveryConsumed when a pending slot exists", "pending report fields are cleared", "the single call consumes the pending operation; there is no intermediate recovery state"]
+		},
+		{
+			"trigger": "executeStagedOperation",
+			"preconditions": ["fresh-cache", "operation exists"],
+			"outcomes": ["ExecutedStagedOperation", "exactly one operation is consumed", "active count becomes prior count minus one"]
+		}
+	],
+	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "PendingOperationRecoveryConsumed", "StagedOperationQueued", "StagedOperationDisputeStakedRepSnapshotted", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
+	"checkpointReasons": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" },
+	"enumValues": {
+		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetCoverageCommitment" },
+		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
+	},
+	"eventDeclarations": {
+		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
+		"RepEthPriceSet": "RepEthPriceSet(uint256 price)",
+		"PriceRequested": "PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)",
+		"PriceReportRejected": "PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
+		"PriceReported": "PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)",
+		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
+		"PendingOperationRecoveryConsumed": "PendingOperationRecoveryConsumed(uint256 indexed operationId, uint8 operation)",
+		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed initiatorVault, address indexed targetVault, uint256 operationAmountAttoRepOrAttoEth, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCoverageCommitmentAttoEth, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
+		"StagedOperationDisputeStakedRepSnapshotted": "StagedOperationDisputeStakedRepSnapshotted(uint256 indexed operationId, uint256 snapshotTargetDisputeStakedAttoRep)",
+		"ExecutedStagedOperation": "ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)",
+		"CoordinatorStateCheckpoint": "CoordinatorStateCheckpoint(uint8 reason, uint256 indexed reportId, uint256 indexed operationId, uint256 pendingReportId, address pendingReportSponsor, uint256 pendingOperationSlotId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp, uint256 stagedOperationCounter, uint256 activeStagedOperationCount, uint256 pendingSettlementOperationCount)"
+	},
+	"checkpoint": {
+		"event": "CoordinatorStateCheckpoint",
+		"indexed": ["reportId", "operationId"],
+		"fields": ["reason", "reportId", "operationId", "pendingReportId", "pendingReportSponsor", "pendingOperationSlotId", "pendingReportMaxSettlementBaseFeeAttoEthPerGas", "lastPrice", "lastSettlementTimestamp", "stagedOperationCounter", "activeStagedOperationCount", "pendingSettlementOperationCount"],
+		"units": { "pendingReportMaxSettlementBaseFeeAttoEthPerGas": "attoETH per gas", "lastPrice": "REP per ETH scaled by 1e18", "lastSettlementTimestamp": "unix seconds" }
+	},
+	"functions": {
+		"MAX_PENDING_SETTLEMENT_OPERATIONS": "view",
+		"OPEN_INTEREST_DIVIDER": "view",
+		"disputeDelay": "view",
+		"escalationHaltMultiplierBps": "view",
+		"executeStagedOperation": "nonpayable",
+		"feePercentage": "view",
+		"gasConsumedOpenOracleReportPrice": "view",
+		"gasConsumedSettlement": "view",
+		"gasUnitsForOneDispute": "view",
+		"getActiveStagedOperationCount": "view",
+		"getActiveStagedOperations": "view",
+		"getPendingOperationSlot": "view",
+		"getPendingSettlementOperationCount": "view",
+		"getPendingSettlementOperationIds": "view",
+		"getQueuedOperationCostAttoEth": "pure",
+		"getRequestPriceCostAttoEth": "view",
+		"getSettlementCallbackGasLimit": "view",
+		"initialReportPriorityFeeAttoEthPerGas": "view",
+		"isPriceValid": "view",
+		"lastPrice": "view",
+		"lastSettlementTimestamp": "view",
+		"maxSettlementBaseFeeMultiplierBps": "view",
+		"minLiquidationPriceDistanceBps": "view",
+		"minimumToken1ReportAttoEth": "view",
+		"multiplier": "view",
+		"openOracle": "view",
+		"openOracleCallback": "nonpayable",
+		"openOracleSecurityMultiplierBps": "view",
+		"pendingOperationSlotId": "view",
+		"pendingReportId": "view",
+		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "view",
+		"pendingReportSponsor": "view",
+		"protocolFee": "view",
+		"protocolFeeRecipient": "view",
+		"recoverSettledPendingReport": "nonpayable",
+		"reputationToken": "view",
+		"requestPrice": "payable",
+		"requestPriceIfNeededAndStageOperation": "payable",
+		"securityPool": "view",
+		"setRepEthPrice": "nonpayable",
+		"setSecurityPool": "nonpayable",
+		"settlementTime": "view",
+		"stagedOperationCounter": "view",
+		"stagedOperations": "view",
+		"targetPriceErrorForDispute": "view",
+		"timeType": "view",
+		"trackDisputes": "view",
+		"weth": "view"
+	},
+	"functionSignatures": {
+		"executeStagedOperation": "executeStagedOperation(uint256)",
+		"getActiveStagedOperations": "getActiveStagedOperations(uint256,uint256)",
+		"getPendingOperationSlot": "getPendingOperationSlot()",
+		"getQueuedOperationCostAttoEth": "getQueuedOperationCostAttoEth()",
+		"openOracleCallback": "openOracleCallback(uint256,uint256,uint256,uint256,address,address)",
+		"recoverSettledPendingReport": "recoverSettledPendingReport()",
+		"requestPrice": "requestPrice(uint256,uint256)",
+		"requestPriceIfNeededAndStageOperation": "requestPriceIfNeededAndStageOperation(uint8,address,uint256,uint256,uint256,uint256)",
+		"setRepEthPrice": "setRepEthPrice(uint256)",
+		"setSecurityPool": "setSecurityPool(address)",
+		"stagedOperations": "stagedOperations(uint256)"
+	},
+	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly.",
+	"operationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetCoverageCommitment" }
+}

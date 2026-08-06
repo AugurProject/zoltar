@@ -3,7 +3,7 @@
 		{
 			"id": "tutorials",
 			"title": "Tutorials",
-			"description": "Learn the protocol by completing guided, safe exercises."
+			"description": "Inspect deterministic protocol states in simulation; the first tutorial includes one resettable transaction."
 		},
 		{
 			"id": "how-to",
@@ -112,11 +112,19 @@
 		},
 		{
 			"path": "how-to/recover-oracle-operation.html",
-			"title": "Recover an oracle-assisted operation",
+			"title": "Recover an oracle-backed operation",
 			"summary": "Diagnose and recover a staged operation after settlement or callback rejection.",
 			"section": "how-to",
 			"topic": "Operations",
 			"keywords": ["OpenOracle", "recovery", "callback", "staged operation"]
+		},
+		{
+			"path": "how-to/stage-oracle-operation.html",
+			"title": "Stage an oracle-backed operation",
+			"summary": "Preflight, fund, stage, and verify a price-sensitive operation before handing failures to recovery.",
+			"section": "how-to",
+			"topic": "Operations",
+			"keywords": ["OpenOracle", "staging", "price", "recovery"]
 		},
 		{
 			"path": "how-to/build-event-indexer.html",
@@ -141,6 +149,14 @@
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["events", "reducers", "schema", "rollback"]
+		},
+		{
+			"path": "reference/open-oracle-coordinator.html",
+			"title": "OpenOracle coordinator reference",
+			"summary": "Coordinator states, events, functions, and structured schema source.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["OpenOracle", "coordinator", "events", "state machine"]
 		},
 		{
 			"path": "reference/invariants.html",
@@ -233,10 +249,26 @@
 		{
 			"path": "explanation/open-oracle.html",
 			"title": "OpenOracle integration",
-			"summary": "Price requests, corrections, settlement, callbacks, and residual risk.",
+			"summary": "Choose the conceptual explanation, coordinator reference, or operator procedure for OpenOracle.",
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
+		},
+		{
+			"path": "explanation/open-oracle-design.html",
+			"title": "Why Statoblast uses OpenOracle",
+			"summary": "Understand the economic purpose, security intuition, and boundaries of OpenOracle.",
+			"section": "explanation",
+			"topic": "Architecture",
+			"keywords": ["OpenOracle", "security", "price", "architecture"]
+		},
+		{
+			"path": "explanation/open-oracle-appendix.html",
+			"title": "OpenOracle design appendix",
+			"summary": "Detailed mathematical, security, and deployment-specific OpenOracle design record.",
+			"section": "explanation",
+			"topic": "Architecture",
+			"keywords": ["OpenOracle", "security", "parameters", "design record"]
 		}
 	]
 }

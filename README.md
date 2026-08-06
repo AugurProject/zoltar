@@ -18,13 +18,13 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 Protocol documentation lives in `docs/`:
 
 - [Security model](https://augurproject.github.io/zoltar/docs/reference/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, account-authority, and cryptographic assumptions A01–A28
-- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
+- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle-appendix.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
 - [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 For oracle audit classification, use the
-[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#intentional-economic-tradeoffs)
-and [attack model](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#attack-model).
+[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle-appendix.html#intentional-economic-tradeoffs)
+and [attack model](https://augurproject.github.io/zoltar/docs/explanation/open-oracle-appendix.html#attack-model).
 For weak-demand auction behavior, use
 [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html#clearing).
 The invariant catalog owns the current requirement, status, and evidence for
@@ -109,7 +109,7 @@ dependent deployment address. See the
 for constructor guards and recovery steps.
 
 Sepolia quote-dependent actions query live, network-local Uniswap liquidity.
-The [OpenOracle integration guide](./docs/explanation/open-oracle.html#openoracle-role)
+The [OpenOracle integration guide](./docs/explanation/open-oracle-appendix.html#openoracle-role)
 owns the quote-source order and address-selection details.
 
 ## Browser Simulation

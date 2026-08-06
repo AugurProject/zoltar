@@ -32,6 +32,11 @@
 				<p>Compare parent and child REP, vault state, open interest, and collateral. The fixture migrates REP to the Yes universe but leaves enough parent value behind to require repair. Collateral follows migrated economic claims rather than being copied into every possible child.</p>
 				<p><strong>Checkpoint:</strong> child backing is not a duplicate of the complete parent snapshot.</p>
 			</section>
+			<section id="materialize-one-position">
+				<h2>Inspect the seeded transition</h2>
+				<p>This fixture advances beyond the pool-local migration window and bootstraps the pool-proxy REP split before starting the auction, so it does not provide a resettable vault-migration write. Record the parent proxy REP delta, child balance, and migration status without inferring a vault-migration event. The executable procedures are <code>createChildUniverse(pool, outcomeIndex)</code>, <code>migrateRepToZoltar(pool, outcomeIndices)</code>, and <code>migrateVault(pool, outcomeIndex)</code>; use <a href="../how-to/migrate-fork.html">the migration how-to</a> with a pre-deadline deployment when performing them.</p>
+				<p>Reloading the scenario URL returns the same seeded snapshot. The parent entitlement remains distinct from child materialization.</p>
+			</section>
 			<section id="inspect-repair">
 				<h2>Inspect the repair boundary</h2>
 				<p>Open the child's fork-auction view. Confirm that a truth auction is active with ten seeded bids at three price levels. The auction raises as much repair ETH as supported demand provides; it does not determine which universe is true.</p>
