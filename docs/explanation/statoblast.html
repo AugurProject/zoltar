@@ -124,490 +124,33 @@
 
 				<p>This requirement protects outcome-share holders by making dishonest behavior economically unprofitable. If a vault owner attempts to manipulate the market's resolution, the REP they risk losing should be worth more than any potential gain. The protocol therefore rewards behavior that supports correct resolution and penalizes behavior that threatens it.</p>
 
+
 				<h3>Fee Extraction and Retention Rate</h3>
 				<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
 				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned coverage commitment. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
-				<p> TODO: move the fee calculation logic into a separate html file and link it to here, this page should give such a short summary on why theres fees, how they are broadly captured</p>
-				<p>Retention follows a piecewise heuristic. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
+				<a href = "fees.html">read more from here on how fees work</a>
 
-				<p>At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>
-				<figure class="diagram" id="fig-statoblast-retention-utilization">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across fee-eligible coverage commitment utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from roughly 10% at zero utilization to roughly 50% at 80% utilization, then remains flat because the retention rate has reached its minimum.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Piecewise retention formula</span> The 80% rule marks the point where the minimum per-second retention rate begins to apply.</p>
-				</figure>
-
-				<p>Fee accrual is lazy: state-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault against that index. Fractional amounts remain in explicit remainders until they accumulate into whole attoETH, so callers do not need to iterate over every vault when time advances.</p>
-				<p>Fee accrual is time-clamped. The pool extracts collateral into fees only until the question end time while the universe remains unforked; after the universe forks, the fee accumulator is instead clamped to the fork time. Retention-rate updates no-op outside <code>Operational</code> mode or when the recalculated rate is unchanged. While operational, utilization uses vault-assigned, fee-eligible coverage commitment; zero eligible coverage commitment selects the maximum retention rate. Unclaimed auction coverage commitment therefore cannot change the live fee curve.</p>
-				<p>A child pool begins a new fee epoch when migration and any truth auction finalize. Only coverage commitment already assigned to a vault enters the fee denominator. Auctioned coverage commitment becomes fee-eligible when the winning bid is claimed, after that vault first checkpoints at the current index. Each delayed claim adds only its newly assigned amount to the live eligible total; it does not reconstruct that total from fork-time migration counters, so intervening coverage commitment changes and liquidations remain intact. Per-vault fractional remainders survive public checkpoints, while whole fees move from the pool reserve into <code>totalClaimableVaultFeesAttoEth</code>; this keeps aggregate claimable fees equal to redeemable vault balances. The <code>totalAccruedFeesAttoEth()</code> view adds those assigned claimable fees to the unallocated reserve when callers need to reconcile all fee-adjusted collateral.</p>
-				<p>A fork permanently closes the parent's fee epoch. The pool tracks how much eligible coverage commitment still has not checkpointed the final index. After every eligible vault syncs, any whole reserve attoETH left solely from aggregating individually sub-attoETH vault remainders cannot become redeemable, so it returns to complete-set collateral. Until the last checkpoint, that reserve remains protected by <code>totalAccruedFeesAttoEth()</code>.</p>
-				<figure class="diagram" id="fig-statoblast-pool-accounting">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-pool-accounting" data-plot-width="920" data-plot-height="310" role="img" aria-label="Pool accounting conversions"><span class="plot-chart-fallback">REP deposits mint proportional REP backing units, settlement collateral decay increments the fee index, and vault coverage commitments claim fees from that index.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Pool Accounting</span>REP backing units and fee accounting use separate proportional ledgers: REP backing units track vault REP backing, which is not automatically withdrawable REP, while the fee index tracks decayed ETH settlement collateral owed to vaults.</p>
-				</figure>
-				<div class="equation" id="eq-statoblast-rep-backing-units-conversion">
-					<math display="block" aria-label="REP deposits mint amount times price precision backing units when the backing ledger or pool-held REP balance is empty, otherwise the floor of amount times total backing units divided by pool-held REP; converting backing units to REP returns zero for an empty backing ledger and otherwise floors the proportional conversion" data-source="attoRepToBackingUnits(attoRepAmount) = attoRepAmount * PRICE_PRECISION if totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0, otherwise \left\lfloor attoRepAmount * totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep \right\rfloor; backingUnitsToAttoRep(repBackingUnits) = 0 if totalRepBackingUnits = 0, otherwise \left\lfloor repBackingUnits * totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits \right\rfloor">
-						<mtable>
-							<mtr
-								><mtd><mi>attoRepToBackingUnits</mi><mo>(</mo><mi>attoRepAmount</mi><mo>)</mo></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mtd
-								><mtd><mtext>if the ledger or pool-held REP balance is empty</mtext></mtd></mtr
-							>
-							<mtr
-								><mtd></mtd><mtd><mo>=</mo></mtd
-								><mtd
-									><mo>&#x230A;</mo
-									><mfrac
-										><mrow><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>totalRepBackingUnits</mi></mrow
-										><mi>totalPoolHeldRepBalanceAttoRep</mi></mfrac
-									><mo>&#x230B;</mo></mtd
-								><mtd><mtext>otherwise</mtext></mtd></mtr
-							>
-							<mtr
-								><mtd><mi>backingUnitsToAttoRep</mi><mo>(</mo><mi>repBackingUnits</mi><mo>)</mo></mtd
-								><mtd><mo>=</mo></mtd
-								><mtd><mn>0</mn></mtd
-								><mtd><mtext>if the backing ledger is empty</mtext></mtd></mtr
-							>
-							<mtr
-								><mtd></mtd><mtd><mo>=</mo></mtd
-								><mtd
-									><mo>&#x230A;</mo
-									><mfrac
-										><mrow><mi>repBackingUnits</mi><mo>&#x22C5;</mo><mi>totalPoolHeldRepBalanceAttoRep</mi></mrow
-										><mi>totalRepBackingUnits</mi></mfrac
-									><mo>&#x230B;</mo></mtd
-								><mtd><mtext>otherwise</mtext></mtd></mtr
-							>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">REP Backing Unit Conversion</span>The bootstrap branch establishes <code>PRICE_PRECISION</code> backing units per attoREP. Once both totals are nonzero, each conversion floors integer division exactly as the contract does.</p>
-				</div>
-				<h3>Solvency Operations and Liquidation</h3>
-				<p>Withdrawals, coverage commitment changes, and liquidation depend on a fresh REP/ETH price. Liquidation moves only coverage commitment whose complete fixed 5%-bonus award is funded by target pool-held vault REP backing to a caller vault that remains healthy. Escalation claims never move and remain payable only to their committed depositors. Accrued fees and pool-held vault REP backing surplus remain exclusively claimable by the target vault. A request at least equal to the target's full coverage commitment records untransferred residual coverage commitment as bad debt and removes it from active capacity without minting REP backing units or diluting other holders. A partial target with remaining coverage commitment preserves its REP and coverage commitment floors; any funded move leaves the caller above both floors. A bad-debt-only maximum execution transfers nothing to the caller, including when the otherwise funded slice would create sub-minimum caller coverage commitment.</p>
-
-				<p>Read how the liquidation works from <a href="../explanation/liquidations.html">Liquidation Design</a>.</p>
-			</section>
-
-			<section class="paper-section" id="shares">
-				<div class="section-heading">
-					<h2>5. Shares and Complete Sets</h2>
-					<a class="anchor-link" href="#shares" aria-label="Link to Shares">#</a>
-				</div>
+				<h3>Shares and Complete Sets</h3>
 				<p><code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.</p>
-				<p>A positive ETH deposit must convert through <code>attoEthToAttoShares</code> to at least one complete-set unit. If rounding would mint zero shares, <code>createCompleteSet</code> reverts with <code>Exchange rate undefined</code> instead of accepting collateral.</p>
+
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="340" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span>Shares are transferable until redemption or the first fork-claim materialization. Materialization preserves the source balance but locks it against later transfer.</p>
+					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span></p>
 				</figure>
-				<p>Shares can materialize across forks. <code>ShareToken.migrate</code> preserves a parent-universe token id as a persistent entitlement and mints child-universe token ids for selected valid, non-malformed fork outcomes.</p>
-				<figure class="diagram" id="fig-statoblast-share-migration">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
-				</figure>
-				<p>If none of the selected children has received a source entitlement, the first call materializes the full current source balance in each selected child. On a later call, each child receives only <code>current source balance - amount already materialized</code>. If every selected delta is zero, the call reverts. The canonical guarantees are <a href="../reference/invariants.html#fork-10"><code>FORK-10</code></a>, <a href="../reference/invariants.html#share-04"><code>SHARE-04</code></a>, and <a href="../reference/invariants.html#fork-11"><code>FORK-11</code></a>.</p>
-				<p>At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That <code>shareTokenSupplyAttoShares</code> includes materialized ERC-1155 balances and fork-time entitlements that can materialize later. In the healthy case this corresponds to a clean <code>1:1</code> redemption outcome against the economic meaning of a complete-set claim, subject to collateral accounting remaining intact through migration and any required auction repair.</p>
-				<div class="equation" id="eq-statoblast-share-redemption">
-					<math display="block" aria-label="settlement collateral payout in attoETH equals floor of burned winning shares in attoShares times economic claim supply in attoShares divided into settlement collateral in attoETH" data-source="settlementCollateralPayoutAttoEth = ⌊winningSharesBurnedAttoShares \cdot settlementCollateralAttoEth / economicClaimSupplyBeforeBurnAttoShares⌋">
-						<mrow>
-							<mi>settlementCollateralPayoutAttoEth</mi>
-							<mo>=</mo>
-							<mo form="prefix" stretchy="true">⌊</mo>
-							<mfrac>
-								<mrow>
-									<mi>winningSharesBurnedAttoShares</mi>
-									<mo>&#x22C5;</mo>
-									<mi>settlementCollateralAttoEth</mi>
-								</mrow>
-								<mi>economicClaimSupplyBeforeBurnAttoShares</mi>
-							</mfrac>
-							<mo form="postfix" stretchy="true">⌋</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Share Redemption</span>The remaining economic claim supply reserves collateral for both materialized winners and winning fork entitlements that arrive later.</p>
-				</div>
-				<p>The important edge case is fork recovery. If a child pool emerges from migration with incomplete collateral, the truth auction sells REP for ETH so the child pool can restore the collateral base needed for clean redemption. If multiple target outcomes are selected during share migration, the holder’s source entitlement remains and its unmaterialized balance is minted into each selected child.</p>
 			</section>
 
 			<section class="paper-section" id="escalation">
 				<div class="section-heading">
-					<h2>6. Escalation Resolution</h2>
+					<h2>4. Escalation Resolution</h2>
 					<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
 				</div>
 				<p class="lede">When a market ends, Statoblast attempts to resolve its outcome by running an Escalation Game based on <a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md">The Isonzo Front</a>. Participants escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. Each deposit adds to that outcome's cumulative balance; it does not have to outbid the previous deposit or the current leader. The accepted deposit must normally meet the game's starting bond, unless it fills the selected outcome to the non-decision threshold.</p>
-				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path. The sections below derive those rules and their economic consequences.</p>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 risk-adjusted incentives</a>, <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent participants</a>, <a href="../reference/security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, and <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
+				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path. </p>
 
 				<div class="callout"><strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded. The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.</div>
-				<p><code>SecurityPoolFactory</code> requires its configured <code>initialEscalationGameDepositAttoRep</code> to be at least <code>1 REP</code>, copies that value into every deployed <code>SecurityPool</code>, and admits a new origin pool only while its live non-decision threshold exceeds the configured bond. An existing pool can outlive that relationship because REP burns reduce the tracked theoretical supply. On the first post-end deposit, the <code>SecurityPool</code> passes its stored bond and the current threshold to <code>EscalationGameFactory</code>. That game factory preserves the bond when possible and otherwise substitutes <code>nonDecisionThresholdAttoRep - 1</code>. Positive attoREP bonds below one whole REP remain valid; a threshold of one attoREP or less has no positive smaller bond and cannot initialize a game.</p>
-				<div class="equation" id="eq-statoblast-escalation-cost">
-					<math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)">
-						<mrow>
-							<mi>requiredEscalationCost</mi>
-							<mo>(</mo>
-							<mi>elapsedEscalationTime</mi>
-							<mo>)</mo>
-							<mo>=</mo>
-							<mi>startingBondAmount</mi>
-							<mo>&#x22C5;</mo>
-							<mi>exp</mi>
-							<mo>(</mo>
-							<mfrac>
-								<mrow>
-									<mi>ln</mi>
-									<mo>(</mo>
-									<mfrac>
-										<mi>nonDecisionThresholdAmount</mi>
-										<mi>startingBondAmount</mi>
-									</mfrac>
-									<mo>)</mo>
-									<mo>&#x22C5;</mo>
-									<mi>elapsedEscalationTime</mi>
-								</mrow>
-								<mi>fullEscalationInterval</mi>
-							</mfrac>
-							<mo>)</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Escalation Cost Curve</span>The required dispute bond rises exponentially from the starting bond to the non-decision threshold over the full interval.</p>
-				</div>
-				<ul>
-					<li><code>requiredEscalationCost(0) = startingBondAmount</code>.</li>
-					<li><code>requiredEscalationCost(fullEscalationInterval) = nonDecisionThresholdAmount</code>.</li>
-					<li>The cost rises monotonically between those endpoints.</li>
-				</ul>
-				<p>The plot below is an illustrative normalized instance with <code>ln(nonDecisionThresholdAttoRep / startingBond) = 2.4</code>. It uses the parameterized curve implemented by <code>totalCostAttoRep()</code> and <code>computeIterativeAttritionCostAttoRep</code>: early deposits face the starting bond, while sustained late disagreement approaches the non-decision threshold. The plotted curve is the continuous model; Solidity computes it with fixed-point integer approximation using <code>SCALE = 1e6</code> and clamps the endpoints. Ratio normalization extracts whole powers of two before approximating the residual logarithm, including exact power-of-two ratios whose residual is zero.</p>
-				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential escalation bond curve from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The required bond rises exponentially from the start bond to the non-decision threshold over the full escalation interval.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span>Delay becomes increasingly expensive without jumping immediately to the non-decision threshold: early disagreement can settle locally, while sustained late disagreement becomes costly enough to justify the non-decision path.</p>
-				</figure>
-				<p>Escalation deposits enter through <code>SecurityPool.depositToEscalationGame</code>. The first valid deposit after question end deploys the game, sets <code>activationTime = block.timestamp + 3 days</code>, and records the game’s starting parameters. Later deposits can continue only while the pool is operational, the game has resumed if it came from a fork continuation, and the child pool is not still waiting for continuation processing.</p>
-				<p>The security pool wrapper first previews the accepted amount, then removes the corresponding vault REP backing units with round-up accounting, checks the vault and pool remain solvent, enforces the minimum remaining REP rule, and transfers REP into the escalation game from the caller's existing vault position rather than from wallet-held REP. If the pool has any active coverage commitment, the call also requires a fresh REP/ETH oracle price before the deposit can proceed. Inside the game, the proposed amount must be at least <code>startBondAttoRep</code>. The recorded amount must be positive and either at least <code>startBondAttoRep</code> or exactly fill the selected outcome to <code>nonDecisionThresholdAttoRep</code>.</p>
-				<p>The game rejects invalid targets, full outcomes, and post-non-decision deposits. Accepted deposits are clipped to the selected outcome's remaining room, and the game applies a small tie-avoidance adjustment when a below-threshold deposit would otherwise make two outcomes share the maximum balance.</p>
-				<h3>Escalation Deposit Trace</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Step</th>
-								<th>Contract area</th>
-								<th>State or check</th>
-								<th>Why it matters</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Preview amount</td>
-								<td><code>EscalationGame.previewDepositOnOutcome</code></td>
-								<td>Computes accepted amount, threshold room, and tie adjustment.</td>
-								<td>The submitted maximum is not always the recorded deposit.</td>
-							</tr>
-							<tr>
-								<td>Remove vault REP backing units</td>
-								<td><code>SecurityPool.depositToEscalationGame</code></td>
-								<td>Burns REP backing units with round-up accounting and checks solvency.</td>
-								<td>Escalation uses existing vault-backed REP, not wallet-held REP.</td>
-							</tr>
-							<tr>
-								<td>Transfer REP</td>
-								<td><code>SecurityPool</code> to <code>EscalationGame</code></td>
-								<td>Moves accepted REP into local game custody.</td>
-								<td>The game can later settle, export, or carry that dispute-staked REP.</td>
-							</tr>
-							<tr>
-								<td>Record deposit</td>
-								<td><code>EscalationGame.recordDepositFromSecurityPool</code></td>
-								<td>Updates outcome balances, unresolved totals, and deposit indexes.</td>
-								<td>Those indexes are the handles used by later withdrawal and fork paths.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<details class="interactive-example" id="escalation-deposit-example">
-					<summary>Adjust escalation deposit clipping and tie avoidance</summary>
-					<p>The accepted deposit is capped by remaining room under the non-decision threshold. If a below-threshold deposit would tie the current leading outcome, the game reduces the accepted amount by one attoREP. In first-deposit mode, outcome balances are fixed at zero and the start-bond slider is the pool's configured bond, copied from <code>SecurityPoolFactory</code> when the pool was deployed. The <code>SecurityPool</code> passes that bond and the current threshold to <code>EscalationGameFactory</code>; when the bond is at or above the live threshold, the game factory uses an effective bond of <code>nonDecisionThresholdAttoRep - 1</code> attoREP. In repeat-deposit mode, the sliders instead represent an existing game's balances and stored parameters; no factory normalization is reapplied.</p>
-					<div class="example-grid">
-						<label>
-							Deposit lifecycle
-							<input type="range" min="0" max="1" step="1" value="0" data-example-input="depositLifecycle" />
-							<span class="example-value" data-example-value="depositLifecycle">First deposit (factory creates game)</span>
-						</label>
-						<label>
-							Invalid balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="invalidBalance" />
-							<span class="example-value" data-example-value="invalidBalance">0 REP</span>
-						</label>
-						<label>
-							Yes balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="yesBalance" />
-							<span class="example-value" data-example-value="yesBalance">0 REP</span>
-						</label>
-						<label>
-							No balance
-							<input type="range" min="0" max="20" step="1" value="0" data-example-input="noBalance" />
-							<span class="example-value" data-example-value="noBalance">0 REP</span>
-						</label>
-						<label>
-							Proposed deposit to No
-							<input type="range" min="0" max="20" step="1" value="5" data-example-input="proposedDeposit" />
-							<span class="example-value" data-example-value="proposedDeposit">5 REP</span>
-						</label>
-						<label>
-							<span data-example-text="startBondLabel">Configured start bond</span>
-							<input type="range" min="1" max="10" step="1" value="2" data-example-input="startBond" />
-							<span class="example-value" data-example-value="startBond">2 REP</span>
-						</label>
-						<label>
-							<span data-example-text="thresholdInputLabel">Live non-decision threshold</span>
-							<input type="range" min="5" max="25" step="1" value="10" data-example-input="nonDecisionThreshold" />
-							<span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span>
-						</label>
-					</div>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-7" data-plot-width="760" data-plot-height="230" role="img" aria-label="Escalation deposit accepted amount"><span class="plot-chart-fallback">Escalation deposit accepted amount</span></div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Room on No</span><output data-example-output="remainingRoom">10 REP</output></div>
-						<div><span data-example-text="effectiveStartBondLabel">Effective start bond</span><output data-example-output="effectiveStartBond">2 REP</output></div>
-						<div><span>Accepted amount</span><output data-example-output="acceptedAmount">5 REP</output></div>
-						<div><span>Adjustment</span><output data-example-output="depositAdjustment">accepted as proposed</output></div>
-						<div><span>Post-deposit condition</span><output data-example-output="depositCondition">No ends at 5 REP</output></div>
-					</div>
-				</details>
-				<details class="interactive-example" id="resolution-edge-example">
-					<summary>Adjust escalation resolution edge cases</summary>
-					<p>The resolution helper first checks whether at least two outcomes meet the running cost. If that unresolved test does not apply and all three balances are zero, the helper returns <code>Invalid</code>. Otherwise, a strict <code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead wins. Valid deposits prevent tied maxima below non-decision by reducing the accepted amount by one attoREP, or reverting if that adjusted amount becomes invalid. Continuation snapshots preserve the parent balances exactly, including tied maxima below <code>nonDecisionThresholdAttoRep</code>, so all selected children begin from the same unresolved state.</p>
-					<div class="example-grid">
-						<label>
-							Invalid balance
-							<input type="range" min="0" max="20" step="1" value="4" data-example-input="invalidBalance" />
-							<span class="example-value" data-example-value="invalidBalance">4 REP</span>
-						</label>
-						<label>
-							Yes balance
-							<input type="range" min="0" max="20" step="1" value="6" data-example-input="yesBalance" />
-							<span class="example-value" data-example-value="yesBalance">6 REP</span>
-						</label>
-						<label>
-							No balance
-							<input type="range" min="0" max="20" step="1" value="7" data-example-input="noBalance" />
-							<span class="example-value" data-example-value="noBalance">7 REP</span>
-						</label>
-						<label>
-							Running total cost
-							<input type="range" min="1" max="20" step="1" value="5" data-example-input="runningCost" />
-							<span class="example-value" data-example-value="runningCost">5 REP</span>
-						</label>
-					</div>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-8" data-plot-width="760" data-plot-height="210" role="img" aria-label="Resolution balances against running cost"><span class="plot-chart-fallback">Resolution balances against running cost</span></div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Outcomes at or above cost</span><output data-example-output="outcomesAtCost">2</output></div>
-						<div><span>Resolution helper returns</span><output data-example-output="resolutionResult">None</output></div>
-						<div><span>Reason</span><output data-example-output="resolutionReason">two outcomes still contest the cost</output></div>
-					</div>
-				</details>
-				<p>The contract exposes both directions of this curve: it can compute the required cost from elapsed time, and it can derive the effective end time from the final binding capital. Before activation, <code>totalCostAttoRep()</code> is zero. In fork-continuation games, elapsed time can be inherited from a parent game and then resume later instead of restarting from zero.</p>
-				<figure class="diagram" id="fig-statoblast-non-decision-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-non-decision-flow" data-plot-width="860" data-plot-height="365" role="img" aria-label="Escalation thresholds"><span class="plot-chart-fallback">Outcome balances are compared to running total cost for local resolution and to the fixed non-decision threshold for a local game's fork eligibility. A pool with an inherited fixed outcome rejects both new local deposits and fork activation.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Non-Decision Flow</span>A live unresolved contest is not the same as the stronger non-decision condition. This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork()</code> true. A pool with an inherited fixed outcome rejects the deposits that could create this state and still rejects <code>activateForkMode()</code>.</p>
-				</figure>
-				<p>Payouts depend on final binding capital, the median of the three outcome balances. Winning capital inside the reward-eligible window shares a fixed reward pool; excess winning capital receives principal only.</p>
-				<p>If time expires without non-decision, the resolution ordering in the interactive example above applies. A local deposit that brings a second outcome to <code>nonDecisionThresholdAttoRep</code> records <code>nonDecisionState = Local</code> and <code>nonDecisionTimestamp</code>, then makes the game-local <code>canTriggerOwnFork()</code> predicate true. That predicate does not override pool finality: a pool with an inherited fixed outcome rejects new <code>depositToEscalationGame</code> calls before they can create a local non-decision and still rejects <code>activateForkMode()</code>. A fork continuation instead records <code>nonDecisionState = InheritedThresholdTie</code> when its preserved balances already meet that condition, without rebasing balances or fabricating a local timestamp. Both explicit states close further deposits. A continuation with a fixed child outcome follows its remaining clock and settles to that outcome; one without a fixed outcome can open its own fork directly.</p>
-				<p>For the exact resolution ordering, empty-game fallback, deposit clipping, carry batching, and residual sweep rules, see <a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">Escalation Resolution and Deposits</a>.</p>
-				<p>The median matters because the game is trying to detect whether disagreement remains live across multiple sides, not merely whether one side has accumulated the most stake. <code>binding capital</code> measures the level at which the contest is still jointly sustained by competing outcomes, which is why it drives timeout and payout logic.</p>
-				<figure class="diagram" id="fig-statoblast-payout-regions">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-payout-regions" data-plot-width="860" data-plot-height="220" role="img" aria-label="Escalation payout regions"><span class="plot-chart-fallback">Winning deposits below binding capital and in the safety boundary share rewards, while excess receives principal only.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Payout Regions</span>Winning deposits below binding capital and in the safety boundary share rewards, while excess receives principal only.</p>
-				</figure>
-				<div class="equation" id="eq-statoblast-escalation-winning-payout">
-					<math display="block" aria-label="all payout amounts are in attoREP; reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when fork time is at or before the scheduled escalation game end date and the actual fork threshold is lower" data-source="rewardEligibleCapAttoRep = bindingCapitalAttoRep + ⌊bindingCapitalAttoRep / excessRewardWindowDivisor⌋; rewardBonusPoolAttoRep = ⌊bindingCapitalAttoRep \cdot 3 / 5⌋; burnAmountAttoRep = ⌊rewardEligibleDepositAttoRep \cdot ⌊bindingCapitalAttoRep \cdot 2 / 5⌋ / rewardEligiblePrincipalAttoRep⌋; amountToWithdrawAttoRep = depositAmountAttoRep + ⌊rewardEligibleDepositAttoRep \cdot rewardBonusPoolAttoRep / rewardEligiblePrincipalAttoRep⌋; scaledWithdrawalAttoRep = ⌊amountToWithdrawAttoRep \cdot actualForkThresholdAttoRep / nonDecisionThresholdAttoRep⌋ when forkTime &lt;= escalationGameEndDate and actualForkThresholdAttoRep &lt; nonDecisionThresholdAttoRep">
-						<mtable>
-							<mtr>
-								<mtd>
-									<mi>rewardEligibleCapAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>bindingCapitalAttoRep</mi>
-									<mo>+</mo>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mi>bindingCapitalAttoRep</mi>
-											<mi>excessRewardWindowDivisor</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>rewardBonusPoolAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>bindingCapitalAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mn>3</mn>
-											</mrow>
-											<mn>5</mn>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>burnAmountAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDepositAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mrow>
-													<mo form="prefix" stretchy="true">⌊</mo>
-													<mfrac>
-														<mrow>
-															<mi>bindingCapitalAttoRep</mi>
-															<mo>&#x22C5;</mo>
-															<mn>2</mn>
-														</mrow>
-														<mn>5</mn>
-													</mfrac>
-													<mo form="postfix" stretchy="true">⌋</mo>
-												</mrow>
-											</mrow>
-											<mi>rewardEligiblePrincipalAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>amountToWithdrawAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mi>depositAmountAttoRep</mi>
-									<mo>+</mo>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDepositAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mi>rewardBonusPoolAttoRep</mi>
-											</mrow>
-											<mi>rewardEligiblePrincipalAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>scaledWithdrawalAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mrow>
-										<mo form="prefix" stretchy="true">⌊</mo>
-										<mfrac>
-											<mrow>
-												<mi>amountToWithdrawAttoRep</mi>
-												<mo>&#x22C5;</mo>
-												<mi>actualForkThresholdAttoRep</mi>
-											</mrow>
-											<mi>nonDecisionThresholdAttoRep</mi>
-										</mfrac>
-										<mo form="postfix" stretchy="true">⌋</mo>
-									</mrow>
-									<mspace linebreak="newline" />
-									<mtext> if forkTime &lt;= escalationGameEndDate and actualForkThresholdAttoRep &lt; nonDecisionThresholdAttoRep</mtext>
-								</mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Winning Payout</span>Reward-eligible winning principal shares the 60% bonus pool pro rata, while a 40% haircut is charged exactly once. If the escalation itself triggers the universe fork, Zoltar collects that haircut from the aggregate escalation backing; otherwise settlement burns it directly. Low fork thresholds scale the payout down when no fork is recorded or the recorded universe <code>forkTime</code> is at or before the scheduled <code>escalationGameEndDate</code>. When <code>forkTime</code> is strictly later than the scheduled <code>escalationGameEndDate</code>, the withdrawal calculation substitutes the configured <code>nonDecisionThresholdAttoRep</code> for the actual fork threshold, restoring the unscaled payout schedule for unclaimed winning deposits. Amounts withdrawn earlier are not revisited. All amounts are attoREP, and every Solidity division floors before the next step.</p>
-				</div>
-				<ul>
-					<li>The binding-capital region defines a fixed reward pool.</li>
-					<li><code>40%</code> of that binding-capital region is the winner haircut, so the remaining <code>60%</code> becomes the reward pool.</li>
-					<li>
-						The reward-eligible cap is
-						<code>bindingCapitalAmount + ⌊bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR⌋</code>.
-					</li>
-					<li>The region between binding capital and that cap is the safety boundary.</li>
-					<li>Winning capital above the reward-eligible cap is excess and receives principal only.</li>
-				</ul>
-				<div class="callout">
-					Example: if final binding capital is <code>10 REP</code>, the reward-eligible cap is <code>15 REP</code>, the safety boundary is <code>(10 REP, 15 REP]</code>, and the reward pool is <code>6 REP</code>. If the winning side contributes <code>15 REP</code> inside that reward-eligible window, each <code>5 REP</code> deposit receives <code>7 REP</code>. Winning depth above <code>15 REP</code>
-					receives principal back with no share of the reward pool.
-				</div>
-				<p>Settlement uses different calls for local withdrawal, own-fork direct claims, optional unresolved parent escalation-deposit accounting cleanup, and child proof claims. The distinction matters because local withdrawal settles deposit indexes, while continuation games settle inherited winners by proof and retire inherited losers without a call.</p>
-				<h3>Escalation Settlement Call Matrix</h3>
-				<div class="table-wrap">
-					<table class="wide-table">
-						<thead>
-							<tr>
-								<th>Entry point</th>
-								<th>Used when</th>
-								<th>Claim unit</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td><code>withdrawFromEscalationGame</code></td>
-								<td>A local game reaches a final outcome without non-decision and no earlier universe fork interrupted it. This includes the ordinary no-fork lifecycle.</td>
-								<td>Local deposit indexes for one original depositor per call; payout goes to that committed depositor.</td>
-							</tr>
-							<tr>
-								<td><code>claimForkedEscalationDeposits</code></td>
-								<td>A non-decision fork exists and the vault owner claims winning parent deposits for a selected outcome.</td>
-								<td>Winning parent deposit indexes; own-fork claims pay the ordinary winning reward in child REP to the committed depositor. The escalation's own fork has already removed the winner haircut from aggregate backing, so the claim does not burn it again.</td>
-							</tr>
-							<tr>
-								<td><code>migrateVaultWithUnresolvedEscalation</code></td>
-								<td>Optional cleanup after an own or external fork captured unresolved parent escalation-deposit accounting before the game finalized.</td>
-								<td>
-									The affected vault owner invokes the wrapper for their security vault's unresolved parent escalation-deposit totals. See the
-									<a href="../reference/operator-guardrails.html#escalation-resolution-and-deposits">operator cleanup reference</a>
-									for ordering, scope, and proof independence.
-								</td>
-							</tr>
-							<tr>
-								<td><code>withdrawForkedEscalationDeposits</code></td>
-								<td>A child continuation game finalized; only inherited winning deposits are claimable, while inherited losers require no call.</td>
-								<td>Carried-deposit proofs for one original depositor per call; the proof's committed depositor is immutable payout ownership.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<p>The pool removes REP backing units and escrows REP when the user deposits into the local game. Settlement does not re-mint those REP backing units: a winner receives the ordinary winning payout as wallet REP, while a losing settlement clears escrow without a payout. An own-fork direct claim uses the same winning reward math and releases pre-funded child REP from the selected child's aggregate backing to the immutable depositor committed in the claim leaf, using the retention and rounding rule documented in the <a href="../explanation/escalation-game.html#claim-ownership">escalation architecture</a>. It is not a claim-time conversion and does not mint child-REP backing units. Own-fork direct claims must still be submitted before the parent migration window closes.</p>
-				<p>Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code> and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any caller can submit so long as every proof or deposit index in the batch belongs to the same original depositor. By contrast, <code>claimForkedEscalationDeposits</code> and the optional <code>migrateVaultWithUnresolvedEscalation</code> cleanup require <code>msg.sender</code> to equal the named vault-owner address. For a direct claim, that vault owner must be the deposit's committed depositor; their authorization releases the deposit once, and settlement pays that same depositor. Cleanup instead acts on that owner's security vault and its unresolved parent dispute-staked REP accounting.</p>
-				<p>External Zoltar forks interrupt the escalation game. This is called continuation. The canonical continuation lifecycle lives in <a href="#migration">Forks and Migration</a>. This section only distinguishes the settlement entry points and their caller permissions.</p>
-				<p>Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</p>
+
+				<a href = "escalation-game.html">read more from here on escalation game works</a>
+
 			</section>
 
 			<section class="paper-section" id="migration">
@@ -615,12 +158,112 @@
 					<h2>7. Forks and Migration</h2>
 					<a class="anchor-link" href="#migration" aria-label="Link to Forks and Migration">#</a>
 				</div>
-				<p>Fork handling spans both layers. Zoltar creates child universes and handles REP splitting. Statoblast separately moves vault state, proportional collateral, and share positions into child pools, while child creation reproduces unresolved escalation state from one canonical snapshot and aggregate backing transfer.</p>
-				<p>The child-pool selector comes from the universe’s fork question, not from Statoblast’s binary market shape. A binary Statoblast pool can therefore spawn child pools keyed to scalar encodings or multi-way categorical outcomes when the universe fork used a different Zoltar question.</p>
-				<p>As described by <a href="./zoltar.html#global-question-scope">Zoltar's global-question rules</a>, the consequence is universe-wide: an eligible Zoltar fork stops or redirects parent flows for every pool using that universe, even when the fork question is unrelated to a pool.</p>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="../reference/security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="../reference/security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="../reference/security-model.html#assumption-a11">A11 practical migration</a>, <a href="../reference/security-model.html#assumption-a05">A05 lineage access value</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="../reference/security-model.html#assumption-a20">A20 chain-data availability</a>.</p>
-				<h3>Migration-powered REP</h3>
-				<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
+				<p>If the Escalation Game fails to reach consensus and enough REP has been committed to satisfy Zoltar's fork threshold, the game triggers a Zoltar fork and the fork resolution process begins.</p>
+				<p>A Statoblast security pool can also enter the fork resolution process when an unrelated Zoltar fork occurs. For example, another Statoblast pool or an entirely different application built on Zoltar may trigger a fork that affects the same universe. In either case, the pool must migrate to the resulting child universes, run truth auction if needed and continue operation there.</p>
+
+				<p> TODO: add a picture of timeline: (split)escalation game fork / unrelated fork -> migration period -> auction period -> operational pool</p>
+
+				<h3> 8 week migration</h3>
+				<p>All vault holders have 8 weeks time to choose which universe they believe is correct by migrating their REP accordingly. REP that did not migrate is burnt. Since the system includes open interest in external assets (ETH), each migrating REP holder also transfers a proportional share of the open interest to the universe they select. E.g. 1% of all REP can move 1% of the total open interest to the universe where that REP is migrated. This open interest belongs to all of the markets in the original universe (both forking and non-forking markets).</p>
+
+				<p>For this mechanism to remain secure, the value of the <b>REP being migrated must exceed the value of the Open Interest it moves</b>. Otherwise, a malicious vault could shift a significant portion of open interest to a universe in which they hold favorable positions.</p>
+
+				<div class="callout">
+					<h4>Example: REP and open-interest migration</h4>
+
+					<p> Bob holds <b>5 REP</b> out of a total supply of <b>100 REP</b>. The prediction market contains one market with <b>10 ETH</b> in outstanding bets, or open interest.</p>
+
+					<p> When the oracle forks into REP<sub>A</sub> and REP<sub>B</sub>, Bob believes universe A is correct and migrates his 5 REP to universe A. As a result:</p>
+
+					<ul>
+						<li>Bob receives <b>5 REP<sub>A</sub></b>.</li>
+						<li> A proportional share of the market's open interest moves to universe A:
+							<div class="equation">
+								<math display="block">
+									<mrow>
+										<mfrac>
+											<mrow>
+												<mn>5</mn>
+												<mspace width="0.2em" />
+												<mtext>REP</mtext>
+											</mrow>
+											<mrow>
+												<mn>100</mn>
+												<mspace width="0.2em" />
+												<mtext>REP</mtext>
+											</mrow>
+										</mfrac>
+
+										<mspace width="0.4em" />
+										<mo>×</mo>
+										<mspace width="0.4em" />
+
+										<mn>10</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+
+										<mspace width="0.4em" />
+										<mo>=</mo>
+										<mspace width="0.4em" />
+
+										<mn>0.5</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+									</mrow>
+								</math>
+							</div>
+						</li>
+					</ul>
+
+					<p> The remaining REP holders control <b>95 REP</b>. They believe universe B is correct and migrate their REP there. As a result: </p>
+					<ul>
+						<li>They receive a total of <b>95 REP<sub>B</sub></b>.</li>
+						<li> The remaining proportional share of open interest moves to universe B:
+							<div class="equation">
+								<math display="block">
+									<mrow>
+										<mfrac>
+											<mrow>
+												<mn>95</mn>
+												<mspace width="0.2em" />
+												<mtext>REP</mtext>
+											</mrow>
+											<mrow>
+												<mn>100</mn>
+												<mspace width="0.2em" />
+												<mtext>REP</mtext>
+											</mrow>
+										</mfrac>
+
+										<mspace width="0.4em" />
+										<mo>×</mo>
+										<mspace width="0.4em" />
+
+										<mn>10</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+
+										<mspace width="0.4em" />
+										<mo>=</mo>
+										<mspace width="0.4em" />
+
+										<mn>9.5</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+									</mrow>
+								</math>
+							</div>
+						</li>
+					</ul>
+
+					<p>After migration:</p>
+					<ul>
+						<li> <b>Universe A</b> holds 5 REP<sub>A</sub> and 0.5 ETH of open interest.</li>
+						<li> <b>Universe B</b> holds 95 REP<sub>B</sub> and 9.5 ETH of open interest. </li>
+					</ul>
+				</div>
+
+<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
 				<div class="equation" id="eq-statoblast-migration-powered-rep">
 					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredAttoRep = vaultTotalAssociatedAttoRep - vaultEscalationGameAttoRep">
 						<mrow><mi>vaultMigrationPoweredAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameAttoRep</mi></mrow>
@@ -630,38 +273,12 @@
 				<p>Migration safety uses only pool-held vault REP backing and is strict for every positive coverage commitment: equality is unsafe. The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so pool-held vault REP backing normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../explanation/liquidations.html#rule">liquidation design</a>. There is no coverage commitment-independent fraction of associated REP that must remain available: escalation capacity depends on the vault's current coverage commitment, REP price, and integer rounding, and a zero-coverage commitment vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.</p>
 				<p>A vault's migrated OI share is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and coverage commitment to one selected child, clears those two parent fields, and separately routes proportional pool-level settlement collateral. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration weight across sibling universes.</p>
 
-				<table>
-					<thead>
-						<tr>
-							<th>State</th>
-							<th>Meaning</th>
-							<th>Typical transition out</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td><code>Operational</code></td>
-							<td>Stored state for normal operation outside the explicit fork lifecycle. A late universe fork can still disable globally guarded calls without changing this enum value.</td>
-							<td>Local resolution or fork handling activation.</td>
-						</tr>
-						<tr>
-							<td><code>PoolForked</code></td>
-							<td>Fork handling was activated for this parent pool, which has stopped normal operation.</td>
-							<td>Child pools begin migration setup.</td>
-						</tr>
-						<tr>
-							<td><code>ForkMigration</code></td>
-							<td>Child pool receives migrated vaults, REP-derived state, and collateral.</td>
-							<td>Migration window ends.</td>
-						</tr>
-						<tr>
-							<td><code>ForkTruthAuction</code></td>
-							<td>Truth-auction decision and finalization phase. The child either sells REP when repair is needed or finalizes immediately without a sale.</td>
-							<td>Auction finalization accounts legitimate routed collateral plus accepted bid ETH and activates the child at that level. It rejects explicit caller contribution ETH.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p><code>SystemState</code> is primarily a fork-and-migration state machine, not a generic question-resolution state machine. A pool finalized before a late, unrelated universe fork can retain <code>SystemState.Operational</code>. Its <code>isOperational</code>-guarded activity still freezes because that modifier separately checks the universe fork time, while finalized share, REP, and eligible escalation-deposit redemption paths that check only the stored state remain callable.</p>
+
+				<h3>1 week Truth Auction</h3>
+
+				<a href = "truth-auctions.html">read more from here on how truth auction is implemented</a>
+
+
 				<figure class="diagram" id="fig-statoblast-fork-state-machine">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">Contract states and conditional transition functions from an operational parent through migration and bounded truth-auction settlement to an operational child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Fork State Machine</span>When fork handling is activated, the parent moves to <code>PoolForked</code>; child pools do migration and optional auction repair. Only a child whose legitimate routed collateral and accepted bid ETH have been accounted returns to operational mode. Finalization rejects explicit contribution ETH, while forced ETH remains unaccounted surplus. A previously finalized pool affected by a late unrelated fork is the separate stored-state case described above.</p>
@@ -1068,96 +685,36 @@
 				</details>
 			</section>
 
-			<section class="paper-section" id="auction">
-				<div class="section-heading">
-					<h2>8. Truth Auction</h2>
-					<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
-				</div>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a01">A01 bidder incentives</a>, <a href="../reference/security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="../reference/security-model.html#assumption-a03">A03 independent demand</a>, <a href="../reference/security-model.html#assumption-a12">A12 efficient REP conversion</a>, <a href="../reference/security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="../reference/security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../reference/security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="../reference/security-model.html#assumption-a20">A20 bid-data availability</a>, <a href="../reference/security-model.html#assumption-a25">A25 safe immutable parameters</a>, and <a href="../reference/security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.</p>
-				<p class="lede">After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap.</p>
-
-				<p>The repair target is the contract’s direct statement of the collateral gap: <code>parentSettlementCollateralAtForkAttoEth</code> minus <code>forkSettlementCollateralReceivedAttoEth</code>, floored at zero. The received counter records actual cumulative-ceiling transfers after the parent’s available-collateral cap, so nominal migrated REP cannot overstate child funding. The auction start gate is tied to the parent pool’s fork timestamp plus the eight-week migration window, not to any child-universe fork time. If migrated REP has reached the pool-auctionable baseline, or if that baseline is zero, the child pool can finalize this phase without running the division path or selling REP. For an own fork that baseline is <code>vaultRepAtForkAttoRep</code>; for an external fork it is <code>auctionableAttoRepAtFork</code>.</p>
-				<p>The REP sale cap is deliberately not just “all remaining REP.” The forker computes the auctionable pool-held REP baseline, subtracts a tiny floor-rounded haircut tied to the REP that already migrated, and gives the auction that maximum inventory. The baseline combines the pool-held REP bucket and unresolved dispute-staked REP. Sold REP is allocated between them proportionally with integer floors; the game applies its allocation as the retention and curve rebase described in <a href="../explanation/truth-auctions.html#escalation-rep-haircut">Dispute-staked REP Participates in Repair</a>.</p>
-				<div class="equation" id="eq-statoblast-auction-rep-sale-cap">
-					<math display="block" aria-label="combined auctionable REP in attoREP equals pool auctionable REP at fork in attoREP plus unresolved dispute-staked REP in attoREP, migrated REP haircut in attoREP equals migrated REP in attoREP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least combined auctionable REP; combined auctionable REP minus one attoREP when the haircut is zero and an escalation game exists; otherwise combined auctionable REP minus migrated REP haircut" data-source="combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + unresolvedDisputeStakedAttoRep; migratedRepHaircutAttoRep = migratedAttoRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxAttoRepBeingSold = migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep ? 0 : migratedRepHaircutAttoRep == 0 and escalationGameExists ? combinedAuctionableAttoRep - 1 : combinedAuctionableAttoRep - migratedRepHaircutAttoRep">
-						<mtable>
-							<mtr>
-								<mtd><mi>combinedAuctionableAttoRep</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd>
-									<mi>poolAuctionableRepAtForkAttoRep</mi>
-									<mo>+</mo>
-									<mi>unresolvedDisputeStakedAttoRep</mi>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>migratedRepHaircutAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mfrac>
-										<mi>migratedAttoRep</mi>
-										<mi>MAX_AUCTION_VAULT_HAIRCUT_DIVISOR</mi>
-									</mfrac>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>maxAttoRepBeingSold</mi>
-								</mtd>
-								<mtd>
-									<mo>=</mo>
-								</mtd>
-								<mtd>
-									<mtable>
-										<mtr>
-											<mtd>
-												<mn>0</mn>
-											</mtd>
-											<mtd>
-												<mtext>if migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep</mtext>
-											</mtd>
-										</mtr>
-										<mtr>
-											<mtd>
-												<mi>combinedAuctionableAttoRep</mi>
-												<mo>-</mo>
-												<mn>1</mn>
-											</mtd>
-											<mtd>
-												<mtext>if migratedRepHaircutAttoRep = 0 and an escalation game exists</mtext>
-											</mtd>
-										</mtr>
-										<mtr>
-											<mtd>
-												<mi>combinedAuctionableAttoRep</mi>
-												<mo>-</mo>
-												<mi>migratedRepHaircutAttoRep</mi>
-											</mtd>
-											<mtd>
-												<mtext>otherwise</mtext>
-											</mtd>
-										</mtr>
-									</mtable>
-								</mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption"><span class="equation-label">Auction REP Sale Cap</span>The truth auction sells from the combined pool and unresolved-dispute-staked REP bucket after the floor-rounded migrated-REP haircut. When a zero haircut would expose the entire combined bucket and an escalation game exists, the cap reserves one attoREP. This makes the game's auction removal strictly smaller than its backing, preserving nonzero aggregate game backing and a defined nonzero retention state.</p>
-				</div>
-				<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="360" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction repairs a child pool by trading part of that child universe’s scarce REP for ETH. The child becomes operational after migration collateral and accepted auction proceeds are accounted, even when weak demand leaves the original target partly unfilled.</p>
+			<section class="paper-section" id="shares">
+				shares stuff
+				<p>Shares can materialize across forks. <code>ShareToken.migrate</code> preserves a parent-universe token id as a persistent entitlement and mints child-universe token ids for selected valid, non-malformed fork outcomes.</p>
+				<figure class="diagram" id="fig-statoblast-share-migration">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
 				</figure>
-				<p>The forker tracks collateral received through migration and the auction separately from the child contract's raw ETH balance. ETH forced into the child does not count toward the repair target. After the deadline, value-free finalization activates the child with migrated collateral plus accepted auction ETH and releases every bid to settlement. Nonzero finalizer ETH is rejected.</p>
-				<p>Auction winners become responsible child-pool vault underwriters only when their claims attach REP backing units and coverage commitment to bidder vaults. Recipient behavior cannot roll back that accounting transition. The <a href="../explanation/truth-auctions.html#zero-migration-full-cap-rep-backing-units">Truth Auction settlement specification</a> owns the exact zero-migration backing-unit conversion, coverage commitment activation, and failed-refund recovery rules.</p>
-				<h3>Clearing and Settlement</h3>
-				<p>The <a href="../explanation/truth-auctions.html#clearing">Truth Auction design</a> owns tick pricing, cap selection, underfunded qualification, and the interactive examples; its <a href="../explanation/truth-auctions.html#settlement">settlement section</a> owns allocation rounding and recovery behavior. The <a href="../reference/security-model.html#assumption-a12">security model</a> separately states efficient REP-to-ETH auction conversion as an explicit assumption.</p>
+				<p>If none of the selected children has received a source entitlement, the first call materializes the full current source balance in each selected child. On a later call, each child receives only <code>current source balance - amount already materialized</code>. If every selected delta is zero, the call reverts. The canonical guarantees are <a href="../reference/invariants.html#fork-10"><code>FORK-10</code></a>, <a href="../reference/invariants.html#share-04"><code>SHARE-04</code></a>, and <a href="../reference/invariants.html#fork-11"><code>FORK-11</code></a>.</p>
+				<p>At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That <code>shareTokenSupplyAttoShares</code> includes materialized ERC-1155 balances and fork-time entitlements that can materialize later. In the healthy case this corresponds to a clean <code>1:1</code> redemption outcome against the economic meaning of a complete-set claim, subject to collateral accounting remaining intact through migration and any required auction repair.</p>
+				<div class="equation" id="eq-statoblast-share-redemption">
+					<math display="block" aria-label="settlement collateral payout in attoETH equals floor of burned winning shares in attoShares times economic claim supply in attoShares divided into settlement collateral in attoETH" data-source="settlementCollateralPayoutAttoEth = ⌊winningSharesBurnedAttoShares \cdot settlementCollateralAttoEth / economicClaimSupplyBeforeBurnAttoShares⌋">
+						<mrow>
+							<mi>settlementCollateralPayoutAttoEth</mi>
+							<mo>=</mo>
+							<mo form="prefix" stretchy="true">⌊</mo>
+							<mfrac>
+								<mrow>
+									<mi>winningSharesBurnedAttoShares</mi>
+									<mo>&#x22C5;</mo>
+									<mi>settlementCollateralAttoEth</mi>
+								</mrow>
+								<mi>economicClaimSupplyBeforeBurnAttoShares</mi>
+							</mfrac>
+							<mo form="postfix" stretchy="true">⌋</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Share Redemption</span>The remaining economic claim supply reserves collateral for both materialized winners and winning fork entitlements that arrive later.</p>
+				</div>
+				<p>The important edge case is fork recovery. If a child pool emerges from migration with incomplete collateral, the truth auction sells REP for ETH so the child pool can restore the collateral base needed for clean redemption. If multiple target outcomes are selected during share migration, the holder’s source entitlement remains and its unmaterialized balance is minted into each selected child.</p>
 			</section>
-
 			<section class="paper-section" id="oracle">
 				<div class="section-heading">
 					<h2>9. REP/ETH Price Oracle</h2>

@@ -1,0 +1,57 @@
+<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
+				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned coverage commitment. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
+<p>Retention follows a piecewise heuristic. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
+
+<p>At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>
+<figure class="diagram" id="fig-statoblast-retention-utilization">
+	<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across fee-eligible coverage commitment utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from roughly 10% at zero utilization to roughly 50% at 80% utilization, then remains flat because the retention rate has reached its minimum.</span></div>
+	<p class="diagram-caption"><span class="figure-label">Piecewise retention formula</span> The 80% rule marks the point where the minimum per-second retention rate begins to apply.</p>
+</figure>
+
+<p>Fee accrual is lazy: state-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault against that index. Fractional amounts remain in explicit remainders until they accumulate into whole attoETH, so callers do not need to iterate over every vault when time advances.</p>
+<p>Fee accrual is time-clamped. The pool extracts collateral into fees only until the question end time while the universe remains unforked; after the universe forks, the fee accumulator is instead clamped to the fork time. Retention-rate updates no-op outside <code>Operational</code> mode or when the recalculated rate is unchanged. While operational, utilization uses vault-assigned, fee-eligible coverage commitment; zero eligible coverage commitment selects the maximum retention rate. Unclaimed auction coverage commitment therefore cannot change the live fee curve.</p>
+<p>A child pool begins a new fee epoch when migration and any truth auction finalize. Only coverage commitment already assigned to a vault enters the fee denominator. Auctioned coverage commitment becomes fee-eligible when the winning bid is claimed, after that vault first checkpoints at the current index. Each delayed claim adds only its newly assigned amount to the live eligible total; it does not reconstruct that total from fork-time migration counters, so intervening coverage commitment changes and liquidations remain intact. Per-vault fractional remainders survive public checkpoints, while whole fees move from the pool reserve into <code>totalClaimableVaultFeesAttoEth</code>; this keeps aggregate claimable fees equal to redeemable vault balances. The <code>totalAccruedFeesAttoEth()</code> view adds those assigned claimable fees to the unallocated reserve when callers need to reconcile all fee-adjusted collateral.</p>
+<p>A fork permanently closes the parent's fee epoch. The pool tracks how much eligible coverage commitment still has not checkpointed the final index. After every eligible vault syncs, any whole reserve attoETH left solely from aggregating individually sub-attoETH vault remainders cannot become redeemable, so it returns to complete-set collateral. Until the last checkpoint, that reserve remains protected by <code>totalAccruedFeesAttoEth()</code>.</p>
+<figure class="diagram" id="fig-statoblast-pool-accounting">
+	<div class="plot-chart" data-plot-chart="fig-statoblast-pool-accounting" data-plot-width="920" data-plot-height="310" role="img" aria-label="Pool accounting conversions"><span class="plot-chart-fallback">REP deposits mint proportional REP backing units, settlement collateral decay increments the fee index, and vault coverage commitments claim fees from that index.</span></div>
+	<p class="diagram-caption"><span class="figure-label">Pool Accounting</span>REP backing units and fee accounting use separate proportional ledgers: REP backing units track vault REP backing, which is not automatically withdrawable REP, while the fee index tracks decayed ETH settlement collateral owed to vaults.</p>
+</figure>
+<div class="equation" id="eq-statoblast-rep-backing-units-conversion">
+	<math display="block" aria-label="REP deposits mint amount times price precision backing units when the backing ledger or pool-held REP balance is empty, otherwise the floor of amount times total backing units divided by pool-held REP; converting backing units to REP returns zero for an empty backing ledger and otherwise floors the proportional conversion" data-source="attoRepToBackingUnits(attoRepAmount) = attoRepAmount * PRICE_PRECISION if totalRepBackingUnits = 0 or totalPoolHeldRepBalanceAttoRep = 0, otherwise \left\lfloor attoRepAmount * totalRepBackingUnits / totalPoolHeldRepBalanceAttoRep \right\rfloor; backingUnitsToAttoRep(repBackingUnits) = 0 if totalRepBackingUnits = 0, otherwise \left\lfloor repBackingUnits * totalPoolHeldRepBalanceAttoRep / totalRepBackingUnits \right\rfloor">
+		<mtable>
+			<mtr
+				><mtd><mi>attoRepToBackingUnits</mi><mo>(</mo><mi>attoRepAmount</mi><mo>)</mo></mtd
+				><mtd><mo>=</mo></mtd
+				><mtd><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mtd
+				><mtd><mtext>if the ledger or pool-held REP balance is empty</mtext></mtd></mtr
+			>
+			<mtr
+				><mtd></mtd><mtd><mo>=</mo></mtd
+				><mtd
+					><mo>&#x230A;</mo
+					><mfrac
+						><mrow><mi>attoRepAmount</mi><mo>&#x22C5;</mo><mi>totalRepBackingUnits</mi></mrow
+						><mi>totalPoolHeldRepBalanceAttoRep</mi></mfrac
+					><mo>&#x230B;</mo></mtd
+				><mtd><mtext>otherwise</mtext></mtd></mtr
+			>
+			<mtr
+				><mtd><mi>backingUnitsToAttoRep</mi><mo>(</mo><mi>repBackingUnits</mi><mo>)</mo></mtd
+				><mtd><mo>=</mo></mtd
+				><mtd><mn>0</mn></mtd
+				><mtd><mtext>if the backing ledger is empty</mtext></mtd></mtr
+			>
+			<mtr
+				><mtd></mtd><mtd><mo>=</mo></mtd
+				><mtd
+					><mo>&#x230A;</mo
+					><mfrac
+						><mrow><mi>repBackingUnits</mi><mo>&#x22C5;</mo><mi>totalPoolHeldRepBalanceAttoRep</mi></mrow
+						><mi>totalRepBackingUnits</mi></mfrac
+					><mo>&#x230B;</mo></mtd
+				><mtd><mtext>otherwise</mtext></mtd></mtr
+			>
+		</mtable>
+	</math>
+	<p class="equation-caption"><span class="equation-label">REP Backing Unit Conversion</span>The bootstrap branch establishes <code>PRICE_PRECISION</code> backing units per attoREP. Once both totals are nonzero, each conversion floors integer division exactly as the contract does.</p>
+</div>
