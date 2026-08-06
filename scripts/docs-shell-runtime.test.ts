@@ -3,7 +3,7 @@ import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.t
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 
-async function loadShell(url = 'http://localhost/docs/tutorials/first-market.html', viewportWidth = 1280) {
+async function loadShell(url = 'http://localhost/docs/how-to/build-event-indexer.html', viewportWidth = 1280) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
@@ -48,9 +48,9 @@ test('documentation shell provides native Diátaxis navigation without an iframe
 		expect(document.querySelector('iframe')).toBeNull()
 		expect(document.querySelector('.docs-topbar')).not.toBeNull()
 		expect(document.querySelector('.docs-topnav')).toBeNull()
-		expect(document.querySelector('.docs-navigation-list a[aria-current="page"]')?.textContent).toBe('Explore a seeded market and security pool')
-		expect(document.querySelector('.docs-type-badge')?.textContent).toBe('Tutorials')
-		expect(document.querySelector('.docs-outline-list a')?.getAttribute('href')).toBe('#before-you-start')
+		expect(document.querySelector('.docs-navigation-list a[aria-current="page"]')?.textContent).toBe('Build a reorg-safe event indexer')
+		expect(document.querySelector('.docs-type-badge')?.textContent).toBe('How-to guides')
+		expect(document.querySelector('.docs-outline-list a')?.getAttribute('href')).toBe('#prerequisites')
 		expect(document.querySelector('.docs-mobile-outline')).not.toBeNull()
 		expect(document.querySelector('.docs-search-icon')?.textContent).toBe('⌕')
 		expect(document.querySelector('.docs-search-button kbd')?.textContent).toBe('Ctrl/⌘ K')
@@ -73,7 +73,7 @@ test('documentation landing keeps global navigation compact and omits a redundan
 })
 
 test('documentation search loads on demand, normalizes Unicode, and links to the best matching section', async () => {
-	const shell = await loadShell()
+	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html')
 	try {
 		const searchButton = document.querySelector<HTMLButtonElement>('.docs-search-button')
 		searchButton?.click()
@@ -93,19 +93,21 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 
 		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
 		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
-		const keywords: unknown = Reflect.get(searchData[0], 'keywords')
+		const searchEntry = searchData.find(entry => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'path') === 'how-to/build-event-indexer.html')
+		if (typeof searchEntry !== 'object' || searchEntry === null) throw new Error('Search fixture entry is missing')
+		const keywords: unknown = Reflect.get(searchEntry, 'keywords')
 		if (!Array.isArray(keywords)) throw new Error('Search fixture keywords are missing')
 		keywords.push('Diátaxis')
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Explore a seeded market and security pool')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Build a reorg-safe event indexer')
 	} finally {
 		shell.cleanup()
 	}
 })
 
 test('documentation search failure stays actionable and retries the lazy request', async () => {
-	const shell = await loadShell()
+	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html')
 	try {
 		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
 		const failedScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
@@ -148,7 +150,7 @@ test('documentation search failure stays actionable and retries the lazy request
 })
 
 test('mobile menu isolates focus while open and restores desktop navigation after resize', async () => {
-	const shell = await loadShell('http://localhost/docs/tutorials/first-market.html', 390)
+	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html', 390)
 	try {
 		const button = document.querySelector<HTMLButtonElement>('.docs-icon-button')
 		const left = document.querySelector<HTMLElement>('.docs-left')
