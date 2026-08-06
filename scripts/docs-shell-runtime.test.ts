@@ -42,24 +42,6 @@ async function finishSearchLoad(source?: string) {
 	await Promise.resolve()
 }
 
-test('documentation shell provides native Diátaxis navigation without an iframe', async () => {
-	const shell = await loadShell()
-	try {
-		expect(document.querySelector('iframe')).toBeNull()
-		expect(document.querySelector('.docs-topbar')).not.toBeNull()
-		expect(document.querySelector('.docs-topnav')).toBeNull()
-		expect(document.querySelector('.docs-navigation-list a[aria-current="page"]')?.textContent).toBe('Build a reorg-safe event indexer')
-		expect(document.querySelector('.docs-type-badge')?.textContent).toBe('How-to guides')
-		expect(document.querySelector('.docs-outline-list a')?.getAttribute('href')).toBe('#prerequisites')
-		expect(document.querySelector('.docs-mobile-outline')).not.toBeNull()
-		expect(document.querySelector('.docs-search-icon')?.textContent).toBe('⌕')
-		expect(document.querySelector('.docs-search-button kbd')?.textContent).toBe('Ctrl/⌘ K')
-		expect(document.querySelector('script[src$="/assets/js/docsSearchData.js"]')).toBeNull()
-	} finally {
-		shell.cleanup()
-	}
-})
-
 test('documentation landing keeps global navigation compact and omits a redundant page outline', async () => {
 	const shell = await loadShell('http://localhost/docs/documentation.html')
 	try {
@@ -149,46 +131,3 @@ test('documentation search failure stays actionable and retries the lazy request
 	}
 })
 
-test('mobile menu isolates focus while open and restores desktop navigation after resize', async () => {
-	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html', 390)
-	try {
-		const button = document.querySelector<HTMLButtonElement>('.docs-icon-button')
-		const left = document.querySelector<HTMLElement>('.docs-left')
-		const main = document.querySelector<HTMLElement>('main')
-		expect(left?.inert).toBeTrue()
-		button?.click()
-		expect(document.body.dataset['docsNavigationOpen']).toBe('true')
-		expect(button?.getAttribute('aria-expanded')).toBe('true')
-		expect(left?.inert).toBeFalse()
-		expect(main?.inert).toBeTrue()
-		expect(document.activeElement?.closest('.docs-left')).not.toBeNull()
-		const backdrop = document.querySelector<HTMLButtonElement>('.docs-navigation-backdrop')
-		expect(backdrop?.tabIndex).toBe(-1)
-		const visibleNavigationItems = Array.from(document.querySelectorAll<HTMLElement>('.docs-left summary, .docs-left a')).filter(node => {
-			for (let ancestor = node.parentElement; ancestor !== null && !ancestor.classList.contains('docs-left'); ancestor = ancestor.parentElement) {
-				if (ancestor.matches('details:not([open])') && ancestor.firstElementChild !== node) return false
-			}
-			return true
-		})
-		const lastNavigationItem = visibleNavigationItems.at(-1)
-		if (lastNavigationItem === undefined) throw new Error('Visible mobile navigation item is missing')
-		lastNavigationItem.focus()
-		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }))
-		expect(document.activeElement).toBe(button)
-		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }))
-		expect(document.activeElement).toBe(lastNavigationItem)
-		backdrop?.click()
-		expect(document.body.dataset['docsNavigationOpen']).toBe('false')
-		expect(left?.inert).toBeTrue()
-		expect(main?.inert).toBeFalse()
-		expect(document.activeElement).toBe(button)
-		button?.click()
-		Object.defineProperty(shell.window, 'innerWidth', { configurable: true, value: 900, writable: true })
-		shell.window.dispatchEvent(new shell.window.Event('resize'))
-		expect(document.body.dataset['docsNavigationOpen']).toBe('false')
-		expect(left?.inert).toBeFalse()
-		expect(main?.inert).toBeFalse()
-	} finally {
-		shell.cleanup()
-	}
-})

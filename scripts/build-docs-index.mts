@@ -9,7 +9,7 @@ const docsDirectory = path.join(repositoryRoot, 'docs')
 const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')
 const searchDataOutputPath = path.join(docsDirectory, 'assets/js/docsSearchData.js')
-const categoryDirectories = ['tutorials', 'how-to', 'reference', 'explanation'] as const
+const categoryDirectories = ['how-to', 'reference', 'explanation'] as const
 
 type DocsSection = {
 	id: string
@@ -41,7 +41,7 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 	assert(Array.isArray(candidate.sections) && candidate.sections.length === 4, 'docs manifest must declare the four Diátaxis sections')
 	assert(Array.isArray(candidate.pages) && candidate.pages.length > 0, 'docs manifest must declare pages')
 	const sectionIds = new Set<string>(candidate.sections.map(section => section.id))
-	assert.deepEqual(sectionIds, new Set<string>(categoryDirectories), 'docs manifest sections must be tutorials, how-to, reference, and explanation')
+	assert.deepEqual(sectionIds, new Set<string>(categoryDirectories), 'docs manifest sections must be how-to, reference, and explanation')
 	const paths = new Set<string>()
 	for (const page of candidate.pages) {
 		assert(page.path.endsWith('.html'), `docs manifest page ${page.path} must be an HTML route`)
@@ -78,7 +78,6 @@ const landingWindow = new Window({ url: 'https://docs.statoblast.test/documentat
 landingWindow.document.write(landingSource)
 landingWindow.document.close()
 for (const [sectionId, landingSectionId] of [
-	['tutorials', 'tutorials'],
 	['how-to', 'how-to-guides'],
 	['reference', 'reference'],
 	['explanation', 'explanation'],
