@@ -216,7 +216,7 @@
 
 			<section id="bounded-execution">
 				<h2>Bounded Execution</h2>
-				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../explanation/escalation-game.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
+				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="./escalation-game.html#payouts">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
 				<p>Settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas. They consume committed leaves with replay protection and do not create owner registries.</p>
 			</section>
 

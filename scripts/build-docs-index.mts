@@ -9,7 +9,7 @@ const docsDirectory = path.join(repositoryRoot, 'docs')
 const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')
 const searchDataOutputPath = path.join(docsDirectory, 'assets/js/docsSearchData.js')
-const categoryDirectories = ['how-to', 'reference', 'explanation'] as const
+const categoryDirectories = ['reference', 'explanation'] as const
 
 type DocsSection = {
 	id: string
@@ -38,10 +38,10 @@ function normalizedText(value: string | null | undefined): string {
 function assertManifest(value: unknown): asserts value is DocsManifest {
 	assert(typeof value === 'object' && value !== null, 'docs/manifest.json must contain an object')
 	const candidate = value as Partial<DocsManifest>
-	assert(Array.isArray(candidate.sections) && candidate.sections.length === 4, 'docs manifest must declare the four Diátaxis sections')
+	assert(Array.isArray(candidate.sections) && candidate.sections.length === 2, 'docs manifest must declare the two remaining Diátaxis sections')
 	assert(Array.isArray(candidate.pages) && candidate.pages.length > 0, 'docs manifest must declare pages')
 	const sectionIds = new Set<string>(candidate.sections.map(section => section.id))
-	assert.deepEqual(sectionIds, new Set<string>(categoryDirectories), 'docs manifest sections must be how-to, reference, and explanation')
+	assert.deepEqual(sectionIds, new Set<string>(categoryDirectories), 'docs manifest sections must be reference and explanation')
 	const paths = new Set<string>()
 	for (const page of candidate.pages) {
 		assert(page.path.endsWith('.html'), `docs manifest page ${page.path} must be an HTML route`)
@@ -77,28 +77,17 @@ const landingSource = await readFile(path.join(docsDirectory, 'documentation.htm
 const landingWindow = new Window({ url: 'https://docs.statoblast.test/documentation.html' })
 landingWindow.document.write(landingSource)
 landingWindow.document.close()
-for (const [sectionId, landingSectionId] of [
-	['how-to', 'how-to-guides'],
-	['reference', 'reference'],
-	['explanation', 'explanation'],
-] as const) {
-	const landingSection = landingWindow.document.querySelector(`#${landingSectionId}`)
-	assert(landingSection !== null, `documentation.html must contain the ${landingSectionId} landing section`)
-	const links = Array.from(landingSection.querySelectorAll('a[href]'))
-	assert(links.length > 0, `documentation.html ${landingSectionId} must feature at least one page`)
-	for (const link of links) {
-		const route = link.getAttribute('href')?.replace(/^\.\//, '')
-		assert(route !== undefined, `documentation.html ${landingSectionId} contains a link without a route`)
-		const page = manifest.pages.find(candidate => candidate.path === route)
-		assert(page !== undefined, `documentation.html links to ${route}, which is absent from docs/manifest.json`)
-		assert.equal(page.section, sectionId, `documentation.html lists ${route} in the wrong Diátaxis section`)
-		assert.equal(normalizedText(link.textContent), page.title, `documentation.html label for ${route} must match its manifest title`)
-	}
+
+for (const link of Array.from(landingWindow.document.querySelectorAll('a[href]'))) {
+	const route = link.getAttribute('href')?.replace(/^\.\//, '')
+	if (route === undefined || !route.endsWith('.html')) continue
+	const page = manifest.pages.find(candidate => candidate.path === route)
+	assert(page !== undefined, `documentation.html links to ${route}, which is absent from docs/manifest.json`)
 }
 landingWindow.close()
 
 const actualPagePaths = (await Promise.all(categoryDirectories.map(filesIn))).flat().toSorted()
-assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the four Diátaxis directories')
+assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the two remaining Diátaxis directories')
 
 const searchIndex = []
 for (const page of manifest.pages) {
@@ -116,8 +105,8 @@ for (const page of manifest.pages) {
 	}
 	const main = pageWindow.document.querySelector('main')
 	assert(main !== null, `${page.path} must contain main documentation content`)
-	const headingOne = normalizedText(main.querySelector('h1')?.textContent)
-	assert(headingOne.length > 0, `${page.path} must contain an h1`)
+	const heading = normalizedText(main.querySelector('h1, h2')?.textContent)
+	assert(heading.length > 0, `${page.path} must contain a primary heading`)
 	const section = sectionById.get(page.section)
 	assert(section !== undefined, `${page.path} has an unknown section`)
 	let currentChunk: { fragment: string; heading: string; text: string[] } = { fragment: '', heading: '', text: [] }

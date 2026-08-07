@@ -1,1 +1,0 @@
-window.protocolTermDefinitions = Object.freeze({})

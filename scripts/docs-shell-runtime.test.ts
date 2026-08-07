@@ -3,7 +3,7 @@ import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.t
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 
-async function loadShell(url = 'http://localhost/docs/how-to/build-event-indexer.html', viewportWidth = 1280) {
+async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
@@ -55,7 +55,7 @@ test('documentation landing keeps global navigation compact and omits a redundan
 })
 
 test('documentation search loads on demand, normalizes Unicode, and links to the best matching section', async () => {
-	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html')
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
 		const searchButton = document.querySelector<HTMLButtonElement>('.docs-search-button')
 		searchButton?.click()
@@ -66,30 +66,30 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		await finishSearchLoad()
 		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
 		if (input === null) throw new Error('Search input is missing')
-		input.value = 'noncanonical replacement branch'
+		input.value = 'OpenOracle integration'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Build a reorg-safe event indexer')
-		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/how-to/build-event-indexer.html#handle-reorganizations')
-		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toMatch(/^Handle reorganizations —/)
-		expect(document.querySelector('.docs-search-status')?.textContent).toBe('1 result')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
+		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/explanation/open-oracle.html')
+		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toBe('REP/ETH price oracle for Statoblast.')
+		expect(document.querySelector('.docs-search-status')?.textContent).toBe('5 results')
 
 		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
 		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
-		const searchEntry = searchData.find(entry => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'path') === 'how-to/build-event-indexer.html')
+		const searchEntry = searchData.find(entry => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'path') === 'explanation/open-oracle.html')
 		if (typeof searchEntry !== 'object' || searchEntry === null) throw new Error('Search fixture entry is missing')
 		const keywords: unknown = Reflect.get(searchEntry, 'keywords')
 		if (!Array.isArray(keywords)) throw new Error('Search fixture keywords are missing')
 		keywords.push('Diátaxis')
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Build a reorg-safe event indexer')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
 	} finally {
 		shell.cleanup()
 	}
 })
 
 test('documentation search failure stays actionable and retries the lazy request', async () => {
-	const shell = await loadShell('http://localhost/docs/how-to/build-event-indexer.html')
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
 		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
 		const failedScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
@@ -130,4 +130,3 @@ test('documentation search failure stays actionable and retries the lazy request
 		shell.cleanup()
 	}
 })
-

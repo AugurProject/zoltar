@@ -1,11 +1,6 @@
 {
 	"sections": [
 		{
-			"id": "how-to",
-			"title": "How-to guides",
-			"description": "Complete a specific operational or integration task."
-		},
-		{
 			"id": "reference",
 			"title": "Reference",
 			"description": "Look up authoritative contracts, events, invariants, and formats."
@@ -18,108 +13,12 @@
 	],
 	"pages": [
 		{
-			"path": "how-to/prepare-release.html",
-			"title": "Prepare an immutable release",
-			"summary": "Produce and verify the release evidence required before an immutable deployment.",
-			"section": "how-to",
-			"topic": "Deployment",
-			"keywords": ["release", "deployment", "provenance", "immutable"]
-		},
-		{
-			"path": "how-to/verify-deployment.html",
-			"title": "Verify a protocol deployment",
-			"summary": "Check addresses, runtime code, wiring, and deployment progress before use.",
-			"section": "how-to",
-			"topic": "Deployment",
-			"keywords": ["deployment", "bytecode", "addresses", "mask"]
-		},
-		{
-			"path": "how-to/operate-security-pool.html",
-			"title": "Operate a security pool",
-			"summary": "Apply pool guardrails when depositing, withdrawing, and maintaining backing.",
-			"section": "how-to",
-			"topic": "Operations",
-			"keywords": ["security pool", "vault", "withdrawal", "backing"]
-		},
-		{
-			"path": "how-to/liquidate-vault.html",
-			"title": "Liquidate an unsafe vault",
-			"summary": "Stage, validate, and execute a funded or bad-debt liquidation safely.",
-			"section": "how-to",
-			"topic": "Operations",
-			"keywords": ["liquidation", "vault", "bad debt", "REP"]
-		},
-		{
-			"path": "how-to/resolve-escalation.html",
-			"title": "Advance an escalation game",
-			"summary": "Move an escalation game through deposits, settlement, or fork continuation.",
-			"section": "how-to",
-			"topic": "Resolution",
-			"keywords": ["escalation", "deposit", "settlement", "fork"]
-		},
-		{
-			"path": "how-to/migrate-fork.html",
-			"title": "Migrate through a fork",
-			"summary": "Select a child universe and migrate vault, share, and escalation claims.",
-			"section": "how-to",
-			"topic": "Resolution",
-			"keywords": ["fork", "migration", "child pool", "claims"]
-		},
-		{
-			"path": "how-to/run-truth-auction.html",
-			"title": "Run a truth auction",
-			"summary": "Start, monitor, clear, and finalize a child-pool repair auction.",
-			"section": "how-to",
-			"topic": "Resolution",
-			"keywords": ["truth auction", "bids", "clearing", "repair"]
-		},
-		{
-			"path": "how-to/recover-oracle-operation.html",
-			"title": "Recover an oracle-backed operation",
-			"summary": "Diagnose and recover a staged operation after settlement or callback rejection.",
-			"section": "how-to",
-			"topic": "Operations",
-			"keywords": ["OpenOracle", "recovery", "callback", "staged operation"]
-		},
-		{
-			"path": "how-to/stage-oracle-operation.html",
-			"title": "Stage an oracle-backed operation",
-			"summary": "Preflight, fund, stage, and verify a price-sensitive operation before handing failures to recovery.",
-			"section": "how-to",
-			"topic": "Operations",
-			"keywords": ["OpenOracle", "staging", "price", "recovery"]
-		},
-		{
-			"path": "how-to/build-event-indexer.html",
-			"title": "Build a reorg-safe event indexer",
-			"summary": "Discover emitters, replay canonical logs, checkpoint state, and handle reorgs.",
-			"section": "how-to",
-			"topic": "Integration",
-			"keywords": ["events", "indexer", "reorg", "replay"]
-		},
-		{
 			"path": "reference/contracts.html",
 			"title": "Contract interactions",
 			"summary": "State-changing entrypoints, callers, prerequisites, effects, and events.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["ABI", "transactions", "callers", "events"]
-		},
-		{
-			"path": "reference/event-stream.html",
-			"title": "Event stream",
-			"summary": "Canonical schemas, reducers, ordering rules, and rollback semantics.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["events", "reducers", "schema", "rollback"]
-		},
-		{
-			"path": "reference/open-oracle-coordinator.html",
-			"title": "OpenOracle coordinator reference",
-			"summary": "Coordinator states, events, functions, and structured schema source.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["OpenOracle", "coordinator", "events", "state machine"]
 		},
 		{
 			"path": "reference/invariants.html",
@@ -202,6 +101,14 @@
 			"keywords": ["liquidation", "incentives", "solvency", "bad debt"]
 		},
 		{
+			"path": "explanation/fees.html",
+			"title": "Protocol fees",
+			"summary": "Understand fee accounting across markets, vaults, and protocol operations.",
+			"section": "explanation",
+			"topic": "Economics",
+			"keywords": ["fees", "markets", "vaults", "accounting"]
+		},
+		{
 			"path": "explanation/truth-auctions.html",
 			"title": "Truth auction economics",
 			"summary": "Auction clearing, settlement, and weak-demand loss allocation.",
@@ -216,22 +123,6 @@
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
-		},
-		{
-			"path": "explanation/open-oracle-design.html",
-			"title": "Why Statoblast uses OpenOracle",
-			"summary": "Understand the economic purpose, security intuition, and boundaries of OpenOracle.",
-			"section": "explanation",
-			"topic": "Architecture",
-			"keywords": ["OpenOracle", "security", "price", "architecture"]
-		},
-		{
-			"path": "explanation/open-oracle-appendix.html",
-			"title": "OpenOracle design appendix",
-			"summary": "Detailed mathematical, security, and deployment-specific OpenOracle design record.",
-			"section": "explanation",
-			"topic": "Architecture",
-			"keywords": ["OpenOracle", "security", "parameters", "design record"]
 		}
 	]
 }

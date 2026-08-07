@@ -20,7 +20,7 @@
 			<section class="paper-section" id="abstract">
 				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
 
-				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href = 'escalation-game.html'>escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
+				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href = './escalation-game.html'>escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
 
 				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
 
@@ -49,7 +49,7 @@
 					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
 					<li>In the unfortunate case where the the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.
 					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder in each pool decides which market outcome is correct, migrate their REP there a long with an equal share of ETH market collateral.</li>
-					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href = 'truth-auction.html'>Truth Auction</a> to repair that collateral gap.</li>
+					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href = 'truth-auctions.html'>Truth Auction</a> to repair that collateral gap.</li>
 					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
 				</ol>
 
@@ -150,7 +150,7 @@
 
 				<div class="callout"><strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded. The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.</div>
 
-				<a href = "escalation-game.html">read more from here on escalation game works</a>
+				<a href = "./escalation-game.html">read more from here on escalation game works</a>
 
 			</section>
 
@@ -318,7 +318,7 @@
 				</div>
 
 				<p> Statoblast requires REP/ETH price to be able to be able to know it security status. Its utmost importance for security pool to have more REP locked into it than it has open interest. To make this happen, Statoblast needs access to REP/ETH price feed.</p>
-				<p> Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a> please read more about how that is integrated here <a href="../explanation/open-oracle-appendix.html#statoblast-integration">OpenOracle integration.</a></p>
+				<p> Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a> please read more about how that is integrated here <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration.</a></p>
 
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow"><span class="plot-chart-fallback">A solvency-sensitive operation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
@@ -415,156 +415,9 @@
 				}
 				update(context);
 			};
-			bindExample("escalation-deposit-example", (context) => {
-				const repeatDeposit = context.read("depositLifecycle") === 1;
-				for (const balanceName of ["invalidBalance", "yesBalance", "noBalance"]) {
-					const balanceInput = context.inputs[balanceName];
-					if (balanceInput !== undefined) {
-						balanceInput.disabled = !repeatDeposit;
-						if (!repeatDeposit) {
-							balanceInput.value = "0";
-						}
-					}
-				}
-				const invalidBalance = context.read("invalidBalance");
-				const yesBalance = context.read("yesBalance");
-				const noBalance = context.read("noBalance");
-				const proposedDeposit = context.read("proposedDeposit");
-				const enteredStartBond = context.read("startBond");
-				const threshold = Math.max(context.read("nonDecisionThreshold"), 1);
-				const enteredStartBondAttoRep = repToAttoRep(enteredStartBond);
-				const thresholdAttoRep = repToAttoRep(threshold);
-				const startBondNormalized = !repeatDeposit && enteredStartBondAttoRep >= thresholdAttoRep;
-				const effectiveStartBondAttoRep = startBondNormalized ? thresholdAttoRep - 1n : enteredStartBondAttoRep;
-				const invalidStoredParameters = repeatDeposit && (enteredStartBondAttoRep <= 0n || enteredStartBondAttoRep >= thresholdAttoRep);
-				const nonDecisionReached = [invalidBalance, yesBalance, noBalance].filter((balance) => repToAttoRep(balance) >= thresholdAttoRep).length >= 2;
-				const proposedDepositAttoRep = repToAttoRep(proposedDeposit);
-				const room = Math.max(0, threshold - noBalance);
-				const clipped = Math.min(proposedDeposit, room);
-				const maxBefore = Math.max(invalidBalance, yesBalance, noBalance);
-				const outcomeFull = noBalance >= threshold;
-				const tieAdjusted = noBalance + clipped === maxBefore && noBalance + clipped < threshold;
-				const clippedAttoRep = repToAttoRep(clipped);
-				const acceptedPreviewAttoRep = tieAdjusted && clippedAttoRep > 0n ? clippedAttoRep - 1n : clippedAttoRep;
-				const noAfterPreviewAttoRep = repToAttoRep(noBalance) + acceptedPreviewAttoRep;
-				const previewReverts = invalidStoredParameters || nonDecisionReached || outcomeFull || proposedDepositAttoRep < effectiveStartBondAttoRep || (acceptedPreviewAttoRep < effectiveStartBondAttoRep && noAfterPreviewAttoRep !== thresholdAttoRep);
-				const acceptedAttoRep = previewReverts ? 0n : acceptedPreviewAttoRep;
-				const accepted = attoRepToRep(acceptedAttoRep);
-				const noAfterAttoRep = repToAttoRep(noBalance) + acceptedAttoRep;
-				const noAfter = attoRepToRep(noAfterAttoRep);
-				const scale = 220 / threshold;
-				context.writeValue("depositLifecycle", repeatDeposit ? "Repeat deposit (existing game)" : "First deposit (factory creates game)");
-				context.writeText("startBondLabel", repeatDeposit ? "Stored game start bond" : "Configured start bond");
-				context.writeText("thresholdInputLabel", repeatDeposit ? "Stored game non-decision threshold" : "Live non-decision threshold");
-				context.writeText("effectiveStartBondLabel", repeatDeposit ? "Stored start bond used" : "Effective start bond");
-				context.writeValue("invalidBalance", formatRep(invalidBalance));
-				context.writeValue("yesBalance", formatRep(yesBalance));
-				context.writeValue("noBalance", formatRep(noBalance));
-				context.writeValue("proposedDeposit", formatRep(proposedDeposit));
-				context.writeValue("startBond", formatRep(enteredStartBond));
-				context.writeValue("nonDecisionThreshold", formatRep(threshold));
-				context.setRectWidth("invalidBefore", Math.min(invalidBalance * scale, 220));
-				context.setRectWidth("yesBefore", Math.min(yesBalance * scale, 220));
-				context.setRectWidth("noBefore", Math.min(noBalance * scale, 220));
-				context.setRectWidth("invalidAfter", Math.min(invalidBalance * scale, 220));
-				context.setRectWidth("yesAfter", Math.min(yesBalance * scale, 220));
-				context.setRectWidth("noAfter", Math.min(noAfter * scale, 220));
-				context.writeText("thresholdText", `threshold ${formatRep(threshold)}`);
-				context.write("remainingRoom", formatRep(room));
-				context.write("effectiveStartBond", startBondNormalized ? formatRepFromAttoRep(effectiveStartBondAttoRep, 18) : formatRep(enteredStartBond));
-				const acceptedAmountText = tieAdjusted && !previewReverts ? formatRepFromAttoRep(acceptedAttoRep, 18) : formatRep(accepted);
-				context.write("acceptedAmount", previewReverts ? "preview reverts" : acceptedAmountText);
-				let adjustment = "accepted as proposed";
-				if (proposedDeposit > room) {
-					adjustment = "clipped to threshold";
-				} else if (tieAdjusted) {
-					adjustment = "reduced by 0.000000000000000001 REP (1 attoREP) to avoid tie";
-				}
-				if (previewReverts) {
-					adjustment = "Not evaluated";
-				}
-				context.write("depositAdjustment", adjustment);
-				let depositCondition = tieAdjusted ? `No ends at ${formatRepFromAttoRep(noAfterAttoRep, 18)}` : `No ends at ${formatRep(noAfter)}`;
-				if (invalidStoredParameters) {
-					depositCondition = "operation reverts: existing game parameters are invalid";
-				} else if (nonDecisionReached) {
-					depositCondition = "operation reverts: non-decision already reached";
-				} else if (outcomeFull) {
-					depositCondition = "operation reverts because No is full";
-				} else if (proposedDepositAttoRep < effectiveStartBondAttoRep) {
-					depositCondition = "operation reverts: proposed deposit is below start bond";
-				} else if (previewReverts) {
-					depositCondition = "operation reverts: accepted deposit is below start bond";
-				} else if (noAfter >= threshold) {
-					depositCondition = "No reaches threshold";
-				}
-				context.write("depositCondition", depositCondition);
-			});
-			bindExample("resolution-edge-example", (context) => {
-				const invalidBalance = context.read("invalidBalance");
-				const yesBalance = context.read("yesBalance");
-				const noBalance = context.read("noBalance");
-				const runningCost = context.read("runningCost");
-				context.writeValue("invalidBalance", formatRep(invalidBalance));
-				context.writeValue("yesBalance", formatRep(yesBalance));
-				context.writeValue("noBalance", formatRep(noBalance));
-				context.writeValue("runningCost", formatRep(runningCost));
-				const balances = [invalidBalance, yesBalance, noBalance];
-				const atCost = balances.filter((balance) => balance >= runningCost).length;
-				const allZero = balances.every((balance) => balance === 0);
-				const maxBalance = Math.max(...balances);
-				const tiedMaximumCount = balances.filter((balance) => balance === maxBalance).length;
-				const hasSyntheticTiedLeader = maxBalance > 0 && tiedMaximumCount >= 2 && atCost < 2;
-				let result = "None";
-				let reason = "no outcome has a strict lead, so the helper keeps the game unresolved";
-				if (atCost >= 2) {
-					result = "None";
-					reason = "two or more outcomes still contest the cost";
-				} else if (allZero) {
-					result = "Invalid";
-					reason = "empty game after cost is non-zero";
-				} else if (hasSyntheticTiedLeader) {
-					result = "None";
-					reason = "synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state";
-				} else if (invalidBalance > yesBalance && invalidBalance > noBalance) {
-					result = "Invalid";
-					reason = "Invalid has a strict lead";
-				} else if (yesBalance > invalidBalance && yesBalance > noBalance) {
-					result = "Yes";
-					reason = "Yes has a strict lead";
-				} else if (noBalance > invalidBalance && noBalance > yesBalance) {
-					result = "No";
-					reason = "No has a strict lead";
-				}
-				const resolutionScale = 520 / Math.max(invalidBalance, yesBalance, noBalance, runningCost, 1);
-				context.setRectWidth("resolutionInvalid", invalidBalance * resolutionScale);
-				context.setRectWidth("resolutionYes", yesBalance * resolutionScale);
-				context.setRectWidth("resolutionNo", noBalance * resolutionScale);
-				context.writeText("resolutionCostMarker", `cost ${formatRep(runningCost)}`);
-				context.write("outcomesAtCost", String(atCost));
-				context.write("resolutionResult", result);
-				context.write("resolutionReason", reason);
-			});
-			bindExample("collateral-repair-example", (context) => {
-				const parentSettlementCollateral = context.read("parentSettlementCollateral");
-				const forkSettlementCollateralReceived = Math.min(context.read("forkSettlementCollateralReceived"), parentSettlementCollateral);
-				const auctionRaised = context.read("auctionRaised");
-				const initialShortfall = Math.max(0, parentSettlementCollateral - forkSettlementCollateralReceived);
-				const repairEth = Math.min(auctionRaised, initialShortfall);
-				const remainingShortfall = Math.max(0, initialShortfall - repairEth);
-				const scale = 600 / Math.max(parentSettlementCollateral, 1);
-				context.writeValue("parentSettlementCollateral", formatEth(parentSettlementCollateral));
-				context.writeValue("forkSettlementCollateralReceived", formatEth(forkSettlementCollateralReceived));
-				context.writeValue("auctionRaised", formatEth(auctionRaised));
-				context.setRectWidth("migratedCollateral", Math.min(forkSettlementCollateralReceived * scale, 600));
-				context.setRectX("auctionRepair", 80 + Math.min(forkSettlementCollateralReceived * scale, 600));
-				context.setRectWidth("auctionRepair", Math.min(repairEth * scale, Math.max(0, 600 - forkSettlementCollateralReceived * scale)));
-				context.writeText("repairTarget", `target ${formatEth(parentSettlementCollateral)}`);
-				context.write("routedCollateral", formatEth(forkSettlementCollateralReceived));
-				context.write("initialShortfall", formatEth(initialShortfall));
-				context.write("remainingShortfall", formatEth(remainingShortfall));
-				context.write("repairStatus", remainingShortfall === 0 ? "full target raised; activates" : "partial target raised; activates without donation");
-			});
+
+
+
 			const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'));
 			const sectionLinks = navLinks
 				.map((link) => {
@@ -622,8 +475,6 @@
 				window.addEventListener("hashchange", scheduleCurrentSectionUpdate);
 			}
 		</script>
-		<script src="../assets/js/protocolTerms.js"></script>
-		<script src="../assets/js/termTooltips.js"></script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>
