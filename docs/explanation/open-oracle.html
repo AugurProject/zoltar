@@ -193,29 +193,15 @@
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
+				<p> Open Oracless correctness depends on the profitablity to correct the price via profitable arbitrage. Open Oracle reports correct price if it always profitable to correct wrong price. Its thus important to be able to create Open Oracle queries that results that are profitable to correct. The coordinator sizes the WETH position so that correcting a price hat is wrong by at least the configured target error is designed to pay the modeled dispute cost, after Open Oracle fees, with the configured security multiplier. </p>
+
+				<p> In the conservative correction direction, the true REP/ETH price is <code>(1 + targetError)</code> times the reported price. Before gas, correcting that report releases the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position. The sizing formula therefore multiplies the modeled gas cost of one dispute by the security multiplier and divides by that correction-profit fraction. </p>
 
 				<p>
-					OpenOracle does not prove that a reported REP/ETH price is externally correct.
-					Instead, the coordinator sizes the WETH position so that correcting a price
-					that is wrong by at least the configured target error is designed to pay the
-					modeled dispute cost, after OpenOracle fees, with the configured security
-					multiplier.
+					The coordinator sizes the initial WETH position to be as sure as possible that correcting the price is economically profitable if the price deviates enough. Every time the Open Oracle is disputed, the reporting ime of the oracle resets, and we need to wait again to see if the oracle reports. This can result in the game to last forever. For this reason, the size of the game need to depend on the pools open interest. We want it to be more expensive to delay games with a lot open interest, than those with smaller open interest amounts. The minimum initial WETH position combines three inputs:
 				</p>
 
-				<p>
-					In the conservative correction direction, the true REP/ETH price is
-					<code>(1 + targetError)</code> times the reported price. Before gas, correcting
-					that report releases the fraction
-					<code>(targetError - fees) / (1 + targetError)</code> of the WETH position.
-					The sizing formula therefore multiplies the modeled gas cost of one dispute by
-					the security multiplier and divides by that correction-profit fraction.
-				</p>
-
-				<p>
-					The minimum initial WETH position combines three inputs:
-				</p>
-
-				<ul>
+				<ol>
 					<li>
 						<strong>Request-block base fee:</strong> a report sized from the current
 						<code>block.basefee</code>.
@@ -228,13 +214,9 @@
 						<strong>Pool open interest:</strong> a floor equal to one percent of the
 						pool's current settlement collateral.
 					</li>
-				</ul>
+				</ol>
 
-				<p>
-					The priority-fee report is added to the larger of the base-fee report and the
-					open-interest report. The sponsor may use this minimum or request a larger
-					initial WETH position.
-				</p>
+				<p> The priority-fee report is added to the larger of the base-fee report and the open-interest report. The sponsor may use this minimum or request a larger initial WETH position. </p>
 			<div class="equation" id="eq-openoracle-initial-report-size">
 			<math aria-label="all report and escalation-halt amounts are in attoETH; minimum token one report adds the priority-fee report to the larger base-fee or open-interest report; escalation halt is the greater of the open-interest report and the initial WETH report times the halt multiplier" data-source="reportAttoEth(gasPriceAttoEthPerGas) = ⌈gasPriceAttoEthPerGas \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))⌉; priorityFeeReportAttoEth = reportAttoEth(initialReportPriorityFeeAttoEthPerGas); baseFeeReportAttoEth = reportAttoEth(block.basefee); openInterestReportAttoEth = ⌈settlementCollateralAttoEth / 100⌉; minimumToken1ReportAttoEth = priorityFeeReportAttoEth + max(baseFeeReportAttoEth, openInterestReportAttoEth); escalationHaltAttoEth = max(⌊initialWethReportAttoEth \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReportAttoEth)" display="block">
 			<mtable>
@@ -351,10 +333,14 @@
 				<h3>Construction bounds and parameter effects</h3>
 
 				<p>
-					Coordinator construction requires positive dispute gas units, a target error
-					no greater than 100%, an Open Oracle Security multiplier of at least
-					<code>1x</code>, and combined OpenOracle fees below the target error. It also
-					rejects a priority fee whose constant-derived report would consume the reserved
+					Coordinator construction requires:
+					<ol>
+						<li>positive dispute gas units</li>
+						<li>a target error no greater than 100%</li>
+						<li>an Open Oracle Security multiplier of at least <code>1x</code></li>
+						<li>combined OpenOracle fees below the target error</li>
+					</ol>
+					It also rejects a priority fee whose constant-derived report would consume the reserved
 					<code>uint128</code> report or escalation-halt capacity; half of that capacity
 					remains available for the dynamic base-fee or open-interest component. The
 					factory stores its deployment configuration, so an invalid parameter domain
@@ -445,155 +431,6 @@
 			<div><span>Safety state</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
 			</div>
 			</details>
-				<p>
-					Once a price is fresh, report sizing no longer decides whether an operation
-					executes. The coordinator and pool instead apply the operation-specific guards
-					described below.
-				</p>
-			</section>
-
-			<section id="worked-report-example">
-				<h2>Worked report request</h2>
-
-				<p>
-					The following example uses a market snapshot from
-					<code>2026-07-09 09:49:35 UTC</code>. At that moment, Ethereum's base fee was
-					<code>69,594,403 attoETH</code> per gas (<code>0.069594403 gwei</code>), ETH
-					traded at <code>$1,750.34</code>, and REP traded at <code>$0.792188</code> or
-					<code>0.00045231 ETH</code> per REP. The USD and ETH-denominated quotes were
-					independently rounded, so reconstructing one from the other may differ by a
-					few basis points.
-				</p>
-
-				<p>
-					For this documentation revision,
-					<code>gasConsumedOpenOracleReportPrice = 100,000</code>,
-					<code>gasConsumedSettlement = 1,000,000</code>, and
-					<code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code>. The callback gas limit is:
-				</p>
-			<figure class="equation" id="eq-openoracle-request-price-worked-example">
-			<math aria-label="callback gas limit equals one million times four equals four million" data-source="callbackGasLimit = 1,000,000 \cdot 4 = 4,000,000" display="block">
-			<mrow>
-			<mi>callbackGasLimit</mi>
-			<mo>=</mo>
-			<mn>1,000,000</mn>
-			<mo>⋅</mo>
-			<mn>4</mn>
-			<mo>=</mo>
-			<mn>4,000,000</mn>
-			</mrow>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Worked Callback Gas Limit</span>The current coordinator parameters reserve four settlement-operation gas budgets inside one callback.</p>
-			</figure><figure class="equation" id="eq-openoracle-request-price-snapshot-example">
-			<math aria-label="Worked request bounty calculation using the snapshot base fee" data-source="requestPriceCostAttoEth = 69,594,403 \cdot 4 \cdot (4,000,000 + 100,000) + 101 = 1,141,348,209,200,101 attoETH" display="block">
-			<mrow>
-			<mi>requestPriceCostAttoEth</mi>
-			<mo>=</mo>
-			<mn>69,594,403</mn>
-			<mo>⋅</mo>
-			<mn>4</mn>
-			<mo>⋅</mo>
-			<mo>(</mo>
-			<mn>4,000,000</mn>
-			<mo>+</mo>
-			<mn>100,000</mn>
-			<mo>)</mo>
-			<mo>+</mo>
-			<mn>101</mn>
-			<mo>=</mo>
-			<mn>1,141,348,209,200,101</mn>
-			<mtext> attoETH</mtext>
-			</mrow>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Worked Trigger Cost</span>The caller who opens a fresh price request sends <code>0.001141348209200101 ETH</code>, about <code>$2.00</code> at that snapshot's ETH/USD price. This bounty is separate from the normal gas burned by the caller's own transaction.</p>
-			</figure>
-				<p>
-					The refresh sponsor supplies a proposed REP/ETH price and passes
-					<code>requestedInitialAttoWeth = 0</code>. This example pool has no open
-					interest, so the selected WETH side is the coordinator's priority- and
-					base-fee-sized minimum. At the snapshot base fee and a lineage priority fee of
-					<code>10 gwei</code>, that minimum is
-					<code>0.813313394088461540 WETH</code>. Using the snapshot price of
-					<code>2,210 REP/ETH</code> gives:
-				</p>
-			<figure class="equation" id="eq-openoracle-initial-report-snapshot-example">
-			<math aria-label="Worked REP amount from the dynamic minimum WETH report and the snapshot REP per ETH price" data-source="amount2 = 0.813313394088461540 \cdot 2,210 = 1,797.422600935500003400 REP" display="block">
-			<mrow>
-			<msub><mi>amount</mi><mn>2</mn></msub>
-			<mo>≈</mo>
-			<mn>0.813313394088461540</mn>
-			<mo>⋅</mo>
-			<mn>2,210</mn>
-			<mo>≈</mo>
-			<mn>1,797.422600935500003400</mn>
-			<mtext> REP</mtext>
-			</mrow>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Worked Initial Report Stake</span>The refresh sponsor supplies exactly <code>0.813313394088461540 WETH</code> and approximately <code>1,797.422600935500003400 REP</code>. Because this example requests zero additional WETH and the example has no open interest, the selected amount equals the minimum computed from the onchain base fee, lineage priority fee, and coordinator parameters. The coordinator derives the REP amount from that selected WETH amount and the sponsor's proposed price.</p>
-			</figure>
-				<p>
-					If no dispute replaces the report, settlement credits the full WETH and REP
-					position to the coordinator as OpenOracle's current reporter. Reporter balances
-					are withdrawn separately. The complete ETH request bounty is configured as the
-					settler reward and is credited to the settler's internal ETH balance;
-					OpenOracle 0.2.0 has no separate reporter ETH reward.
-				</p>
-
-				<p>
-					For a coordinator-created report, the coordinator forwards its withdrawable
-					WETH and REP balance to the refresh sponsor during the settlement callback. If
-					a disputer is the final reporter, that disputer receives the final position;
-					the coordinator forwards only the previous reporter's swap proceeds credited
-					to its own internal balances. The recovery path performs the same withdrawal
-					of coordinator-owned balances if the callback failed.
-				</p>
-			</section>
-
-			<section id="operation-guardrails">
-				<h2>Operation guardrails</h2>
-
-				<p>
-					An accepted OpenOracle price does not automatically authorize the operation
-					that requested it. OpenOracle provides a fresh, economically contestable
-					REP/ETH price; the coordinator and security pool decide whether the requested
-					state change remains safe at that price.
-				</p>
-
-				<ul>
-					<li>
-						<code>PRICE_VALID_FOR_SECONDS</code> limits accepted prices to a five-minute
-						cache window.
-					</li>
-					<li>
-						Withdrawal, liquidation, and coverage-commitment execution functions reject
-						direct user calls. They can be called only by the configured coordinator
-						while its price remains valid.
-					</li>
-					<li>
-						A withdrawal must still have an effect when it executes.
-					</li>
-					<li>
-						A coverage-commitment update executes against the vault's current state.
-					</li>
-					<li>
-						A liquidation uses a queue-time snapshot and fails if the target's coverage
-						commitment or REP backing units changed before execution.
-					</li>
-					<li>
-						A liquidation must cross the applicable threshold and remain at least
-						<code>minLiquidationPriceDistanceBps</code> beyond it.
-					</li>
-					<li>
-						The security pool rechecks target and liquidator safety using live pool-held
-						REP backing and live current-game escrow before committing the transfer.
-					</li>
-				</ul>
-
-				<p>
-					A failed local check can consume the staged operation without changing the
-					requested pool state. A later price report does not revive an operation that
-					has already been consumed.
-				</p>
 			</section>
 
 			<section id="callback-rejection-and-recovery">
@@ -717,11 +554,7 @@
 					keep funding valid replacements. This availability model is separate from the
 					dynamic initial WETH sizing rule and is not a bounded-liveness invariant.
 				</p>
-			<div class="callout" id="rolling-dispute-security-classification">
-			<p><strong>Dust self-dispute attempt.</strong> A reporter can choose <code>amount2 = 1</code>, meaning one attoREP. On a token2-side self-dispute, the 1% protocol fee then floors to zero. After <code>amount1</code> reaches <code>escalationHalt</code>, each replacement requires only <code>oldAmount1 + 1</code>, so the reporter can mechanically reset the settlement clock with one additional WETH attoETH plus transaction gas. The coordinator makes that halt at least one percent of pool open interest, raising the capital needed to enter this post-halt regime but not changing its one-attoETH marginal step.</p>
-			<p>That sequence still exposes a profitable correction. An OpenOracle dispute executes one of the current reporter's limit orders as it installs the replacement. Against a report holding <code>H WETH</code> and one attoREP, an independent token2-side disputer can install a sensible REP amount, become current reporter, and inherit the posted <code>H WETH</code> position while the dust reporter receives only the dust-side swap proceeds. The configured <code>disputeDelay</code> is zero, so this correction is immediately available. The dust reporter must therefore censor or continually front-run every profitable correction, whose inclusion bid can be funded by the exposed WETH value; inclusion only before each settlement deadline is insufficient.</p>
-			<p><strong>Security-review classification.</strong> Indefinite funded resetting remains an accepted design property, not a bounded-liveness guarantee. A valid finding must account for the executable replacement position and demonstrate a free or underfunded reset despite profitable correction, fee recovery, simultaneous reuse of required capital, an invalid deadline transition, or unauthorized sponsor-queue use.</p>
-			</div>
+
 				<h3>Dispute escalation after the halt</h3>
 
 				<p>
@@ -742,348 +575,6 @@
 					<code>⌈settlementCollateralAttoEth / OPEN_INTEREST_DIVIDER⌉</code>. The actual
 					halt is the greater of the two, as shown in
 					<a href="#eq-openoracle-initial-report-size">Dynamic Report and Escalation Threshold</a>.
-				</p>
-			</section>
-
-			<section id="attack-model">
-				<h2>Liquidation manipulation attack model</h2>
-
-				<p>
-					The equations below model an attacker who posts an incorrect REP/ETH price and
-					prevents correcting transactions from being included until the report settles
-					and enables an outside payoff. They are continuous economic approximations,
-					not contract-enforced exposure limits.
-				</p>
-
-				<p>
-					A liquidation payoff is binary. The attacker receives a fixed outside payoff
-					only if the manipulated price is strictly above the liquidation threshold and
-					also satisfies the liquidation-distance check. A price that does not cross both
-					boundaries unlocks no liquidation payoff.
-				</p>
-
-				<p>
-					The cost side depends on <code>oracleReportLiquidity</code>, the report's
-					WETH-denominated liquidity; <code>censorshipRate</code>, the modeled per-step
-					pressure required to keep honest activity out; and
-					<code>censorshipDuration</code>, how long that pressure must be maintained.
-					<code>externalPayoff</code> is the attacker's outside ETH-denominated payoff,
-					and <code>BPS_DENOMINATOR = 10_000</code> converts basis-point parameters into
-					fractions.
-				</p>
-
-				<h3>Price movement required for execution</h3>
-
-				<p>
-					The distance guard first discounts the honest price. The execution threshold
-					and manipulated price error are then measured against that honest baseline.
-				</p>
-			<div class="equation" id="eq-openoracle-binary-threshold">
-			<math aria-label="binary liquidation threshold and upward manipulated price error" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / BPS_DENOMINATOR; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice)" display="block">
-			<mtable>
-			<mtr>
-			<mtd><mi>liquidationDistanceFraction</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mfrac><mi>minLiquidationPriceDistanceBps</mi><mi>BPS_DENOMINATOR</mi></mfrac></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>discountedHonestPrice</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>honestPrice</mi><mo>⋅</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>executionErrorThreshold</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mfrac><mi>liquidationThresholdPrice</mi><mi>discountedHonestPrice</mi></mfrac><mo>-</mo><mn>1</mn><mo>)</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>manipulatedPriceError</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mfrac><mrow><mi>manipulatedPrice</mi><mo>-</mo><mi>honestPrice</mi></mrow><mi>honestPrice</mi></mfrac><mo>)</mo></mtd>
-			</mtr>
-			</mtable>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Execution Error Threshold</span>The manipulated price only creates liquidation payoff when its fractional error meets the guarded liquidation threshold.</p>
-			</div>
-				<h3>Contract liquidation guard</h3>
-
-				<p>
-					The continuous threshold above is useful for economic reasoning. The following
-					integer formulas are the actual queue-time guard applied by the coordinator.
-				</p>
-			<div class="equation" id="eq-openoracle-contract-liquidation-guard">
-			<math aria-label="contract liquidation guard uses queue-time pool-held vault REP backing and dispute-staked REP, both in attoREP, to compute the lower of the floored associated REP threshold and strict migration REP threshold, followed by the floored distance check" data-source="associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth * poolSecurityMultiplierBps)⌋; migrationThreshold = ⌊snapshotTargetVaultRepBackingAttoRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth * migrationSecurityMultiplierBps)⌋; thresholdPrice = min(associatedRepThreshold, migrationThreshold); currentPrice &gt; thresholdPrice; ⌊(currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice⌋ &gt;= minLiquidationPriceDistanceBps" display="block">
-			<mtable>
-			<mtr>
-			<mtd><mi>associatedRepThreshold</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mo form="prefix" stretchy="true">⌊</mo><mfrac><mrow><mo>(</mo><mi>snapshotTargetVaultRepBackingAttoRep</mi><mo>+</mo><mi>snapshotDisputeStakedAttoRep</mi><mo>)</mo><mo>⋅</mo><mi>PRICE_PRECISION</mi><mo>⋅</mo><mi>BPS_DENOMINATOR</mi></mrow><mrow><mi>snapshotTargetCoverageCommitmentAttoEth</mi><mo>⋅</mo><mi>poolSecurityMultiplierBps</mi></mrow></mfrac><mo form="postfix" stretchy="true">⌋</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>migrationThreshold</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mo form="prefix" stretchy="true">⌊</mo><mfrac><mrow><mi>snapshotTargetVaultRepBackingAttoRep</mi><mo>⋅</mo><mi>PRICE_PRECISION</mi><mo>⋅</mo><mi>BPS_DENOMINATOR</mi></mrow><mrow><mi>snapshotTargetCoverageCommitmentAttoEth</mi><mo>⋅</mo><mi>migrationSecurityMultiplierBps</mi></mrow></mfrac><mo form="postfix" stretchy="true">⌋</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>thresholdPrice</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>min</mi><mo>(</mo><mi>associatedRepThreshold</mi><mo>,</mo><mi>migrationThreshold</mi><mo>)</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>currentPrice</mi></mtd>
-			<mtd><mo>&gt;</mo></mtd>
-			<mtd><mi>thresholdPrice</mi></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>distanceBps</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mo form="prefix" stretchy="true">⌊</mo><mfrac><mrow><mo>(</mo><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi><mo>)</mo><mo>⋅</mo><mi>BPS_DENOMINATOR</mi></mrow><mi>currentPrice</mi></mfrac><mo form="postfix" stretchy="true">⌋</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>distanceBps</mi></mtd>
-			<mtd><mo>≥</mo></mtd>
-			<mtd><mi>minLiquidationPriceDistanceBps</mi></mtd>
-			</mtr>
-			</mtable>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Contract Liquidation Guard</span>The coordinator computes both floored health thresholds from queue-time pool-held vault REP backing and dispute-staked REP, uses the lower one because it is the first boundary to fail, and then applies the distance check before calling the pool. Here <code>migrationSecurityMultiplierBps = max(10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋, 10,500)</code>; the <a href="./liquidations.html#rule">liquidation design</a> owns its derivation and reserve rationale. Any REP backing-unit or coverage-commitment change first invalidates the quote. <code>SecurityPool</code> then rechecks target safety with live pool-held vault REP backing plus live current-game escrow. A partial execution preserves the positive target REP and coverage commitment floors, while any funded transfer must leave the caller above both floors and healthy. A maximum request instead records untransferred residual coverage commitment as bad debt, including the complete coverage commitment when its funded slice would leave the caller below the minimum active coverage commitment. Equality passes only at the distance check. Ordinary associated-REP coverage admits equality, while migration coverage is strict and is unhealthy at equality; <code>currentPrice</code> must still be strictly above <code>thresholdPrice</code>.</p>
-			</div>
-				<h3>Binary payoff and censorship cost</h3>
-
-				<p>
-					The attack model separates the liquidation payoff from the cost of delaying
-					correction. The attacker receives <code>externalPayoff</code> only when the
-					liquidation is executable. Censorship cost grows with duration, the excess
-					price error above the honest-dispute barrier, and report liquidity.
-				</p>
-			<div class="equation" id="eq-openoracle-binary-payoff-cost">
-			<math aria-label="binary attacker payoff and censorship cost" data-source="liquidationExecutable = manipulatedPrice &gt; liquidationThresholdPrice and manipulatedPriceError &gt;= executionErrorThreshold; attackerProfit = { externalPayoff, liquidationExecutable; 0, otherwise }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity" display="block">
-			<mtable>
-			<mtr>
-			<mtd><mi>liquidationExecutable</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>manipulatedPrice</mi><mo>&gt;</mo><mi>liquidationThresholdPrice</mi><mo>⋀</mo><mi>manipulatedPriceError</mi><mo>≥</mo><mi>executionErrorThreshold</mi></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>attackerProfit</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd>
-			<mo>{</mo>
-			<mtable>
-			<mtr>
-			<mtd><mi>externalPayoff</mi></mtd>
-			<mtd><mo>,</mo></mtd>
-			<mtd><mi>liquidationExecutable</mi></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mn>0</mn></mtd>
-			<mtd><mo>,</mo></mtd>
-			<mtd><mtext>otherwise</mtext></mtd>
-			</mtr>
-			</mtable>
-			</mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>censorshipRate</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>censorshipCost</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mi>censorshipDuration</mi><mo>⋅</mo><mi>censorshipRate</mi><mo>⋅</mo><mi>oracleReportLiquidity</mi></mtd>
-			</mtr>
-			</mtable>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Binary Payoff and Censorship Cost</span>Here <code>externalPayoff</code> is the attacker's outside ETH-denominated payoff, and <code>oracleReportLiquidity</code> is the report's WETH-denominated liquidity.</p>
-			</div>
-				<h3>Safe censorship duration</h3>
-
-				<p>
-					The final bound asks how long censorship would need to remain inexpensive for
-					the attack to be attractive. The bound becomes smaller as the censorship rate
-					or report-liquidity-to-payoff ratio increases.
-				</p>
-			<div class="equation" id="eq-openoracle-safe-censorship-duration">
-			<math aria-label="safe censorship duration equals target grief ratio plus one divided by censorship rate times oracle liquidity ratio" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)" display="block">
-			<mtable>
-			<mtr>
-			<mtd><mi>oracleLiquidityRatio</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mfrac><mi>oracleReportLiquidity</mi><mi>externalPayoff</mi></mfrac></mtd>
-			</mtr>
-			<mtr>
-			<mtd><mi>safeCensorshipDuration</mi></mtd>
-			<mtd><mo>=</mo></mtd>
-			<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>⋅</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
-			</mtr>
-			</mtable>
-			</math>
-			<p class="equation-caption"><span class="equation-label">Safe Censorship Duration</span>The bound is strongest when report liquidity is large relative to the payoff and each additional unit of price error is costly to keep undisputed.</p>
-			</div><details class="interactive-example" id="binary-censorship-example">
-			<summary>Adjust a binary censorship example</summary>
-			<p>The liquidation distance, manipulated price, report liquidity, and payoff determine the attacker's payoff and delay cost.</p>
-			<div class="example-grid">
-			<label>
-										Honest price
-										<input data-example-input="honestPrice" max="200" min="50" step="1" type="range" value="100"/>
-			<span class="example-value" data-example-value="honestPrice">100</span>
-			</label>
-			<label>
-										Manipulated price
-										<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="range" value="113"/>
-			<span class="example-value" data-example-value="manipulatedPrice">113</span>
-			</label>
-			<label>
-										Liquidation threshold
-										<input data-example-input="liquidationThresholdPrice" max="200" min="50" step="1" type="range" value="101"/>
-			<span class="example-value" data-example-value="liquidationThresholdPrice">101</span>
-			</label>
-			<label>
-										Liquidation distance bps
-										<input data-example-input="minLiquidationPriceDistanceBps" max="3000" min="0" step="100" type="range" value="1000"/>
-			<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
-			</label>
-			<label>
-										External payoff ETH
-										<input data-example-input="externalPayoff" max="10000" min="100" step="100" type="range" value="1000"/>
-			<span class="example-value" data-example-value="externalPayoff">1000 ETH</span>
-			</label>
-			<label>
-										Report liquidity ETH value
-										<input data-example-input="oracleReportLiquidity" max="20000" min="100" step="100" type="range" value="4000"/>
-			<span class="example-value" data-example-value="oracleReportLiquidity">4000 ETH</span>
-			</label>
-			<label>
-										Honest dispute barrier
-										<input data-example-input="honestDisputeBarrierFraction" max="0.1" min="0" step="0.005" type="range" value="0.01"/>
-			<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.00%</span>
-			</label>
-			<label>
-										Censorship duration (steps)
-										<input data-example-input="censorshipDuration" max="168" min="0" step="1" type="range" value="24"/>
-			<span class="example-value" data-example-value="censorshipDuration">24 steps</span>
-			</label>
-			<label>
-										Target grief ratio
-										<input data-example-input="targetGriefRatio" max="5" min="0" step="0.1" type="range" value="1"/>
-			<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
-			</label>
-			</div>
-			<div class="example-visual">
-			<div aria-label="Binary censorship threshold and cost comparison" class="plot-chart" data-plot-chart="plot-open-oracle-integration-2" data-plot-height="210" data-plot-width="760" role="img"><span class="plot-chart-fallback">Binary censorship threshold and cost comparison</span></div>
-			</div>
-			<ul aria-live="polite" class="example-output">
-			<li>
-										Execution error threshold:
-										<output data-example-output="executionErrorThreshold">12.22%</output>
-			</li>
-			<li>
-										Manipulated price error:
-										<output data-example-output="manipulatedPriceError">13.00%</output>
-			</li>
-			<li>
-										Liquidation executable:
-										<output data-example-output="liquidationExecutable">yes</output>
-			</li>
-			<li>
-										Attacker payoff:
-										<output data-example-output="attackerProfit">1000.00 ETH</output>
-			</li>
-			<li>
-										Censorship cost:
-										<output data-example-output="censorshipCost">11520.00 ETH</output>
-			</li>
-			<li>
-										Oracle liquidity ratio:
-										<output data-example-output="oracleLiquidityRatio">4.00</output>
-			</li>
-			<li>
-										Safe censorship duration (steps):
-										<output data-example-output="safeCensorshipDuration">4.17</output>
-			</li>
-			</ul>
-			</details>
-				<h3>How to interpret the model</h3>
-
-				<ul>
-					<li>
-						<strong>Censorship and delay:</strong>
-						<code>settlementTime</code> defines the correction window. The report-sizing
-						section determines the modeled profitability of the initial correction
-						position.
-					</li>
-					<li>
-						<strong>Binary threshold attacks:</strong>
-						staged liquidations currently require
-						<code>minLiquidationPriceDistanceBps = 1000</code>, so
-						<math
-							aria-label="current price minus threshold price divided by current price"
-							data-source="(currentPrice - thresholdPrice) / currentPrice"
-						>
-							<mfrac>
-								<mrow>
-									<mi>currentPrice</mi>
-									<mo>-</mo>
-									<mi>thresholdPrice</mi>
-								</mrow>
-								<mi>currentPrice</mi>
-							</mfrac>
-						</math>
-						must be at least <code>10%</code>; merely crossing the threshold is not
-						sufficient.
-					</li>
-					<li>
-						<strong>Settlement base-fee boundary:</strong>
-						the coordinator rejects a callback only when the settlement base fee is
-						greater than the request-time cap; equality is accepted. With the default
-						<code>10x</code> Open Oracle Security multiplier and
-						<code>3x maxSettlementBaseFeeMultiplierBps</code>, let <code>b</code> be the
-						request base fee and <code>p</code> the configured priority fee. When the gas
-						branch sizes the report, actual transaction priority fee equals <code>p</code>,
-						and rounding is ignored, correction profit at the target error is
-						<code>10(b + p) / (3b + p)</code> times one-dispute gas cost at the largest
-						admitted settlement base fee. This is at least the base-fee-only
-						<code>10 / 3</code> lower bound; an open-interest-dominant report only makes
-						the position larger.
-					</li>
-					<li>
-						<strong>Deployment assumption:</strong>
-						the callback cap constrains only <code>block.basefee</code>. A prevailing
-						transaction priority fee above the configured <code>p</code> weakens the
-						modeled bound. The constructor checks the individual multiplier lower bounds
-						but does not require the settlement cap multiplier to remain below the Open
-						Oracle Security multiplier.
-					</li>
-					<li>
-						<strong>Settlement validation:</strong>
-						the callback checks the final report's WETH position against its recorded
-						base fee plus the configured priority fee, but it neither recomputes
-						<code>minimumToken1ReportAttoEth()</code> from the settlement block nor
-						compares the final price with an external truth source. See
-						<a href="#settlement-validation-scope">Coordinator settlement validation</a>.
-					</li>
-					<li>
-						<strong>Callback scope:</strong>
-						only four operations are automatically attempted from one settlement
-						callback. Additional operations require manual execution while the price is
-						still fresh.
-					</li>
-					<li>
-						<strong>Freshness:</strong>
-						prices expire after <code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>, so a
-						delayed operation cannot reuse an accepted report indefinitely.
-					</li>
-				</ul>
-
-				<p>
-					The
-					<a href="https://docs.openoracle.org/openoracle/attack-vectors-inclusion#dynamic-programming-analysis">
-						dynamic-programming section of OpenOracle's inclusion analysis
-					</a>
-					is a useful template for modeling censorship and delay. It is not proof that
-					Statoblast's outside operation exposure is bonded or that a correction will be
-					included.
 				</p>
 			</section>
 
@@ -1210,36 +701,6 @@
 			</table>
 			</section>
 
-			<section id="related-reference">
-				<h2>Related reference material</h2>
-
-				<ul>
-					<li>
-						<a href="https://docs.openoracle.org">OpenOracle documentation</a>
-						for the generic report, dispute, settlement, fee, and reporter mechanics.
-					</li>
-					<li>
-						<a href="../reference/open-oracle-coordinator.html">
-							OpenOracle coordinator reference
-						</a>
-						for functions, errors, parameter definitions, and deployment configuration.
-					</li>
-					<li>
-						<a href="../reference/event-stream.html#openoracle-packed-state-reconstruction">
-							Event-stream reference
-						</a>
-						for packed report decoding and state reconstruction.
-					</li>
-					<li>
-						<a href="../reference/security-model.html">Statoblast security model</a>
-						for the economic assumptions and excluded guarantees used by this design.
-					</li>
-					<li>
-						<a href="./liquidations.html#rule">Liquidation design</a>
-						for vault-health thresholds, migration reserves, and transfer rules.
-					</li>
-				</ul>
-			</section>
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>

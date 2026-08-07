@@ -211,7 +211,6 @@
 					</tbody>
 				</table>
 				<h2 id="share-migration">Share Migration</h2>
-				<p>Security assumptions: <a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="./security-model.html#assumption-a11">A11 practical migration</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>.</p>
 				<p>Share migration after a fork is user-facing asset migration, not vault REP migration. Canonical rules live in <a href="./invariants.html#fork-10"><code>FORK-10</code></a> for persistent per-child materialization, <a href="./invariants.html#share-04"><code>SHARE-04</code></a> for the economic-claim denominator, and <a href="./invariants.html#fork-11"><code>FORK-11</code></a> for unequal materialized supplies.</p>
 				<table>
 					<thead>
@@ -271,7 +270,6 @@
 					</tbody>
 				</table>
 				<h2 id="escalation-resolution-and-deposits">Escalation Resolution and Deposits</h2>
-				<p>Security assumptions: <a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>, <a href="./security-model.html#assumption-a03">A03 independent participants</a>, <a href="./security-model.html#assumption-a04">A04 early alarm capital</a>, <a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>.</p>
 				<p>Accepted deposits, edge-case resolution results, and carry-proof or residual-REP consumption all live in this section.</p>
 				<table>
 					<thead>
@@ -414,7 +412,6 @@
 					</tbody>
 				</table>
 				<h2 id="fork-migration">Fork Migration</h2>
-				<p>Security assumptions: <a href="./security-model.html#assumption-a07">A07 fork value preservation</a>, <a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>, <a href="./security-model.html#assumption-a11">A11 practical migration</a>, <a href="./security-model.html#assumption-a05">A05 lineage access value</a>, <a href="./security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="./security-model.html#assumption-a20">A20 chain-data availability</a>.</p>
 				<p>Pool-level migration mechanics after a universe fork live here: proxies, child-pool creation, pool-proxy REP splitting, and child outcome selection.</p>
 				<table>
 					<thead>
@@ -524,7 +521,6 @@
 					</tbody>
 				</table>
 				<h2 id="truth-auction-operations">Truth Auction Operations</h2>
-				<p>Security assumptions: <a href="./security-model.html#assumption-a01">A01 bidder incentives</a>, <a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a03">A03 independent bidders</a>, <a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="./security-model.html#assumption-a20">A20 bid-data availability</a>, <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>, and <a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.</p>
 				<p>Collateral-repair auctions have three operator-critical boundaries: forker ownership, a one-week bidding window, and paged settlement into vault accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct auction finalization is allowed at <code>&gt;=</code> that boundary, but the public forker wrapper requires the boundary to have passed. The canonical clearing rules and examples are in <a href="../explanation/truth-auctions.html#clearing">Truth Auction</a>.</p>
 				<table>
 					<thead>
@@ -553,7 +549,6 @@
 					</tbody>
 				</table>
 				<h2 id="repeth-oracle-operations">REP/ETH Oracle Operations</h2>
-				<p>Security assumptions: <a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>, <a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a17">A17 corrector capability</a>, <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.</p>
 				<p>The coordinator quick reference below covers staging, callback recovery, stale-operation handling, and liquidation boundaries. Report sizing, request cost, and current OpenOracle parameters are canonical in <a href="../reference/open-oracle-coordinator.html#parameters">OpenOracle Integration</a>.</p>
 				<table>
 					<thead>

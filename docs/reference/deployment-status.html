@@ -11,10 +11,8 @@
 		<main>
 			<header>
 				<h1>Deployment Status Oracle</h1>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a23">A23 verified canonical deployments</a> and <a href="../reference/security-model.html#assumption-a24">A24 client and RPC integrity</a>.</p>
 				<p><code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not measure protocol readiness or initialization success. It only reports which configured deployment-step addresses currently contain runtime bytecode.</p>
 				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and frontends need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
-				<p class="security-assumption-ref"><strong>Scope:</strong> Mainnet and Sepolia manifests · source release: unreleased · verify the selected manifest, chain ID, block, and manifest hash with <a href="../how-to/verify-deployment.html">deployment verification</a>.</p>
 			</header>
 
 			<section id="mask">
@@ -73,21 +71,6 @@
 						</tr>
 					</tbody>
 				</table>
-				<details class="interactive-example" id="deployment-mask-decoder" data-tool-unavailable="true" open>
-					<summary>Decode a mainnet deployment mask</summary>
-					<p>Paste the decimal or hexadecimal <code>uint256</code> returned by the mainnet <code>getDeploymentMask()</code>. The status column above updates against the mainnet constructor order. Sepolia has a different order; use the Sepolia table below instead of this decoder when interpreting its mask.</p>
-					<div class="example-grid">
-						<label>
-							Deployment mask
-							<input type="text" inputmode="text" value="0x0" placeholder="0x0 or 0" spellcheck="false" data-tool-input="deploymentMask" disabled />
-						</label>
-					</div>
-					<div class="example-output" data-tool-output-region>
-						<p><strong>Decoded status:</strong> <output data-deployment-mask-summary>Waiting for the deployment mapping…</output></p>
-						<p class="detail" data-deployment-mask-guidance>Bits above the tracked manifest range are reported separately.</p>
-						<button type="button" class="interactive-tool-retry" data-deployment-mask-retry hidden>Retry mapping</button>
-					</div>
-				</details>
 				<table aria-label="Current Sepolia deployment-status bit mapping">
 					<thead>
 						<tr>
@@ -178,23 +161,6 @@
 				>
 			</section>
 
-			<section id="sources">
-				<h2>Sources</h2>
-				<ul>
-					<li>
-						<a href="../../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a>
-					</li>
-					<li>
-						<a href="../../ui/ts/protocol/deployment.ts"><code>ui/ts/protocol/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.
-					</li>
-					<li>
-						<a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a>
-					</li>
-					<li>
-						<a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a>
-					</li>
-				</ul>
-			</section>
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
