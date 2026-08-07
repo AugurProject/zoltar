@@ -5,13 +5,7 @@ export type AuctionBidInput = {
 	price: number
 }
 
-export const quantitativeChartIds = [
-	'fig-auction-clearing-ladder',
-	'fig-statoblast-escalation-cost-curve',
-	'fig-statoblast-retention-utilization',
-	'fig-zoltar-fork-threshold-decay',
-	'plot-statoblast-whitepaper-19',
-] as const
+export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay', 'plot-statoblast-whitepaper-19'] as const
 
 type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 

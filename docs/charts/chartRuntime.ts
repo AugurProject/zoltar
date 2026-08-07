@@ -1,14 +1,5 @@
 import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
-import {
-	calculateAnnualizedRetentionFeePercent,
-	calculateCollateralRepairModel,
-	calculateAuctionModel,
-	calculateForkThresholdSeries,
-	contractInteractionEdges,
-	normalizedEscalationCost,
-	quantitativeChartAxisLabels,
-	quantitativeChartIds,
-} from './chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateCollateralRepairModel, calculateAuctionModel, calculateForkThresholdSeries, contractInteractionEdges, normalizedEscalationCost, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
 import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 
@@ -409,13 +400,6 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 	const input = container?.querySelector<HTMLInputElement>(`[data-example-input="${name}"]`)
 	const value = Number(input?.value)
 	return Number.isFinite(value) ? value : fallback
-}
-
-function formatRepFromAttoRep(valueAttoRep: bigint): string {
-	const scale = 1_000_000_000_000_000_000n
-	const whole = valueAttoRep / scale
-	const fraction = (valueAttoRep % scale).toString().padStart(18, '0')
-	return `${whole}.${fraction}`
 }
 
 function escalationCostChart(spec: ChartSpec): SVGSVGElement {
@@ -1026,10 +1010,6 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 	mount.dataset['chartState'] = chart.dataset['chartState']
 	return chart
 }
-
-
-
-
 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
