@@ -3,16 +3,18 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Liquidation Design</title>
+		<title>Vault Liquidation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Liquidation Design</h1>
-				<p>A vault becomes liquidatable when its REP security no longer supports its coverage commitment at the current REP/ETH price. Liquidation transfers a bounded portion of that coverage commitment to a healthy liquidator vault.</p>
-				<p>For every unit of coverage transferred, the liquidator must receive the full fixed REP award. The protocol therefore transfers only the portion whose award can be fully funded from the target vault's pool-held REP. Non-transferable claims, accrued fees, and surplus REP remain with the target. On a maximum request, any coverage that cannot be transferred is recorded as bad debt.</p>
+				<h1>Vault Liquidation</h1>
+
+				<p>The protocol relies on security pools maintaining enough REP value to secure their open interest. If a vault no longer provides sufficient REP backing for its coverage commitment, it can be liquidated. This ensures that coverage is transferred to vaults that are able to maintain the required level of security.</p>
+				<p>A vault becomes liquidatable when, at the current REP/ETH price, its REP backing falls below the minimum required for the amount of open interest it secures. Liquidation transfers a bounded portion of that coverage commitment from the unhealthy vault to a healthy liquidator vault.</p>
+				<p>For every unit of coverage transferred, the liquidator receives the fixed REP reward defined by the protocol. As a result, only the portion of the unhealthy vault's coverage that can be fully funded by its pool-held REP is transferred. Non-transferable claims, accrued fees, and any surplus REP remain with the original vault. If a maximum liquidation still cannot transfer all requested coverage, the remaining uncovered amount is recorded as bad debt.</p>
 			</header>
 
 			<section id="position-model">
@@ -29,13 +31,13 @@
 					<math display="block" aria-label="ordinary health requires associated REP in attoREP times price precision and the basis-point denominator to be at least coverage commitment in attoETH times the pool security multiplier and REP per ETH price" data-source="associatedAttoRep * pricePrecision * BPS_DENOMINATOR >= coverageCommitmentAttoEth * poolSecurityMultiplierBps * repPerEthPrice">
 						<mrow><mi>associatedAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>&#x2265;</mo><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>poolSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi></mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Ordinary pool coverage</span>Associated REP includes pool-held vault REP backing and locally attributed dispute-staked REP. Equality is healthy for this branch; liquidation uses the strict inverse inequality.</p>
+					<p class="equation-note">Associated REP includes pool-held vault REP backing and locally attributed dispute-staked REP. Equality is healthy for this branch; liquidation uses the strict inverse inequality.</p>
 				</div>
 				<div class="equation" id="eq-migration-health-condition">
 					<math display="block" aria-label="migration health means coverage commitment is zero or pool-held vault REP backing in attoREP times price precision and the basis-point denominator is strictly greater than coverage commitment in attoETH times the migration security multiplier and REP per ETH price" data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep * pricePrecision * BPS_DENOMINATOR > coverageCommitmentAttoEth * migrationSecurityMultiplierBps * repPerEthPrice"
 						><mrow><mi>migrationHealthy</mi><mo>=</mo><mo>(</mo><mi>coverageCommitmentAttoEth</mi><mo>=</mo><mn>0</mn><mo>)</mo><mo>&#x2228;</mo><mo>(</mo><mi>poolHeldVaultRepBackingAttoRep</mi><mo>&#x22C5;</mo><mi>valueScale</mi><mo>&gt;</mo><mi>coverageCommitmentAttoEth</mi><mo>&#x22C5;</mo><mi>migrationSecurityMultiplierBps</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi><mo>)</mo></mrow></math
 					>
-					<p class="equation-caption"><span class="equation-label">Migration coverage</span>Only pool-held vault REP backing can route parent OI. For a positive coverage commitment, equality is unsafe.</p>
+					<p class="equation-note">Only pool-held vault REP backing can route parent OI. For a positive coverage commitment, equality is unsafe.</p>
 				</div>
 				<p>The configured migration multiplier is derived halfway between one and the pool multiplier. The effective pool-held vault REP backing multiplier is the greater of that value and <code>10,500 BPS</code>, matching the complete liquidation award. At the minimum permitted pool multiplier of <code>10,002 BPS</code>, the halfway value is only <code>10,001 BPS</code>, so the 10,500-BPS liquidation reserve applies. This prevents a healthy vault from deliberately locking the pool-held vault REP backing needed to fund its ordinary 105% liquidation award.</p>
 			</section>
@@ -54,7 +56,7 @@
 							><mo>&#x2309;</mo></mrow
 						>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Liquidation award</span><code>coverageCommitmentTransferredAttoEth</code> is attoETH and <code>grossRepAwardAttoRep</code> is attoREP; <code>repPerEthPrice</code> is scaled by <code>PRICE_PRECISION = 10¹⁸</code>, and the 500 BPS bonus is applied over <code>BPS_DENOMINATOR = 10,000</code>.</p>
+					<p class="equation-note"><code>coverageCommitmentTransferredAttoEth</code> is attoETH and <code>grossRepAwardAttoRep</code> is attoREP; <code>repPerEthPrice</code> is scaled by <code>PRICE_PRECISION = 10¹⁸</code>, and the 500 BPS bonus is applied over <code>BPS_DENOMINATOR = 10,000</code>.</p>
 				</div>
 				<div class="equation" id="eq-liquidation-funded-coverage-commitment">
 					<math display="block" aria-label="maximum funded liquidation coverage commitment equals available pool-held vault REP backing times price precision and the basis point denominator, divided by REP per ETH price times ten thousand five hundred, rounded down" data-source="maximumFundedCoverageCommitmentAttoEth = ⌊transferableVaultRepBackingAttoRep * PRICE_PRECISION * BPS_DENOMINATOR / (repPerEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))⌋">
@@ -66,7 +68,7 @@
 							><mo>&#x230B;</mo></mrow
 						>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Funded coverage commitment cap</span>In an initialized pool, a partial request first computes <code>reservedBackingUnits = ⌈MIN_REP_DEPOSIT_ATTO_REP × totalRepBackingUnits / totalAttoRep⌉</code>. If that reserve is at least the target backing units, no partial coverage commitment or REP transfer is fundable. Otherwise, <code>transferableVaultRepBackingAttoRep = ⌊(targetBackingUnits - reservedBackingUnits) × totalAttoRep / totalRepBackingUnits⌋</code>. A <dfn>maximum request</dfn> asks for at least the target's full current coverage commitment (<code>requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth</code>); it uses <code>transferableVaultRepBackingAttoRep = ⌊targetBackingUnits × totalAttoRep / totalRepBackingUnits⌋</code>. The user queues that amount through the coordinator, which calls the pool; the pool's maximum-request path records remaining coverage commitment through the bad-debt backstop. With a zero denominator, backing units convert at <code>PRICE_PRECISION</code>; with nonzero total REP backing units and zero pool-held REP, the available amount is zero.</p>
+					<p class="equation-note">In an initialized pool, a partial request first computes <code>reservedBackingUnits = ⌈MIN_REP_DEPOSIT_ATTO_REP × totalRepBackingUnits / totalAttoRep⌉</code>. If that reserve is at least the target backing units, no partial coverage commitment or REP transfer is fundable. Otherwise, <code>transferableVaultRepBackingAttoRep = ⌊(targetBackingUnits - reservedBackingUnits) × totalAttoRep / totalRepBackingUnits⌋</code>. A <dfn>maximum request</dfn> asks for at least the target's full current coverage commitment (<code>requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth</code>); it uses <code>transferableVaultRepBackingAttoRep = ⌊targetBackingUnits × totalAttoRep / totalRepBackingUnits⌋</code>. The user queues that amount through the coordinator, which calls the pool; the pool's maximum-request path records remaining coverage commitment through the bad-debt backstop. With a zero denominator, backing units convert at <code>PRICE_PRECISION</code>; with nonzero total REP backing units and zero pool-held REP, the available amount is zero.</p>
 				</div>
 				<div class="equation" id="eq-liquidation-price-guard">
 					<math display="block" aria-label="associated REP threshold uses snapshot target backing and dispute staked REP" data-source="associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth * poolSecurityMultiplierBps)⌋">
@@ -78,7 +80,7 @@
 							><mo>⌋</mo></mrow
 						>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Associated REP liquidation threshold</span><code>associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × poolSecurityMultiplierBps)⌋</code>. The migration threshold is <code>⌊snapshotTargetVaultRepBackingAttoRep × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × migrationSecurityMultiplierBps)⌋</code>, where <code>migrationSecurityMultiplierBps = max(BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)</code>. Execution uses <code>thresholdPrice = min(associatedRepThreshold, migrationThreshold)</code>, requires <code>currentPrice &gt; thresholdPrice</code>, and then requires <code>⌊(currentPrice - thresholdPrice) × BPS_DENOMINATOR / currentPrice⌋ ≥ minPriceDistanceBps</code>; equality and prices below the threshold fail.</p>
+					<p class="equation-note"><code>associatedRepThreshold = ⌊(snapshotTargetVaultRepBackingAttoRep + snapshotDisputeStakedAttoRep) × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × poolSecurityMultiplierBps)⌋</code>. The migration threshold is <code>⌊snapshotTargetVaultRepBackingAttoRep × PRICE_PRECISION × BPS_DENOMINATOR / (snapshotTargetCoverageCommitmentAttoEth × migrationSecurityMultiplierBps)⌋</code>, where <code>migrationSecurityMultiplierBps = max(BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS)</code>. Execution uses <code>thresholdPrice = min(associatedRepThreshold, migrationThreshold)</code>, requires <code>currentPrice &gt; thresholdPrice</code>, and then requires <code>⌊(currentPrice - thresholdPrice) × BPS_DENOMINATOR / currentPrice⌋ ≥ minPriceDistanceBps</code>; equality and prices below the threshold fail.</p>
 				</div>
 				<div class="example" id="liquidation-numeric-example">
 					<h3>Separate partial and maximum examples</h3>
@@ -213,18 +215,9 @@
 				<p>Liquidation does not inspect or value this claim commitment. Its gas cost is independent of the target's reporter count, portfolio size, and fork depth.</p>
 			</section>
 
-			<section id="incentives">
-				<span id="game-theory"></span>
-				<h2>Why Claims Stay Put</h2>
-				<p>A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them. Its compensation is the deterministic 105% pool-held vault REP backing award for assuming coverage commitment; the target vault owner retains both the upside and downside of every report they originated.</p>
-				<p>This separation also keeps settlement identity simple: the committed depositor remains the payout address at every fork depth. A liquidator must remain healthy after accepting the coverage commitment and pool-held vault REP backing.</p>
-				<p>A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or submit a maximum request that moves only funded coverage commitment and records the untransferred remainder as bad debt. Requiring instant target health would make many partial liquidations impossible and would force keepers to finance a larger slice than requested, potentially the target's complete coverage commitment.</p>
-				<p>The 105% quote is paid from pool-held vault REP backing and compensates execution risk, gas, and capital. Accrued ETH fees, escalation claims, and pool-held vault REP backing surplus are always inaccessible. The backstop never mints REP backing units or socializes the missing bonus: it writes the residual coverage commitment out of active capacity, emits <code>VaultBadDebtRecorded</code>, and can leave existing collateral above active coverage commitment so no additional complete sets can be created until capacity is restored.</p>
-			</section>
-
 			<section id="bounded-execution">
 				<h2>Bounded Execution</h2>
-				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../explanation/escalation-game.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
+				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="./escalation-game.html#payouts">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
 				<p>Settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas. They consume committed leaves with replay protection and do not create owner registries.</p>
 			</section>
 

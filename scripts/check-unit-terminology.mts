@@ -43,7 +43,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 		'docs/explanation/statoblast.html',
 		/\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|rewardEligibleCap|bindingCapital|rewardBonusPool|burnAmount|rewardEligibleDeposit|rewardEligiblePrincipal|depositAmount|scaledWithdrawal|actualForkThreshold|vaultMigrationPoweredRep|vaultTotalAssociatedRep|vaultEscalationGameRep|sourcePrincipalAtFork|inheritedUnresolvedTotal|localUnresolvedTotal)\b/,
 	],
-	['docs/explanation/open-oracle-appendix.html', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|priorityFeeReport|baseFeeReport|openInterestReport|initialWethReport)\b/],
+	['docs/explanation/open-oracle.html', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*|priorityFeeReport|baseFeeReport|openInterestReport|initialWethReport)\b/],
 	['docs/explanation/escalation-game.html', /\b(?:currentCarryTotal|effectiveInheritedUnresolvedTotal|localUnresolvedTotal)\b/],
 	['docs/explanation/liquidations.html', /\bbonusRepQuote\b/],
 	['docs/explanation/truth-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],
@@ -75,6 +75,7 @@ if (!unsuffixedAtomicEthEquationSymbol.test('<math data-source="rawEthBalance = 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {
 	if (path === '' || !textFilePattern.test(path)) continue
+	if (!(await Bun.file(path).exists())) continue
 	const source = await readFile(path, 'utf8')
 	const isTestSource = path.includes('/tests/') || path.includes('/testSupport/') || /\.(?:test|fuzz)\.[^.]+$/.test(path)
 	if (path !== protectedVendorPath && path !== terminologyCheckPath && legacyTerminology.test(source)) failures.push(`${path}: contains replaced terminology`)

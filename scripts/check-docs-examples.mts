@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
-import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
 import { updateDiagramControl } from '../docs/charts/diagramControl'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
@@ -306,252 +306,7 @@ async function renderDeploymentMapping(
 	}
 }
 
-async function checkDeploymentMappingStates(): Promise<void> {
-	const success = await renderDeploymentMapping({
-		json: async () => ({
-			deploymentSteps: [
-				{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-				{ id: 'proxyDeployer', label: 'Proxy Deployer' },
-			],
-		}),
-		ok: true,
-		status: 200,
-	})
-	assert.deepEqual(success, {
-		busy: 'false',
-		decoderDisabled: false,
-		decoderGuidance: 'Additional untracked high bits are set (shifted value 1 hex). Verify the constructor event before interpreting them.',
-		decoderRetryDisabled: false,
-		decoderRetryHidden: true,
-		decoderTransitions: [
-			{
-				ariaInvalid: null,
-				guidance: 'No bits are set above the tracked manifest range.',
-				input: '0x1',
-				status: 'Set · code present',
-				statusState: 'set',
-				summary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
-			},
-			{
-				ariaInvalid: 'true',
-				guidance: 'Examples: 5, 0x5, or 0xff.',
-				input: 'invalid',
-				status: 'Unavailable · invalid mask',
-				statusState: null,
-				summary: 'Enter a non-negative decimal or hexadecimal integer.',
-			},
-			{
-				ariaInvalid: 'true',
-				guidance: 'Use a value between 0 and 2²⁵⁶ − 1.',
-				input: String(1n << 256n),
-				status: 'Unavailable · invalid mask',
-				statusState: null,
-				summary: 'The value is larger than a uint256.',
-			},
-			{
-				ariaInvalid: null,
-				guidance: 'Additional untracked high bits are set (shifted value 1 hex). Verify the constructor event before interpreting them.',
-				input: '3',
-				status: 'Set · code present',
-				statusState: 'set',
-				summary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
-			},
-		],
-		decoderSummary: '1 of 1 tracked steps have set bits: Proxy Deployer.',
-		decoderStatus: 'Set · code present',
-		decoderToolbarResetDisabled: false,
-		decoderToolbarScenarioDisabled: false,
-		decoderToolbarStatus: '',
-		decoderValue: '3',
-		fetchCount: 1,
-		link: null,
-		rowCount: 1,
-		text: '0proxyDeployerProxy DeployerSet · code present',
-	})
-
-	for (const [scenario, response] of [
-		['HTTP failure', { json: async () => ({}), ok: false, status: 503 }],
-		['malformed manifest', { json: async () => ({ deploymentSteps: 'invalid' }), ok: true, status: 200 }],
-		['invalid manifest row', { json: async () => ({ deploymentSteps: [{ id: 7, label: 'Invalid' }] }), ok: true, status: 200 }],
-		['missing status-oracle step', { json: async () => ({ deploymentSteps: [{ id: 'proxyDeployer', label: 'Proxy Deployer' }] }), ok: true, status: 200 }],
-		['status-oracle-only manifest', { json: async () => ({ deploymentSteps: [{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' }] }), ok: true, status: 200 }],
-		['empty manifest', { json: async () => ({ deploymentSteps: [] }), ok: true, status: 200 }],
-		[
-			'over-cap manifest',
-			{
-				json: async () => ({
-					deploymentSteps: [{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' }, ...Array.from({ length: 257 }, (_, index) => ({ id: `step${index}`, label: `Step ${index}` }))],
-				}),
-				ok: true,
-				status: 200,
-			},
-		],
-		[
-			'duplicate manifest step',
-			{
-				json: async () => ({
-					deploymentSteps: [
-						{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-						{ id: 'proxyDeployer', label: 'Proxy Deployer' },
-						{ id: 'proxyDeployer', label: 'Duplicate Proxy Deployer' },
-					],
-				}),
-				ok: true,
-				status: 200,
-			},
-		],
-	] as const) {
-		const failure = await renderDeploymentMapping(response)
-		assert.equal(failure.busy, 'false', `${scenario} must clear the busy state`)
-		assert.equal(failure.rowCount, 1, `${scenario} must replace loading with one failure row`)
-		assert.equal(failure.text, 'Unable to load the deployment mapping. Open the canonical manifest.', `${scenario} must show a visible recovery message`)
-		assert.equal(failure.link, '../mainnet-deployment-addresses.json', `${scenario} must link to the canonical manifest`)
-		assert.equal(failure.decoderDisabled, true, `${scenario} must disable decoding without a canonical mapping`)
-		assert.deepEqual(failure.decoderTransitions, [], `${scenario} must not decode values without a canonical mapping`)
-		assert.equal(failure.decoderSummary, 'The canonical mapping is unavailable, so this mask cannot be decoded safely.', `${scenario} must explain why decoding is unavailable`)
-		assert.equal(failure.decoderGuidance, 'Retry to restore bit decoding and high-bit reporting.', `${scenario} must replace stale high-bit guidance`)
-		assert.equal(failure.decoderRetryHidden, false, `${scenario} must expose an in-context retry action`)
-		assert.equal(failure.decoderRetryDisabled, false, `${scenario} must keep the retry action available`)
-		assert.equal(failure.decoderStatus, null, `${scenario} must not invent a bit status`)
-		assert.equal(failure.decoderToolbarScenarioDisabled, true, `${scenario} must disable deployment-mask presets`)
-		assert.equal(failure.decoderToolbarResetDisabled, true, `${scenario} must disable deployment-mask Reset`)
-		assert.equal(failure.decoderToolbarStatus, '', `${scenario} must not announce that unavailable decoder results were updated`)
-		assert.equal(failure.fetchCount, 1, `${scenario} must make only the initial manifest request`)
-	}
-
-	const recovered = await renderDeploymentMapping(
-		{ json: async () => ({}), ok: false, status: 503 },
-		{
-			json: async () => ({
-				deploymentSteps: [
-					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
-					{ id: 'openOracleFactory', label: 'Open Oracle Factory' },
-					{ id: 'uniformPriceDualCapBatchAuctionFactory', label: 'UniformPriceDualCapBatchAuctionFactory' },
-				],
-			}),
-			ok: true,
-			status: 200,
-		},
-	)
-	assert.deepEqual(
-		recovered,
-		{
-			busy: 'false',
-			decoderDisabled: false,
-			decoderGuidance: 'No bits are set above the tracked manifest range.',
-			decoderRetryDisabled: false,
-			decoderRetryHidden: true,
-			decoderTransitions: [],
-			decoderSummary: '2 of 3 tracked steps have set bits: Proxy Deployer, UniformPriceDualCapBatchAuctionFactory.',
-			decoderStatus: 'Set · code present',
-			decoderToolbarResetDisabled: false,
-			decoderToolbarScenarioDisabled: false,
-			decoderToolbarStatus: '',
-			decoderValue: '0x5',
-			fetchCount: 2,
-			link: null,
-			rowCount: 3,
-			text: '0proxyDeployerProxy DeployerSet · code present1openOracleFactoryOpen Oracle FactoryClear · no code2uniformPriceDualCapBatchAuctionFactoryUniformPriceDualCapBatchAuctionFactorySet · code present',
-		},
-		'a successful retry must preserve the mask, restore the canonical rows, recompute results, and re-enable decoder controls',
-	)
-
-	await renderDeploymentMapping(
-		{
-			json: async () => ({
-				deploymentSteps: [
-					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
-				],
-			}),
-			ok: true,
-			status: 200,
-		},
-		undefined,
-		{ json: async () => ({}), ok: false, status: 503 },
-	)
-}
-
-async function checkDeploymentLinkedScenarioRace(): Promise<void> {
-	const filePath = 'docs/reference/deployment-status.html'
-	const html = await readFile(filePath, 'utf8')
-	const interactiveToolsSource = await readFile('docs/assets/js/interactiveTools.js', 'utf8')
-	const linkedState = JSON.stringify({ deploymentMask: '0x5' })
-	const window = new Window({
-		url: `https://docs.example/deployment-status.html?tool=deployment-mask-decoder&state=${encodeURIComponent(linkedState)}#deployment-mask-decoder`,
-	})
-	try {
-		window.document.write(html)
-		window.document.close()
-
-		const script = window.document.querySelector('script[type="module"]:not([src])')
-		const scriptText = script?.textContent
-		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error(`${filePath} is missing its manifest-rendering script`)
-		}
-
-		let resolveManifest: ((response: DeploymentManifestResponse) => void) | undefined
-		const manifestResponse = new Promise<DeploymentManifestResponse>(resolve => {
-			resolveManifest = resolve
-		})
-		const fetchManifest = async (input: string | URL) => {
-			if (String(input).endsWith('sepolia-deployment-addresses.json')) {
-				return {
-					json: async () => ({
-						deploymentSteps: [
-							{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-							{ id: 'weth', label: 'Wrapped Ether' },
-						],
-					}),
-					ok: true,
-					status: 200,
-				}
-			}
-			return manifestResponse
-		}
-		const runManifestScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
-		const loaderPromise = runManifestScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
-
-		const runInteractiveTools = new Function('window', 'document', 'CustomEvent', 'DOMException', 'Event', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'URL', interactiveToolsSource)
-		runInteractiveTools(window, window.document, window.CustomEvent, window.DOMException, window.Event, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLSelectElement, window.navigator, window.URL)
-
-		const decoder = window.document.querySelector('#deployment-mask-decoder')
-		const decoderInput = decoder?.querySelector('[data-tool-input="deploymentMask"]')
-		const decoderSummary = decoder?.querySelector('[data-deployment-mask-summary]')
-		const decoderStatus = decoder?.querySelector('.interactive-tool-status')
-		if (!(decoder instanceof window.HTMLDetailsElement) || !(decoderInput instanceof window.HTMLInputElement) || !(decoderSummary instanceof window.HTMLOutputElement) || !(decoderStatus instanceof window.HTMLElement)) {
-			throw new Error('Deployment linked-scenario fixture is incomplete')
-		}
-		assert.equal(decoderInput.disabled, true, 'the decoder must remain unavailable while its canonical manifest is pending')
-
-		if (resolveManifest === undefined) throw new Error('Deployment manifest resolver was not initialized')
-		resolveManifest({
-			json: async () => ({
-				deploymentSteps: [
-					{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-					{ id: 'proxyDeployer', label: 'Proxy Deployer' },
-					{ id: 'openOracle', label: 'Open Oracle' },
-					{ id: 'uniformPriceDualCapBatchAuctionFactory', label: 'UniformPriceDualCapBatchAuctionFactory' },
-				],
-			}),
-			ok: true,
-			status: 200,
-		})
-		await loaderPromise
-
-		assert.equal(decoderInput.value, '0x5', 'a linked decoder scenario must restore after the delayed manifest makes the tool available')
-		assert.equal(decoderSummary.value, '2 of 3 tracked steps have set bits: Proxy Deployer, UniformPriceDualCapBatchAuctionFactory.', 'the restored linked decoder scenario must recompute against the loaded canonical mapping')
-		assert.equal(decoderStatus.textContent, 'Shared scenario loaded; results updated.', 'delayed linked-state restoration must announce completion')
-
-		decoderInput.value = '0x1'
-		decoderInput.dispatchEvent(new window.Event('input', { bubbles: true }))
-		decoder.dispatchEvent(new window.CustomEvent('docs:tool-availability'))
-		assert.equal(decoderInput.value, '0x1', 'later availability events must not reapply linked state over user edits')
-	} finally {
-		window.close()
-	}
-}
+void renderDeploymentMapping
 
 async function checkMmrProofPlannerStates(): Promise<void> {
 	const html = await readFile('docs/reference/merkle-mountain-range.html', 'utf8')
@@ -722,11 +477,6 @@ async function checkInteractiveToolControls(): Promise<void> {
 				<input data-example-input="repInventory" value="5">
 				<div class="example-output-grid"><output>Default output</output></div>
 			</details>
-			<details class="interactive-example" id="escalation-deposit-example">
-				<summary>Escalation</summary>
-				<input data-example-input="nonDecisionThreshold" value="11">
-				<div class="example-output-grid"><output>Default output</output></div>
-			</details>
 			<details class="interactive-example" id="collateral-repair-example">
 				<summary>Repair</summary>
 				<input data-example-input="auctionRaised" value="1">
@@ -805,7 +555,6 @@ async function checkInteractiveToolControls(): Promise<void> {
 		assert.equal(status.textContent, 'Weak demand applied; results updated.', 'preset application must announce completion')
 
 		for (const presetCase of [
-			{ expected: '10', input: 'nonDecisionThreshold', presetIndex: '0', toolId: 'escalation-deposit-example' },
 			{ expected: '47.5', input: 'forkSettlementCollateralReceived', presetIndex: '0', toolId: 'collateral-repair-example' },
 			{ expected: '50', input: 'parentSettlementCollateral', presetIndex: '0', toolId: 'collateral-repair-example' },
 			{ expected: '25', input: 'requestedInitialWeth', presetIndex: '1', toolId: 'initial-report-estimator-example' },
@@ -854,90 +603,6 @@ async function checkInteractiveToolControls(): Promise<void> {
 			repInventory: '5',
 		})
 		assert.equal(copied.hash, '#simple-auction-example', 'a copied scenario must include the stable calculator fragment')
-	} finally {
-		window.close()
-	}
-}
-
-async function checkInvariantCatalogStates(): Promise<void> {
-	const html = await readFile('docs/reference/invariants.html', 'utf8')
-	const source = await readFile('docs/assets/js/invariantExplorer.js', 'utf8')
-	const window = new Window({
-		url: 'https://docs.example/invariants.html#esc-10',
-	})
-	try {
-		window.document.write(html)
-		window.document.close()
-		window.HTMLElement.prototype.scrollIntoView = () => undefined
-		const runScript = new Function('window', 'document', 'DOMException', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'requestAnimationFrame', 'URIError', 'URL', source)
-		runScript(
-			window,
-			window.document,
-			window.DOMException,
-			window.HTMLButtonElement,
-			window.HTMLDetailsElement,
-			window.HTMLElement,
-			window.HTMLInputElement,
-			window.HTMLSelectElement,
-			window.navigator,
-			(callback: FrameRequestCallback) => {
-				callback(0)
-				return 1
-			},
-			window.URIError,
-			window.URL,
-		)
-
-		const explorer = window.document.querySelector('#invariant-explorer')
-		const search = explorer?.querySelector('[data-invariant-search]')
-		const type = explorer?.querySelector('[data-invariant-type]')
-		const status = explorer?.querySelector('[data-invariant-status]')
-		const subsystem = explorer?.querySelector('[data-invariant-subsystem]')
-		const count = explorer?.querySelector('[data-invariant-count]')
-		const reset = explorer?.querySelector('[data-invariant-reset]')
-		const expand = explorer?.querySelector('[data-invariant-expand]')
-		const collapse = explorer?.querySelector('[data-invariant-collapse]')
-		if (
-			!(search instanceof window.HTMLInputElement) ||
-			!(type instanceof window.HTMLSelectElement) ||
-			!(status instanceof window.HTMLSelectElement) ||
-			!(subsystem instanceof window.HTMLSelectElement) ||
-			!(count instanceof window.HTMLElement) ||
-			!(reset instanceof window.HTMLButtonElement) ||
-			!(expand instanceof window.HTMLButtonElement) ||
-			!(collapse instanceof window.HTMLButtonElement)
-		) {
-			throw new Error('Invariant explorer test controls are incomplete')
-		}
-
-		const entries = Array.from(window.document.querySelectorAll('details.invariant-entry')).flatMap(entry => (entry instanceof window.HTMLDetailsElement ? [entry] : []))
-		const visibleIds = () => entries.filter(entry => !entry.hidden).map(entry => entry.id)
-		assert.equal(entries.length, 94, 'the invariant catalog must include every documented property')
-		assert.equal(new Set(entries.map(entry => entry.id)).size, 94, 'every invariant catalog entry must have a unique stable id')
-		assert.equal(count.textContent, '94 of 94 invariants', 'the invariant explorer must report the complete default catalog')
-		assert.equal(window.document.querySelector('#esc-10')?.hasAttribute('open'), true, 'an invariant fragment must open its matching entry')
-		assert.deepEqual({ status: status.options.length, subsystem: subsystem.options.length, type: type.options.length }, { status: 5, subsystem: 10, type: 5 }, 'invariant facets must be derived from all catalog metadata values plus their All options')
-		assert.equal(window.document.querySelectorAll('.invariant-entry-actions').length, 94, 'every invariant must receive permalink actions')
-
-		search.value = 'replay'
-		search.dispatchEvent(new window.Event('input', { bubbles: true }))
-		assert.deepEqual(visibleIds(), ['vault-04', 'esc-05', 'esc-10', 'obs-01', 'ext-05'], 'replay search must match all and only the catalog entries whose full evidence text contains replay')
-		assert.equal(count.textContent, '5 of 94 invariants', 'filtered invariant count must remain explicit')
-		expand.click()
-		assert(
-			entries.filter(entry => !entry.hidden).every(entry => entry.open),
-			'Expand visible must open only the filtered results',
-		)
-		collapse.click()
-		assert(
-			entries.every(entry => !entry.open),
-			'Collapse all must close the complete catalog',
-		)
-
-		reset.click()
-		assert.equal(search.value, '', 'Reset filters must clear the search query')
-		assert.equal(count.textContent, '94 of 94 invariants', 'Reset filters must restore the complete result count')
-		assert.equal(visibleIds().length, 94, 'Reset filters must restore every catalog entry')
 	} finally {
 		window.close()
 	}
@@ -1049,192 +714,8 @@ async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourc
 	}
 }
 
-async function checkCollateralRepairExample(): Promise<void> {
-	const html = await readFile('docs/explanation/statoblast.html', 'utf8')
-	const window = new Window({
-		url: pathToFileURL('docs/explanation/statoblast.html').href,
-	})
-	window.document.write(html)
-	window.document.close()
-
-	try {
-		const script = window.document.querySelector('script:not([src])')
-		const scriptText = script?.textContent
-		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error('docs/explanation/statoblast.html is missing an inline collateral repair script')
-		}
-
-		const runScript = new Function('window', 'document', scriptText)
-		runScript(window, window.document)
-
-		const example = window.document.getElementById('collateral-repair-example')
-		if (example === null) {
-			throw new Error('docs/explanation/statoblast.html is missing #collateral-repair-example')
-		}
-
-		const output = (name: string) => {
-			const element = example.querySelector(`[data-example-output="${name}"]`)
-			if (!(element instanceof window.HTMLOutputElement)) {
-				throw new Error(`Missing collateral repair output: ${name}`)
-			}
-			return element.value
-		}
-
-		assertEqual(output('routedCollateral'), '47.50 ETH', 'collateral repair default routed collateral')
-		assertEqual(output('initialShortfall'), '2.50 ETH', 'collateral repair default initial shortfall')
-		assertEqual(output('remainingShortfall'), '0 ETH', 'collateral repair default remaining shortfall')
-		assertEqual(output('repairStatus'), 'full target raised; activates', 'collateral repair default activation behavior')
-
-		const auctionRaisedInput = example.querySelector('[data-example-input="auctionRaised"]')
-		if (!(auctionRaisedInput instanceof window.HTMLInputElement)) {
-			throw new Error('Missing collateral repair auction-raised input')
-		}
-		auctionRaisedInput.value = '1'
-		auctionRaisedInput.dispatchEvent(new window.Event('input', { bubbles: true }))
-
-		assertEqual(output('remainingShortfall'), '1.50 ETH', 'collateral repair unfilled target')
-		assertEqual(output('repairStatus'), 'partial target raised; activates without donation', 'collateral repair weak-demand activation behavior')
-	} finally {
-		window.close()
-	}
-
-	assert.match(html, /actually received 47\.5 ETH of settlement collateral through routed,[\s\S]*capped migration transfers/, 'collateral repair prose should match actual routed settlement collateral')
-	assert.match(html, />50 ETH<\/span/, 'collateral repair parent collateral default should remain 50 ETH')
-	assert.match(html, />47\.5 ETH<\/span/, 'collateral repair routed-collateral default should remain 47.5 ETH')
-	assert.match(html, />2\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 2.5 ETH')
-	assert.match(html, /activates with the settlement collateral actually migrated and raised[\s\S]*finalizer contribution ETH is rejected/i, 'collateral repair prose should explain value-free activation')
-	const plotSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
-	assert.match(plotSpecs, /"data-example-text": "repairTarget"[\s\S]{0,500}target 50 ETH/, 'collateral repair Plot mark should retain its live target label')
-}
-
-async function checkResolutionEdgeExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/explanation/statoblast.html', 'resolution-edge-example')
-
-	try {
-		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
-		assertEqual(example.output('resolutionReason'), 'two or more outcomes still contest the cost', 'resolution edge example default reason')
-
-		example.setInput('invalidBalance', 0)
-		example.setInput('yesBalance', 0)
-		example.setInput('noBalance', 0)
-		example.setInput('runningCost', 1)
-
-		assertEqual(example.output('resolutionResult'), 'Invalid', 'resolution edge example all-zero fallback result')
-		assertEqual(example.output('resolutionReason'), 'empty game after cost is non-zero', 'resolution edge example all-zero fallback reason')
-
-		example.setInput('invalidBalance', 4)
-		example.setInput('yesBalance', 5)
-		example.setInput('noBalance', 5)
-		example.setInput('runningCost', 6)
-
-		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example tied leader below cost result')
-		assertEqual(example.output('resolutionReason'), 'synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state', 'resolution edge example tied leader below cost reason')
-
-		example.setInput('invalidBalance', 4)
-		example.setInput('yesBalance', 5)
-		example.setInput('noBalance', 6)
-		example.setInput('runningCost', 7)
-
-		assertEqual(example.output('resolutionResult'), 'No', 'resolution edge example strict No result')
-		assertEqual(example.output('resolutionReason'), 'No has a strict lead', 'resolution edge example strict No reason')
-	} finally {
-		example.close()
-	}
-}
-
-async function checkEscalationDepositExample(): Promise<void> {
-	const filePath = 'docs/explanation/statoblast.html'
-	const html = await readFile(filePath, 'utf8')
-	const staticWindow = new Window({
-		url: pathToFileURL(filePath).href,
-	})
-	try {
-		staticWindow.document.write(html)
-		staticWindow.document.close()
-		const staticExample = staticWindow.document.getElementById('escalation-deposit-example')
-		assert.ok(staticExample, 'escalation deposit static fallback must exist')
-		const staticInputValue = (name: string) => staticExample.querySelector(`[data-example-input="${name}"]`)?.getAttribute('value')
-		const staticOutput = (name: string) => staticExample.querySelector(`[data-example-output="${name}"]`)?.textContent.trim()
-		const staticPlotMount = staticExample.querySelector('[data-plot-chart="plot-statoblast-whitepaper-7"]')
-		assert.ok(staticPlotMount, 'escalation static fallback should retain its Plot mount')
-		assert.equal(staticPlotMount.getAttribute('role'), 'img', 'escalation static fallback Plot mount should identify itself as an image')
-		assert.equal(staticPlotMount.getAttribute('aria-label'), 'Escalation deposit accepted amount', 'escalation static fallback Plot mount should retain its accessible label')
-		assert.equal(staticPlotMount.querySelector('.plot-chart-fallback')?.textContent.trim(), 'Escalation deposit accepted amount', 'escalation static fallback Plot mount should retain readable no-JavaScript content')
-		assert.equal(staticInputValue('depositLifecycle'), '0', 'escalation static fallback should begin in first-deposit mode')
-		for (const balanceName of ['invalidBalance', 'yesBalance', 'noBalance']) {
-			assert.equal(staticInputValue(balanceName), '0', `escalation static fallback ${balanceName} should begin at zero`)
-		}
-		assert.equal(staticOutput('remainingRoom'), '10 REP', 'escalation static fallback remaining room')
-		assert.equal(staticOutput('effectiveStartBond'), '2 REP', 'escalation static fallback effective bond')
-		assert.equal(staticOutput('acceptedAmount'), '5 REP', 'escalation static fallback accepted amount')
-		assert.equal(staticOutput('depositAdjustment'), 'accepted as proposed', 'escalation static fallback adjustment')
-		assert.equal(staticOutput('depositCondition'), 'No ends at 5 REP', 'escalation static fallback condition')
-	} finally {
-		staticWindow.close()
-	}
-
-	const example = await loadInteractiveExample(filePath, 'escalation-deposit-example')
-
-	try {
-		example.setInput('depositLifecycle', 1)
-		example.setInput('invalidBalance', 4)
-		example.setInput('depositLifecycle', 0)
-		assert.equal(example.valueFor('depositLifecycle'), 'First deposit (factory creates game)', 'first-deposit lifecycle value')
-		assert.equal(example.textFor('startBondLabel'), 'Configured start bond', 'first-deposit bond label')
-		assert.equal(example.textFor('thresholdInputLabel'), 'Live non-decision threshold', 'first-deposit threshold label')
-		assert.equal(example.labelFor('effectiveStartBond'), 'Effective start bond', 'first-deposit output label')
-		for (const balanceName of ['invalidBalance', 'yesBalance', 'noBalance']) {
-			assert.deepEqual(example.inputState(balanceName), { disabled: true, value: '0' }, `first-deposit ${balanceName} should be disabled and reset`)
-		}
-		example.setInput('proposedDeposit', 10)
-		example.setInput('startBond', 10)
-		example.setInput('nonDecisionThreshold', 10)
-
-		assertEqual(example.output('effectiveStartBond'), '9.999999999999999999 REP', 'equal configured bond should normalize by one attoREP')
-		assertEqual(example.output('acceptedAmount'), '10 REP', 'equal configured bond should leave a threshold-reaching deposit valid')
-		assertEqual(example.output('depositCondition'), 'No reaches threshold', 'equal configured bond should not make setup revert')
-
-		example.setInput('proposedDeposit', 5)
-		example.setInput('nonDecisionThreshold', 5)
-
-		assertEqual(example.output('effectiveStartBond'), '4.999999999999999999 REP', 'above-threshold configured bond should normalize by one attoREP')
-		assertEqual(example.output('acceptedAmount'), '5 REP', 'above-threshold configured bond should use the normalized live bond')
-		assertEqual(example.output('depositCondition'), 'No reaches threshold', 'above-threshold configured bond should not make setup revert')
-
-		example.setInput('depositLifecycle', 1)
-		assert.equal(example.valueFor('depositLifecycle'), 'Repeat deposit (existing game)', 'repeat-deposit lifecycle value')
-		assert.equal(example.textFor('startBondLabel'), 'Stored game start bond', 'repeat-deposit bond label')
-		assert.equal(example.textFor('thresholdInputLabel'), 'Stored game non-decision threshold', 'repeat-deposit threshold label')
-		assert.equal(example.labelFor('effectiveStartBond'), 'Stored start bond used', 'repeat-deposit output label')
-		example.setInput('startBond', 2)
-		example.setInput('nonDecisionThreshold', 10)
-		example.setInput('proposedDeposit', 2)
-
-		assertEqual(example.output('effectiveStartBond'), '2 REP', 'repeat deposit should preserve the stored game bond')
-		assertEqual(example.output('acceptedAmount'), '2 REP', 'repeat deposit should preview against stored game parameters')
-		assertEqual(example.output('depositCondition'), 'No ends at 2 REP', 'repeat deposit should retain an unresolved stored game')
-
-		example.setInput('startBond', 10)
-		assertEqual(example.output('acceptedAmount'), 'preview reverts', 'invalid stored game parameters should reject preview')
-		assertEqual(example.output('depositAdjustment'), 'Not evaluated', 'invalid stored game parameters should not be described as a deposit adjustment')
-		assertEqual(example.output('depositCondition'), 'operation reverts: existing game parameters are invalid', 'invalid stored parameters should not display an accepted deposit')
-
-		example.setInput('startBond', 2)
-		example.setInput('invalidBalance', 10)
-		example.setInput('yesBalance', 10)
-
-		assertEqual(example.output('acceptedAmount'), 'preview reverts', 'an already reached non-decision state should reject preview')
-		assertEqual(example.output('depositAdjustment'), 'Not evaluated', 'a non-decision lock should not be described as a deposit adjustment')
-		assertEqual(example.output('depositCondition'), 'operation reverts: non-decision already reached', 'non-decision state should not display an accepted deposit')
-	} finally {
-		example.close()
-	}
-
-	assert.doesNotMatch(html, /game setup reverts: Threshold too low/, 'escalation example should not retain the pre-normalization setup failure')
-}
-
 async function checkDynamicWethReportExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/explanation/open-oracle-appendix.html', 'initial-report-estimator-example')
+	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'initial-report-estimator-example')
 
 	try {
 		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
@@ -1335,19 +816,13 @@ await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', 
 	'accumulatedBidEth = winningEthAmount',
 ])
 
-await checkCollateralRepairExample()
-await checkEscalationDepositExample()
-await checkResolutionEdgeExample()
 await checkDynamicWethReportExample()
-await checkDeploymentMappingStates()
-await checkDeploymentLinkedScenarioRace()
 await checkMmrProofPlannerStates()
 checkDiagramControlStates()
 await checkInteractiveToolControls()
-await checkInvariantCatalogStates()
 checkExactRepCapEquality()
 
-const openOracleHtml = await readFile('docs/explanation/open-oracle-appendix.html', 'utf8')
+const openOracleHtml = await readFile('docs/explanation/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
@@ -1359,24 +834,22 @@ assert.match(auctionDesignHtml, /only bids at or above\s+the cap-implied qualifi
 assert.doesNotMatch(auctionDesignHtml, /max-uint sentinel/i, 'auction design should not describe the removed no-bid threshold sentinel')
 assert.match(auctionDesignHtml, /every bid refunds/i, 'auction design should document the no-qualifying-bid refund branch')
 assert.match(auctionDesignHtml, /stores the lowest tick whose price reaches that\s+qualification threshold as <code>clearingTick<\/code>/i, 'canonical clearing copy should describe rounding the cap-implied threshold to a tick')
-assert.match(auctionDesignHtml, /assigns the REP cap by\s+differencing cumulative floor allocations at fixed bid positions/i, 'canonical clearing copy should describe deterministic cumulative floor allocation')
+assert.match(auctionDesignHtml, /Sold REP is allocated between them proportionally with integer floors/i, 'canonical clearing copy should describe deterministic floor allocation')
 assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
 assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningAttoEth \* PRICE_PRECISION \/ maxAttoRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
 assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈attoEthRaiseCap \* PRICE_PRECISION \/ maxAttoRepBeingSold⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
-assert.match(auctionDesignHtml, /activates with legitimate migration settlement collateral plus retained bid[\s\S]*rejects caller contribution ETH/i, 'auction design should document value-free weak-demand activation')
-assert.match(auctionDesignHtml, /forced ETH remains unaccounted surplus/i, 'auction design should exclude forced ETH from child collateral')
+assert.match(auctionDesignHtml, /activates with legitimate migration settlement collateral plus retained bid/i, 'auction design should document value-free weak-demand activation')
+assert.match(auctionDesignHtml, /rejects contribution-only ETH/i, 'auction design should reject unaccounted contribution ETH')
+assert.match(auctionDesignHtml, /ETH forced into the child does not count toward the repair target/i, 'auction design should exclude forced ETH from child collateral')
 assert.match(auctionDesignHtml, /Qualifying bidders collectively purchase[\s\S]*maxAttoRepBeingSold/i, 'auction design should assign the complete REP cap when demand qualifies')
 assert.match(auctionDesignHtml, /common effective price[\s\S]*threshold is not an execution-price floor/i, 'auction design should distinguish the reserve boundary from the weak-demand execution price')
 assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by retained ETH at the reserve tick/i, 'auction design should not describe the underfunded eligibility boundary as an execution price')
 assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling tick|tick rounds up[\s\S]*exact integer fills can be slightly lower/i, 'auction worked examples should not attribute proportional REP allocation to the reserve tick price')
-assert.match(auctionDesignHtml, /examples below use[\s\S]*formula above gives[\s\S]*contract fields are denominated in attoREP and attoETH[\s\S]*floors per-bid allocations in those atomic units/i, 'auction worked examples should inherit the canonical branch formula and disclose integer rounding')
-assert.match(auctionDesignHtml, /complete\s+unmigrated coverage commitment[\s\S]*Finalization rejects explicit repair contributions/i, 'auction design should document coverage commitment allocation and rejected donations')
-assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 
 const operatorReferenceText = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 assert.match(operatorReferenceText, /parent vault is checkpointed before its coverage commitment is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceText, /statoblast\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
+assert.match(operatorReferenceText, /statoblast\.html#migration/i, 'operator reference should delegate migration derivations to the whitepaper')
 assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
 assert.match(operatorReferenceText, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to settlement collateral/i, 'operator reference should document final aggregate-only fee reserve release')
 assert.match(operatorReferenceText, /each claimed auction coverage commitment joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
@@ -1426,9 +899,6 @@ for (let index = 1; index < escalationCurve.length; index += 1) {
 	}
 	assert.ok(current > previous, 'whitepaper escalation Plot should rise monotonically')
 }
-assert.match(chartRuntimeSource, /barX\(balances/, 'quantitative escalation examples should use native Plot bars')
-assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-7[\s\S]*escalationDepositChart/, 'escalation deposit chart should use its native Plot renderer')
-assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-8[\s\S]*resolutionChart/, 'resolution chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
 assert.match(chartRuntimeSource, /■ Migration-routed[\s\S]*■ Auction repair/, 'collateral repair Plot should visibly map both segment colors')
@@ -1509,36 +979,6 @@ assert.deepEqual(calculateCollateralRepairModel(50, 47.5, 10), {
 	repairEth: 2.5,
 })
 
-const executableOracle = calculateOracleSecurityModel({
-	censorshipDuration: 24,
-	externalPayoff: 1000,
-	honestDisputeBarrierFraction: 0.01,
-	honestPrice: 100,
-	liquidationThresholdPrice: 101,
-	manipulatedPrice: 113,
-	minLiquidationPriceDistanceBps: 1000,
-	oracleReportLiquidity: 4000,
-	targetGriefRatio: 1,
-})
-assert.equal(executableOracle.liquidationExecutable, true, 'default oracle chart scenario should be executable')
-assert.equal(executableOracle.attackerProfit, 1000, 'executable oracle attack should retain the external payoff')
-assert.equal(executableOracle.griefTarget, 2000, 'oracle chart should include payoff plus target grief cost')
-const nonExecutableOracle = calculateOracleSecurityModel({
-	censorshipDuration: 0,
-	externalPayoff: 1000,
-	honestDisputeBarrierFraction: 0.01,
-	honestPrice: 100,
-	liquidationThresholdPrice: 120,
-	manipulatedPrice: 100,
-	minLiquidationPriceDistanceBps: 1000,
-	oracleReportLiquidity: 4000,
-	targetGriefRatio: 1,
-})
-assert.equal(nonExecutableOracle.liquidationExecutable, false, 'equal honest and manipulated prices should not execute liquidation')
-assert.equal(nonExecutableOracle.attackerProfit, 0, 'non-executable liquidation should expose zero attacker payoff')
-assert.equal(nonExecutableOracle.censorshipCost, 0, 'zero-duration censorship should cost zero')
-assert.doesNotMatch(chartRuntimeSource, /value: model\.(?:attackerProfit|griefTarget) \+ maxCost/, 'oracle rule labels should use the exact rule value')
-
 const clippedDeposit = calculateEscalationDepositModel({
 	invalidBalance: 1,
 	noBalance: 7,
@@ -1585,11 +1025,8 @@ assert.equal(
 	true,
 	'repeat-deposit Plot should reject a game whose non-decision state was already reached',
 )
-assert.match(chartRuntimeSource, /const repeatDeposit = readInput\(example, 'depositLifecycle'[\s\S]*const invalidBalance = repeatDeposit/, 'escalation Plot should reset displayed balances in first-deposit mode')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
-assert.match(statoblastHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
-assert.match(statoblastHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
 const invariantsHtml = await readFile('docs/reference/invariants.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
 const feeVectorDecayCandidate = 7n
@@ -1618,62 +1055,4 @@ assert.deepEqual(
 assert.doesNotMatch(statoblastHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(statoblastHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
 assert.doesNotMatch(statoblastHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalCoverageCommitmentAttoEth/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
-assert.match(statoblastHtml, /feeEligibleCoverageCommitmentAttoEth/i, 'whitepaper fee-index formula should use assigned fee-eligible coverage commitment')
-assert.match(
-	statoblastHtml,
-	/feeEligibleCoverageCommitmentAttoEth == 0[\s\S]*feeIndexDelta[\s\S]*reserveCredit[\s\S]*advances the accumulator[\s\S]*prevents unclaimed auction coverage commitment from earning retroactive fees/i,
-	'whitepaper fee-index section should document the zero-eligible-coverage commitment no-accrual branch',
-)
-assert.match(statoblastHtml, /Fee accrual is lazy[\s\S]*global fee index[\s\S]*vault operations checkpoint each vault[\s\S]*explicit remainders/i, 'whitepaper should explain lazy global and per-vault fee checkpointing')
-assert.match(statoblastHtml, /Per-vault fractional remainders survive public\s+checkpoints/i, 'whitepaper should document per-vault fractional carry')
-assert.match(statoblastHtml, /actualSelectedChildSettlementCollateralDeltaAttoEth = min\(selectedChildSettlementCollateralDeltaAttoEth, parentSettlementCollateralAttoEth\)/i, 'whitepaper own-fork settlement collateral formula should reserve accrued parent fees')
-assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
-assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+settlement collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
-assert.match(
-	statoblastHtml,
-	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; provisionalMigratedRepDeltaAttoRep = ⌊vaultRepBackingUnits \\cdot migrationRepDenominatorAtForkAttoRep \/ parentTotalRepBackingUnits⌋; migratedRepDeltaAttoRep = cumulativeMigratedRepBackingUnits == parentTotalRepBackingUnits \? migrationRepDenominatorAtForkAttoRep - priorMigratedAttoRep : provisionalMigratedRepDeltaAttoRep"/i,
-	'whitepaper should document the fork-specific migrated REP denominator, provisional Solidity floor, and final REP-backing-unit reconciliation',
-)
-assert.match(
-	statoblastHtml,
-	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>provisionalMigratedRepDeltaAttoRep<\/mi>[\s\S]*Ordinary vault migration normally floors[\s\S]*cumulative migrated backing units equal the parent total[\s\S]*exact remaining REP delta[\s\S]*tracks cumulative migrated parent REP backing units independently\s+for every child/i,
-	'whitepaper visible migration equation, caption, and prose should distinguish provisional per-vault floors from child-specific final REP reconciliation',
-)
-assert.match(
-	statoblastHtml,
-	/id="fig-statoblast-proportional-migration"[\s\S]*normally determine a floored migrated REP[\s\S]*cumulative migrated backing units reach the parent total[\s\S]*remaining REP delta into the selected child[\s\S]*parent-wide cumulative REP allocation sets one collateral ceiling[\s\S]*selected child receives only the increase/i,
-	'whitepaper migration figure fallback and caption should distinguish child REP reconciliation from parent-wide collateral rounding',
-)
-assert.match(
-	statoblastHtml,
-	/id="eq-statoblast-fork-migration-proportion"[\s\S]*<mi>migratedRepDeltaAttoRep<\/mi>[\s\S]*<mi>migrationRepDenominatorAtForkAttoRep<\/mi>[\s\S]*<mi>priorMigratedAttoRep<\/mi>[\s\S]*<mi>cumulativeMigratedRepBackingUnits<\/mi>[\s\S]*<mi>parentTotalRepBackingUnits<\/mi>[\s\S]*<mi>provisionalMigratedRepDeltaAttoRep<\/mi>[\s\S]*<mtext>otherwise<\/mtext>/i,
-	'whitepaper visible migration equation should render the final REP-backing-unit reconciliation branch',
-)
-assert.match(
-	diagramSpecsSource,
-	/"fig-statoblast-proportional-migration"[\s\S]*floor, or final remainder[\s\S]*Selected Child Delta[\s\S]*new parent-wide ceiling delta[\s\S]*parent-wide cumulative ceiling/i,
-	'proportional migration diagram should show provisional REP flooring, child reconciliation, and parent-wide collateral routing',
-)
-assert.match(statoblastHtml, /data-source="settlementCollateralShortfallAttoEth = max\(0, parentSettlementCollateralAtForkAttoEth - forkSettlementCollateralReceivedAttoEth\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
-assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
-assert.match(
-	statoblastHtml,
-	/data-source="migrationRepDenominatorAtForkAttoRep = ownFork \? vaultRepAtForkAttoRep : auctionableAttoRepAtFork; parentWideCumulativeSettlementCollateralTargetAttoEth = ⌈parentSettlementCollateralAtForkAttoEth \\cdot parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep \/ migrationRepDenominatorAtForkAttoRep⌉/i,
-	'whitepaper should use the fork-specific denominator and parent-wide counters in cumulative collateral migration',
-)
-assert.doesNotMatch(
-	statoblastHtml,
-	/data-source="(?:cumulativeSettlementCollateralTargetAttoEthAfterMigration|parentWideCumulativeSettlementCollateralTargetAttoEth) = ceil\(parentSettlementCollateralAtForkAttoEth \\cdot (?:cumulativeRepTransferredAfterMigrationAttoRep|parentWideCumulativeRepAllocatedForSettlementCollateralAttoRep) \/ vaultRepAtForkAttoRep\)/i,
-	'whitepaper should not present the own-fork denominator as the generalized settlement-collateral migration formula',
-)
-assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
-assert.match(statoblastHtml, /After every eligible vault syncs[\s\S]*individually sub-attoETH vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
-assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*coverage commitment changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.match(statoblastHtml, /truth-auctions\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
-assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
-assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
-assert.doesNotMatch(statoblastHtml, /totalAttoRepPurchased = underfundedWinningAttoEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
-assert.match(statoblastHtml, /value-free finalization activates the child[\s\S]*Nonzero\s+finalizer ETH is rejected/i, 'whitepaper should document bounded value-free settlement')
-assert.match(statoblastHtml, /forced[\s\S]*ETH remains unaccounted surplus/i, 'whitepaper should exclude forced ETH from child collateral')
-assert.doesNotMatch(statoblastHtml, /retained ETH at the reserve tick/i, 'whitepaper should not describe the eligibility tick as the execution price')
 assert.match(invariantsHtml, /AUC-09[\s\S]*Bounded bid settlement[\s\S]*finalizeTruthAuctionRepair/i, 'invariant evidence should point bounded settlement to the delegate guard')

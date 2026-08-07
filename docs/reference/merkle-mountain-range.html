@@ -113,14 +113,13 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 							<msup><mn>2</mn><mn>64</mn></msup>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Carry Snapshot Bound</span>The 64-peak constant means each inherited snapshot leaf count must fit below <code>2^64</code>.</p>
+					<p class="equation-note">The 64-peak constant means each inherited snapshot leaf count must fit below <code>2^64</code>.</p>
 				</div>
 				<p>Local carry appends behave like binary addition with carries: a new leaf merges upward through occupied lower peaks until it finds the first empty peak slot. If that upward carry would reach height <code>64</code>, the append reverts with <code>MMR too tall</code>.</p>
 			</section>
 
 			<section id="proofs">
 				<h2>Proof Structure</h2>
-				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="../reference/security-model.html#assumption-a20">A20 chain-data and proof availability</a> and <a href="../reference/security-model.html#assumption-a27">A27 cryptographic security</a>.</p>
 				<p>A carried-deposit proof has two parts. First it proves membership in the inherited MMR snapshot for one outcome. Then it proves that the same <code>parentDepositIndex</code> has not already been consumed in this continuation's nullifier tree.</p>
 				<table>
 					<thead>

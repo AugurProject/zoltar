@@ -161,31 +161,6 @@ body.docs-diagram-expanded {
 	color: var(--ink, #1f2529);
 }
 
-.term-tooltip {
-	position: fixed;
-	z-index: 1000;
-	max-width: min(22rem, calc(100vw - 1.5rem));
-	padding: 0.65rem 0.8rem;
-	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
-	border-radius: 0.5rem;
-	background: color-mix(in srgb, var(--paper, #fff) 96%, var(--bg, #f5f7f8));
-	box-shadow: 0 0.9rem 2.2rem rgba(15, 23, 31, 0.14);
-	color: var(--ink, #1f2529);
-	font-size: 0.92rem;
-	line-height: 1.45;
-	pointer-events: none;
-	opacity: 0;
-	transform: translateY(0.2rem);
-	transition:
-		opacity 80ms ease,
-		transform 80ms ease;
-}
-
-.term-tooltip[data-visible="true"] {
-	opacity: 1;
-	transform: translateY(0);
-}
-
 /* OpenOracle integration document */
 
 body.doc-openoracle {
@@ -988,21 +963,6 @@ body.doc-openoracle .equation-label {
 	margin-right: 0.35rem;
 	color: var(--ink);
 	font-weight: 700;
-}
-body.doc-openoracle .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.doc-openoracle .term[data-has-tooltip="true"] {
-	cursor: help;
-}
-body.doc-openoracle .term:focus-visible {
-	outline: 2px solid var(--blue);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.doc-openoracle .equation math {
 	display: block;
@@ -1914,6 +1874,17 @@ body.paper-statoblast .example-bar-red {
 	stroke: var(--red);
 	stroke-width: 1.5;
 }
+.equation {
+	counter-increment: equation;
+}
+.equation::before {
+	display: block;
+	margin-bottom: 0.5rem;
+	color: var(--muted);
+	font-size: 0.85rem;
+	font-weight: 800;
+	content: "Equation " counter(equation);
+}
 body.paper-statoblast .equation,
 body.paper-statoblast .diagram {
 	scroll-margin-top: 1rem;
@@ -1926,7 +1897,6 @@ body.paper-statoblast .diagram {
 	scrollbar-width: thin;
 }
 body.paper-statoblast .equation {
-	counter-increment: equation;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
 	background: var(--code-bg);
@@ -2168,18 +2138,6 @@ body.paper-statoblast .timeline-card p,
 body.paper-statoblast .implementation-note p {
 	margin: 0;
 	color: var(--muted);
-}
-body.paper-statoblast .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.paper-statoblast .term:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.paper-statoblast .implementation-note {
 	border-left: 0.3rem solid var(--blue);
@@ -2898,7 +2856,6 @@ body.paper-zoltar .clean-list li {
 	padding-left: 0.2rem;
 }
 body.paper-zoltar .equation {
-	counter-increment: equation;
 	scroll-margin-top: 1rem;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
@@ -3111,18 +3068,6 @@ body.paper-zoltar .timeline-card p,
 body.paper-zoltar .implementation-note p {
 	margin: 0;
 	color: var(--muted);
-}
-body.paper-zoltar .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.paper-zoltar .term:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.paper-zoltar .implementation-note {
 	border-left: 0.3rem solid var(--blue);
