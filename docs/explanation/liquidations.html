@@ -3,16 +3,17 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Liquidation Design</title>
+		<title>Vault Liquidation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header>
-				<h1>Liquidation Design</h1>
-				<p>A vault becomes liquidatable when its REP security no longer supports its coverage commitment at the current REP/ETH price. Liquidation transfers a bounded portion of that coverage commitment to a healthy liquidator vault.</p>
-				<p>For every unit of coverage transferred, the liquidator must receive the full fixed REP award. The protocol therefore transfers only the portion whose award can be fully funded from the target vault's pool-held REP. Non-transferable claims, accrued fees, and surplus REP remain with the target. On a maximum request, any coverage that cannot be transferred is recorded as bad debt.</p>
+			<header><h1>Vault Liquidation</h1>
+
+			<p> The protocol relies on security pools maintaining enough REP value to secure their open interest. If a vault no longer provides sufficient REP backing for its coverage commitment, it can be liquidated. This ensures that coverage is transferred to vaults that are able to maintain the required level of security.</p>
+			<p> A vault becomes liquidatable when, at the current REP/ETH price, its REP backing falls below the minimum required for the amount of open interest it secures. Liquidation transfers a bounded portion of that coverage commitment from the unhealthy vault to a healthy liquidator vault.</p>
+			<p> For every unit of coverage transferred, the liquidator receives the fixed REP reward defined by the protocol. As a result, only the portion of the unhealthy vault's coverage that can be fully funded by its pool-held REP is transferred. Non-transferable claims, accrued fees, and any surplus REP remain with the original vault. If a maximum liquidation still cannot transfer all requested coverage, the remaining uncovered amount is recorded as bad debt.</p>
 			</header>
 
 			<section id="position-model">
@@ -213,18 +214,9 @@
 				<p>Liquidation does not inspect or value this claim commitment. Its gas cost is independent of the target's reporter count, portfolio size, and fork depth.</p>
 			</section>
 
-			<section id="incentives">
-				<span id="game-theory"></span>
-				<h2>Why Claims Stay Put</h2>
-				<p>A liquidator cannot cherry-pick escalation claims because it cannot acquire any of them. Its compensation is the deterministic 105% pool-held vault REP backing award for assuming coverage commitment; the target vault owner retains both the upside and downside of every report they originated.</p>
-				<p>This separation also keeps settlement identity simple: the committed depositor remains the payout address at every fork depth. A liquidator must remain healthy after accepting the coverage commitment and pool-held vault REP backing.</p>
-				<p>A partial transfer does not promise to make the target healthy. It reduces the target's absolute exposure and leaves a later liquidator free to take another bounded slice or submit a maximum request that moves only funded coverage commitment and records the untransferred remainder as bad debt. Requiring instant target health would make many partial liquidations impossible and would force keepers to finance a larger slice than requested, potentially the target's complete coverage commitment.</p>
-				<p>The 105% quote is paid from pool-held vault REP backing and compensates execution risk, gas, and capital. Accrued ETH fees, escalation claims, and pool-held vault REP backing surplus are always inaccessible. The backstop never mints REP backing units or socializes the missing bonus: it writes the residual coverage commitment out of active capacity, emits <code>VaultBadDebtRecorded</code>, and can leave existing collateral above active coverage commitment so no additional complete sets can be created until capacity is restored.</p>
-			</section>
-
 			<section id="bounded-execution">
 				<h2>Bounded Execution</h2>
-				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="../explanation/escalation-game.html#claim-ownership">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
+				<p>Liquidation reads only the target and liquidator vault accounting. It performs no claim scan, proof verification, owner rewrite, or descendant import, so its work is constant regardless of reporter count and fork depth. The <a href="./escalation-game.html#payouts">carry commitment</a> is used only when a relayer later settles an inherited claim.</p>
 				<p>Settlement relay calls accept caller-sized deposit or proof arrays and should be chunked to fit available gas. They consume committed leaves with replay protection and do not create owner registries.</p>
 			</section>
 

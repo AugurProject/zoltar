@@ -235,14 +235,43 @@
 				</ul>
 			</section>
 			<section id="actors-and-boundaries">
-				<h2>Actors, custody, and one operation</h2>
-				<p>The architecture is easiest to follow from the outside in: a market creator configures a pool, traders hold claims and shares, vault holders provide REP backing, liquidators respond to unhealthy vaults, auction bidders repair child collateral, keepers advance permissionless transitions, and indexers reconstruct the resulting events. Pools own the pool-held assets and authoritative lifecycle state; the oracle coordinator stages price-sensitive operations; Zoltar owns universes, questions, REP, and forks. These custody boundaries explain why a call can cross contracts without transferring every liability.</p>
-				<p>For a complete-set mint, the trader calls the pool, the pool accepts ETH and mints one share per outcome, and the event stream records the resulting supply and accounting checkpoints. The deployment graph above shows the primary protocol interactions for this release; supporting factories, delegates, emitters, callbacks, and compatibility contracts remain summarized. Addresses and generated edge lists are deployment facts, while these custody boundaries are the stable architectural model.</p>
+			<h2>Actors, custody, and one operation</h2>
+				<p>
+					The protocol consists of several participants with distinct responsibilities.
+					Market creators configure security pools, traders mint and hold complete sets
+					and outcome shares, vault owners provide REP backing, liquidators repair
+					under-collateralized vaults, auction bidders recapitalize child pools after
+					forks, keepers execute permissionless maintenance operations, and indexers
+					reconstruct protocol state from emitted events.
+				</p>
+
+				<p>
+					Each contract owns a specific part of the protocol. Security pools hold user
+					funds and manage market state. The Oracle Coordinator executes price-sensitive
+					operations that require a REP/ETH price. Zoltar manages universes, questions,
+					REP, and forks. Because each contract has a well-defined area of responsibility,
+					operations may involve multiple contracts without transferring ownership of all
+					assets or state between them.
+				</p>
+
+				<p>
+					For example, when a trader mints a complete set, they send ETH to the security
+					pool. The pool accepts the deposit, mints one outcome share for every possible
+					outcome, and updates its accounting. Throughout the process, each contract
+					modifies only the state it owns while emitted events allow external indexers to
+					reconstruct the operation.
+				</p>
+
+				<p>
+					The deployment graph above illustrates the primary contract interactions in this
+					release. Supporting factories, delegates, callbacks, emitters, and compatibility
+					contracts are omitted for clarity. Contract addresses and call relationships are
+					deployment details, while the ownership boundaries described above remain stable
+					across deployments.
+				</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script src="../assets/js/protocolTerms.js"></script>
-		<script src="../assets/js/termTooltips.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>
 		<script src="../assets/js/docsShell.js"></script>

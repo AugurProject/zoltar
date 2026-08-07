@@ -9,30 +9,6 @@ const presetDefinitions = {
 			values: { aliceEth: '3', bobEth: '4', carolEth: '6', ethRaiseCap: '30', repInventory: '4' },
 		},
 	],
-	'escalation-deposit-example': [
-		{
-			label: 'Clip at threshold',
-			values: { depositLifecycle: '1', invalidBalance: '2', noBalance: '8', nonDecisionThreshold: '10', proposedDeposit: '12', yesBalance: '4' },
-		},
-		{
-			label: 'Avoid a tie',
-			values: { depositLifecycle: '1', invalidBalance: '2', noBalance: '3', nonDecisionThreshold: '15', proposedDeposit: '5', yesBalance: '8' },
-		},
-	],
-	'resolution-edge-example': [
-		{
-			label: 'Still contested',
-			values: { invalidBalance: '4', noBalance: '7', runningCost: '5', yesBalance: '6' },
-		},
-		{
-			label: 'Strict Yes lead',
-			values: { invalidBalance: '2', noBalance: '3', runningCost: '8', yesBalance: '12' },
-		},
-		{
-			label: 'All zero',
-			values: { invalidBalance: '0', noBalance: '0', runningCost: '5', yesBalance: '0' },
-		},
-	],
 	'collateral-repair-example': [
 		{
 			label: 'Fully repaired',
