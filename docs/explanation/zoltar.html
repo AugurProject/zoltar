@@ -127,7 +127,7 @@
 							<mo>)</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Child Universe Id</span>Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
+					<p class="equation-note">Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
 				</div>
 				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
 				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches.</div>
@@ -180,14 +180,14 @@
 							</mrow>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Fork Threshold</span>With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
+					<p class="equation-note">With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
 				</div>
-				<p>Triggering a fork removes the full fork threshold from the parent universe. `forkUniverse` removes `forkThresholdAttoRep` of parent REP and reduces the parent universe's theoretical REP supply by the same amount. </p>
+				<p>Triggering a fork removes the full fork threshold from the parent universe. `forkUniverse` removes `forkThresholdAttoRep` of parent REP and reduces the parent universe's theoretical REP supply by the same amount.</p>
 
 				<p>Only part of that removed REP is credited toward REP in the child universe. <code>forkBurnDivisor</code> determines the haircut. With <code>forkBurnDivisor = 5</code>:</p>
 				<ul>
-					<li> <b>20% is burnt:</b> ⌊forkThresholdAttoRep / 5⌋ </li>
-					<li> <b>80% becomes migration credit:</b> ⌈4 × forkThresholdAttoRep / 5⌉ </li>
+					<li><b>20% is burnt:</b> ⌊forkThresholdAttoRep / 5⌋</li>
+					<li><b>80% becomes migration credit:</b> ⌈4 × forkThresholdAttoRep / 5⌉</li>
 				</ul>
 
 				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code></p>
@@ -204,7 +204,6 @@
 							<mo form="postfix" stretchy="true">⌋</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Fork Haircut</span></p>
 				</div>
 				<div class="equation" id="eq-zoltar-initiator-migration-balance">
 					<math display="block" aria-label="fork initiator migration balance in attoREP equals fork threshold in attoREP minus uncredited fork haircut in attoREP" data-source="forkInitiatorMigrationBalanceAttoRep = forkThresholdAttoRep - uncreditedForkHaircutAttoRep">
@@ -216,13 +215,11 @@
 							<mi>uncreditedForkHaircutAttoRep</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span></p>
 				</div>
 
 				<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 					<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
 					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="360" data-rounding="integer-flooring" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance."><span class="plot-chart-fallback">Threshold Deposit Split. The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span></p>
 				</figure>
 
 				<p>Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a> under Zoltar’s control.</p>
@@ -232,9 +229,7 @@
 				<p>Along one lineage, each fork subtracts its floored haircut from child theoretical supply. With threshold divisor <code>20</code> and burn divisor <code>5</code>, supply is close to 99% of the previous generation, subject to Solidity integer flooring.</p>
 				<figure class="diagram" id="fig-zoltar-fork-threshold-decay">
 					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-threshold-decay" data-plot-width="900" data-plot-height="420" role="img" aria-label="Theoretical REP supply and fork threshold across repeated forks"><span class="plot-chart-fallback">Repeated-fork economics. Each default fork leaves approximately 99% of the previous generation's theoretical REP supply, and the next fork threshold remains 5% of that declining supply.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Repeated-Fork Decay</span></p>
 				</figure>
-
 			</section>
 
 			<section class="paper-section" id="splitting">
@@ -314,7 +309,7 @@
 							<mi>numTicks</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Scalar Validity</span>A valid scalar answer must allocate all ticks across the two payout numerators.</p>
+					<p class="equation-note">A valid scalar answer must allocate all ticks across the two payout numerators.</p>
 				</div>
 				<p>The all-zero word is the only canonical scalar <code>Invalid</code> value. Any other word with the highest bit clear is malformed, and any word with a nonzero reserved bit in <code>254...240</code> is malformed even if the payout fields would otherwise decode cleanly.</p>
 				<p>At the helper and UI level, a scalar tick index named <code>tickIndex</code> is encoded as:</p>
@@ -335,7 +330,7 @@
 							<mo>)</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Scalar Tick Encoding</span>The helper encodes a tick as left and right payout numerators.</p>
+					<p class="equation-note">The helper encodes a tick as left and right payout numerators.</p>
 				</div>
 				<p><a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> interprets <code>secondPayoutNumerator</code> as the position along the scalar range:</p>
 				<div class="equation" id="eq-zoltar-scalar-display-value">
@@ -361,7 +356,7 @@
 							<mo>⌋</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Scalar Display Value</span>The contract interpolates the scalar answer with <code>mulDiv</code>, so uneven divisions round down before the value is formatted.</p>
+					<p class="equation-note">The contract interpolates the scalar answer with <code>mulDiv</code>, so uneven divisions round down before the value is formatted.</p>
 				</div>
 				<p><code>displayValueMin</code> and <code>displayValueMax</code> are stored as 18-decimal fixed-point display bounds. Formatting divides the atomic result by <code>1e18</code> and trims trailing zeroes. For example, with <code>displayValueMin = 0</code>, <code>displayValueMax = 10e18</code>, <code>numTicks = 6</code>, and <code>secondPayoutNumerator = 1</code>, the atomic value is <code>⌊10e18 / 6⌋</code>, which displays as <code>1.666666666666666666</code> rather than an unrounded real number.</p>
 			</section>

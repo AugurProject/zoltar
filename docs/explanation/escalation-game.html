@@ -13,15 +13,12 @@
 				<h1>EscalationGame</h1>
 			</header>
 			<section id="lifecycle-first">
-				<p class="lede">When a market ends, Statoblast attempts to resolve its outcome by running an Escalation Game based on <a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md">The Isonzo Front</a>. Participants escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. Each deposit adds to that outcome's cumulative balance; it does not have to outbid the previous deposit or the current leader. The accepted deposit must normally meet the game's starting bond, unless it fills the selected outcome to the non-decision threshold.</p>
-
-				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path. </p>
+				<p class="lede">The Escalation Game's deposit, timing, outcome-selection, and continuation rules fit into the wider prediction-market lifecycle described in the Statoblast white paper.</p>
 
 				<p>When a Statoblast market ends, anyone can deploy and start the escalation game by depositing 1 REP into it. After the game has been started, there's 3 day period where anyone can deposit REP to challenge the outcome. If there's no-one has challenged the initial depositer by 3 day period, the security pool is finalized as that outcome However, if the outcome is challenged, the escalation game starts.</p>
 				<p>If the escalation game raises enough rep, the escalation game ends and the Statoblast escalation game forks zoltar.</p>
 
 				<p>(convert this into an image)<strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
-
 			</section>
 
 			<section id="escalation">
@@ -30,36 +27,7 @@
 
 				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential escalation bond curve from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The required bond rises exponentially from the start bond to the non-decision threshold over the full escalation interval.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span>
-						<math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)">
-							<mrow>
-								<mi>requiredEscalationCost</mi>
-								<mo>(</mo>
-								<mi>elapsedEscalationTime</mi>
-								<mo>)</mo>
-								<mo>=</mo>
-								<mi>startingBondAmount</mi>
-								<mo>&#x22C5;</mo>
-								<mi>exp</mi>
-								<mo>(</mo>
-								<mfrac>
-									<mrow>
-										<mi>ln</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mi>nonDecisionThresholdAmount</mi>
-											<mi>startingBondAmount</mi>
-										</mfrac>
-										<mo>)</mo>
-										<mo>&#x22C5;</mo>
-										<mi>elapsedEscalationTime</mi>
-									</mrow>
-									<mi>fullEscalationInterval</mi>
-								</mfrac>
-								<mo>)</mo>
-							</mrow>
-						</math>
-					</p>
+					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span> <math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)"> <mrow> <mi>requiredEscalationCost</mi> <mo>(</mo> <mi>elapsedEscalationTime</mi> <mo>)</mo> <mo>=</mo> <mi>startingBondAmount</mi> <mo>&#x22C5;</mo> <mi>exp</mi> <mo>(</mo> <mfrac> <mrow> <mi>ln</mi> <mo>(</mo> <mfrac> <mi>nonDecisionThresholdAmount</mi> <mi>startingBondAmount</mi> </mfrac> <mo>)</mo> <mo>&#x22C5;</mo> <mi>elapsedEscalationTime</mi> </mrow> <mi>fullEscalationInterval</mi> </mfrac> <mo>)</mo> </mrow> </math></p>
 				</figure>
 
 				<p>TODO: make x axis to be time, make curve to start at 0 days, then add 3 day grace period and then add the exponential part, the start bond should not be 9.1%, its wrong</p>
@@ -75,13 +43,7 @@
 					<li>Two sides have reached the maximal deposit amount: Statoblast triggers a fork</li>
 				</ol>
 
-				After the game has ended, the escalation game rewards the winning side (on fork, both sides are rewarded) and burns some fraction of the deposited REP to make it costly to delay the game unnecessarily.
-
-				TODO explain these nicely
-
-				[binding capital][safety boundary][excess]
-				[reward eglible cap              ]
-				 - payout
+				After the game has ended, the escalation game rewards the winning side (on fork, both sides are rewarded) and burns some fraction of the deposited REP to make it costly to delay the game unnecessarily. TODO explain these nicely [binding capital][safety boundary][excess] [reward eglible cap ] - payout
 
 				<div class="callout">
 					Example: if final binding capital is <code>10 REP</code>, the reward-eligible cap is <code>15 REP</code>, the safety boundary is <code>(10 REP, 15 REP]</code>, and the reward pool is <code>6 REP</code>. If the winning side contributes <code>15 REP</code> inside that reward-eligible window, each <code>5 REP</code> deposit receives <code>7 REP</code>. Winning depth above <code>15 REP</code>
@@ -90,14 +52,10 @@
 
 				<h3>Escalation game continuation</h3>
 
-				In AugurV2, when a fork hapens, it cancels all currently running escalation games, the players are refunded. This opens an attack vector for the oracle, discussed more in
-				<a href = "https://github.com/AugurProject/oracle-research/blob/main/Zoltar%20Forks%20Should%20Not%20Cancel%20Escalation%20Games.md">Zoltar Forks Should Not Cancel Escalation Games</a>. The fix to the issue is to fork escalation games. This is called continuation. </p>
+				<p>In AugurV2, when a fork happens, it cancels all currently running escalation games, and the players are refunded. This opens an attack vector for the oracle, discussed more in <a href="https://github.com/AugurProject/oracle-research/blob/main/Zoltar%20Forks%20Should%20Not%20Cancel%20Escalation%20Games.md">Zoltar Forks Should Not Cancel Escalation Games</a>. The fix to the issue is to fork escalation games. This is called continuation.</p>
 
 				<p>Escalation game continuation uses <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a> and nullifier roots to migrate user game deposits, without requiring expensive data copying efforts onchain.</p>
-
-
 			</section>
-
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>

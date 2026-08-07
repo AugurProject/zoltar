@@ -1874,6 +1874,17 @@ body.paper-statoblast .example-bar-red {
 	stroke: var(--red);
 	stroke-width: 1.5;
 }
+.equation {
+	counter-increment: equation;
+}
+.equation::before {
+	display: block;
+	margin-bottom: 0.5rem;
+	color: var(--muted);
+	font-size: 0.85rem;
+	font-weight: 800;
+	content: "Equation " counter(equation);
+}
 body.paper-statoblast .equation,
 body.paper-statoblast .diagram {
 	scroll-margin-top: 1rem;
@@ -1886,7 +1897,6 @@ body.paper-statoblast .diagram {
 	scrollbar-width: thin;
 }
 body.paper-statoblast .equation {
-	counter-increment: equation;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
 	background: var(--code-bg);
@@ -2846,7 +2856,6 @@ body.paper-zoltar .clean-list li {
 	padding-left: 0.2rem;
 }
 body.paper-zoltar .equation {
-	counter-increment: equation;
 	scroll-margin-top: 1rem;
 	margin: 1.1rem 0;
 	padding: 0.5rem;

@@ -18,13 +18,10 @@
 			</header>
 
 			<section class="paper-section" id="abstract">
-				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
+				<p>This white paper develops the Statoblast prediction-market design, its REP-backed resolution path, and its security assumptions. The documentation overview introduces the system; the sections below provide the detailed protocol model and accounting rules.</p>
+				<p>Statoblast's relationship to Zoltar, escalation resolution, settlement collateral, and security assumptions is defined by the linked canonical pages: <a href="../documentation.html">documentation overview</a>, <a href="./escalation-game.html">escalation game</a>, <a href="./zoltar.html">Zoltar</a>, and <a href="../reference/security-model.html">security model</a>.</p>
 
-				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href = './escalation-game.html'>escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="../reference/security-model.html">security model</a>.</p>
-
-				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
-
-				<p> It is designed so that: </p>
+				<p>It is designed so that:</p>
 				<ul>
 					<li>Honest reporting is economically rewarded.</li>
 					<li>Dishonest reporting becomes increasingly expensive.</li>
@@ -33,7 +30,7 @@
 					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
 				</ul>
 
-				<p> Statoblasts design is based on <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">Artic Tern Oracle</a> and <a href="https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md">Sisyphean Exchnge</a>.</p>
+				<p>Statoblasts design is based on <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">Artic Tern Oracle</a> and <a href="https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md">Sisyphean Exchnge</a>.</p>
 			</section>
 
 			<section class="paper-section" id="overview">
@@ -47,9 +44,9 @@
 					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
 					<li>Vault owners deposit REP into security vaults, while traders deposit ETH to mint complete sets. Each complete set is backed by ETH and secured by REP from the vaults worth at least as much as the deposited ETH.</li>
 					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
-					<li>In the unfortunate case where the the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.
+					<li>In the unfortunate case where the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.</li>
 					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder in each pool decides which market outcome is correct, migrate their REP there a long with an equal share of ETH market collateral.</li>
-					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href = 'truth-auctions.html'>Truth Auction</a> to repair that collateral gap.</li>
+					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href="truth-auctions.html">Truth Auction</a> to repair that collateral gap.</li>
 					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
 				</ol>
 
@@ -64,13 +61,10 @@
 				<section>
 					<h3>Traders / Liquidity providers</h3>
 					<ul>
-						<li>
-							Deposit ETH to mint complete sets containing transferable <code>Yes</code>, <code>No</code>, and <code>Invalid</code> outcome shares.
-						</li>
-						<li>Pay time-based fees in ETH to vault owners for the duration that the complete sets remain outstanding.
-						</li>
-						<li> Trade by splitting complete sets into their individual outcome shares. This trading occurs outside the protocol.</li>
-						<li> Burn complete sets to recover ETH before resolution, or redeem individual winning shares for ETH after the market resolves. </li>
+						<li>Deposit ETH to mint complete sets containing transferable <code>Yes</code>, <code>No</code>, and <code>Invalid</code> outcome shares.</li>
+						<li>Pay time-based fees in ETH to vault owners for the duration that the complete sets remain outstanding.</li>
+						<li>Trade by splitting complete sets into their individual outcome shares. This trading occurs outside the protocol.</li>
+						<li>Burn complete sets to recover ETH before resolution, or redeem individual winning shares for ETH after the market resolves.</li>
 					</ul>
 				</section>
 
@@ -79,13 +73,11 @@
 					<ul>
 						<li>Deposit REP into a security pool.</li>
 						<li>Provide REP-backed security capacity for traders.</li>
-						<li> Receive time-based fees in ETH from traders holding outstanding complete sets.
-						</li>
-						<li> Participate in the Escalation Game after the market ends. </li>
-						<li> Choose where to migrate their REP and allocated share of open interest ETH after a fork. </li>
-						<li> Keep the value of their REP backing above the amount required to secure their allocated open interest.
-</li>
-						<li> Trigger OpenOracle games when a REP/ETH price is required for a protocol operation. </li>
+						<li>Receive time-based fees in ETH from traders holding outstanding complete sets.</li>
+						<li>Participate in the Escalation Game after the market ends.</li>
+						<li>Choose where to migrate their REP and allocated share of open interest ETH after a fork.</li>
+						<li>Keep the value of their REP backing above the amount required to secure their allocated open interest.</li>
+						<li>Trigger OpenOracle games when a REP/ETH price is required for a protocol operation.</li>
 					</ul>
 				</section>
 
@@ -94,24 +86,23 @@
 					<ul>
 						<li>Decide whether to create a security pool for a question.</li>
 						<li>Decide whether to participate in an existing security pool.</li>
-						<li> Split their REP into outcome-specific child-universe REP during a Zoltar fork.
-						</li>
+						<li>Split their REP into outcome-specific child-universe REP during a Zoltar fork.</li>
 					</ul>
 				</section>
 
 				<section>
 					<h3>OpenOracle disputers</h3>
-					<p> OpenOracle disputers, such as arbitrage bots, monitor active OpenOracle games and challenge inaccurate REP/ETH prices when doing so offers a profitable arbitrage opportunity. </p>
+					<p>OpenOracle disputers, such as arbitrage bots, monitor active OpenOracle games and challenge inaccurate REP/ETH prices when doing so offers a profitable arbitrage opportunity.</p>
 				</section>
 
 				<section>
 					<h3>Truth auction participants</h3>
-					<p> After a Zoltar fork, truth auction participants provide ETH to acquire REP-backed positions from an auction. Their ETH helps repair missing open-interest collateral in a child security pool. </p>
+					<p>After a Zoltar fork, truth auction participants provide ETH to acquire REP-backed positions from an auction. Their ETH helps repair missing settlement collateral in a child security pool.</p>
 				</section>
 
 				<section>
 					<h3>Liquidators and keepers</h3>
-					<p> Liquidators and keepers monitor vault health and execute profitable liquidations when a vault no longer satisfies the protocol's required backing condition: </p>
+					<p>Liquidators and keepers monitor vault health and execute profitable liquidations when a vault no longer satisfies the protocol's required backing condition:</p>
 					<pre><code>value of REP backing ≥ security multiplier × open interest secured</code></pre>
 				</section>
 			</section>
@@ -121,22 +112,21 @@
 					<h2>3. Security Pools</h2>
 					<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 				</div>
-				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP backing: <code>value of REP backing ≥ security multiplier × secured open interest</code>. </p>
+				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP backing: <code>value of REP backing ≥ security multiplier × secured open interest</code>.</p>
 
 				<p>This requirement protects outcome-share holders by making dishonest behavior economically unprofitable. If a vault owner attempts to manipulate the market's resolution, the REP they risk losing should be worth more than any potential gain. The protocol therefore rewards behavior that supports correct resolution and penalizes behavior that threatens it.</p>
 
-
 				<h3>Fee Extraction and Retention Rate</h3>
 				<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
-				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned coverage commitment. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
-				<a href = "fees.html">read more from here on how fees work</a>
+				<p>Fee extraction and retention vary with vault coverage commitment and utilization; see <a href="./fees.html">Open Interest Fees</a> for the complete fee curve and epoch accounting.</p>
+				<a href="fees.html">read more from here on how fees work</a>
 
 				<h3>Shares and Complete Sets</h3>
 				<p><code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.</p>
 
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="340" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span></p>
+					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span>Complete sets mint one Invalid, Yes, and No share; operational redemption burns the complete set, while finalized settlement redeems the winning outcome.</p>
 				</figure>
 			</section>
 
@@ -146,12 +136,11 @@
 					<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
 				</div>
 				<p class="lede">When a market ends, Statoblast attempts to resolve its outcome by running an Escalation Game based on <a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md">The Isonzo Front</a>. Participants escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. Each deposit adds to that outcome's cumulative balance; it does not have to outbid the previous deposit or the current leader. The accepted deposit must normally meet the game's starting bond, unless it fills the selected outcome to the non-decision threshold.</p>
-				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path. </p>
+				<p>The running escalation cost increases with elapsed time, and the median outcome balance determines the scheduled end. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path.</p>
 
 				<div class="callout"><strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded. The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.</div>
 
-				<a href = "./escalation-game.html">read more from here on escalation game works</a>
-
+				<a href="./escalation-game.html">read more from here on escalation game works</a>
 			</section>
 
 			<section class="paper-section" id="migration">
@@ -163,8 +152,8 @@
 				<p>A Statoblast security pool can also enter the fork resolution process when an unrelated Zoltar fork occurs. For example, another Statoblast pool or an entirely different application built on Zoltar may trigger a fork that affects the same universe. In either case, the pool must migrate to the resulting child universes, run truth auction if needed and continue operation there.</p>
 
 				<figure class="diagram" id="fig-statoblast-fork-state-machine">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"></div>
-					<p class="diagram-caption"><span class="figure-label">Fork Timeline</span></p>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, auction repair, and child settlement.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Fork Timeline</span>The parent pool pauses, vault owners select child universes, and each child resumes only after migration and any required collateral repair.</p>
 				</figure>
 
 				<p>Fork Steps</p>
@@ -175,12 +164,11 @@
 					<li>Unresolved ongoing escalation games fork into child pools and the games continue after a pause</li>
 					<li>Truth auction starts to recover missing open interest (if there's any)</li>
 					<li>Truth auction ends, auction participants can claim their bought locked REP and security commitments</li>
-					<li>Vault owners claim winning own-fork escalation deposits; the own-fork path is open only during the parent migration window. A successful direct claim invalidates that stable deposit identity in every current and future child continuation.
-					</li>
-					<li>Shares migrate into new universes</code>. </li>
+					<li>Vault owners claim winning own-fork escalation deposits; the own-fork path is open only during the parent migration window. A successful direct claim invalidates that stable deposit identity in every current and future child continuation.</li>
+					<li>Shares migrate into new universes.</li>
 				</ol>
 
-				<h3> 8 week migration</h3>
+				<h3>8 week migration</h3>
 				<p>All vault holders have 8 weeks time to choose which universe they believe is correct by migrating their REP accordingly. REP that did not migrate is burnt. Since the system includes open interest in external assets (ETH), each migrating REP holder also transfers a proportional share of the open interest to the universe they select. E.g. 1% of all REP can move 1% of the total open interest to the universe where that REP is migrated. This open interest belongs to all of the markets in the original universe (both forking and non-forking markets).</p>
 
 				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, migrated REP backing units and coverage commitments, and converted child-universe REP backing that actually move into it.</p>
@@ -190,15 +178,19 @@
 				<div class="callout">
 					<h4>Example: REP and open-interest migration</h4>
 
-					<p> Bob holds <b>5 REP</b> out of a total supply of <b>100 REP</b>. The prediction market contains one market with <b>10 ETH</b> in outstanding bets, or open interest.</p>
+					<p>Bob holds <b>5 REP</b> out of a total supply of <b>100 REP</b>. The prediction market contains one market with <b>10 ETH</b> in outstanding bets, or open interest.</p>
 
-					<p> When the oracle forks into REP<sub>A</sub> and REP<sub>B</sub>, Bob believes universe A is correct and migrates his 5 REP to universe A. As a result:</p>
+					<p>When the oracle forks into REP<sub>A</sub> and REP<sub>B</sub>, Bob believes universe A is correct and migrates his 5 REP to universe A. As a result:</p>
 
 					<ul>
-						<li>Bob receives <b>5 REP<sub>A</sub></b>.</li>
-						<li> A proportional share of the market's open interest moves to universe A:
-							<div class="equation">
-								<math display="block">
+						<li>
+							Bob receives <b>5 REP<sub>A</sub></b
+							>.
+						</li>
+						<li>
+							A proportional share of the market's open interest moves to universe A:
+							<div class="equation" id="eq-statoblast-migration-share-a">
+								<math display="block" aria-label="five REP divided by one hundred REP times ten ETH equals zero point five ETH" data-source="(5 REP / 100 REP) × 10 ETH = 0.5 ETH">
 									<mrow>
 										<mfrac>
 											<mrow>
@@ -230,16 +222,21 @@
 										<mtext>ETH</mtext>
 									</mrow>
 								</math>
+								<p class="equation-note">Bob's 5 REP represents 5% of the parent supply, so 0.5 ETH of the 10 ETH open interest follows the migration.</p>
 							</div>
 						</li>
 					</ul>
 
-					<p> The remaining REP holders control <b>95 REP</b>. They believe universe B is correct and migrate their REP there. As a result: </p>
+					<p>The remaining REP holders control <b>95 REP</b>. They believe universe B is correct and migrate their REP there. As a result:</p>
 					<ul>
-						<li>They receive a total of <b>95 REP<sub>B</sub></b>.</li>
-						<li> The remaining proportional share of open interest moves to universe B:
-							<div class="equation">
-								<math display="block">
+						<li>
+							They receive a total of <b>95 REP<sub>B</sub></b
+							>.
+						</li>
+						<li>
+							The remaining proportional share of open interest moves to universe B:
+							<div class="equation" id="eq-statoblast-migration-share-b">
+								<math display="block" aria-label="ninety five REP divided by one hundred REP times ten ETH equals nine point five ETH" data-source="(95 REP / 100 REP) × 10 ETH = 9.5 ETH">
 									<mrow>
 										<mfrac>
 											<mrow>
@@ -271,14 +268,15 @@
 										<mtext>ETH</mtext>
 									</mrow>
 								</math>
+								<p class="equation-note">The remaining 95 REP represents 95% of the parent supply, so 9.5 ETH follows the migration to universe B.</p>
 							</div>
 						</li>
 					</ul>
 
 					<p>After migration:</p>
 					<ul>
-						<li> <b>Universe A</b> holds 5 REP<sub>A</sub> and 0.5 ETH of open interest.</li>
-						<li> <b>Universe B</b> holds 95 REP<sub>B</sub> and 9.5 ETH of open interest. </li>
+						<li><b>Universe A</b> holds 5 REP<sub>A</sub> and 0.5 ETH of open interest.</li>
+						<li><b>Universe B</b> holds 95 REP<sub>B</sub> and 9.5 ETH of open interest.</li>
 					</ul>
 				</div>
 
@@ -287,21 +285,21 @@
 					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredAttoRep = vaultTotalAssociatedAttoRep - vaultEscalationGameAttoRep">
 						<mrow><mi>vaultMigrationPoweredAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameAttoRep</mi></mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Migration-powered REP</span>Escalation claims are excluded.</p>
+					<p class="equation-note">Escalation claims are excluded.</p>
 				</div>
 				<p>Migration safety uses only pool-held vault REP backing and is strict for every positive coverage commitment: equality is unsafe. The implementation derives <code>10,000 + ⌊(poolSecurityMultiplierBps - 10,000) / 2⌋</code>, then floors the effective <code>migrationSecurityMultiplierBps</code> at <code>10,500 BPS</code> so pool-held vault REP backing normally funds the complete liquidation award. The exact integer-BPS minimum and both contract inequalities are owned by the <a href="../explanation/liquidations.html#rule">liquidation design</a>. There is no coverage commitment-independent fraction of associated REP that must remain available: escalation capacity depends on the vault's current coverage commitment, REP price, and integer rounding, and a zero-coverage commitment vault may lock all associated REP. This separation lets REP perform escalation work without letting contingent claims secure parent OI.</p>
 				<p>A vault's migrated OI share is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and coverage commitment to one selected child, clears those two parent fields, and separately routes proportional pool-level settlement collateral. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration weight across sibling universes.</p>
 
 				<h3>One week Truth Auction</h3>
 
-				<a href = "truth-auctions.html">read more from here on how truth auction is implemented</a>
+				<a href="truth-auctions.html">read more from here on how truth auction is implemented</a>
 
 				<h3 id="child-outcome-resolution">Child Outcome Resolution</h3>
-				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational. </p>
+				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational.</p>
 
 				<figure class="diagram" id="fig-statoblast-system-decision-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="500" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.</span></div>
-					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span></p>
+					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The lifecycle connects question registration, pool operation, local escalation, fork migration, auction repair, settlement, and recursive continuation when a child remains unresolved.</p>
 				</figure>
 
 				<h3>Shares migration</h3>
@@ -317,8 +315,8 @@
 					<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 				</div>
 
-				<p> Statoblast requires REP/ETH price to be able to be able to know it security status. Its utmost importance for security pool to have more REP locked into it than it has open interest. To make this happen, Statoblast needs access to REP/ETH price feed.</p>
-				<p> Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a> please read more about how that is integrated here <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration.</a></p>
+				<p>Statoblast requires REP/ETH price to be able to be able to know it security status. Its utmost importance for security pool to have more REP locked into it than it has open interest. To make this happen, Statoblast needs access to REP/ETH price feed.</p>
+				<p>Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a> please read more about how that is integrated here <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration.</a></p>
 
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow"><span class="plot-chart-fallback">A solvency-sensitive operation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
@@ -329,95 +327,6 @@
 
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script>
-			const formatFixed = (value, digits = 2) => {
-				if (Number.isInteger(value)) {
-					return value.toFixed(0);
-				}
-				return value.toFixed(digits);
-			};
-			const formatRep = (value, digits = 2) => `${formatFixed(value, digits)} REP`;
-			const formatEth = (value) => `${formatFixed(value)} ETH`;
-			const displayTicksPerRep = 1_000_000n;
-			const attoRepPerDisplayTick = 1_000_000_000_000n;
-			const repToAttoRep = (repAmount) => BigInt(Math.round(repAmount * Number(displayTicksPerRep))) * attoRepPerDisplayTick;
-			const attoRepToRep = (amountAttoRep) => Number(amountAttoRep / attoRepPerDisplayTick) / Number(displayTicksPerRep);
-			const formatRepFromAttoRep = (amountAttoRep, digits = 18) => {
-				const wholePart = amountAttoRep / (displayTicksPerRep * attoRepPerDisplayTick);
-				const fractionalPart = amountAttoRep % (displayTicksPerRep * attoRepPerDisplayTick);
-				const paddedFraction = fractionalPart.toString().padStart(18, "0").slice(0, digits);
-				return `${wholePart.toString()}.${paddedFraction} REP`;
-			};
-			const collectExample = (exampleId) => {
-				const example = document.getElementById(exampleId);
-				if (example === null) {
-					return undefined;
-				}
-				const inputs = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-input]")).map((inputElement) => [inputElement.dataset.exampleInput, inputElement]));
-				const outputs = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-output]")).map((outputElement) => [outputElement.dataset.exampleOutput, outputElement]));
-				const values = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-value]")).map((valueElement) => [valueElement.dataset.exampleValue, valueElement]));
-				const rects = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-rect]")).map((rectElement) => [rectElement.dataset.exampleRect, rectElement]));
-				const texts = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-text]")).map((textElement) => [textElement.dataset.exampleText, textElement]));
-				const read = (inputName) => {
-					const inputElement = inputs[inputName];
-					if (inputElement === undefined) {
-						return 0;
-					}
-					const inputValue = Number(inputElement.value);
-					return Number.isFinite(inputValue) ? inputValue : 0;
-				};
-				const write = (outputName, value) => {
-					const outputElement = outputs[outputName];
-					if (outputElement !== undefined) {
-						outputElement.value = value;
-					}
-				};
-				const writeValue = (valueName, value) => {
-					const valueElement = values[valueName];
-					if (valueElement !== undefined) {
-						valueElement.textContent = value;
-					}
-				};
-				const writeText = (textName, value) => {
-					const textElement = texts[textName];
-					if (textElement !== undefined) {
-						textElement.textContent = value;
-					}
-				};
-				const setRectWidth = (rectName, width) => {
-					const rectElement = rects[rectName];
-					if (rectElement !== undefined) {
-						rectElement.setAttribute("width", String(Math.max(0, width)));
-					}
-				};
-				const setRectX = (rectName, rectX) => {
-					const rectElement = rects[rectName];
-					if (rectElement !== undefined) {
-						rectElement.setAttribute("x", String(rectX));
-					}
-				};
-				return {
-					inputs,
-					read,
-					write,
-					writeValue,
-					writeText,
-					setRectWidth,
-					setRectX,
-				};
-			};
-			const bindExample = (exampleId, update) => {
-				const context = collectExample(exampleId);
-				if (context === undefined) {
-					return;
-				}
-				for (const inputElement of Object.values(context.inputs)) {
-					inputElement.addEventListener("input", () => update(context));
-				}
-				update(context);
-			};
-
-
-
 			const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'));
 			const sectionLinks = navLinks
 				.map((link) => {

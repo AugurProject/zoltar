@@ -20,6 +20,37 @@
 				</figure>
 			</header>
 
+			<section class="invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer">
+				<div class="invariant-explorer-controls">
+					<label>Search <input type="search" data-invariant-search placeholder="Search invariants" /></label>
+					<label
+						>Type
+						<select data-invariant-type>
+							<option value="">Any type</option>
+						</select></label
+					>
+					<label
+						>Enforcement status
+						<select data-invariant-status>
+							<option value="">Any status</option>
+						</select></label
+					>
+					<label
+						>Subsystem
+						<select data-invariant-subsystem>
+							<option value="">Any subsystem</option>
+						</select></label
+					>
+				</div>
+				<div class="invariant-explorer-actions">
+					<button type="button" data-invariant-expand>Expand visible</button>
+					<button type="button" data-invariant-collapse>Collapse all</button>
+					<button type="button" data-invariant-reset>Reset filters</button>
+				</div>
+				<p class="invariant-result-count" data-invariant-count aria-live="polite">Loading invariants…</p>
+				<p data-invariant-empty hidden>No invariants match the selected filters.</p>
+			</section>
+
 			<section id="standing">
 				<h2>Classification and Scope</h2>
 				<p>Each entry separates the kind of property from its current enforcement status. A status describes the strongest claim supported by the local implementation and tests; it is not a formal proof. Changes to any contract named in the evidence column must preserve the full statement, not only the check performed in one function.</p>
@@ -616,7 +647,7 @@
 							<mi>explicitSurplusAttoEth</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">ETH Conservation Boundary</span>Every successful external call should reconcile raw ETH into named liabilities or an explicit surplus bucket. All equation terms are denominated in attoETH; raw balance alone must not define collateral.</p>
+					<p class="equation-note">Every successful external call should reconcile raw ETH into named liabilities or an explicit surplus bucket. All equation terms are denominated in attoETH; raw balance alone must not define collateral.</p>
 				</div>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="bal-01">

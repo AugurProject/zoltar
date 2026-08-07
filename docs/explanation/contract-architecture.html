@@ -235,40 +235,14 @@
 				</ul>
 			</section>
 			<section id="actors-and-boundaries">
-			<h2>Actors, custody, and one operation</h2>
-				<p>
-					The protocol consists of several participants with distinct responsibilities.
-					Market creators configure security pools, traders mint and hold complete sets
-					and outcome shares, vault owners provide REP backing, liquidators repair
-					under-collateralized vaults, auction bidders recapitalize child pools after
-					forks, keepers execute permissionless maintenance operations, and indexers
-					reconstruct protocol state from emitted events.
-				</p>
+				<h2>Actors, custody, and one operation</h2>
+				<p>The protocol consists of several participants with distinct responsibilities. Market creators configure security pools, traders mint and hold complete sets and outcome shares, vault owners provide REP backing, liquidators repair under-collateralized vaults, auction bidders recapitalize child pools after forks, keepers execute permissionless maintenance operations, and indexers reconstruct protocol state from emitted events.</p>
 
-				<p>
-					Each contract owns a specific part of the protocol. Security pools hold user
-					funds and manage market state. The Oracle Coordinator executes price-sensitive
-					operations that require a REP/ETH price. Zoltar manages universes, questions,
-					REP, and forks. Because each contract has a well-defined area of responsibility,
-					operations may involve multiple contracts without transferring ownership of all
-					assets or state between them.
-				</p>
+				<p>Each contract owns a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator executes price-sensitive operations that require a REP/ETH price. Zoltar manages universes, questions, REP, and forks. Because each contract has a well-defined area of responsibility, operations may involve multiple contracts without transferring ownership of all assets or state between them.</p>
 
-				<p>
-					For example, when a trader mints a complete set, they send ETH to the security
-					pool. The pool accepts the deposit, mints one outcome share for every possible
-					outcome, and updates its accounting. Throughout the process, each contract
-					modifies only the state it owns while emitted events allow external indexers to
-					reconstruct the operation.
-				</p>
+				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Throughout the process, each contract modifies only the state it owns while emitted events allow external indexers to reconstruct the operation.</p>
 
-				<p>
-					The deployment graph above illustrates the primary contract interactions in this
-					release. Supporting factories, delegates, callbacks, emitters, and compatibility
-					contracts are omitted for clarity. Contract addresses and call relationships are
-					deployment details, while the ownership boundaries described above remain stable
-					across deployments.
-				</p>
+				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the ownership boundaries described above remain stable across deployments.</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
