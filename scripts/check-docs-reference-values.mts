@@ -318,7 +318,11 @@ function assertRecursiveForkGasStatusDocs(): void {
 function assertCoordinatorRecoveryBranch(): void {
 	assert.match(openOracleIntegration, /<section id="callback-rejection-and-recovery">[\s\S]*<h2>Settlement validation, rejection, and recovery<\/h2>/)
 	assert.match(openOracleIntegration, /failed callback does not automatically undo an otherwise valid OpenOracle settlement[\s\S]*coordinator remains pending/, 'OpenOracle documentation must explain the pending state after a failed low-level callback')
-	assert.match(openOracleIntegration, /settlement base fee exceeds the request-time cap[\s\S]*storedGame\(reportId\)\.numReports[\s\S]*either settled token amount is zero[\s\S]*integer REP\/ETH calculation produces a zero price/, 'OpenOracle documentation must retain the current coordinator rejection conditions')
+	assert.match(
+		openOracleIntegration,
+		/settlement base fee exceeds the request-time cap[\s\S]*storedGame\(reportId\)\.numReports[\s\S]*final history record's WETH amount is too small[\s\S]*Report uneconomic[\s\S]*either settled token amount is zero[\s\S]*integer REP\/ETH calculation produces a zero price/,
+		'OpenOracle documentation must retain the current coordinator rejection conditions',
+	)
 	assert.match(openOracleIntegration, /rejected report does not replay the pending settlement operations[\s\S]*remain queued for a later valid price/, 'OpenOracle documentation must describe queued-operation behavior after rejection')
 	assert.match(
 		openOracleIntegration,
@@ -332,6 +336,10 @@ function assertCoordinatorRecoveryBranch(): void {
 	)
 	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle callback report id does not match the pending request'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
 	assert.match(openOracleIntegration, /data-source="requestPriceCostAttoEth = block\.basefee \\cdot 4 \\cdot \(callbackGasLimit \+ gasConsumedOpenOracleReportPrice\) \+ 101"/, 'OpenOracle documentation must retain the canonical request-cost equation')
+	const requestCostEquation = openOracleIntegration.match(/<figure class="equation" id="eq-openoracle-request-price-cost">[\s\S]*?<\/figure>/)?.[0]
+	assert.ok(requestCostEquation, 'OpenOracle documentation must retain the request-cost equation figure')
+	assert.match(requestCostEquation, /aria-label="request price cost in attoETH equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101 attoETH"/)
+	assert.match(requestCostEquation, /<mi>requestPriceCostAttoEth<\/mi>[\s\S]*?<mi>block\.basefee<\/mi>[\s\S]*?<mn>4<\/mn>[\s\S]*?<mi>callbackGasLimit<\/mi>[\s\S]*?<mi>gasConsumedOpenOracleReportPrice<\/mi>[\s\S]*?<mn>101<\/mn>/)
 	assert.match(
 		priceCoordinator,
 		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return block\.basefee \* 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\) \+ 101;/,
