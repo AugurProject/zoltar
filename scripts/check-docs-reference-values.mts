@@ -315,7 +315,23 @@ function assertRecursiveForkGasStatusDocs(): void {
 	}
 }
 
-function assertCoordinatorRecoveryBranch(): void {}
+function assertCoordinatorRecoveryBranch(): void {
+	assert.match(openOracleIntegration, /<section id="callback-rejection-and-recovery">[\s\S]*<h2>Settlement validation, rejection, and recovery<\/h2>/)
+	assert.match(openOracleIntegration, /failed callback does not automatically undo an otherwise valid OpenOracle settlement[\s\S]*coordinator remains pending/, 'OpenOracle documentation must explain the pending state after a failed low-level callback')
+	assert.match(openOracleIntegration, /settlement base fee exceeds the request-time cap[\s\S]*storedGame\(reportId\)\.numReports[\s\S]*either settled token amount is zero[\s\S]*integer REP\/ETH calculation produces a zero price/, 'OpenOracle documentation must retain the current coordinator rejection conditions')
+	assert.match(openOracleIntegration, /rejected report does not replay the pending settlement operations[\s\S]*remain queued for a later valid price/, 'OpenOracle documentation must describe queued-operation behavior after rejection')
+	assert.match(
+		openOracleIntegration,
+		/anyone can call <code>recoverSettledPendingReport<\/code>[\s\S]*clears the pending report and base-fee cap[\s\S]*deactivates and removes the live staged operation[\s\S]*does not treat the removed operation as executed/,
+		'OpenOracle documentation must describe settled-report recovery effects',
+	)
+	assert.match(
+		priceCoordinator,
+		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No pending oracle price request can be recovered'\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)[\s\S]*pendingReportId = 0;[\s\S]*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_consumeRecoveredPendingOperation\(\)/,
+		'coordinator recovery must require settlement and clear pending state before consuming the pending operation',
+	)
+	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle callback report id does not match the pending request'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
+}
 
 function assertCoordinatorSettlementEconomics(): void {
 	const requestBaseFee = 30n
