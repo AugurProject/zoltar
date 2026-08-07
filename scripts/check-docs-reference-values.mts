@@ -331,6 +331,12 @@ function assertCoordinatorRecoveryBranch(): void {
 		'coordinator recovery must require settlement and clear pending state before consuming the pending operation',
 	)
 	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle callback report id does not match the pending request'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
+	assert.match(openOracleIntegration, /data-source="requestPriceCostAttoEth = block\.basefee \\cdot 4 \\cdot \(callbackGasLimit \+ gasConsumedOpenOracleReportPrice\) \+ 101"/, 'OpenOracle documentation must retain the canonical request-cost equation')
+	assert.match(
+		priceCoordinator,
+		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return block\.basefee \* 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\) \+ 101;/,
+		'coordinator request-cost implementation must retain the documented factors and boundary offset',
+	)
 }
 
 function assertCoordinatorSettlementEconomics(): void {
