@@ -212,7 +212,7 @@
 		{
 			"path": "explanation/open-oracle.html",
 			"title": "OpenOracle integration",
-			"summary": "Choose the conceptual explanation, coordinator reference, or operator procedure for OpenOracle.",
+			"summary": "REP/ETH price oracle for Statoblast.",
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
