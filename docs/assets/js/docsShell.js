@@ -43,7 +43,7 @@
 	const topbar = element('header', 'docs-topbar')
 	const brand = element('a', 'docs-brand')
 	brand.href = docsUrl('documentation.html')
-	brand.append(element('span', 'docs-brand-mark', 'S'), element('span', '', 'Statoblast documentation'))
+	brand.append(element('span', 'docs-brand-mark', 'S'), element('span', '', 'Statoblast docs'))
 
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')

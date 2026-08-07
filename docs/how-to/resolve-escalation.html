@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Advance an escalation game · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Advance an escalation game</h1>
+				<p>Move one escalation game from an active round to local settlement or fork continuation, with exact state checks at every transition.</p>
+			</header>
+			<section id="identify-the-game">
+				<h2>Identify the game</h2>
+				<p>Verify the pool, question, universe, active game address, round, tentative answer, deposit target, deadline, and whether the game is ordinary or a child continuation. Read <code>systemState()</code>, <code>escalationGame()</code>, and the game state from the deployed interface in the <a href="../reference/contracts.html">contract reference</a>. Snapshot the block before calculating a deposit.</p>
+			</section>
+			<section id="prepare-a-deposit">
+				<h2>Prepare a deposit</h2>
+				<p>Choose an eligible outcome and calculate the accepted REP amount from current state. Read <code>securityVaults(msg.sender)</code>, <code>getPoolAccountingSnapshot()</code>, <code>priceOracleManagerAndOperatorQueuer().isPriceValid()</code>, and the game's round/deadline. The pool entrypoint is <code>depositToEscalationGame(outcome, maximumDepositAttoRep)</code>; it escrows the caller vault's pool-held REP backing, not a wallet transfer, so no REP approval is required. Coverage-bearing pools require a fresh price and post-deposit coverage checks must pass.</p>
+			</section>
+			<section id="worked-deposit-example">
+				<h2>Worked deposit and deadline example</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Field</th>
+							<th>Contract-derived value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Outcome balances before deposit</td>
+							<td><code>Invalid = 0 REP</code>; <code>Yes = 200 REP</code>; <code>No = 150 REP</code></td>
+						</tr>
+						<tr>
+							<td>Current tentative outcome</td>
+							<td><code>Yes</code> balance <code>200 REP</code>; <code>No</code> balance <code>150 REP</code></td>
+						</tr>
+						<tr>
+							<td>Game parameters</td>
+							<td><code>startBond = 100 REP</code>; threshold <code>350 REP</code></td>
+						</tr>
+						<tr>
+							<td>Challenging outcome</td>
+							<td><code>No</code></td>
+						</tr>
+						<tr>
+							<td>Maximum amount offered</td>
+							<td><code>250 REP</code></td>
+						</tr>
+						<tr>
+							<td>Amount accepted by the game</td>
+							<td><code>200 REP</code></td>
+						</tr>
+						<tr>
+							<td>Binding capital after deposit</td>
+							<td><code>median(Invalid 0, Yes 200, No 350) = 200 REP</code></td>
+						</tr>
+						<tr>
+							<td>Previous deadline</td>
+							<td><code>activationTime + time(150 REP)</code></td>
+						</tr>
+						<tr>
+							<td>New deadline</td>
+							<td><code>activationTime + time(200 REP)</code></td>
+						</tr>
+						<tr>
+							<td>New tentative outcome</td>
+							<td><code>No</code></td>
+						</tr>
+					</tbody>
+				</table>
+				<p>Read <code>previewDepositOnOutcome(No, 250 REP)</code> first. With these balances, room is <code>350 − 150 = 200 REP</code>, so the preview returns accepted amount <code>200 REP</code> and cumulative No balance <code>350 REP</code>; the remaining <code>50 REP</code> is not transferred. The game recomputes the leader and binding capital as <code>median(0, 200, 350) = 200 REP</code>; in this example No becomes the leader, but an accepted deposit does not always change the leader. Read <code>getBindingCapitalAttoRep()</code> and <code>getEscalationGameEndDate()</code> again after the deposit: the deadline changes from the curve time for <code>150 REP</code> to the curve time for <code>200 REP</code>. Submit <code>depositToEscalationGame(No, 250 REP)</code> and require <code>DepositToEscalationGame</code> plus the game-level deposit events. The next deposit is valid only while the game remains active and its state has not advanced.</p>
+			</section>
+			<section id="advance-the-round">
+				<h2>Advance the round</h2>
+				<p>Approve no REP: the pool escrows REP backing already held by the caller's vault. Submit the call from that vault, then re-read balances, leader, binding capital, and end date from the receipt block. The local pool claim action is <code>withdrawFromEscalationGame(outcome, depositIndexes)</code>; reserve <code>withdrawForkedEscalationDeposits(outcome, proofs)</code> for forked withdrawals. An own fork uses <code>forkZoltarWithOwnEscalationGame(securityPool)</code>. If a transaction reverts, inspect the current state and quote again because another participant may have advanced it.</p>
+			</section>
+			<section id="settle-or-fork">
+				<h2>Settle or enter fork handling</h2>
+				<p>If the game selects a local winner, settle it and verify claim accounting before withdrawal. If it reaches non-decision, activate the pool fork path and verify the Zoltar fork relationship. Do not treat a paused child continuation as an ordinary unsettled parent game.</p>
+			</section>
+			<section id="settle-locally">
+				<h2>Settle a locally resolved game</h2>
+				<p>Confirm the game has a settled local outcome and is not awaiting a fork continuation. Call <code>withdrawFromEscalationGame(outcome, depositIndexes)</code> for one vault's deposits, then verify the withdrawal event, claim balances, and pool state. A transaction that only advances a timer is not settlement. For an own-fork continuation, the forker path is <code>forkZoltarWithOwnEscalationGame(pool)</code> rather than local withdrawal.</p>
+			</section>
+			<section id="continue-in-child">
+				<h2>Continue in a child universe</h2>
+				<p>For a forked pool, verify the child pool, parent snapshot, carry proof, and <code>awaitingForkContinuation()</code>. Materialize the required child state, follow <a href="./run-truth-auction.html">truth-auction repair</a>, and finalize any required auction. The configured <code>SecurityPoolForker</code> applies a haircut only when purchased REP removes a positive escalation allocation, while the game is paused. Incomplete aggregate backing reverts finalization; reconcile the missing backing and retry.</p>
+				<p>When the child is operational and still awaiting continuation, call permissionless <code>resumeForkedEscalationGame()</code>. Reconcile <code>ForkContinuationResumed</code> and the resulting game state. See the <a href="../reference/merkle-mountain-range.html">proof reference</a> and <a href="../explanation/escalation-game.html">architecture explanation</a>.</p>
+			</section>
+			<section id="common-failures">
+				<h2>Common failures and safe retry</h2>
+				<p>Expired deadline, insufficient vault-backed REP, stale price for a coverage-bearing pool, post-deposit coverage failure, wrong outcome, already-advanced round, and child-not-operational are state errors: inspect and recalculate. A mined successful deposit is not safe to replay just because the UI did not refresh; use the receipt and event identity first.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

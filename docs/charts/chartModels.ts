@@ -10,6 +10,9 @@ export const quantitativeChartIds = [
 	'fig-statoblast-escalation-cost-curve',
 	'fig-statoblast-retention-utilization',
 	'fig-zoltar-fork-threshold-decay',
+	'plot-open-oracle-integration-2',
+	'plot-statoblast-whitepaper-7',
+	'plot-statoblast-whitepaper-8',
 	'plot-statoblast-whitepaper-19',
 ] as const
 
@@ -20,6 +23,9 @@ export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: strin
 	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed escalation interval (% of interval)', y: 'Required bond (% of non-decision threshold)' },
 	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
+	'plot-open-oracle-integration-2': { x: 'Censorship duration (steps)', y: 'Cost or payoff (ETH)' },
+	'plot-statoblast-whitepaper-7': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
+	'plot-statoblast-whitepaper-8': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
 }
 
@@ -152,6 +158,50 @@ export function calculateCollateralRepairModel(
 		received,
 		remainingShortfall: initialShortfall - repairEth,
 		repairEth,
+	}
+}
+
+export type OracleSecurityModel = {
+	attackerProfit: number
+	censorshipCost: number
+	censorshipRate: number
+	executionErrorThreshold: number
+	griefTarget: number
+	liquidationExecutable: boolean
+	manipulatedPriceError: number
+	safeCensorshipDuration: number
+}
+
+export function calculateOracleSecurityModel(input: {
+	censorshipDuration: number
+	externalPayoff: number
+	honestDisputeBarrierFraction: number
+	honestPrice: number
+	liquidationThresholdPrice: number
+	manipulatedPrice: number
+	minLiquidationPriceDistanceBps: number
+	oracleReportLiquidity: number
+	targetGriefRatio: number
+}): OracleSecurityModel {
+	const liquidationDistanceFraction = Math.min(Math.max(input.minLiquidationPriceDistanceBps, 0), 10_000) / 10_000
+	const discountedHonestPrice = input.honestPrice * (1 - liquidationDistanceFraction)
+	const executionErrorThreshold = discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, input.liquidationThresholdPrice / discountedHonestPrice - 1)
+	const manipulatedPriceError = Math.max(0, (input.manipulatedPrice - input.honestPrice) / input.honestPrice)
+	const liquidationExecutable = input.manipulatedPrice > input.liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold
+	const attackerProfit = liquidationExecutable ? input.externalPayoff : 0
+	const censorshipRate = Math.max(0, manipulatedPriceError - input.honestDisputeBarrierFraction)
+	const censorshipCost = input.censorshipDuration * censorshipRate * input.oracleReportLiquidity
+	const oracleLiquidityRatio = input.oracleReportLiquidity / input.externalPayoff
+	const safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (input.targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
+	return {
+		attackerProfit,
+		censorshipCost,
+		censorshipRate,
+		executionErrorThreshold,
+		griefTarget: liquidationExecutable ? (input.targetGriefRatio + 1) * input.externalPayoff : 0,
+		liquidationExecutable,
+		manipulatedPriceError,
+		safeCensorshipDuration,
 	}
 }
 

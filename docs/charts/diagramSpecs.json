@@ -299,6 +299,415 @@
 		],
 		"width": 920
 	},
+	"fig-escalation-game-module-split": {
+		"ariaDescription": "A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. Deposit and claim delegates use the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.",
+		"ariaLabel": "EscalationGame module split between inherited state modules, the deposit and claim delegates, and the external proof verifier",
+		"height": 360,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "escalation-arrow",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"x": "30",
+					"y": "100",
+					"width": "130",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-slate"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "95",
+					"y": "131",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Types"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "195",
+					"y": "100",
+					"width": "160",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-blue"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "275",
+					"y": "131",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Storage / State"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "390",
+					"y": "100",
+					"width": "140",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-green"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "460",
+					"y": "131",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Calculations"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "570",
+					"y": "100",
+					"width": "110",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-green"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "625",
+					"y": "131",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Carry"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "390",
+					"y": "215",
+					"width": "140",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-green"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "460",
+					"y": "246",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Escrow"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "570",
+					"y": "215",
+					"width": "120",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-green"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "630",
+					"y": "246",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "Settlement"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "710",
+					"y": "155",
+					"width": "200",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-amber"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "810",
+					"y": "186",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "EscalationGame"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "710",
+					"y": "55",
+					"width": "200",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-rose"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "810",
+					"y": "86",
+					"text-anchor": "middle",
+					"class": "svg-label"
+				},
+				"children": [
+					{
+						"text": "ProofVerifier"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "710",
+					"y": "260",
+					"width": "200",
+					"height": "50",
+					"rx": "10",
+					"class": "svg-amber"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"x": "810",
+					"y": "291",
+					"text-anchor": "middle",
+					"class": "svg-small"
+				},
+				"children": [
+					{
+						"text": "DepositDelegate + ClaimDelegate"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x1": "355",
+					"y1": "125",
+					"x2": "390",
+					"y2": "125",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "530",
+					"y1": "125",
+					"x2": "570",
+					"y2": "125",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "625",
+					"y1": "150",
+					"x2": "480",
+					"y2": "215",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "530",
+					"y1": "240",
+					"x2": "570",
+					"y2": "240",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "690",
+					"y1": "240",
+					"x2": "710",
+					"y2": "190",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "160",
+					"y1": "125",
+					"x2": "195",
+					"y2": "125",
+					"stroke": "currentColor",
+					"stroke-width": "2",
+					"stroke-dasharray": "6 5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "710",
+					"y1": "80",
+					"x2": "675",
+					"y2": "113",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"x1": "810",
+					"y1": "205",
+					"x2": "810",
+					"y2": "260",
+					"stroke": "currentColor",
+					"stroke-width": "2.5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"points": "710,285 275,285 275,150",
+					"fill": "none",
+					"stroke": "currentColor",
+					"stroke-width": "2",
+					"stroke-dasharray": "6 5",
+					"marker-end": "url(#escalation-arrow)"
+				},
+				"tag": "polyline"
+			},
+			{
+				"attributes": {
+					"x": "95",
+					"y": "79",
+					"text-anchor": "middle",
+					"class": "svg-note"
+				},
+				"children": [
+					{
+						"text": "shared definitions"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "810",
+					"y": "34",
+					"text-anchor": "middle",
+					"class": "svg-note"
+				},
+				"children": [
+					{
+						"text": "storage-free proof math"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"x": "500",
+					"y": "336",
+					"text-anchor": "middle",
+					"class": "svg-note"
+				},
+				"children": [
+					{
+						"text": "delegatecall preserves the game's shared storage surface"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 920
+	},
 	"fig-invariant-layers": {
 		"ariaDescription": "Four connected layers run from local authority guards through\n\t\t\t\t\t\t\tcross-contract conservation and lifecycle liveness to economic\n\t\t\t\t\t\t\tsecurity. A failure in an earlier layer invalidates the safety\n\t\t\t\t\t\t\tclaims built above it.",
 		"ariaLabel": "Protocol invariant layers",
@@ -1720,6 +2129,1049 @@
 		],
 		"width": 980
 	},
+	"plot-open-oracle-integration-2": {
+		"ariaDescription": "Binary censorship threshold and cost comparison",
+		"ariaLabel": "Binary censorship threshold and cost comparison",
+		"height": 210,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "120",
+					"y": "42",
+					"width": "520",
+					"height": "28",
+					"rx": "6"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-blue",
+					"x": "120",
+					"y": "42",
+					"width": "120",
+					"height": "28",
+					"rx": "6",
+					"data-example-rect": "executionErrorThreshold"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-red",
+					"x": "120",
+					"y": "86",
+					"width": "130",
+					"height": "28",
+					"rx": "6",
+					"data-example-rect": "manipulatedPriceError"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "120",
+					"y": "30"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tPrice error needed vs. supplied\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "650",
+					"y": "63",
+					"text-anchor": "end",
+					"data-example-text": "thresholdText"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tthreshold 12.22%\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "650",
+					"y": "107",
+					"text-anchor": "end",
+					"data-example-text": "errorText"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\terror 13.00%\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "120",
+					"y": "150",
+					"width": "520",
+					"height": "24",
+					"rx": "6"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-gold",
+					"x": "120",
+					"y": "150",
+					"width": "180",
+					"height": "24",
+					"rx": "6",
+					"data-example-rect": "censorshipCost"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "640",
+					"y1": "136",
+					"x2": "640",
+					"y2": "188"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "650",
+					"y": "190",
+					"text-anchor": "end",
+					"data-example-text": "payoffText"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tpayoff 1000.00 ETH\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 760
+	},
+	"fig-statoblast-actor-swimlanes": {
+		"ariaDescription": "Trader, vault owner, and protocol responsibilities across\n\t\t\t\t\t\t\t\tminting, reporting, forking, migration, auction repair, and\n\t\t\t\t\t\t\t\tredemption.",
+		"ariaLabel": "Actor swimlane lifecycle",
+		"height": 430,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-swimlane",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "40",
+					"y": "48",
+					"width": "900",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "40",
+					"y": "170",
+					"width": "900",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "40",
+					"y": "292",
+					"width": "900",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "95",
+					"y": "101",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tTrader\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "95",
+					"y": "223",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tVault owner\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "95",
+					"y": "345",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tProtocol\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "150",
+					"y1": "50",
+					"x2": "150",
+					"y2": "382"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "190",
+					"y": "72",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "265",
+					"y": "100",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmint shares\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "190",
+					"y": "194",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "265",
+					"y": "222",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tdeposit REP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "190",
+					"y": "316",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "265",
+					"y": "344",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tdeploy pool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 340 95 H 390"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 340 217 H 390"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 340 339 H 390"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "390",
+					"y": "72",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "465",
+					"y": "100",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\thold outcomes\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "390",
+					"y": "194",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "465",
+					"y": "222",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\treport outcome\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "390",
+					"y": "316",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "465",
+					"y": "344",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tescalate\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 540 95 H 590"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 540 217 H 590"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 540 339 H 590"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "590",
+					"y": "316",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "665",
+					"y": "344",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfork/migrate\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "590",
+					"y": "72",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "665",
+					"y": "100",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tredeem shares\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "590",
+					"y": "194",
+					"width": "150",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "665",
+					"y": "222",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmigrate vault\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-swimlane)",
+					"d": "M 740 339 H 790"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "790",
+					"y": "316",
+					"width": "120",
+					"height": "46",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "850",
+					"y": "344",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\trepair ETH\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 980
+	},
+	"fig-statoblast-asset-flow": {
+		"ariaDescription": "Users send ETH to the security pool, which mints shares. A\n\t\t\t\t\t\t\t\tredemption request goes to the pool; the pool burns the relevant\n\t\t\t\t\t\t\t\tshares and pays ETH. Vault owners send REP and receive fees; fork\n\t\t\t\t\t\t\t\trepair can sell child REP for ETH.",
+		"ariaLabel": "ETH, REP, shares, and fee flow",
+		"height": 430,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-assets",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "54",
+					"y": "58",
+					"width": "170",
+					"height": "72",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "139",
+					"y": "90",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tTrader\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "139",
+					"y": "113",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tsends ETH\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "384",
+					"y": "58",
+					"width": "200",
+					"height": "94",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "484",
+					"y": "92",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tSecurityPool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "484",
+					"y": "116",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tcollateral accounting\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "484",
+					"y": "137",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfee extraction\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "734",
+					"y": "58",
+					"width": "170",
+					"height": "72",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "819",
+					"y": "90",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tShareToken\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "819",
+					"y": "113",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tInvalid + Yes + No\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"d": "M 224 94 H 384"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "299",
+					"y": "79",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tETH collateral\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"data-flow": "pool-to-share-token-mint",
+					"d": "M 584 94 H 734"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "654",
+					"y": "79",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmint shares\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"data-flow": "pool-to-share-token-burn",
+					"d": "M 590 152 C 640 190 690 190 728 132"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "659",
+					"y": "190",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tauthorized burn\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"data-flow": "trader-to-pool-redemption",
+					"d": "M 224 118 C 280 158 330 158 384 118"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "304",
+					"y": "170",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tredeem request\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"data-flow": "pool-to-trader-eth-payout",
+					"d": "M 384 138 C 330 220 280 220 224 138"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "304",
+					"y": "228",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tETH payout\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "54",
+					"y": "272",
+					"width": "170",
+					"height": "72",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "139",
+					"y": "304",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tVault owner\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "139",
+					"y": "327",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tdeposits REP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "384",
+					"y": "276",
+					"width": "200",
+					"height": "76",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "484",
+					"y": "308",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tPool Accounting\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "484",
+					"y": "333",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tREP and ETH ledger\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"d": "M 224 306 H 384"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "299",
+					"y": "293",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tREP backing\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"d": "M 384 332 H 224"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "309",
+					"y": "362",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfees owed\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "734",
+					"y": "272",
+					"width": "170",
+					"height": "72",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "819",
+					"y": "304",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tTruth Auction\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "819",
+					"y": "327",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tchild repair\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"d": "M 734 308 H 584"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "664",
+					"y": "293",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tETH repair\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-assets)",
+					"d": "M 584 332 H 734"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "654",
+					"y": "360",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tchild REP sold\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 960
+	},
 	"fig-statoblast-pool-accounting": {
 		"ariaDescription": "REP deposits mint proportional REP backing units, decayed\n\t\t\t\t\t\t\t\tsettlement collateral increments the fee index, and vault coverage commitments claim\n\t\t\t\t\t\t\t\tfees from that index.",
 		"ariaLabel": "Pool accounting conversions",
@@ -2669,6 +4121,876 @@
 		],
 		"width": 860
 	},
+	"plot-statoblast-whitepaper-7": {
+		"ariaDescription": "Escalation deposit accepted amount",
+		"ariaLabel": "Escalation deposit accepted amount",
+		"height": 230,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "70",
+					"y": "34"
+				},
+				"children": [
+					{
+						"text": "Before"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "405",
+					"y": "34"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\t\tAfter accepted deposit\n\t\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "80",
+					"y": "58",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-blue",
+					"x": "80",
+					"y": "58",
+					"width": "11",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "invalidBefore"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "315",
+					"y": "76"
+				},
+				"children": [
+					{
+						"text": "Invalid"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "80",
+					"y": "102",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-green",
+					"x": "80",
+					"y": "102",
+					"width": "99",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "yesBefore"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "315",
+					"y": "120"
+				},
+				"children": [
+					{
+						"text": "Yes"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "80",
+					"y": "146",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-red",
+					"x": "80",
+					"y": "146",
+					"width": "77",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "noBefore"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "315",
+					"y": "164"
+				},
+				"children": [
+					{
+						"text": "No"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "420",
+					"y": "58",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-blue",
+					"x": "420",
+					"y": "58",
+					"width": "11",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "invalidAfter"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "420",
+					"y": "102",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-green",
+					"x": "420",
+					"y": "102",
+					"width": "99",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "yesAfter"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "420",
+					"y": "146",
+					"width": "220",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-red",
+					"x": "420",
+					"y": "146",
+					"width": "110",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "noAfter"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "80",
+					"y1": "190",
+					"x2": "640",
+					"y2": "190"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "640",
+					"y": "211",
+					"text-anchor": "end",
+					"data-example-text": "thresholdText"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\t\tthreshold 10 REP\n\t\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 760
+	},
+	"plot-statoblast-whitepaper-8": {
+		"ariaDescription": "Resolution balances against running cost",
+		"ariaLabel": "Resolution balances against running cost",
+		"height": 210,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "80",
+					"y": "30"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\t\tBalances compared with running cost\n\t\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "90",
+					"y": "50",
+					"width": "520",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-blue",
+					"x": "90",
+					"y": "50",
+					"width": "104",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "resolutionInvalid"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "625",
+					"y": "68"
+				},
+				"children": [
+					{
+						"text": "Invalid"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "90",
+					"y": "92",
+					"width": "520",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-green",
+					"x": "90",
+					"y": "92",
+					"width": "156",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "resolutionYes"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "625",
+					"y": "110"
+				},
+				"children": [
+					{
+						"text": "Yes"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-base",
+					"x": "90",
+					"y": "134",
+					"width": "520",
+					"height": "24",
+					"rx": "5"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "example-bar-red",
+					"x": "90",
+					"y": "134",
+					"width": "156",
+					"height": "24",
+					"rx": "5",
+					"data-example-rect": "resolutionNo"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "625",
+					"y": "152"
+				},
+				"children": [
+					{
+						"text": "No"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "220",
+					"y1": "40",
+					"x2": "220",
+					"y2": "174"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "220",
+					"y": "194",
+					"text-anchor": "middle",
+					"data-example-text": "resolutionCostMarker"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\t\tcost 5 REP\n\t\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 760
+	},
+	"fig-statoblast-non-decision-flow": {
+		"ariaDescription": "Outcome balances are compared to running total cost for local\n\t\t\t\t\t\t\t\tresolution and to the fixed non-decision threshold for a local\n\t\t\t\t\t\t\t\tgame's fork eligibility. A pool with an inherited fixed outcome\n\t\t\t\t\t\t\t\trejects both new local deposits and fork activation.",
+		"ariaLabel": "Escalation thresholds",
+		"height": 365,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-esc",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "58",
+					"y": "46",
+					"width": "210",
+					"height": "118",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "163",
+					"y": "82",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tTracked Balances\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "163",
+					"y": "110",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tInvalid\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "163",
+					"y": "132",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tYes\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "163",
+					"y": "154",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tNo\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-esc)",
+					"d": "M 268 105 H 355"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "355",
+					"y": "46",
+					"width": "230",
+					"height": "118",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "470",
+					"y": "82",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tRunning totalCostAttoRep()\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\ttwo sides at or above\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "130",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tthreshold means unresolved\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-esc)",
+					"d": "M 585 105 H 672"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "672",
+					"y": "46",
+					"width": "150",
+					"height": "118",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "747",
+					"y": "96",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tLocal\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "747",
+					"y": "120",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tResolution\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-esc)",
+					"d": "M 470 164 V 226"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "340",
+					"y": "226",
+					"width": "260",
+					"height": "84",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "470",
+					"y": "260",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tNon-Decision Threshold\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "279",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\ttwo or more outcomes\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "299",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\treach fixed threshold\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-esc)",
+					"d": "M 600 268 H 690"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "690",
+					"y": "226",
+					"width": "132",
+					"height": "84",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "756",
+					"y": "260",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tGame-Local\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "756",
+					"y": "284",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tEligibility\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "756",
+					"y": "302",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tpool guard still applies\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 860
+	},
+	"fig-statoblast-payout-regions": {
+		"ariaDescription": "Winning deposits below binding capital and in the safety\n\t\t\t\t\t\t\t\tboundary share rewards, while excess receives principal only.",
+		"ariaLabel": "Escalation payout regions",
+		"height": 220,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "70",
+					"y1": "105",
+					"x2": "790",
+					"y2": "105"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "90",
+					"y": "75",
+					"width": "260",
+					"height": "60",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "350",
+					"y": "75",
+					"width": "150",
+					"height": "60",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "500",
+					"y": "75",
+					"width": "250",
+					"height": "60",
+					"rx": "8"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "220",
+					"y": "110",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tBinding capital\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "425",
+					"y": "100",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tSafety\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "425",
+					"y": "120",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tboundary\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "625",
+					"y": "110",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tExcess\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "220",
+					"y": "154",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tprincipal plus pro-rata reward\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "425",
+					"y": "154",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tsame reward pool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "625",
+					"y": "154",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tprincipal only\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 860
+	},
 	"fig-statoblast-fork-state-machine": {
 		"ariaDescription": "Contract states and conditional transition functions from an\n\t\t\t\t\t\t\t\toperational parent through migration and bounded truth-auction\n\t\t\t\t\t\t\t\tsettlement to an operational child.",
 		"ariaLabel": "SecurityPool fork state machine",
@@ -3056,6 +5378,1743 @@
 			}
 		],
 		"width": 960
+	},
+	"fig-statoblast-migration-flow": {
+		"ariaDescription": "After a Zoltar fork, Statoblast migrates vaults, collateral, and\n\t\t\t\t\t\t\t\tshares. Child creation separately reproduces unresolved escalation\n\t\t\t\t\t\t\t\tstate and aggregate backing once.",
+		"ariaLabel": "Fork migration responsibilities",
+		"height": 330,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-mig",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "60",
+					"y": "112",
+					"width": "180",
+					"height": "86",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "150",
+					"y": "146",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tParent Pool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "150",
+					"y": "170",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfork mode\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-mig)",
+					"d": "M 240 155 H 330"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "330",
+					"y": "54",
+					"width": "210",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "435",
+					"y": "84",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmigrateVault\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "435",
+					"y": "107",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tREP backing units and coverage commitment\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "330",
+					"y": "136",
+					"width": "210",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "435",
+					"y": "166",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tEscalation Carry\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "435",
+					"y": "189",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tsnapshot + backing once\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "330",
+					"y": "218",
+					"width": "210",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "435",
+					"y": "248",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tShare Migration\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "435",
+					"y": "271",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tERC-1155 token ids\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-mig)",
+					"d": "M 540 89 C 580 89 595 136 635 136"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-mig)",
+					"d": "M 540 171 H 635"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-mig)",
+					"d": "M 540 253 C 580 253 595 174 635 174"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "635",
+					"y": "112",
+					"width": "180",
+					"height": "86",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "725",
+					"y": "146",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tChild Pool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "725",
+					"y": "170",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tselected universe\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 860
+	},
+	"fig-statoblast-migration-proxy": {
+		"ariaDescription": "The forker controls one deterministic proxy per parent pool, and\n\t\t\t\t\t\t\t\tthe proxy is the caller recorded by Zoltar migration accounting.",
+		"ariaLabel": "Pool-specific migration proxy",
+		"height": 300,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-proxy",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "50",
+					"y": "82",
+					"width": "210",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "155",
+					"y": "114",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tSecurityPoolForker\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "155",
+					"y": "138",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\towner and coordinator\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proxy)",
+					"d": "M 260 123 H 360"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "360",
+					"y": "70",
+					"width": "220",
+					"height": "106",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "470",
+					"y": "101",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tMigration Proxy\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "126",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tone CREATE2 address\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "148",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tper parent pool\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proxy)",
+					"d": "M 580 123 H 680"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "680",
+					"y": "82",
+					"width": "190",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "775",
+					"y": "114",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tZoltar\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "775",
+					"y": "138",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmigration ledger\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "470",
+					"y": "225",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tledger key = proxy address, not the vault address\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 920
+	},
+	"fig-statoblast-proportional-migration": {
+		"ariaDescription": "Parent REP backing units normally determine a floored migrated REP\n\t\t\t\t\t\t\t\tdelta. When cumulative migrated backing units reach the parent total,\n\t\t\t\t\t\t\t\tthe final migration routes the remaining REP delta into the selected child.\n\t\t\t\t\t\t\t\tParent-wide cumulative REP sets the collateral ceiling, and the selected child receives only its new per-call delta.",
+		"ariaLabel": "Proportional migration accounting",
+		"height": 330,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-proportional-migration",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "48",
+					"y": "72",
+					"width": "220",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "158",
+					"y": "104",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tParent REP Backing Units\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "158",
+					"y": "130",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tvault REP backing units delta\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proportional-migration)",
+					"d": "M 268 113 H 360"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "360",
+					"y": "72",
+					"width": "220",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "470",
+					"y": "104",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tMigrated REP Delta\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "470",
+					"y": "130",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfloor, or final remainder\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proportional-migration)",
+					"d": "M 580 113 H 672"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "672",
+					"y": "72",
+					"width": "220",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "782",
+					"y": "104",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tSelected Child Delta\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "782",
+					"y": "130",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tnew parent-wide ceiling delta\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "208",
+					"y": "218",
+					"width": "220",
+					"height": "68",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "318",
+					"y": "246",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tParent REP at fork\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "318",
+					"y": "266",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tfork-bucket denominator\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proportional-migration)",
+					"d": "M 318 218 C 340 182 386 160 430 154"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "512",
+					"y": "218",
+					"width": "220",
+					"height": "68",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "622",
+					"y": "246",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tParent Settlement Collateral\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "622",
+					"y": "266",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tparent-wide cumulative ceiling\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-proportional-migration)",
+					"d": "M 622 218 C 656 184 700 164 746 154"
+				},
+				"tag": "path"
+			}
+		],
+		"width": 940
+	},
+	"fig-statoblast-own-fork-rep-buckets": {
+		"ariaDescription": "Pool-held REP and unresolved dispute-staked REP enter one Zoltar fork\n\t\t\t\t\t\t\t\tbalance. Ordinary pool-held REP remains in the vault bucket at 1:1,\n\t\t\t\t\t\t\t\twhile the fork haircut is deducted from escalation aggregate backing.",
+		"ariaLabel": "Own-fork REP bucket split",
+		"height": 340,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-own-fork-buckets",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "56",
+					"y": "54",
+					"width": "220",
+					"height": "76",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "166",
+					"y": "85",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tPool-held REP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "166",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tvault REP backing units source\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "56",
+					"y": "204",
+					"width": "220",
+					"height": "76",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "166",
+					"y": "235",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tDispute-staked REP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "166",
+					"y": "258",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tunresolved vault attribution\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-own-fork-buckets)",
+					"d": "M 276 92 C 344 100 378 124 420 158"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-own-fork-buckets)",
+					"d": "M 276 242 C 344 234 378 210 420 176"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "420",
+					"y": "124",
+					"width": "220",
+					"height": "86",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "530",
+					"y": "157",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tZoltar Fork Balance\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "530",
+					"y": "182",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tauctionable child REP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-own-fork-buckets)",
+					"d": "M 640 150 C 680 126 692 100 720 92"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-own-fork-buckets)",
+					"d": "M 640 184 C 680 210 692 234 720 242"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "720",
+					"y": "54",
+					"width": "200",
+					"height": "76",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "820",
+					"y": "84",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tVault Bucket\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "820",
+					"y": "107",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmigrate vaults\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "720",
+					"y": "204",
+					"width": "200",
+					"height": "76",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "820",
+					"y": "234",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tEscalation Backing\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "820",
+					"y": "257",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tgame REP minus haircut\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 940
+	},
+	"fig-statoblast-recursive-continuation": {
+		"ariaDescription": "A caller invokes Zoltar to fork a universe while one of its security pools has\n\t\t\t\t\t\t\t\tan unresolved escalation. Later, migration into selected child branches deploys child pools\n\t\t\t\t\t\t\t\tand initializes paused continuation games. Canonical snapshot state supplies each selected\n\t\t\t\t\t\t\t\tchild's proof baseline, aggregate REP supplies physical backing once, and\n\t\t\t\t\t\t\t\tauthenticated winning proofs pay the immutable depositor committed in each leaf. Only a\n\t\t\t\t\t\t\t\tcontinuation pool without a fixed outcome may fork again; within that\n\t\t\t\t\t\t\t\tboundary, a local non-decision or inherited threshold tie makes its game\n\t\t\t\t\t\t\t\teligible for the security-pool fork path.",
+		"ariaLabel": "Recursive fork-continuation flow",
+		"height": 520,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-recursive",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "360",
+					"y": "36",
+					"width": "260",
+					"height": "86",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "490",
+					"y": "70",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tParent Escalation\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "490",
+					"y": "94",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tunresolved across outcomes\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-recursive)",
+					"d": "M 490 122 V 176"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "350",
+					"y": "176",
+					"width": "280",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "490",
+					"y": "207",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tZoltar Fork\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "490",
+					"y": "230",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tselected branches created lazily\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-recursive)",
+					"d": "M 350 215 C 265 225 207 252 176 296"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-recursive)",
+					"d": "M 490 254 V 296"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-recursive)",
+					"d": "M 630 215 C 715 225 773 252 804 296"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "72",
+					"y": "296",
+					"width": "220",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "182",
+					"y": "328",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tInvalid Child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "182",
+					"y": "352",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tpaused continuation game\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "182",
+					"y": "371",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\toriginal deposit\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "182",
+					"y": "386",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\toutcomes preserved\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "380",
+					"y": "296",
+					"width": "220",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "490",
+					"y": "328",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tYes Child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "490",
+					"y": "352",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tpaused continuation game\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "490",
+					"y": "373",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tmigration window, then resume\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "688",
+					"y": "296",
+					"width": "220",
+					"height": "92",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "798",
+					"y": "328",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tNo Child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "798",
+					"y": "352",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tpaused continuation game\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "798",
+					"y": "373",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tsame inherited carry baseline\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-recursive)",
+					"d": "M 490 388 V 426"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "350",
+					"y": "426",
+					"width": "280",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "490",
+					"y": "450",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tContinuation\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "490",
+					"y": "470",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\tCan Fork Again\n\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "490",
+					"y": "489",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\tpool has no fixed outcome\n\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "490",
+					"y": "506",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\tlocal or inherited game trigger\n\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 980
+	},
+	"fig-statoblast-carry-snapshot": {
+		"ariaDescription": "Current balances, carry, and nullifiers form the canonical next\n\t\t\t\t\t\t\t\tsnapshot. Remaining aggregate REP funds child backing once. Winning proofs\n\t\t\t\t\t\t\t\tauthenticate original deposits and pay their committed depositors; inherited losers retire without proofs.",
+		"ariaLabel": "Separate recursive continuation accounting lanes",
+		"height": 470,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-carry",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "currentColor"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "54",
+					"y": "40",
+					"width": "250",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "179",
+					"y": "73",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tCurrent Game State\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "179",
+					"y": "98",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tbalances + carry + nullifiers\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "644",
+					"y": "40",
+					"width": "240",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "764",
+					"y": "73",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tCanonical Snapshot\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "764",
+					"y": "98",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\treused by every selected child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-carry)",
+					"d": "M 304 81 H 644"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "54",
+					"y": "180",
+					"width": "250",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "179",
+					"y": "205",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tRemaining Aggregate\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "179",
+					"y": "225",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tREP\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "179",
+					"y": "247",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tlocked once at the fork\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "644",
+					"y": "180",
+					"width": "240",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "764",
+					"y": "205",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tPhysical Child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "764",
+					"y": "225",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tBacking\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-micro",
+					"x": "764",
+					"y": "247",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tcomplete backing per selected child\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-carry)",
+					"d": "M 304 221 H 644"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "54",
+					"y": "330",
+					"width": "250",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "179",
+					"y": "363",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tFinal Winning Outcome\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "179",
+					"y": "388",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tinherited losers retire\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "354",
+					"y": "330",
+					"width": "220",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "464",
+					"y": "363",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tWinning Carry Proof\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "464",
+					"y": "388",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\trelayed permissionlessly\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "644",
+					"y": "330",
+					"width": "240",
+					"height": "82",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "764",
+					"y": "363",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tAuthenticated Payout\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "764",
+					"y": "388",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "\n\t\t\t\t\t\t\t\tto committed depositor\n\t\t\t\t\t\t\t"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-carry)",
+					"d": "M 304 371 H 354"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-carry)",
+					"d": "M 574 371 H 644"
+				},
+				"tag": "path"
+			}
+		],
+		"width": 920
 	},
 	"fig-statoblast-system-decision-flow": {
 		"ariaDescription": "Question, pool, escalation, fork, child migration, auction\n\t\t\t\t\t\t\t\trepair, fixed-outcome settlement, and unresolved recursive\n\t\t\t\t\t\t\t\tcontinuation flow.",
@@ -5409,6 +9468,350 @@
 			}
 		],
 		"width": 860
+	},
+	"fig-zoltar-migration-reproduction": {
+		"ariaDescription": "Migration Balance Reproduction. Selecting multiple branches mints child REP in each selected child universe from the same migration balance.",
+		"ariaLabel": "A migration balance can mint REP into one selected child or be reproduced across multiple selected children.",
+		"height": 520,
+		"nodes": [
+			{
+				"children": [
+					{
+						"attributes": {
+							"id": "arrow-split",
+							"viewBox": "0 0 10 10",
+							"refX": "8",
+							"refY": "5",
+							"markerWidth": "7",
+							"markerHeight": "7",
+							"orient": "auto-start-reverse"
+						},
+						"children": [
+							{
+								"attributes": {
+									"d": "M 0 0 L 10 5 L 0 10 z",
+									"fill": "#615642"
+								},
+								"tag": "path"
+							}
+						],
+						"tag": "marker"
+					}
+				],
+				"tag": "defs"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "315",
+					"y": "28",
+					"width": "300",
+					"height": "70",
+					"rx": "12"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "465",
+					"y": "59",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Post-fork migration balance"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "465",
+					"y": "81",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "splitMigrationRep(selected outcomes)"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 465 100 V 136"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "465",
+					"y1": "136",
+					"x2": "465",
+					"y2": "168"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "205",
+					"y1": "168",
+					"x2": "725",
+					"y2": "168"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 205 168 V 210"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 725 168 V 210"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "86",
+					"y": "214",
+					"width": "238",
+					"height": "64",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "205",
+					"y": "239",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "One selected branch"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "205",
+					"y": "261",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "mint only there"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-teal",
+					"x": "606",
+					"y": "214",
+					"width": "238",
+					"height": "64",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "725",
+					"y": "239",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Multiple branches"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "725",
+					"y": "261",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "reproduce same claim"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 205 280 V 340"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "88",
+					"y": "346",
+					"width": "234",
+					"height": "56",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "205",
+					"y": "380",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Selected child REP"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 725 280 V 330"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"x1": "610",
+					"y1": "330",
+					"x2": "840",
+					"y2": "330"
+				},
+				"tag": "line"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 610 330 V 372"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 725 330 V 372"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"marker-end": "url(#arrow-split)",
+					"d": "M 840 330 V 372"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "520",
+					"y": "378",
+					"width": "180",
+					"height": "56",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "635",
+					"y": "444",
+					"width": "180",
+					"height": "56",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-box",
+					"x": "750",
+					"y": "378",
+					"width": "180",
+					"height": "56",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "610",
+					"y": "412",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Invalid REP"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "725",
+					"y": "478",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Outcome A REP"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "840",
+					"y": "412",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Outcome B REP"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 930
 	},
 	"fig-zoltar-packed-scalar-answer": {
 		"ariaDescription": "Packed Scalar Answer. A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits 254...240 must be zero, 0 in bit 255 is the invalid namespace, and 1 means the payout fields must sum to numTicks.",

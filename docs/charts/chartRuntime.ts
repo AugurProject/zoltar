@@ -1,9 +1,12 @@
 import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
 import {
 	calculateAnnualizedRetentionFeePercent,
-	calculateCollateralRepairModel,
 	calculateAuctionModel,
+	calculateCollateralRepairModel,
+	calculateEscalationDepositModel,
 	calculateForkThresholdSeries,
+	calculateOracleSecurityModel,
+	calculateResolutionModel,
 	contractInteractionEdges,
 	normalizedEscalationCost,
 	quantitativeChartAxisLabels,
@@ -970,6 +973,8 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 			dot(bids, {
 				fill: 'status',
 				r: 6,
+				tip: true,
+				title: bid => `${bid.name}: ${bid.eth.toFixed(2)} ETH at ${bid.price.toFixed(2)} ETH/REP`,
 				x: 'cumulativeRep',
 				y: 'price',
 			}),
@@ -1026,10 +1031,6 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 	mount.dataset['chartState'] = chart.dataset['chartState']
 	return chart
 }
-
-
-
-
 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
@@ -1089,6 +1090,189 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 	return chart
 }
 
+function oracleSecurityChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-open-oracle-integration-2']
+	const example = mount.closest('#binary-censorship-example')
+	const honestPrice = Math.max(readInput(example, 'honestPrice', 900), 0.0001)
+	const manipulatedPrice = Math.max(readInput(example, 'manipulatedPrice', 1017), 0.0001)
+	const liquidationThresholdPrice = Math.max(readInput(example, 'liquidationThresholdPrice', 101), 0.0001)
+	const minLiquidationPriceDistanceBps = Math.max(readInput(example, 'minLiquidationPriceDistanceBps', 1000), 0)
+	const externalPayoff = Math.max(readInput(example, 'externalPayoff', 1000), 0)
+	const oracleLiquidity = Math.max(readInput(example, 'oracleReportLiquidity', 4000), 0)
+	const disputeBarrier = Math.max(readInput(example, 'honestDisputeBarrierFraction', 0.01), 0)
+	const selectedDuration = Math.max(readInput(example, 'censorshipDuration', 24), 0)
+	const targetGriefRatio = Math.max(readInput(example, 'targetGriefRatio', 1), 0)
+	const model = calculateOracleSecurityModel({
+		censorshipDuration: selectedDuration,
+		externalPayoff,
+		honestDisputeBarrierFraction: disputeBarrier,
+		honestPrice,
+		liquidationThresholdPrice,
+		manipulatedPrice,
+		minLiquidationPriceDistanceBps,
+		oracleReportLiquidity: oracleLiquidity,
+		targetGriefRatio,
+	})
+	const costRate = model.censorshipRate * oracleLiquidity
+	const maxDuration = Math.max(168, selectedDuration)
+	const costs = Array.from({ length: maxDuration + 1 }, (_, duration) => ({
+		cost: duration * costRate,
+		duration,
+	}))
+	const selectedCost = model.censorshipCost
+	const horizontalRules = [
+		{ label: 'Conditional attacker payoff', value: model.attackerProfit },
+		{ label: 'Target payoff + grief cost', value: model.griefTarget },
+	]
+
+	return plot({
+		ariaDescription: `${spec.ariaDescription}. Liquidation is ${model.liquidationExecutable ? 'executable' : 'not executable'}, so attacker payoff is ${model.attackerProfit.toFixed(2)} ETH. At ${selectedDuration.toFixed(0)} steps, censorship costs ${selectedCost.toFixed(2)} ETH; the payoff-plus-grief target is ${model.griefTarget.toFixed(2)} ETH.`,
+		ariaLabel: 'Interactive censorship cost and attacker payoff',
+		height: spec.height,
+		marginBottom: 48,
+		marginLeft: 72,
+		marginRight: 24,
+		marginTop: 18,
+		marks: [
+			areaY(costs, {
+				fill: 'var(--gold-soft, #f3e4c6)',
+				x: 'duration',
+				y: 'cost',
+			}),
+			lineY(costs, {
+				stroke: 'var(--gold, #8a5d18)',
+				strokeWidth: 3,
+				x: 'duration',
+				y: 'cost',
+			}),
+			ruleY(horizontalRules, {
+				stroke: (_datum, index) => (index === 0 ? 'var(--red, #99453f)' : 'var(--green, #1d735d)'),
+				strokeDasharray: '5,4',
+				strokeWidth: 2,
+				y: 'value',
+			}),
+			ruleX([selectedDuration], {
+				stroke: 'var(--blue, #245f9f)',
+				strokeDasharray: '5,4',
+			}),
+			text([{ label: 'attacker payoff', value: model.attackerProfit }], {
+				dy: -6,
+				fill: 'var(--red, #99453f)',
+				fontSize: 11,
+				text: 'label',
+				textAnchor: 'start',
+				x: maxDuration * 0.63,
+				y: 'value',
+			}),
+			text([{ label: 'payoff + grief target', value: model.griefTarget }], {
+				dy: -20,
+				fill: 'var(--green, #1d735d)',
+				fontSize: 11,
+				text: 'label',
+				textAnchor: 'start',
+				x: maxDuration * 0.63,
+				y: 'value',
+			}),
+			dot([{ cost: selectedCost, duration: selectedDuration }], {
+				fill: selectedCost >= model.griefTarget ? 'var(--green, #1d735d)' : 'var(--red, #99453f)',
+				r: 6,
+				tip: true,
+				title: `Selected: ${selectedDuration.toFixed(0)} steps, ${selectedCost.toFixed(2)} ETH`,
+				x: 'duration',
+				y: 'cost',
+			}),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { domain: [0, maxDuration], grid: true, label: axes.x },
+		y: { grid: true, label: axes.y },
+	}) as SVGSVGElement
+}
+
+function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-7']
+	const example = mount.closest('#escalation-deposit-example')
+	const repeatDeposit = readInput(example, 'depositLifecycle', 0) === 1
+	const invalidBalance = repeatDeposit ? readInput(example, 'invalidBalance', 1) : 0
+	const yesBalance = repeatDeposit ? readInput(example, 'yesBalance', 9) : 0
+	const noBalance = repeatDeposit ? readInput(example, 'noBalance', 7) : 0
+	const model = calculateEscalationDepositModel({
+		invalidBalance,
+		noBalance,
+		nonDecisionThreshold: readInput(example, 'nonDecisionThreshold', 10),
+		proposedDeposit: readInput(example, 'proposedDeposit', 5),
+		repeatDeposit,
+		startBond: readInput(example, 'startBond', 2),
+		yesBalance,
+	})
+	const balances = [
+		{ balance: invalidBalance, phase: 'Before', side: 'Invalid' },
+		{ balance: yesBalance, phase: 'Before', side: 'Yes' },
+		{ balance: noBalance, phase: 'Before', side: 'No' },
+		{ balance: invalidBalance, phase: 'After', side: 'Invalid' },
+		{ balance: yesBalance, phase: 'After', side: 'Yes' },
+		{ balance: model.noAfter, phase: 'After', side: 'No' },
+	]
+	const acceptedLabel = model.tieAdjusted ? formatRepFromAttoRep(model.acceptedAttoRep) : model.accepted.toFixed(6)
+	const noAfterLabel = model.tieAdjusted ? formatRepFromAttoRep(model.noAfterAttoRep) : model.noAfter.toFixed(6)
+	const chart = plot({
+		ariaDescription: `${spec.ariaDescription}. This is a ${repeatDeposit ? 'repeat deposit into an existing game' : 'first deposit that creates the game'} with an effective start bond of ${formatRepFromAttoRep(model.effectiveStartBondAttoRep)} REP. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
+		ariaLabel: spec.ariaLabel,
+		color: {
+			domain: ['Invalid', 'Yes', 'No'],
+			range: ['var(--red, #99453f)', 'var(--green, #1d735d)', 'var(--blue, #245f9f)'],
+		},
+		fx: { domain: ['Before', 'After'], label: null },
+		height: spec.height,
+		marginBottom: 42,
+		marginLeft: 58,
+		marginRight: 24,
+		marginTop: 28,
+		marks: [barX(balances, { fill: 'side', fx: 'phase', inset: 2, x: 'balance', y: 'side' }), ruleX([model.threshold], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { domain: [0, Math.max(model.threshold, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
+		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
+	}) as SVGSVGElement
+	chart.dataset['chartState'] = model.previewReverts ? 'reverts' : 'accepted'
+	return chart
+}
+
+function resolutionChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-8']
+	const example = mount.closest('#resolution-edge-example')
+	const invalidBalance = readInput(example, 'invalidBalance', 4)
+	const yesBalance = readInput(example, 'yesBalance', 6)
+	const noBalance = readInput(example, 'noBalance', 7)
+	const runningCost = readInput(example, 'runningCost', 5)
+	const model = calculateResolutionModel({ invalidBalance, noBalance, runningCost, yesBalance })
+	const balances = [
+		{ balance: invalidBalance, side: 'Invalid' },
+		{ balance: yesBalance, side: 'Yes' },
+		{ balance: noBalance, side: 'No' },
+	]
+	const chart = plot({
+		ariaDescription: `${spec.ariaDescription}. ${model.atCost} outcomes meet the ${runningCost.toFixed(2)} REP running cost, so the helper returns ${model.result}.`,
+		ariaLabel: spec.ariaLabel,
+		color: {
+			domain: ['Invalid', 'Yes', 'No'],
+			range: ['var(--red, #99453f)', 'var(--green, #1d735d)', 'var(--blue, #245f9f)'],
+		},
+		height: spec.height,
+		marginBottom: 42,
+		marginLeft: 58,
+		marginRight: 24,
+		marginTop: 22,
+		marks: [barX(balances, { fill: 'side', inset: 3, x: 'balance', y: 'side' }), ruleX([runningCost], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { domain: [0, Math.max(runningCost, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
+		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
+	}) as SVGSVGElement
+	chart.dataset['chartState'] = model.result.toLowerCase()
+	return chart
+}
+
 function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
 		return escalationCostChart(spec)
@@ -1104,6 +1288,15 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
+	}
+	if (chartId === 'plot-open-oracle-integration-2') {
+		return oracleSecurityChart(spec, mount)
+	}
+	if (chartId === 'plot-statoblast-whitepaper-7') {
+		return escalationDepositChart(spec, mount)
+	}
+	if (chartId === 'plot-statoblast-whitepaper-8') {
+		return resolutionChart(spec, mount)
 	}
 	if (chartId === 'plot-statoblast-whitepaper-19') {
 		return collateralRepairChart(spec, mount)
@@ -1339,7 +1532,7 @@ window.setTimeout(restoreDocumentFragment, 600)
 window.addEventListener('load', restoreDocumentFragment)
 window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
-for (const chartId of ['fig-auction-clearing-ladder']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {

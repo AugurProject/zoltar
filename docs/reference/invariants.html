@@ -13,12 +13,48 @@
 				<h1>Statoblast And Zoltar Invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
 				<p>The catalog separates local contract guards from cross-contract properties and economic assumptions. It also records launch-critical properties that the current contracts do not preserve. A documented implementation choice is not automatically a safe invariant.</p>
-				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for assumptions A01–A28. The <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a> owns funded and underfunded clearing mechanics, while <a href="../explanation/open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a> owns the oracle notional and residual-loss analysis.</p>
+				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for assumptions A01–A28. The <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a> owns funded and underfunded clearing mechanics, while <a href="../explanation/open-oracle-appendix.html#intentional-economic-tradeoffs">OpenOracle Integration</a> owns the oracle notional and residual-loss analysis.</p>
 				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="260" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Invariant Dependency</span>Correct callers are necessary but insufficient. Their actions must conserve assets, every mandatory state transition must remain reachable, and the named participation and inclusion assumptions must hold where the protocol deliberately relies on economic incentives.</p>
 				</figure>
 			</header>
+
+			<section class="interactive-example invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer">
+				<h2>Find an Invariant</h2>
+				<p>Search the full property, example, status, and evidence text, or narrow the catalog by property type, enforcement status, and subsystem.</p>
+				<div class="invariant-explorer-controls">
+					<label>
+						<span>Search</span>
+						<input type="search" placeholder="Try “replay” or “auction coverage commitment”" autocomplete="off" data-invariant-search />
+					</label>
+					<label>
+						<span>Property type</span>
+						<select data-invariant-type>
+							<option value="">All property types</option>
+						</select>
+					</label>
+					<label>
+						<span>Enforcement status</span>
+						<select data-invariant-status>
+							<option value="">All enforcement statuses</option>
+						</select>
+					</label>
+					<label>
+						<span>Subsystem</span>
+						<select data-invariant-subsystem>
+							<option value="">All subsystems</option>
+						</select>
+					</label>
+				</div>
+				<div class="invariant-explorer-actions">
+					<button type="button" data-invariant-expand>Expand visible</button>
+					<button type="button" data-invariant-collapse>Collapse all</button>
+					<button type="button" data-invariant-reset>Reset filters</button>
+				</div>
+				<p class="invariant-result-count" role="status" aria-live="polite" data-invariant-count>94 of 94 invariants</p>
+				<p class="invariant-no-results" hidden data-invariant-empty>No invariants match every active filter.</p>
+			</section>
 
 			<section id="standing">
 				<h2>Classification and Scope</h2>
@@ -800,7 +836,7 @@
 							<div class="invariant-property">
 								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible coverage commitment equals summed live vault coverage commitment, and uncheckpointed coverage commitment equals coverage commitment whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated coverage commitments remain pending outside those pool aggregates. A <code>PoolForked</code>
 								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total coverage commitment equals fee-eligible coverage commitment plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction coverage commitment exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
-								<a href="../explanation/truth-auctions.html#clearing">auction settlement specification</a>
+								<a href="../explanation/truth-auctions.html#settlement">auction settlement specification</a>
 								owns that zero-purchase allocation rule.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Migrating one of two 3 ETH vault coverage commitments leaves the parent's frozen 6 ETH total unchanged and records 3 ETH as pending in the child. With purchased REP, claims move the remaining 3 ETH from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remaining 3 ETH stays unassigned and ineligible.</p>
@@ -1265,7 +1301,7 @@
 							<div class="invariant-property">
 								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears unresolved parent escalation-deposit accounting; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
 								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
-								<a href="../explanation/statoblast.html#migration"><code>sourcePrincipalAtForkAttoRep</code></a>
+								<a href="../explanation/statoblast.html#source-principal-at-fork"><code>sourcePrincipalAtForkAttoRep</code></a>
 								is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
@@ -1468,7 +1504,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../explanation/escalation-game.html#payouts">Escalation accounting invariants</a>
+										<a href="../explanation/escalation-game.html#accounting-invariants">Escalation accounting invariants</a>
 									</dd>
 								</div>
 							</dl>
@@ -1492,7 +1528,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../explanation/escalation-game.html#payouts">Stable deposit identity</a>
+										<a href="../explanation/escalation-game.html#accounting-invariants">Stable deposit identity</a>
 									</dd>
 								</div>
 							</dl>
@@ -2109,7 +2145,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../explanation/truth-auctions.html#clearing">Auction settlement</a>
+										<a href="../explanation/truth-auctions.html#settlement">Auction settlement</a>
 									</dd>
 								</div>
 							</dl>
@@ -2444,7 +2480,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="./contracts.html">Canonical event-stream specification</a>, <a href="../../solidity/ts/tests/eventReplay/eventReplayModel.ts">event replay model</a>,
+										<a href="./event-stream.html">Canonical event-stream specification</a>, <a href="../../solidity/ts/tests/eventReplay/eventReplayModel.ts">event replay model</a>,
 										<a href="../../solidity/ts/tests/eventReplay/eventReplay.test.ts">actual-log storage-equivalence tests</a>
 									</dd>
 								</div>
@@ -2596,6 +2632,8 @@
 				</div>
 			</section>
 		</main>
+		<script src="../assets/js/protocolTerms.js"></script>
+		<script src="../assets/js/termTooltips.js"></script>
 
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script type="module" src="../assets/js/invariantExplorer.js"></script>

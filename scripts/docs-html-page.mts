@@ -7,7 +7,7 @@ export async function renderReferencePage(title: string, content: string, output
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>${title}</title>
+		<title>${title} · Statoblast docs</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>

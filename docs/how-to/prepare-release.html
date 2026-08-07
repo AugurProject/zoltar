@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Prepare an immutable release · Statoblast docs</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle docs-guide">
+		<main>
+			<header>
+				<h1>Prepare an immutable release</h1>
+				<p>Produce reviewable release evidence before deploying contracts that cannot be paused, upgraded, or rescued administratively.</p>
+			</header>
+			<section id="freeze-the-candidate">
+				<h2>Freeze the candidate</h2>
+				<ol>
+					<li>Choose and record the exact release-candidate commit. Do not create the final signed release tag yet.</li>
+					<li>Install from the lockfile and initialize generated contract dependencies in a clean checkout with <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
+					<li>Record Bun, Solidity compiler, Foundry, and operating-system versions.</li>
+					<li>Confirm the worktree is clean before producing artifacts.</li>
+				</ol>
+			</section>
+			<section id="run-release-validation">
+				<h2>Run release validation</h2>
+				<p>Run the commands below separately and stop on the first failure. Record output and a scope-based reason for every skipped category.</p>
+				<pre><code>bun run ensure-contract-artifacts
+bun run tsc
+bun run check:shared-dependencies
+bun run test:run -- --bail=1
+bun run format:check
+bun run check
+bun run knip
+bun run check:generated-clean
+bun run ui:build:prod:current
+git diff --check</code></pre>
+				<p>Expected results are a zero exit status, no generated diff, a passing production build, and test output tied to the frozen commit.</p>
+			</section>
+			<section id="record-provenance">
+				<h2>Record provenance</h2>
+				<ol>
+					<li>Build production contracts and UI from the frozen checkout.</li>
+					<li>Record artifact hashes, bytecode hashes, compiler settings, deterministic addresses, constructor arguments, and external-token addresses.</li>
+					<li>Publish the final commit, tag, manifest, validation results, and known limitations together.</li>
+				</ol>
+				<pre><code>commit:
+tag:
+chain_id:
+manifest_path:
+manifest_sha256:
+bun_version:
+solidity_version:
+artifact_hashes:
+runtime_bytecode_hashes:
+constructor_arguments:
+validation_results:
+known_limitations:</code></pre>
+			</section>
+			<section id="review-immutable-parameters">
+				<h2>Review immutable parameters</h2>
+				<p>Re-evaluate every economic, timing, integer-width, and gas relationship named by <a href="../reference/security-model.html#assumption-a25">assumption A25</a>. A later UI release cannot repair unsafe immutable values.</p>
+			</section>
+			<section id="release-gate">
+				<h2>Release gate</h2>
+				<p>No-go conditions are a dirty worktree, mismatched lockfile, failed or unexplained check, stale generated output, an immutable-parameter change that is unreviewed, unexplained, absent from the economic analysis, or missing corresponding test and documentation updates, an artifact mismatch, or an unreproducible clean-room build. Have a second machine or clean checkout reproduce the hashes before creating the final signed release tag. This is an immutable contract release: deployed contracts cannot be paused, upgraded, or administratively rescued. After deployment, continue with <a href="./verify-deployment.html">deployment verification</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>
