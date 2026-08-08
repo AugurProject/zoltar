@@ -216,13 +216,27 @@ Disposition every finding using the contract. After material fixes, rerun affect
 
 ### Documentation reviewer
 
-When documentation under `docs/` changes, spawn the project-scoped reviewer from `.codex/agents/textReview.toml` before the final reviewer. In addition to the standard handoff, list:
+When published documentation changes, spawn the documentation reviewer before
+the visual and final reviewers.
 
-- changed documentation files
-- Solidity contracts described, or `none`
-- linked docs, tooltips, diagrams, examples, and shared references in the reading path
+Supply:
 
-Ask it to assess story, flow, concept order, contract accuracy, MathML, notation, examples, and reader preparation. Disposition findings under the shared contract. Repeat the text review after material documentation fixes, then proceed to the visual reviewer when the documentation change can affect rendered appearance, followed by the final reviewer.
+- changed documentation files;
+- primary Diátaxis mode of each changed page;
+- intended reader and reader job;
+- acceptance criteria;
+- intentional non-goals;
+- authoritative implementation or research sources;
+- pages or material intentionally deleted;
+- validation performed.
+
+Ask the reviewer to assess reader-purpose completion, mode purity, concision,
+canonical ownership, accuracy of claims actually made, rendered correctness,
+and deletion opportunities.
+
+Do not ask it to build protocol-wide documentation coverage or require examples,
+diagrams, formulas, edge cases, and security analysis that are outside the
+stated reader job.
 
 ### Final response
 
