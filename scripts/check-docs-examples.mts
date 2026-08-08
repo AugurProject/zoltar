@@ -874,6 +874,7 @@ assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'con
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
 const escalationHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
+assert.match(statoblastHtml, /<details class="interactive-example technical-details" id="collateral-repair-example">[\s\S]*data-plot-chart="plot-statoblast-whitepaper-19"/i, 'collateral repair controls and chart must share the interactive example container')
 assert.match(escalationHtml, /fixed (?:start bond|configured start bond)/i, 'escalation explanation should name the fixed deposit minimum')
 assert.match(escalationHtml, /cumulative binding-capital threshold/i, 'escalation explanation should distinguish the cumulative threshold from the deposit minimum')
 assert.match(escalationHtml, /deadline moves only when the deposit raises the median outcome balance/i, 'escalation explanation should tie deadline changes to median balance increases')

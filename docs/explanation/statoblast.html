@@ -313,9 +313,9 @@
 				<p class="lede">After migration, a child pool may still have less ETH than it needs to support its open interest. A Truth Auction can sell some child-universe REP for ETH to repair that shortfall.</p>
 				<p>The auction has an ETH raise target and a cap on how much REP it may sell. The cap depends on migrated REP, pool-held REP, and unresolved dispute-staked REP; it may allow the full auctionable amount, reserve a small amount, apply a migration haircut, or be zero.</p>
 				<p>The child resumes with the collateral actually migrated and raised. See the <a href="../explanation/truth-auctions.html">Truth Auction design</a> for timing, caps, rounding, bidding, and settlement.</p>
-				<details class="technical-details">
+				<details class="interactive-example technical-details" id="collateral-repair-example">
 					<summary>See the collateral-repair illustrations</summary>
-					<div class="example-grid" id="collateral-repair-example">
+					<div class="example-grid">
 						<label>Parent settlement collateral <input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" /><span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span></label>
 						<label>Migration-routed collateral <input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" /><span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span></label>
 						<label>Auction ETH raised <input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
