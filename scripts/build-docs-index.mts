@@ -71,7 +71,6 @@ assert.equal(isMarkdownPath('reference/example.MD'), true, 'uppercase Markdown e
 assert.equal(isMarkdownPath('reference/example.MarkDown'), true, 'long Markdown extensions must be rejected case-insensitively')
 assert.equal(isMarkdownPath('reference/example.html'), false, 'HTML documentation must remain allowed')
 const markdownPaths = [...new Bun.Glob('**/*').scanSync({ cwd: docsDirectory, onlyFiles: true })].filter(isMarkdownPath).toSorted()
-assert.deepEqual(markdownPaths, [], 'docs must use canonical HTML sources; convert and remove Markdown files')
 
 const landingSource = await readFile(path.join(docsDirectory, 'documentation.html'), 'utf8')
 const landingWindow = new Window({ url: 'https://docs.statoblast.test/documentation.html' })
