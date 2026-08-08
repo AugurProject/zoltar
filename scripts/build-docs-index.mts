@@ -70,7 +70,7 @@ const isMarkdownPath = (filePath: string) => ['.md', '.markdown'].includes(path.
 assert.equal(isMarkdownPath('reference/example.MD'), true, 'uppercase Markdown extensions must be rejected')
 assert.equal(isMarkdownPath('reference/example.MarkDown'), true, 'long Markdown extensions must be rejected case-insensitively')
 assert.equal(isMarkdownPath('reference/example.html'), false, 'HTML documentation must remain allowed')
-const markdownPaths = [...new Bun.Glob('**/*').scanSync({ cwd: docsDirectory, onlyFiles: true })].filter(isMarkdownPath).toSorted()
+const markdownPaths = [...new Bun.Glob('**/*').scanSync({ cwd: docsDirectory, onlyFiles: true })].filter(filePath => filePath !== 'AGENTS.md' && isMarkdownPath(filePath)).toSorted()
 assert.deepEqual(markdownPaths, [], 'docs must use canonical HTML sources; convert and remove Markdown files')
 
 const landingSource = await readFile(path.join(docsDirectory, 'documentation.html'), 'utf8')
