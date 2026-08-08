@@ -2545,7 +2545,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
-					"data-source": "normalizedCost(t) = 0.1 * exp(ln(10) * t)",
+					"data-source": "canonicalBindingCapital(day) = contractFixedPoint(startBondAttoRep, nonDecisionThresholdAttoRep, max(0, day - 3) * 86400)",
 					"d": "M 90 212 L 159 208 L 228 202 L 297 195 L 366 186 L 435 175 L 504 160 L 573 141 L 642 118 L 711 88 L 780 50"
 				},
 				"tag": "path"

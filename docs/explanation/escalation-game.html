@@ -15,7 +15,7 @@
 			<section id="lifecycle-first">
 				<p class="lede">The Escalation Game's deposit, timing, outcome-selection, and continuation rules fit into the wider prediction-market lifecycle described in the Statoblast white paper.</p>
 
-				<p>When a Statoblast market ends, the security pool sends a valid deposit through its escalation-deposit delegate. The deposit must pass the pool's vault-backing and lifecycle checks and usually meet the configured starting bond. A smaller deposit is allowed only when it fills an outcome to the non-decision threshold. The first deposit does not resolve the market by itself.</p>
+				<p>When a Statoblast market ends, the security pool sends a valid deposit through its escalation-deposit delegate. The deposit must pass the pool's vault-backing and lifecycle checks and usually meet the configured starting bond. A smaller deposit is allowed only when it fills an outcome to the <a href="#term-non-decision-threshold">non-decision threshold</a>. The first deposit does not resolve the market by itself.</p>
 				<p>A deposit moves the local deadline only when it raises the median of the three outcome balances. A strict leader identifies the local result, but the pool can finalize it only after the deadline. If competing outcomes reach the non-decision threshold, the pool follows the fork path.</p>
 
 				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
@@ -26,27 +26,31 @@
 				<p>A vault owner with enough backing can add REP to an outcome with a valid deposit that meets the configured start bond. The deposit adds to that outcome's cumulative balance; it does not have to exceed the leader. The deadline moves only when the deposit raises the median outcome balance. Separately, the cumulative binding-capital threshold rises over time:</p>
 
 				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential cumulative binding-capital threshold from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The cumulative binding-capital threshold rises exponentially from the configured start-bond ratio to the non-decision threshold over the full escalation interval; individual deposits still use the fixed start bond.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Contract-model cumulative binding-capital curve from day 0 through day 52"><span class="plot-chart-fallback">The contract model shows zero binding capital before activation, the configured start bond at day 3, and the configured non-decision threshold at day 52.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Cumulative Binding-Capital Threshold</span> <math display="block" aria-label="cumulative binding capital at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="cumulativeBindingCapital(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)"> <mrow> <mi>cumulativeBindingCapital</mi> <mo>(</mo> <mi>elapsedEscalationTime</mi> <mo>)</mo> <mo>=</mo> <mi>startingBondAmount</mi> <mo>&#x22C5;</mo> <mi>exp</mi> <mo>(</mo> <mfrac> <mrow> <mi>ln</mi> <mo>(</mo> <mfrac> <mi>nonDecisionThresholdAmount</mi> <mi>startingBondAmount</mi> </mfrac> <mo>)</mo> <mo>&#x22C5;</mo> <mi>elapsedEscalationTime</mi> </mrow> <mi>fullEscalationInterval</mi> </mfrac> <mo>)</mo> </mrow> </math></p>
 				</figure>
 
-				<p>The contract waits three days after <code>start()</code> before the escalation clock begins. The chart shows the next seven weeks. Its 10% curve is an example; deployed games use their configured start bond and non-decision threshold.</p>
+				<p>The contract waits three days after <code>start()</code> before the escalation clock begins. The chart labels day 0 (game start), day 3 (activation), and day 52 (the end of the seven-week escalation interval).</p>
 
 				<details class="interactive-example" id="escalation-game-example">
 					<summary>Try a simplified escalation round</summary>
-					<p>Adjust the cumulative outcome balances to see how the median controls the deadline. The pool and delegate apply the real checks.</p>
+					<p>This simulator uses the contract model: a three-day activation delay, a 49-day escalation interval, and the fixed-point attrition curve. Change the configured start bond and non-decision threshold to explore a different game; the chart and deadline use those values.</p>
 					<div class="example-grid">
-						<label>Yes balance <input type="range" min="0" max="10" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
-						<label>No balance <input type="range" min="0" max="10" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
-						<label>Invalid balance <input type="range" min="0" max="10" value="0" step="1" data-example-input="invalid" /><span class="example-value" data-escalation-value="invalid">0 REP</span></label>
+						<label>Start bond <input type="range" min="0.1" max="20" value="1" step="0.1" data-example-input="startBond" /><span class="example-value" data-example-value="startBond">1 REP</span></label>
+						<label>Non-decision threshold <input type="range" min="1" max="100" value="10" step="1" data-example-input="nonDecisionThreshold" /><span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span></label>
+						<label>Yes balance <input type="range" min="0" max="100" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
+						<label>No balance <input type="range" min="0" max="100" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
+						<label>Invalid balance <input type="range" min="0" max="100" value="0" step="1" data-example-input="invalid" /><span class="example-value" data-escalation-value="invalid">0 REP</span></label>
 						<label>Days since start <input type="range" min="0" max="56" value="0" step="1" data-example-input="days" /><span class="example-value" data-escalation-value="days">0 days</span></label>
 					</div>
 					<div class="example-output-grid">
+						<div><span>Configured start bond</span><output data-escalation-output="startBond">1 REP</output></div>
+						<div><span>Configured threshold</span><output data-escalation-output="threshold">10 REP</output></div>
 						<div><span>Leading outcome</span><output data-escalation-output="leader">Yes / No</output></div>
 						<div><span>Median balance</span><output data-escalation-output="median">1 REP</output></div>
 						<div><span>Activation</span><output data-escalation-output="activation">3 days</output></div>
-						<div><span>Illustrative deadline</span><output data-escalation-output="deadline">3 days after start</output></div>
-						<div><span>Illustrative state</span><output data-escalation-output="state">contested</output></div>
+						<div><span>Scheduled deadline</span><output data-escalation-output="deadline">day 3.0</output></div>
+						<div><span>Contract-model state</span><output data-escalation-output="state">deadline pending</output></div>
 					</div>
 				</details>
 			</section>
@@ -59,12 +63,40 @@
 					<li>Two sides have reached the maximal deposit amount: Statoblast triggers a fork</li>
 				</ol>
 
-				<p>After the game ends, the payout uses three amounts. Binding capital supports the final result. Deposits above that amount remain reward-eligible only up to the safety boundary. Deposits above the reward cap get their principal back but no reward. In a local win, eligible deposits on the winning outcome share the reward pool; after a fork, continuation rules handle each forked outcome. The game burns the winning-deposit haircut.</p>
+				<p>After the game ends, the payout uses <a href="#term-binding-capital">binding capital</a>, the <a href="#term-safety-boundary">safety boundary</a>, and the <a href="#term-reward-cap">reward-eligible cap</a>. A winning deposit returns its <a href="#term-principal">principal</a> and may receive a bonus. Any excess above the reward cap returns principal without a bonus. The game burns the winning-deposit <a href="#term-haircut">haircut</a>; forked payouts can also be scaled by the fork threshold.</p>
 
 				<div class="callout">
-					Example: if final binding capital is <code>10 REP</code>, the reward-eligible cap is <code>15 REP</code>, the safety boundary is <code>(10 REP, 15 REP]</code>, and the reward pool is <code>6 REP</code>. If the winning side contributes <code>15 REP</code> inside that reward-eligible window, each <code>5 REP</code> deposit receives <code>7 REP</code>. Winning depth above <code>15 REP</code>
-					receives principal back with no share of the reward pool.
+					<p><strong>Exact example.</strong> Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>10 + 10 / 2 = 15 REP</code>. The reward pool is <code>10 × 3 / 5 = 6 REP</code>, and the haircut pool is <code>10 × 2 / 5 = 4 REP</code>. If the winning outcome has <code>15 REP</code> and a deposit contributes <code>5 REP</code> within the eligible range:</p>
+					<ul>
+						<li>Principal returned: <code>5 REP</code>.</li>
+						<li>Bonus: <code>5 × 6 / 15 = 2 REP</code>.</li>
+						<li>Winning payout: <code>5 + 2 = 7 REP</code>.</li>
+						<li>Haircut burned: <code>5 × 4 / 15 = 1.333333333333333333 REP</code> at attoREP precision.</li>
+					</ul>
+					<p>A deposit position above <code>15 REP</code> still returns its principal but receives no bonus. If the fork threshold is <code>8 REP</code> instead of the <code>10 REP</code> non-decision threshold, the fork-time scaling is <code>7 × 8 / 10 = 5.6 REP</code>, rounded down to attoREP.</p>
 				</div>
+
+				<section id="glossary">
+					<h3>Glossary</h3>
+					<dl>
+						<dt id="term-binding-capital">Binding capital</dt>
+						<dd>The median REP balance across Invalid, Yes, and No. It is the amount the winning result must support and the value that sets the scheduled deadline.</dd>
+						<dt id="term-non-decision-threshold">Non-decision threshold</dt>
+						<dd>The configured REP balance at which two outcomes have enough support to stop local resolution and use the fork path.</dd>
+						<dt id="term-safety-boundary">Safety boundary</dt>
+						<dd>The interval above binding capital where a winning deposit can still earn a bonus. In this model it is <code>(binding capital, reward-eligible cap]</code>.</dd>
+						<dt id="term-reward-cap">Reward-eligible cap</dt>
+						<dd>Binding capital plus half of binding capital. Only the portion of winning deposits up to this cap participates in the bonus calculation.</dd>
+						<dt id="term-principal">Principal</dt>
+						<dd>The REP originally deposited. A winning deposit returns its principal before any bonus is added.</dd>
+						<dt id="term-haircut">Haircut</dt>
+						<dd>The REP amount calculated for burning from the reward-eligible portion of a winning deposit. It is separate from the payout amount.</dd>
+						<dt id="term-coverage-commitment">Coverage commitment</dt>
+						<dd>The ETH-denominated open-interest amount a vault has committed to secure with REP backing.</dd>
+						<dt id="term-settlement-collateral">Settlement collateral</dt>
+						<dd>ETH held by a security pool to pay complete-set redemption and outcome settlement.</dd>
+					</dl>
+				</section>
 
 				<h3>Escalation game continuation</h3>
 
@@ -75,38 +107,6 @@
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script>
-			const escalationExample = document.querySelector("#escalation-game-example");
-			if (escalationExample !== null) {
-				const readBalance = (name) => Number(escalationExample.querySelector(`[data-example-input="${name}"]`)?.value ?? 0);
-				const updateEscalationExample = () => {
-					const balances = { Yes: readBalance("yes"), No: readBalance("no"), Invalid: readBalance("invalid") };
-					const ordered = Object.entries(balances).sort((left, right) => right[1] - left[1]);
-					const median = [...Object.values(balances)].sort((left, right) => left - right)[1];
-					const daysSinceStart = readBalance("days");
-					const activationDays = 3;
-					const escalationDays = 49;
-					const deadlineDays = activationDays + Math.min(escalationDays, Math.max(0, Math.log10(Math.max(median, 1)) * escalationDays));
-					for (const [name, balance] of Object.entries(balances)) {
-						escalationExample.querySelector(`[data-escalation-value="${name.toLowerCase()}"]`).textContent = `${balance} REP`;
-					}
-					escalationExample.querySelector('[data-escalation-value="days"]').textContent = `${daysSinceStart} days`;
-					escalationExample.querySelector('[data-escalation-output="leader"]').value = ordered[0][1] === ordered[1][1] ? "No strict leader" : ordered[0][0];
-					escalationExample.querySelector('[data-escalation-output="median"]').value = `${median} REP`;
-					escalationExample.querySelector('[data-escalation-output="activation"]').value = daysSinceStart < activationDays ? `${activationDays - daysSinceStart} days remaining` : "active";
-					escalationExample.querySelector('[data-escalation-output="deadline"]').value = `${deadlineDays.toFixed(1)} days after start`;
-					let state = "deadline pending";
-					const thresholdReached = Object.values(balances).filter((balance) => balance >= 10).length >= 2;
-					if (daysSinceStart < activationDays) state = "activation pending";
-					else if (thresholdReached) state = "non-decision: fork path";
-					else if (daysSinceStart > deadlineDays && ordered[0][1] > ordered[1][1]) state = `locally resolvable: ${ordered[0][0]}`;
-					else if (daysSinceStart > deadlineDays) state = "unresolved tie";
-					escalationExample.querySelector('[data-escalation-output="state"]').value = state;
-				};
-				for (const input of escalationExample.querySelectorAll("[data-example-input]")) input.addEventListener("input", updateEscalationExample);
-				updateEscalationExample();
-			}
-		</script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>

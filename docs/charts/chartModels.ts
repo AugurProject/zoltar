@@ -11,7 +11,7 @@ type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
-	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed time after activation (%)', y: 'Cumulative binding capital (% of non-decision threshold)' },
+	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Cumulative binding capital (REP)' },
 	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
@@ -195,13 +195,80 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 	return { atCost, result: 'None' }
 }
 
-export const escalationChartStartBondFraction = 0.1
+export const ESCALATION_ACTIVATION_DELAY_DAYS = 3
+export const ESCALATION_TIME_LENGTH_DAYS = 49
+export const ESCALATION_TIME_LENGTH_SECONDS = 4_233_600n
 
-export function normalizedBindingCapitalThreshold(elapsed: number, startBondFraction = escalationChartStartBondFraction): number {
-	const boundedElapsed = Math.min(Math.max(elapsed, 0), 1)
-	const boundedStartBondFraction = Math.min(Math.max(startBondFraction, Number.EPSILON), 1)
-	if (boundedElapsed === 1) return 1
-	return boundedStartBondFraction * Math.exp(Math.log(1 / boundedStartBondFraction) * boundedElapsed)
+const ATTO_REP = 10n ** 18n
+const ESCALATION_SCALE = 1_000_000n
+const ESCALATION_LN2_SCALED = 693_147n
+const ESCALATION_MAX_EXP_ITERATIONS = 16
+
+function computeAtanhScaled(z: bigint) {
+	const zSquared = (z * z) / ESCALATION_SCALE
+	let term = z
+	let result = term
+	for (let iteration = 1; iteration < 16; iteration += 1) {
+		term = (term * zSquared * BigInt(2 * iteration - 1)) / (BigInt(2 * iteration + 1) * ESCALATION_SCALE)
+		if (term === 0n) break
+		result += term
+	}
+	return result
+}
+
+function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
+	let normalizedLow = lowValue
+	let log2Count = 0n
+	while (highValue >= normalizedLow * 2n) {
+		normalizedLow *= 2n
+		log2Count += 1n
+	}
+	const difference = highValue - normalizedLow
+	const sum = highValue + normalizedLow
+	const z = (difference * ESCALATION_SCALE) / sum
+	if (z === 0n) return log2Count * ESCALATION_LN2_SCALED
+	return log2Count * ESCALATION_LN2_SCALED + 2n * computeAtanhScaled(z)
+}
+
+export function toAttoRep(value: number) {
+	return BigInt(Math.round(value * 1_000_000)) * 1_000_000_000_000n
+}
+
+export function computeCanonicalEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedSeconds: bigint) {
+	if (elapsedSeconds <= 0n) return startBondAttoRep
+	if (elapsedSeconds >= ESCALATION_TIME_LENGTH_SECONDS) return nonDecisionThresholdAttoRep
+	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)
+	const exponent = (lnRatioScaled * elapsedSeconds) / ESCALATION_TIME_LENGTH_SECONDS
+	const exponentPow2 = exponent / ESCALATION_LN2_SCALED
+	const exponentRemainder = exponent - exponentPow2 * ESCALATION_LN2_SCALED
+	let expScaled = ESCALATION_SCALE
+	let term = exponentRemainder
+	expScaled += term
+	for (let iteration = 2; iteration < ESCALATION_MAX_EXP_ITERATIONS; iteration += 1) {
+		term = (term * exponentRemainder) / (BigInt(iteration) * ESCALATION_SCALE)
+		if (term === 0n) break
+		expScaled += term
+	}
+	expScaled <<= exponentPow2
+	const cost = (startBondAttoRep * expScaled) / ESCALATION_SCALE
+	return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost
+}
+
+export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
+	const elapsedSeconds = BigInt(Math.round(Math.max(0, elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
+	return Number(computeCanonicalEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds)) / Number(ATTO_REP)
+}
+
+export function computeCanonicalEscalationDeadlineDays(startBondRep: number, nonDecisionThresholdRep: number, bindingCapitalRep: number) {
+	const startBondAttoRep = toAttoRep(startBondRep)
+	const thresholdAttoRep = toAttoRep(nonDecisionThresholdRep)
+	const bindingCapitalAttoRep = toAttoRep(bindingCapitalRep)
+	if (bindingCapitalAttoRep <= startBondAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS
+	if (bindingCapitalAttoRep >= thresholdAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS
+	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, thresholdAttoRep)
+	const lnCostRatioScaled = computeLnRatioScaled(startBondAttoRep, bindingCapitalAttoRep)
+	const elapsedSeconds = (lnCostRatioScaled * ESCALATION_TIME_LENGTH_SECONDS) / lnRatioScaled
+	return ESCALATION_ACTIVATION_DELAY_DAYS + Number(elapsedSeconds) / 86_400
 }
 
 export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {

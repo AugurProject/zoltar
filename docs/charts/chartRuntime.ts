@@ -1,5 +1,17 @@
 import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
-import { calculateAnnualizedRetentionFeePercent, calculateCollateralRepairModel, calculateAuctionModel, calculateForkThresholdSeries, contractInteractionEdges, normalizedBindingCapitalThreshold, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
+import {
+	calculateAnnualizedRetentionFeePercent,
+	computeCanonicalEscalationBindingCapital,
+	computeCanonicalEscalationDeadlineDays,
+	calculateCollateralRepairModel,
+	calculateAuctionModel,
+	calculateForkThresholdSeries,
+	contractInteractionEdges,
+	ESCALATION_ACTIVATION_DELAY_DAYS,
+	ESCALATION_TIME_LENGTH_DAYS,
+	quantitativeChartAxisLabels,
+	quantitativeChartIds,
+} from './chartModels'
 import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 
@@ -404,16 +416,19 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 
 function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-statoblast-escalation-cost-curve']
-	const curve = Array.from({ length: 61 }, (_, index) => {
-		const elapsed = index / 60
+	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
+	const startBond = readInput(simulator, 'startBond', 1)
+	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
+	const curve = Array.from({ length: 54 }, (_, day) => {
 		return {
-			elapsed,
-			bindingCapitalFraction: normalizedBindingCapitalThreshold(elapsed),
+			day,
+			bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
 		}
 	})
 	const start = curve[0]
+	const activation = curve[ESCALATION_ACTIVATION_DELAY_DAYS]
 	const end = curve[curve.length - 1]
-	if (start === undefined || end === undefined) {
+	if (start === undefined || activation === undefined || end === undefined) {
 		throw new Error('Escalation cost curve must include both endpoints')
 	}
 	return plot({
@@ -427,48 +442,48 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 		marks: [
 			areaY(curve, {
 				fill: 'var(--gold-soft, #f3e4c6)',
-				x: 'elapsed',
-				y: 'bindingCapitalFraction',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
 			lineY(curve, {
 				stroke: 'var(--gold, #8a5d18)',
 				strokeWidth: 3,
-				x: 'elapsed',
-				y: 'bindingCapitalFraction',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			ruleY([start.bindingCapitalFraction], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			ruleY([end.bindingCapitalFraction], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			dot([start, end], {
+			ruleX([ESCALATION_ACTIVATION_DELAY_DAYS], { stroke: 'var(--blue, #245f9f)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			dot([activation, end], {
 				fill: (_datum, index) => (index === 0 ? 'var(--green, #1d735d)' : 'var(--red, #99453f)'),
 				r: 6,
-				x: 'elapsed',
-				y: 'bindingCapitalFraction',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			text([{ elapsed: start.elapsed, label: `start bond ${(start.bindingCapitalFraction * 100).toFixed(1)}%`, bindingCapitalFraction: start.bindingCapitalFraction }], {
+			text([{ day: activation.day, label: `day ${activation.day}: activation / ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
 				dx: 9,
 				dy: -10,
 				fill: 'var(--green, #1d735d)',
 				fontWeight: 700,
 				text: 'label',
 				textAnchor: 'start',
-				x: 'elapsed',
-				y: 'bindingCapitalFraction',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', bindingCapitalFraction: end.bindingCapitalFraction }], {
+			text([{ day: end.day, label: `day ${end.day}: threshold / ${nonDecisionThreshold} REP`, bindingCapital: end.bindingCapital }], {
 				dx: -9,
 				dy: 14,
 				fill: 'var(--red, #99453f)',
 				fontWeight: 700,
 				text: 'label',
 				textAnchor: 'end',
-				x: 'elapsed',
-				y: 'bindingCapitalFraction',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
+			text([{ day: 0, label: 'day 0: game starts', bindingCapital: 0 }], { dx: 8, dy: -8, fill: 'var(--ink, currentColor)', fontWeight: 650, text: 'label', textAnchor: 'start', x: 'day', y: 'bindingCapital' }),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, 1], grid: true, label: axes.x, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
-		y: { domain: [0, 1.06], grid: true, label: axes.y, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
+		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
+		y: { domain: [0, Math.max(nonDecisionThreshold * 1.08, 1)], grid: true, label: axes.y, tickFormat: (value: number) => `${value.toFixed(1)} REP` },
 	}) as SVGSVGElement
 }
 
@@ -1307,11 +1322,47 @@ window.setTimeout(restoreDocumentFragment, 600)
 window.addEventListener('load', restoreDocumentFragment)
 window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
-for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19']) {
+function updateEscalationSimulator(): void {
+	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
+	if (simulator === null) return
+	const read = (name: string, fallback: number) => readInput(simulator, name, fallback)
+	const startBond = Math.max(read('startBond', 1), 0.000001)
+	const nonDecisionThreshold = Math.max(read('nonDecisionThreshold', 10), startBond + 0.000001)
+	const balances: Record<string, number> = { Yes: read('yes', 1), No: read('no', 1), Invalid: read('invalid', 0) }
+	const ordered = Object.entries(balances).sort((left, right) => right[1] - left[1])
+	const median = [...Object.values(balances)].sort((left, right) => left - right)[1] ?? 0
+	const daysSinceStart = read('days', 0)
+	const deadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, median)
+	for (const [name, balance] of Object.entries(balances)) simulator.querySelector<HTMLElement>(`[data-escalation-value="${name.toLowerCase()}"]`)?.replaceChildren(`${balance} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="startBond"]')?.replaceChildren(`${startBond} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="nonDecisionThreshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
+	simulator.querySelector<HTMLElement>('[data-escalation-value="days"]')?.replaceChildren(`${daysSinceStart} days`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="startBond"]')?.replaceChildren(`${startBond} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="threshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(ordered[0]?.[1] === ordered[1]?.[1] ? 'No strict leader' : (ordered[0]?.[0] ?? 'None'))
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${median} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="activation"]')?.replaceChildren(daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS ? `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (${ESCALATION_ACTIVATION_DELAY_DAYS - daysSinceStart} days remaining)` : `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (active)`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)}`)
+	const thresholdReached = Object.values(balances).filter(balance => balance >= nonDecisionThreshold).length >= 2
+	let state = 'deadline pending'
+	if (daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS) state = 'activation pending'
+	else if (thresholdReached) state = 'non-decision: fork path'
+	else if (daysSinceStart > deadlineDays && (ordered[0]?.[1] ?? 0) > (ordered[1]?.[1] ?? 0)) state = `locally resolvable: ${ordered[0]?.[0] ?? 'None'}`
+	else if (daysSinceStart > deadlineDays) state = 'unresolved tie'
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')?.replaceChildren(state)
+}
+
+updateEscalationSimulator()
+
+for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19', 'fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
-	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
+	let inputRoot: Element | null
+	if (chartId === 'fig-auction-clearing-ladder') inputRoot = document.querySelector('#simple-auction-example')
+	else if (chartId === 'fig-statoblast-escalation-cost-curve') inputRoot = document.querySelector('#escalation-game-example')
+	else inputRoot = mount?.closest('.interactive-example') ?? null
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
+			if (chartId === 'fig-statoblast-escalation-cost-curve') updateEscalationSimulator()
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)
 				dispatchChartLayout()
