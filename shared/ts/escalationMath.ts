@@ -4,6 +4,7 @@ export type ProjectedEscalationDeposit = {
 	acceptedAmountAttoRep: bigint
 	projectedBalancesAttoRep: EscalationBalanceTuple
 	reachesNonDecision: boolean
+	tieAdjusted: boolean
 }
 
 export const ESCALATION_TIME_LENGTH = 4233600n
@@ -43,6 +44,29 @@ function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
 	const z = (diff * SCALE) / sum
 	if (z === 0n) return log2Count * LN2_SCALED
 	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
+}
+
+export function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, lnRatioScaled: bigint, timeSinceStart: bigint) {
+	if (timeSinceStart <= 0n) return startBondAttoRep
+	if (timeSinceStart >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep
+	const exponent = (lnRatioScaled * timeSinceStart) / ESCALATION_TIME_LENGTH
+	const exponentPow2 = exponent / LN2_SCALED
+	const exponentRemainder = exponent - exponentPow2 * LN2_SCALED
+	let expScaled = SCALE + exponentRemainder
+	let term = exponentRemainder
+	for (let iteration = 2; iteration < MAX_ATANH_ITERATIONS; iteration += 1) {
+		term = (term * exponentRemainder) / (BigInt(iteration) * SCALE)
+		if (term === 0n) break
+		expScaled += term
+	}
+	expScaled <<= exponentPow2
+	const cost = (startBondAttoRep * expScaled) / SCALE
+	return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost
+}
+
+export function computeEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
+	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('Escalation threshold must exceed the start bond')
+	return computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep), timeSinceStart)
 }
 
 export function computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, attritionCostAttoRep: bigint) {
@@ -111,13 +135,13 @@ export function projectEscalationDeposit({
 	outcome: EscalationOutcomeKey
 	startBondAttoRep: bigint
 }): ProjectedEscalationDeposit | undefined {
-	if (amountAttoRep < startBondAttoRep) return undefined
 	const outcomeIndex = getEscalationOutcomeIndex(outcome)
 	const currentBalanceAttoRep = balancesAttoRep[outcomeIndex]
 	if (currentBalanceAttoRep >= nonDecisionThresholdAttoRep) return undefined
 	const roomAttoRep = nonDecisionThresholdAttoRep - currentBalanceAttoRep
 	let acceptedAmountAttoRep = amountAttoRep > roomAttoRep ? roomAttoRep : amountAttoRep
 	let newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
+	let tieAdjusted = false
 	const maxBalanceAttoRep = getMaxEscalationBalanceAttoRep(balancesAttoRep)
 	const otherHasMax = (() => {
 		if (outcomeIndex === 0) return balancesAttoRep[1] === maxBalanceAttoRep || balancesAttoRep[2] === maxBalanceAttoRep
@@ -125,15 +149,17 @@ export function projectEscalationDeposit({
 		return balancesAttoRep[0] === maxBalanceAttoRep || balancesAttoRep[1] === maxBalanceAttoRep
 	})()
 	if (newBalanceAttoRep === maxBalanceAttoRep && otherHasMax && maxBalanceAttoRep < nonDecisionThresholdAttoRep) {
+		tieAdjusted = true
 		acceptedAmountAttoRep -= 1n
-		if (acceptedAmountAttoRep < startBondAttoRep) return undefined
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
 	}
+	if (acceptedAmountAttoRep < startBondAttoRep && newBalanceAttoRep !== nonDecisionThresholdAttoRep) return undefined
 	const projectedBalancesAttoRep = setBalanceAtIndex(balancesAttoRep, outcomeIndex, newBalanceAttoRep)
 	return {
 		acceptedAmountAttoRep,
 		projectedBalancesAttoRep,
 		reachesNonDecision: hasReachedNonDecision(projectedBalancesAttoRep, nonDecisionThresholdAttoRep),
+		tieAdjusted,
 	}
 }
 

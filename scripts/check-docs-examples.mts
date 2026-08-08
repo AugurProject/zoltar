@@ -3,7 +3,19 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
-import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
+import {
+	calculateAnnualizedRetentionFeePercent,
+	calculateAuctionModel,
+	computeCanonicalEscalationBindingCapital,
+	computeCanonicalEscalationDeadlineDays,
+	calculateCollateralRepairModel,
+	calculateEscalationDepositModel,
+	calculateForkThresholdSeries,
+	calculateResolutionModel,
+	ESCALATION_TIME_LENGTH_SECONDS,
+	toAttoRep,
+} from '../docs/charts/chartModels'
+import { getWinningEscalationDepositClaimAmount } from '../shared/ts/escalationMath'
 import { updateDiagramControl } from '../docs/charts/diagramControl'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
@@ -835,6 +847,7 @@ assert.doesNotMatch(auctionDesignHtml, /max-uint sentinel/i, 'auction design sho
 assert.match(auctionDesignHtml, /every bid refunds/i, 'auction design should document the no-qualifying-bid refund branch')
 assert.match(auctionDesignHtml, /stores the lowest tick whose price reaches that\s+qualification threshold as <code>clearingTick<\/code>/i, 'canonical clearing copy should describe rounding the cap-implied threshold to a tick')
 assert.match(auctionDesignHtml, /Sold REP is allocated between them proportionally with integer floors/i, 'canonical clearing copy should describe deterministic floor allocation')
+assert.match(auctionDesignHtml, /dispute-staked bucket receives <code>⌊repPurchased \* disputeStakedRepBefore \/ combinedRepBefore⌋<\/code>[\s\S]*pool-held bucket receives the complementary remainder/i, 'canonical clearing copy should identify the dispute-staked floor and pool-held remainder')
 assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
 assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningAttoEth \* PRICE_PRECISION \/ maxAttoRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
@@ -872,6 +885,12 @@ assert.match(redeemRepFromVaultRow, /specified `vault` has no escalation escrow 
 assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRepFromVault requires global escrow clearance')
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
+const escalationHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
+assert.match(statoblastHtml, /<details class="interactive-example technical-details" id="collateral-repair-example">[\s\S]*data-plot-chart="plot-statoblast-whitepaper-19"/i, 'collateral repair controls and chart must share the interactive example container')
+assert.match(escalationHtml, /configured start bond|fixed-point attrition curve/i, 'escalation explanation should name the configured bond and canonical curve')
+assert.match(escalationHtml, /cumulative binding-capital threshold/i, 'escalation explanation should distinguish the cumulative threshold from the deposit minimum')
+assert.match(escalationHtml, /deadline moves only when the deposit raises the median outcome balance/i, 'escalation explanation should tie deadline changes to median balance increases')
+assert.doesNotMatch(escalationHtml, /requiredEscalationCost|Exponential escalation bond curve/i, 'escalation explanation should not label the cumulative threshold as an individual deposit cost')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	const exampleId = bindMatch[1]
 	if (exampleId === undefined) {
@@ -880,28 +899,43 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	assert.ok(statoblastHtml.includes(`id="${exampleId}"`), `whitepaper bindExample target should exist: ${exampleId}`)
 }
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
-const diagramSpecsSource = await readFile('docs/charts/diagramSpecs.json', 'utf8')
-assert.match(chartRuntimeSource, /Array\.from\(\{ length: 61 \}/, 'whitepaper escalation Plot should sample the normalized curve densely')
-const escalationCurve = Array.from({ length: 61 }, (_, index) => {
-	const elapsed = index / 60
-	return normalizedEscalationCost(elapsed)
-})
-assert.equal(escalationCurve[0], Math.exp(-2.4), 'whitepaper escalation Plot should start at the normalized starting bond')
-assert.equal(escalationCurve[escalationCurve.length - 1], 1, 'whitepaper escalation Plot should end at the normalized non-decision threshold')
-assert.match(diagramSpecsSource, /normalizedCost\(t\) = exp\(2\.4 \* \(t - 1\)\)/, 'whitepaper escalation chart specification should declare the same normalized exponential formula as the runtime model')
-assert.doesNotMatch(chartRuntimeSource, /percent:\s*true/, 'normalized escalation coordinates should use percent tick labels without rescaling the curve data')
-assert.match(chartRuntimeSource, /tickFormat: \(value: number\) => `\$\{Math\.round\(value \* 100\)\}%`/, 'whitepaper escalation Plot should format normalized coordinates as percentages')
-for (let index = 1; index < escalationCurve.length; index += 1) {
-	const previous = escalationCurve[index - 1]
-	const current = escalationCurve[index]
-	if (previous === undefined || current === undefined) {
-		throw new Error('whitepaper escalation Plot samples should be defined')
-	}
-	assert.ok(current > previous, 'whitepaper escalation Plot should rise monotonically')
-}
+assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
+assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
+assert.match(chartRuntimeSource, /ticks: \[0, 3, 52\]/, 'whitepaper escalation Plot should mark game start, activation, and curve end')
+assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
+assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
+const oneThirdPowerOfTwoTimeDays = Number(ESCALATION_TIME_LENGTH_SECONDS / 3n) / 86_400
+assert.equal(computeCanonicalEscalationBindingCapital(1, 8, 3 + oneThirdPowerOfTwoTimeDays), Number(toAttoRep(2)) / Number(toAttoRep(1)), 'canonical escalation fixture should match the contract one-third-time power-of-two ratio')
+assert.equal(computeCanonicalEscalationDeadlineDays(1, 8, 2), 3 + oneThirdPowerOfTwoTimeDays, 'canonical deadline fixture should match the contract inverse calculation')
+const payoutFixture = 10n ** 18n
+assert.equal(
+	getWinningEscalationDepositClaimAmount({
+		bindingCapitalAttoRep: 10n * payoutFixture,
+		cumulativeAmountAttoRep: 15n * payoutFixture,
+		depositAmountAttoRep: 5n * payoutFixture,
+		forkThresholdAttoRep: 10n * payoutFixture,
+		nonDecisionThresholdAttoRep: 10n * payoutFixture,
+		winningOutcomeBalanceAttoRep: 15n * payoutFixture,
+	}),
+	7n * payoutFixture,
+	'published payout example should match the shared contract fixture for principal plus bonus',
+)
+assert.equal(
+	getWinningEscalationDepositClaimAmount({
+		bindingCapitalAttoRep: 10n * payoutFixture,
+		cumulativeAmountAttoRep: 20n * payoutFixture,
+		depositAmountAttoRep: 5n * payoutFixture,
+		forkThresholdAttoRep: 8n * payoutFixture,
+		nonDecisionThresholdAttoRep: 10n * payoutFixture,
+		winningOutcomeBalanceAttoRep: 20n * payoutFixture,
+	}),
+	4n * payoutFixture,
+	'fork scaling should reduce even an above-cap principal-only withdrawal',
+)
+assert.match(escalationHtml, /Principal returned: <code>5 REP<\/code>[\s\S]*Bonus: <code>5 × 6 \/ 15 = 2 REP<\/code>[\s\S]*Winning payout: <code>5 \+ 2 = 7 REP<\/code>/i, 'published payout example should show principal, bonus, and total formulas')
 assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
-assert.match(chartRuntimeSource, /■ Migration-routed[\s\S]*■ Auction repair/, 'collateral repair Plot should visibly map both segment colors')
+assert.match(chartRuntimeSource, /domain: \['Migration-routed', 'Auction repair'\]/, 'collateral repair Plot should preserve distinct migration and repair segment colors')
 const zeroUtilizationFee = calculateAnnualizedRetentionFeePercent(0)
 const dipUtilizationFee = calculateAnnualizedRetentionFeePercent(80)
 assert.ok(zeroUtilizationFee > 9 && zeroUtilizationFee < 11, 'retention Plot should annualize the maximum retention rate to roughly ten percent fees')

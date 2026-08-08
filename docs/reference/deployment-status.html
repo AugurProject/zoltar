@@ -21,7 +21,7 @@
 				<p>This is a code-presence bitmap. A set bit means code exists at the configured address. A clear bit means the address currently has no code. The oracle does not verify constructor args, ownership wiring, or post-deployment setup.</p>
 				<figure class="diagram diagram-wide" id="fig-deployment-mask">
 					<div class="plot-chart" data-plot-chart="fig-deployment-mask" data-plot-width="920" data-plot-height="220" role="img" aria-label="Deployment mask maps ordered deployment steps to bits"><span class="plot-chart-fallback">A row of deployment steps on the left maps by index into bit positions in a uint256 mask on the right. Each step sets its bit only when code exists at that configured address.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Deployment Status Mask</span>Each configured deployment step owns one bit position in the returned word. The oracle sets that bit only if the step's address currently contains code.</p>
+					<p class="diagram-caption"><span class="figure-label">Deployment Status Mask</span>Each configured deployment step uses one bit position in the returned word. The oracle sets that bit only if the step's address currently contains code.</p>
 				</figure>
 				<div class="equation" id="eq-deployment-mask">
 					<math display="block" aria-label="deployed mask equals the sum over each configured address of code present at i times two to the i" data-source="deployedMask = sum(codePresent(i) * 2^i)">
@@ -136,7 +136,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>Use <a href="../reference/deployment-status.html">Verify a deployment</a> for the complete code-hash, wiring, permission, and manifest check. The <code>getDeploymentMask()</code> return type is <code>uint256</code>; the constructor reverts when more than 256 addresses are supplied.</p>
+				<p>This page documents the deployment-status bitmask only; it does not provide complete bytecode, wiring, permission, or manifest verification. The <code>getDeploymentMask()</code> return type is <code>uint256</code>; the constructor reverts when more than 256 addresses are supplied.</p>
 				<h3>Static decoder test vectors</h3>
 				<table>
 					<thead>

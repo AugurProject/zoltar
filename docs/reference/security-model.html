@@ -12,7 +12,7 @@
 			<header>
 				<h1>Statoblast Protocol Security Model</h1>
 				<p class="security-model-lede">Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules onchain. Their economic safety and practical liveness still depend on the participant, market, asset, deployment, client, data, Ethereum, and cryptographic assumptions below.</p>
-				<p>An assumption is not a contract guarantee. Each entry names the boundary that must remain true, the failure that follows when it does not, and the documentation whose mechanics rely on it. The <a href="./invariants.html">Protocol Invariants</a> catalog owns contract-enforced properties and their implementation evidence.</p>
+				<p>An assumption is not a guarantee enforced by the contracts. Each entry says what must remain true, what can fail if it does not, and where the related mechanics are explained. The <a href="./invariants.html">Protocol Invariants</a> catalog lists contract-enforced properties and their implementation evidence.</p>
 				<nav class="assumption-nav" aria-label="Security assumption groups">
 					<a href="#assumptions-participation">Participation</a>
 					<a href="#assumptions-forks">Forks and markets</a>
@@ -179,7 +179,7 @@
 						<h3>Truth auctions can convert supported child REP efficiently</h3>
 						<p>When repair is needed, enough demand can buy some supported-child REP for ETH at an acceptably small discount and operating cost. This does not assume that the full repair target is raised.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/truth-auctions.html#auction">repair accounting</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#auction">repair accounting</a>.</p>
 					</li>
 					<li id="assumption-a13" value="13" data-assumption="A13">
 						<h3>REP is sufficiently liquid</h3>
@@ -275,7 +275,7 @@
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>Interfaces, indexers, RPC providers, and wallet software return canonical, reorg-aware state; construct and display the intended chain, target, calldata, parameters, and ETH value; and submit only transactions the user authorizes. Users verify transaction previews rather than treating an application label as an onchain guarantee.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Compromised or stale offchain software can misroute signatures or capital, hide deadlines or events, or cause users to authorize valid but unintended calls without violating contract guards.</p>
-						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">canonical replay</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator verification</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">contract interactions</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator verification</a>.</p>
 					</li>
 					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
@@ -292,7 +292,7 @@
 					<li id="assumption-a27" value="27" data-assumption="A27">
 						<h3>Ethereum cryptographic primitives remain secure</h3>
 						<p>Keccak-256 remains collision- and preimage-resistant at the truncated widths used by the protocol, and CREATE2 identity remains sound. secp256k1 ECDSA signatures remain unforgeable with correct EOA signer recovery for Ethereum transactions and EIP-712 authorizations. OpenOracle's fixed Permit2 singleton additionally validates either an EOA signature or an ERC-1271 contract-account signature correctly.</p>
-						<p>OpenOracle fixes the Permit2 address, requires the exact permitted amount, sends the requested tokens to itself, and constructs the witness from the beneficiary, relayer, token owner, and intent. Canonical Permit2 owns the EIP-712 domain, deadline, permitted-amount ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature validation. Verification under <a href="#assumption-a23">A23</a> must cover the pinned Permit2 implementation at that fixed address.</p>
+						<p>OpenOracle fixes the Permit2 address, requires the exact permitted amount, sends the requested tokens to itself, and constructs the witness from the beneficiary, relayer, token owner, and intent. Permit2 defines the EIP-712 domain, deadline, permitted-amount ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature validation. Verification under <a href="#assumption-a23">A23</a> must cover the pinned Permit2 implementation at that fixed address.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Forged identities, colliding questions or universes, false carry proofs, forged EOA transactions, incorrect EOA recovery or ERC-1271 acceptance, or broken domain and nonce enforcement can violate otherwise-correct guards or authorize an unintended token transfer.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#universe-model">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="../../solidity/contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="../../solidity/contracts/peripherals/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic deployments</a>.</p>
 					</li>

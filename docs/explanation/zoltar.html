@@ -71,7 +71,7 @@
 					<li>mint and burn child-universe REP</li>
 					<li>turn migration balances into selected child REP</li>
 				</ul>
-				<p>In practice, that means an application can register a question, trigger a fork after that question ends, and consume the child-universe structure that Zoltar defines. Only Zoltar can mint the child-universe <code>ReputationToken</code>; genesis REP is separately deployed and supplied to Zoltar. Zoltar cannot never mint more REP into a single universe than its parent has REP.</p>
+				<p>In practice, an application can register a question, trigger a fork after that question ends, and use the child-universe structure that Zoltar defines. <code>ZoltarQuestionData</code> stores question state and answer encoding. Only Zoltar can mint the child-universe <code>ReputationToken</code>; genesis REP is separately deployed and supplied to Zoltar. Zoltar can never mint more REP into a single universe than its parent has REP.</p>
 
 				<h3>Zoltar Contracts</h3>
 				<ul class="contract-list">
