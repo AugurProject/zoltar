@@ -45,7 +45,7 @@
 					<li>Vault owners deposit REP into security vaults, while traders deposit ETH to mint complete sets. Before minting, the pool checks whether enough fee-eligible coverage capacity is available. It does not fetch a new REP price for every mint. Price-sensitive health is checked when commitments or backing change and during liquidation.</li>
 					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
 					<li>In the unfortunate case where the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.</li>
-					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, migrates its backing units there, and routes a proportional share of that pool's <a href="./escalation-game.html#term-settlement-collateral">settlement collateral</a>.</li>
+					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, migrates its backing units there, and routes a proportional share of that pool's <a href="#term-settlement-collateral">settlement collateral</a>.</li>
 					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href="truth-auctions.html">Truth Auction</a> to repair that collateral gap.</li>
 					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
 				</ol>
@@ -160,7 +160,7 @@
 				<ol>
 					<li>The parent pool enters fork mode.</li>
 					<li>Anyone can deploy a child pool for a valid fork outcome.</li>
-					<li>Vault owners can migrate their REP backing units and <a href="./escalation-game.html#term-coverage-commitment">coverage commitment</a> to one child of their choosing. Claimable fees remain checkpointed, funded, and redeemable in the parent vault.</li>
+					<li>Vault owners can migrate their REP backing units and <a href="#term-coverage-commitment">coverage commitment</a> to one child of their choosing. Claimable fees remain checkpointed, funded, and redeemable in the parent vault.</li>
 					<li>Unresolved ongoing escalation games fork into child pools and the games continue after a pause</li>
 					<li>The child starts a truth auction after the migration deadline if collateral is missing.</li>
 					<li>Truth auction ends, auction participants can claim their bought locked REP and security commitments</li>
@@ -349,6 +349,16 @@
 				</div>
 
 				<p>Statoblast uses a REP/ETH price to evaluate pool security. The price feed supports operations whose safety depends on REP value relative to pool settlement collateral.</p>
+
+				<section id="statoblast-glossary">
+					<h2>Glossary</h2>
+					<dl>
+						<dt id="term-coverage-commitment">Coverage commitment</dt>
+						<dd>The ETH-denominated open-interest amount a vault has committed to secure with REP backing.</dd>
+						<dt id="term-settlement-collateral">Settlement collateral</dt>
+						<dd>ETH held by a security pool to redeem complete sets and settle the winning outcome.</dd>
+					</dl>
+				</section>
 				<p>Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a>; see the <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration</a> explanation for the coordinator lifecycle.</p>
 
 				<figure class="diagram" id="fig-statoblast-oracle-flow">

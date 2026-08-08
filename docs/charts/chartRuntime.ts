@@ -3,6 +3,7 @@ import {
 	calculateAnnualizedRetentionFeePercent,
 	computeCanonicalEscalationBindingCapital,
 	computeCanonicalEscalationDeadlineDays,
+	projectDocumentationEscalationDeposit,
 	calculateCollateralRepairModel,
 	calculateAuctionModel,
 	calculateForkThresholdSeries,
@@ -419,7 +420,7 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
 	const startBond = readInput(simulator, 'startBond', 1)
 	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
-	const curve = Array.from({ length: 54 }, (_, day) => {
+	const curve = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => {
 		return {
 			day,
 			bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
@@ -427,7 +428,7 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	})
 	const start = curve[0]
 	const activation = curve[ESCALATION_ACTIVATION_DELAY_DAYS]
-	const end = curve[curve.length - 1]
+	const end = curve[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
 	if (start === undefined || activation === undefined || end === undefined) {
 		throw new Error('Escalation cost curve must include both endpoints')
 	}
@@ -1327,28 +1328,67 @@ function updateEscalationSimulator(): void {
 	if (simulator === null) return
 	const read = (name: string, fallback: number) => readInput(simulator, name, fallback)
 	const startBond = Math.max(read('startBond', 1), 0.000001)
-	const nonDecisionThreshold = Math.max(read('nonDecisionThreshold', 10), startBond + 0.000001)
-	const balances: Record<string, number> = { Yes: read('yes', 1), No: read('no', 1), Invalid: read('invalid', 0) }
-	const ordered = Object.entries(balances).sort((left, right) => right[1] - left[1])
-	const median = [...Object.values(balances)].sort((left, right) => left - right)[1] ?? 0
+	let nonDecisionThreshold = read('nonDecisionThreshold', 10)
+	const thresholdInput = simulator.querySelector<HTMLInputElement>('[data-example-input="nonDecisionThreshold"]')
+	if (thresholdInput !== null) {
+		thresholdInput.min = (startBond + 0.1).toFixed(1)
+		if (Number(thresholdInput.value) < Number(thresholdInput.min)) thresholdInput.value = thresholdInput.min
+		nonDecisionThreshold = Number(thresholdInput.value)
+	}
+	const error = simulator.querySelector<HTMLElement>('[data-escalation-error]')
+	if (nonDecisionThreshold <= startBond) {
+		if (error !== null) {
+			error.hidden = false
+			error.textContent = 'Choose a non-decision threshold above the start bond.'
+		}
+		return
+	}
+	if (error !== null) error.hidden = true
+	const balances: { Invalid: number; No: number; Yes: number } = { Yes: Math.min(read('yes', 1), nonDecisionThreshold), No: Math.min(read('no', 1), nonDecisionThreshold), Invalid: Math.min(read('invalid', 0), nonDecisionThreshold) }
+	const ordered = (
+		[
+			['Yes', balances.Yes],
+			['No', balances.No],
+			['Invalid', balances.Invalid],
+		] as [string, number][]
+	).sort((left, right) => right[1] - left[1])
+	const balanceValues = [balances.Yes, balances.No, balances.Invalid]
+	const median = [...balanceValues].sort((left, right) => left - right)[1] ?? 0
 	const daysSinceStart = read('days', 0)
 	const deadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, median)
+	const depositOutcome = simulator.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')?.value ?? 'yes'
+	const depositAmount = Math.max(read('depositAmount', startBond), 0)
+	const beforeBalances: [bigint, bigint, bigint] = [BigInt(Math.round(balances.Invalid * 1e18)), BigInt(Math.round(balances.Yes * 1e18)), BigInt(Math.round(balances.No * 1e18))]
+	const projection = projectDocumentationEscalationDeposit({ amountRep: depositAmount, balances: beforeBalances, nonDecisionThresholdRep: nonDecisionThreshold, outcome: depositOutcome as 'invalid' | 'yes' | 'no', startBondRep: startBond })
+	const afterBalances = projection === undefined ? balances : { Invalid: Number(projection.projectedBalancesAttoRep[0]) / 1e18, Yes: Number(projection.projectedBalancesAttoRep[1]) / 1e18, No: Number(projection.projectedBalancesAttoRep[2]) / 1e18 }
+	const projectedMedian = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid].sort((left, right) => left - right)[1] ?? 0
+	const afterDeadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, projectedMedian)
 	for (const [name, balance] of Object.entries(balances)) simulator.querySelector<HTMLElement>(`[data-escalation-value="${name.toLowerCase()}"]`)?.replaceChildren(`${balance} REP`)
 	simulator.querySelector<HTMLElement>('[data-example-value="startBond"]')?.replaceChildren(`${startBond} REP`)
 	simulator.querySelector<HTMLElement>('[data-example-value="nonDecisionThreshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="depositAmount"]')?.replaceChildren(`${depositAmount} REP`)
 	simulator.querySelector<HTMLElement>('[data-escalation-value="days"]')?.replaceChildren(`${daysSinceStart} days`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="startBond"]')?.replaceChildren(`${startBond} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="threshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(ordered[0]?.[1] === ordered[1]?.[1] ? 'No strict leader' : (ordered[0]?.[0] ?? 'None'))
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${median} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="balances"]')?.replaceChildren(`Yes ${balances.Yes} → ${afterBalances.Yes} REP; No ${balances.No} → ${afterBalances.No} REP; Invalid ${balances.Invalid} → ${afterBalances.Invalid} REP`)
+	const accepted = projection === undefined ? 0 : Number(projection.acceptedAmountAttoRep) / 1e18
+	let depositState = 'rejected'
+	if (projection !== undefined) {
+		if (projection.tieAdjusted) depositState = `accepted with tie adjustment: ${accepted} REP`
+		else if (accepted < depositAmount) depositState = `accepted and clipped: ${accepted} REP`
+		else depositState = `accepted: ${accepted} REP`
+	}
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deposit"]')?.replaceChildren(`${depositState}${projection?.reachesNonDecision === true ? ' (non-decision reached)' : ''}`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="activation"]')?.replaceChildren(daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS ? `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (${ESCALATION_ACTIVATION_DELAY_DAYS - daysSinceStart} days remaining)` : `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (active)`)
-	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)}`)
-	const thresholdReached = Object.values(balances).filter(balance => balance >= nonDecisionThreshold).length >= 2
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)} → day ${afterDeadlineDays.toFixed(1)}`)
+	const thresholdReached = balanceValues.filter(balance => balance >= nonDecisionThreshold).length >= 2
 	let state = 'deadline pending'
-	if (daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS) state = 'activation pending'
-	else if (thresholdReached) state = 'non-decision: fork path'
+	if (thresholdReached) state = 'non-decision: fork path'
+	else if (daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS) state = 'activation pending'
 	else if (daysSinceStart > deadlineDays && (ordered[0]?.[1] ?? 0) > (ordered[1]?.[1] ?? 0)) state = `locally resolvable: ${ordered[0]?.[0] ?? 'None'}`
-	else if (daysSinceStart > deadlineDays) state = 'unresolved tie'
+	else if (daysSinceStart > deadlineDays) state = balanceValues.every(balance => balance === 0) ? 'resolved: Invalid' : 'unresolved tie'
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')?.replaceChildren(state)
 }
 
@@ -1360,7 +1400,7 @@ for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepape
 	if (chartId === 'fig-auction-clearing-ladder') inputRoot = document.querySelector('#simple-auction-example')
 	else if (chartId === 'fig-statoblast-escalation-cost-curve') inputRoot = document.querySelector('#escalation-game-example')
 	else inputRoot = mount?.closest('.interactive-example') ?? null
-	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {
+	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
 			if (chartId === 'fig-statoblast-escalation-cost-curve') updateEscalationSimulator()
 			if (mount !== null && mount !== undefined) {

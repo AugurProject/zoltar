@@ -1,3 +1,5 @@
+import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/ts/escalationMath'
+
 export type AuctionBidInput = {
 	eth: number
 	key: 'alice' | 'bob' | 'carol'
@@ -11,7 +13,7 @@ type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
-	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Cumulative binding capital (REP)' },
+	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Required support threshold / attrition cost (REP)' },
 	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
@@ -149,38 +151,6 @@ export function calculateCollateralRepairModel(
 	}
 }
 
-const attoRepPerRep = 1_000_000_000_000_000_000n
-
-export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }): {
-	accepted: number
-	acceptedAttoRep: bigint
-	effectiveStartBondAttoRep: bigint
-	noAfter: number
-	noAfterAttoRep: bigint
-	previewReverts: boolean
-	threshold: number
-	tieAdjusted: boolean
-} {
-	const threshold = Math.max(input.nonDecisionThreshold, 1)
-	const thresholdAttoRep = BigInt(Math.round(threshold * Number(attoRepPerRep)))
-	const enteredStartBondAttoRep = BigInt(Math.round(input.startBond * Number(attoRepPerRep)))
-	const effectiveStartBondAttoRep = !input.repeatDeposit && enteredStartBondAttoRep >= thresholdAttoRep ? thresholdAttoRep - 1n : enteredStartBondAttoRep
-	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAttoRep <= 0n || enteredStartBondAttoRep >= thresholdAttoRep)
-	const nonDecisionReached = [input.invalidBalance, input.yesBalance, input.noBalance].filter(balance => BigInt(Math.round(balance * Number(attoRepPerRep))) >= thresholdAttoRep).length >= 2
-	const room = Math.max(0, threshold - input.noBalance)
-	const clipped = Math.min(input.proposedDeposit, room)
-	const maxBefore = Math.max(input.invalidBalance, input.yesBalance, input.noBalance)
-	const tieAdjusted = input.noBalance + clipped === maxBefore && input.noBalance + clipped < threshold
-	const clippedAttoRep = BigInt(Math.round(clipped * Number(attoRepPerRep)))
-	const acceptedPreviewAttoRep = tieAdjusted && clippedAttoRep > 0n ? clippedAttoRep - 1n : clippedAttoRep
-	const noAfterPreviewAttoRep = BigInt(Math.round(input.noBalance * Number(attoRepPerRep))) + acceptedPreviewAttoRep
-	const previewReverts = invalidStoredParameters || nonDecisionReached || input.noBalance >= threshold || BigInt(Math.round(input.proposedDeposit * Number(attoRepPerRep))) < effectiveStartBondAttoRep || (acceptedPreviewAttoRep < effectiveStartBondAttoRep && noAfterPreviewAttoRep !== thresholdAttoRep)
-	const acceptedAttoRep = previewReverts ? 0n : acceptedPreviewAttoRep
-	const accepted = Number(acceptedAttoRep) / Number(attoRepPerRep)
-	const noAfterAttoRep = BigInt(Math.round(input.noBalance * Number(attoRepPerRep))) + acceptedAttoRep
-	return { accepted, acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + accepted, noAfterAttoRep, previewReverts, threshold, tieAdjusted }
-}
-
 export function calculateResolutionModel(input: { invalidBalance: number; noBalance: number; runningCost: number; yesBalance: number }): { atCost: number; result: 'Invalid' | 'No' | 'None' | 'Yes' } {
 	const balances = [input.invalidBalance, input.yesBalance, input.noBalance]
 	const atCost = balances.filter(balance => balance >= input.runningCost).length
@@ -196,62 +166,17 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 }
 
 export const ESCALATION_ACTIVATION_DELAY_DAYS = 3
-export const ESCALATION_TIME_LENGTH_DAYS = 49
-export const ESCALATION_TIME_LENGTH_SECONDS = 4_233_600n
+export const ESCALATION_TIME_LENGTH_DAYS = Number(ESCALATION_TIME_LENGTH) / 86_400
+export const ESCALATION_TIME_LENGTH_SECONDS = ESCALATION_TIME_LENGTH
 
 const ATTO_REP = 10n ** 18n
-const ESCALATION_SCALE = 1_000_000n
-const ESCALATION_LN2_SCALED = 693_147n
-const ESCALATION_MAX_EXP_ITERATIONS = 16
-
-function computeAtanhScaled(z: bigint) {
-	const zSquared = (z * z) / ESCALATION_SCALE
-	let term = z
-	let result = term
-	for (let iteration = 1; iteration < 16; iteration += 1) {
-		term = (term * zSquared * BigInt(2 * iteration - 1)) / (BigInt(2 * iteration + 1) * ESCALATION_SCALE)
-		if (term === 0n) break
-		result += term
-	}
-	return result
-}
-
-function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
-	let normalizedLow = lowValue
-	let log2Count = 0n
-	while (highValue >= normalizedLow * 2n) {
-		normalizedLow *= 2n
-		log2Count += 1n
-	}
-	const difference = highValue - normalizedLow
-	const sum = highValue + normalizedLow
-	const z = (difference * ESCALATION_SCALE) / sum
-	if (z === 0n) return log2Count * ESCALATION_LN2_SCALED
-	return log2Count * ESCALATION_LN2_SCALED + 2n * computeAtanhScaled(z)
-}
 
 export function toAttoRep(value: number) {
 	return BigInt(Math.round(value * 1_000_000)) * 1_000_000_000_000n
 }
 
 export function computeCanonicalEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedSeconds: bigint) {
-	if (elapsedSeconds <= 0n) return startBondAttoRep
-	if (elapsedSeconds >= ESCALATION_TIME_LENGTH_SECONDS) return nonDecisionThresholdAttoRep
-	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)
-	const exponent = (lnRatioScaled * elapsedSeconds) / ESCALATION_TIME_LENGTH_SECONDS
-	const exponentPow2 = exponent / ESCALATION_LN2_SCALED
-	const exponentRemainder = exponent - exponentPow2 * ESCALATION_LN2_SCALED
-	let expScaled = ESCALATION_SCALE
-	let term = exponentRemainder
-	expScaled += term
-	for (let iteration = 2; iteration < ESCALATION_MAX_EXP_ITERATIONS; iteration += 1) {
-		term = (term * exponentRemainder) / (BigInt(iteration) * ESCALATION_SCALE)
-		if (term === 0n) break
-		expScaled += term
-	}
-	expScaled <<= exponentPow2
-	const cost = (startBondAttoRep * expScaled) / ESCALATION_SCALE
-	return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost
+	return computeEscalationBindingCapitalAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedSeconds)
 }
 
 export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
@@ -265,10 +190,30 @@ export function computeCanonicalEscalationDeadlineDays(startBondRep: number, non
 	const bindingCapitalAttoRep = toAttoRep(bindingCapitalRep)
 	if (bindingCapitalAttoRep <= startBondAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS
 	if (bindingCapitalAttoRep >= thresholdAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS
-	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, thresholdAttoRep)
-	const lnCostRatioScaled = computeLnRatioScaled(startBondAttoRep, bindingCapitalAttoRep)
-	const elapsedSeconds = (lnCostRatioScaled * ESCALATION_TIME_LENGTH_SECONDS) / lnRatioScaled
+	const elapsedSeconds = computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, thresholdAttoRep, bindingCapitalAttoRep)
 	return ESCALATION_ACTIVATION_DELAY_DAYS + Number(elapsedSeconds) / 86_400
+}
+
+export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
+	return projectEscalationDeposit({
+		amountAttoRep: toAttoRep(input.amountRep),
+		balancesAttoRep: input.balances,
+		nonDecisionThresholdAttoRep: toAttoRep(input.nonDecisionThresholdRep),
+		outcome: input.outcome,
+		startBondAttoRep: toAttoRep(input.startBondRep),
+	})
+}
+
+export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }) {
+	const threshold = Math.max(input.nonDecisionThreshold, 1)
+	const thresholdAttoRep = toAttoRep(threshold)
+	const enteredStartBondAttoRep = toAttoRep(input.startBond)
+	const effectiveStartBondAttoRep = !input.repeatDeposit && enteredStartBondAttoRep >= thresholdAttoRep ? thresholdAttoRep - 1n : enteredStartBondAttoRep
+	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAttoRep <= 0n || enteredStartBondAttoRep >= thresholdAttoRep)
+	const projection = projectEscalationDeposit({ amountAttoRep: toAttoRep(input.proposedDeposit), balancesAttoRep: [toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], nonDecisionThresholdAttoRep: thresholdAttoRep, outcome: 'no', startBondAttoRep: effectiveStartBondAttoRep })
+	const previewReverts = invalidStoredParameters || hasReachedNonDecision([toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], thresholdAttoRep) || projection === undefined
+	const acceptedAttoRep = previewReverts ? 0n : projection.acceptedAmountAttoRep
+	return { accepted: Number(acceptedAttoRep) / Number(ATTO_REP), acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + Number(acceptedAttoRep) / Number(ATTO_REP), noAfterAttoRep: toAttoRep(input.noBalance) + acceptedAttoRep, previewReverts, threshold, tieAdjusted: projection?.tieAdjusted ?? false }
 }
 
 export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {

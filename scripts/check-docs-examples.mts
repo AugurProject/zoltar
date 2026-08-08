@@ -900,7 +900,7 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 }
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
 assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
-assert.match(chartRuntimeSource, /Array\.from\(\{ length: 54 \}/, 'whitepaper escalation Plot should sample every day from game start through day 52')
+assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
 assert.match(chartRuntimeSource, /ticks: \[0, 3, 52\]/, 'whitepaper escalation Plot should mark game start, activation, and curve end')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
@@ -919,6 +919,18 @@ assert.equal(
 	}),
 	7n * payoutFixture,
 	'published payout example should match the shared contract fixture for principal plus bonus',
+)
+assert.equal(
+	getWinningEscalationDepositClaimAmount({
+		bindingCapitalAttoRep: 10n * payoutFixture,
+		cumulativeAmountAttoRep: 20n * payoutFixture,
+		depositAmountAttoRep: 5n * payoutFixture,
+		forkThresholdAttoRep: 8n * payoutFixture,
+		nonDecisionThresholdAttoRep: 10n * payoutFixture,
+		winningOutcomeBalanceAttoRep: 20n * payoutFixture,
+	}),
+	4n * payoutFixture,
+	'fork scaling should reduce even an above-cap principal-only withdrawal',
 )
 assert.match(escalationHtml, /Principal returned: <code>5 REP<\/code>[\s\S]*Bonus: <code>5 × 6 \/ 15 = 2 REP<\/code>[\s\S]*Winning payout: <code>5 \+ 2 = 7 REP<\/code>/i, 'published payout example should show principal, bonus, and total formulas')
 assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
