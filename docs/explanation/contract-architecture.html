@@ -20,9 +20,9 @@
 				<h2>Conceptual Model Before the Graph</h2>
 				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
 				<ul>
-					<li><code>ZoltarQuestionData</code> owns question state and answer encoding; <code>Zoltar</code> owns universes, forks, and REP branching.</li>
-					<li>A security pool owns market collateral, vault accounting, open interest, and lifecycle state.</li>
-					<li>The share token owns outcome-share balances.</li>
+					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and REP branches.</li>
+					<li>A security pool tracks market collateral, vault accounting, open interest, and lifecycle state.</li>
+					<li>The share token tracks outcome-share balances.</li>
 					<li>The price coordinator stages operations that require a fresh REP/ETH price.</li>
 					<li>The escalation game escrows reporting REP and tracks local dispute state.</li>
 					<li>The pool forker creates and repairs child pools after a fork.</li>
@@ -140,13 +140,13 @@
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td>Fork migration</td>
-								<td>Deploys and owns the pool-specific adapter, transfers parent REP to it, and instructs it to lock, fork, split, and sweep child REP.</td>
+								<td>Deploys and controls the pool-specific adapter, transfers parent REP to it, and instructs it to lock, fork, split, and sweep child REP.</td>
 							</tr>
 							<tr data-edge-id="migration-proxy-zoltar" data-source="Migration Proxy" data-receiver="Zoltar" data-phase="Fork migration">
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td><code>Zoltar</code></td>
 								<td>Fork migration</td>
-								<td>Acts as the literal Zoltar caller whose stable address owns the migration ledger balance while parent REP is locked and split into child-universe REP.</td>
+								<td>Acts as the literal Zoltar caller whose stable address holds the migration ledger balance while parent REP is locked and split into child-universe REP.</td>
 							</tr>
 							<tr data-edge-id="forker-child-deployment" data-source="Pool Forker" data-receiver="Pool Factory" data-phase="Fork migration">
 								<td><code>SecurityPoolForker</code></td>
@@ -238,11 +238,11 @@
 				<h2>Actors, custody, and one operation</h2>
 				<p>The protocol consists of several participants with distinct responsibilities. Market creators configure security pools, traders mint and hold complete sets and outcome shares, vault owners provide REP backing, liquidators repair under-collateralized vaults, auction bidders recapitalize child pools after forks, keepers execute permissionless maintenance operations, and indexers reconstruct protocol state from emitted events.</p>
 
-				<p>Each contract owns a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator executes price-sensitive operations that require a REP/ETH price. Zoltar manages universes, questions, REP, and forks. Because each contract has a well-defined area of responsibility, operations may involve multiple contracts without transferring ownership of all assets or state between them.</p>
+				<p>Each contract handles a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator runs price-sensitive operations that need a REP/ETH price. Zoltar manages universes, questions, REP, and forks. An operation may involve several contracts, but that does not move every asset or piece of state between them.</p>
 
-				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Throughout the process, each contract modifies only the state it owns while emitted events allow external indexers to reconstruct the operation.</p>
+				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Each contract changes only the state it manages, while emitted events let external indexers reconstruct the operation.</p>
 
-				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the ownership boundaries described above remain stable across deployments.</p>
+				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the custody and responsibility boundaries described above remain stable across deployments.</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>

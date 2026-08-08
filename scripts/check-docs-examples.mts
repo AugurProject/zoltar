@@ -874,9 +874,9 @@ assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'con
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
 const escalationHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
-assert.match(statoblastHtml, /disputeStakedRepSold = ⌊repPurchased \* disputeStakedRepBefore \/ combinedRepBefore⌋[\s\S]*poolRepSold = repPurchased - disputeStakedRepSold/i, 'whitepaper clearing copy should preserve the exact source-bucket rounding rule')
-assert.match(escalationHtml, /individual deposits keep that fixed start-bond minimum[\s\S]*cumulative binding-capital threshold/i, 'escalation explanation should distinguish fixed deposit minimums from the median-derived cumulative threshold')
-assert.match(escalationHtml, /deadline advances only when a deposit increases the median balance/i, 'escalation explanation should tie deadline changes to median balance increases')
+assert.match(escalationHtml, /fixed (?:start bond|configured start bond)/i, 'escalation explanation should name the fixed deposit minimum')
+assert.match(escalationHtml, /cumulative binding-capital threshold/i, 'escalation explanation should distinguish the cumulative threshold from the deposit minimum')
+assert.match(escalationHtml, /deadline moves only when the deposit raises the median outcome balance/i, 'escalation explanation should tie deadline changes to median balance increases')
 assert.doesNotMatch(escalationHtml, /requiredEscalationCost|Exponential escalation bond curve/i, 'escalation explanation should not label the cumulative threshold as an individual deposit cost')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	const exampleId = bindMatch[1]

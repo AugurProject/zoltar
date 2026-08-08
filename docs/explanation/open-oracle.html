@@ -46,7 +46,7 @@
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
 
-				<p>Every security pool has its own <code>OpenOraclePriceCoordinator</code>. The coordinator sits between users, the pool, and the shared OpenOracle instance. It owns the pool's cached REP/ETH price, pending report state, staged-operation queue, and settlement callback handling. Keeping this state per pool prevents one pool's pending report or freshness window from becoming a protocol-wide queue.</p>
+				<p>Every security pool has its own <code>OpenOraclePriceCoordinator</code>. The coordinator connects users, the pool, and the shared OpenOracle instance. It keeps the pool's cached REP/ETH price, pending report state, staged-operation queue, and settlement callback state. Keeping this state per pool prevents one pool's pending report or freshness window from becoming a protocol-wide queue.</p>
 
 				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>PriceOracleManagerAndOperatorQueuerFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory calls <code>setSecurityPool</code> once with the nonzero pool address.</p>
 
@@ -136,7 +136,7 @@
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
-				<p>OpenOracle's correctness depends on profitable arbitrage correcting inaccurate prices. A report is useful when correcting a price that is wrong by at least the configured target error can pay the modeled dispute cost after OpenOracle fees and the configured security multiplier. The coordinator sizes the WETH position for that correction incentive.</p>
+				<p>OpenOracle's correctness depends on profitable arbitrage correcting inaccurate prices. The coordinator sizes each report so that correcting an error at or above the target remains profitable after modeled dispute costs and OpenOracle fees, with the configured security margin.</p>
 
 				<p>In the conservative correction direction, the true REP/ETH price is <code>(1 + targetError)</code> times the reported price. Before gas, correcting that report releases the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position. The sizing formula therefore multiplies the modeled gas cost of one dispute by the security multiplier and divides by that correction-profit fraction.</p>
 
@@ -399,7 +399,7 @@
 			<section id="parameters">
 				<h2>OpenOracle parameters used</h2>
 
-				<p>The table below summarizes the integration values needed to understand this explanation. It is not a second normative parameter catalogue. The <a href="../explanation/open-oracle.html#parameters"> coordinator reference </a> owns the source constants and parameter definitions, while deployment verification owns deployed getter snapshots. The <a href="../explanation/statoblast.html#oracle">Statoblast whitepaper</a> routes readers to those canonical sources.</p>
+				<p>Use the <a href="../explanation/open-oracle.html#parameters">coordinator reference</a> for source constants and parameter definitions, and deployment verification for deployed getter values. The <a href="../explanation/statoblast.html#oracle">Statoblast whitepaper</a> links to both.</p>
 				<table>
 					<thead>
 						<tr>

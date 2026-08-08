@@ -15,7 +15,7 @@
 
 				<p>Because collateral follows migration rather than being copied in full, a child pool retains its obligations while lacking enough ETH to reopen cleanly. The truth auction sells child-universe REP to raise as much repair ETH as demand supports. A truth auction does not determine which outcome is true. It sells REP belonging to one already-defined child universe to repair that child pool's collateral.</p>
 
-				<p>The auction has an ETH raise target (the missing collateral) and a child-universe REP sale cap (almost all REP). Statoblast runs the resulting dual-cap, then writes winning claims back into vault state rather than paying out simple token transfers, so bidders buy into the child pool and its matching coverage commitment instead of merely receiving REP.</p>
+				<p>The auction has an ETH raise target and a cap on how much child-universe REP it may sell. That cap depends on migrated and dispute-staked REP. Statoblast writes winning claims back into vault state rather than paying simple token transfers, so bidders buy into the child pool and its matching coverage commitment instead of merely receiving REP.</p>
 			</header>
 
 			<section id="lifecycle">
@@ -63,7 +63,7 @@
 
 				<h3>Underfunded Clearing</h3>
 				<p>When demand never reaches a full clearing price, the auction switches into the underfunded branch. Finalization computes <code>underfundedThreshold</code>, stores the lowest tick whose price reaches that qualification threshold as <code>clearingTick</code>. Only bids at or above the cap-implied qualification threshold are retained; lower ticks refund. Qualifying bidders collectively purchase <code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so the common effective price is their retained ETH divided by the REP cap. That effective price can be lower than the qualification threshold; the threshold is not an execution-price floor. If no ETH qualifies, every bid refunds.</p>
-				<p>Sold REP is allocated between them proportionally with integer floors: “them” means the pool-held REP bucket and the unresolved dispute-staked REP bucket. The dispute-staked bucket receives <code>⌊repPurchased * disputeStakedRepBefore / combinedRepBefore⌋</code>, and the pool-held bucket receives the complementary remainder. This inventory-source allocation is separate from the proportional REP allocation among qualifying bidders; each bucket retains separate backing and retention accounting.</p>
+				<p>Sold REP is allocated between them proportionally with integer floors: “them” means the pool-held and unresolved dispute-staked REP buckets. The dispute-staked bucket receives <code>⌊repPurchased * disputeStakedRepBefore / combinedRepBefore⌋</code>, and the pool-held bucket receives the complementary remainder. This bucket split happens before REP is allocated among qualifying bidders, and each bucket keeps separate backing and retention accounting.</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">
 					<math display="block" aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold" data-source="underfundedThreshold = ⌈attoEthRaiseCap * PRICE_PRECISION / maxAttoRepBeingSold⌉">
 						<mrow>
