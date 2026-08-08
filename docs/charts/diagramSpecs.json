@@ -2518,8 +2518,8 @@
 		"width": 900
 	},
 	"fig-statoblast-escalation-cost-curve": {
-		"ariaDescription": "The required bond rises exponentially from the normalized starting bond to one hundred percent of the non-decision threshold over the full escalation interval.",
-		"ariaLabel": "Exponential escalation bond curve from the starting bond to the non-decision threshold",
+		"ariaDescription": "Cumulative binding capital rises exponentially from the normalized starting bond to one hundred percent of the non-decision threshold over the full escalation interval; individual deposits retain the fixed start-bond minimum.",
+		"ariaLabel": "Exponential cumulative binding-capital threshold from the starting bond to the non-decision threshold",
 		"height": 300,
 		"nodes": [
 			{
@@ -2545,7 +2545,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
-					"data-source": "normalizedCost(t) = exp(2.4 * (t - 1))",
+					"data-source": "normalizedCost(t) = 0.1 * exp(ln(10) * t)",
 					"d": "M 90 212 L 159 208 L 228 202 L 297 195 L 366 186 L 435 175 L 504 160 L 573 141 L 642 118 L 711 88 L 780 50"
 				},
 				"tag": "path"

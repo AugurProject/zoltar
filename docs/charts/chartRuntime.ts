@@ -1,5 +1,5 @@
 import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
-import { calculateAnnualizedRetentionFeePercent, calculateCollateralRepairModel, calculateAuctionModel, calculateForkThresholdSeries, contractInteractionEdges, normalizedEscalationCost, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateCollateralRepairModel, calculateAuctionModel, calculateForkThresholdSeries, contractInteractionEdges, normalizedBindingCapitalThreshold, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
 import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 
@@ -402,13 +402,13 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 	return Number.isFinite(value) ? value : fallback
 }
 
-function escalationCostChart(spec: ChartSpec): SVGSVGElement {
+function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-statoblast-escalation-cost-curve']
 	const curve = Array.from({ length: 61 }, (_, index) => {
 		const elapsed = index / 60
 		return {
 			elapsed,
-			requiredRepFraction: normalizedEscalationCost(elapsed),
+			bindingCapitalFraction: normalizedBindingCapitalThreshold(elapsed),
 		}
 	})
 	const start = curve[0]
@@ -428,23 +428,23 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 			areaY(curve, {
 				fill: 'var(--gold-soft, #f3e4c6)',
 				x: 'elapsed',
-				y: 'requiredRepFraction',
+				y: 'bindingCapitalFraction',
 			}),
 			lineY(curve, {
 				stroke: 'var(--gold, #8a5d18)',
 				strokeWidth: 3,
 				x: 'elapsed',
-				y: 'requiredRepFraction',
+				y: 'bindingCapitalFraction',
 			}),
-			ruleY([start.requiredRepFraction], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			ruleY([end.requiredRepFraction], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			ruleY([start.bindingCapitalFraction], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			ruleY([end.bindingCapitalFraction], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
 			dot([start, end], {
 				fill: (_datum, index) => (index === 0 ? 'var(--green, #1d735d)' : 'var(--red, #99453f)'),
 				r: 6,
 				x: 'elapsed',
-				y: 'requiredRepFraction',
+				y: 'bindingCapitalFraction',
 			}),
-			text([{ elapsed: start.elapsed, label: `start bond ${(start.requiredRepFraction * 100).toFixed(1)}%`, requiredRepFraction: start.requiredRepFraction }], {
+			text([{ elapsed: start.elapsed, label: `start bond ${(start.bindingCapitalFraction * 100).toFixed(1)}%`, bindingCapitalFraction: start.bindingCapitalFraction }], {
 				dx: 9,
 				dy: -10,
 				fill: 'var(--green, #1d735d)',
@@ -452,9 +452,9 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 				text: 'label',
 				textAnchor: 'start',
 				x: 'elapsed',
-				y: 'requiredRepFraction',
+				y: 'bindingCapitalFraction',
 			}),
-			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', requiredRepFraction: end.requiredRepFraction }], {
+			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', bindingCapitalFraction: end.bindingCapitalFraction }], {
 				dx: -9,
 				dy: 14,
 				fill: 'var(--red, #99453f)',
@@ -462,7 +462,7 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 				text: 'label',
 				textAnchor: 'end',
 				x: 'elapsed',
-				y: 'requiredRepFraction',
+				y: 'bindingCapitalFraction',
 			}),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
@@ -1015,7 +1015,21 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
 	const example = mount.closest('#collateral-repair-example')
 	const parentSettlementCollateral = Math.max(readInput(example, 'parentSettlementCollateral', 50), 0)
-	const model = calculateCollateralRepairModel(parentSettlementCollateral, readInput(example, 'forkSettlementCollateralReceived', 47.5), readInput(example, 'auctionRaised', 2.5))
+	const forkSettlementCollateralReceived = readInput(example, 'forkSettlementCollateralReceived', 47.5)
+	const auctionRaised = readInput(example, 'auctionRaised', 2.5)
+	const model = calculateCollateralRepairModel(parentSettlementCollateral, forkSettlementCollateralReceived, auctionRaised)
+	if (example !== null) {
+		const values = {
+			auctionRaised: `${auctionRaised.toFixed(2)} ETH`,
+			forkSettlementCollateralReceived: `${forkSettlementCollateralReceived.toFixed(2)} ETH`,
+			parentSettlementCollateral: `${parentSettlementCollateral.toFixed(2)} ETH`,
+		}
+		for (const [name, value] of Object.entries(values)) example.querySelector(`[data-example-value="${name}"]`)?.replaceChildren(String(value))
+		example.querySelector('[data-example-output="routedCollateral"]')?.replaceChildren(`${model.received.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="initialShortfall"]')?.replaceChildren(`${model.initialShortfall.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="remainingShortfall"]')?.replaceChildren(`${model.remainingShortfall.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="repairStatus"]')?.replaceChildren(model.remainingShortfall === 0 ? 'no contribution required' : 'shortfall remains')
+	}
 	const parts = [
 		{ kind: 'Migration-routed', x1: 0, x2: model.received },
 		{ kind: 'Auction repair', x1: model.received, x2: model.received + model.repairEth },
@@ -1028,41 +1042,15 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 			range: ['var(--blue, #245f9f)', 'var(--green, #1d735d)'],
 		},
 		height: spec.height,
-		marginBottom: 44,
-		marginLeft: 124,
-		marginRight: 28,
-		marginTop: 52,
-		marks: [
-			barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }),
-			ruleX([parentSettlementCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			text(
-				[
-					{ kind: 'Migration-routed', label: '■ Migration-routed', value: parentSettlementCollateral * 0.24 },
-					{ kind: 'Auction repair', label: '■ Auction repair', value: parentSettlementCollateral * 0.68 },
-				],
-				{
-					dy: -55,
-					fill: 'kind',
-					fontSize: 12,
-					text: 'label',
-					x: 'value',
-					y: () => 'Child collateral',
-				},
-			),
-			text([{ label: `target ${parentSettlementCollateral.toFixed(2)} ETH`, value: parentSettlementCollateral }], {
-				dx: -6,
-				dy: -55,
-				fontSize: 12,
-				text: 'label',
-				textAnchor: 'end',
-				x: 'value',
-				y: () => 'Child collateral',
-			}),
-		],
+		marginBottom: 32,
+		marginLeft: 12,
+		marginRight: 12,
+		marginTop: 20,
+		marks: [barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }), ruleX([parentSettlementCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
 		x: { domain: [0, Math.max(parentSettlementCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
-		y: { label: axes.y },
+		y: { axis: null, label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.remainingShortfall === 0 ? 'repaired' : 'partial'
 	mount.dataset['chartState'] = chart.dataset['chartState']
@@ -1071,7 +1059,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 
 function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
-		return escalationCostChart(spec)
+		return bindingCapitalThresholdChart(spec)
 	}
 	if (chartId === 'fig-zoltar-fork-threshold-decay') {
 		return forkThresholdDecayChart(spec)
@@ -1319,7 +1307,7 @@ window.setTimeout(restoreDocumentFragment, 600)
 window.addEventListener('load', restoreDocumentFragment)
 window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
-for (const chartId of ['fig-auction-clearing-ladder']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {

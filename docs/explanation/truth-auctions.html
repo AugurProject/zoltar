@@ -11,7 +11,7 @@
 		<main>
 			<header>
 				<h1>Truth Auction</h1>
-				<p>When Pools migration period end, if a child pool lacks the ETH needed to fully collateralize its open interest, Statoblast initiates a truth auction for that pool. The fork may have been triggered either by a direct Zoltar fork or by the Statoblast Escalation Game.</p>
+				<p>When a pool's migration deadline has passed, if a child pool lacks the ETH needed to fully collateralize its open interest, the child may start a truth auction. The fork may have been triggered either by a direct Zoltar fork or by the Statoblast Escalation Game.</p>
 
 				<p>Because collateral follows migration rather than being copied in full, a child pool retains its obligations while lacking enough ETH to reopen cleanly. The truth auction sells child-universe REP to raise as much repair ETH as demand supports. A truth auction does not determine which outcome is true. It sells REP belonging to one already-defined child universe to repair that child pool's collateral.</p>
 
@@ -22,9 +22,9 @@
 				<h2>Operational Lifecycle</h2>
 
 				<ol>
-					<li>Auction starts (when migration ends)</li>
+					<li>Migration deadline passes; the child may start the auction later</li>
 					<li>Bidding</li>
-					<li>Bidding ends & Finalization (one week after migration)</li>
+					<li>Bidding ends and finalization occurs one week after the auction actually starts</li>
 				</ol>
 
 				<figure class="diagram diagram-wide" id="fig-auction-lifecycle">
@@ -33,7 +33,8 @@
 					<p class="diagram-caption"><span class="figure-label">Auction Lifecycle</span> The start transition activates a child immediately when no sale is needed. On the repair branch, ETH bids restore collateral, auction finalization activates the child, and later calls settle winning claims and refunds. REP doesn't leave the system. Finalization accounts the ETH actually raised and rejects contribution-only ETH, so bidder settlement never depends on a donor.</p>
 				</figure>
 
-				<h3>Start Of auction</h3>
+				<h3>Starting the auction</h3>
+				<p>The start call is permissionless but not automatic. It is valid strictly after the eight-week migration deadline and records the actual auction start time. That timestamp starts the one-week bidding window.</p>
 
 				<h3>Bidding</h3>
 				<p>Bidders submit bids at discrete <em>price ticks</em>, where each tick represents a maximum price in ETH per REP that the bidder is willing to pay.</p>
@@ -44,6 +45,7 @@
 				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders.</p>
 
 				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive REP backing units in the child pool plus their proportional share of the auctioned coverage commitment, rather than a direct REP token transfer.</p>
+				<p>The forker tracks collateral received through migration and the auction separately from the child contract's raw ETH balance. ETH forced into the child does not count toward the repair target. Finalization activates the child with migrated collateral plus accepted auction ETH and rejects nonzero finalizer contribution ETH.</p>
 			</section>
 
 			<section id="clearing">
@@ -61,6 +63,7 @@
 
 				<h3>Underfunded Clearing</h3>
 				<p>When demand never reaches a full clearing price, the auction switches into the underfunded branch. Finalization computes <code>underfundedThreshold</code>, stores the lowest tick whose price reaches that qualification threshold as <code>clearingTick</code>. Only bids at or above the cap-implied qualification threshold are retained; lower ticks refund. Qualifying bidders collectively purchase <code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so the common effective price is their retained ETH divided by the REP cap. That effective price can be lower than the qualification threshold; the threshold is not an execution-price floor. If no ETH qualifies, every bid refunds.</p>
+				<p>Sold REP is allocated between them proportionally with integer floors: “them” means the pool-held REP bucket and the unresolved dispute-staked REP bucket. The dispute-staked bucket receives <code>⌊repPurchased * disputeStakedRepBefore / combinedRepBefore⌋</code>, and the pool-held bucket receives the complementary remainder. This inventory-source allocation is separate from the proportional REP allocation among qualifying bidders; each bucket retains separate backing and retention accounting.</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">
 					<math display="block" aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold" data-source="underfundedThreshold = ⌈attoEthRaiseCap * PRICE_PRECISION / maxAttoRepBeingSold⌉">
 						<mrow>
@@ -81,15 +84,13 @@
 					<p class="equation-note"><code>PRICE_PRECISION = 1e18</code>. The ceiling tick is the bid-eligibility boundary, not an execution-price floor.</p>
 				</div>
 
-				TODO, add some simple example auctions here
-
 				<p>Before a winner claims, its reserved auction coverage commitment remains part of the child's fork balance sheet but is not assigned to a responsible vault. It therefore does not accrue fees, affect retention utilization, or secure newly minted complete sets. Claim settlement adds that coverage commitment to the bidder vault and to <code>feeEligibleCoverageCommitmentAttoEth</code> atomically.</p>
 				<p id="zero-migration-full-cap-rep-backing-units"><strong>Zero-migration full-cap REP backing units.</strong> When no vault REP migrated into the child and the auction sells every auctionable REP, the parent's inherited denominator has no migrated child-vault backing-unit attribution. The forker therefore sets <code>auctionRepBackingUnitsPerAttoRep</code> to <code>PRICE_PRECISION</code> and sets the final denominator to <code>repAvailable * PRICE_PRECISION</code>. Each winner's REP backing units then round-trips through <code>backingUnitsToAttoRep</code> to its full purchased REP, and later direct REP deposits join the same live scale. When REP remains unsold behind an inherited denominator, the forker instead derives the backing-unit rate from that residual REP.</p>
 			</section>
 
 			<section id="avl-tree">
 				<h2>AVL tree</h2>
-				<p>TODO, explain AVL tree The valid tick range is finite: <code>[-524288, 524288]</code>, or <code>1,048,577</code> possible price levels. An AVL tree containing every possible tick has maximum height <code>28</code>, so <code>finalize()</code> descends bounded tree paths and pruned subtrees instead of risking an out-of-gas loop over every submitted bid.</p>
+				<p>The auction indexes bids in an AVL tree keyed by tick. The valid tick range is finite: <code>[-524288, 524288]</code>, or <code>1,048,577</code> possible price levels. The tree stores only submitted ticks and keeps each subtree's demand summary. Because a full tree over the range has maximum height <code>28</code>, <code>finalize()</code> follows bounded paths and prunes subtrees instead of looping over every possible price level.</p>
 			</section>
 
 			<section id="interactive-example">
@@ -306,141 +307,3 @@
 		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>
-
-<section class="paper-section" id="auction">
-	<div class="section-heading">
-		<h2>8. Truth Auction</h2>
-		<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
-	</div>
-
-	<p class="lede">After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap.</p>
-
-	<p>The repair target is the contract’s direct statement of the collateral gap: <code>parentSettlementCollateralAtForkAttoEth</code> minus <code>forkSettlementCollateralReceivedAttoEth</code>, floored at zero. The received counter records actual cumulative-ceiling transfers after the parent’s available-collateral cap, so nominal migrated REP cannot overstate child funding. The auction start gate is tied to the parent pool’s fork timestamp plus the eight-week migration window, not to any child-universe fork time. If migrated REP has reached the pool-auctionable baseline, or if that baseline is zero, the child pool can finalize this phase without running the division path or selling REP. For an own fork that baseline is <code>vaultRepAtForkAttoRep</code>; for an external fork it is <code>auctionableAttoRepAtFork</code>.</p>
-	<p>The REP sale cap is deliberately not just “all remaining REP.” The forker computes the auctionable pool-held REP baseline, subtracts a tiny floor-rounded haircut tied to the REP that already migrated, and gives the auction that maximum inventory. The baseline combines the pool-held REP bucket and unresolved dispute-staked REP. Sold REP is allocated between them proportionally with integer floors; the game applies its allocation as the retention and curve rebase described in <a href="../explanation/truth-auctions.html#auction">Dispute-staked REP Participates in Repair</a>.</p>
-	<div class="equation" id="eq-statoblast-auction-rep-sale-cap">
-		<math display="block" aria-label="combined auctionable REP in attoREP equals pool auctionable REP at fork in attoREP plus unresolved dispute-staked REP in attoREP, migrated REP haircut in attoREP equals migrated REP in attoREP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least combined auctionable REP; combined auctionable REP minus one attoREP when the haircut is zero and an escalation game exists; otherwise combined auctionable REP minus migrated REP haircut" data-source="combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + unresolvedDisputeStakedAttoRep; migratedRepHaircutAttoRep = migratedAttoRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxAttoRepBeingSold = migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep ? 0 : migratedRepHaircutAttoRep == 0 and escalationGameExists ? combinedAuctionableAttoRep - 1 : combinedAuctionableAttoRep - migratedRepHaircutAttoRep">
-			<mtable>
-				<mtr>
-					<mtd><mi>combinedAuctionableAttoRep</mi></mtd>
-					<mtd><mo>=</mo></mtd>
-					<mtd>
-						<mi>poolAuctionableRepAtForkAttoRep</mi>
-						<mo>+</mo>
-						<mi>unresolvedDisputeStakedAttoRep</mi>
-					</mtd>
-				</mtr>
-				<mtr>
-					<mtd>
-						<mi>migratedRepHaircutAttoRep</mi>
-					</mtd>
-					<mtd>
-						<mo>=</mo>
-					</mtd>
-					<mtd>
-						<mfrac>
-							<mi>migratedAttoRep</mi>
-							<mi>MAX_AUCTION_VAULT_HAIRCUT_DIVISOR</mi>
-						</mfrac>
-					</mtd>
-				</mtr>
-				<mtr>
-					<mtd>
-						<mi>maxAttoRepBeingSold</mi>
-					</mtd>
-					<mtd>
-						<mo>=</mo>
-					</mtd>
-					<mtd>
-						<mtable>
-							<mtr>
-								<mtd>
-									<mn>0</mn>
-								</mtd>
-								<mtd>
-									<mtext>if migratedRepHaircutAttoRep &gt;= combinedAuctionableAttoRep</mtext>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>combinedAuctionableAttoRep</mi>
-									<mo>-</mo>
-									<mn>1</mn>
-								</mtd>
-								<mtd>
-									<mtext>if migratedRepHaircutAttoRep = 0 and an escalation game exists</mtext>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd>
-									<mi>combinedAuctionableAttoRep</mi>
-									<mo>-</mo>
-									<mi>migratedRepHaircutAttoRep</mi>
-								</mtd>
-								<mtd>
-									<mtext>otherwise</mtext>
-								</mtd>
-							</mtr>
-						</mtable>
-					</mtd>
-				</mtr>
-			</mtable>
-		</math>
-		<p class="equation-note">The truth auction sells from the combined pool and unresolved-dispute-staked REP bucket after the floor-rounded migrated-REP haircut. When a zero haircut would expose the entire combined bucket and an escalation game exists, the cap reserves one attoREP. This makes the game's auction removal strictly smaller than its backing, preserving nonzero aggregate game backing and a defined nonzero retention state.</p>
-	</div>
-	<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-		<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="360" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
-		<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction repairs a child pool by trading part of that child universe’s scarce REP for ETH. The child becomes operational after migration collateral and accepted auction proceeds are accounted, even when weak demand leaves the original target partly unfilled.</p>
-	</figure>
-	<p>The forker tracks collateral received through migration and the auction separately from the child contract's raw ETH balance. ETH forced into the child does not count toward the repair target. After the deadline, value-free finalization activates the child with migrated collateral plus accepted auction ETH and releases every bid to settlement. Nonzero finalizer ETH is rejected.</p>
-	<p>Auction winners become responsible child-pool vault underwriters only when their claims attach REP backing units and coverage commitment to bidder vaults. Recipient behavior cannot roll back that accounting transition. The <a href="../explanation/truth-auctions.html#zero-migration-full-cap-rep-backing-units">Truth Auction settlement specification</a> owns the exact zero-migration backing-unit conversion, coverage commitment activation, and failed-refund recovery rules.</p>
-	<h3>Clearing and Settlement</h3>
-	<p>The <a href="../explanation/truth-auctions.html#clearing">Truth Auction design</a> owns tick pricing, cap selection, underfunded qualification, and the interactive examples; its <a href="../explanation/truth-auctions.html#clearing">settlement section</a> owns allocation rounding and recovery behavior. The <a href="../reference/security-model.html#assumption-a12">security model</a> separately states efficient REP-to-ETH auction conversion as an explicit assumption.</p>
-</section>
-
-<div class="equation" id="eq-statoblast-truth-auction-shortfall">
-	<math display="block" aria-label="settlement collateral shortfall in attoETH equals the greater of zero and parent settlement collateral in attoETH at fork minus settlement collateral in attoETH actually received through migration" data-source="settlementCollateralShortfallAttoEth = max(0, parentSettlementCollateralAtForkAttoEth - forkSettlementCollateralReceivedAttoEth)">
-		<mrow>
-			<mi>settlementCollateralShortfallAttoEth</mi>
-			<mo>=</mo>
-			<mi>max</mi>
-			<mo>(</mo>
-			<mn>0</mn>
-			<mo>,</mo>
-			<mi>parentSettlementCollateralAtForkAttoEth</mi>
-			<mo>-</mo>
-			<mi>forkSettlementCollateralReceivedAttoEth</mi>
-			<mo>)</mo>
-		</mrow>
-	</math>
-	<p class="equation-note">The truth auction targets the exact parent snapshot not already received by the child. <code>forkSettlementCollateralReceivedAttoEth</code> sums actual routed transfers after cumulative-ceiling calculation and the parent’s available-collateral cap; nominal migrated REP is not substituted.</p>
-</div>
-<details class="interactive-example" id="collateral-repair-example">
-	<summary>Adjust child collateral repair</summary>
-	<p>In this example, the parent obligations still require 50 ETH of settlement collateral and the child actually received 47.5 ETH of settlement collateral through routed, capped migration transfers. That leaves an exact 2.5 ETH shortfall before any repair auction raises more ETH. After the deadline, the child activates with the settlement collateral actually migrated and raised; finalizer contribution ETH is rejected. Each child branch is sized against its own received settlement collateral and remaining shortfall.</p>
-	<div class="example-grid">
-		<label>
-			Parent settlement collateral
-			<input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" />
-			<span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span>
-		</label>
-		<label>
-			Migration-routed collateral received
-			<input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" />
-			<span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span>
-		</label>
-		<label>
-			Auction ETH raised
-			<input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" />
-			<span class="example-value" data-example-value="auctionRaised">2.5 ETH</span>
-		</label>
-	</div>
-	<div class="example-visual">
-		<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
-	</div>
-	<div class="example-output-grid">
-		<div><span>Routed collateral received</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
-		<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
-		<div><span>Unfilled target after auction</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
-		<div><span>Activation behavior</span><output data-example-output="repairStatus">no contribution required</output></div>
-	</div>
-</details>

@@ -11,7 +11,7 @@ type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
-	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed escalation interval (% of interval)', y: 'Required bond (% of non-decision threshold)' },
+	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed time after activation (%)', y: 'Cumulative binding capital (% of non-decision threshold)' },
 	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
@@ -195,8 +195,13 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 	return { atCost, result: 'None' }
 }
 
-export function normalizedEscalationCost(elapsed: number): number {
-	return Math.exp(2.4 * (elapsed - 1))
+export const escalationChartStartBondFraction = 0.1
+
+export function normalizedBindingCapitalThreshold(elapsed: number, startBondFraction = escalationChartStartBondFraction): number {
+	const boundedElapsed = Math.min(Math.max(elapsed, 0), 1)
+	const boundedStartBondFraction = Math.min(Math.max(startBondFraction, Number.EPSILON), 1)
+	if (boundedElapsed === 1) return 1
+	return boundedStartBondFraction * Math.exp(Math.log(1 / boundedStartBondFraction) * boundedElapsed)
 }
 
 export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {

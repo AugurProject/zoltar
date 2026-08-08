@@ -3404,6 +3404,27 @@ body.paper-zoltar .footer-note {
 		color: var(--ink);
 	}
 
+	body.docs-shell-page a.button {
+		display: inline-block;
+		padding: 0.65rem 0.9rem;
+		border: 1px solid var(--accent);
+		border-radius: 0.45rem;
+		background: var(--accent);
+		color: var(--paper);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	body.docs-shell-page a.button:hover {
+		background: var(--ink);
+		color: var(--paper);
+	}
+
+	body.docs-shell-page a.button:focus-visible {
+		outline: 3px solid var(--ink);
+		outline-offset: 3px;
+	}
+
 	body.docs-shell-page :is(a, button, input, select, [tabindex]):focus-visible {
 		outline: 3px solid var(--accent-soft);
 		outline-offset: 2px;

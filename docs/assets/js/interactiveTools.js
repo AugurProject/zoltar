@@ -19,6 +19,20 @@ const presetDefinitions = {
 			values: { auctionRaised: '5', forkSettlementCollateralReceived: '35', parentSettlementCollateral: '50' },
 		},
 	],
+	'escalation-game-example': [
+		{
+			label: 'Leader deposit does not extend',
+			values: { days: '7', invalid: '1', no: '1', yes: '4' },
+		},
+		{
+			label: 'Median increases',
+			values: { days: '7', invalid: '1', no: '4', yes: '4' },
+		},
+		{
+			label: 'After the deadline',
+			values: { days: '56', invalid: '1', no: '4', yes: '4' },
+		},
+	],
 	'initial-report-estimator-example': [
 		{
 			label: 'High gas cost',

@@ -179,7 +179,7 @@
 						<h3>Truth auctions can convert supported child REP efficiently</h3>
 						<p>When repair is needed, enough demand can buy some supported-child REP for ETH at an acceptably small discount and operating cost. This does not assume that the full repair target is raised.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/truth-auctions.html#auction">repair accounting</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#auction">repair accounting</a>.</p>
 					</li>
 					<li id="assumption-a13" value="13" data-assumption="A13">
 						<h3>REP is sufficiently liquid</h3>
@@ -275,7 +275,7 @@
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>Interfaces, indexers, RPC providers, and wallet software return canonical, reorg-aware state; construct and display the intended chain, target, calldata, parameters, and ETH value; and submit only transactions the user authorizes. Users verify transaction previews rather than treating an application label as an onchain guarantee.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Compromised or stale offchain software can misroute signatures or capital, hide deadlines or events, or cause users to authorize valid but unintended calls without violating contract guards.</p>
-						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">canonical replay</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator verification</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">contract interactions</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator verification</a>.</p>
 					</li>
 					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>

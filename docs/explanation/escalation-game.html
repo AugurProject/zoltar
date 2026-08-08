@@ -15,24 +15,40 @@
 			<section id="lifecycle-first">
 				<p class="lede">The Escalation Game's deposit, timing, outcome-selection, and continuation rules fit into the wider prediction-market lifecycle described in the Statoblast white paper.</p>
 
-				<p>When a Statoblast market ends, anyone can deploy and start the escalation game by depositing 1 REP into it. After the game has been started, there's 3 day period where anyone can deposit REP to challenge the outcome. If there's no-one has challenged the initial depositer by 3 day period, the security pool is finalized as that outcome However, if the outcome is challenged, the escalation game starts.</p>
-				<p>If the escalation game raises enough rep, the escalation game ends and the Statoblast escalation game forks zoltar.</p>
+				<p>When a Statoblast market ends, the security pool routes a valid deposit through its escalation-deposit delegate. The deposit must pass the pool's vault-backing and lifecycle checks and normally meet the configured starting bond; only a deposit that fills an outcome to the non-decision threshold may use a smaller amount. The initial deposit does not automatically resolve the market.</p>
+				<p>An accepted deposit extends the local deadline only when it increases the median of the three outcome balances; a deposit that leaves the median unchanged does not move the deadline. A strict leader identifies the local result, but the pool can finalize it only after the deadline has passed strictly, while competing outcomes that reach the non-decision threshold follow the fork path.</p>
 
-				<p>(convert this into an image)<strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
+				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
 			</section>
 
 			<section id="escalation">
 				<h2>Escalation</h2>
-				<p>The escalation game's running time can be extended by any participant who deposits more than the current total on the leading outcome. The game functions as a war of attrition: escalating the game becomes increasingly expensive over time. The cost to participate grows exponentially, following this formula:</p>
+				<p>The escalation game's running time can be extended by any participant whose valid, vault-backed deposit meets the configured start bond. The deposit adds to the selected outcome's cumulative balance; it does not have to exceed the leading outcome. Individual deposits keep that fixed start-bond minimum, while the cumulative binding-capital threshold used for the median-derived deadline rises exponentially over time:</p>
 
 				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential escalation bond curve from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The required bond rises exponentially from the start bond to the non-decision threshold over the full escalation interval.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Exponential Cost Curve</span> <math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)"> <mrow> <mi>requiredEscalationCost</mi> <mo>(</mo> <mi>elapsedEscalationTime</mi> <mo>)</mo> <mo>=</mo> <mi>startingBondAmount</mi> <mo>&#x22C5;</mo> <mi>exp</mi> <mo>(</mo> <mfrac> <mrow> <mi>ln</mi> <mo>(</mo> <mfrac> <mi>nonDecisionThresholdAmount</mi> <mi>startingBondAmount</mi> </mfrac> <mo>)</mo> <mo>&#x22C5;</mo> <mi>elapsedEscalationTime</mi> </mrow> <mi>fullEscalationInterval</mi> </mfrac> <mo>)</mo> </mrow> </math></p>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential cumulative binding-capital threshold from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The cumulative binding-capital threshold rises exponentially from the configured start-bond ratio to the non-decision threshold over the full escalation interval; individual deposits still use the fixed start bond.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Cumulative Binding-Capital Threshold</span> <math display="block" aria-label="cumulative binding capital at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="cumulativeBindingCapital(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)"> <mrow> <mi>cumulativeBindingCapital</mi> <mo>(</mo> <mi>elapsedEscalationTime</mi> <mo>)</mo> <mo>=</mo> <mi>startingBondAmount</mi> <mo>&#x22C5;</mo> <mi>exp</mi> <mo>(</mo> <mfrac> <mrow> <mi>ln</mi> <mo>(</mo> <mfrac> <mi>nonDecisionThresholdAmount</mi> <mi>startingBondAmount</mi> </mfrac> <mo>)</mo> <mo>&#x22C5;</mo> <mi>elapsedEscalationTime</mi> </mrow> <mi>fullEscalationInterval</mi> </mfrac> <mo>)</mo> </mrow> </math></p>
 				</figure>
 
-				<p>TODO: make x axis to be time, make curve to start at 0 days, then add 3 day grace period and then add the exponential part, the start bond should not be 9.1%, its wrong</p>
+				<p>The contract waits three days after <code>start()</code> before the escalation clock becomes active. The chart then shows the seven-week escalation interval from activation; its illustrative curve uses a 10% start-bond-to-threshold ratio, while deployed games use their configured start bond and non-decision threshold. The deadline advances only when a deposit increases the median balance.</p>
 
-				<p>TODO: ADD a simple javascript game where you can click to add funds to YES,NO,INVALID time and where timer ticks to resolve the game</p>
+				<details class="interactive-example" id="escalation-game-example">
+					<summary>Try a simplified escalation round</summary>
+					<p>This small model demonstrates that deposits add to one outcome and that the deadline follows the median balance. It is illustrative; the pool and delegate enforce the authoritative checks.</p>
+					<div class="example-grid">
+						<label>Yes deposit <input type="range" min="0" max="10" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
+						<label>No deposit <input type="range" min="0" max="10" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
+						<label>Invalid deposit <input type="range" min="0" max="10" value="0" step="1" data-example-input="invalid" /><span class="example-value" data-escalation-value="invalid">0 REP</span></label>
+						<label>Days since start <input type="range" min="0" max="56" value="0" step="1" data-example-input="days" /><span class="example-value" data-escalation-value="days">0 days</span></label>
+					</div>
+					<div class="example-output-grid">
+						<div><span>Leading outcome</span><output data-escalation-output="leader">Yes / No</output></div>
+						<div><span>Median balance</span><output data-escalation-output="median">1 REP</output></div>
+						<div><span>Activation</span><output data-escalation-output="activation">3 days</output></div>
+						<div><span>Illustrative deadline</span><output data-escalation-output="deadline">3 days after start</output></div>
+						<div><span>Illustrative state</span><output data-escalation-output="state">contested</output></div>
+					</div>
+				</details>
 			</section>
 			<section id="payouts">
 				<h2>The game end</h2>
@@ -43,7 +59,7 @@
 					<li>Two sides have reached the maximal deposit amount: Statoblast triggers a fork</li>
 				</ol>
 
-				After the game has ended, the escalation game rewards the winning side (on fork, both sides are rewarded) and burns some fraction of the deposited REP to make it costly to delay the game unnecessarily. TODO explain these nicely [binding capital][safety boundary][excess] [reward eglible cap ] - payout
+				<p>After the game ends, the payout separates three amounts. Binding capital is the amount needed to support the final result. The safety boundary is the interval above that capital in which deposits remain eligible for rewards. Deposits beyond the reward-eligible cap return principal but do not share the reward pool. On a local win, eligible deposits on the winning outcome share the reward pool; on a fork, eligible deposits on each forked outcome are handled by the continuation rules. The winning-deposit haircut is burned as specified by the game.</p>
 
 				<div class="callout">
 					Example: if final binding capital is <code>10 REP</code>, the reward-eligible cap is <code>15 REP</code>, the safety boundary is <code>(10 REP, 15 REP]</code>, and the reward pool is <code>6 REP</code>. If the winning side contributes <code>15 REP</code> inside that reward-eligible window, each <code>5 REP</code> deposit receives <code>7 REP</code>. Winning depth above <code>15 REP</code>
@@ -59,6 +75,36 @@
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
+		<script>
+			const escalationExample = document.querySelector("#escalation-game-example");
+			if (escalationExample !== null) {
+				const readBalance = (name) => Number(escalationExample.querySelector(`[data-example-input="${name}"]`)?.value ?? 0);
+				const updateEscalationExample = () => {
+					const balances = { Yes: readBalance("yes"), No: readBalance("no"), Invalid: readBalance("invalid") };
+					const ordered = Object.entries(balances).sort((left, right) => right[1] - left[1]);
+					const median = [...Object.values(balances)].sort((left, right) => left - right)[1];
+					const daysSinceStart = readBalance("days");
+					const activationDays = 3;
+					const escalationDays = 49;
+					const deadlineDays = activationDays + Math.min(escalationDays, Math.max(0, Math.log10(Math.max(median, 1)) * escalationDays));
+					for (const [name, balance] of Object.entries(balances)) {
+						escalationExample.querySelector(`[data-escalation-value="${name.toLowerCase()}"]`).textContent = `${balance} REP`;
+					}
+					escalationExample.querySelector('[data-escalation-value="days"]').textContent = `${daysSinceStart} days`;
+					escalationExample.querySelector('[data-escalation-output="leader"]').value = ordered[0][1] === ordered[1][1] ? "No strict leader" : ordered[0][0];
+					escalationExample.querySelector('[data-escalation-output="median"]').value = `${median} REP`;
+					escalationExample.querySelector('[data-escalation-output="activation"]').value = daysSinceStart < activationDays ? `${activationDays - daysSinceStart} days remaining` : "active";
+					escalationExample.querySelector('[data-escalation-output="deadline"]').value = `${deadlineDays.toFixed(1)} days after start`;
+					let state = "contested";
+					if (daysSinceStart < activationDays) state = "activation pending";
+					else if (daysSinceStart >= deadlineDays) state = "deadline reached";
+					escalationExample.querySelector('[data-escalation-output="state"]').value = state;
+				};
+				for (const input of escalationExample.querySelectorAll("[data-example-input]")) input.addEventListener("input", updateEscalationExample);
+				updateEscalationExample();
+			}
+		</script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>
 		<script src="../assets/js/docsShell.js"></script>
