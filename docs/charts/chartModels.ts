@@ -175,13 +175,9 @@ export function toAttoRep(value: number) {
 	return BigInt(Math.round(value * 1_000_000)) * 1_000_000_000_000n
 }
 
-export function computeCanonicalEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedSeconds: bigint) {
-	return computeEscalationBindingCapitalAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedSeconds)
-}
-
 export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
 	const elapsedSeconds = BigInt(Math.round(Math.max(0, elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
-	return Number(computeCanonicalEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds)) / Number(ATTO_REP)
+	return Number(computeEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds)) / Number(ATTO_REP)
 }
 
 export function computeCanonicalEscalationDeadlineDays(startBondRep: number, nonDecisionThresholdRep: number, bindingCapitalRep: number) {
