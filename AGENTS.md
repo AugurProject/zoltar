@@ -171,7 +171,7 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
-- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there.
+- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there; `docs/AGENTS.md` is the sole repository-instruction exception.
 - Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
@@ -216,8 +216,8 @@ Disposition every finding using the contract. After material fixes, rerun affect
 
 ### Documentation reviewer
 
-When published documentation changes, spawn the documentation reviewer before
-the visual and final reviewers.
+When published documentation changes, spawn the project-scoped reviewer from
+`.codex/agents/textReview.toml` before the visual and final reviewers.
 
 Supply:
 
