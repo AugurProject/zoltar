@@ -26,7 +26,7 @@ export type DemoMarket = Readonly<{
 }>
 
 export const demoWalletBalances = {
-	yes: 1_820_420_000_000_000_000_000n,
+	yes: 2_050_000_000_000_000_000_000n,
 	no: 184_090_000_000_000_000_000n,
 	invalid: 750_000_000_000_000_000_000n,
 	lp: 428_570_000_000_000_000_000n,
@@ -74,9 +74,9 @@ export function demoMarket(scenario: string): DemoMarket {
 		pool: selectedPool,
 		endTime: '31 Dec 2026 · 23:59 UTC',
 		lifecycle,
-		yesReserve: 428_571_000_000_000_000_000n * 10n ** 18n,
-		noReserve: 1_000_000_000_000_000_000_000n * 10n ** 18n,
-		lpTotalSupply: 428_571_000_000_000_000_000n * 10n ** 18n,
+		yesReserve: 428_571_000_000_000_000_000n,
+		noReserve: 1_000_000_000_000_000_000_000n,
+		lpTotalSupply: 428_571_000_000_000_000_000n,
 		feeBps: 30n,
 		securityPool: {
 			systemState,
@@ -85,8 +85,8 @@ export function demoMarket(scenario: string): DemoMarket {
 			statoblastSecurityMultiplierBps: 20_000n,
 			initialReportPriorityFeeGwei: 2n,
 			feeEligibleCoverageCommitmentAttoEth: 25n * 10n ** 18n,
-			settlementCollateralAttoEth: 12_342_500_000_000_000_000n,
-			shareTokenSupplyAttoShares: 12_500_000_000_000_000_000n * 10n ** 18n,
+			settlementCollateralAttoEth: 2_468_500_000_000_000_000_000n,
+			shareTokenSupplyAttoShares: 2_500_000_000_000_000_000_000n,
 			activeVaultCount: 3n,
 		},
 	}

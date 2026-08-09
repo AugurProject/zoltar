@@ -102,8 +102,9 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 	const [amount, setAmount] = useState(scenario === 'insufficient-invalid' ? '900' : '0.25')
 	const [transactionState, setTransactionState] = useState<TransactionState>(initialTransactionState(scenario))
 	const closedReason = tradingClosedReason(market.lifecycle)
-	const conditional = conditionalYesProbability(market.yesReserve, market.noReserve)
-	const yesPercent = Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
+	const initialized = market.yesReserve + market.noReserve > 0n
+	const conditional = initialized ? conditionalYesProbability(market.yesReserve, market.noReserve) : undefined
+	const yesPercent = conditional === undefined ? undefined : Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
 	const collateralPerShare = formatEthPerShare(market.securityPool.settlementCollateralAttoEth, market.securityPool.shareTokenSupplyAttoShares)
 	const parsed = useMemo(() => {
 		try {
@@ -180,11 +181,11 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					<div class='side-picker' aria-label='Outcome'>
 						<button type='button' aria-pressed={side === 'YES'} disabled={closedReason !== undefined} onClick={() => setSide('YES')}>
 							<span>YES</span>
-							<small>Conditional price {yesPercent.toFixed(1)}%</small>
+							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${yesPercent.toFixed(1)}%`}</small>
 						</button>
 						<button type='button' aria-pressed={side === 'NO'} disabled={closedReason !== undefined} onClick={() => setSide('NO')}>
 							<span>NO</span>
-							<small>Conditional price {(100 - yesPercent).toFixed(1)}%</small>
+							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${(100 - yesPercent).toFixed(1)}%`}</small>
 						</button>
 					</div>
 					<label class='field'>
@@ -229,9 +230,15 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							Switch to the configured network before simulating or submitting.
 						</p>
 					) : null}
-					<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || market.pair === undefined || quote === undefined || transactionState === 'pending'} onClick={submit}>
-						{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(market.pair !== undefined, actionBlocker, transactionState, mode, side)}
-					</button>
+					{market.pair === undefined ? (
+						<a class='primary-action' href='#/liquidity'>
+							Initialize this market in Liquidity
+						</a>
+					) : (
+						<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || transactionState === 'pending'} onClick={submit}>
+							{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
+						</button>
+					)}
 					<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
 						{transactionMessage(transactionState)}
 					</div>
@@ -249,7 +256,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 								<h2>Conditional YES price</h2>
 							</div>
 						</div>
-						<ProbabilityBar yesPercent={yesPercent} beforePercent={yesPercent - 3.4} />
+						{yesPercent === undefined ? <p class='muted'>Conditional price available after pair initialization.</p> : <ProbabilityBar yesPercent={yesPercent} beforePercent={yesPercent - 3.4} />}
 						<dl class='fact-list'>
 							<div>
 								<dt>YES reserve</dt>

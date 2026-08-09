@@ -440,7 +440,7 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
 	}, [probability])
 	const closedForAdding = !marketAcceptsNewRisk(market, BigInt(Math.floor(Date.now() / 1_000)))
-	const needsLpApproval = operation === 'remove' && parsed !== undefined && (balances?.lpAllowance ?? 0n) < parsed
+	const needsLpApproval = operation === 'remove' && market.lpTotalSupply > 0n && parsed !== undefined && (balances?.lpAllowance ?? 0n) < parsed
 
 	async function simulateCurrent() {
 		if (walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || (operation === 'initialize' && conditionalBps === undefined)) return
@@ -515,7 +515,7 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 				</button>
 				<button
 					aria-pressed={operation === 'remove'}
-					disabled={market.pair === undefined}
+					disabled={market.lpTotalSupply === 0n}
 					onClick={() => {
 						setOperation('remove')
 						setQuote(undefined)

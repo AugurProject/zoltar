@@ -472,6 +472,9 @@ details p,
 	color: inherit;
 }
 .primary-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	width: 100%;
 	min-height: 46px;
 	border: 1px solid #91ad48;
@@ -481,6 +484,8 @@ details p,
 	cursor: pointer;
 	font-weight: 700;
 	font-size: 12px;
+	text-align: center;
+	text-decoration: none;
 }
 .primary-action:disabled {
 	border-color: var(--line);

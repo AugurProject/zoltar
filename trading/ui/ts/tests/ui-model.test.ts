@@ -32,8 +32,8 @@ describe('standalone trading UI model', () => {
 		const market = demoMarket('baseline')
 		const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, 7_000n)
 		if (added === undefined) throw new Error('Initialized demo market must quote added liquidity')
-		expect(formatShareAmount(initial.invalidReturned)).toBe('1,012,760,785,902,369,860.239 shares')
-		expect(formatShareAmount(addedCompleteSetShares)).toBe('101,276,078,590,236,986.0239 shares')
+		expect(formatShareAmount(initial.invalidReturned)).toBe('1.0127 shares')
+		expect(formatShareAmount(addedCompleteSetShares)).toBe('0.1012 shares')
 		expect(added.yesUsed).toBeLessThanOrEqual(addedCompleteSetShares)
 		expect(added.noUsed).toBeLessThanOrEqual(addedCompleteSetShares)
 	})
@@ -50,20 +50,20 @@ describe('standalone trading UI model', () => {
 	test('formats 18-decimal shares and Statoblast settings for display', () => {
 		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
-		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n * 10n ** 18n)).toBe('0.0000000000000000009874 ETH / share')
+		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
 	})
 
 	test('converts ETH to share units using the live SecurityPool exchange rate once', () => {
 		const market = demoMarket('baseline')
 		const shares = demoAttoEthToAttoShares(250_000_000_000_000_000n, market)
-		expect(formatShareAmount(shares)).toBe('253,190,196,475,592,465.0597 shares')
+		expect(formatShareAmount(shares)).toBe('0.2531 shares')
 		expect((shares * market.securityPool.settlementCollateralAttoEth) / market.securityPool.shareTokenSupplyAttoShares).toBeLessThanOrEqual(250_000_000_000_000_000n)
 	})
 
 	test('wires the live-rate complete-set amount into the enter quote', () => {
 		const quote = quoteDemoEnterPosition(demoMarket('baseline'), 'YES', 250_000_000_000_000_000n)
-		expect(formatShareAmount(quote.completeSetShares)).toBe('253,190,196,475,592,465.0597 shares')
-		expect(quote.completeSetShares).toBeGreaterThan(1n * 10n ** 18n)
+		expect(formatShareAmount(quote.completeSetShares)).toBe('0.2531 shares')
+		expect(quote.completeSetShares).toBeGreaterThan(250_000_000_000_000_000n)
 	})
 
 	test('derives exit ETH from the current SecurityPool redemption rate', () => {
@@ -87,6 +87,7 @@ describe('standalone trading UI model', () => {
 	test('blocks new risk for every uninitialized lifecycle guard', () => {
 		const open = { tradingStatus: undefined, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, endTime: 2_000n } satisfies Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
 		expect(marketAcceptsNewRisk(open, 1_000n)).toBeTrue()
+		expect(marketAcceptsNewRisk({ ...open, tradingStatus: 6 }, 1_000n)).toBeTrue()
 		expect(marketAcceptsNewRisk({ ...open, awaitingForkContinuation: true }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk({ ...open, universeForkTime: 999n }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk({ ...open, questionOutcome: 1 }, 1_000n)).toBeFalse()
@@ -110,5 +111,15 @@ describe('standalone trading UI model', () => {
 		expect(yesClaim).toBe(demoWalletBalances.lp)
 		expect(noClaim).toBeGreaterThan(yesClaim)
 		expect(demoWalletBalances.invalid).toBeGreaterThan(yesClaim)
+	})
+
+	test('keeps every represented outcome balance within demo outstanding supply', () => {
+		const market = demoMarket('baseline')
+		const supply = market.securityPool.shareTokenSupplyAttoShares
+		expect(market.yesReserve).toBeLessThanOrEqual(supply)
+		expect(market.noReserve).toBeLessThanOrEqual(supply)
+		expect(market.yesReserve + demoWalletBalances.yes).toBeLessThanOrEqual(supply)
+		expect(market.noReserve + demoWalletBalances.no).toBeLessThanOrEqual(supply)
+		expect(demoWalletBalances.invalid).toBeLessThanOrEqual(supply)
 	})
 })

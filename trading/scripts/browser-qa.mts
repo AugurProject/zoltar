@@ -87,6 +87,8 @@ const scenarios = [
 	{ name: 'insured-exit', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&mode=exit#/market' },
 	{ name: 'insufficient-invalid', width: 390, height: 844, path: '/?demo=1&scenario=insufficient-invalid&mode=exit#/market', scrollY: 650 },
 	{ name: 'pair-missing', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/markets' },
+	{ name: 'pair-missing-market', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/market' },
+	{ name: 'pair-missing-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=missing-pair#/market', scrollY: 500 },
 	{ name: 'liquidity-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/liquidity' },
 	{ name: 'liquidity-mobile', width: 390, height: 844, path: '/?demo=1&scenario=missing-pair#/liquidity', scrollY: 420 },
 	{ name: 'portfolio-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/portfolio' },

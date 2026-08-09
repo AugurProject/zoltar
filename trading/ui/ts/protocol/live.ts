@@ -162,7 +162,7 @@ export type LiveMarket = Readonly<{
 }>
 
 export function marketAcceptsNewRisk(market: Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>, nowSeconds: bigint) {
-	if (market.tradingStatus !== undefined) return market.tradingStatus === 0
+	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) return market.tradingStatus === 0
 	return market.systemState === 0 && !market.awaitingForkContinuation && market.universeForkTime === 0n && market.questionOutcome === 3 && nowSeconds < market.endTime
 }
 
