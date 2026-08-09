@@ -1,9 +1,15 @@
+export function roundedProbabilityLabels(yesPercent: number) {
+	const roundedYes = Math.round((yesPercent + Number.EPSILON * Math.abs(yesPercent)) * 10) / 10
+	return { yes: roundedYes.toFixed(1), no: (100 - roundedYes).toFixed(1) }
+}
+
 export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: number; beforePercent?: number }) {
+	const labels = roundedProbabilityLabels(yesPercent)
 	return (
-		<figure class='probability' aria-label={`Conditional YES price ${yesPercent.toFixed(1)} percent`}>
+		<figure class='probability' aria-label={`Conditional YES price ${labels.yes} percent`}>
 			<div class='probability__labels'>
-				<span>YES {yesPercent.toFixed(1)}%</span>
-				<span>NO {(100 - yesPercent).toFixed(1)}%</span>
+				<span>YES {labels.yes}%</span>
+				<span>NO {labels.no}%</span>
 			</div>
 			<div class='probability__track'>
 				<div class='probability__yes' style={{ width: `${yesPercent}%` }} />

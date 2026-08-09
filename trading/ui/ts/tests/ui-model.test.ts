@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
-import { insuredExitLimitMessage } from '../features/LiveTrading.tsx'
+import { insuredExitLimitMessage, liquidityApprovalRequired } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
+import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
@@ -36,6 +37,18 @@ describe('standalone trading UI model', () => {
 		expect(parseConditionalProbabilityBps('70.251').error).toContain('at most two decimal places')
 		expect(parseConditionalProbabilityBps('not-a-price').error).toContain('at most two decimal places')
 		expect(parseConditionalProbabilityBps('9'.repeat(1_000)).error).toContain('below 100%')
+	})
+
+	test('keeps displayed conditional prices complementary after rounding', () => {
+		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
+		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
+	})
+
+	test('requires LP approval only after authoritative balances are ready', () => {
+		for (const state of ['disconnected', 'loading', 'error'] as const) expect(liquidityApprovalRequired(state, 'remove', 1n, 0n)).toBeFalse()
+		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeTrue()
+		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
+		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
 	})
 
 	test('uses the live SecurityPool rate for ETH-funded liquidity previews', () => {
