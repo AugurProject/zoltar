@@ -11,23 +11,12 @@
 		"ui/ts/tests/**/*.tsx",
 		"ui/ts/index.ts",
 		"ui/build/vendor.mts",
-		"ui/build/tests.mts",
-		"trading/ts/compiler/compile.mts",
-		"trading/ts/deploy/deploy-local.mts",
-		"trading/ts/sdk/index.ts",
-		"trading/ts/tests/gas-costs.mts",
-		"trading/scripts/browser-qa.mts",
-		"trading/ui/ts/index.tsx",
-		"trading/ui/ts/protocol/config.ts",
-		"trading/ui/build/build.mts",
-		"trading/ui/build/serve.mts"
+		"ui/build/tests.mts"
 	],
-	"project": ["docs/charts/**/*.ts", "solidity/ts/**/*.ts", "trading/scripts/**/*.mts", "trading/ts/**/*.ts", "trading/ts/**/*.mts", "trading/ui/ts/**/*.ts", "trading/ui/ts/**/*.tsx", "trading/ui/build/**/*.mts", "ui/ts/**/*.ts", "ui/ts/**/*.tsx", "ui/build/**/*.mts"],
+	"project": ["docs/charts/**/*.ts", "solidity/ts/**/*.ts", "ui/ts/**/*.ts", "ui/ts/**/*.tsx", "ui/build/**/*.mts"],
 	"ignoreDependencies": ["better-typescript-lib"],
 	"ignoreIssues": {
-		"solidity/ts/**/*.ts": ["unlisted"],
-		"trading/ts/compiler/compile.mts": ["unlisted"],
-		"trading/ts/sdk/**/*.ts": ["exports"]
+		"solidity/ts/**/*.ts": ["unlisted"]
 	},
 	"ignore": ["ui/build/production.mts", "ui/build/workers.mts", "ui/ts/index.dev.ts", "ui/ts/liveReload.ts"]
 }

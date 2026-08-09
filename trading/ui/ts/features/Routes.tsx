@@ -365,7 +365,10 @@ export function Help() {
 				<h2>What the price means</h2>
 				<p>Conditional YES and NO prices sum to 100% because the pair compares only valid outcomes. This does not say INVALID has zero probability; the AMM has no invalidity estimate at all.</p>
 				<h2>Why profit can remain as shares</h2>
-				<p>An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable and redeemable after resolution, but cannot be converted into complete sets without acquiring more INVALID.</p>
+				<p>
+					An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable but cannot be converted into complete sets without acquiring more INVALID. After resolution, those excess shares redeem
+					collateral only if their outcome won.
+				</p>
 				<p>
 					The complete developer and protocol documentation is included in <code>trading/docs/</code>.
 				</p>
