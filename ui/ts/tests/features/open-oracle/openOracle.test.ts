@@ -13,6 +13,7 @@ import {
 	loadOpenOracleReportSummaries,
 	loadOracleManagerDetails,
 	queueOracleManagerOperation,
+	queueSecurityPoolLiquidation,
 	requestOraclePrice,
 	settleOracleReport,
 	withdrawOpenOracleBalance,
@@ -38,7 +39,7 @@ import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResul
 import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/lib/marketForm.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../../contractArtifact.js'
 import type { InjectedEthereum } from '../../../injectedEthereum.js'
 import type { WriteContractClient } from '../../../protocol/core.js'
@@ -426,6 +427,35 @@ describe('Open Oracle helpers', () => {
 		await expect(loadOpenOracleInitialReportPrice(createFailingQuoteClient('no pool'), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)).rejects.toThrow(
 			'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no pool. Uniswap V3 quote failed: no pool',
 		)
+	})
+
+	test('initial report price helpers select the Uniswap version with the most executable liquidity', async () => {
+		const client = createConnectedReadClient()
+		client.simulateContract = async parameters => {
+			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [25n, 0n], request: {} as never } as never
+			return { result: [40n, 0n, 0, 0n], request: {} as never } as never
+		}
+		client.readContract = async () => zeroAddress as never
+
+		await expect(loadOpenOracleInitialReportPrice(client, REP_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
+			price: 2_500_000_000_000_000_000_000_000_000_000n,
+			priceSource: 'Uniswap V3',
+			token2Amount: 40n,
+		})
+	})
+
+	test('initial report price helpers retain a usable V4 quote when V3 is unavailable', async () => {
+		const client = createConnectedReadClient()
+		client.simulateContract = async parameters => {
+			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [25n, 0n], request: {} as never } as never
+			throw new Error('no v3 pool')
+		}
+
+		await expect(loadOpenOracleInitialReportPrice(client, REP_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
+			price: 4_000_000_000_000_000_000_000_000_000_000n,
+			priceSource: 'Uniswap V4',
+			token2Amount: 25n,
+		})
 	})
 
 	test('initial report price helpers report both Uniswap V4 and V3 failures when fallback was attempted', async () => {
@@ -938,24 +968,8 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.currentAmount2).toBe(requestedInitialAttoWeth)
 	})
 
-	test('requestOraclePrice derives stale cached price refresh amounts with coordinator 1e18 precision', async () => {
+	test('requestOraclePrice rejects a stale cached price when a fresh Uniswap quote is unavailable', async () => {
 		const seededRepEthPrice = 2n * 10n ** 18n
-		const minimumToken1ReportAttoEth = await client.readContract({
-			address: managerAddress,
-			abi: [
-				{
-					type: 'function',
-					name: 'minimumToken1ReportAttoEth',
-					stateMutability: 'view',
-					inputs: [],
-					outputs: [{ name: '', type: 'uint256' }],
-				},
-			],
-			functionName: 'minimumToken1ReportAttoEth',
-			args: [],
-		})
-		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
-		const seededAmount2 = minimumToken1ReportAttoEth * 2n
 		const seededRequestEthCost = await getRequestPriceCostAttoEth(client, managerAddress)
 
 		await requestPriceWithValue(client, managerAddress, seededRequestEthCost, seededRepEthPrice)
@@ -964,13 +978,8 @@ describe('Open Oracle helpers', () => {
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), seededReportId)
 		await mockWindow.advanceTime(ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS + 1n)
 
-		await requestOraclePrice(uiWriteClient, managerAddress)
-
-		const staleRefreshReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		const staleRefreshDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), staleRefreshReportId)
-		expect(staleRefreshDetails.currentAmount1).toBe(minimumToken1ReportAttoEth)
-		expect(staleRefreshDetails.currentAmount2).toBe(seededAmount2)
-		expect(seededRepEthPrice).toBe((staleRefreshDetails.currentAmount2 * 10n ** 18n) / staleRefreshDetails.currentAmount1)
+		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('Failed to fetch price from Uniswap')
+		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBe(0n)
 	})
 
 	test('requestOraclePrice rejects fresh cached prices before wrap or approval side effects', async () => {
@@ -1011,7 +1020,7 @@ describe('Open Oracle helpers', () => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
 			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
-			if (functionName === 'lastPrice') return 0n as never
+			if (functionName === 'lastPrice') throw new Error('A cached price must not be used for a new initial report')
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
 			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return currentWethBalanceAttoEth as never
 			if (functionName === 'balanceOf' && address === reputationTokenAddress) return currentRepBalanceAttoRep as never
@@ -1051,6 +1060,43 @@ describe('Open Oracle helpers', () => {
 		expect(funding.maximumInitialAttoWeth).toBe(requestedInitialAttoWeth)
 		expect(funding.initialReportAmount2).toBe(500n)
 		expect(funding.wethShortfallAttoEth).toBe(requestedInitialAttoWeth)
+	})
+
+	test('loadCoordinatorInitialReportFundingRequirement selects liquidity at the requested report size', async () => {
+		const minimumToken1ReportAttoEth = 100n
+		const requestedInitialAttoWeth = 250n
+		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const quotedExactAmounts: bigint[] = []
+		const mockClient = createConnectedReadClient()
+		mockClient.readContract = async parameters => {
+			const address = parameters.address as Address
+			const functionName = parameters.functionName as string
+			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
+			if (functionName === 'reputationToken') return reputationTokenAddress as never
+			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return 0n as never
+			if (functionName === 'balanceOf' && address === reputationTokenAddress) return 1_000n as never
+			if (functionName === 'getPool') return zeroAddress as never
+			throw new Error(`Unexpected read ${functionName} for ${address}`)
+		}
+		mockClient.simulateContract = async parameters => {
+			const args = parameters.args
+			if (!Array.isArray(args)) throw new Error('Expected Uniswap quote arguments')
+			const quoteParameters: unknown = args[0]
+			if (typeof quoteParameters !== 'object' || quoteParameters === null) throw new Error('Expected Uniswap quote parameters')
+			let exactAmount: unknown
+			if ('exactAmount' in quoteParameters) exactAmount = quoteParameters.exactAmount
+			else if ('amountIn' in quoteParameters) exactAmount = quoteParameters.amountIn
+			if (typeof exactAmount !== 'bigint') throw new Error('Expected an exact Uniswap quote amount')
+			quotedExactAmounts.push(exactAmount)
+			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [50n, 0n], request: {} as never } as never
+			return { result: [100n, 0n, 0, 0n], request: {} as never } as never
+		}
+
+		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, undefined, requestedInitialAttoWeth)
+
+		expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
+		expect(funding.proposedRepPerEthPrice).toBe(400_000_000_000_000_000n)
+		expect(funding.initialReportAmount2).toBe(100n)
 	})
 
 	test('requestOraclePrice rejects an unavailable first-report REP quote instead of assuming a price', async () => {
@@ -1143,6 +1189,67 @@ describe('Open Oracle helpers', () => {
 		expect(result.queuedOperation?.operation).toBe('setCoverageCommitment')
 		expect(result.queuedOperation?.operationId).toBeGreaterThan(0n)
 		expect(result.stagedExecution).toBeUndefined()
+	})
+
+	test('automatic coordinator operations select Uniswap liquidity at the requested report size', async () => {
+		const minimumToken1ReportAttoEth = 100n
+		const requestedInitialAttoWeth = 250n
+		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const transactionHash = `0x${'3'.repeat(64)}` as Hash
+		const runOperation = async (operation: 'request' | 'liquidation-helper' | 'generic') => {
+			const quotedExactAmounts: bigint[] = []
+			const preparedQueueArguments: Array<readonly unknown[]> = []
+			const onTransactionPrepared: NonNullable<typeof uiWriteClient.onTransactionPrepared> = preview => {
+				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation') && preview.args !== undefined) preparedQueueArguments.push(preview.args)
+			}
+			const readContract: typeof uiWriteClient.readContract = async parameters => {
+				if (parameters.functionName === 'lastPrice') return 0n as never
+				if (parameters.functionName === 'getPendingSettlementOperationIds') return [] as never
+				if (parameters.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 8n as never
+				if (parameters.functionName === 'pendingReportId') return 0n as never
+				if (parameters.functionName === 'getQueuedOperationCostAttoEth') return 0n as never
+				if (parameters.functionName === 'getRequestPriceCostAttoEth') return 10n as never
+				if (parameters.functionName === 'isPriceValid') return false as never
+				if (parameters.functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
+				if (parameters.functionName === 'reputationToken') return reputationTokenAddress as never
+				if (parameters.functionName === 'balanceOf') return 1_000n as never
+				if (parameters.functionName === 'getPool') return zeroAddress as never
+				throw new Error(`Unexpected read ${parameters.functionName} for ${parameters.address}`)
+			}
+			const simulateContract: typeof uiWriteClient.simulateContract = async parameters => {
+				const args = parameters.args
+				if (!Array.isArray(args)) throw new Error('Expected Uniswap quote arguments')
+				const quoteParameters: unknown = args[0]
+				if (typeof quoteParameters !== 'object' || quoteParameters === null) throw new Error('Expected Uniswap quote parameters')
+				let exactAmount: unknown
+				if ('exactAmount' in quoteParameters) exactAmount = quoteParameters.exactAmount
+				else if ('amountIn' in quoteParameters) exactAmount = quoteParameters.amountIn
+				if (typeof exactAmount !== 'bigint') throw new Error('Expected an exact Uniswap quote amount')
+				quotedExactAmounts.push(exactAmount)
+				if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [50n, 0n], request: {} as never } as never
+				return { result: [100n, 0n, 0, 0n], request: {} as never } as never
+			}
+			const mockClient = {
+				...uiWriteClient,
+				onTransactionPrepared,
+				readContract,
+				simulateContract,
+				sendTransaction: async () => transactionHash,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(transactionHash, managerAddress),
+			}
+
+			if (operation === 'request') await requestOraclePrice(mockClient, managerAddress, undefined, requestedInitialAttoWeth, 12n)
+			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(mockClient, managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth)
+			else await queueOracleManagerOperation(mockClient, managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
+
+			expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
+			const expectedArguments = operation === 'request' ? [400_000_000_000_000_000n, requestedInitialAttoWeth] : [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
+			expect(preparedQueueArguments).toEqual([expectedArguments])
+		}
+
+		await runOperation('request')
+		await runOperation('liquidation-helper')
+		await runOperation('generic')
 	})
 
 	test('queueOracleManagerOperation preserves incremental ids when adding to the pending settlement list', async () => {

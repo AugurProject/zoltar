@@ -49,31 +49,35 @@ export async function loadOpenOracleInitialReportPriceResult(client: Parameters<
 		}
 	}
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
+	let v4Quote: Extract<OpenOracleInitialReportPriceLoadResult, { status: 'success' }> | undefined
 	try {
 		const { amountOut: token2Amount, source } = await quoteBestExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-		if (price !== undefined) return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+		if (price !== undefined) {
+			v4Quote = { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+			if (source.protocol === 'mock') return v4Quote
+		}
 	} catch (error) {
 		v4Failure = error
 	}
 	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4', 'Uniswap V3']
+	let v3Failure: unknown = 'Uniswap V3 returned an unusable quote'
+	let v3Quote: Extract<OpenOracleInitialReportPriceLoadResult, { status: 'success' }> | undefined
 	try {
 		const { amountOut: token2Amount, source } = await quoteBestV3ExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-		if (price !== undefined) return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
-		return {
-			attemptedSources,
-			failureKind: 'quote-failed',
-			reason: formatOpenOraclePriceLoadError(v4Failure, 'Uniswap V3 returned an unusable quote'),
-			status: 'failure',
-		}
-	} catch (v3Error) {
-		return {
-			attemptedSources,
-			failureKind: 'quote-failed',
-			reason: formatOpenOraclePriceLoadError(v4Failure, v3Error),
-			status: 'failure',
-		}
+		if (price !== undefined) v3Quote = { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+	} catch (error) {
+		v3Failure = error
+	}
+
+	if (v4Quote !== undefined && (v3Quote === undefined || v4Quote.token2Amount >= v3Quote.token2Amount)) return v4Quote
+	if (v3Quote !== undefined) return v3Quote
+	return {
+		attemptedSources,
+		failureKind: 'quote-failed',
+		reason: formatOpenOraclePriceLoadError(v4Failure, v3Failure),
+		status: 'failure',
 	}
 }
 

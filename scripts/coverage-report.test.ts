@@ -2,7 +2,21 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { buildTypeScriptCoverage, calculateChangedLineCoverage, classifyTypeScriptSource, evaluateCoveragePolicy, mergeLcovRecords, parseChangedLines, parseLcov, readTaskChangedLines, readTrackedTypeScriptSources, resolveCoverageBaseRef, summarizeSolidityCoverage, type CoveragePolicy } from './coverage-report.mts'
+import {
+	buildTypeScriptCoverage,
+	calculateChangedLineCoverage,
+	classifyTypeScriptSource,
+	evaluateCoveragePolicy,
+	mergeLcovRecords,
+	parseChangedLines,
+	parseLcov,
+	readTaskChangedLines,
+	readTrackedTypeScriptSources,
+	renderMarkdown,
+	resolveCoverageBaseRef,
+	summarizeSolidityCoverage,
+	type CoveragePolicy,
+} from './coverage-report.mts'
 
 describe('TypeScript coverage accounting', () => {
 	test('uses weighted executable totals instead of averaging file percentages', () => {
@@ -184,6 +198,34 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('TypeScript ui line coverage 88.0565% is below 88.060%')
+	})
+})
+
+describe('coverage summary markdown', () => {
+	test('lists uncovered imported Solidity lines separately from first-party lines', () => {
+		const report = {
+			typescript: {
+				surfaces: {
+					ui: surface(100, 100),
+					shared: surface(100, 100),
+					tooling: surface(100, 100),
+				},
+				excludedFiles: [],
+			},
+			solidity: {
+				firstParty: metric(100),
+				imported: metric(0),
+				all: metric(99),
+				uncoveredFirstPartyLines: ['solidity/contracts/Protocol.sol:2'],
+				uncoveredImportedLines: ['solidity/contracts/peripherals/WETH9.sol:9'],
+			},
+		}
+		const markdown = renderMarkdown(report, 1, { failures: [], passed: true })
+
+		expect(markdown).toContain('## Uncovered first-party Solidity lines')
+		expect(markdown).toContain('- `solidity/contracts/Protocol.sol:2`')
+		expect(markdown).toContain('## Uncovered imported Solidity lines')
+		expect(markdown).toContain('- `solidity/contracts/peripherals/WETH9.sol:9`')
 	})
 })
 
