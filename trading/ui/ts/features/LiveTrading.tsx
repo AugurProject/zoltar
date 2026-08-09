@@ -160,7 +160,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	)
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const nowSeconds = BigInt(Math.floor(Date.now() / 1_000))
+	const [nowSeconds, setNowSeconds] = useState(() => BigInt(Math.floor(Date.now() / 1_000)))
 	const parsedAmount = useMemo(() => {
 		try {
 			return { value: parseUnits(amount), error: undefined }
@@ -231,6 +231,33 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		setQuote(undefined)
 		setState('idle')
 	}, [route])
+
+	useEffect(() => {
+		let timeout: number | undefined
+		let active = true
+		const updateAtBoundary = () => {
+			if (!active) return
+			const current = BigInt(Math.floor(Date.now() / 1_000))
+			setNowSeconds(current)
+			if (selected === undefined || current >= selected.endTime) return
+			const remainingSeconds = selected.endTime - current
+			const maximumDelay = 2_147_000_000
+			const delay = remainingSeconds > BigInt(Math.floor(maximumDelay / 1_000)) ? maximumDelay : Number(remainingSeconds) * 1_000 + 50
+			timeout = window.setTimeout(updateAtBoundary, delay)
+		}
+		updateAtBoundary()
+		return () => {
+			active = false
+			if (timeout !== undefined) window.clearTimeout(timeout)
+		}
+	}, [selected?.endTime])
+
+	useEffect(() => {
+		if (selected === undefined || marketAcceptsNewRisk(selected, nowSeconds)) return
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!positionWorkflow.isActive() && !liquidityWorkflowLockedRef.current) setState('idle')
+	}, [nowSeconds, selected])
 
 	useEffect(() => {
 		setWalletProvider(getInjectedEthereum())
@@ -616,6 +643,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								balanceError={balanceError}
 								account={account}
 								walletClient={walletClient}
+								nowSeconds={nowSeconds}
 								refresh={() => refresh(configuration)}
 								retryBalances={retryBalances}
 								onWorkflowLockChange={updateLiquidityWorkflowLock}
@@ -633,6 +661,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								amount={amount}
 								quote={quote}
 								state={state}
+								nowSeconds={nowSeconds}
 								setMode={value => {
 									if (positionWorkflow.isActive()) return
 									simulationRequests.invalidate()
@@ -681,6 +710,7 @@ function LiveLiquidityControls({
 	balanceError,
 	account,
 	walletClient,
+	nowSeconds,
 	refresh,
 	retryBalances,
 	onWorkflowLockChange,
@@ -692,6 +722,7 @@ function LiveLiquidityControls({
 	balanceError: string | undefined
 	account: Address | undefined
 	walletClient: WalletClient | undefined
+	nowSeconds: bigint
 	refresh(): Promise<void>
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
@@ -710,7 +741,7 @@ function LiveLiquidityControls({
 		const value = parseUnitsOrUndefined(probability, 2)
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
 	}, [probability])
-	const closedForAdding = !marketAcceptsNewRisk(market, BigInt(Math.floor(Date.now() / 1_000)))
+	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const needsLpApproval = market.lpTotalSupply > 0n && liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
 	const workflowLocked = state === 'approval' || state === 'pending'
 
@@ -1055,6 +1086,7 @@ function LivePositionControls({
 	amount,
 	quote,
 	state,
+	nowSeconds,
 	setMode,
 	setSide,
 	setAmount,
@@ -1072,6 +1104,7 @@ function LivePositionControls({
 	amount: string
 	quote: Quote | undefined
 	state: TransactionState
+	nowSeconds: bigint
 	setMode(value: 'entry' | 'exit'): void
 	setSide(value: 'YES' | 'NO'): void
 	setAmount(value: string): void
@@ -1081,7 +1114,7 @@ function LivePositionControls({
 	retryBalances(): Promise<void>
 }) {
 	const yesPercent = market.yesReserve + market.noReserve === 0n ? 0 : Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10
-	const closed = market.tradingStatus !== 0
+	const closed = !marketAcceptsNewRisk(market, nowSeconds)
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const parsedInput = parseUnitsOrUndefined(amount)

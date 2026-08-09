@@ -172,7 +172,6 @@ function resolvedOutcomeLabel(questionOutcome: number) {
 
 export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint) {
 	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) {
-		if (market.tradingStatus === 0) return undefined
 		if (market.tradingStatus === 1) return 'Question ended'
 		if (market.tradingStatus === 2) return 'Pool inactive'
 		if (market.tradingStatus === 3) return 'Awaiting fork continuation'

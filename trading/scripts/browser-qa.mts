@@ -78,7 +78,7 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/#/markets',
-		assertExpression: `(() => { const status = document.querySelector('.wallet-status'); if (!(status instanceof HTMLElement)) return false; const style = getComputedStyle(status); return status.textContent === 'Wallet disconnected' && style.borderTopWidth === '0px' && style.cursor !== 'pointer' })()`,
+		assertExpression: `document.querySelector('.wallet-status') === null && document.body.textContent?.includes('Connect in market view') !== true`,
 	},
 	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },

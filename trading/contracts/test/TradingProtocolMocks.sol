@@ -252,3 +252,41 @@ contract TradingForceEth {
 		selfdestruct(recipient);
 	}
 }
+
+contract TradingReentrantRecipient is IERC1155Receiver {
+	address public target;
+	bytes public payload;
+	bool public reentryBlocked;
+
+	function configure(address valueTarget, bytes calldata valuePayload) external {
+		target = valueTarget;
+		payload = valuePayload;
+		reentryBlocked = false;
+	}
+
+	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+		return interfaceId == type(IERC1155Receiver).interfaceId;
+	}
+
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external returns (bytes4) {
+		_attemptReentry();
+		return IERC1155Receiver.onERC1155Received.selector;
+	}
+
+	function onERC1155BatchReceived(
+		address,
+		address,
+		uint256[] calldata,
+		uint256[] calldata,
+		bytes calldata
+	) external returns (bytes4) {
+		_attemptReentry();
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
+	}
+
+	function _attemptReentry() private {
+		(bool success, ) = target.call(payload);
+		require(!success, 'Reentry unexpectedly succeeded');
+		reentryBlocked = true;
+	}
+}

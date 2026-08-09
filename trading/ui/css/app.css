@@ -212,12 +212,6 @@ nav a[aria-current="page"] {
 .wallet-context {
 	cursor: default;
 }
-.wallet-status {
-	color: var(--muted);
-	font:
-		11px ui-monospace,
-		monospace;
-}
 .wallet-button,
 .secondary-action {
 	min-height: 44px;
@@ -954,8 +948,7 @@ footer {
 		font-size: 9px;
 		line-height: 1.2;
 	}
-	.wallet-context,
-	.wallet-status {
+	.wallet-context {
 		display: none;
 	}
 	.detail-grid,

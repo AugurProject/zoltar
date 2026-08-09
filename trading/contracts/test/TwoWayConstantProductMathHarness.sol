@@ -28,4 +28,13 @@ contract TwoWayConstantProductMathHarness {
 	) external pure returns (uint256 yesAmount, uint256 noAmount) {
 		return TwoWayConstantProductMath.initialLiquidityAmounts(completeSets, conditionalYesBpsValue);
 	}
+
+	function proportionalDeposit(
+		uint256 yesReserve,
+		uint256 noReserve,
+		uint256 maxYes,
+		uint256 maxNo
+	) external pure returns (uint256 yesUsed, uint256 noUsed) {
+		return TwoWayConstantProductMath.proportionalDeposit(yesReserve, noReserve, maxYes, maxNo);
+	}
 }

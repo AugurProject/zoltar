@@ -4,7 +4,7 @@ import { useIsolatedAnvilNode } from '../../../solidity/ts/testSupport/simulator
 import { createWriteClient, type WriteClient } from '../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { TEST_ADDRESSES } from '../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { compileArtifactsForTests } from './compileArtifactsForTests.ts'
-import { quoteExactInput, quoteExactOutput } from '../sdk/math.ts'
+import { quoteAddLiquidity, quoteExactInput, quoteExactOutput } from '../sdk/math.ts'
 
 type TradingContracts = typeof import('../artifacts/contractArtifact.ts').tradingContracts
 
@@ -69,5 +69,15 @@ describe('Solidity and TypeScript AMM math parity', () => {
 		const actual = await client.readContract({ abi: artifact.abi, address: harness, functionName: 'quoteExactInput', args: [reserveIn, reserveOut, amountIn, 30n] })
 		expect(actual[0]).toBe(expected.amountOut)
 		expect(actual[1]).toBe(expected.feeAmount)
+	})
+
+	test('selects the limiting proportional deposit before dividing an overflowing quotient', async () => {
+		const maximum = (1n << 256n) - 1n
+		const expected = quoteAddLiquidity(1n, maximum, maximum, maximum)
+		const actual = await client.readContract({ abi: artifact.abi, address: harness, functionName: 'proportionalDeposit', args: [1n, maximum, maximum, maximum] })
+		expect(actual[0]).toBe(expected.yesUsed)
+		expect(actual[1]).toBe(expected.noUsed)
+		expect(actual[0]).toBe(1n)
+		expect(actual[1]).toBe(maximum)
 	})
 })

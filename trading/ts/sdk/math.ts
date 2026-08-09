@@ -54,12 +54,9 @@ export function quoteInitialLiquidity(completeSets: bigint, conditionalYesBps: b
 export function quoteAddLiquidity(yesReserve: bigint, noReserve: bigint, maxYes: bigint, maxNo: bigint) {
 	requirePositive(yesReserve, 'yesReserve')
 	requirePositive(noReserve, 'noReserve')
-	let yesUsed = maxYes
-	let noUsed = (maxYes * noReserve) / yesReserve
-	if (noUsed > maxNo) {
-		noUsed = maxNo
-		yesUsed = (maxNo * yesReserve) / noReserve
-	}
+	const yesLimited = maxYes * noReserve <= maxNo * yesReserve
+	const yesUsed = yesLimited ? maxYes : (maxNo * yesReserve) / noReserve
+	const noUsed = yesLimited ? (maxYes * noReserve) / yesReserve : maxNo
 	return { yesUsed, noUsed, yesReturned: maxYes - yesUsed, noReturned: maxNo - noUsed }
 }
 

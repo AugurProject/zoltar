@@ -43,8 +43,10 @@ library TwoWayConstantProductMath {
 		uint256 maxNo
 	) internal pure returns (uint256 yesUsed, uint256 noUsed) {
 		require(yesReserve > 0 && noReserve > 0, 'Empty reserves');
-		noUsed = Math.mulDiv(maxYes, noReserve, yesReserve);
-		if (noUsed <= maxNo) return (maxYes, noUsed);
+		if (_productAtMost(maxYes, noReserve, maxNo, yesReserve)) {
+			noUsed = Math.mulDiv(maxYes, noReserve, yesReserve);
+			return (maxYes, noUsed);
+		}
 		yesUsed = Math.mulDiv(maxNo, yesReserve, noReserve);
 		noUsed = maxNo;
 	}
@@ -104,5 +106,11 @@ library TwoWayConstantProductMath {
 			if (highSum < highWithoutCarry) return false;
 			return highSum < rightHigh || (highSum == rightHigh && lowSum <= rightLow);
 		}
+	}
+
+	function _productAtMost(uint256 leftA, uint256 leftB, uint256 rightA, uint256 rightB) private pure returns (bool) {
+		(uint256 leftHigh, uint256 leftLow) = Math.mul512(leftA, leftB);
+		(uint256 rightHigh, uint256 rightLow) = Math.mul512(rightA, rightB);
+		return leftHigh < rightHigh || (leftHigh == rightHigh && leftLow <= rightLow);
 	}
 }

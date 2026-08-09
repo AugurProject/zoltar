@@ -186,7 +186,7 @@ export function App() {
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>
-						{demo ? <span class='wallet-context'>0x8ba1…ba72</span> : <span class='wallet-status'>Wallet disconnected</span>}
+						{demo ? <span class='wallet-context'>0x8ba1…ba72</span> : null}
 					</div>
 				</header>
 			</div>
