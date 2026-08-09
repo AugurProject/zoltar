@@ -85,6 +85,11 @@ function configuredClient(configuration: DeploymentConfiguration) {
 	return createTradingPublicClient(configuration)
 }
 
+export function insuredExitLimitMessage(requested: bigint, maximum: bigint, invalidBalance: bigint) {
+	if (maximum === invalidBalance && requested > invalidBalance) return `Your INVALID balance covers only ${formatUnits(invalidBalance)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.`
+	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
+}
+
 export function LiveTrading({ route }: { route: string }) {
 	const [configuration, setConfiguration] = useState<DeploymentConfiguration>()
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
@@ -787,7 +792,7 @@ function LivePositionControls({
 			)}
 			{exceedsInsurance ? (
 				<p class='error' role='alert'>
-					Your INVALID balance covers only {formatUnits(maximumExit ?? 0n)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.
+					{insuredExitLimitMessage(parsedInput ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n)}
 				</p>
 			) : null}
 			{quote === undefined ? null : (

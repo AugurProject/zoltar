@@ -16,4 +16,16 @@ describe('maximum insured exit', () => {
 		const maximum = maximumInsuredExit({ longOutcome: 'NO', longBalance: 10n ** 30n, invalidBalance: 10n ** 30n, yesReserve: 100n, noReserve: 200n, feeBps: 0n })
 		expect(maximum).toBe(99n)
 	})
+
+	test('identifies INVALID, long shares, and reserve liquidity as independent bounds', () => {
+		const invalidBound = maximumInsuredExit({ longOutcome: 'YES', longBalance: 10n ** 30n, invalidBalance: 50n, yesReserve: 10_000n, noReserve: 10_000n, feeBps: 30n })
+		expect(invalidBound).toBe(50n)
+
+		const longBound = maximumInsuredExit({ longOutcome: 'YES', longBalance: 100n, invalidBalance: 10_000n, yesReserve: 10_000n, noReserve: 10_000n, feeBps: 30n })
+		expect(longBound).toBeLessThan(100n)
+		expect(quoteExitPosition('YES', longBound + 1n, 10_000n, 10_000n, 30n).totalLongShares).toBeGreaterThan(100n)
+
+		const reserveBound = maximumInsuredExit({ longOutcome: 'NO', longBalance: 10n ** 30n, invalidBalance: 10n ** 30n, yesReserve: 100n, noReserve: 200n, feeBps: 0n })
+		expect(reserveBound).toBe(99n)
+	})
 })

@@ -126,6 +126,13 @@ export function maximumAfterSlippage(amount: bigint) {
 	return (amount * (10_000n + UI_SLIPPAGE_BPS) + 9_999n) / 10_000n
 }
 
+async function stableSimulation<T>(client: Pick<WalletClient, 'getBlockNumber'>, simulate: () => Promise<T>) {
+	const blockNumber = await client.getBlockNumber()
+	const result = await simulate()
+	if ((await client.getBlockNumber()) !== blockNumber) throw new Error('Block changed during simulation; simulate again')
+	return { blockNumber, result }
+}
+
 export type LiveMarket = Readonly<{
 	pool: Address
 	pair: Address | undefined
@@ -302,9 +309,9 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 }
 
 export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
-	if (market.pair === undefined) throw new Error('Create and initialize the pair before trading')
-	const blockNumber = await client.getBlockNumber()
-	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount })
+	const pairAddress = market.pair
+	if (pairAddress === undefined) throw new Error('Create and initialize the pair before trading')
+	const { blockNumber, result: simulation } = await stableSimulation(client, async () => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount }))
 	return { blockNumber, result: simulation.result, amount, side, market, deadline, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares) }
 }
 
@@ -318,9 +325,9 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 }
 
 export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
-	const blockNumber = await client.getBlockNumber()
-	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline] })
+	const pairAddress = market.pair
+	if (pairAddress === undefined) throw new Error('Pair is unavailable')
+	const { blockNumber, result: simulation } = await stableSimulation(client, async () => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline] }))
 	return {
 		blockNumber,
 		result: simulation.result,
@@ -353,21 +360,22 @@ export async function approveRouter(client: WalletClient, market: LiveMarket, co
 export type LiquidityOperation = 'initialize' | 'add' | 'remove'
 
 export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n) {
-	const blockNumber = await client.getBlockNumber()
 	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const pairAddress = market.pair
 	if (operation === 'initialize') {
-		const simulation =
-			market.pair === undefined
+		const { blockNumber, result: simulation } = await stableSimulation(client, async () =>
+			pairAddress === undefined
 				? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount })
-				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [market.pair, conditionalYesBps, 0n, account, deadline], value: amount })
+				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount }),
+		)
 		return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
 	}
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	if (pairAddress === undefined) throw new Error('Pair is unavailable')
 	if (operation === 'add') {
-		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [market.pair, 0n, account, deadline], value: amount })
+		const { blockNumber, result: simulation } = await stableSimulation(client, async () => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, 0n, account, deadline], value: amount }))
 		return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
 	}
-	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [market.pair, amount, 0n, 0n, account, deadline] })
+	const { blockNumber, result: simulation } = await stableSimulation(client, async () => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, amount, 0n, 0n, account, deadline] }))
 	return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
 }
 

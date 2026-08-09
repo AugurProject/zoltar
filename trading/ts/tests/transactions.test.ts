@@ -12,4 +12,17 @@ describe('authoritative router simulation', () => {
 		block = 11n
 		await expect(requireFreshSimulation(client, simulation)).rejects.toThrow('Quote is stale')
 	})
+
+	test('rejects a block transition during simulation', async () => {
+		let block = 10n
+		const client = {
+			getBlockNumber: async () => block,
+			simulate: async () => {
+				block = 11n
+				return { totalLongShares: 42n }
+			},
+		}
+		const request = enterPositionRequest(address, address, 'YES', 1n, 1n, address, 100n)
+		await expect(simulateAuthoritatively(client, request)).rejects.toThrow('Block changed during simulation')
+	})
 })

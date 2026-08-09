@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
+import { insuredExitLimitMessage } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { marketAcceptsNewRisk, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
 
@@ -83,5 +84,10 @@ describe('standalone trading UI model', () => {
 		expect(marketAcceptsNewRisk({ ...open, questionOutcome: 1 }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk({ ...open, systemState: 3 }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk(open, 2_000n)).toBeFalse()
+	})
+
+	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n)).toContain('long-share balance and pair liquidity')
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n)).toContain('INVALID balance covers only 4 complete sets')
 	})
 })

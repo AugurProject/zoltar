@@ -41,6 +41,7 @@ export function removeLiquidityRequest(router: Address, pair: Address, liquidity
 export async function simulateAuthoritatively<T>(client: SimulationClient<T>, request: ContractRequest): Promise<SimulationResult<T>> {
 	const blockNumber = await client.getBlockNumber()
 	const result = await client.simulate(request)
+	if ((await client.getBlockNumber()) !== blockNumber) throw new Error('Block changed during simulation; simulate the router call again')
 	return { blockNumber, request, result }
 }
 
