@@ -119,11 +119,13 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	const balanceRequests = useRef(createLatestRequestGuard()).current
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const positionWorkflow = useRef(createExclusiveWorkflowGuard()).current
+	const liquidityWorkflowLockedRef = useRef(false)
 	const [positionWorkflowLocked, setPositionWorkflowLocked] = useState(false)
 	const [liquidityWorkflowLocked, setLiquidityWorkflowLocked] = useState(false)
 	const workflowLocked = positionWorkflowLocked || liquidityWorkflowLocked
 	const updateLiquidityWorkflowLock = useCallback(
 		(locked: boolean) => {
+			liquidityWorkflowLockedRef.current = locked
 			setLiquidityWorkflowLocked(locked)
 			onWorkflowLockChange(locked)
 		},
@@ -165,7 +167,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	}
 
 	function refreshFromControl() {
-		if (!positionWorkflow.isActive() && !liquidityWorkflowLocked) void refresh()
+		if (!positionWorkflow.isActive() && !liquidityWorkflowLockedRef.current) void refresh()
 	}
 
 	useEffect(
@@ -223,7 +225,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	}, [account, configuration, selected])
 
 	async function connect() {
-		if (positionWorkflow.isActive() || liquidityWorkflowLocked) return
+		if (positionWorkflow.isActive() || liquidityWorkflowLockedRef.current) return
 		try {
 			const provider = getInjectedEthereum()
 			if (provider === undefined) throw new Error('No injected wallet was found')
@@ -371,7 +373,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				aria-pressed={selected?.pool === market.pool}
 				disabled={workflowLocked}
 				onClick={() => {
-					if (positionWorkflow.isActive() || liquidityWorkflowLocked) return
+					if (positionWorkflow.isActive() || liquidityWorkflowLockedRef.current) return
 					balanceRequests.invalidate()
 					simulationRequests.invalidate()
 					setBalances(undefined)
