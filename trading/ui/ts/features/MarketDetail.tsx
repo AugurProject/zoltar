@@ -6,6 +6,7 @@ import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, l
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
+import { insuredExitLimitMessage } from './LiveTrading.tsx'
 
 type TransactionState = 'idle' | 'approval' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
 
@@ -26,14 +27,14 @@ function quoteStatus(scenario: string, hasQuote: boolean): { tone: 'good' | 'war
 function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
 	if (!pairExists) return 'Create pair before trading'
 	if (closedReason !== undefined) return closedReason
-	if (transactionState === 'approval') return 'Confirm share approval…'
-	if (transactionState === 'pending') return 'Transaction pending…'
-	return mode === 'enter' ? `Enter ${side} position` : `Exit insured ${side}`
+	if (transactionState === 'approval') return 'Simulated share approval…'
+	if (transactionState === 'pending') return 'Simulated workflow pending…'
+	return mode === 'enter' ? `Simulate enter ${side} workflow` : `Simulate insured ${side} exit`
 }
 
 function transactionMessage(transactionState: TransactionState) {
-	if (transactionState === 'confirmed') return 'Transaction confirmed. Balances and reserves refreshed.'
-	if (transactionState === 'reverted') return 'Simulation failed: reserve state changed. Refresh the quote and try again.'
+	if (transactionState === 'confirmed') return 'Simulated confirmation shown. Demo balances and reserves do not change.'
+	if (transactionState === 'reverted') return 'Simulated failure shown. Change the fixture or inputs and try again.'
 	return undefined
 }
 
@@ -173,7 +174,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					</div>
 					{mode === 'enter' ? (
 						<p class='pool-mint-note'>
-							Submitted ETH goes to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. That pool reconciles collateral and mints complete-set shares at its live rate.
+							In a live transaction, submitted ETH would go to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. This demo applies that pool’s illustrative collateral rate locally.
 						</p>
 					) : null}
 					<div class='side-picker' aria-label='Outcome'>
@@ -211,7 +212,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							</p>
 							{exitExceedsInsurance ? (
 								<p class='error' role='alert'>
-									Reduce the exit to {formatUnits(maxExit)} complete sets or acquire more INVALID.
+									{insuredExitLimitMessage(parsed.value ?? 0n, maxExit, demoWalletBalances.invalid)}
 								</p>
 							) : null}
 						</div>
@@ -229,7 +230,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 						</p>
 					) : null}
 					<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || market.pair === undefined || quote === undefined || transactionState === 'pending'} onClick={submit}>
-						{exitExceedsInsurance ? 'Exit exceeds INVALID coverage' : actionLabel(market.pair !== undefined, actionBlocker, transactionState, mode, side)}
+						{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(market.pair !== undefined, actionBlocker, transactionState, mode, side)}
 					</button>
 					<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
 						{transactionMessage(transactionState)}

@@ -100,6 +100,8 @@ const scenarios = [
 	{ name: 'pending', width: 1440, height: 900, path: '/?demo=1&scenario=pending#/market', scrollY: 900 },
 	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', scrollY: 900 },
 	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', scrollY: 900 },
+	{ name: 'clicked-pending', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 150, scrollY: 900 },
+	{ name: 'clicked-confirmed', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 1_500, scrollY: 900 },
 ] as const
 
 try {
@@ -107,6 +109,10 @@ try {
 		await command('Emulation.setDeviceMetricsOverride', { width: scenario.width, height: scenario.height, deviceScaleFactor: 1, mobile: false })
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)
+		if ('clickSelector' in scenario) {
+			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.clickSelector)})?.click()` })
+			await Bun.sleep(scenario.clickWaitMs)
+		}
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })
 			await Bun.sleep(300)
@@ -118,6 +124,7 @@ try {
 	}
 	console.log(`Runtime errors: ${runtimeErrors.length}`)
 	for (const error of runtimeErrors) console.log(error)
+	if (runtimeErrors.length > 0) throw new Error(`Browser QA observed ${runtimeErrors.length} runtime error${runtimeErrors.length === 1 ? '' : 's'}`)
 } finally {
 	socket.close()
 	browser.kill()

@@ -26,7 +26,8 @@ sequenceDiagram
     participant Pair
     actor Holder
     participant Pool as SecurityPool
-    Forker-->>Pair: authoritative outcome becomes YES/NO/INVALID
+    Pair->>Forker: getQuestionOutcome(pool)
+    Forker-->>Pair: current YES/NO/INVALID outcome
     Pair-->>Pair: swaps/additions closed
     Holder->>Pair: removeLiquidity remains available
     Pair-->>Holder: raw YES + NO

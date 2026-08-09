@@ -8,7 +8,8 @@ import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 export function MarketList({ market }: { market: DemoMarket }) {
-	const yesPercent = Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10
+	const initialized = market.yesReserve + market.noReserve > 0n
+	const yesPercent = initialized ? Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10 : 0
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -31,9 +32,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 						</h2>
 						<p>{market.universe}</p>
 					</div>
-					<div class='market-row__price'>
-						<ProbabilityBar yesPercent={yesPercent} />
-					</div>
+					<div class='market-row__price'>{initialized ? <ProbabilityBar yesPercent={yesPercent} /> : <p class='muted'>Conditional price available after initialization.</p>}</div>
 					<dl class='market-row__metrics'>
 						<div>
 							<dt>Liquidity</dt>
@@ -86,7 +85,9 @@ export function MarketList({ market }: { market: DemoMarket }) {
 }
 
 export function liquidityActionAvailability(market: DemoMarket) {
-	return { createOrAdd: market.lifecycle === 'open', remove: true } as const
+	const open = market.lifecycle === 'open'
+	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
+	return { initialize: open && !initialized, add: open && initialized, remove: initialized } as const
 }
 
 export function quoteDemoEthLiquidity(market: DemoMarket, targetBps: bigint) {
@@ -94,7 +95,7 @@ export function quoteDemoEthLiquidity(market: DemoMarket, targetBps: bigint) {
 	const addedCompleteSetShares = demoAttoEthToAttoShares(1n * 10n ** 17n, market)
 	return {
 		initial: quoteInitialLiquidity(initialCompleteSetShares, targetBps),
-		added: quoteAddLiquidity(market.yesReserve, market.noReserve, addedCompleteSetShares, addedCompleteSetShares),
+		added: market.yesReserve === 0n || market.noReserve === 0n ? undefined : quoteAddLiquidity(market.yesReserve, market.noReserve, addedCompleteSetShares, addedCompleteSetShares),
 		addedCompleteSetShares,
 	} as const
 }
@@ -107,9 +108,9 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 	const [probability, setProbability] = useState('70')
 	const targetBps = BigInt(Math.max(1, Math.min(99, Number(probability) || 0))) * 100n
 	const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, targetBps)
-	const removed = quoteDemoRemoval(market, 100n * 10n ** 18n)
 	const actionAvailability = liquidityActionAvailability(market)
-	const closedReason = actionAvailability.createOrAdd ? undefined : lifecycleLabel(market.lifecycle)
+	const removed = actionAvailability.remove ? quoteDemoRemoval(market, 100n * 10n ** 18n) : undefined
+	const closedReason = market.lifecycle === 'open' ? undefined : lifecycleLabel(market.lifecycle)
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -118,105 +119,111 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 					<h1>Liquidity</h1>
 					<p>LP tokens represent only the pair’s YES and NO reserves. INVALID remains in the provider wallet.</p>
 				</div>
-				<Status tone='good'>Removal always available</Status>
+				<Status tone={actionAvailability.remove ? 'good' : 'neutral'}>{actionAvailability.remove ? 'Removal available' : 'No LP liquidity yet'}</Status>
 			</header>
 			<div class='two-column'>
-				<section class='section'>
-					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>Uninitialized pair</span>
-							<h2>Create and initialize atomically</h2>
+				{actionAvailability.initialize ? (
+					<section class='section'>
+						<div class='section-heading'>
+							<div>
+								<span class='section-kicker'>Uninitialized pair</span>
+								<h2>Create and initialize atomically</h2>
+							</div>
 						</div>
-					</div>
-					<label class='field'>
-						<span>ETH amount</span>
-						<div class='amount-input'>
-							<input value='1.0' readOnly />
-							<span>ETH</span>
-						</div>
-					</label>
-					<label class='field'>
-						<span>Target Conditional YES price</span>
-						<div class='amount-input'>
-							<input value={probability} inputMode='numeric' onInput={event => setProbability(event.currentTarget.value)} />
-							<span>%</span>
-						</div>
-					</label>
-					<ProbabilityBar yesPercent={Number(targetBps) / 100} />
-					<dl class='metrics'>
-						<div>
-							<dt>YES reserve</dt>
-							<dd>{formatShareAmount(initial.yesUsed)}</dd>
-						</div>
-						<div>
-							<dt>NO reserve</dt>
-							<dd>{formatShareAmount(initial.noUsed)}</dd>
-						</div>
-						<div>
-							<dt>Unused YES returned</dt>
-							<dd>{formatShareAmount(initial.yesReturned)}</dd>
-						</div>
-						<div>
-							<dt>INVALID retained</dt>
-							<dd>{formatShareAmount(initial.invalidReturned)}</dd>
-						</div>
-					</dl>
-					<div class='warning'>
-						<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
-					</div>
-					<button class='primary-action' disabled={!actionAvailability.createOrAdd}>
-						{closedReason === undefined ? 'Create pair + initialize' : `Creation closed · ${closedReason}`}
-					</button>
-				</section>
-				<section class='section'>
-					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>Initialized pair</span>
-							<h2>Add or remove liquidity</h2>
-						</div>
-					</div>
-					<div class='operation-block'>
-						<h3>Add from 0.1 ETH</h3>
+						<label class='field'>
+							<span>ETH amount</span>
+							<div class='amount-input'>
+								<input value='1.0' readOnly />
+								<span>ETH</span>
+							</div>
+						</label>
+						<label class='field'>
+							<span>Target Conditional YES price</span>
+							<div class='amount-input'>
+								<input value={probability} inputMode='numeric' onInput={event => setProbability(event.currentTarget.value)} />
+								<span>%</span>
+							</div>
+						</label>
+						<ProbabilityBar yesPercent={Number(targetBps) / 100} />
 						<dl class='metrics'>
 							<div>
-								<dt>YES used</dt>
-								<dd>{formatShareAmount(added.yesUsed)}</dd>
+								<dt>YES reserve</dt>
+								<dd>{formatShareAmount(initial.yesUsed)}</dd>
 							</div>
 							<div>
-								<dt>NO used</dt>
-								<dd>{formatShareAmount(added.noUsed)}</dd>
+								<dt>NO reserve</dt>
+								<dd>{formatShareAmount(initial.noUsed)}</dd>
+							</div>
+							<div>
+								<dt>Unused YES returned</dt>
+								<dd>{formatShareAmount(initial.yesReturned)}</dd>
 							</div>
 							<div>
 								<dt>INVALID retained</dt>
-								<dd>{formatShareAmount(addedCompleteSetShares)}</dd>
-							</div>
-							<div>
-								<dt>Unused NO returned</dt>
-								<dd>{formatShareAmount(added.noReturned)}</dd>
+								<dd>{formatShareAmount(initial.invalidReturned)}</dd>
 							</div>
 						</dl>
-						<button class='secondary-action' disabled={!actionAvailability.createOrAdd}>
-							{closedReason === undefined ? 'Add proportional liquidity' : `Addition closed · ${closedReason}`}
-						</button>
-					</div>
-					<div class='operation-block'>
-						<h3>Remove 100 LP tokens</h3>
-						<dl class='metrics'>
+						<div class='warning'>
+							<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
+						</div>
+						<button class='primary-action'>{closedReason === undefined ? 'Create pair + initialize' : `Creation closed · ${closedReason}`}</button>
+					</section>
+				) : null}
+				{actionAvailability.add || actionAvailability.remove ? (
+					<section class='section'>
+						<div class='section-heading'>
 							<div>
-								<dt>Raw YES returned</dt>
-								<dd>{formatShareAmount(removed.yesOut)}</dd>
+								<span class='section-kicker'>Initialized pair</span>
+								<h2>Add or remove liquidity</h2>
 							</div>
-							<div>
-								<dt>Raw NO returned</dt>
-								<dd>{formatShareAmount(removed.noOut)}</dd>
+						</div>
+						{added === undefined ? null : (
+							<div class='operation-block'>
+								<h3>Add from 0.1 ETH</h3>
+								<dl class='metrics'>
+									<div>
+										<dt>YES used</dt>
+										<dd>{formatShareAmount(added.yesUsed)}</dd>
+									</div>
+									<div>
+										<dt>NO used</dt>
+										<dd>{formatShareAmount(added.noUsed)}</dd>
+									</div>
+									<div>
+										<dt>INVALID retained</dt>
+										<dd>{formatShareAmount(addedCompleteSetShares)}</dd>
+									</div>
+									<div>
+										<dt>Unused NO returned</dt>
+										<dd>{formatShareAmount(added.noReturned)}</dd>
+									</div>
+								</dl>
+								<button class='secondary-action' disabled={!actionAvailability.add}>
+									{closedReason === undefined ? 'Add proportional liquidity' : `Addition closed · ${closedReason}`}
+								</button>
 							</div>
-						</dl>
-						<p>No INVALID is consumed and no complete set is redeemed.</p>
-						<button class='secondary-action' disabled={!actionAvailability.remove}>
-							Remove into raw shares
-						</button>
-					</div>
-				</section>
+						)}
+						{removed === undefined ? null : (
+							<div class='operation-block'>
+								<h3>Remove 100 LP tokens</h3>
+								<dl class='metrics'>
+									<div>
+										<dt>Raw YES returned</dt>
+										<dd>{formatShareAmount(removed.yesOut)}</dd>
+									</div>
+									<div>
+										<dt>Raw NO returned</dt>
+										<dd>{formatShareAmount(removed.noOut)}</dd>
+									</div>
+								</dl>
+								<p>No INVALID is consumed and no complete set is redeemed.</p>
+								<button class='secondary-action' disabled={!actionAvailability.remove}>
+									Remove into raw shares
+								</button>
+							</div>
+						)}
+					</section>
+				) : null}
 			</div>
 		</main>
 	)

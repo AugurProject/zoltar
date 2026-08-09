@@ -19,12 +19,19 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('keeps truth-auction liquidity removal available while create and add are closed', () => {
-		expect(liquidityActionAvailability(demoMarket('truth-auction'))).toEqual({ createOrAdd: false, remove: true })
+		expect(liquidityActionAvailability(demoMarket('truth-auction'))).toEqual({ initialize: false, add: false, remove: true })
+	})
+
+	test('keeps demo liquidity states mutually exclusive', () => {
+		expect(liquidityActionAvailability(demoMarket('baseline'))).toEqual({ initialize: false, add: true, remove: true })
+		expect(liquidityActionAvailability(demoMarket('missing-pair'))).toEqual({ initialize: true, add: false, remove: false })
+		expect(quoteDemoEthLiquidity(demoMarket('missing-pair'), 7_000n).added).toBeUndefined()
 	})
 
 	test('uses the live SecurityPool rate for ETH-funded liquidity previews', () => {
 		const market = demoMarket('baseline')
 		const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, 7_000n)
+		if (added === undefined) throw new Error('Initialized demo market must quote added liquidity')
 		expect(formatShareAmount(initial.invalidReturned)).toBe('1,012,760,785,902,369,860.239 shares')
 		expect(formatShareAmount(addedCompleteSetShares)).toBe('101,276,078,590,236,986.0239 shares')
 		expect(added.yesUsed).toBeLessThanOrEqual(addedCompleteSetShares)

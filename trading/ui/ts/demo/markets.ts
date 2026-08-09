@@ -90,7 +90,7 @@ export function demoMarket(scenario: string): DemoMarket {
 			activeVaultCount: 3n,
 		},
 	}
-	return scenario === 'missing-pair' ? common : { ...common, pair: selectedPair }
+	return scenario === 'missing-pair' ? { ...common, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n } : { ...common, pair: selectedPair }
 }
 
 export function lifecycleLabel(lifecycle: Lifecycle) {
