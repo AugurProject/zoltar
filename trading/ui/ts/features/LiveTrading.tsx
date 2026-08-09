@@ -96,7 +96,7 @@ export function insuredExitLimitMessage(requested: bigint, maximum: bigint, inva
 	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
 }
 
-export function LiveTrading({ route }: { route: string }) {
+export function LiveTrading({ route, onDeploymentStatus }: { route: string; onDeploymentStatus: (status: 'loading' | 'verified' | 'unavailable') => void }) {
 	const [configuration, setConfiguration] = useState<DeploymentConfiguration>()
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	const [selectedPool, setSelectedPool] = useState<Address>()
@@ -132,24 +132,30 @@ export function LiveTrading({ route }: { route: string }) {
 
 	useEffect(() => {
 		let active = true
+		onDeploymentStatus('loading')
 		void (async () => {
 			try {
 				const loaded = await loadDeploymentConfiguration()
 				if (!active) return
 				if (loaded === undefined) {
 					setMessage('Missing deployment.json. Build with a reviewed trading deployment manifest.')
+					onDeploymentStatus('unavailable')
 					return
 				}
 				setConfiguration(loaded)
 				await refresh(loaded)
+				if (active) onDeploymentStatus('verified')
 			} catch (error) {
-				if (active) setMessage(error instanceof Error ? error.message : 'Unable to load the trading deployment')
+				if (active) {
+					setMessage(error instanceof Error ? error.message : 'Unable to load the trading deployment')
+					onDeploymentStatus('unavailable')
+				}
 			}
 		})()
 		return () => {
 			active = false
 		}
-	}, [])
+	}, [onDeploymentStatus])
 
 	useEffect(() => {
 		if (configuration === undefined || account === undefined || selected === undefined) return

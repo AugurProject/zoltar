@@ -38,7 +38,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 					<h1>Markets</h1>
 					<p>Trade valid-resolution outcomes while retaining INVALID insurance in your wallet.</p>
 				</div>
-				<button class='secondary-action'>Refresh discovery</button>
+				<span class='muted'>Demo discovery snapshot</span>
 			</header>
 			<section class='market-list'>
 				<article class='market-row'>
@@ -146,7 +146,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 					<h1>Liquidity</h1>
 					<p>LP tokens represent only the pair’s YES and NO reserves. INVALID remains in the provider wallet.</p>
 				</div>
-				<Status tone={liquidityStatusTone}>{liquidityStatus}</Status>
+				<Status tone={liquidityStatusTone}>{actionAvailability.remove ? 'Removal preview' : liquidityStatus}</Status>
 			</header>
 			<div class='two-column'>
 				{closedReason !== undefined && !actionAvailability.remove ? (
@@ -207,7 +207,9 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 						<div class='warning'>
 							<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
 						</div>
-						<button class='primary-action'>{closedReason === undefined ? 'Create pair + initialize' : `Creation closed · ${closedReason}`}</button>
+						<button class='primary-action' disabled>
+							Demo preview only · Create pair + initialize
+						</button>
 					</section>
 				) : null}
 				{actionAvailability.add || actionAvailability.remove ? (
@@ -239,8 +241,8 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 										<dd>{formatShareAmount(added.noReturned)}</dd>
 									</div>
 								</dl>
-								<button class='secondary-action' disabled={!actionAvailability.add}>
-									{closedReason === undefined ? 'Add proportional liquidity' : `Addition closed · ${closedReason}`}
+								<button class='secondary-action' disabled>
+									Demo preview only · Add proportional liquidity
 								</button>
 							</div>
 						)}
@@ -258,8 +260,8 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 									</div>
 								</dl>
 								<p>No INVALID is consumed and no complete set is redeemed.</p>
-								<button class='secondary-action' disabled={!actionAvailability.remove}>
-									Remove into raw shares
+								<button class='secondary-action' disabled>
+									Demo preview only · Remove into raw shares
 								</button>
 							</div>
 						)}
@@ -379,7 +381,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 				<div class='table-row'>
 					<span>Approvals</span>
 					<strong>Router approved for shares · LP approval required</strong>
-					<button class='link-button'>Review</button>
+					<span class='muted'>Demo approval snapshot</span>
 				</div>
 			</section>
 		</main>

@@ -39,13 +39,25 @@ function renderBanner(scenario: string, demo: boolean) {
 	)
 }
 
-function networkLabel(scenario: string, demo: boolean) {
+type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
+
+function networkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
 	if (scenario === 'wrong-network') return 'Unsupported · requires Anvil 31337'
-	return demo ? 'Anvil 31337' : 'Configured live network'
+	if (demo) return 'Anvil 31337'
+	if (liveDeploymentStatus === 'verified') return 'Verified live deployment'
+	if (liveDeploymentStatus === 'unavailable') return 'Deployment unavailable'
+	return 'Checking deployment'
+}
+
+function networkToneClass(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
+	if (scenario === 'wrong-network' || (!demo && liveDeploymentStatus === 'unavailable')) return ' network-pill--warn'
+	if (!demo && liveDeploymentStatus !== 'verified') return ' network-pill--neutral'
+	return ''
 }
 
 export function App() {
 	const [route, setRoute] = useState(currentRoute)
+	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
 	const scenario = query.get('scenario') ?? 'baseline'
@@ -60,7 +72,7 @@ export function App() {
 	if (!demo) {
 		if (route === 'help') content = <Help />
 		else if (route === 'developer') content = <Developer demo={false} />
-		else content = <LiveTrading route={route} />
+		else content = <LiveTrading route={route} onDeploymentStatus={setLiveDeploymentStatus} />
 	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
@@ -111,9 +123,9 @@ export function App() {
 						</a>
 					</nav>
 					<div class='header-actions'>
-						<a class={`network-pill${scenario === 'wrong-network' ? ' network-pill--warn' : ''}`} href='#/developer'>
+						<a class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`} href='#/developer'>
 							<span />
-							{networkLabel(scenario, demo)}
+							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>
 						<button class='wallet-button' disabled>
 							{demo ? '0x8ba1…ba72' : 'Connect in market view'}

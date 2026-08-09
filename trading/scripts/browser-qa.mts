@@ -74,6 +74,7 @@ await command('Runtime.enable')
 await command('Log.enable')
 const scenarios = [
 	{ name: 'disconnected-market-list', width: 1440, height: 900, path: '/#/markets' },
+	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },
 	{ name: 'market-list-mobile', width: 390, height: 844, path: '/?demo=1&scenario=baseline#/markets' },
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 500 },

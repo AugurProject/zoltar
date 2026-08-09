@@ -188,6 +188,10 @@ nav a[aria-current="page"] {
 	background: var(--warn);
 	box-shadow: 0 0 0 3px rgb(241 199 111 / 14%);
 }
+.network-pill--neutral span {
+	background: var(--muted);
+	box-shadow: none;
+}
 .wallet-button,
 .secondary-action {
 	padding: 0.62rem 0.85rem;

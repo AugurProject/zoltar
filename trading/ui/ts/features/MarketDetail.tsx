@@ -34,7 +34,7 @@ function actionLabel(pairExists: boolean, closedReason: string | undefined, tran
 
 function transactionMessage(transactionState: TransactionState) {
 	if (transactionState === 'confirmed') return 'Simulated confirmation shown. Demo balances and reserves do not change.'
-	if (transactionState === 'reverted') return 'Simulated failure shown. Change the fixture or inputs and try again.'
+	if (transactionState === 'reverted') return 'Simulated failure shown. Change the amount or outcome and try again.'
 	return undefined
 }
 
@@ -268,7 +268,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 								<h2>Conditional YES price</h2>
 							</div>
 						</div>
-						{yesPercent === undefined ? <p class='muted'>Conditional price available after pair initialization.</p> : <ProbabilityBar yesPercent={yesPercent} beforePercent={yesPercent - 3.4} />}
+						{yesPercent === undefined ? <p class='muted'>Conditional price available after pair initialization.</p> : <ProbabilityBar yesPercent={yesPercent} />}
 						<dl class='fact-list'>
 							<div>
 								<dt>YES reserve</dt>
