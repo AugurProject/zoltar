@@ -13,6 +13,7 @@ import {
 	createTradingWalletClient,
 	discoverLiveMarkets,
 	loadLiveBalances,
+	marketAcceptsNewRisk,
 	simulateEntry,
 	simulateExit,
 	simulateLiquidity,
@@ -56,6 +57,14 @@ function systemStateLabel(state: number) {
 	if (state === 2) return 'Fork migration'
 	if (state === 3) return 'Fork truth auction'
 	return `Unknown state ${state}`
+}
+
+function questionOutcomeLabel(outcome: number) {
+	if (outcome === 0) return 'INVALID'
+	if (outcome === 1) return 'YES'
+	if (outcome === 2) return 'NO'
+	if (outcome === 3) return 'None (unresolved)'
+	return `Unknown outcome ${outcome}`
 }
 
 function formatTimestamp(timestamp: bigint) {
@@ -329,6 +338,14 @@ export function LiveTrading({ route }: { route: string }) {
 								<dd>{selected.awaitingForkContinuation ? 'Awaiting' : 'Not awaiting'}</dd>
 							</div>
 							<div>
+								<dt>Universe fork</dt>
+								<dd>{selected.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(selected.universeForkTime)} UTC`}</dd>
+							</div>
+							<div>
+								<dt>Question outcome</dt>
+								<dd>{questionOutcomeLabel(selected.questionOutcome)}</dd>
+							</div>
+							<div>
 								<dt>Security multiplier</dt>
 								<dd>{formatBpsMultiplier(selected.statoblastSecurityMultiplierBps)}</dd>
 							</div>
@@ -417,7 +434,7 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 		const value = parseUnitsOrUndefined(probability, 2)
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
 	}, [probability])
-	const closedForAdding = market.tradingStatus !== 0 && market.tradingStatus !== 6 && market.pair !== undefined
+	const closedForAdding = !marketAcceptsNewRisk(market, BigInt(Math.floor(Date.now() / 1_000)))
 	const needsLpApproval = operation === 'remove' && parsed !== undefined && (balances?.lpAllowance ?? 0n) < parsed
 
 	async function simulateCurrent() {
@@ -709,6 +726,7 @@ function LivePositionControls({
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const parsedInput = parseUnitsOrUndefined(amount)
 	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
+	const entryPriceImpact = quote?.kind === 'entry' ? Number(quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore) / 100 : undefined
 	return (
 		<div class='operation-block'>
 			<ProbabilityBar yesPercent={yesPercent} />
@@ -802,13 +820,31 @@ function LivePositionControls({
 						<dt>AMM fee</dt>
 						<dd>{formatShareAmount(quote.value.result.feeAmount)}</dd>
 					</div>
+					<div>
+						<dt>{quote.kind === 'entry' ? `Minimum ${side} received` : `Maximum ${side} required`}</dt>
+						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares)}</dd>
+					</div>
+					<div>
+						<dt>{quote.kind === 'entry' ? 'Average ETH per long share' : 'Minimum ETH received'}</dt>
+						<dd>{quote.kind === 'entry' ? formatEthPerShare(quote.value.amount, quote.value.result.totalLongShares) : `${formatUnits(quote.value.minimumEth)} ETH`}</dd>
+					</div>
+					<div>
+						<dt>Deadline</dt>
+						<dd>{formatTimestamp(quote.value.deadline)} UTC</dd>
+					</div>
 					{quote.kind === 'entry' ? (
-						<div>
-							<dt>Conditional YES before / after</dt>
-							<dd>
-								{Number(quote.value.result.conditionalYesBpsBefore) / 100}% / {Number(quote.value.result.conditionalYesBpsAfter) / 100}%
-							</dd>
-						</div>
+						<>
+							<div>
+								<dt>Conditional YES before / after</dt>
+								<dd>
+									{Number(quote.value.result.conditionalYesBpsBefore) / 100}% / {Number(quote.value.result.conditionalYesBpsAfter) / 100}%
+								</dd>
+							</div>
+							<div>
+								<dt>Conditional YES price impact</dt>
+								<dd>{entryPriceImpact === undefined ? '—' : `${entryPriceImpact > 0 ? '+' : ''}${entryPriceImpact.toFixed(2)} percentage points`}</dd>
+							</div>
+						</>
 					) : null}
 				</dl>
 			)}

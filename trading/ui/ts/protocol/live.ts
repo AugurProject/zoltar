@@ -47,6 +47,7 @@ const securityPoolFactoryAbi = [
 
 const securityPoolAbi = [
 	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'shareTokenSupplyAttoShares', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 	{ type: 'function', name: 'getPoolAccountingSnapshot', stateMutability: 'view', inputs: [], outputs: [{ name: 'snapshot', type: 'tuple', components: poolAccountingComponents }] },
@@ -57,6 +58,8 @@ const securityPoolAbi = [
 ] as const satisfies Abi
 
 const securityPoolForkerAbi = [{ type: 'function', name: 'getQuestionOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address' }], outputs: [{ type: 'uint8' }] }] as const satisfies Abi
+
+const zoltarAbi = [{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 
 const questionDataAbi = [
 	{
@@ -113,10 +116,14 @@ const shareTokenAbi = [
 const tradingFactory = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const UI_SLIPPAGE_BPS = 50n
+export const UI_SLIPPAGE_BPS = 50n
 
-function minimumAfterSlippage(amount: bigint) {
+export function minimumAfterSlippage(amount: bigint) {
 	return (amount * (10_000n - UI_SLIPPAGE_BPS)) / 10_000n
+}
+
+export function maximumAfterSlippage(amount: bigint) {
+	return (amount * (10_000n + UI_SLIPPAGE_BPS) + 9_999n) / 10_000n
 }
 
 export type LiveMarket = Readonly<{
@@ -132,6 +139,7 @@ export type LiveMarket = Readonly<{
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	systemState: number
 	awaitingForkContinuation: boolean
+	universeForkTime: bigint
 	activeVaultCount: bigint
 	shareTokenSupplyAttoShares: bigint
 	settlementCollateralAttoEth: bigint
@@ -145,6 +153,11 @@ export type LiveMarket = Readonly<{
 	noReserve: bigint
 	lpTotalSupply: bigint
 }>
+
+export function marketAcceptsNewRisk(market: Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>, nowSeconds: bigint) {
+	if (market.tradingStatus !== undefined) return market.tradingStatus === 0
+	return market.systemState === 0 && !market.awaitingForkContinuation && market.universeForkTime === 0n && market.questionOutcome === 3 && nowSeconds < market.endTime
+}
 
 export type LiveBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
 
@@ -184,8 +197,9 @@ export async function switchWalletChain(provider: InjectedEthereum, chainId: num
 }
 
 export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
-	const [questionData, shareTokenSupplyAttoShares, accounting, systemState, awaitingForkContinuation, activeVaultCount, forker] = await Promise.all([
+	const [questionData, zoltar, shareTokenSupplyAttoShares, accounting, systemState, awaitingForkContinuation, activeVaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getPoolAccountingSnapshot' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'systemState' }),
@@ -195,6 +209,7 @@ export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: A
 	])
 	return {
 		questionData,
+		zoltar,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: accounting.settlementCollateralAttoEth,
 		currentRetentionRate: accounting.currentRetentionRate,
@@ -217,10 +232,11 @@ export async function discoverLiveMarkets(client: PublicClient, configuration: D
 			const pool = getAddress(poolAddress)
 			const shareToken = getAddress(shareTokenAddress)
 			const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-			const { questionData, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCoverageCommitmentAttoEth, feeEligibleCoverageCommitmentAttoEth, systemState, awaitingForkContinuation, activeVaultCount, forker } = poolSettings
-			const [question, questionOutcome] = await Promise.all([
+			const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCoverageCommitmentAttoEth, feeEligibleCoverageCommitmentAttoEth, systemState, awaitingForkContinuation, activeVaultCount, forker } = poolSettings
+			const [question, questionOutcome, universeForkTime] = await Promise.all([
 				client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 				client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
+				client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
 			])
 			const canonicalPair = pairAddress === zeroAddress ? undefined : getAddress(pairAddress)
 			let yesReserve = 0n
@@ -254,6 +270,7 @@ export async function discoverLiveMarkets(client: PublicClient, configuration: D
 				initialReportPriorityFeeAttoEthPerGas,
 				systemState: Number(systemState),
 				awaitingForkContinuation,
+				universeForkTime,
 				activeVaultCount,
 				shareTokenSupplyAttoShares,
 				settlementCollateralAttoEth,
@@ -284,42 +301,45 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 	return { invalid, yes, no, approved, lp, lpAllowance }
 }
 
-export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint) {
+export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
 	if (market.pair === undefined) throw new Error('Create and initialize the pair before trading')
 	const blockNumber = await client.getBlockNumber()
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount })
-	return { blockNumber, result: simulation.result, amount, side, market }
+	return { blockNumber, result: simulation.result, amount, side, market, deadline, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares) }
 }
 
 export async function submitFreshEntry(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateEntry>>): Promise<Hash> {
 	if ((await client.getBlockNumber()) !== quote.blockNumber) throw new Error('Quote is stale; simulate again before submission')
-	const refreshed = await simulateEntry(client, configuration, quote.market, account, quote.side, quote.amount)
+	const refreshed = await simulateEntry(client, configuration, quote.market, account, quote.side, quote.amount, quote.deadline)
 	if (refreshed.blockNumber !== quote.blockNumber) throw new Error('Quote changed blocks during revalidation')
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumAfterSlippage(refreshed.result.totalLongShares), account, deadline], value: quote.amount })
+	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, refreshed.minimumLongShares, account, quote.deadline], value: quote.amount })
 }
 
-export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint) {
+export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
 	if (market.pair === undefined) throw new Error('Pair is unavailable')
 	const blockNumber = await client.getBlockNumber()
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline] })
-	return { blockNumber, result: simulation.result, completeSets, side, market }
+	return {
+		blockNumber,
+		result: simulation.result,
+		completeSets,
+		side,
+		market,
+		deadline,
+		maximumLongShares: maximumAfterSlippage(simulation.result.totalLongShares),
+		minimumEth: minimumAfterSlippage(simulation.result.ethOut),
+	}
 }
 
 export async function submitFreshExit(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateExit>>): Promise<Hash> {
 	if ((await client.getBlockNumber()) !== quote.blockNumber) throw new Error('Quote is stale; simulate again before submission')
-	const refreshed = await simulateExit(client, configuration, quote.market, account, quote.side, quote.completeSets)
+	const refreshed = await simulateExit(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline)
 	if (refreshed.blockNumber !== quote.blockNumber) throw new Error('Quote changed blocks during revalidation')
-	const maximumLong = (refreshed.result.totalLongShares * 10_050n + 9_999n) / 10_000n
-	const minimumEth = (refreshed.result.ethOut * 9_950n) / 10_000n
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, quote.completeSets, maximumLong, minimumEth, account, deadline] })
+	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, quote.completeSets, refreshed.maximumLongShares, refreshed.minimumEth, account, quote.deadline] })
 }
 
 export async function createPair(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address) {

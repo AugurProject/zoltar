@@ -3,6 +3,7 @@ import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits,
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
 import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
+import { marketAcceptsNewRisk, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
 
 describe('standalone trading UI model', () => {
 	test('derives exact lifecycle reasons', () => {
@@ -67,5 +68,20 @@ describe('standalone trading UI model', () => {
 		const removed = quoteDemoRemoval(demoMarket('baseline'), 100n * 10n ** 18n)
 		expect(formatShareAmount(removed.yesOut)).toBe('100 shares')
 		expect(formatShareAmount(removed.noOut)).toBe('233.3335 shares')
+	})
+
+	test('derives displayed transaction bounds with LP-favoring rounding', () => {
+		expect(minimumAfterSlippage(10_001n)).toBe(9_950n)
+		expect(maximumAfterSlippage(10_001n)).toBe(10_052n)
+	})
+
+	test('blocks new risk for every uninitialized lifecycle guard', () => {
+		const open = { tradingStatus: undefined, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, endTime: 2_000n } satisfies Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
+		expect(marketAcceptsNewRisk(open, 1_000n)).toBeTrue()
+		expect(marketAcceptsNewRisk({ ...open, awaitingForkContinuation: true }, 1_000n)).toBeFalse()
+		expect(marketAcceptsNewRisk({ ...open, universeForkTime: 999n }, 1_000n)).toBeFalse()
+		expect(marketAcceptsNewRisk({ ...open, questionOutcome: 1 }, 1_000n)).toBeFalse()
+		expect(marketAcceptsNewRisk({ ...open, systemState: 3 }, 1_000n)).toBeFalse()
+		expect(marketAcceptsNewRisk(open, 2_000n)).toBeFalse()
 	})
 })
