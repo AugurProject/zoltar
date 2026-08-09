@@ -352,8 +352,8 @@ export function LiveTrading({ route }: { route: string }) {
 								<dd>{selected.activeVaultCount.toString()}</dd>
 							</div>
 							<div>
-								<dt>Current retention</dt>
-								<dd>{formatUnits(selected.currentRetentionRate * 100n, 18, 2)}%</dd>
+								<dt>Per-second retention multiplier</dt>
+								<dd>{formatUnits(selected.currentRetentionRate, 18, 12)}×</dd>
 							</div>
 							<div>
 								<dt>Total / fee-eligible coverage commitment</dt>
