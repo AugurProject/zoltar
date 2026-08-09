@@ -73,7 +73,13 @@ await command('Page.enable')
 await command('Runtime.enable')
 await command('Log.enable')
 const scenarios = [
-	{ name: 'disconnected-market-list', width: 1440, height: 900, path: '/#/markets' },
+	{
+		name: 'disconnected-market-list',
+		width: 1440,
+		height: 900,
+		path: '/#/markets',
+		assertExpression: `(() => { const status = document.querySelector('.wallet-status'); if (!(status instanceof HTMLElement)) return false; const style = getComputedStyle(status); return status.textContent === 'Wallet disconnected' && style.borderTopWidth === '0px' && style.cursor !== 'pointer' })()`,
+	},
 	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },
 	{
