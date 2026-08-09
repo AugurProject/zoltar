@@ -25,6 +25,7 @@ describe('standalone trading UI model', () => {
 	test('keeps demo liquidity states mutually exclusive', () => {
 		expect(liquidityActionAvailability(demoMarket('baseline'))).toEqual({ initialize: false, add: true, remove: true })
 		expect(liquidityActionAvailability(demoMarket('missing-pair'))).toEqual({ initialize: true, add: false, remove: false })
+		expect(liquidityActionAvailability(demoMarket('ended-missing-pair'))).toEqual({ initialize: false, add: false, remove: false })
 		expect(quoteDemoEthLiquidity(demoMarket('missing-pair'), 7_000n).added).toBeUndefined()
 	})
 

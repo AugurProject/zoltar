@@ -713,10 +713,17 @@ summary {
 		monospace;
 }
 .row-action {
+	border: 0;
+	background: none;
 	color: var(--accent);
+	padding: 0;
 	white-space: nowrap;
+	font-family: inherit;
 	font-size: 11px;
 	text-decoration: none;
+}
+.row-action:disabled {
+	color: var(--muted);
 }
 .two-column {
 	display: grid;

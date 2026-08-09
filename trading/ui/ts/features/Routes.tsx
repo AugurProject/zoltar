@@ -7,6 +7,26 @@ import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
+function MarketListAction({ market }: { market: DemoMarket }) {
+	if (market.pair !== undefined)
+		return (
+			<a class='row-action' href='#/market'>
+				Open market →
+			</a>
+		)
+	if (market.lifecycle !== 'open')
+		return (
+			<button class='row-action' disabled>
+				{lifecycleLabel(market.lifecycle)} · initialization unavailable
+			</button>
+		)
+	return (
+		<a class='row-action' href='#/liquidity'>
+			Create + initialize →
+		</a>
+	)
+}
+
 export function MarketList({ market }: { market: DemoMarket }) {
 	const initialized = market.yesReserve + market.noReserve > 0n
 	const yesPercent = initialized ? Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10 : 0
@@ -43,9 +63,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 							<dd>{Number(market.feeBps) / 100}%</dd>
 						</div>
 					</dl>
-					<a class='row-action' href={market.pair === undefined ? '#/liquidity' : '#/market'}>
-						{market.pair === undefined ? 'Create + initialize' : 'Open market'} →
-					</a>
+					<MarketListAction market={market} />
 					<div class='market-row__pool'>
 						<div class='market-row__pool-identity'>
 							<span>SecurityPool used by this AMM</span>
@@ -111,6 +129,15 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 	const actionAvailability = liquidityActionAvailability(market)
 	const removed = actionAvailability.remove ? quoteDemoRemoval(market, 100n * 10n ** 18n) : undefined
 	const closedReason = market.lifecycle === 'open' ? undefined : lifecycleLabel(market.lifecycle)
+	let liquidityStatusTone: 'good' | 'neutral' | 'warn' = 'neutral'
+	let liquidityStatus = 'No LP liquidity yet'
+	if (actionAvailability.remove) {
+		liquidityStatusTone = 'good'
+		liquidityStatus = 'Removal available'
+	} else if (closedReason !== undefined) {
+		liquidityStatusTone = 'warn'
+		liquidityStatus = `${closedReason} · initialization unavailable`
+	}
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -119,9 +146,23 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 					<h1>Liquidity</h1>
 					<p>LP tokens represent only the pair’s YES and NO reserves. INVALID remains in the provider wallet.</p>
 				</div>
-				<Status tone={actionAvailability.remove ? 'good' : 'neutral'}>{actionAvailability.remove ? 'Removal available' : 'No LP liquidity yet'}</Status>
+				<Status tone={liquidityStatusTone}>{liquidityStatus}</Status>
 			</header>
 			<div class='two-column'>
+				{closedReason !== undefined && !actionAvailability.remove ? (
+					<section class='section'>
+						<div class='section-heading'>
+							<div>
+								<span class='section-kicker'>Lifecycle blocker</span>
+								<h2>{closedReason}</h2>
+							</div>
+						</div>
+						<p>This SecurityPool cannot create or initialize a pair after the market closes. There is no LP position to remove.</p>
+						<button class='primary-action' disabled>
+							{closedReason} — pair initialization unavailable
+						</button>
+					</section>
+				) : null}
 				{actionAvailability.initialize ? (
 					<section class='section'>
 						<div class='section-heading'>

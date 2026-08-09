@@ -362,7 +362,7 @@ export function LiveTrading({ route }: { route: string }) {
 								</dd>
 							</div>
 							<div>
-								<dt>Collateral rate</dt>
+								<dt>Checkpointed collateral / share ratio</dt>
 								<dd>{selected.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(selected.settlementCollateralAttoEth, selected.shareTokenSupplyAttoShares)}</dd>
 							</div>
 							<div>
@@ -565,6 +565,10 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 								<div>
 									<dt>Complete-set shares created</dt>
 									<dd>{formatShareAmount(quote.result.completeSetShares)}</dd>
+								</div>
+								<div>
+									<dt>Simulated effective complete-set rate</dt>
+									<dd>{formatEthPerShare(quote.amount, quote.result.completeSetShares)}</dd>
 								</div>
 								<div>
 									<dt>YES / NO deposited</dt>
@@ -817,6 +821,10 @@ function LivePositionControls({
 					<div>
 						<dt>{quote.kind === 'entry' ? 'Average ETH per long share' : 'Minimum ETH received'}</dt>
 						<dd>{quote.kind === 'entry' ? formatEthPerShare(quote.value.amount, quote.value.result.totalLongShares) : `${formatUnits(quote.value.minimumEth)} ETH`}</dd>
+					</div>
+					<div>
+						<dt>Simulated effective complete-set rate</dt>
+						<dd>{formatEthPerShare(quote.kind === 'entry' ? quote.value.amount : quote.value.result.ethOut, quote.value.result.completeSetShares)}</dd>
 					</div>
 					<div>
 						<dt>Deadline</dt>
