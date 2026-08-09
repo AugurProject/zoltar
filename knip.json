@@ -15,16 +15,13 @@
 	],
 	"project": [
 		"docs/charts/**/*.ts",
+		"scripts/uniswap-deployment.mts",
 		"solidity/ts/**/*.ts",
 		"ui/ts/**/*.ts",
 		"ui/ts/**/*.tsx",
 		"ui/build/**/*.mts"
 	],
 	"ignoreDependencies": [
-		"@uniswap/v3-core",
-		"@uniswap/v3-periphery",
-		"@uniswap/v4-core",
-		"@uniswap/v4-periphery",
 		"better-typescript-lib"
 	],
 	"ignoreIssues": {

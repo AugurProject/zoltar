@@ -1,8 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
-import { assertCancunCompatible, assertNoPendingDeployerTransactions, createCompleteDeploymentPlan, deployTestnet, parseChainId, parsePrivateKey, parseRpcUrl, runDeploymentPlan } from './deploy-testnet.mts'
+import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
+import {
+	assertBootstrapDescendantCode,
+	assertRequiredEvmCompatible,
+	assertEip1559Compatible,
+	assertNoPendingDeployerTransactions,
+	createBudgetedTransactionSender,
+	createCompleteDeploymentPlan,
+	createDeploymentBudget,
+	deployTestnet,
+	parseChainId,
+	parseMaxFeePerGas,
+	parseMaxTotalCost,
+	parsePrivateKey,
+	parseRpcUrl,
+	runDeploymentPlan,
+} from './deploy-testnet.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
@@ -40,10 +56,26 @@ describe('testnet deployment inputs', () => {
 		expect(() => parsePrivateKey(undefined)).toThrow('32-byte 0x-prefixed')
 	})
 
+	test('parses positive fee and total deployment limits', () => {
+		expect(parseMaxFeePerGas(undefined)).toBe(100_000_000_000n)
+		expect(parseMaxFeePerGas('1.5')).toBe(1_500_000_000n)
+		expect(parseMaxTotalCost(undefined)).toBe(10_000_000_000_000_000_000n)
+		expect(parseMaxTotalCost('0.25')).toBe(250_000_000_000_000_000n)
+		for (const value of ['', '0', '-1', 'not-a-number']) {
+			expect(() => parseMaxFeePerGas(value)).toThrow('MAX_FEE_PER_GAS_GWEI')
+			expect(() => parseMaxTotalCost(value)).toThrow('MAX_TOTAL_COST_ETH')
+		}
+	})
+
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
 		const workflow = await Bun.file(new URL('./github-actions/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).toContain('group: testnet-contract-deployment-${{ inputs.chain_id }}')
 		expect(workflow).toContain('CHAIN_ID: ${{ inputs.chain_id }}')
+		expect(workflow).toContain('MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}')
+		expect(workflow).toContain('MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}')
+		for (const line of workflow.split('\n').filter(line => line.trim().startsWith('uses:'))) {
+			expect(line).toMatch(/uses: [^@]+@[0-9a-f]{40}(?:\s+#.*)?$/)
+		}
 	})
 
 	test('refuses to start a deployment while its account has a pending transaction', async () => {
@@ -57,17 +89,17 @@ describe('testnet deployment inputs', () => {
 		).rejects.toThrow('has pending transactions')
 	})
 
-	test('requires Cancun EVM opcode support before deployment', async () => {
+	test('requires the Cancun and Osaka EVM opcodes used by deployed bytecode', async () => {
 		await expect(
-			assertCancunCompatible(
+			assertRequiredEvmCompatible(
 				{
-					call: async () => ({ data: '0x0000000000000000000000000000000000000000000000000000000000000001' }),
+					call: async ({ data }) => ({ data: data === '0x5f1e60005260206000f3' ? '0x0000000000000000000000000000000000000000000000000000000000000100' : '0x0000000000000000000000000000000000000000000000000000000000000001' }),
 				},
 				11_155_111,
 			),
 		).resolves.toBeUndefined()
 		await expect(
-			assertCancunCompatible(
+			assertRequiredEvmCompatible(
 				{
 					call: async () => {
 						throw new Error('EVM error NotActivated')
@@ -76,12 +108,116 @@ describe('testnet deployment inputs', () => {
 				11_155_111,
 			),
 		).rejects.toThrow('does not support the Cancun EVM opcodes')
+		await expect(
+			assertRequiredEvmCompatible(
+				{
+					call: async ({ data }) => {
+						if (data === '0x5f1e60005260206000f3') throw new Error('EVM error NotActivated')
+						return { data: '0x0000000000000000000000000000000000000000000000000000000000000001' }
+					},
+				},
+				11_155_111,
+			),
+		).rejects.toThrow('does not support the Osaka CLZ opcode')
+	})
+
+	test('requires EIP-1559 even when every deployment step could be skipped', async () => {
+		await expect(assertEip1559Compatible({ getBlock: async () => ({ baseFeePerGas: 1n }) as never }, 11_155_111)).resolves.toBeUndefined()
+		await expect(assertEip1559Compatible({ getBlock: async () => ({ baseFeePerGas: undefined }) as never }, 84_532)).rejects.toThrow('does not expose the EIP-1559 base fee')
 	})
 
 	test('enforces chain and RPC safety at the transaction-capable entry point', async () => {
 		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
 		await expect(deployTestnet({ chainId: 1, privateKey, rpcUrl: 'https://rpc.example.test' })).rejects.toThrow('refuses Ethereum mainnet')
 		await expect(deployTestnet({ chainId: 11_155_111, privateKey, rpcUrl: 'http://rpc.example.test' })).rejects.toThrow('HTTPS or loopback HTTP')
+	})
+})
+
+describe('testnet deployment transaction authorization', () => {
+	const account = privateKeyToAccount('0x1212121212121212121212121212121212121212121212121212121212121212')
+
+	function wallet(overrides: Partial<Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}) {
+		return {
+			estimateGas: async () => 100_000n,
+			getBlock: async () => ({ baseFeePerGas: 10n }) as never,
+			getGasPrice: async () => 20n,
+			getTransactionCount: async () => 7n,
+			sendTransaction: async () => FIRST_HASH,
+			...overrides,
+		} as Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>
+	}
+
+	test('sends EIP-1559 transactions bounded by the authorized fee', async () => {
+		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
+		const send = createBudgetedTransactionSender(
+			wallet({
+				sendTransaction: async request => {
+					submitted = request
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 4_000_001n },
+		)
+
+		expect(await send({ to: FIRST_ADDRESS, value: 1n })).toBe(FIRST_HASH)
+		expect(submitted).toMatchObject({ gas: 130_000n, gasPrice: undefined, maxFeePerGas: 30n, maxPriorityFeePerGas: 10n, nonce: 7n, to: FIRST_ADDRESS, value: 1n })
+	})
+
+	test('rejects an RPC gas-price suggestion above the authorized maximum before signing', async () => {
+		let estimateCalled = false
+		let sendCalled = false
+		const send = createBudgetedTransactionSender(
+			wallet({
+				estimateGas: async () => {
+					estimateCalled = true
+					return 100_000n
+				},
+				getGasPrice: async () => 101n,
+				sendTransaction: async () => {
+					sendCalled = true
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000n },
+		)
+
+		await expect(send({ to: FIRST_ADDRESS })).rejects.toThrow('RPC suggested gas price')
+		expect(estimateCalled).toBe(false)
+		expect(sendCalled).toBe(false)
+	})
+
+	test('rejects a transaction that exceeds the remaining total budget before signing', async () => {
+		let sendCalled = false
+		const send = createBudgetedTransactionSender(
+			wallet({
+				sendTransaction: async () => {
+					sendCalled = true
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 3_900_000n },
+		)
+
+		await expect(send({ to: FIRST_ADDRESS, value: 1n })).rejects.toThrow('would exceed the authorized deployment total')
+		expect(sendCalled).toBe(false)
+	})
+
+	test('rejects an already-funded canonical raw deployment outside the total budget', () => {
+		const budget = createDeploymentBudget(9_999_999_999_999_999n)
+		expect(() => budget.assertCanonicalRawTransactionCost(FIRST_ADDRESS, 10_000_000_000_000_000n)).toThrow('would exceed the authorized deployment total')
+	})
+
+	test('credits canonical funding only to the matching signer and records each raw deployment once', () => {
+		const budget = createDeploymentBudget(10_100_000_000_000_000n)
+		budget.recordWalletTransaction(10_100_000_000_000_000n)
+		budget.recordCanonicalFunding(FIRST_ADDRESS, 10_000_000_000_000_000n)
+		expect(() => budget.assertCanonicalRawTransactionCost(FIRST_ADDRESS, 10_000_000_000_000_000n)).not.toThrow()
+		budget.recordCanonicalRawTransaction(FIRST_ADDRESS, 10_000_000_000_000_000n)
+		budget.recordCanonicalRawTransaction(FIRST_ADDRESS, 10_000_000_000_000_000n)
+		expect(() => budget.assertCanonicalRawTransactionCost(SECOND_ADDRESS, 10_000_000_000_000_000n)).toThrow('would exceed the authorized deployment total')
 	})
 })
 
@@ -115,6 +251,7 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.permit2Address,
 			uniswap.addresses.uniswapV3FactoryAddress,
 			uniswap.addresses.uniswapV3QuoterAddress,
+			uniswap.addresses.uniswapV3SwapRouterAddress,
 			uniswap.addresses.uniswapV4PoolManagerAddress,
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
@@ -124,7 +261,7 @@ describe('testnet deployment plan', () => {
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(23)
+		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
@@ -146,6 +283,7 @@ describe('testnet deployment plan', () => {
 					address: FIRST_ADDRESS,
 					dependencies: [],
 					deploy: async () => FIRST_HASH,
+					expectedRuntimeCodeHash: keccak256('0x01'),
 					id: 'first',
 					label: 'First',
 				},
@@ -157,6 +295,7 @@ describe('testnet deployment plan', () => {
 						code.set(SECOND_ADDRESS, '0x02')
 						return SECOND_HASH
 					},
+					expectedRuntimeCodeHash: keccak256('0x02'),
 					id: 'second',
 					label: 'Second',
 				},
@@ -183,6 +322,7 @@ describe('testnet deployment plan', () => {
 						address: SECOND_ADDRESS,
 						dependencies: ['first'],
 						deploy: async () => SECOND_HASH,
+						expectedRuntimeCodeHash: keccak256('0x02'),
 						id: 'second',
 						label: 'Second',
 					},
@@ -199,6 +339,7 @@ describe('testnet deployment plan', () => {
 						address: FIRST_ADDRESS,
 						dependencies: [],
 						deploy: async () => FIRST_HASH,
+						expectedRuntimeCodeHash: keccak256('0x01'),
 						id: 'first',
 						label: 'First',
 					},
@@ -207,5 +348,26 @@ describe('testnet deployment plan', () => {
 				() => undefined,
 			),
 		).rejects.toThrow('succeeded without installing code')
+	})
+
+	test('rejects incorrect code at direct deployment and descendant addresses', async () => {
+		await expect(
+			runDeploymentPlan(
+				[
+					{
+						address: FIRST_ADDRESS,
+						dependencies: [],
+						deploy: async () => FIRST_HASH,
+						expectedRuntimeCodeHash: keccak256('0x01'),
+						id: 'first',
+						label: 'First',
+					},
+				],
+				{ getCode: async () => '0x02' },
+				() => undefined,
+			),
+		).rejects.toThrow('Unexpected runtime code for first')
+
+		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for escalationGameCreationCodePartOne')
 	})
 })

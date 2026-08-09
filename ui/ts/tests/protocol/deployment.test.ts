@@ -1,6 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
+import { createRequire } from 'node:module'
 import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
@@ -12,14 +13,32 @@ import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fak
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '../../contractArtifact.js'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
+import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
+
+const require = createRequire(new URL('../../../../package.json', import.meta.url))
+const solc: { compile: (input: string) => string; version: () => string } = require('solc')
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireRecord(value: unknown, label: string) {
+	if (!isRecord(value)) throw new Error(`Expected ${label} to be an object`)
+	return value
+}
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
 type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> &
-	Partial<Pick<WriteClient, 'getBalance' | 'getTransactionCount' | 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
+	Partial<
+		Pick<
+			WriteClient,
+			'assertCanonicalRawTransactionCost' | 'getBalance' | 'getBlock' | 'getTransactionCount' | 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'recordCanonicalRawTransaction' | 'requiresWalletConfirmation'
+		>
+	>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
 	return {
+		getBlock: async () => ({ baseFeePerGas: 1n }) as never,
 		getTransactionCount: async () => 0n,
 		...client,
 	} as unknown as WriteClient
@@ -47,6 +66,33 @@ function createMockReadClient({ getCode, readContract }: { getCode: MockReadClie
 }
 
 describe('contract deployment internals', () => {
+	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', () => {
+		const output = requireRecord(
+			JSON.parse(
+				solc.compile(
+					JSON.stringify({
+						language: 'Solidity',
+						sources: { 'AtomicFunding.sol': { content: ATOMIC_FUNDING_SOURCE } },
+						settings: {
+							metadata: { bytecodeHash: 'none' },
+							optimizer: { enabled: true, runs: 200 },
+							outputSelection: { '*': { '*': ['evm.bytecode.object'] } },
+						},
+					}),
+				),
+			),
+			'Solidity compiler output',
+		)
+		const contracts = requireRecord(output['contracts'], 'compiled contracts')
+		const sourceContracts = requireRecord(contracts['AtomicFunding.sol'], 'AtomicFunding.sol contracts')
+		const contract = requireRecord(sourceContracts['AtomicFunding'], 'AtomicFunding contract')
+		const evm = requireRecord(contract['evm'], 'AtomicFunding EVM output')
+		const bytecode = requireRecord(evm['bytecode'], 'AtomicFunding bytecode')
+		expect(solc.version()).toStartWith('0.8.17')
+		expect(Array.isArray(output['errors']) ? output['errors'].filter(error => requireRecord(error, 'compiler diagnostic')['severity'] === 'error') : []).toEqual([])
+		expect(bytecode['object']).toBe(ATOMIC_FUNDING_BYTECODE.slice(2))
+	})
+
 	test('adds WETH and allocated genesis REP ahead of Sepolia protocol dependencies', () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {
@@ -149,34 +195,49 @@ describe('contract deployment internals', () => {
 	})
 
 	test('loadDeploymentStatusOracleSnapshot reads deployment mask when the status oracle is deployed', async () => {
-		const deploymentSteps = createDeploymentSteps()
-		const oracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
-		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
-		const proxyStep = deploymentSteps.find(step => step.id === 'proxyDeployer')
-		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const oracleStep = createDeploymentSteps().find(step => step.id === 'deploymentStatusOracle')
+			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+			const readContractCalls: string[] = []
+			const readClient = createMockReadClient({
+				getCode: async ({ address }) => {
+					if (address === oracleStep.address) return '0x1234'
+					throw new Error(`Unexpected getCode address: ${address}`)
+				},
+				readContract: async ({ functionName }) => {
+					readContractCalls.push(functionName)
+					if (functionName === 'getDeploymentMask') return 5n as never
+					throw new Error(`Unexpected readContract call: ${functionName}`)
+				},
+			})
 
-		const readContractCalls: string[] = []
-		const readClient = createMockReadClient({
-			getCode: async ({ address }) => {
-				if (address === oracleStep.address) return '0x1234'
-				if (address === proxyStep.address) return '0x1234'
-				throw new Error(`Unexpected getCode address: ${address}`)
-			},
-			readContract: async ({ functionName }) => {
-				readContractCalls.push(functionName)
-				if (functionName === 'getDeploymentMask') return 5n as never
-				throw new Error(`Unexpected readContract call: ${functionName}`)
-			},
-		})
+			const snapshot = await loadDeploymentStatusOracleSnapshot(readClient as ReadClient)
 
-		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient as ReadClient)
+			expect(readContractCalls).toEqual(['getDeploymentMask'])
+			expect(snapshot.augurStatoblastDeployed).toBe(false)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')?.deployed).toBe(true)
+		} finally {
+			resetEnvironment()
+		}
+	})
 
-		expect(readContractCalls).toEqual(['getDeploymentMask'])
-		expect(snapshot.augurStatoblastDeployed).toBe(false)
-		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
-		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
-		expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
-		expect(snapshot.deploymentStatuses.find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')?.deployed).toBe(true)
+	test('loadDeploymentStatusOracleSnapshot rejects unexpected status-oracle code', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const oracleStep = createDeploymentSteps().find(step => step.id === 'deploymentStatusOracle')
+			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+			const readClient = createMockReadClient({
+				getCode: async ({ address }) => (address === oracleStep.address ? '0x1234' : undefined),
+			})
+
+			await expect(loadDeploymentStatusOracleSnapshot(readClient as ReadClient)).rejects.toThrow('Unexpected runtime code for deploymentStatusOracle')
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	test('deployViaProxy-backed steps execute with a transaction through the proxy deployer', async () => {
@@ -394,6 +455,7 @@ describe('contract deployment internals', () => {
 		const fundHash = `0x${'c'.repeat(64)}` as Hash
 		const deployHash = `0x${'d'.repeat(64)}` as Hash
 		let proxyInstalled = false
+		let rawBroadcastCount = 0
 
 		const client = asWriteClient({
 			getBalance: async () => 0n,
@@ -407,7 +469,9 @@ describe('contract deployment internals', () => {
 			},
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 			sendRawTransaction: async request => {
+				rawBroadcastCount += 1
 				seen.push(request.serializedTransaction)
+				if (rawBroadcastCount === 1) throw new Error('insufficient funds for gas')
 				proxyInstalled = true
 				return deployHash
 			},
@@ -416,22 +480,25 @@ describe('contract deployment internals', () => {
 		const hash = await proxyStep.deploy(client)
 
 		expect(hash).toBe(deployHash)
-		expect(seen[0]).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
-		expect(seen[1]).toBe('0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222')
-		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['Fund deterministic proxy deployer signer', 'Broadcast deterministic proxy deployer transaction'])
-		expect(preparedPreviews[0]?.toLabel).toBe('Proxy deployer signer')
-		const rawBroadcastPreview = preparedPreviews[1]
+		expect(seen).toEqual([
+			'0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
+			'none',
+			'0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
+		])
+		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['Broadcast deterministic proxy deployer transaction', 'Fund deterministic proxy deployer signer without surplus', 'Broadcast deterministic proxy deployer transaction'])
+		expect(preparedPreviews[1]?.value).toBe(10_000_000_000_000_000n)
+		const rawBroadcastPreview = preparedPreviews[2]
 		if (rawBroadcastPreview === undefined) throw new Error('Expected raw broadcast preview')
 		expect(rawBroadcastPreview.account).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
 		expect(rawBroadcastPreview.dataLabel).toBe('Raw transaction')
 		expect(rawBroadcastPreview.requiresWalletConfirmation).toBe(false)
 	})
 
-	for (const { balance, expectedFunding } of [
-		{ balance: 10_000_000_000_000_000n, expectedFunding: undefined },
-		{ balance: 4_000_000_000_000_000n, expectedFunding: 6_000_000_000_000_000n },
+	for (const { balance, rawInitiallyFunded, expectedFunding } of [
+		{ balance: 10_000_000_000_000_000n, rawInitiallyFunded: true, expectedFunding: undefined },
+		{ balance: 4_000_000_000_000_000n, rawInitiallyFunded: false, expectedFunding: 10_000_000_000_000_000n },
 	]) {
-		test(`proxy deployer retry funds only the signer shortfall from ${balance.toString()}`, async () => {
+		test(`proxy deployer retry atomically funds the signer when its balance is ${balance.toString()}`, async () => {
 			const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
 			if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 			const fundingValues: bigint[] = []
@@ -444,6 +511,7 @@ describe('contract deployment internals', () => {
 					return `0x${'1'.repeat(64)}` as Hash
 				},
 				sendRawTransaction: async () => {
+					if (!rawInitiallyFunded && fundingValues.length === 0) throw new Error('insufficient funds for gas')
 					proxyInstalled = true
 					return `0x${'2'.repeat(64)}` as Hash
 				},
@@ -493,6 +561,75 @@ describe('contract deployment internals', () => {
 		expect(sendCalled).toBe(false)
 	})
 
+	test('proxy deployer rejects an incompatible base fee without sending or funding', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let writeCalled = false
+		const client = asWriteClient({
+			getBalance: async () => 0n,
+			getBlock: async () => ({ baseFeePerGas: 100_000_000_001n }) as never,
+			getCode: async () => undefined,
+			sendRawTransaction: async () => {
+				writeCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				writeCalled = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('below the current base fee')
+		expect(writeCalled).toBe(false)
+	})
+
+	test('proxy deployer tests RPC raw-transaction policy before signer funding', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let fundingCalled = false
+		const client = asWriteClient({
+			getBalance: async () => 0n,
+			getCode: async () => undefined,
+			sendRawTransaction: async () => {
+				throw new Error('only replay-protected transactions allowed over RPC')
+			},
+			sendTransaction: async () => {
+				fundingCalled = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('before signer funding')
+		expect(fundingCalled).toBe(false)
+	})
+
+	test('proxy deployer enforces raw-transaction cost authorization before broadcast', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let writeCalled = false
+		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => {
+				throw new Error('would exceed the authorized deployment total')
+			},
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => undefined,
+			sendRawTransaction: async () => {
+				writeCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				writeCalled = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('would exceed the authorized deployment total')
+		expect(writeCalled).toBe(false)
+	})
+
 	test('proxy deployer retry notices a raw deployment that confirms during preflight', async () => {
 		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
@@ -511,7 +648,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		expect(await proxyStep.deploy(client)).toBe(ZERO_HASH)
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
 		expect(sendCalled).toBe(false)
 	})
 
@@ -549,10 +686,15 @@ describe('contract deployment internals', () => {
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 		let installed = false
 		let rawBroadcastCalled = false
+		let accountedRawTransactions = 0
 		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => undefined,
 			getBalance: async () => 10_000_000_000_000_000n,
 			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
+			recordCanonicalRawTransaction: () => {
+				accountedRawTransactions += 1
+			},
 			sendRawTransaction: async () => {
 				rawBroadcastCalled = true
 				return `0x${'1'.repeat(64)}` as Hash
@@ -569,6 +711,7 @@ describe('contract deployment internals', () => {
 		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
 		expect(installed).toBe(true)
 		expect(rawBroadcastCalled).toBe(false)
+		expect(accountedRawTransactions).toBe(1)
 	})
 
 	test('proxy deployer retry accepts an already-known canonical broadcast race', async () => {
@@ -576,10 +719,15 @@ describe('contract deployment internals', () => {
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 		let installed = false
 		let pending = false
+		let accountedRawTransactions = 0
 		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => undefined,
 			getBalance: async () => 10_000_000_000_000_000n,
 			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async parameters => (pending && parameters.blockTag === 'pending' ? 1n : 0n),
+			recordCanonicalRawTransaction: () => {
+				accountedRawTransactions += 1
+			},
 			sendRawTransaction: async () => {
 				pending = true
 				throw new Error('already known')
@@ -596,6 +744,7 @@ describe('contract deployment internals', () => {
 
 		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
 		expect(installed).toBe(true)
+		expect(accountedRawTransactions).toBe(1)
 	})
 
 	test('proxy deployer retry accepts a canonical deployment that confirms before its broadcast returns', async () => {
@@ -631,7 +780,7 @@ describe('contract deployment internals', () => {
 			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			sendRawTransaction: async () => {
 				rawBroadcastCalled = true
-				return `0x${'1'.repeat(64)}` as Hash
+				throw new Error('insufficient funds for gas')
 			},
 			sendTransaction: async () => {
 				funded = true
@@ -644,7 +793,7 @@ describe('contract deployment internals', () => {
 		})
 
 		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
-		expect(rawBroadcastCalled).toBe(false)
+		expect(rawBroadcastCalled).toBe(true)
 	})
 
 	test('proxy deployer broadcast races reject unexpected installed code', async () => {
@@ -708,12 +857,12 @@ describe('contract deployment internals', () => {
 			},
 			sendRawTransaction: async () => {
 				sendRawTransactionCalled = true
-				return `0x${'7'.repeat(64)}` as Hash
+				throw new Error('insufficient funds for gas')
 			},
 		})
 
 		await expect(proxyStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
-		expect(sendRawTransactionCalled).toBe(false)
+		expect(sendRawTransactionCalled).toBe(true)
 	})
 
 	test('proxy deployer step returns the replacement hash when the raw deploy transaction is repriced', async () => {

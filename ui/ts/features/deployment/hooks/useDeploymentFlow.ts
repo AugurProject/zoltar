@@ -10,6 +10,7 @@ import { requireWallet } from '../../../lib/requireWalletConnection.js'
 import { assertActiveWallet } from '../../../lib/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '../../../types/contracts.js'
+import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 
 type UseDeploymentFlowParameters = {
 	accountAddress: Address | undefined
@@ -62,16 +63,29 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		try {
 			await assertActiveWallet(accountAddress)
-			onTransactionRequested(createDeploymentTransactionIntent(step.label))
+			if (step.expectedRuntimeCodeHash === undefined && !step.trustedSimulationCodePresence) throw new Error(`Exact runtime-code verification is unavailable for ${step.label} on the active network`)
 			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
+			if (assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))) {
+				setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
+				deploymentFeedback.value = undefined
+				return
+			}
+			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const hash = await step.deploy(client)
 			const code = await client.getCode({ address: step.address })
-			if (code === undefined || code === '0x') throw new Error(`${step.label} deployment transaction ${hash} succeeded without installing code at ${step.address}`)
+			if (!assertDeploymentStepRuntimeCode(step, code)) {
+				const message = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
+				errorMessage.value = message
+				onTransactionFailed?.(message)
+				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
+				return
+			}
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
 			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))
 		} catch (error) {
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
+			errorMessage.value = message
 			onTransactionFailed?.(message)
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {

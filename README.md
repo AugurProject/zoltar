@@ -90,27 +90,42 @@ dependent deployment address.
 
 ## Testnet deployment
 
-Deploy the complete deterministic infrastructure with a locally supplied key and
-an explicitly selected RPC endpoint:
+Deploy the complete deterministic infrastructure with an explicitly selected RPC
+endpoint. First load `PRIVATE_KEY` from a protected secret manager or hidden
+prompt; do not paste it into the command because shells may save it in history.
+Use a dedicated testnet account funded with enough testnet ETH to finish the
+remaining deployment.
 
 ```bash
-PRIVATE_KEY=0x... RPC_URL=https://... bun run deploy:testnet
+RPC_URL=https://... \
+MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=10 \
+bun run deploy:testnet
 ```
 
-The chain ID defaults to Sepolia (`11155111`). Set `CHAIN_ID` for any other
-Cancun-compatible EVM testnet; chain ID `1` is intentionally rejected. Before
-sending a transaction, the command verifies that the RPC reports the selected
-chain and supports the Cancun opcodes required by the protocol and Uniswap V4.
-It validates the canonical deployers, skips expected deterministic addresses
-that already contain code, and resumes from the first missing deployment. The
-same plan covers the canonical CREATE2 deployer and Permit2, a deterministic
-Uniswap V3 factory and QuoterV2, plus a Uniswap V4 PoolManager and Quoter. It
-does not create pools or add liquidity. The deployed protocol factories create
-per-market security pools, share tokens, oracle coordinators, auctions,
-escalation games, delegates, and child-universe contracts when those features
-are used. Constructor-created support contracts such as the escalation proof
-verifier are not separate bootstrap steps; the command checks that the proof
-verifier has code after its parent factory is deployed.
+The chain ID defaults to Sepolia (`11155111`). Set `CHAIN_ID` for any other EVM
+testnet that supports the protocol's required Cancun opcodes and Osaka `CLZ`
+opcode; chain ID `1` is intentionally rejected. Older pre-Cancun or pre-Osaka
+chains cannot execute the pinned protocol and Uniswap V4 bytecode. The fee ceiling
+defaults to 100 gwei and the worst-case transaction fee and value budget defaults
+to 10 testnet ETH. This is an authorization ceiling, not an estimate: each local
+command or workflow run starts a fresh budget, so every retry authorizes the
+selected amount again. Before funding or signing, the command verifies the
+selected chain, required EVM opcodes, EIP-1559 support, fee limits, and acceptance
+of the fixed canonical legacy deployer transactions. A network that rejects those
+transactions must provide both canonical deployers as predeploys.
+
+The command validates each expected runtime, skips deterministic addresses only
+when their code matches, fails closed when an address contains different code,
+and resumes from the first missing deployment. Atomic funding transactions refund
+surplus if another process wins a deployment race. Every supported testnet plan
+includes deterministic WETH and genesis REP contracts. The same plan covers the canonical CREATE2 deployer and
+Permit2, a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2, plus a
+Uniswap V4 PoolManager and Quoter. It does not create pools or add liquidity. The deployed
+protocol factories create per-market security pools, share tokens, oracle
+coordinators, auctions, escalation games, delegates, and child-universe
+contracts when those features are used. Constructor-created support contracts
+are not separate bootstrap steps; the command verifies all nine bootstrap
+descendants after their parent factories are deployed.
 
 The ready-to-install GitHub Actions template is
 [`scripts/github-actions/deploy-testnet.yml`](./scripts/github-actions/deploy-testnet.yml).
@@ -118,9 +133,9 @@ GitHub only discovers workflows under `.github/workflows`, so copy the template
 there on a trusted branch when using a credential authorized to manage Actions.
 Then create and protect the `testnet-deployment` environment, add its
 `TESTNET_DEPLOYER_PRIVATE_KEY` secret, and dispatch **Deploy Testnet Contracts**
-from `main`. Supply the public HTTPS RPC URL and chain ID, and enter `DEPLOY` in
-the confirmation input. Workflow inputs are visible in GitHub metadata, so do
-not supply an RPC URL containing credentials.
+from `main`. Supply the public HTTPS RPC URL, chain ID, fee ceiling, and total
+budget, then enter `DEPLOY` in the confirmation input. Workflow inputs are
+visible in GitHub metadata, so do not supply an RPC URL containing credentials.
 
 ## Browser Simulation
 

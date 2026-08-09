@@ -104,6 +104,8 @@ export type DeploymentStep = {
 	address: Address
 	dependencies: DeploymentStepId[]
 	deploy: (client: ClientsWriteClient) => Promise<Hash>
+	expectedRuntimeCodeHash?: Hash
+	trustedSimulationCodePresence?: true
 }
 
 export type DeploymentStatus = DeploymentStep & {

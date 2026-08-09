@@ -9,7 +9,17 @@ on:
         type: string
       chain_id:
         default: "11155111"
-        description: Decimal chain ID (defaults to Sepolia)
+        description: Decimal chain ID for an EIP-1559, Cancun, and Osaka-compatible testnet
+        required: true
+        type: string
+      max_fee_per_gas_gwei:
+        default: "100"
+        description: Maximum authorized fee per gas in gwei
+        required: true
+        type: string
+      max_total_cost_eth:
+        default: "10"
+        description: Maximum worst-case deployment cost in testnet ETH
         required: true
         type: string
       confirm:
@@ -36,12 +46,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout trusted main
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -58,6 +68,8 @@ jobs:
       - name: Deploy deterministic infrastructure
         env:
           CHAIN_ID: ${{ inputs.chain_id }}
+          MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}
+          MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}
           PRIVATE_KEY: ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
           RPC_URL: ${{ inputs.rpc_url }}
         run: bun run deploy:testnet

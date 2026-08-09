@@ -1,12 +1,14 @@
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { concatHex, encodeDeployData, getAddress, getCreate2Address, keccak256, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { waitForSubmittedTransactionReceipt } from '../ui/ts/protocol/core.ts'
+import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../ui/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../ui/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
 
 const V3_FACTORY_ARTIFACT = new URL('./artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json', import.meta.resolve('@uniswap/v3-core/package.json'))
 const V3_QUOTER_ARTIFACT = new URL('./artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json', import.meta.resolve('@uniswap/v3-periphery/package.json'))
+const V3_SWAP_ROUTER_ARTIFACT = new URL('./artifacts/contracts/SwapRouter.sol/SwapRouter.json', import.meta.resolve('@uniswap/v3-periphery/package.json'))
 const V4_POOL_MANAGER_ARTIFACT = new URL('./out/PoolManager.sol/PoolManager.json', import.meta.resolve('@uniswap/v4-core/package.json'))
 const V4_QUOTER_ARTIFACT = new URL('./foundry-out/V4Quoter.sol/V4Quoter.json', import.meta.resolve('@uniswap/v4-periphery/package.json'))
 const PERMIT2_ROOT = new URL('./lib/permit2/', import.meta.resolve('@uniswap/v4-periphery/package.json'))
@@ -24,7 +26,7 @@ const PERMIT2_SALT = '0x0000000000000000000000000000000000000000d3af2663da51c102
 
 const require = createRequire(import.meta.url)
 const solc: { compile: (input: string) => string; version: () => string } = require('solc')
-let permit2InitCodePromise: Promise<Hex> | undefined
+let permit2CompilationPromise: Promise<Permit2Compilation> | undefined
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 
 const ADDRESS_CONSTRUCTOR_ABI = [
@@ -54,6 +56,7 @@ type UniswapDeploymentStep = {
 	deploy: (client: WriteClient) => Promise<Hash>
 	id: string
 	label: string
+	verifyRuntimeCode?: (client: WriteClient, code: Hex) => Promise<void>
 }
 
 export type UniswapDeployment = {
@@ -62,6 +65,7 @@ export type UniswapDeployment = {
 		permit2Address: Address
 		uniswapV3FactoryAddress: Address
 		uniswapV3QuoterAddress: Address
+		uniswapV3SwapRouterAddress: Address
 		uniswapV4PoolManagerAddress: Address
 		uniswapV4QuoterAddress: Address
 	}
@@ -73,7 +77,22 @@ type SolcOutputContract = {
 		bytecode: {
 			object: string
 		}
+		deployedBytecode: {
+			immutableReferences: Readonly<Record<string, readonly { length: number; start: number }[]>>
+			object: string
+		}
 	}
+}
+
+type Permit2Compilation = {
+	deployedBytecodeTemplate: Hex
+	immutableReferences: readonly Permit2ImmutableReferences[]
+	initCode: Hex
+}
+
+type Permit2ImmutableReferences = {
+	name: '_CACHED_CHAIN_ID' | '_CACHED_DOMAIN_SEPARATOR'
+	references: readonly { length: number; start: number }[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -116,7 +135,33 @@ function parseSolcContract(output: unknown): SolcOutputContract {
 	if (!isRecord(evm)) throw new Error('Permit2 compiler did not return EVM output')
 	const bytecode = evm['bytecode']
 	if (!isRecord(bytecode) || typeof bytecode['object'] !== 'string') throw new Error('Permit2 compiler did not return creation bytecode')
-	return { evm: { bytecode: { object: bytecode['object'] } } }
+	const deployedBytecode = evm['deployedBytecode']
+	if (!isRecord(deployedBytecode) || typeof deployedBytecode['object'] !== 'string' || !isRecord(deployedBytecode['immutableReferences'])) throw new Error('Permit2 compiler did not return deployed bytecode and immutable references')
+	const immutableReferences: Record<string, readonly { length: number; start: number }[]> = {}
+	for (const [id, references] of Object.entries(deployedBytecode['immutableReferences'])) {
+		if (!Array.isArray(references)) throw new Error(`Permit2 immutable ${id} does not contain reference ranges`)
+		immutableReferences[id] = references.map(reference => {
+			if (!isRecord(reference) || !Number.isSafeInteger(reference['length']) || !Number.isSafeInteger(reference['start'])) throw new Error(`Permit2 immutable ${id} contains an invalid reference range`)
+			return { length: Number(reference['length']), start: Number(reference['start']) }
+		})
+	}
+	return { evm: { bytecode: { object: bytecode['object'] }, deployedBytecode: { immutableReferences, object: deployedBytecode['object'] } } }
+}
+
+function collectPermit2ImmutableNames(value: unknown, names = new Map<string, string>()) {
+	if (Array.isArray(value)) {
+		for (const item of value) collectPermit2ImmutableNames(item, names)
+		return names
+	}
+	if (!isRecord(value)) return names
+	if (value['nodeType'] === 'VariableDeclaration' && value['mutability'] === 'immutable' && typeof value['id'] === 'number' && typeof value['name'] === 'string') names.set(value['id'].toString(), value['name'])
+	for (const nested of Object.values(value)) collectPermit2ImmutableNames(nested, names)
+	return names
+}
+
+function parsePermit2ImmutableName(name: string | undefined): Permit2ImmutableReferences['name'] {
+	if (name === '_CACHED_CHAIN_ID' || name === '_CACHED_DOMAIN_SEPARATOR') return name
+	throw new Error(`Permit2 compiler returned an unknown immutable ${name ?? '(missing name)'}`)
 }
 
 async function compilePermit2InitCode() {
@@ -137,19 +182,75 @@ async function compilePermit2InitCode() {
 				settings: {
 					metadata: { bytecodeHash: 'none' },
 					optimizer: { enabled: true, runs: 1_000_000 },
-					outputSelection: { '*': { '*': ['evm.bytecode.object'] } },
+					outputSelection: { '*': { '': ['ast'], '*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'evm.deployedBytecode.immutableReferences'] } },
 					viaIR: true,
 				},
 				sources,
 			}),
 		),
 	)
-	return parseBytecode(parseSolcContract(output).evm.bytecode.object, 'Permit2')
+	const permit2 = parseSolcContract(output).evm
+	const immutableNames = collectPermit2ImmutableNames(output)
+	return {
+		deployedBytecodeTemplate: parseBytecode(permit2.deployedBytecode.object, 'Permit2 deployed bytecode'),
+		immutableReferences: Object.entries(permit2.deployedBytecode.immutableReferences).map(([id, references]) => ({ name: parsePermit2ImmutableName(immutableNames.get(id)), references })),
+		initCode: parseBytecode(permit2.bytecode.object, 'Permit2'),
+	}
 }
 
-function getPermit2InitCode() {
-	permit2InitCodePromise ??= compilePermit2InitCode()
-	return permit2InitCodePromise
+function getPermit2Compilation() {
+	permit2CompilationPromise ??= compilePermit2InitCode()
+	return permit2CompilationPromise
+}
+
+function normalizePermit2RuntimeCode(code: Hex, compilation: Permit2Compilation) {
+	if (code.length !== compilation.deployedBytecodeTemplate.length) throw new Error('Permit2 runtime code has an unexpected length')
+	let normalized = code.slice(2)
+	for (const immutable of compilation.immutableReferences) {
+		for (const { length, start } of immutable.references) {
+			const firstCharacter = start * 2
+			const lastCharacter = firstCharacter + length * 2
+			normalized = `${normalized.slice(0, firstCharacter)}${'0'.repeat(length * 2)}${normalized.slice(lastCharacter)}`
+		}
+	}
+	return `0x${normalized}` as Hex
+}
+
+export function assertPermit2ImmutableValues(code: Hex, immutableReferences: readonly Permit2ImmutableReferences[], expectedValues: { chainId: Hex; domainSeparator: Hash }) {
+	const expectedByName: Readonly<Record<Permit2ImmutableReferences['name'], Hex>> = {
+		_CACHED_CHAIN_ID: expectedValues.chainId,
+		_CACHED_DOMAIN_SEPARATOR: expectedValues.domainSeparator,
+	}
+	if (immutableReferences.length !== 2) throw new Error(`Permit2 compiler returned ${immutableReferences.length.toString()} immutable groups instead of 2`)
+	for (const immutable of immutableReferences) {
+		if (immutable.references.length === 0) throw new Error(`Permit2 immutable ${immutable.name} has no runtime references`)
+		for (const reference of immutable.references) {
+			if (reference.length !== 32) throw new Error(`Permit2 immutable ${immutable.name} has a non-32-byte runtime reference`)
+			const firstCharacter = 2 + reference.start * 2
+			const actualValue = `0x${code.slice(firstCharacter, firstCharacter + reference.length * 2)}`
+			if (actualValue !== expectedByName[immutable.name]) throw new Error(`Permit2 immutable ${immutable.name} does not match the selected chain`)
+		}
+	}
+}
+
+async function verifyPermit2RuntimeCode(client: WriteClient, code: Hex, compilation: Permit2Compilation) {
+	const normalizedActualCode = normalizePermit2RuntimeCode(code, compilation)
+	const normalizedTemplate = normalizePermit2RuntimeCode(compilation.deployedBytecodeTemplate, compilation)
+	if (keccak256(normalizedActualCode) !== keccak256(normalizedTemplate)) throw new Error('Permit2 runtime code differs outside its chain-specific EIP-712 immutables')
+	const chainId = await client.getChainId()
+	const typeHash = keccak256(toHex('EIP712Domain(string name,uint256 chainId,address verifyingContract)'))
+	const nameHash = keccak256(toHex('Permit2'))
+	const expectedDomainSeparator = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'address' }], [typeHash, nameHash, BigInt(chainId), PERMIT2_ADDRESS]))
+	assertPermit2ImmutableValues(code, compilation.immutableReferences, {
+		chainId: encodeAbiParameters([{ type: 'uint256' }], [BigInt(chainId)]),
+		domainSeparator: expectedDomainSeparator,
+	})
+	const actualDomainSeparator = await client.readContract({
+		abi: [{ inputs: [], name: 'DOMAIN_SEPARATOR', outputs: [{ type: 'bytes32' }], stateMutability: 'view', type: 'function' }] as const,
+		address: PERMIT2_ADDRESS,
+		functionName: 'DOMAIN_SEPARATOR',
+	})
+	if (actualDomainSeparator !== expectedDomainSeparator) throw new Error(`Permit2 DOMAIN_SEPARATOR does not match chain ${chainId.toString()} and canonical address ${PERMIT2_ADDRESS}`)
 }
 
 function deterministicAddress(initCode: Hex) {
@@ -195,21 +296,64 @@ async function waitForCanonicalCreate2Deployer(client: WriteClient) {
 	return hash
 }
 
+function accountCanonicalRawTransaction(client: WriteClient) {
+	client.assertCanonicalRawTransactionCost?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+}
+
 async function resolveCreate2DeployerBroadcastRace(client: WriteClient, broadcastError: unknown) {
-	if (await arachnidCreate2DeployerIsInstalled(client)) return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+	if (await arachnidCreate2DeployerIsInstalled(client)) {
+		client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+		return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+	}
 	const activity = await getArachnidCreate2DeployerActivity(client)
-	if (activity.deploymentPending) return await waitForCanonicalCreate2Deployer(client)
+	if (activity.deploymentPending) {
+		client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+		return await waitForCanonicalCreate2Deployer(client)
+	}
 	if (activity.confirmedNonce !== 0n) {
-		if (await arachnidCreate2DeployerIsInstalled(client)) return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+		if (await arachnidCreate2DeployerIsInstalled(client)) {
+			client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+			return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+		}
 		throw new Error('The canonical CREATE2 deployer signer nonce was consumed without installing the deployer', { cause: broadcastError })
 	}
 	throw broadcastError
 }
 
+async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsufficientFunds: boolean) {
+	client.assertCanonicalRawTransactionCost?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	let hash: Hash
+	try {
+		hash = await client.sendRawTransaction({ serializedTransaction: ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION })
+	} catch (error) {
+		if (allowInsufficientFunds && isInsufficientFundsError(error)) {
+			if (await arachnidCreate2DeployerIsInstalled(client)) {
+				client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+				return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+			}
+			return undefined
+		}
+		try {
+			return await resolveCreate2DeployerBroadcastRace(client, error)
+		} catch (resolvedError) {
+			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical CREATE2 deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
+			throw resolvedError
+		}
+	}
+	client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
+	if (!(await arachnidCreate2DeployerIsInstalled(client))) throw new Error(`Canonical CREATE2 deployer transaction ${resolvedHash} succeeded without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
+	return resolvedHash
+}
+
 async function deployArachnidCreate2Deployer(client: WriteClient) {
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
 	const activity = await getArachnidCreate2DeployerActivity(client)
-	if (activity.deploymentPending) return await waitForCanonicalCreate2Deployer(client)
+	if (activity.deploymentPending) {
+		accountCanonicalRawTransaction(client)
+		return await waitForCanonicalCreate2Deployer(client)
+	}
 	if (activity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
 	if (activity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
@@ -218,24 +362,31 @@ async function deployArachnidCreate2Deployer(client: WriteClient) {
 	if (finalActivity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
 	if (finalActivity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
+	await assertCanonicalRawTransactionFeeCompatible(client, 'Canonical CREATE2 deployer')
+	const preFundingDeploymentHash = await broadcastCanonicalCreate2Deployer(client, true)
+	if (preFundingDeploymentHash !== undefined) return preFundingDeploymentHash
 	const shortfall = arachnidCreate2DeployerShortfall(finalActivity.confirmedBalance)
 	if (shortfall > 0n) {
-		const fundHash = await client.sendTransaction({ to: ARACHNID_CREATE2_DEPLOYER_SIGNER, value: shortfall })
-		await waitForSubmittedTransactionReceipt(client, fundHash)
+		await fundCanonicalDeployerSigner(client, {
+			expectedDeployer: ARACHNID_CREATE2_DEPLOYER_ADDRESS,
+			label: 'canonical CREATE2 deployer',
+			requiredBalance: ARACHNID_CREATE2_DEPLOYER_FUNDING,
+			signer: ARACHNID_CREATE2_DEPLOYER_SIGNER,
+		})
 	}
-	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
+	if (await arachnidCreate2DeployerIsInstalled(client)) {
+		accountCanonicalRawTransaction(client)
+		return ZERO_HASH
+	}
 	const postFundingActivity = await getArachnidCreate2DeployerActivity(client)
-	if (postFundingActivity.deploymentPending) return await waitForCanonicalCreate2Deployer(client)
+	if (postFundingActivity.deploymentPending) {
+		accountCanonicalRawTransaction(client)
+		return await waitForCanonicalCreate2Deployer(client)
+	}
 	if (postFundingActivity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (postFundingActivity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
-	let hash: Hash
-	try {
-		hash = await client.sendRawTransaction({ serializedTransaction: ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION })
-	} catch (error) {
-		return await resolveCreate2DeployerBroadcastRace(client, error)
-	}
-	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
-	if (!(await arachnidCreate2DeployerIsInstalled(client))) throw new Error(`Canonical CREATE2 deployer transaction ${resolvedHash} succeeded without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
+	const resolvedHash = await broadcastCanonicalCreate2Deployer(client, false)
+	if (resolvedHash === undefined) throw new Error('Canonical CREATE2 deployer broadcast unexpectedly returned without a transaction hash')
 	return resolvedHash
 }
 
@@ -246,13 +397,15 @@ async function deployPermit2(client: WriteClient, initCode: Hex) {
 }
 
 export async function getUniswapDeployment(wethAddress: Address): Promise<UniswapDeployment> {
-	const [permit2InitCode, v3FactoryInitCode, v3QuoterBytecode, v4PoolManagerBytecode, v4QuoterBytecode] = await Promise.all([
-		getPermit2InitCode(),
+	const [permit2Compilation, v3FactoryInitCode, v3QuoterBytecode, v3SwapRouterBytecode, v4PoolManagerBytecode, v4QuoterBytecode] = await Promise.all([
+		getPermit2Compilation(),
 		loadArtifactBytecode(V3_FACTORY_ARTIFACT, 'Uniswap V3 Factory', 'hardhat'),
 		loadArtifactBytecode(V3_QUOTER_ARTIFACT, 'Uniswap V3 QuoterV2', 'hardhat'),
+		loadArtifactBytecode(V3_SWAP_ROUTER_ARTIFACT, 'Uniswap V3 SwapRouter', 'hardhat'),
 		loadArtifactBytecode(V4_POOL_MANAGER_ARTIFACT, 'Uniswap V4 PoolManager', 'foundry'),
 		loadArtifactBytecode(V4_QUOTER_ARTIFACT, 'Uniswap V4 Quoter', 'foundry'),
 	])
+	const permit2InitCode = permit2Compilation.initCode
 	const computedPermit2Address = getCreate2Address({ bytecode: permit2InitCode, from: ARACHNID_CREATE2_DEPLOYER_ADDRESS, salt: PERMIT2_SALT })
 	if (computedPermit2Address !== PERMIT2_ADDRESS) throw new Error(`Compiled Permit2 address ${computedPermit2Address} does not match canonical address ${PERMIT2_ADDRESS}`)
 
@@ -263,6 +416,12 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 		bytecode: v3QuoterBytecode,
 	})
 	const uniswapV3QuoterAddress = deterministicAddress(v3QuoterInitCode)
+	const v3SwapRouterInitCode = encodeDeployData({
+		abi: TWO_ADDRESS_CONSTRUCTOR_ABI,
+		args: [uniswapV3FactoryAddress, wethAddress],
+		bytecode: v3SwapRouterBytecode,
+	})
+	const uniswapV3SwapRouterAddress = deterministicAddress(v3SwapRouterInitCode)
 	const v4PoolManagerInitCode = encodeDeployData({
 		abi: ADDRESS_CONSTRUCTOR_ABI,
 		args: [zeroAddress],
@@ -282,6 +441,7 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 			permit2Address: PERMIT2_ADDRESS,
 			uniswapV3FactoryAddress,
 			uniswapV3QuoterAddress,
+			uniswapV3SwapRouterAddress,
 			uniswapV4PoolManagerAddress,
 			uniswapV4QuoterAddress,
 		},
@@ -299,6 +459,7 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 				deploy: async client => await deployPermit2(client, permit2InitCode),
 				id: 'permit2',
 				label: 'Uniswap Permit2',
+				verifyRuntimeCode: async (client, code) => await verifyPermit2RuntimeCode(client, code, permit2Compilation),
 			},
 			{
 				address: uniswapV3FactoryAddress,
@@ -313,6 +474,13 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 				deploy: async client => await deployViaProxy(client, v3QuoterInitCode),
 				id: 'uniswapV3Quoter',
 				label: 'Uniswap V3 QuoterV2',
+			},
+			{
+				address: uniswapV3SwapRouterAddress,
+				dependencies: ['proxyDeployer', 'uniswapV3Factory'],
+				deploy: async client => await deployViaProxy(client, v3SwapRouterInitCode),
+				id: 'uniswapV3SwapRouter',
+				label: 'Uniswap V3 SwapRouter',
 			},
 			{
 				address: uniswapV4PoolManagerAddress,

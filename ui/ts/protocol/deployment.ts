@@ -23,7 +23,7 @@ import {
 	getZoltarQuestionDataByteCode,
 } from './deploymentHelpers.js'
 import { waitForSubmittedTransactionReceipt } from './core.js'
-import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
+import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../lib/sepoliaDeploymentConfig.js'
@@ -34,6 +34,55 @@ const PROXY_DEPLOYER_RAW_TRANSACTION_HASH = keccak256(PROXY_DEPLOYER_RAW_TRANSAC
 export const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
+const TRUSTED_SIMULATION_CODE_PRESENCE: true = true
+export const CANONICAL_DEPLOYER_RAW_GAS_PRICE = 100_000_000_000n
+export const CANONICAL_DEPLOYER_RAW_TRANSACTION_COST = 10_000_000_000_000_000n
+export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Record<DeploymentStepId, Hash>> = {
+	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
+	escalationGameClaimDelegate: '0x9409a4d3d433df7b0d52a1eb46d4c55b07abf2b615517e6071e1a020ada81c3c',
+	escalationGameFactory: '0x5d4a56e53f2630b67558a2b971f77513a17baf96a107f8bb50e960aff7d032f8',
+	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
+	openOracle: '0xc5fa46a36e40bdd0fff825734c723a824b15f4c59a2b0904378965ee913af3e8',
+	priceOracleManagerAndOperatorQueuerFactory: '0x69f309d2cd4851e5c2b43f3055f060ee1fee893783d73a994d09a0f3a339bc8c',
+	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
+	reputationToken: '0x772dcbeeadf9579117fa633a14610849a4f220996484371bad168ef95cee199d',
+	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
+	securityPoolFactory: '0x5bc3ef62b9f22f55d0275cec7b93b1a4e5e365d60a185a00c55a10a040a31e43',
+	securityPoolForker: '0xdd8bdf18f74533cbd924ee986e06c5b4d94467f2f5abd0418b4161799c719cb8',
+	securityPoolUtils: '0x503782caa40e19b2a544a189c46b821f3f516b8cabb2601229b685192a7d6137',
+	shareTokenFactory: '0xed11b30e226aeada17eff736161652ccfe07eb1d531319950f619af66b0b7bfb',
+	uniformPriceDualCapBatchAuctionFactory: '0xec6a9ccf60f42f0d31bf091162b96b49983b15a65a5a669f9df8024fff4b1504',
+	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
+	zoltar: '0x6ebf83287d374d233f4ec8cb6a0120eca233a24fa31e7d01f3fda0c10fa7510a',
+	zoltarQuestionData: '0x2bbf78668b76b95ae32ce1e524cad6a17b708a9acb4e55c02a4411953ba70515',
+}
+const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
+	{
+		inputs: [
+			{ name: 'signer', type: 'address' },
+			{ name: 'expectedDeployer', type: 'address' },
+			{ name: 'requiredBalance', type: 'uint256' },
+		],
+		stateMutability: 'payable',
+		type: 'constructor',
+	},
+] as const
+// Compiled with solc 0.8.17, optimizer runs=200, metadata bytecodeHash=none.
+export const ATOMIC_FUNDING_SOURCE = `pragma solidity 0.8.17;
+contract AtomicFunding {
+    constructor(address payable signer, address expectedDeployer, uint256 requiredBalance) payable {
+        if (expectedDeployer.code.length == 0) {
+            uint256 balance = signer.balance;
+            if (balance < requiredBalance) {
+                (bool success,) = signer.call{value: requiredBalance - balance}("");
+                require(success, "Funding failed");
+            }
+        }
+        selfdestruct(payable(msg.sender));
+    }
+}`
+export const ATOMIC_FUNDING_BYTECODE =
+	'0x608060405260405161016e38038061016e83398101604081905261002291610103565b816001600160a01b03163b6000036100e8576001600160a01b03831631818110156100e65760006001600160a01b03851661005d8385610146565b604051600081818185875af1925050503d8060008114610099576040519150601f19603f3d011682016040523d82523d6000602084013e61009e565b606091505b50509050806100e45760405162461bcd60e51b815260206004820152600e60248201526d119d5b991a5b99c819985a5b195960921b604482015260640160405180910390fd5b505b505b33ff5b6001600160a01b038116811461010057600080fd5b50565b60008060006060848603121561011857600080fd5b8351610123816100eb565b6020850151909350610134816100eb565b80925050604084015190509250925092565b8181038181111561016757634e487b7160e01b600052601160045260246000fd5b9291505056fe' satisfies Hex
 
 export async function getProxyDeployerFundingShortfall(client: Pick<ReadClient, 'getBalance'>) {
 	const balance = await client.getBalance({ address: PROXY_DEPLOYER_SIGNER })
@@ -62,6 +111,42 @@ async function proxyDeployerIsInstalled(client: Pick<ReadClient, 'getCode'>) {
 	return true
 }
 
+export async function assertCanonicalRawTransactionFeeCompatible(client: Pick<ReadClient, 'getBlock'>, label: string) {
+	const { baseFeePerGas } = await client.getBlock()
+	if (baseFeePerGas === undefined) throw new Error(`${label} requires an EIP-1559 base fee before its canonical raw transaction can be funded`)
+	if (baseFeePerGas > CANONICAL_DEPLOYER_RAW_GAS_PRICE) {
+		throw new Error(`${label} canonical raw transaction gas price is ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas, below the current base fee ${baseFeePerGas.toString()} attoETH per gas; no signer funding was sent`)
+	}
+}
+
+export function isInsufficientFundsError(error: unknown) {
+	if (!(error instanceof Error)) return false
+	const message = `${error.message} ${'shortMessage' in error && typeof error.shortMessage === 'string' ? error.shortMessage : ''}`.toLowerCase()
+	return message.includes('insufficient funds') || message.includes('insufficient balance') || message.includes('funds for gas')
+}
+
+export async function fundCanonicalDeployerSigner(client: WriteClient, parameters: { expectedDeployer: Address; label: string; requiredBalance: bigint; signer: Address }) {
+	const data = encodeDeployData({
+		abi: ATOMIC_FUNDING_CONSTRUCTOR_ABI,
+		args: [parameters.signer, parameters.expectedDeployer, parameters.requiredBalance],
+		bytecode: ATOMIC_FUNDING_BYTECODE,
+	})
+	markDeploymentTransactionPrepared(client, {
+		data,
+		dataLabel: 'Atomic funding constructor',
+		functionName: `Fund ${parameters.label} signer without surplus`,
+		value: parameters.requiredBalance,
+	})
+	const hash = await client.sendTransaction({ data, value: parameters.requiredBalance })
+	client.recordCanonicalFunding?.(parameters.signer, parameters.requiredBalance)
+	return await waitForSubmittedTransactionReceipt(client, hash)
+}
+
+function accountCanonicalRawTransaction(client: WriteClient, signer: Address) {
+	client.assertCanonicalRawTransactionCost?.(signer, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	client.recordCanonicalRawTransaction?.(signer, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+}
+
 async function waitForCanonicalProxyDeployer(client: WriteClient) {
 	const { hash } = await waitForSubmittedTransactionReceipt(client, PROXY_DEPLOYER_RAW_TRANSACTION_HASH)
 	if (!(await proxyDeployerIsInstalled(client))) throw new Error(`Canonical proxy deployer transaction ${hash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
@@ -69,14 +154,58 @@ async function waitForCanonicalProxyDeployer(client: WriteClient) {
 }
 
 async function resolveProxyDeployerBroadcastRace(client: WriteClient, broadcastError: unknown) {
-	if (await proxyDeployerIsInstalled(client)) return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+	if (await proxyDeployerIsInstalled(client)) {
+		client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+		return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+	}
 	const activity = await getProxyDeployerActivity(client)
-	if (activity.deploymentPending) return await waitForCanonicalProxyDeployer(client)
+	if (activity.deploymentPending) {
+		client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+		return await waitForCanonicalProxyDeployer(client)
+	}
 	if (activity.confirmedNonce !== 0n) {
-		if (await proxyDeployerIsInstalled(client)) return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+		if (await proxyDeployerIsInstalled(client)) {
+			client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+			return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+		}
 		throw new Error('The deterministic proxy deployer signer nonce was consumed without installing the canonical proxy', { cause: broadcastError })
 	}
 	throw broadcastError
+}
+
+async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsufficientFunds: boolean) {
+	markDeploymentTransactionPrepared(client, {
+		account: PROXY_DEPLOYER_SIGNER,
+		data: PROXY_DEPLOYER_RAW_TRANSACTION,
+		dataLabel: 'Raw transaction',
+		functionName: 'Broadcast deterministic proxy deployer transaction',
+		requiresWalletConfirmation: false,
+	})
+	client.assertCanonicalRawTransactionCost?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	let deployHash: Hash
+	try {
+		deployHash = await client.sendRawTransaction({
+			serializedTransaction: PROXY_DEPLOYER_RAW_TRANSACTION,
+		})
+	} catch (error) {
+		if (allowInsufficientFunds && isInsufficientFundsError(error)) {
+			if (await proxyDeployerIsInstalled(client)) {
+				client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+				return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+			}
+			return undefined
+		}
+		try {
+			return await resolveProxyDeployerBroadcastRace(client, error)
+		} catch (resolvedError) {
+			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical proxy deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
+			throw resolvedError
+		}
+	}
+	client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
+	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
+	if (!(await proxyDeployerIsInstalled(client))) throw new Error(`Canonical proxy deployer transaction ${resolvedDeployHash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	return resolvedDeployHash
 }
 
 function markDeploymentTransactionPrepared(
@@ -182,12 +311,18 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 		return ZERO_HASH
 	}
 	const activity = await getProxyDeployerActivity(client)
-	if (activity.deploymentPending) return await waitForCanonicalProxyDeployer(client)
+	if (activity.deploymentPending) {
+		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
+		return await waitForCanonicalProxyDeployer(client)
+	}
 	if (activity.fundingPending) {
 		throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	}
 	if (await proxyDeployerIsInstalled(client)) return undefined
 	if (activity.confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	await assertCanonicalRawTransactionFeeCompatible(client, 'Deterministic proxy deployer')
+	const preFundingDeploymentHash = await broadcastCanonicalProxyDeployer(client, true)
+	if (preFundingDeploymentHash !== undefined) return preFundingDeploymentHash
 
 	const fundingShortfall = await getProxyDeployerFundingShortfall(client)
 	if (fundingShortfall > 0n) {
@@ -200,42 +335,28 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 		if (confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
 		const finalFundingShortfall = await getProxyDeployerFundingShortfall(client)
 		if (finalFundingShortfall > 0n) {
-			markDeploymentTransactionPrepared(client, {
-				functionName: 'Fund deterministic proxy deployer signer',
-				to: PROXY_DEPLOYER_SIGNER,
-				toLabel: 'Proxy deployer signer',
-				value: finalFundingShortfall,
+			await fundCanonicalDeployerSigner(client, {
+				expectedDeployer: PROXY_DEPLOYER_ADDRESS,
+				label: 'deterministic proxy deployer',
+				requiredBalance: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
+				signer: PROXY_DEPLOYER_SIGNER,
 			})
-			const fundHash = await client.sendTransaction({
-				to: PROXY_DEPLOYER_SIGNER,
-				value: finalFundingShortfall,
-			})
-			await waitForSubmittedTransactionReceipt(client, fundHash)
 		}
 	}
-	if (await proxyDeployerIsInstalled(client)) return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+	if (await proxyDeployerIsInstalled(client)) {
+		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
+		return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+	}
 	const postFundingActivity = await getProxyDeployerActivity(client)
-	if (postFundingActivity.deploymentPending) return await waitForCanonicalProxyDeployer(client)
+	if (postFundingActivity.deploymentPending) {
+		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
+		return await waitForCanonicalProxyDeployer(client)
+	}
 	if (postFundingActivity.fundingPending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (postFundingActivity.confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
 
-	markDeploymentTransactionPrepared(client, {
-		account: PROXY_DEPLOYER_SIGNER,
-		data: PROXY_DEPLOYER_RAW_TRANSACTION,
-		dataLabel: 'Raw transaction',
-		functionName: 'Broadcast deterministic proxy deployer transaction',
-		requiresWalletConfirmation: false,
-	})
-	let deployHash: Hash
-	try {
-		deployHash = await client.sendRawTransaction({
-			serializedTransaction: PROXY_DEPLOYER_RAW_TRANSACTION,
-		})
-	} catch (error) {
-		return await resolveProxyDeployerBroadcastRace(client, error)
-	}
-	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
-	if (!(await proxyDeployerIsInstalled(client))) throw new Error(`Canonical proxy deployer transaction ${resolvedDeployHash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	const resolvedDeployHash = await broadcastCanonicalProxyDeployer(client, false)
+	if (resolvedDeployHash === undefined) throw new Error('Canonical proxy deployer broadcast unexpectedly returned without a transaction hash')
 	return resolvedDeployHash
 }
 
@@ -272,7 +393,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 				] satisfies DeploymentStep[])
 			: []
 
-	return [
+	const steps: DeploymentStep[] = [
 		{
 			id: 'proxyDeployer',
 			label: 'Proxy Deployer',
@@ -403,19 +524,57 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 				),
 		},
 	]
+	return steps.map(step => ({
+		...step,
+		...(profile.id === 'sepolia' || step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
+	}))
+}
+
+export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence'>, code: Hex | undefined) {
+	if (code === undefined || code === '0x') return false
+	if (step.trustedSimulationCodePresence) return true
+	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Exact runtime-code verification is unavailable for deployment step ${step.id} on the active network`)
+	const actualRuntimeCodeHash = keccak256(code)
+	if (actualRuntimeCodeHash !== step.expectedRuntimeCodeHash) {
+		throw new Error(`Unexpected runtime code for ${step.id} at ${step.address}: expected ${step.expectedRuntimeCodeHash}, received ${actualRuntimeCodeHash}`)
+	}
+	return true
 }
 
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
+	const profile = getRuntimeNetworkProfile()
+	if (profile.id === 'simulation') {
+		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+		const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
+		if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
+			const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
+			return getDeploymentStatusSnapshot(proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false)
+		}
+		return getDeploymentStatusSnapshot(await loadDeploymentStatusOracleMask(client), true)
+	}
+
+	const steps = getDeploymentSteps(profile)
+	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
+	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
 	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
 	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
-	if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
+	if (!assertDeploymentStepRuntimeCode(oracleStep, deploymentStatusOracleCode)) {
 		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = proxyDeployerCode !== undefined && proxyDeployerCode !== '0x'
+		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
 		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
 	}
 
 	const deployedMask = await loadDeploymentStatusOracleMask(client)
-	return getDeploymentStatusSnapshot(deployedMask, true)
+	const snapshot = getDeploymentStatusSnapshot(deployedMask, true)
+	await Promise.all(
+		snapshot.deploymentStatuses.map(async step => {
+			if (!step.deployed) return
+			assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))
+		}),
+	)
+	return snapshot
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address): Promise<bigint> {
