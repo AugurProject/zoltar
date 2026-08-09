@@ -65,6 +65,8 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
 			const hash = await step.deploy(client)
+			const code = await client.getCode({ address: step.address })
+			if (code === undefined || code === '0x') throw new Error(`${step.label} deployment transaction ${hash} succeeded without installing code at ${step.address}`)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
 			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { type Address, type Hash, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address } from '@zoltar/shared/ethereum'
+import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../protocol/deploymentHelpers.js'
@@ -12,12 +12,17 @@ import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fak
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '../../contractArtifact.js'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
-type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
+type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> &
+	Partial<Pick<WriteClient, 'getBalance' | 'getTransactionCount' | 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
-	return client as unknown as WriteClient
+	return {
+		getTransactionCount: async () => 0n,
+		...client,
+	} as unknown as WriteClient
 }
 
 function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
@@ -186,7 +191,7 @@ describe('contract deployment internals', () => {
 		const preparedFunctions: string[] = []
 		const txHash = `0x${'7'.repeat(64)}` as Hash
 		const client = asWriteClient({
-			getCode: async () => '0x1234',
+			getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
 			onTransactionPrepared: preview => {
 				preparedFunctions.push(preview.functionName)
 				expect(preview.data).toBeDefined()
@@ -331,7 +336,7 @@ describe('contract deployment internals', () => {
 		let sendRawTransactionCallCount = 0
 
 		const client = asWriteClient({
-			getCode: async () => '0x1234',
+			getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
 			sendTransaction: async () => {
 				sendTransactionCallCount += 1
 				return `0x${'9'.repeat(64)}` as Hash
@@ -358,6 +363,7 @@ describe('contract deployment internals', () => {
 		let funded = false
 
 		const client = asWriteClient({
+			getBalance: async () => 0n,
 			getCode: async () => undefined,
 			installSimulationProxyDeployer: async () => {
 				installCalled = true
@@ -387,9 +393,11 @@ describe('contract deployment internals', () => {
 		const preparedPreviews: Parameters<NonNullable<WriteClient['onTransactionPrepared']>>[0][] = []
 		const fundHash = `0x${'c'.repeat(64)}` as Hash
 		const deployHash = `0x${'d'.repeat(64)}` as Hash
+		let proxyInstalled = false
 
 		const client = asWriteClient({
-			getCode: async () => undefined,
+			getBalance: async () => 0n,
+			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			onTransactionPrepared: preview => {
 				preparedPreviews.push(preview)
 			},
@@ -400,6 +408,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 			sendRawTransaction: async request => {
 				seen.push(request.serializedTransaction)
+				proxyInstalled = true
 				return deployHash
 			},
 		})
@@ -418,6 +427,266 @@ describe('contract deployment internals', () => {
 		expect(rawBroadcastPreview.requiresWalletConfirmation).toBe(false)
 	})
 
+	for (const { balance, expectedFunding } of [
+		{ balance: 10_000_000_000_000_000n, expectedFunding: undefined },
+		{ balance: 4_000_000_000_000_000n, expectedFunding: 6_000_000_000_000_000n },
+	]) {
+		test(`proxy deployer retry funds only the signer shortfall from ${balance.toString()}`, async () => {
+			const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+			if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+			const fundingValues: bigint[] = []
+			let proxyInstalled = false
+			const client = asWriteClient({
+				getBalance: async () => balance,
+				getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+				sendTransaction: async request => {
+					if (request.value !== undefined) fundingValues.push(request.value)
+					return `0x${'1'.repeat(64)}` as Hash
+				},
+				sendRawTransaction: async () => {
+					proxyInstalled = true
+					return `0x${'2'.repeat(64)}` as Hash
+				},
+				waitForTransactionReceipt: async () => hashReceipt('success'),
+			})
+
+			await proxyStep.deploy(client)
+
+			expect(fundingValues).toEqual(expectedFunding === undefined ? [] : [expectedFunding])
+		})
+	}
+
+	test('proxy deployer retry refuses duplicate funding while signer funding is pending', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let sendCalled = false
+		const client = asWriteClient({
+			getBalance: async parameters => (parameters.blockTag === 'pending' ? 10_000_000_000_000_000n : 0n),
+			getCode: async () => undefined,
+			sendTransaction: async () => {
+				sendCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('pending funding or deployment activity')
+		expect(sendCalled).toBe(false)
+	})
+
+	test('proxy deployer retry refuses funding after its signer nonce was consumed without installing the proxy', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let sendCalled = false
+		const client = asWriteClient({
+			getBalance: async () => 0n,
+			getCode: async () => undefined,
+			getTransactionCount: async () => 1n,
+			sendTransaction: async () => {
+				sendCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('signer nonce has already been consumed')
+		expect(sendCalled).toBe(false)
+	})
+
+	test('proxy deployer retry notices a raw deployment that confirms during preflight', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let codeReadCount = 0
+		let sendCalled = false
+		const client = asWriteClient({
+			getBalance: async () => 0n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 3 ? undefined : PROXY_DEPLOYER_RUNTIME_CODE
+			},
+			sendTransaction: async () => {
+				sendCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		expect(await proxyStep.deploy(client)).toBe(ZERO_HASH)
+		expect(sendCalled).toBe(false)
+	})
+
+	test('proxy deployer retry broadcasts the raw deployment after funding confirms during preflight', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let balanceReadCount = 0
+		let rawBroadcastCount = 0
+		let proxyInstalled = false
+		const deployHash = `0x${'2'.repeat(64)}` as Hash
+		const client = asWriteClient({
+			getBalance: async () => {
+				balanceReadCount += 1
+				return balanceReadCount < 4 ? 0n : 10_000_000_000_000_000n
+			},
+			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			sendTransaction: async () => {
+				throw new Error('A stale funding transaction must not be sent')
+			},
+			sendRawTransaction: async () => {
+				rawBroadcastCount += 1
+				proxyInstalled = true
+				return deployHash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		expect(await proxyStep.deploy(client)).toBe(deployHash)
+		expect(rawBroadcastCount).toBe(1)
+		expect(proxyInstalled).toBe(true)
+	})
+
+	test('proxy deployer retry waits for a concurrent canonical raw deployment', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let installed = false
+		let rawBroadcastCalled = false
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
+			sendRawTransaction: async () => {
+				rawBroadcastCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				installed = true
+				return hashReceipt('success')
+			},
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(installed).toBe(true)
+		expect(rawBroadcastCalled).toBe(false)
+	})
+
+	test('proxy deployer retry accepts an already-known canonical broadcast race', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let installed = false
+		let pending = false
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			getTransactionCount: async parameters => (pending && parameters.blockTag === 'pending' ? 1n : 0n),
+			sendRawTransaction: async () => {
+				pending = true
+				throw new Error('already known')
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				pending = false
+				installed = true
+				return hashReceipt('success')
+			},
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(installed).toBe(true)
+	})
+
+	test('proxy deployer retry accepts a canonical deployment that confirms before its broadcast returns', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let installed = false
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			sendRawTransaction: async () => {
+				installed = true
+				throw new Error('nonce too low')
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				throw new Error('An already confirmed deployment should not be awaited')
+			},
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+	})
+
+	test('proxy deployer retry rechecks canonical state after funding confirms', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let funded = false
+		let installed = false
+		let rawBroadcastCalled = false
+		const client = asWriteClient({
+			getBalance: async () => (funded ? 10_000_000_000_000_000n : 0n),
+			getCode: async () => (installed ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			sendRawTransaction: async () => {
+				rawBroadcastCalled = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				funded = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => {
+				installed = true
+				return hashReceipt('success')
+			},
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(rawBroadcastCalled).toBe(false)
+	})
+
+	test('proxy deployer broadcast races reject unexpected installed code', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let code: Hex | undefined
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => code,
+			sendRawTransaction: async () => {
+				code = '0x1234'
+				throw new Error('nonce too low')
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+	})
+
+	test('proxy deployer successful broadcasts reject unexpected installed code immediately', async () => {
+		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let code: Hex | undefined
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => code,
+			sendRawTransaction: async () => `0x${'1'.repeat(64)}` as Hash,
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				code = '0x1234'
+				return hashReceipt('success')
+			},
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+	})
+
 	test('proxy deployer step stops when the signer-funding transaction is cancelled in the wallet', async () => {
 		const steps = createDeploymentSteps()
 		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
@@ -425,6 +694,7 @@ describe('contract deployment internals', () => {
 		const fundHash = `0x${'5'.repeat(64)}` as Hash
 		let sendRawTransactionCalled = false
 		const client = asWriteClient({
+			getBalance: async () => 0n,
 			getCode: async () => undefined,
 			sendTransaction: async () => fundHash,
 			waitForTransactionReceipt: async parameters => {
@@ -454,12 +724,15 @@ describe('contract deployment internals', () => {
 		const rawHash = `0x${'9'.repeat(64)}` as Hash
 		const replacementHash = `0x${'a'.repeat(64)}` as Hash
 		const onTransactionSubmitted = mock(() => undefined)
+		let proxyInstalled = false
 		const client = asWriteClient({
-			getCode: async () => undefined,
+			getBalance: async () => 0n,
+			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			onTransactionSubmitted,
 			sendTransaction: async () => fundHash,
 			waitForTransactionReceipt: async parameters => {
 				if (parameters.hash === fundHash) return hashReceipt('success')
+				proxyInstalled = true
 				parameters.onReplaced?.({
 					reason: 'repriced',
 					replacedTransaction: { hash: rawHash } as never,

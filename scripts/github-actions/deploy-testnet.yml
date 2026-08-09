@@ -1,0 +1,63 @@
+name: Deploy Testnet Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      rpc_url:
+        description: Public HTTPS RPC URL for the target testnet
+        required: true
+        type: string
+      chain_id:
+        default: "11155111"
+        description: Decimal chain ID (defaults to Sepolia)
+        required: true
+        type: string
+      confirm:
+        description: Type DEPLOY to authorize onchain transactions
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testnet-contract-deployment-${{ inputs.chain_id }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.3.14
+
+jobs:
+  deploy:
+    name: Deploy contracts
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY'
+    environment: testnet-deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          bun install --frozen-lockfile
+          (cd solidity && bun install --frozen-lockfile)
+          (cd ui && bun install --frozen-lockfile)
+
+      - name: Prepare contract artifacts
+        run: bun run ensure-contract-artifacts
+
+      - name: Deploy deterministic infrastructure
+        env:
+          CHAIN_ID: ${{ inputs.chain_id }}
+          PRIVATE_KEY: ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
+          RPC_URL: ${{ inputs.rpc_url }}
+        run: bun run deploy:testnet

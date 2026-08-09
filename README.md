@@ -88,6 +88,40 @@ are defined in
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.
 
+## Testnet deployment
+
+Deploy the complete deterministic infrastructure with a locally supplied key and
+an explicitly selected RPC endpoint:
+
+```bash
+PRIVATE_KEY=0x... RPC_URL=https://... bun run deploy:testnet
+```
+
+The chain ID defaults to Sepolia (`11155111`). Set `CHAIN_ID` for any other
+Cancun-compatible EVM testnet; chain ID `1` is intentionally rejected. Before
+sending a transaction, the command verifies that the RPC reports the selected
+chain and supports the Cancun opcodes required by the protocol and Uniswap V4.
+It validates the canonical deployers, skips expected deterministic addresses
+that already contain code, and resumes from the first missing deployment. The
+same plan covers the canonical CREATE2 deployer and Permit2, a deterministic
+Uniswap V3 factory and QuoterV2, plus a Uniswap V4 PoolManager and Quoter. It
+does not create pools or add liquidity. The deployed protocol factories create
+per-market security pools, share tokens, oracle coordinators, auctions,
+escalation games, delegates, and child-universe contracts when those features
+are used. Constructor-created support contracts such as the escalation proof
+verifier are not separate bootstrap steps; the command checks that the proof
+verifier has code after its parent factory is deployed.
+
+The ready-to-install GitHub Actions template is
+[`scripts/github-actions/deploy-testnet.yml`](./scripts/github-actions/deploy-testnet.yml).
+GitHub only discovers workflows under `.github/workflows`, so copy the template
+there on a trusted branch when using a credential authorized to manage Actions.
+Then create and protect the `testnet-deployment` environment, add its
+`TESTNET_DEPLOYER_PRIVATE_KEY` secret, and dispatch **Deploy Testnet Contracts**
+from `main`. Supply the public HTTPS RPC URL and chain ID, and enter `DEPLOY` in
+the confirmation input. Workflow inputs are visible in GitHub metadata, so do
+not supply an RPC URL containing credentials.
+
 ## Browser Simulation
 
 The UI also supports a walletless browser-local simulation mode for manual QA.

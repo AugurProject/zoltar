@@ -3,13 +3,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, type Hash } from '@zoltar/shared/ethereum'
+import { createWalletClient, custom, getAddress, publicActions, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { useDeploymentFlow } from '../../../features/deployment/hooks/useDeploymentFlow.js'
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import type { DeploymentStatus } from '../../../types/contracts.js'
+import { MAINNET_NETWORK_PROFILE } from '../../../lib/networkProfile.js'
 
 type UseDeploymentFlowState = ReturnType<typeof useDeploymentFlow>
 
@@ -175,5 +176,67 @@ describe('useDeploymentFlow', () => {
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(deploy).not.toHaveBeenCalled()
 		expect(onTransactionFailed).toHaveBeenCalledWith('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+	})
+
+	test('does not mark a deployment successful when the target code remains absent', async () => {
+		const writeClient = createWalletClient({
+			account: WALLET_ADDRESS,
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async request => {
+					if (request.method === 'eth_getCode') return '0x'
+					throw new Error(`Unexpected RPC method ${request.method}`)
+				},
+			}),
+		}).extend(publicActions)
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
+			createWriteClient: () => writeClient,
+		})
+		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
+		let failedMessage: string | undefined
+		const onTransactionFailed = mock((message: string) => {
+			failedMessage = message
+		})
+		const onTransactionPresented = mock(() => undefined)
+		const setDeploymentStatuses = mock(() => undefined)
+		const deploymentStatuses: DeploymentStatus[] = [
+			{
+				address: getAddress('0x00000000000000000000000000000000000000d1'),
+				dependencies: [],
+				deploy,
+				deployed: false,
+				id: 'zoltar',
+				label: 'Zoltar',
+			},
+		]
+		let hookState: UseDeploymentFlowState | undefined
+		const Harness = function DeploymentFlowHarness() {
+			hookState = useDeploymentFlow({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				setDeploymentStatuses,
+			})
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).deployStep('zoltar')
+		})
+
+		expect(deploy).toHaveBeenCalledTimes(1)
+		expect(setDeploymentStatuses).not.toHaveBeenCalled()
+		expect(onTransactionPresented).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledTimes(1)
+		expect(failedMessage).toContain('without installing code')
 	})
 })
