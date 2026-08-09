@@ -668,18 +668,12 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	return funding.includeBuffer ? addOpenOracleBountyBuffer(funding.costAttoEth) : funding.costAttoEth
 }
 
-async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address) {
-	const [minimumToken1ReportAttoEth, lastPrice, rawReputationTokenAddress] = await Promise.all([
+async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n) {
+	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
-			args: [],
-		}),
-		client.readContract({
-			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastPrice',
 			args: [],
 		}),
 		client.readContract({
@@ -690,12 +684,10 @@ async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReport
 		}),
 	])
 	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
-	if (lastPrice === 0n) {
-		const quote = await loadOpenOracleInitialReportPrice(client, getWethAddress(), reputationTokenAddress, minimumToken1ReportAttoEth)
-		const proposedRepPerEthPrice = (quote.token2Amount * COORDINATOR_PRICE_PRECISION) / minimumToken1ReportAttoEth
-		return proposedRepPerEthPrice > 0n ? proposedRepPerEthPrice : 1n
-	}
-	return lastPrice
+	const initialReportAttoWeth = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
+	const quote = await loadOpenOracleInitialReportPrice(client, getWethAddress(), reputationTokenAddress, initialReportAttoWeth)
+	const proposedRepPerEthPrice = (quote.token2Amount * COORDINATOR_PRICE_PRECISION) / initialReportAttoWeth
+	return proposedRepPerEthPrice > 0n ? proposedRepPerEthPrice : 1n
 }
 
 export async function loadCoordinatorInitialReportFundingRequirement(client: CoordinatorInitialReportClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) {
@@ -712,7 +704,7 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 			functionName: 'balanceOf',
 			args: [walletAddress],
 		}),
-		proposedRepPerEthPrice ?? getCoordinatorInitialReportPrice(client, managerAddress),
+		proposedRepPerEthPrice ?? getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth),
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -785,7 +777,7 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, reviewedRequestValueAttoEth?: bigint) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
-	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress))
+	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
 	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	const callParams = {
 		address: managerAddress,
@@ -906,7 +898,7 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 }
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
-	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress) : 0n
+	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth) : 0n
 	if (queueOperationValueAttoEth > 0n) {
 		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth)
 	}
@@ -928,7 +920,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 }
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
-	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress))) : (proposedRepPerEthPrice ?? 0n)
+	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : (proposedRepPerEthPrice ?? 0n)
 	if (queueOperationValueAttoEth > 0n) {
 		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	}
