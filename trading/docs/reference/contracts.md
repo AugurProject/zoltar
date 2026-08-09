@@ -28,7 +28,7 @@ Immutable accessors expose `factory`, `securityPool`, `shareToken`, `universeId`
 - `sync()` records authoritative balances, reverting if balances fell below reserves or INVALID is present.
 - `onERC1155Received`, `onERC1155BatchReceived`, and `supportsInterface` implement receiver discovery. Only the canonical ShareToken’s exact YES/NO IDs are accepted. Pre-initialization transfers must be initiated by the pair’s own pull.
 
-`tradingStatus()` is a concise action blocker, not an authoritative settlement summary. The first matching condition wins in this order: `Uninitialized`, `QuestionEnded`, `UniverseForked`, `AwaitingForkContinuation`, `PoolInactive`, `QuestionResolved`, then `Open`. Thus an uninitialized ended pair reports `Uninitialized`, and an ended resolved pair reports `QuestionEnded`. Read `SecurityPoolForker.getQuestionOutcome(pool)` when the finalized outcome itself is required.
+`tradingStatus()` is a concise action blocker, not an authoritative settlement summary. The first matching condition wins in this order: `Uninitialized`, `UniverseForked`, `AwaitingForkContinuation`, `PoolInactive`, `QuestionResolved`, `QuestionEnded`, then `Open`. Thus an uninitialized forked pair reports `Uninitialized`, and a finalized question reports `QuestionResolved` even after its end time. Read `SecurityPoolForker.getQuestionOutcome(pool)` when the finalized outcome itself is required.
 
 ## TwoWayConstantProductMath
 

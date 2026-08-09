@@ -1,6 +1,6 @@
 # First trade
 
-Using a contract console or integration client, select an initialized, open pair and choose YES or NO. The standalone UI currently demonstrates these states with simulated fixtures only and cannot submit this workflow.
+Build and open the standalone UI with a valid deployment manifest as described in [Configure the standalone UI](../how-to/configure-ui.md). Connect a wallet on the manifest chain, select an initialized open pair, and choose YES or NO. Use `?demo=1` only to inspect clearly labeled simulated states; demo mode cannot submit transactions.
 
 1. Enter an ETH amount. The instant preview estimates the complete-set amount, but the final summary must come from simulating the router call.
 2. Review complete-set shares, opposite shares swapped, additional long shares, total long shares, INVALID insurance, fee, conditional price impact, deadline, and minimum received.

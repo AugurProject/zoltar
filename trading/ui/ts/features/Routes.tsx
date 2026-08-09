@@ -367,7 +367,7 @@ export function Help() {
 				<h2>Why profit can remain as shares</h2>
 				<p>An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable and redeemable after resolution, but cannot be converted into complete sets without acquiring more INVALID.</p>
 				<p>
-					<a href='./docs/index.md'>Open the complete project documentation →</a>
+					The complete developer and protocol documentation is included in <code>trading/docs/</code>.
 				</p>
 			</section>
 		</main>

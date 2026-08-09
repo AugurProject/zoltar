@@ -2,7 +2,7 @@
 
 This project has not been audited. Tests and internal reviews are not substitutes for an independent security assessment.
 
-Report a suspected vulnerability privately to the repository maintainers. Include the affected commit, contracts and functions, prerequisites, a minimal reproduction, expected impact, and whether funds or deployment keys may be at immediate risk. Do not exploit a live deployment or publish details before maintainers have had a reasonable opportunity to respond.
+Report a suspected vulnerability through [GitHub private vulnerability reporting](https://github.com/AugurProject/zoltar/security/advisories/new). Include the affected commit, contracts and functions, prerequisites, a minimal reproduction, expected impact, and whether funds or deployment keys may be at immediate risk. If private reporting is unavailable, open a public issue asking maintainers to establish a private channel, but do not include vulnerability details. Do not exploit a live deployment or publish details before maintainers have had a reasonable opportunity to respond.
 
 ## Assumptions
 
