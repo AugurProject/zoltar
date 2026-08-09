@@ -89,6 +89,8 @@ const scenarios = [
 	{ name: 'pair-missing', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/markets' },
 	{ name: 'liquidity-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/liquidity' },
 	{ name: 'liquidity-mobile', width: 390, height: 844, path: '/?demo=1&scenario=missing-pair#/liquidity', scrollY: 420 },
+	{ name: 'portfolio-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/portfolio' },
+	{ name: 'portfolio-mobile', width: 390, height: 844, path: '/?demo=1&scenario=baseline#/portfolio', scrollY: 360 },
 	{ name: 'ended', width: 1440, height: 900, path: '/?demo=1&scenario=ended#/market' },
 	{ name: 'truth-auction', width: 1440, height: 900, path: '/?demo=1&scenario=truth-auction#/market' },
 	{ name: 'truth-auction-liquidity', width: 1440, height: 900, path: '/?demo=1&scenario=truth-auction#/liquidity' },

@@ -166,6 +166,10 @@ export function marketAcceptsNewRisk(market: Pick<LiveMarket, 'tradingStatus' | 
 	return market.systemState === 0 && !market.awaitingForkContinuation && market.universeForkTime === 0n && market.questionOutcome === 3 && nowSeconds < market.endTime
 }
 
+export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
+	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
+}
+
 export type LiveBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
 
 export function createTradingPublicClient(configuration: DeploymentConfiguration) {
@@ -177,11 +181,13 @@ export function createTradingWalletClient(provider: InjectedEthereum, account: A
 }
 
 export async function validateLiveDeployment(client: PublicClient, configuration: DeploymentConfiguration) {
-	const [configuredCoreFactory, configuredFee, configuredRouterFactory] = await Promise.all([
+	const [rpcChainId, configuredCoreFactory, configuredFee, configuredRouterFactory] = await Promise.all([
+		client.getChainId(),
 		client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
 		client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'feeBps' }),
 		client.readContract({ abi: router.abi, address: configuration.router, functionName: 'factory' }),
 	])
+	validateRpcChainId(rpcChainId, configuration.chainId)
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match deployment.json')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')

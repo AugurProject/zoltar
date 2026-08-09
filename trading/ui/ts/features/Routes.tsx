@@ -1,10 +1,11 @@
 import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoAttoEthToAttoShares, lifecycleLabel } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
 import { formatBpsMultiplier, formatShareAmount, formatUnits } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
+import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 export function MarketList({ market }: { market: DemoMarket }) {
 	const yesPercent = Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10
@@ -222,6 +223,14 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 }
 
 export function Portfolio({ market }: { market: DemoMarket }) {
+	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: demoWalletBalances.yes, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: demoWalletBalances.no, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * demoWalletBalances.lp) / market.lpTotalSupply
+	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * demoWalletBalances.lp) / market.lpTotalSupply
+	const completeSetClaim = yesClaim < noClaim ? yesClaim : noClaim
+	const coveredClaim = demoWalletBalances.invalid < completeSetClaim ? demoWalletBalances.invalid : completeSetClaim
+	const coverageBps = completeSetClaim === 0n ? 0n : (coveredClaim * 10_000n) / completeSetClaim
+	const excessYes = demoWalletBalances.yes > maximumYesExit ? demoWalletBalances.yes - maximumYesExit : 0n
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -235,19 +244,19 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 			<section class='balance-strip'>
 				<div>
 					<span>YES</span>
-					<strong>1,820.42</strong>
+					<strong>{formatShareAmount(demoWalletBalances.yes)}</strong>
 				</div>
 				<div>
 					<span>NO</span>
-					<strong>184.09</strong>
+					<strong>{formatShareAmount(demoWalletBalances.no)}</strong>
 				</div>
 				<div>
 					<span>INVALID</span>
-					<strong>750.00</strong>
+					<strong>{formatShareAmount(demoWalletBalances.invalid)}</strong>
 				</div>
 				<div>
 					<span>LP tokens</span>
-					<strong>428.57</strong>
+					<strong>{formatUnits(demoWalletBalances.lp)} LP</strong>
 				</div>
 			</section>
 			<div class='two-column'>
@@ -261,22 +270,22 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 					<div class='coverage-meter'>
 						<div>
 							<span>Maximum insured YES exit</span>
-							<strong>438.01 sets</strong>
+							<strong>{formatUnits(maximumYesExit)} sets</strong>
 						</div>
-						<progress value='438' max='750'>
-							438 of 750
+						<progress value={Number((maximumYesExit * 10_000n) / demoWalletBalances.invalid)} max='10000'>
+							{formatUnits(maximumYesExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
-						<small>Bounded by the YES required to buy matching NO from current reserves.</small>
+						<small>Derived from wallet INVALID, wallet YES, and the pair’s available NO reserve.</small>
 					</div>
 					<div class='coverage-meter'>
 						<div>
 							<span>Maximum insured NO exit</span>
-							<strong>153.74 sets</strong>
+							<strong>{formatUnits(maximumNoExit)} sets</strong>
 						</div>
-						<progress value='154' max='750'>
-							154 of 750
+						<progress value={Number((maximumNoExit * 10_000n) / demoWalletBalances.invalid)} max='10000'>
+							{formatUnits(maximumNoExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
-						<small>Bounded by wallet NO and available pair YES.</small>
+						<small>Derived from wallet INVALID, wallet NO, and the pair’s available YES reserve.</small>
 					</div>
 				</section>
 				<section class='section'>
@@ -289,19 +298,19 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 					<dl class='fact-list'>
 						<div>
 							<dt>Claimed YES reserve</dt>
-							<dd>428.57 shares</dd>
+							<dd>{formatShareAmount(yesClaim)}</dd>
 						</div>
 						<div>
 							<dt>Claimed NO reserve</dt>
-							<dd>1,000.00 shares</dd>
+							<dd>{formatShareAmount(noClaim)}</dd>
 						</div>
 						<div>
 							<dt>Wallet INVALID</dt>
-							<dd>750.00 shares</dd>
+							<dd>{formatShareAmount(demoWalletBalances.invalid)}</dd>
 						</div>
 						<div>
 							<dt>Estimated covered fraction</dt>
-							<dd>75.0%</dd>
+							<dd>{(Number(coverageBps) / 100).toFixed(1)}%</dd>
 						</div>
 					</dl>
 					<p class='muted'>The estimate compares separate wallet INVALID with the complete-set coverage of the reserve claim. The LP token itself is not insured.</p>
@@ -316,7 +325,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 				</div>
 				<div class='table-row'>
 					<span>Unresolved directional shares</span>
-					<strong>1,254.51 YES above insured exit</strong>
+					<strong>{formatShareAmount(excessYes)} YES above insured exit</strong>
 					<a href='#/market'>Manage</a>
 				</div>
 				<div class='table-row'>
@@ -411,7 +420,7 @@ export function Developer({ demo = true }: { demo?: boolean }) {
 						<dd>Factory mapping by exact SecurityPool</dd>
 					</div>
 				</dl>
-				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : 'The live client validates the configured factory, router, fee, and core SecurityPoolFactory against the connected chain before discovering markets.'}</div>
+				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : 'The live client validates the RPC chain ID, factory, router, fee, and core SecurityPoolFactory against deployment.json before discovering markets.'}</div>
 			</section>
 		</main>
 	)

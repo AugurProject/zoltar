@@ -25,6 +25,13 @@ export type DemoMarket = Readonly<{
 	}>
 }>
 
+export const demoWalletBalances = {
+	yes: 1_820_420_000_000_000_000_000n,
+	no: 184_090_000_000_000_000_000n,
+	invalid: 750_000_000_000_000_000_000n,
+	lp: 428_570_000_000_000_000_000n,
+} as const
+
 const pool = `0x${'3a'.repeat(20)}` as const
 const pair = `0x${'7c'.repeat(20)}` as const
 const childPool = `0x${'4b'.repeat(20)}` as const

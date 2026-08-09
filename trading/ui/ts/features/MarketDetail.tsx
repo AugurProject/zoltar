@@ -2,7 +2,7 @@ import { useMemo, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -18,9 +18,9 @@ function initialTransactionState(scenario: string): TransactionState {
 }
 
 function quoteStatus(scenario: string, hasQuote: boolean): { tone: 'good' | 'warn' | 'neutral'; label: string } {
-	if (scenario === 'stale') return { tone: 'warn', label: 'Quote stale' }
+	if (scenario === 'stale') return { tone: 'warn', label: 'Demo preview stale' }
 	if (!hasQuote) return { tone: 'neutral', label: 'Waiting for input' }
-	return { tone: 'good', label: 'Simulated · block 21,904,812' }
+	return { tone: 'good', label: 'Illustrative demo math' }
 }
 
 function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
@@ -119,7 +119,8 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 		return mode === 'enter' ? quoteDemoEnterPosition(market, side, parsed.value) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
 	}, [closedReason, market, mode, parsed.value, side])
 	const estimatedExitAttoEth = mode === 'exit' && parsed.value !== undefined ? demoAttoSharesToAttoEth(parsed.value, market) : undefined
-	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance: 1_820n * 10n ** 18n, invalidBalance: 750n * 10n ** 18n, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const longBalance = side === 'YES' ? demoWalletBalances.yes : demoWalletBalances.no
+	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const exitExceedsInsurance = mode === 'exit' && parsed.value !== undefined && parsed.value > maxExit
 	const wrongNetwork = scenario === 'wrong-network'
 	const actionBlocker = wrongNetwork ? 'Switch network to continue' : closedReason
@@ -192,7 +193,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
 						</div>
 						{parsed.error === undefined ? (
-							<small id='amount-help'>Final values come from a fresh router simulation.</small>
+							<small id='amount-help'>Values below are illustrative local math, not a router simulation.</small>
 						) : (
 							<small id='amount-error' class='error'>
 								{parsed.error}
@@ -205,7 +206,9 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 								<span>Maximum insured {side} exit</span>
 								<strong>{formatShareAmount(maxExit)}</strong>
 							</div>
-							<p>Your INVALID balance covers only {formatUnits(750n * 10n ** 18n)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.</p>
+							<p>
+								This demo limit is derived from wallet {side} ({formatShareAmount(longBalance)}), wallet INVALID ({formatShareAmount(demoWalletBalances.invalid)}), and the displayed pair reserves. Excess directional shares remain in the wallet.
+							</p>
 							{exitExceedsInsurance ? (
 								<p class='error' role='alert'>
 									Reduce the exit to {formatUnits(maxExit)} complete sets or acquire more INVALID.
@@ -215,7 +218,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					) : null}
 					<div class='quote' aria-live='polite'>
 						<div class='quote__title'>
-							<span>{quote === undefined ? 'Quote unavailable' : 'Authoritative preview'}</span>
+							<span>{quote === undefined ? 'Demo preview unavailable' : 'Illustrative demo preview'}</span>
 							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
 						</div>
 						{closedReason === undefined ? renderQuote(quote, side, estimatedExitAttoEth) : <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>}

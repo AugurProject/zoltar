@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
-import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
 import { insuredExitLimitMessage } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { marketAcceptsNewRisk, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
+import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 describe('standalone trading UI model', () => {
 	test('derives exact lifecycle reasons', () => {
@@ -89,5 +90,18 @@ describe('standalone trading UI model', () => {
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
 		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n)).toContain('long-share balance and pair liquidity')
 		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n)).toContain('INVALID balance covers only 4 complete sets')
+	})
+
+	test('derives both demo exits and LP coverage from one wallet fixture', () => {
+		const market = demoMarket('baseline')
+		const maximumYes = maximumInsuredExit({ longOutcome: 'YES', longBalance: demoWalletBalances.yes, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+		const maximumNo = maximumInsuredExit({ longOutcome: 'NO', longBalance: demoWalletBalances.no, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+		expect(maximumYes).toBe(demoWalletBalances.invalid)
+		expect(maximumNo).toBeLessThan(demoWalletBalances.no)
+		const yesClaim = (market.yesReserve * demoWalletBalances.lp) / market.lpTotalSupply
+		const noClaim = (market.noReserve * demoWalletBalances.lp) / market.lpTotalSupply
+		expect(yesClaim).toBe(demoWalletBalances.lp)
+		expect(noClaim).toBeGreaterThan(yesClaim)
+		expect(demoWalletBalances.invalid).toBeGreaterThan(yesClaim)
 	})
 })
