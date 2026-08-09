@@ -114,7 +114,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const timers = useRef<number[]>([])
 	const closedReason = tradingClosedReason(market.lifecycle)
-	const initialized = market.yesReserve + market.noReserve > 0n
+	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
 	const conditional = initialized ? conditionalYesProbability(market.yesReserve, market.noReserve) : undefined
 	const yesPercent = conditional === undefined ? undefined : Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
 	const collateralPerShare = formatEthPerShare(market.securityPool.settlementCollateralAttoEth, market.securityPool.shareTokenSupplyAttoShares)
@@ -126,12 +126,12 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 		}
 	}, [amount])
 	const quote = useMemo(() => {
-		if (parsed.value === undefined || parsed.value === 0n || market.pair === undefined) return undefined
+		if (parsed.value === undefined || parsed.value === 0n || !initialized) return undefined
 		const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 		if (mode === 'exit' && parsed.value >= oppositeReserve) return undefined
 		if (closedReason !== undefined) return undefined
 		return mode === 'enter' ? quoteDemoEnterPosition(market, side, parsed.value) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
-	}, [closedReason, market, mode, parsed.value, side])
+	}, [closedReason, initialized, market, mode, parsed.value, side])
 	const estimatedExitAttoEth = mode === 'exit' && parsed.value !== undefined ? demoAttoSharesToAttoEth(parsed.value, market) : undefined
 	const longBalance = side === 'YES' ? demoWalletBalances.yes : demoWalletBalances.no
 	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
@@ -141,7 +141,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const inputValid = parsed.value !== undefined && parsed.value > 0n
 	const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 	const capacityAvailable = mode !== 'exit' || parsed.value === undefined || parsed.value < oppositeReserve
-	const displayedQuoteStatus = demoPreviewPresentation({ scenario, hasQuote: quote !== undefined, pairExists: market.pair !== undefined, closedReason, inputValid, capacityAvailable })
+	const displayedQuoteStatus = demoPreviewPresentation({ scenario, hasQuote: quote !== undefined, pairExists: initialized, closedReason, inputValid, capacityAvailable })
 	const workflowLocked = transactionState === 'approval' || transactionState === 'pending'
 	useEffect(() => {
 		if (workflowLocked) onWorkflowLockChange(true)
@@ -173,13 +173,13 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
 		</button>
 	)
-	if (market.pair === undefined && closedReason === undefined)
+	if (!initialized && closedReason === undefined)
 		primaryAction = (
 			<a class='primary-action' href='#/liquidity'>
-				Initialize this market in Liquidity
+				{market.pair === undefined ? 'Create and initialize this market in Liquidity' : 'Initialize this pair in Liquidity'}
 			</a>
 		)
-	if (market.pair === undefined && closedReason !== undefined)
+	if (!initialized && closedReason !== undefined)
 		primaryAction = (
 			<button class='primary-action' disabled>
 				{closedReason} — pair initialization unavailable

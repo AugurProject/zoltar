@@ -8,7 +8,8 @@ import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
-	if (market.pair !== undefined)
+	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
+	if (initialized)
 		return (
 			<a class='row-action' href='#/market'>
 				Open market →
@@ -22,13 +23,13 @@ function MarketListAction({ market }: { market: DemoMarket }) {
 		)
 	return (
 		<a class='row-action' href='#/liquidity'>
-			Create + initialize →
+			{market.pair === undefined ? 'Create + initialize →' : 'Initialize pair →'}
 		</a>
 	)
 }
 
 export function MarketList({ market }: { market: DemoMarket }) {
-	const initialized = market.yesReserve + market.noReserve > 0n
+	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
 	const yesPercent = initialized ? Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10 : 0
 	return (
 		<main class='route' id='main-content'>
@@ -36,7 +37,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 				<div>
 					<span class='eyebrow'>Canonical SecurityPools</span>
 					<h1>Markets</h1>
-					<p>Trade valid-resolution outcomes while retaining INVALID insurance in your wallet.</p>
+					<p>Trade valid-resolution outcomes. INVALID is insurance and is not priced by this AMM.</p>
 				</div>
 				<span class='muted'>Demo discovery snapshot</span>
 			</header>
@@ -152,7 +153,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 				<div>
 					<span class='eyebrow'>Separate insurance accounting</span>
 					<h1>Liquidity</h1>
-					<p>LP tokens represent only the pair’s YES and NO reserves. INVALID remains in the provider wallet.</p>
+					<p>LP tokens represent only YES and NO reserves. INVALID is insurance and is not priced by this AMM.</p>
 				</div>
 				<Status tone={liquidityStatusTone}>{actionAvailability.remove ? 'Removal preview' : liquidityStatus}</Status>
 			</header>
@@ -302,7 +303,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 				<div>
 					<span class='eyebrow'>Aggregate wallet balances</span>
 					<h1>Portfolio</h1>
-					<p>Coverage is derived from wallet balances, not individually tracked on-chain positions.</p>
+					<p>Coverage uses aggregate wallet balances. INVALID is insurance and is not priced by this AMM.</p>
 				</div>
 				<Status tone='neutral'>Demo account</Status>
 			</header>

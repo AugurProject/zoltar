@@ -89,6 +89,9 @@ export function App() {
 		return () => window.removeEventListener('hashchange', update)
 	}, [])
 	useEffect(() => {
+		window.scrollTo(0, 0)
+	}, [route])
+	useEffect(() => {
 		if (demo) return
 		let active = true
 		setLiveDeploymentStatus('loading')

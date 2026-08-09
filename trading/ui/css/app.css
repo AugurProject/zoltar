@@ -212,6 +212,10 @@ nav a[aria-current="page"] {
 .wallet-context {
 	cursor: default;
 }
+.wallet-button,
+.secondary-action {
+	min-height: 44px;
+}
 .route {
 	width: min(1260px, calc(100% - 2rem));
 	min-height: calc(100vh - 170px);
@@ -341,6 +345,7 @@ nav a[aria-current="page"] {
 	background: var(--bg);
 }
 .segmented button {
+	min-height: 44px;
 	border: 0;
 	padding: 0.45rem 0.7rem;
 	background: transparent;
@@ -727,10 +732,13 @@ summary {
 		monospace;
 }
 .row-action {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
 	border: 0;
 	background: none;
 	color: var(--accent);
-	padding: 0;
+	padding: 0 0.5rem;
 	white-space: nowrap;
 	font-family: inherit;
 	font-size: 11px;

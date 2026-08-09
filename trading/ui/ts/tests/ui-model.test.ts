@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { demoPreviewPresentation, quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
-import { insuredExitLimitMessage, liquidityApprovalRequired } from '../features/LiveTrading.tsx'
+import { insuredExitLimitMessage, liquidityApprovalRequired, livePairInitialized } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
@@ -26,6 +26,7 @@ describe('standalone trading UI model', () => {
 	test('keeps demo liquidity states mutually exclusive', () => {
 		expect(liquidityActionAvailability(demoMarket('baseline'))).toEqual({ initialize: false, add: true, remove: true })
 		expect(liquidityActionAvailability(demoMarket('missing-pair'))).toEqual({ initialize: true, add: false, remove: false })
+		expect(liquidityActionAvailability(demoMarket('uninitialized-pair'))).toEqual({ initialize: true, add: false, remove: false })
 		expect(liquidityActionAvailability(demoMarket('ended-missing-pair'))).toEqual({ initialize: false, add: false, remove: false })
 		expect(quoteDemoEthLiquidity(demoMarket('missing-pair'), 7_000n).added).toBeUndefined()
 	})
@@ -132,6 +133,12 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Pool inactive')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
+	})
+
+	test('does not present a created pair as initialized before it has reserves and LP supply', () => {
+		const pair = '0x0000000000000000000000000000000000000001' as const
+		expect(livePairInitialized({ pair, lpTotalSupply: 0n, yesReserve: 0n, noReserve: 0n, tradingStatus: 6 })).toBeFalse()
+		expect(livePairInitialized({ pair, lpTotalSupply: 1n, yesReserve: 1n, noReserve: 1n, tradingStatus: 0 })).toBeTrue()
 	})
 
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {

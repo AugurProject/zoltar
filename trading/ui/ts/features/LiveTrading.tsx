@@ -42,7 +42,7 @@ function statusLabel(market: LiveMarket, nowSeconds: bigint) {
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
 	if (blocker !== undefined) return blocker
 	if (market.pair === undefined) return 'Pair not created'
-	return market.tradingStatus === 6 ? 'Pair uninitialized' : 'Trading open'
+	return livePairInitialized(market) ? 'Trading open' : 'Pair uninitialized'
 }
 
 function systemStateLabel(state: number) {
@@ -79,18 +79,28 @@ function configuredClient(configuration: DeploymentConfiguration) {
 	return createTradingPublicClient(configuration)
 }
 
-function MissingPairAction({ market }: { market: LiveMarket }) {
+export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {
+	return market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n && market.tradingStatus !== 6
+}
+
+function PairInitializationAction({ market }: { market: LiveMarket }) {
 	const blocker = marketNewRiskBlocker(market, BigInt(Math.floor(Date.now() / 1_000)))
 	if (blocker !== undefined)
 		return (
-			<button class='primary-action' disabled>
-				{blocker} — pair creation unavailable
-			</button>
+			<div class='operation-block'>
+				<p>Conditional price unavailable until initialization.</p>
+				<button class='primary-action' disabled>
+					{blocker} — pair initialization unavailable
+				</button>
+			</div>
 		)
 	return (
-		<a class='primary-action' href='#/liquidity'>
-			Create pair and initialize atomically in Liquidity
-		</a>
+		<div class='operation-block'>
+			<p>Conditional price unavailable until initialization.</p>
+			<a class='primary-action' href='#/liquidity'>
+				{market.pair === undefined ? 'Create pair and initialize atomically in Liquidity' : 'Initialize this pair in Liquidity'}
+			</a>
+		</div>
 	)
 }
 
@@ -136,6 +146,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		[onWorkflowLockChange],
 	)
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
+	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
 	const nowSeconds = BigInt(Math.floor(Date.now() / 1_000))
 	const parsedAmount = useMemo(() => {
 		try {
@@ -562,8 +573,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							<LiveLiquidityControls configuration={configuration} market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} account={account} walletClient={walletClient} refresh={() => refresh(configuration)} onWorkflowLockChange={updateLiquidityWorkflowLock} />
 						) : null}
 						{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} /> : null}
-						{route !== 'liquidity' && route !== 'portfolio' && selected.pair === undefined ? <MissingPairAction market={selected} /> : null}
-						{route !== 'liquidity' && route !== 'portfolio' && selected.pair !== undefined ? (
+						{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
+						{route !== 'liquidity' && route !== 'portfolio' && selectedPairInitialized ? (
 							<LivePositionControls
 								market={selected}
 								balances={balances}
