@@ -111,7 +111,7 @@ function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): F
 
 function createParentDetails(): ForkAuctionDetails {
 	return {
-		auctionedCoverageCommitmentAttoEth: 0n,
+		auctionedCapacityOwnershipAttoRep: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,
@@ -137,7 +137,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 1n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 0n,
+		feeEligibleCapacityOwnershipAttoRep: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -155,7 +155,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'forkMigration',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: true,
@@ -168,7 +168,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 
 function createChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDetails {
 	return {
-		auctionedCoverageCommitmentAttoEth: 0n,
+		auctionedCapacityOwnershipAttoRep: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,

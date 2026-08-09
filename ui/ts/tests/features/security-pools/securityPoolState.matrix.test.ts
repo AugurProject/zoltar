@@ -10,7 +10,7 @@ function expectActionSet(actionIds: readonly SecurityPoolActionId[], expectedAct
 
 describe('security pool action matrix data', () => {
 	test('lists the exact lifecycle allowlists', () => {
-		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.operational, ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'queueSetCoverageCommitmentAttoEth', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'])
+		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.operational, ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'])
 		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.ended, ['redeemRepFromVault', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'])
 		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.poolForked, ['redeemFees'])
 		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.forkMigration, ['redeemFees'])

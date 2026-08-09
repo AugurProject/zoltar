@@ -1,6 +1,6 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, zoltarAbi } from '#contracts/abi'
+import { coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, repForBackingUnits, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -27,10 +27,13 @@ export function validatePoolUniverseRep(pool: Pick<PoolObservation, 'address' | 
 function emptyVault(address: Address): VaultPosition {
 	return {
 		address,
-		coverageCommitmentAttoEth: 0n,
+		capacityOwnershipAttoRep: 0n,
+		badDebtAttoEth: 0n,
+		openInterestAttoEth: 0n,
 		backingUnits: 0n,
 		vaultAttoRepBacking: 0n,
 		claimableFeesAttoEth: 0n,
+		disputeStakedAttoRep: 0n,
 	}
 }
 
@@ -89,20 +92,23 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
 	return universes
 }
 
-async function loadVault(client: ReadClient, pool: Address, vault: Address, totalAttoRep: bigint, denominator: bigint): Promise<VaultPosition> {
-	const raw = await client.readContract({
-		abi: securityPoolAbi,
-		address: pool,
-		args: [vault],
-		functionName: 'securityVaults',
-	})
-	const [repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth] = raw
+async function loadVault(client: ReadClient, pool: Address, escalationGame: Address, vault: Address, totalAttoRep: bigint, denominator: bigint): Promise<VaultPosition> {
+	const [raw, openInterestAttoEth, badDebtAttoEth, disputeStakedAttoRep] = await Promise.all([
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'getVaultOpenInterestAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' }),
+		escalationGame === zeroAddress ? 0n : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' }),
+	])
+	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = raw
 	return {
 		address: vault,
-		coverageCommitmentAttoEth,
+		badDebtAttoEth,
+		capacityOwnershipAttoRep,
+		openInterestAttoEth,
 		backingUnits: repBackingUnits,
 		vaultAttoRepBacking: repForBackingUnits(repBackingUnits, totalAttoRep, denominator),
 		claimableFeesAttoEth,
+		disputeStakedAttoRep,
 	}
 }
 
@@ -146,36 +152,44 @@ async function loadPool(
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		denominator,
+		escalationGame,
 		isPriceValid,
 		lastPrice,
 		lastSettlementTimestamp,
 		minLiquidationPriceDistanceBps,
+		minimumSecurityBondDebtAttoEth,
 		minimumToken1ReportAttoEth,
+		minimumVaultRepDepositAttoRep,
+		poolAccountingSnapshot,
 		pendingReportId,
 		pendingReportSponsor,
 		repToken,
 		requestPriceCostAttoEth,
 		securityPoolForker,
 		systemState,
-		totalCoverageCommitmentAttoEth,
+		totalCapacityOwnershipAttoRep,
 		totalAttoRep,
 	] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getActiveVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'settlementCollateralAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'currentRetentionRate' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalRepBackingUnits' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'escalationGame' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'isPriceValid' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastPrice' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastSettlementTimestamp' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'minLiquidationPriceDistanceBps' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'minimumSecurityBondDebtAttoEth' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'minimumToken1ReportAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'minimumVaultRepDepositAttoRep' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getPoolAccountingSnapshot' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'pendingReportId' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'pendingReportSponsor' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'repToken' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getRequestPriceCostAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'systemState' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalCoverageCommitmentAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalCapacityOwnershipAttoRep' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getTotalPoolHeldAttoRep' }),
 	])
 	const [forkData, forkActivationTime] = await Promise.all([
@@ -198,12 +212,17 @@ async function loadPool(
 			stagedOperations.push({
 				operationAmountAttoRepOrAttoEth: operation.operationAmountAttoRepOrAttoEth,
 				id,
-				initiatorVault: getAddress(operation.initiatorVault),
+				liquidationApprovalId: operation.liquidationApprovalId,
 				isPendingSettlement: pendingSettlementOperationIds.includes(id),
 				operation: operation.operation,
+				operator: getAddress(operation.operator),
 				queuedAt: operation.queuedAt,
+				receiverVault: getAddress(operation.receiverVault),
+				reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth,
 				snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
-				snapshotTargetCoverageCommitmentAttoEth: operation.snapshotTargetCoverageCommitmentAttoEth,
+				snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
+				snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep,
+				snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth,
 				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits,
 				snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
 				targetVault: getAddress(operation.targetVault),
@@ -211,17 +230,22 @@ async function loadPool(
 			})
 		}
 	}
-	const vaults = await Promise.all(addresses.map(async vault => await loadVault(client, address, vault, totalAttoRep, denominator)))
-	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, wallet, totalAttoRep, denominator)))
+	const normalizedEscalationGame = getAddress(escalationGame)
+	const vaults = await Promise.all(addresses.map(async vault => await loadVault(client, address, normalizedEscalationGame, vault, totalAttoRep, denominator)))
+	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, normalizedEscalationGame, wallet, totalAttoRep, denominator)))
 	const selected = settings.selectedPools.some(pool => sameAddress(pool, address))
 	const approvedUniverse = settings.approvedUniverses.includes(deployment.universeId)
 	const riskContext = {
 		address,
 		denominator,
+		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
 		manager,
 		minLiquidationPriceDistanceBps,
+		minimumSecurityBondDebtAttoEth,
+		minimumVaultRepDepositAttoRep,
 		multiplierBps: deployment.statoblastSecurityMultiplierBps,
 		price: candidateScreeningPrice(lastPrice, settings.strategy.fallbackRepPerEthPrice),
+		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		totalAttoRep,
 	}
 	const candidates = !isPoolExecutionEligible({ approvedUniverse, selected, systemState })
@@ -251,7 +275,9 @@ async function loadPool(
 		lastSettlementTimestamp,
 		manager,
 		minLiquidationPriceDistanceBps,
+		minimumSecurityBondDebtAttoEth,
 		minimumToken1ReportAttoEth,
+		minimumVaultRepDepositAttoRep,
 		multiplierBps: deployment.statoblastSecurityMultiplierBps,
 		parent: getAddress(deployment.parent),
 		parentUniverseId: undefined,
@@ -264,7 +290,7 @@ async function loadPool(
 		securityPoolForker: getAddress(securityPoolForker),
 		stagedOperations,
 		systemState,
-		totalCoverageCommitmentAttoEth,
+		totalCapacityOwnershipAttoRep,
 		totalAttoRep,
 		truncatedVaults: truncated,
 		universeId: deployment.universeId,

@@ -21,9 +21,10 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { TransactionStatusCard } from '../../../components/TransactionStatusCard.js'
 import { assertNever } from '../../../lib/assert.js'
 import { sameAddress } from '../../../lib/address.js'
+import { tryParseAddressInput } from '../../../lib/inputs.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
-import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration, formatTimestamp } from '../../../lib/formatters.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput, tryParseEthAmountInput } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -32,15 +33,15 @@ import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '..
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { useModalFocusIsolation } from '../../../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
-import type { LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { getWrongNetworkMessage } from '../../../lib/network.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	isOnActiveAppChain: boolean
-	coverageCommitmentTransferEthAmount: string
-	maximumCoverageCommitmentTransferAttoEth: bigint | undefined
+	liquidationDebtEthAmount: string
+	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -61,13 +62,41 @@ type LiquidationModalProps = {
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
 	securityPoolLiquidationError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
-	callerVaultSummary: SecurityPoolVaultSummary | undefined
+	receiverVaultSummary?: SecurityPoolVaultSummary | undefined
+	callerVaultSummary?: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 	liquidationTargetVault: string
+	liquidationReceiverVault?: string | undefined
+	liquidationApprovalId?: string | undefined
+	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
+	liquidationApprovalError?: string | undefined
+	liquidationReceiverVaultSummaryError?: string | undefined
+	liquidationReceiverVaultSummaryResolved?: boolean | undefined
+	loadingLiquidationApproval?: boolean | undefined
+	loadingLiquidationReceiverVaultSummary?: boolean | undefined
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
+	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
+	onLoadLiquidationApproval?: (() => void) | undefined
+	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	walletBalanceAttoEth?: bigint | undefined
+}
+
+function formatHealthFactorBps(healthFactorBps: bigint) {
+	const whole = healthFactorBps / 10_000n
+	const fractional = (healthFactorBps % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
+	return `${whole.toString()}${fractional === '' ? '' : `.${fractional}`}${liquidationCopy.protocolHealthSuffix}`
+}
+
+function getApprovalStatus(revoked: boolean, nonceInvalidated: boolean, validAfter: bigint, validUntil: bigint, currentTimestamp: bigint | undefined) {
+	if (revoked) return liquidationCopy.approvalRevoked
+	if (nonceInvalidated) return liquidationCopy.approvalInvalidated
+	if (currentTimestamp === undefined) return commonCopy.unavailable
+	if (currentTimestamp < validAfter) return liquidationCopy.approvalPending
+	if (currentTimestamp >= validUntil) return liquidationCopy.approvalExpired
+	return liquidationCopy.approvalActive
 }
 type QueuedLiquidationOperationView = {
 	amount: bigint | undefined
@@ -128,7 +157,7 @@ function renderQueuedLiquidationStatusCard({
 					<MetricGrid>
 						<MetricField label={commonCopy.stagedOperation}>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
 						{queuedLiquidationOperation.amount === undefined ? null : (
-							<MetricField label={liquidationCopy.coverageCommitmentTransfer}>
+							<MetricField label={liquidationCopy.requestedLiquidationDebt}>
 								<CurrencyValue precision='exact' value={queuedLiquidationOperation.amount} suffix={commonCopy.eth} />
 							</MetricField>
 						)}
@@ -162,8 +191,8 @@ export function LiquidationModal({
 	closeLiquidationModal,
 	currentPoolOracleManagerDetails,
 	isOnActiveAppChain,
-	coverageCommitmentTransferEthAmount,
-	maximumCoverageCommitmentTransferAttoEth,
+	liquidationDebtEthAmount,
+	maximumLiquidationDebtAttoEth,
 	liquidationManagerAddress,
 	liquidationFundingPreview,
 	liquidationFundingPreviewError,
@@ -173,6 +202,14 @@ export function LiquidationModal({
 	loadingPoolOracleManager,
 	loadingLiquidationFundingPreview = false,
 	liquidationTargetVault,
+	liquidationReceiverVault = accountAddress ?? '',
+	liquidationApprovalId = `0x${'00'.repeat(32)}`,
+	liquidationApprovalDetails,
+	liquidationApprovalError,
+	liquidationReceiverVaultSummaryError,
+	liquidationReceiverVaultSummaryResolved = false,
+	loadingLiquidationApproval = false,
+	loadingLiquidationReceiverVaultSummary = false,
 	onLoadPoolOracleManager,
 	onLoadLiquidationFundingPreview = () => undefined,
 	onSelectedPoolViewChange,
@@ -185,9 +222,14 @@ export function LiquidationModal({
 	securityPoolOverviewActiveAction,
 	securityPoolLiquidationError,
 	securityPoolOverviewResult,
+	receiverVaultSummary: loadedReceiverVaultSummary,
 	callerVaultSummary,
 	targetVaultSummary,
 	onLiquidationAmountChange,
+	onLiquidationReceiverVaultChange = () => undefined,
+	onLiquidationApprovalIdChange = () => undefined,
+	onLoadLiquidationApproval = () => undefined,
+	onLoadLiquidationReceiverVaultSummary = () => undefined,
 	onLiquidationTimeoutMinutesChange,
 	onQueueLiquidation,
 	walletBalanceAttoEth,
@@ -213,9 +255,22 @@ export function LiquidationModal({
 		if (liquidationManagerAddress === undefined || liquidationFundingPreview !== undefined || liquidationFundingPreviewError !== undefined || loadingLiquidationFundingPreview) return
 		onLoadLiquidationFundingPreview(liquidationManagerAddress)
 	}, [chainCurrentTimestamp, currentPoolOracleManagerDetails, liquidationFundingPreview, liquidationFundingPreviewError, liquidationManagerAddress, loadingLiquidationFundingPreview, onLoadLiquidationFundingPreview, showLiquidationModal])
+	const delegatedReceiver = accountAddress !== undefined && liquidationReceiverVault.trim() !== '' && !sameAddress(accountAddress, liquidationReceiverVault.trim())
+	const zeroApprovalId = `0x${'00'.repeat(32)}`
+	const hasValidApprovalId = /^0x[0-9a-fA-F]{64}$/.test(liquidationApprovalId) && liquidationApprovalId !== zeroApprovalId
+	useEffect(() => {
+		if (!showLiquidationModal || !delegatedReceiver || !hasValidApprovalId || liquidationApprovalDetails !== undefined || liquidationApprovalError !== undefined || loadingLiquidationApproval) return
+		onLoadLiquidationApproval()
+	}, [delegatedReceiver, hasValidApprovalId, liquidationApprovalDetails, liquidationApprovalError, loadingLiquidationApproval, onLoadLiquidationApproval, showLiquidationModal])
+	const hasValidReceiverVault = tryParseAddressInput(liquidationReceiverVault) !== undefined
+	useEffect(() => {
+		if (!showLiquidationModal || !delegatedReceiver || !hasValidReceiverVault || liquidationReceiverVaultSummaryResolved || liquidationReceiverVaultSummaryError !== undefined || loadingLiquidationReceiverVaultSummary) return
+		onLoadLiquidationReceiverVaultSummary()
+	}, [delegatedReceiver, hasValidReceiverVault, liquidationReceiverVaultSummaryError, liquidationReceiverVaultSummaryResolved, loadingLiquidationReceiverVaultSummary, onLoadLiquidationReceiverVaultSummary, showLiquidationModal])
 	if (!showLiquidationModal) return undefined
+	const receiverVaultSummary = delegatedReceiver ? loadedReceiverVaultSummary : (loadedReceiverVaultSummary ?? callerVaultSummary)
 	const currentTimestamp = chainCurrentTimestamp
-	const liquidationAmountValue = tryParseEthAmountInput(coverageCommitmentTransferEthAmount)
+	const liquidationAmountValue = tryParseEthAmountInput(liquidationDebtEthAmount)
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
@@ -223,17 +278,45 @@ export function LiquidationModal({
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails, currentTimestamp)
 	const hasUsableOraclePrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
+	const trimmedLiquidationReceiverVault = liquidationReceiverVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
 	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
-	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
+	const sameVaultWarning = trimmedLiquidationReceiverVault === '' || trimmedLiquidationTargetVault === '' || !sameAddress(trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
+	const approvalRouteMismatch =
+		liquidationApprovalDetails === undefined || accountAddress === undefined || liquidationSecurityPoolAddress === undefined
+			? false
+			: !sameAddress(liquidationApprovalDetails.params.securityPool, liquidationSecurityPoolAddress) ||
+				!sameAddress(liquidationApprovalDetails.params.receiverVault, trimmedLiquidationReceiverVault) ||
+				!sameAddress(liquidationApprovalDetails.params.operator, accountAddress) ||
+				(liquidationApprovalDetails.params.targetVault !== '0x0000000000000000000000000000000000000000' && !sameAddress(liquidationApprovalDetails.params.targetVault, trimmedLiquidationTargetVault))
+	const approvalLatestExecutionTimestamp = currentTimestamp === undefined || liquidationTimeoutSeconds === undefined || currentPoolOracleManagerDetails?.settlementTime === undefined ? undefined : currentTimestamp + currentPoolOracleManagerDetails.settlementTime + liquidationTimeoutSeconds
+	const approvalNonceInvalidated = liquidationApprovalDetails !== undefined && liquidationApprovalDetails.params.nonce < liquidationApprovalDetails.minimumValidNonce
+	const delegatedApprovalReason = (() => {
+		if (!delegatedReceiver) return undefined
+		if (liquidationApprovalId === zeroApprovalId) return liquidationCopy.delegatedApprovalRequired
+		if (!hasValidApprovalId) return liquidationCopy.invalidDelegatedApprovalId
+		if (loadingLiquidationApproval) return liquidationCopy.loadingBoundedApproval
+		if (liquidationApprovalError !== undefined) return liquidationApprovalError
+		if (liquidationApprovalDetails === undefined) return liquidationCopy.boundedApprovalRequiredBeforeSubmission
+		if (approvalRouteMismatch) return liquidationCopy.approvalRouteMismatch
+		if (approvalNonceInvalidated) return liquidationCopy.approvalNonceInvalidated
+		if (liquidationApprovalDetails.revoked || liquidationApprovalDetails.availableDebtAttoEth === 0n) return liquidationCopy.approvalUnavailable
+		if (currentTimestamp !== undefined && currentTimestamp < liquidationApprovalDetails.params.validAfter) return liquidationCopy.approvalNotActive
+		if (approvalLatestExecutionTimestamp !== undefined && approvalLatestExecutionTimestamp > liquidationApprovalDetails.params.validUntil) return liquidationCopy.approvalExpiresBeforeExecution
+		if (liquidationAmountValue !== undefined && (liquidationAmountValue > liquidationApprovalDetails.availableDebtAttoEth || liquidationAmountValue > liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth)) return liquidationCopy.approvalQuotaTooLow
+		return undefined
+	})()
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
 			? undefined
 			: simulateLiquidation({
-					callerVaultSummary,
-					coverageCommitmentTransferAttoEth: liquidationAmountValue,
+					callerVaultSummary: receiverVaultSummary,
+					requestedDebtAttoEth: liquidationAmountValue,
+					totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+					minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
 					repPerEthPrice: poolOraclePrice,
+					settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
 					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 					targetVaultSummary,
 				})
@@ -242,12 +325,16 @@ export function LiquidationModal({
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? maximumCoverageCommitmentTransferAttoEth) : maximumCoverageCommitmentTransferAttoEth
+	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? maximumLiquidationDebtAttoEth) : maximumLiquidationDebtAttoEth
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
-		callerVaultSummary,
-		coverageCommitmentTransferAttoEth: liquidationAmountValue,
-		maxCoverageCommitmentToTransferAttoEth: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
+		callerVaultSummary: receiverVaultSummary,
+		requestedDebtAttoEth: liquidationAmountValue,
+		totalCapacityOwnershipAttoRep: selectedPool?.totalCapacityOwnershipAttoRep,
+		maxLiquidationDebtAttoEth: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
+		minimumSecurityBondDebtAttoEth: selectedPool?.minimumSecurityBondDebtAttoEth,
+		minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
+		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
@@ -256,9 +343,14 @@ export function LiquidationModal({
 		if (selectedPool?.statoblastSecurityMultiplierBps === undefined) return liquidationCopy.selectedPoolReloadRequired
 
 		return getLiquidationFailureReason({
-			callerVaultSummary,
-			coverageCommitmentTransferAttoEth: liquidationAmountValue,
+			callerVaultSummary: receiverVaultSummary,
+			requestedDebtAttoEth: liquidationAmountValue,
+			totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+			minimumReceiverHealthFactorBps: delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : undefined,
+			minimumSecurityBondDebtAttoEth: selectedPool.minimumSecurityBondDebtAttoEth,
+			minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
 			repPerEthPrice: poolOraclePrice,
+			settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
 			statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 			targetVaultSummary,
 		})
@@ -279,8 +371,13 @@ export function LiquidationModal({
 		liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined,
 		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined,
 		trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined,
+		trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined,
+		delegatedApprovalReason,
+		delegatedReceiver && loadingLiquidationReceiverVaultSummary ? liquidationCopy.loadingReceiverVault : undefined,
+		delegatedReceiver ? liquidationReceiverVaultSummaryError : undefined,
+		delegatedReceiver && !liquidationReceiverVaultSummaryResolved ? liquidationCopy.receiverVaultRequiredBeforeSubmission : undefined,
 		sameVaultWarning,
-		coverageCommitmentTransferEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
+		liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
 		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined,
 		liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined,
 		liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined,
@@ -358,13 +455,14 @@ export function LiquidationModal({
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
 					<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
-					<MetricField label={liquidationCopy.callerVault}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
+					<MetricField label={liquidationCopy.operator}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
+					<MetricField label={liquidationCopy.receiverVault}>{trimmedLiquidationReceiverVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationReceiverVault} />}</MetricField>
 					<MetricField label={commonCopy.targetVault}>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
 					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
-					<MetricField label={liquidationCopy.targetCoverageCommitmentAttoEth}>
-						<CurrencyValue value={targetVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
+					<MetricField label={liquidationCopy.targetCapacityOwnershipAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
 						<CurrencyValue value={targetVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
@@ -381,14 +479,14 @@ export function LiquidationModal({
 					>
 						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
 					</MetricField>
-					<MetricField label={liquidationCopy.callerCoverageCommitmentAttoEth}>
-						<CurrencyValue value={callerVaultSummary?.coverageCommitmentAttoEth} suffix={commonCopy.eth} />
+					<MetricField label={liquidationCopy.callerCapacityOwnershipAttoRep}>
+						<CurrencyValue value={receiverVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
-						<CurrencyValue value={callerVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
+						<CurrencyValue value={receiverVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField label={liquidationCopy.callerDisputeStakedAttoRep}>
-						<CurrencyValue value={callerVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue value={receiverVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
@@ -401,11 +499,58 @@ export function LiquidationModal({
 						<p className='detail'>{sameVaultWarning}</p>
 					</WarningSurface>
 				)}
+				{delegatedReceiver ? (
+					<WarningSurface as='section' surface='flat' variant='compact'>
+						<div className='entity-card-header'>
+							<div>
+								<h4>{liquidationCopy.receiverLiabilityTitle}</h4>
+							</div>
+						</div>
+						<p className='detail'>{liquidationCopy.receiverLiabilityDetail}</p>
+					</WarningSurface>
+				) : null}
 				<div className='form-grid'>
 					<label className='field'>
-						<span>{liquidationCopy.liquidationAmountEth}</span>
+						<span>{liquidationCopy.receiverVault}</span>
+						<FormInput value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
+					</label>
+					{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? (
+						<p className='detail' id='liquidation-receiver-loading-status' role='status'>
+							{liquidationCopy.loadingReceiverVault}
+						</p>
+					) : null}
+					{delegatedReceiver && liquidationReceiverVaultSummaryError !== undefined ? (
+						<div className='actions'>
+							<button className='secondary' type='button' onClick={onLoadLiquidationReceiverVaultSummary} disabled={loadingLiquidationReceiverVaultSummary || !hasValidReceiverVault}>
+								{liquidationCopy.retryReceiverVault}
+							</button>
+						</div>
+					) : null}
+					{delegatedReceiver ? (
+						<>
+							<label className='field'>
+								<span>{liquidationCopy.boundedApprovalId}</span>
+								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
+								<span className='detail'>{liquidationCopy.receiverOperatorEconomics}</span>
+							</label>
+							{loadingLiquidationApproval ? (
+								<p className='detail' role='status'>
+									{liquidationCopy.loadingBoundedApproval}
+								</p>
+							) : null}
+							{liquidationApprovalError === undefined ? null : (
+								<div className='actions'>
+									<button className='secondary' type='button' onClick={onLoadLiquidationApproval} disabled={!hasValidApprovalId}>
+										{liquidationCopy.retryBoundedApproval}
+									</button>
+								</div>
+							)}
+						</>
+					) : null}
+					<label className='field'>
+						<span>{liquidationCopy.requestedLiquidationDebtEth}</span>
 						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={coverageCommitmentTransferEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
+							<FormInput className='field-inline-input' value={liquidationDebtEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
 							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
 								{commonCopy.max}
 							</button>
@@ -421,6 +566,31 @@ export function LiquidationModal({
 						</label>
 					)}
 				</div>
+				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
+				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
+				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : (
+					<DataGrid className='modal-summary-grid' columns={2}>
+						<MetricField label={liquidationCopy.availableApproval}>
+							<CurrencyValue value={liquidationApprovalDetails.availableDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+						<MetricField label={liquidationCopy.reservedApproval}>
+							<CurrencyValue value={liquidationApprovalDetails.reservedDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+						<MetricField label={liquidationCopy.consumedApproval}>
+							<CurrencyValue value={liquidationApprovalDetails.consumedDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+						<MetricField label={liquidationCopy.perLiquidationLimit}>
+							<CurrencyValue value={liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+						<MetricField label={liquidationCopy.totalApprovalLimit}>
+							<CurrencyValue value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+						<MetricField label={liquidationCopy.approvalValidAfter}>{formatTimestamp(liquidationApprovalDetails.params.validAfter)}</MetricField>
+						<MetricField label={liquidationCopy.approvalExpiration}>{formatTimestamp(liquidationApprovalDetails.params.validUntil)}</MetricField>
+						<MetricField label={liquidationCopy.minimumPostLiquidationHealth}>{formatHealthFactorBps(liquidationApprovalDetails.params.minPostLiquidationHealthFactorBps)}</MetricField>
+						<MetricField label={liquidationCopy.approvalStatus}>{getApprovalStatus(liquidationApprovalDetails.revoked, approvalNonceInvalidated, liquidationApprovalDetails.params.validAfter, liquidationApprovalDetails.params.validUntil, currentTimestamp)}</MetricField>
+					</DataGrid>
+				)}
 				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined ? null : (
 					<div className='actions'>
@@ -435,7 +605,8 @@ export function LiquidationModal({
 						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
 					]}
 					primary={[
-						{ label: liquidationCopy.coverageCommitmentAssumed, value: <CurrencyValue value={liquidationSimulation?.coverageCommitmentToTransferAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
@@ -444,7 +615,7 @@ export function LiquidationModal({
 					]}
 					details={[
 						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.coverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
 					]}
 					disclosures={
 						liquidationExecutionMode === 'queue'
@@ -503,6 +674,7 @@ export function LiquidationModal({
 						{commonCopy.cancel}
 					</button>
 					<TransactionActionButton
+						disabledReasonElementId={delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined}
 						idleLabel={buttonLabels.idle}
 						pendingLabel={buttonLabels.pending}
 						onClick={() => {
@@ -514,7 +686,7 @@ export function LiquidationModal({
 							disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
 							reason: liquidationButtonDisabledReason,
 						}}
-						showDisabledReason={liquidationExecutionMode !== 'queue'}
+						showDisabledReason={liquidationExecutionMode !== 'queue' && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}
 					/>
 				</div>
 			</section>

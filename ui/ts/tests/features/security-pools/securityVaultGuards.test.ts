@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetCoverageCommitmentGuardMessage, getVaultWithdrawGuardMessage } from '../../../features/security-pools/lib/securityVaultGuards.js'
+import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '../../../features/security-pools/lib/securityVaultGuards.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
@@ -54,7 +54,23 @@ describe('security vault guards', () => {
 		).toBeUndefined()
 	})
 
-	test('coverage commitment', () => {
+	test('blocks positive deposits until the target health factor is valid', () => {
+		const guard = (targetHealthFactor: string) =>
+			getVaultDepositGuardMessage({
+				approvalSatisfied: true,
+				depositAmount: 1n,
+				isDepositBelowMinimum: false,
+				targetHealthFactor,
+				walletRepShortfallAttoRep: undefined,
+			})
+
+		expect(guard('')).toBe('Target health factor must be a number with at most four decimal places')
+		expect(guard('abc')).toBe('Target health factor must be a number with at most four decimal places')
+		expect(guard('0.9999')).toBe('Target health factor must be at least 1.00×')
+		expect(guard('1.25')).toBeUndefined()
+	})
+
+	test('capacity ownership', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
 				disputeStakedAttoRep: 1n,
@@ -95,46 +111,6 @@ describe('security vault guards', () => {
 				walletBalanceAttoEth: 1n,
 			}),
 		).toBe('Reduce the withdrawal to 2 500 REP or less.')
-
-		expect(
-			getVaultSetCoverageCommitmentGuardMessage({
-				maxCoverageCommitmentAttoEthAmount: undefined,
-				requiredCostAttoEth: undefined,
-				coverageCommitmentAttoEthAmount: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('Enter a valid coverage commitment.')
-
-		expect(
-			getVaultSetCoverageCommitmentGuardMessage({
-				maxCoverageCommitmentAttoEthAmount: undefined,
-				requiredCostAttoEth: undefined,
-				coverageCommitmentAttoEthAmount: 0n,
-				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBeUndefined()
-
-		expect(
-			getVaultSetCoverageCommitmentGuardMessage({
-				maxCoverageCommitmentAttoEthAmount: 5n * 10n ** 18n,
-				requiredCostAttoEth: undefined,
-				coverageCommitmentAttoEthAmount: 5n * 10n ** 17n,
-				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('Enter at least 1 ETH for a non-zero coverage commitment.')
-
-		expect(
-			getVaultSetCoverageCommitmentGuardMessage({
-				maxCoverageCommitmentAttoEthAmount: 5n * 10n ** 18n,
-				requiredCostAttoEth: undefined,
-				coverageCommitmentAttoEthAmount: 6n * 10n ** 18n,
-				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('Reduce the coverage commitment to 5 ETH or less.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
@@ -228,16 +204,5 @@ describe('security vault guards', () => {
 				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to queue this REP withdrawal.')
-
-		expect(
-			getVaultSetCoverageCommitmentGuardMessage({
-				maxCoverageCommitmentAttoEthAmount: undefined,
-				bufferRequiredEthCost: true,
-				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
-				coverageCommitmentAttoEthAmount: 0n,
-				stagedOperationTimeoutMinutes: 5n,
-				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
-			}),
-		).toBe('Need 7 more ETH in this wallet to queue this coverage commitment update.')
 	})
 })

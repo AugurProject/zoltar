@@ -6,6 +6,25 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuction.sol';
 
 interface ISecurityPoolForkerEvents {
+	event VaultBadDebtMigrated(
+		ISecurityPool indexed parentPool,
+		ISecurityPool indexed childPool,
+		address indexed vault,
+		uint256 migratedBadDebtAttoEth,
+		uint256 resultingParentTotalBadDebtAttoEth,
+		uint256 resultingChildTotalBadDebtAttoEth
+	);
+	event ClaimAuctionProceeds(
+		ISecurityPool indexed securityPool,
+		address indexed vault,
+		uint256 amountAttoRep,
+		uint256 repBackingUnits,
+		uint256 totalRepBackingUnits,
+		uint256 claimedAuctionRepPurchasedAttoRep,
+		uint256 claimedAuctionedCapacityOwnershipAttoRep,
+		uint256 claimedAuctionedBadDebtAttoEth,
+		uint256 auctionedBadDebtAttoEth
+	);
 	/// @notice Immutable fork-time pool and escalation accounting. Collateral uses attoETH, REP fields use
 	/// attoREP, elapsed time uses seconds, and `escalationSnapshotId` commits to the carry state.
 	event SecurityPoolForkSnapshot(
@@ -38,7 +57,7 @@ interface ISecurityPoolForkerEvents {
 		uint256 resultingLockedAttoRep
 	);
 	/// @notice Final parent/child vault and collateral state after one vault migration. REP fields use attoREP,
-	/// settlement-collateral fields use attoETH, REP attribution fields use REP backing units, and coverage commitments use
+	/// settlement-collateral fields use attoETH, REP attribution fields use REP backing units, and capacity ownerships use
 	/// attoETH. The event is emitted even when `settlementCollateralTransferredAttoEth` is zero.
 	event VaultMigrationCheckpoint(
 		ISecurityPool indexed parentPool,
@@ -48,13 +67,13 @@ interface ISecurityPoolForkerEvents {
 		uint256 migratedRepDeltaAttoRep,
 		uint256 resultingChildMigratedRepTotalAttoRep,
 		uint256 resultingParentRepBackingUnits,
-		uint256 resultingParentCoverageCommitmentAttoEth,
+		uint256 resultingParentCapacityOwnershipAttoRep,
 		uint256 resultingChildRepBackingUnits,
-		uint256 resultingChildCoverageCommitmentAttoEth,
+		uint256 resultingChildCapacityOwnershipAttoRep,
 		uint256 resultingParentTotalRepBackingUnits,
 		uint256 resultingChildTotalRepBackingUnits,
-		uint256 resultingParentTotalCoverageCommitmentAttoEth,
-		uint256 resultingChildTotalCoverageCommitmentAttoEth,
+		uint256 resultingParentTotalCapacityOwnershipAttoRep,
+		uint256 resultingChildTotalCapacityOwnershipAttoRep,
 		uint256 settlementCollateralTransferredAttoEth,
 		uint256 cumulativeSettlementCollateralTransferredAttoEth
 	);

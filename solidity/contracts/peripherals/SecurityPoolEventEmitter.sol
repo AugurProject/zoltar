@@ -17,26 +17,26 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		AccountingReason reason,
 		address indexed vault,
 		uint256 settlementCollateralAttoEth,
-		uint256 totalCoverageCommitmentAttoEth,
-		uint256 feeEligibleCoverageCommitmentAttoEth,
+		uint256 totalCapacityOwnershipAttoRep,
+		uint256 feeEligibleCapacityOwnershipAttoRep,
 		uint256 totalClaimableVaultFeesAttoEth,
 		uint256 unallocatedAccruedFeesAttoEth,
 		uint256 feeIndex,
 		uint256 feeIndexRemainder,
 		uint256 totalFeesOwedRemainder,
-		uint256 uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
+		uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
 		uint256 lastUpdatedFeeAccumulator,
 		uint256 currentRetentionRate
 	);
 	event VaultAccountingCheckpoint(
 		address indexed vault,
 		uint256 repBackingUnits,
-		uint256 coverageCommitmentAttoEth,
+		uint256 capacityOwnershipAttoRep,
 		uint256 claimableFeesAttoEth,
 		uint256 feeIndex,
 		uint256 vaultFeeRemainder,
 		uint256 resultingTotalRepBackingUnits,
-		uint256 resultingFeeEligibleCoverageCommitmentAttoEth
+		uint256 resultingFeeEligibleCapacityOwnershipAttoRep
 	);
 
 	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
@@ -60,14 +60,14 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 			reason,
 			vault,
 			snapshot.settlementCollateralAttoEth,
-			snapshot.totalCoverageCommitmentAttoEth,
-			snapshot.feeEligibleCoverageCommitmentAttoEth,
+			snapshot.totalCapacityOwnershipAttoRep,
+			snapshot.feeEligibleCapacityOwnershipAttoRep,
 			snapshot.totalClaimableVaultFeesAttoEth,
 			snapshot.unallocatedAccruedFeesAttoEth,
 			snapshot.feeIndex,
 			snapshot.feeIndexRemainder,
 			snapshot.totalFeesOwedRemainder,
-			snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
+			snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
 			snapshot.lastUpdatedFeeAccumulator,
 			snapshot.currentRetentionRate
 		);
@@ -76,31 +76,31 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 	function emitVaultAccountingCheckpoint(address vault) external payable {
 		bytes32 vaultSlot = keccak256(abi.encode(vault, SECURITY_VAULTS_SLOT));
 		uint256 repBackingUnits;
-		uint256 coverageCommitmentAttoEth;
+		uint256 capacityOwnershipAttoRep;
 		uint256 claimableFeesAttoEth;
 		uint256 vaultFeeIndex;
 		uint256 vaultFeeRemainder;
 		uint256 resultingTotalRepBackingUnits;
-		uint256 resultingFeeEligibleCoverageCommitmentAttoEth;
+		uint256 resultingFeeEligibleCapacityOwnershipAttoRep;
 		bytes32 vaultFeeRemainderSlot = keccak256(abi.encode(vault, VAULT_FEE_REMAINDERS_SLOT));
 		assembly {
 			repBackingUnits := sload(vaultSlot)
-			coverageCommitmentAttoEth := sload(add(vaultSlot, 1))
+			capacityOwnershipAttoRep := sload(add(vaultSlot, 1))
 			claimableFeesAttoEth := sload(add(vaultSlot, 2))
 			vaultFeeIndex := sload(add(vaultSlot, 3))
 			vaultFeeRemainder := sload(vaultFeeRemainderSlot)
 			resultingTotalRepBackingUnits := sload(3)
-			resultingFeeEligibleCoverageCommitmentAttoEth := sload(12)
+			resultingFeeEligibleCapacityOwnershipAttoRep := sload(12)
 		}
 		emit VaultAccountingCheckpoint(
 			vault,
 			repBackingUnits,
-			coverageCommitmentAttoEth,
+			capacityOwnershipAttoRep,
 			claimableFeesAttoEth,
 			vaultFeeIndex,
 			vaultFeeRemainder,
 			resultingTotalRepBackingUnits,
-			resultingFeeEligibleCoverageCommitmentAttoEth
+			resultingFeeEligibleCapacityOwnershipAttoRep
 		);
 	}
 

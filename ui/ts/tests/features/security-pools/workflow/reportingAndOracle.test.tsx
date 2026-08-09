@@ -193,7 +193,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
-	test('allows reporting with a stale oracle price when the pool has no coverage commitment', async () => {
+	test('allows reporting with a stale oracle price when the pool has no capacity ownership', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<SecurityPoolWorkflowSection
@@ -208,7 +208,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCoverageCommitmentAttoEth: 0n,
+								totalCapacityOwnershipAttoRep: 0n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -381,7 +381,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: {
 							amount: 5n * 10n ** 18n,
-							initiatorVault: zeroAddress,
+							operator: zeroAddress,
 							operation: 'withdrawRep',
 							operationId: 7n,
 							targetVault: zeroAddress,
@@ -417,11 +417,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
 	})
 
-	test('labels ETH-denominated staged operation amounts by accounting role', async () => {
-		for (const stagedCase of [
-			{ amountLabel: 'Coverage commitment', operation: 'setCoverageCommitment' as const },
-			{ amountLabel: 'Coverage commitment transfer', operation: 'liquidation' as const },
-		]) {
+	test('labels liquidation amounts by accounting role', async () => {
+		for (const stagedCase of [{ amountLabel: 'Requested liquidation debt', operation: 'liquidation' as const }]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
@@ -429,7 +426,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						poolOracleManagerDetails: createOracleManagerDetails({
 							pendingOperation: {
 								amount: 5n * 10n ** 18n,
-								initiatorVault: zeroAddress,
+								operator: zeroAddress,
 								operation: stagedCase.operation,
 								operationId: 7n,
 								targetVault: zeroAddress,
@@ -464,7 +461,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					poolOracleManagerDetails: createOracleManagerDetails({
 						pendingOperation: {
 							amount: 1n,
-							initiatorVault: walletAddress,
+							operator: walletAddress,
 							operation: 'liquidation',
 							operationId: 9n,
 							targetVault,
@@ -499,7 +496,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: {
 							amount: 5n * 10n ** 18n,
-							initiatorVault: zeroAddress,
+							operator: zeroAddress,
 							operation: 'withdrawRep',
 							operationId: 7n,
 							targetVault: zeroAddress,

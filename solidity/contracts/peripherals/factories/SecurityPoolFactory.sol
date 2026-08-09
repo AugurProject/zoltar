@@ -28,6 +28,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ISecurityPoolForker immutable securityPoolForker;
 	SecurityPoolDeployer immutable securityPoolDeployer;
 	uint256 public immutable initialEscalationGameDepositAttoRep;
+	uint256 public immutable override minimumSecurityBondDebtAttoEth;
+	uint256 public immutable override minimumVaultRepDepositAttoRep;
 	SecurityPoolDeployment[] private securityPoolDeployments;
 	mapping(bytes32 => ISecurityPool) private securityPoolsById;
 	mapping(bytes32 => bool) private securityPoolIdClaims;
@@ -63,9 +65,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ShareTokenFactory _shareTokenFactory,
 		UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory,
 		PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory,
-		uint256 _initialEscalationGameDepositAttoRep
+		uint256 _initialEscalationGameDepositAttoRep,
+		uint256 _minimumSecurityBondDebtAttoEth,
+		uint256 _minimumVaultRepDepositAttoRep
 	) {
-		require(_initialEscalationGameDepositAttoRep >= 1e18, 'Initial escalation game deposit must be at least 1 REP');
+		require(_initialEscalationGameDepositAttoRep == 1, 'Initial escalation game deposit must equal 1 attoREP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -75,6 +79,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
 		initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep;
+		require(_minimumSecurityBondDebtAttoEth > 0, 'Minimum security bond debt zero');
+		require(_minimumVaultRepDepositAttoRep > 0, 'Minimum vault REP zero');
+		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
+		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
 		securityPoolDeployer = new SecurityPoolDeployer();
 	}
 
@@ -237,7 +245,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
 		require(
-			zoltar.getNonDecisionThresholdAttoRep(universeId) > initialEscalationGameDepositAttoRep,
+			zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(reputationToken),
 			'Escalation threshold too low'
 		);
 		bytes32 originId = getOriginId(
@@ -367,5 +375,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, settlementCollateralAttoEth);
+	}
+
+	function _getInitialEscalationDepositAttoRep(
+		ReputationToken reputationToken
+	) private view returns (uint256 initialDepositAttoRep) {
+		return
+			SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(
+				reputationToken.getTotalTheoreticalSupplyAttoRep()
+			);
 	}
 }

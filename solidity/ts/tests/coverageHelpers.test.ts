@@ -304,17 +304,17 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 10n ** 18n - 1n],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n],
 				}),
 			}),
-			/Initial escalation game deposit must be at least 1 REP/,
+			/Initial escalation game deposit must equal 1 attoREP/,
 		)
 
 		const factoryAddress = await deployContract(
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 10n ** 18n],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n, 1n * 10n ** 18n, 10n * 10n ** 18n],
 			}),
 		)
 		await assert.rejects(

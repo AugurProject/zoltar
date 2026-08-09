@@ -33,7 +33,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { createActionAvailability } from '../../../lib/actionAvailability.js'
 import { sameAddress } from '../../../lib/address.js'
 import { assertNever } from '../../../lib/assert.js'
-import { AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
+import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
@@ -141,12 +141,12 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-function renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCopy = false) {
+function renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettlementCopy = false) {
 	if (showRefundOnlySettlementCopy) {
 		return (
 			<WarningSurface as='section' surface='flat' variant='compact'>
 				<p className='detail'>
-					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}
+					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}
 				</p>
 			</WarningSurface>
 		)
@@ -155,21 +155,21 @@ function renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCopy
 	return (
 		<WarningSurface as='section' surface='flat' variant='compact'>
 			<p className='detail'>
-				<strong>{forkAuctionCopy.formatWinningClaimCoverageCommitmentHeadline(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}
+				<strong>{forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}
 			</p>
 		</WarningSurface>
 	)
 }
 
 function renderTruthAuctionSettlementSelectionSummary({
-	estimatedAssignedCoverageCommitmentAttoEth,
+	estimatedAssignedCapacityOwnershipAttoRep,
 	estimatedRefundedAttoEth,
 	estimatedVaultRepBackingAttoRep,
 	selectedClaimCount,
 	selectedRefundCount,
 	selectedRowCount,
 }: {
-	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
+	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	estimatedVaultRepBackingAttoRep: bigint | undefined
 	selectedClaimCount: number
@@ -180,12 +180,12 @@ function renderTruthAuctionSettlementSelectionSummary({
 
 	const summaryDescription = (() => {
 		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
-			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 		}
 		if (selectedClaimCount > 0) {
-			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 		}
-		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 	})()
 
 	const refundDescription = estimatedRefundedAttoEth > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
@@ -208,7 +208,7 @@ function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
 				{ label: forkAuctionCopy.estimatedVaultRepBackingAttoRep, value: estimatedVaultRepBackingAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedVaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
-				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL), value: estimatedAssignedCoverageCommitmentAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL), value: estimatedAssignedCapacityOwnershipAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedCapacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
 				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
@@ -575,7 +575,7 @@ export function ForkAuctionSection({
 					<p className='detail'>{forkAuctionCopy.migratedBalancesForThisOutcome}</p>
 					{renderWorkflowMetricGrid([
 						{ label: forkAuctionCopy.selectedOutcomeRepCollateral, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.vaultAttoRepBacking ?? 0n} suffix={commonCopy.rep} /> },
-						{ label: forkAuctionCopy.selectedOutcomeCoverageCommitmentAttoEth, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.coverageCommitmentAttoEth ?? 0n} suffix={commonCopy.eth} /> },
+						{ label: forkAuctionCopy.selectedOutcomeCapacityOwnershipAttoRep, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.capacityOwnershipAttoRep ?? 0n} suffix={commonCopy.rep} /> },
 					])}
 				</>
 			)
@@ -585,7 +585,7 @@ export function ForkAuctionSection({
 			<>
 				{renderWorkflowMetricGrid([
 					{ label: commonCopy.repCollateral, value: <CurrencyValue value={connectedWalletVaultSummary.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-					{ label: commonCopy.coverageCommitmentAttoEth, value: <CurrencyValue value={connectedWalletVaultSummary.coverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+					{ label: commonCopy.capacityOwnershipAttoRep, value: <CurrencyValue value={connectedWalletVaultSummary.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
 					{ label: commonCopy.disputeStakedAttoRep, value: <CurrencyValue value={effectiveDisputeStakedAttoRep ?? 0n} suffix={commonCopy.rep} /> },
 				])}
 				<div className='form-grid fork-workflow-outcome-selector'>
@@ -602,7 +602,7 @@ export function ForkAuctionSection({
 			</>
 		)
 	})()
-	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.vaultAttoRepBacking > 0n || connectedWalletVaultSummary.coverageCommitmentAttoEth > 0n)
+	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.vaultAttoRepBacking > 0n || connectedWalletVaultSummary.capacityOwnershipAttoRep > 0n)
 	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedAttoRep !== undefined && effectiveDisputeStakedAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
 	const claimParentEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletDisputeStakedRepEmpty : undefined
@@ -755,7 +755,7 @@ export function ForkAuctionSection({
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
 	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
-		auctionedCoverageCommitmentAttoEth: selectedAuctionContext?.auctionedCoverageCommitmentAttoEth,
+		auctionedCapacityOwnershipAttoRep: selectedAuctionContext?.auctionedCapacityOwnershipAttoRep,
 		selectedRows: selectedSettlementBidRows,
 		truthAuction: truthAuctionStatus,
 	})
@@ -765,15 +765,15 @@ export function ForkAuctionSection({
 			selectionHasRefunds: settlementSelectionHasRefunds,
 			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 		}) ?? 'refundLosingBids'
-	const showRefundOnlySettlementCoverageCommitmentNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
+	const showRefundOnlySettlementCapacityOwnershipNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = forkAuctionCopy.settleSelectedBids
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 		if (settlementSelectionMode === 'refund') {
-			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
-			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 		}
-		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 	})()
 	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
 	const auctionBidRows = buildTruthAuctionBidRows({
@@ -845,7 +845,7 @@ export function ForkAuctionSection({
 		return (
 			<div className='notice success'>
 				<p>
-					<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {truthAuctionStatus.finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
+					<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {truthAuctionStatus.finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
 					{truthAuctionEndsAt === undefined ? undefined : (
 						<Fragment>
 							{forkAuctionCopy.endedAtLead}
@@ -1093,7 +1093,7 @@ export function ForkAuctionSection({
 						{ label: forkAuctionCopy.submittedTickPrice, value: submittedBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(submittedBidPrice) },
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
 					]}
-					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCoverageCommitmentRisk]}
+					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCapacityOwnershipRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
@@ -1140,7 +1140,7 @@ export function ForkAuctionSection({
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
 			{description === undefined || selectionSummary !== undefined ? undefined : <p className='detail'>{description}</p>}
 			{selectionSummary}
-			{selectionSummary === undefined ? renderTruthAuctionCoverageCommitmentNotice(showRefundOnlySettlementCoverageCommitmentNotice) : undefined}
+			{selectionSummary === undefined ? renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettlementCapacityOwnershipNotice) : undefined}
 			<div className='actions'>
 				{renderStageActionButton({
 					action,
@@ -1209,12 +1209,12 @@ export function ForkAuctionSection({
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.clearingPrice, value: clearingPriceDisplay },
-		{ label: AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+		{ label: AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCapacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.minBidSizeAttoEth, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.maxAttoRepBeingSold, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxAttoRepBeingSold} suffix={commonCopy.rep} /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} /> },
+		{ label: AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCapacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.settlementAvailable, value: settlementAvailableDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
@@ -1234,7 +1234,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
-				auctionedCoverageCommitmentAttoEthDisplay={selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedAuctionContext.auctionedCoverageCommitmentAttoEth} suffix={commonCopy.eth} />}
+				auctionedCapacityOwnershipAttoRepDisplay={selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedAuctionContext.auctionedCapacityOwnershipAttoRep} suffix={commonCopy.rep} />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)}
 				displayedEthRaisedAttoEth={displayedEthRaisedAttoEth}
@@ -1380,7 +1380,7 @@ export function ForkAuctionSection({
 			idleLabel: settlementActionLabel,
 			pendingLabel: settlementActionPendingLabel,
 			selectionSummary: renderTruthAuctionSettlementSelectionSummary({
-				estimatedAssignedCoverageCommitmentAttoEth: settlementSelectionEstimate.estimatedAssignedCoverageCommitmentAttoEth,
+				estimatedAssignedCapacityOwnershipAttoRep: settlementSelectionEstimate.estimatedAssignedCapacityOwnershipAttoRep,
 				estimatedRefundedAttoEth: settlementSelectionEstimate.estimatedRefundedAttoEth,
 				estimatedVaultRepBackingAttoRep: settlementSelectionEstimate.estimatedVaultRepBackingAttoRep,
 				selectedClaimCount: selectedClaimSettlementBidRows.length,
@@ -1714,7 +1714,7 @@ export function ForkAuctionSection({
 
 						{hasStartedTruthAuction ? undefined : (
 							<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)}</p>
+								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}</p>
 								{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 								{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 								<div className='actions'>

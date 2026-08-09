@@ -10,8 +10,8 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
+import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
@@ -121,7 +121,7 @@ function requireBigintArray(value: unknown, context: string) {
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
@@ -182,6 +182,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'settlementTime',
+			address: managerAddress,
+			args: [],
+		},
 	])
 	const normalizedPendingSettlementOperationIds = requireBigintArray(pendingSettlementOperationIds, 'pending settlement operation ids')
 	const normalizedPendingSettlementQueueCapacity = requireBigintValue(pendingSettlementQueueCapacity, 'pending settlement queue capacity')
@@ -212,7 +218,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				if (stagedOperation === undefined) throw new Error('Missing staged operation details')
 				return {
 					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
-					initiatorVault: stagedOperation.initiatorVault,
+					operator: stagedOperation.operator,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId,
 					targetVault: stagedOperation.targetVault,
@@ -227,10 +233,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				address: managerAddress,
 				args: [],
 			})
-			if (stagedOperation.initiatorVault !== zeroAddress) {
+			if (stagedOperation.operator !== zeroAddress) {
 				pendingOperation = {
 					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
-					initiatorVault: stagedOperation.initiatorVault,
+					operator: stagedOperation.operator,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId: pendingOperationSlotId,
 					targetVault: stagedOperation.targetVault,
@@ -270,6 +276,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,
+		settlementTime,
 		stagedOperations,
 		token1,
 		token2,
@@ -808,7 +815,7 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 		args: [operationId],
 		gas: 5_000_000n,
 	}))
-	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'setCoverageCommitment')
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep')
 	return {
 		action: 'executeStagedOperation',
 		hash,
@@ -904,7 +911,82 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n) {
+export type LiquidationApprovalParams = {
+	securityPool: Address
+	receiverVault: Address
+	operator: Address
+	targetVault: Address
+	maxCumulativeDebtAttoEth: bigint
+	maxDebtPerLiquidationAttoEth: bigint
+	minPostLiquidationHealthFactorBps: bigint
+	validAfter: bigint
+	validUntil: bigint
+	nonce: bigint
+}
+
+export async function loadLiquidationApprovalRegistry(client: ReadClient, managerAddress: Address) {
+	return await client.readContract({
+		address: managerAddress,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'liquidationApprovalRegistry',
+		args: [],
+	})
+}
+
+export async function loadLiquidationApproval(client: ReadClient, managerAddress: Address, approvalId: Hex): Promise<LiquidationApprovalDetails> {
+	const registryAddress = await loadLiquidationApprovalRegistry(client, managerAddress)
+	const approval = await client.readContract({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'getLiquidationApproval',
+		args: [approvalId],
+	})
+	const minimumValidNonce = await client.readContract({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'minimumLiquidationApprovalNonce',
+		args: [approval.params.receiverVault],
+	})
+	return { registryAddress, ...approval, minimumValidNonce }
+}
+
+export async function setLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams) {
+	return await writeContractAndWait(client, () => ({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'setLiquidationApproval',
+		args: [params],
+	}))
+}
+
+export async function permitLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams, signature: Hex) {
+	return await writeContractAndWait(client, () => ({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'permitLiquidationApproval',
+		args: [params, signature],
+	}))
+}
+
+export async function revokeLiquidationApproval(client: WriteClient, registryAddress: Address, approvalId: Hex) {
+	return await writeContractAndWait(client, () => ({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'revokeLiquidationApproval',
+		args: [approvalId],
+	}))
+}
+
+export async function invalidateLiquidationApprovalNonce(client: WriteClient, registryAddress: Address, newNonce: bigint) {
+	return await writeContractAndWait(client, () => ({
+		address: registryAddress,
+		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		functionName: 'invalidateLiquidationApprovalNonce',
+		args: [newNonce],
+	}))
+}
+
+export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n, receiverVault: Address = client.account.address, approvalId: Hex = `0x${'00'.repeat(32)}`) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress) : 0n
 	if (queueOperationValueAttoEth > 0n) {
@@ -913,8 +995,8 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
+		functionName: 'requestPriceIfNeededAndStageLiquidation',
+		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
 		value: queueOperationValueAttoEth,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

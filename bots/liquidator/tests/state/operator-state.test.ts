@@ -61,7 +61,8 @@ describe('liquidator durable state', () => {
 				receiptExpectation: {
 					amount: 20n,
 					coordinator: getAddress('0x0000000000000000000000000000000000000020'),
-					initiator: account.address,
+					operator: account.address,
+					receiver: account.address,
 					target: getAddress('0x0000000000000000000000000000000000000030'),
 					type: 'pending-liquidation',
 				},

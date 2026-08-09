@@ -15,7 +15,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps, securityPoolAddresses } = fixture
 		const openInterestAmount = 1n * 10n ** 18n
-		const coverageCommitmentAttoEth = 25n * 10n ** 18n
+		const capacityOwnershipAttoRep = 25n * 10n ** 18n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		const readNonDecisionThreshold = async () =>
 			await client.readContract({
@@ -33,13 +33,13 @@ describe('Audit regression: escalation start configuration liveness', () => {
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
-			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
-			'the canonical factory deployment must preserve the default immutable escalation bond',
+			reportBond,
+			'the canonical pool must apply the supply-based escalation bond floor',
 		)
-		assert.strictEqual(reportBond, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the production start bond must be exactly 1 REP')
+		assert.ok(reportBond > DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the supply-based floor must exceed the configured one-attoREP fallback in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, reportedRepEthPrice)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

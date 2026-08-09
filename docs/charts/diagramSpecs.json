@@ -33,9 +33,9 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
-					"x": "40",
+					"x": "30",
 					"y": "42",
-					"width": "220",
+					"width": "240",
 					"height": "42",
 					"rx": "8"
 				},
@@ -584,8 +584,8 @@
 		"width": 920
 	},
 	"fig-liquidation-punitive-flow": {
-		"ariaDescription": "Liquidation moves only fully funded coverage commitment and its complete 5%-bonus pool-held vault REP backing award. Escalation claims, fees, and all surplus remain with the target; a maximum request records untransferred residual coverage commitment as bad debt.",
-		"ariaLabel": "Liquidation moves funded coverage commitment and its pool-held vault REP backing award while target claims, fees, and surplus remain behind and residual coverage commitment becomes bad debt.",
+		"ariaDescription": "Floor-rounded proportional capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported security-bond debt increase and receives those ownership and backing units. The operator only submits the transaction. Escalation claims, fees, surplus, and unmatched ownership remain with the target; only on a full-target request does debt left by the award cap or integer allocation rounding become target-local bad debt.",
+		"ariaLabel": "Floor-rounded capacity ownership and ceiling-rounded REP backing units leave the target while the authorized receiver incurs the exact reported debt increase and receives those units.",
 		"height": 200,
 		"nodes": [
 			{
@@ -648,7 +648,7 @@
 				},
 				"children": [
 					{
-						"text": "unsafe coverage commitment"
+						"text": "ownership + backing units"
 					}
 				],
 				"tag": "text"
@@ -662,7 +662,7 @@
 				},
 				"children": [
 					{
-						"text": "retains claims, fees, surplus"
+						"text": "leave; claims + fees remain"
 					}
 				],
 				"tag": "text"
@@ -676,7 +676,7 @@
 				},
 				"children": [
 					{
-						"text": "max residual → bad debt"
+						"text": "full-target residual → bad debt"
 					}
 				],
 				"tag": "text"
@@ -698,7 +698,7 @@
 				},
 				"children": [
 					{
-						"text": "funded coverage commitment + complete 5% award"
+						"text": "ownership + backing units"
 					}
 				],
 				"tag": "text"
@@ -706,10 +706,10 @@
 			{
 				"attributes": {
 					"class": "svg-green",
-					"x": "620",
+					"x": "610",
 					"y": "50",
-					"width": "220",
-					"height": "90",
+					"width": "240",
+					"height": "110",
 					"rx": "10"
 				},
 				"tag": "rect"
@@ -723,7 +723,7 @@
 				},
 				"children": [
 					{
-						"text": "Liquidator Vault"
+						"text": "Receiver Vault"
 					}
 				],
 				"tag": "text"
@@ -737,7 +737,7 @@
 				},
 				"children": [
 					{
-						"text": "absorbs funded coverage commitment"
+						"text": "incurs exact reported debt"
 					}
 				],
 				"tag": "text"
@@ -751,7 +751,21 @@
 				},
 				"children": [
 					{
-						"text": "receives pool-held vault REP backing award"
+						"text": "receives ownership"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "730",
+					"y": "148",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "and backing units"
 					}
 				],
 				"tag": "text"
@@ -1440,7 +1454,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\tliquidate, withdraw REP,\n\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\tliquidate or withdraw REP\n\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -1454,7 +1468,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\tcoverage commitment\n\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\tusing a live REP/ETH price\n\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -1721,7 +1735,7 @@
 		"width": 980
 	},
 	"fig-statoblast-pool-accounting": {
-		"ariaDescription": "REP deposits mint proportional REP backing units, decayed\n\t\t\t\t\t\t\t\tsettlement collateral increments the fee index, and vault coverage commitments claim\n\t\t\t\t\t\t\t\tfees from that index.",
+		"ariaDescription": "REP deposits mint proportional REP backing units, decayed\n\t\t\t\t\t\t\t\tsettlement collateral increments the fee index, and vault capacity ownerships claim\n\t\t\t\t\t\t\t\tfees from that index.",
 		"ariaLabel": "Pool accounting conversions",
 		"height": 310,
 		"nodes": [
@@ -2012,7 +2026,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\tcoverage commitment\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\tcapacity ownership\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -3892,8 +3906,8 @@
 		"width": 960
 	},
 	"fig-statoblast-oracle-flow": {
-		"ariaDescription": "A solvency-sensitive operation either executes immediately with\n\t\t\t\t\t\t\t\ta valid cached price or stages behind a pending OpenOracle\n\t\t\t\t\t\t\t\treport.",
-		"ariaLabel": "Queued REP/ETH oracle operation flow",
+		"ariaDescription": "A REP withdrawal or liquidation either executes immediately with\n\t\t\t\t\t\t\t\ta valid cached price or stages behind a pending OpenOracle\n\t\t\t\t\t\t\t\treport.",
+		"ariaLabel": "Queued REP/ETH oracle operation flow for REP withdrawals and liquidations",
 		"height": 380,
 		"nodes": [
 			{
@@ -3956,21 +3970,7 @@
 				},
 				"children": [
 					{
-						"text": "\n\t\t\t\t\t\t\t\twithdraw, coverage commitment,\n\t\t\t\t\t\t\t"
-					}
-				],
-				"tag": "text"
-			},
-			{
-				"attributes": {
-					"class": "svg-small",
-					"x": "162",
-					"y": "124",
-					"text-anchor": "middle"
-				},
-				"children": [
-					{
-						"text": "\n\t\t\t\t\t\t\t\tliquidation\n\t\t\t\t\t\t\t"
+						"text": "\n\t\t\t\t\t\t\t\twithdraw REP or liquidation\n\t\t\t\t\t\t\t"
 					}
 				],
 				"tag": "text"
@@ -5864,7 +5864,7 @@
 	},
 	"fig-statoblast-retention-utilization": {
 		"ariaDescription": "The annualized open-interest fee rises from about ten percent at zero utilization to about fifty percent at the eighty-percent utilization dip, then remains at that level as the per-second retention rate stays at its minimum.",
-		"ariaLabel": "Annualized open-interest fee across fee-eligible coverage commitment utilization",
+		"ariaLabel": "Annualized open-interest fee across live ETH minting-capacity utilization",
 		"height": 420,
 		"nodes": [],
 		"width": 900

@@ -14,7 +14,7 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 struct SecurityVault {
 	uint256 repBackingUnits;
-	uint256 coverageCommitmentAttoEth;
+	uint256 capacityOwnershipAttoRep;
 	uint256 claimableFeesAttoEth;
 	uint256 feeIndex;
 }
@@ -25,22 +25,22 @@ struct SecurityVault {
 struct PoolAccountingSnapshot {
 	/// @dev ETH reserved as complete-set settlement collateral, denominated in attoETH.
 	uint256 settlementCollateralAttoEth;
-	/// @dev Resulting sum of vault coverage commitments, denominated in attoETH.
-	uint256 totalCoverageCommitmentAttoEth;
-	/// @dev Coverage commitment currently participating in fee accrual, denominated in attoETH.
-	uint256 feeEligibleCoverageCommitmentAttoEth;
+	/// @dev Resulting sum of vault capacity ownerships, denominated in attoREP.
+	uint256 totalCapacityOwnershipAttoRep;
+	/// @dev Capacity ownership currently participating in fee accrual, denominated in attoREP.
+	uint256 feeEligibleCapacityOwnershipAttoRep;
 	/// @dev Whole attoETH already assigned to vaults but not yet redeemed.
 	uint256 totalClaimableVaultFeesAttoEth;
 	/// @dev Whole accrued attoETH not yet assigned by a vault checkpoint.
 	uint256 unallocatedAccruedFeesAttoEth;
-	/// @dev Cumulative fee per eligible coverage-commitment attoETH, scaled by 1e18.
+	/// @dev Cumulative fee per eligible capacity-ownership attoREP, scaled by 1e18.
 	uint256 feeIndex;
-	/// @dev Division carry from fee-index allocation; scoped to the current coverage-commitment denominator.
+	/// @dev Division carry from fee-index allocation; scoped to the current capacity-ownership denominator.
 	uint256 feeIndexRemainder;
 	/// @dev Fractional attoETH carry from total fee accrual, always less than 1e18.
 	uint256 totalFeesOwedRemainder;
-	/// @dev Eligible coverage commitment whose vault fee indexes have not consumed the latest global index delta.
-	uint256 uncheckpointedFeeEligibleCoverageCommitmentAttoEth;
+	/// @dev Eligible capacity ownership whose vault fee indexes have not consumed the latest global index delta.
+	uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep;
 	/// @dev Last accrual timestamp, in Unix seconds.
 	uint256 lastUpdatedFeeAccumulator;
 	/// @dev Per-second collateral retention multiplier, scaled by 1e18.
@@ -51,7 +51,7 @@ enum AccountingReason {
 	Accrual,
 	VaultCheckpoint,
 	FeeRedemption,
-	CoverageCommitmentChange,
+	CapacityOwnershipChange,
 	AuctionClaim,
 	PoolInitialization,
 	ForkActivation,
@@ -79,29 +79,29 @@ interface ISecurityPool {
 		AccountingReason reason,
 		address indexed vault,
 		uint256 settlementCollateralAttoEth,
-		uint256 totalCoverageCommitmentAttoEth,
-		uint256 feeEligibleCoverageCommitmentAttoEth,
+		uint256 totalCapacityOwnershipAttoRep,
+		uint256 feeEligibleCapacityOwnershipAttoRep,
 		uint256 totalClaimableVaultFeesAttoEth,
 		uint256 unallocatedAccruedFeesAttoEth,
 		uint256 feeIndex,
 		uint256 feeIndexRemainder,
 		uint256 totalFeesOwedRemainder,
-		uint256 uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
+		uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
 		uint256 lastUpdatedFeeAccumulator,
 		uint256 currentRetentionRate
 	);
 	/// @notice Authoritative resulting vault state and the affected global denominators. REP attribution uses
-	/// REP backing units, commitments and fees use attoETH, and `feeIndex` and
+	/// REP backing units and capacity ownership use attoREP, fees use attoETH, and `feeIndex` and
 	/// `vaultFeeRemainder` use 1e18 fixed-point precision.
 	event VaultAccountingCheckpoint(
 		address indexed vault,
 		uint256 repBackingUnits,
-		uint256 coverageCommitmentAttoEth,
+		uint256 capacityOwnershipAttoRep,
 		uint256 claimableFeesAttoEth,
 		uint256 feeIndex,
 		uint256 vaultFeeRemainder,
 		uint256 resultingTotalRepBackingUnits,
-		uint256 resultingFeeEligibleCoverageCommitmentAttoEth
+		uint256 resultingFeeEligibleCapacityOwnershipAttoRep
 	);
 	/// @notice Complete sets minted for `creator`. ETH fields use attoETH; share fields use attoShares.
 	event CompleteSetCreated(
@@ -132,10 +132,13 @@ interface ISecurityPool {
 	function questionId() external view returns (uint256);
 	function universeId() external view returns (uint248);
 	function zoltar() external view returns (Zoltar);
-	function totalCoverageCommitmentAttoEth() external view returns (uint256);
+	function totalCapacityOwnershipAttoRep() external view returns (uint256);
 	function settlementCollateralAttoEth() external view returns (uint256);
 	function totalRepBackingUnits() external view returns (uint256);
 	function statoblastSecurityMultiplierBps() external view returns (uint256);
+	function minimumSecurityBondDebtAttoEth() external view returns (uint256);
+	function minimumVaultRepDepositAttoRep() external view returns (uint256);
+	function vaultTargetHealthFactorBps(address vault) external view returns (uint256);
 	function totalClaimableVaultFeesAttoEth() external view returns (uint256);
 	function totalAccruedFeesAttoEth() external view returns (uint256);
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
@@ -151,7 +154,7 @@ interface ISecurityPool {
 		view
 		returns (
 			uint256 repBackingUnits,
-			uint256 coverageCommitmentAttoEth,
+			uint256 capacityOwnershipAttoRep,
 			uint256 claimableFeesAttoEth,
 			uint256 feeIndex
 		);
@@ -175,6 +178,8 @@ interface ISecurityPool {
 	function attoRepToBackingUnits(uint256 attoRepAmount) external view returns (uint256);
 	function backingUnitsToAttoRep(uint256 repBackingUnits) external view returns (uint256);
 	function getTotalPoolHeldAttoRep() external view returns (uint256);
+	function getCurrentMintingCapacityAttoEth() external view returns (uint256);
+	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
@@ -187,20 +192,22 @@ interface ISecurityPool {
 	function redeemFees(address vault) external;
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external;
-	function depositRepToVault(uint256 attoRepAmount) external;
+	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
 	function redeemRepFromVault(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
 	function performLiquidation(
-		address callerVault,
+		uint256 operationId,
+		address operator,
+		address receiverVault,
 		address targetVaultAddress,
-		uint256 requestedCommitmentTransferAttoEth,
+		uint256 requestedDebtAttoEth,
 		uint256 snapshotTargetBackingUnits,
-		uint256 snapshotTargetCoverageCommitmentAttoEth,
+		uint256 snapshotTargetCapacityOwnershipAttoRep,
 		uint256 snapshotTotalPoolHeldAttoRep,
-		uint256 snapshotTotalRepBackingUnits
-	) external;
-	function executeCoverageCommitmentUpdate(address callerVault, uint256 amountAttoEth) external;
-
+		uint256 snapshotTotalRepBackingUnits,
+		uint256 minimumReceiverHealthFactorBps,
+		uint256 minLiquidationPriceDistanceBps
+	) external returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amountAttoShares) external;
 
@@ -227,17 +234,23 @@ interface ISecurityPool {
 	function configureVault(
 		address vault,
 		uint256 repBackingUnits,
-		uint256 coverageCommitmentAttoEth,
-		uint256 vaultFeeIndex
+		uint256 capacityOwnershipAttoRep,
+		uint256 vaultFeeIndex,
+		uint256 targetHealthFactorBps,
+		uint256 newVaultBadDebtAttoEth,
+		uint256 newTotalBadDebtAttoEth
 	) external;
-	function addFeeEligibleCoverageCommitmentAttoEth(address vault, uint256 amountAttoEth) external;
+	function addFeeEligibleCapacityOwnershipAttoRep(address vault, uint256 amountAttoRep) external;
 	function setTotalRepBackingUnits(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
+	function vaultBadDebtAttoEth(address vault) external view returns (uint256);
+	function totalBadDebtAttoEth() external view returns (uint256);
 	function setTotalSharesAttoShares(uint256 newTotalSharesAttoShares) external;
 	function setPoolFinancials(
 		uint256 newSettlementCollateralAttoEth,
-		uint256 newTotalCoverageCommitmentAttoEth,
-		uint256 newFeeEligibleCoverageCommitmentAttoEth
+		uint256 newTotalCapacityOwnershipAttoRep,
+		uint256 newFeeEligibleCapacityOwnershipAttoRep,
+		uint256 newTotalBadDebtAttoEth
 	) external;
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
@@ -250,6 +263,9 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
+	function minimumSecurityBondDebtAttoEth() external view returns (uint256);
+	function minimumVaultRepDepositAttoRep() external view returns (uint256);
+
 	struct SecurityPoolDeployment {
 		ISecurityPool securityPool;
 		UniformPriceDualCapBatchAuction truthAuction;

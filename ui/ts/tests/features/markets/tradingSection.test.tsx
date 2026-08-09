@@ -8,7 +8,7 @@ import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { TradingSection } from '../../../features/markets/components/TradingSection.js'
 import { GlobalTransactionPresentationProvider } from '../../../components/GlobalTransactionPresentationContext.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
-import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
+import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
 import type { AccountState, TradingFormState } from '../../../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import type { TradingSectionProps } from '../../../features/types.js'
@@ -38,12 +38,12 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
+		lastOraclePrice: 10n ** 18n,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
@@ -56,7 +56,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -437,15 +437,15 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason when total coverage commitment remains unclaimed and none is fee eligible', async () => {
+	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
-						feeEligibleCoverageCommitmentAttoEth: 0n,
+						feeEligibleCapacityOwnershipAttoRep: 0n,
 						totalPoolHeldAttoRep: 20n * 10n ** 18n,
-						totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 0n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '100' }),
@@ -457,16 +457,16 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE)
+		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
 	})
 
-	void test('shows only assigned fee-eligible coverage commitment in the mint transaction modal', async () => {
+	void test('shows only assigned fee-eligible capacity ownership in the mint transaction modal', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
-						feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
-						totalCoverageCommitmentAttoEth: 9n * 10n ** 18n,
+						feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 9n * 10n ** 18n,
 					}),
 				})}
 			/>,
@@ -479,12 +479,12 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		const activeCoverageCommitmentLabel = modalQueries.getByText('Active coverage commitment')
-		const activeCoverageCommitmentMetric = activeCoverageCommitmentLabel.parentElement
-		if (activeCoverageCommitmentMetric === null) throw new Error('Expected active coverage commitment metric')
-		const activeCoverageCommitmentQueries = within(activeCoverageCommitmentMetric)
-		expect(activeCoverageCommitmentQueries.getByRole('button', { name: 'Copy exact value 2' })).not.toBeNull()
-		expect(activeCoverageCommitmentQueries.queryByRole('button', { name: 'Copy exact value 9' })).toBeNull()
+		const activeCapacityOwnershipLabel = modalQueries.getByText('Active capacity ownership')
+		const activeCapacityOwnershipMetric = activeCapacityOwnershipLabel.parentElement
+		if (activeCapacityOwnershipMetric === null) throw new Error('Expected active capacity ownership metric')
+		const activeCapacityOwnershipQueries = within(activeCapacityOwnershipMetric)
+		expect(activeCapacityOwnershipQueries.getByRole('button', { name: 'Copy exact value 2' })).not.toBeNull()
+		expect(activeCapacityOwnershipQueries.queryByRole('button', { name: 'Copy exact value 9' })).toBeNull()
 	})
 
 	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
@@ -547,7 +547,7 @@ void describe('TradingSection', () => {
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
 						shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-						totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '1' }),

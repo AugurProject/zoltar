@@ -15,7 +15,7 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVaultMigrationDelegate.sol';
 import { EscalationGameForker } from './EscalationGameForker.sol';
-import { SecurityPoolForkerAuctionSettlementBase } from './SecurityPoolForkerAuctionSettlementBase.sol';
+import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
 import {
 	EscalationForkSnapshot,
@@ -23,7 +23,7 @@ import {
 	SecurityPoolForkerForkData
 } from './SecurityPoolForkerTypes.sol';
 
-contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
+contract SecurityPoolForker is SecurityPoolForkerBase {
 	using SafeERC20Ops for IERC20;
 	// These delegates keep fork/migration behavior under the EVM bytecode-size limit while
 	// sharing the same storage layout defined by `SecurityPoolForkerBase` and `SecurityPoolForkerStorage`.
@@ -61,6 +61,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		uint256 auctionableAttoRepAtFork
 	);
 	event TruthAuctionFinalized(ISecurityPool indexed securityPool);
+
 	function forkData(
 		ISecurityPool securityPool
 	)
@@ -71,7 +72,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			UniformPriceDualCapBatchAuction truthAuction,
 			uint256 truthAuctionStarted,
 			uint256 migratedAttoRep,
-			uint256 auctionedCoverageCommitmentAttoEth,
+			uint256 auctionedCapacityOwnershipAttoRep,
 			uint256 escalationElapsedAtFork,
 			uint256 escalationStartBondAtForkAttoRep,
 			uint256 escalationNonDecisionThresholdAtForkAttoRep,
@@ -86,7 +87,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			data.truthAuction,
 			data.truthAuctionStarted,
 			data.migratedAttoRep,
-			data.auctionedCoverageCommitmentAttoEth,
+			data.auctionedCapacityOwnershipAttoRep,
 			data.escalationElapsedAtFork,
 			data.escalationStartBondAtForkAttoRep,
 			data.escalationNonDecisionThresholdAtForkAttoRep,
@@ -191,7 +192,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		);
 	}
 
-	constructor(Zoltar _zoltar) SecurityPoolForkerAuctionSettlementBase(_zoltar) {
+	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {
 		vaultMigrationDelegate = address(new SecurityPoolForkerVaultMigrationDelegate(_zoltar));
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
 		forkEventEmitter = address(new SecurityPoolEventEmitter());
@@ -406,6 +407,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 			data.unresolvedEscalationAtFork ? rep.balanceOf(address(escalationGame)) : 0;
 		uint256 repBalanceBeforeAttoRep = rep.balanceOf(address(this));
 		securityPool.activateForkMode();
+		badDebtAtForkByPool[securityPool] = securityPool.totalBadDebtAttoEth();
 		data.forkActivationTime = block.timestamp;
 		data.settlementCollateralAtForkAttoEth = securityPool.settlementCollateralAttoEth();
 		data.migratedRepAllocatedForSettlementCollateralAttoRep = 0;
@@ -798,6 +800,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 		uint256 disputeStakedRepToForkAttoRep = rep.balanceOf(address(escalationGame));
 		uint256 repBalanceBeforeAttoRep = rep.balanceOf(address(this));
 		securityPool.activateForkMode();
+		badDebtAtForkByPool[securityPool] = securityPool.totalBadDebtAttoEth();
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.forkActivationTime = block.timestamp;
 		data.ownFork = true;
@@ -849,7 +852,7 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 
 	// Settles finalized truth-auction bids through the forker-owned auction.
 	// Winning and partial bids credit purchased REP into the vault and assign the
-	// corresponding share of auctioned coverage commitment. Finalized losing bids may still
+	// corresponding share of auctioned capacity ownership. Finalized losing bids may still
 	// settle here as ETH-only refunds, in which case no vault accounting changes.
 	// Anyone can call this so that settlement is not blocked on the bidder.
 	function claimAuctionProceeds(
@@ -895,18 +898,23 @@ contract SecurityPoolForker is SecurityPoolForkerAuctionSettlementBase {
 	) private {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		require(data.truthAuction.finalized(), 'Not final');
-		(uint256 amountAttoRep, , uint256 newCoverageCommitmentAttoEth) = data.truthAuction.withdrawBids(
+		(uint256 amountAttoRep, , uint256 newCapacityOwnershipAttoRep) = data.truthAuction.withdrawBids(
 			vault,
 			tickIndices,
-			data.auctionedCoverageCommitmentAttoEth
+			data.auctionedCapacityOwnershipAttoRep
 		);
-		_creditAuctionProceeds(
-			securityPool,
-			vault,
-			data,
-			amountAttoRep,
-			newCoverageCommitmentAttoEth,
-			data.truthAuction.totalAttoRepPurchased()
+		_delegateMigrationCall(
+			vaultMigrationDelegate,
+			abi.encodeCall(
+				SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds,
+				(
+					securityPool,
+					vault,
+					amountAttoRep,
+					newCapacityOwnershipAttoRep,
+					data.truthAuction.totalAttoRepPurchased()
+				)
+			)
 		);
 	}
 

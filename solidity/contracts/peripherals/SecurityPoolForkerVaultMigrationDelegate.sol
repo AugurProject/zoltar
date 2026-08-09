@@ -7,12 +7,48 @@ import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
+import { SecurityPoolForkerAuctionSettlementBase } from './SecurityPoolForkerAuctionSettlementBase.sol';
+import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 
-contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigrationBase {
-	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
+contract SecurityPoolForkerVaultMigrationDelegate is
+	SecurityPoolForkerVaultMigrationBase,
+	SecurityPoolForkerAuctionSettlementBase
+{
+	constructor(Zoltar _zoltar) SecurityPoolForkerAuctionSettlementBase(_zoltar) {}
+
+	function _assignAuctionBadDebt(
+		ISecurityPool securityPool,
+		uint256 nextClaimedCapacityOwnershipAttoRep,
+		uint256 auctionedCapacityOwnershipAttoRep
+	) internal override returns (uint256 badDebtToAssignAttoEth) {
+		uint256 nextClaimedBadDebtAttoEth;
+		(badDebtToAssignAttoEth, nextClaimedBadDebtAttoEth) = SecurityPoolUtils.calculateCumulativeAuctionBadDebt(
+			auctionedBadDebtByPool[securityPool],
+			nextClaimedCapacityOwnershipAttoRep,
+			auctionedCapacityOwnershipAttoRep,
+			claimedAuctionedBadDebtByPool[securityPool]
+		);
+		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedBadDebtAttoEth;
+	}
+
+	function creditAuctionProceeds(
+		ISecurityPool securityPool,
+		address vault,
+		uint256 amountAttoRep,
+		uint256 newCapacityOwnershipAttoRep,
+		uint256 totalAttoRepPurchased
+	) public {
+		_creditAuctionProceeds(
+			securityPool,
+			vault,
+			forkDataByPool[securityPool],
+			amountAttoRep,
+			newCapacityOwnershipAttoRep,
+			totalAttoRepPurchased
+		);
+	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(
 		ISecurityPool parent,
@@ -56,15 +92,21 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		uint256 settlementCollateralAttoEth =
 			data.forkSettlementCollateralReceivedAttoEth + auctionSettlementCollateralReceivedAttoEth;
 		require(settlementCollateralAttoEth <= parentSettlementCollateralAtForkAttoEth, 'Repair');
-		uint256 parentTotalCoverageCommitmentAttoEth = securityPool.parent().totalCoverageCommitmentAttoEth();
-		uint256 unmigratedCoverageCommitmentAttoEth =
-			parentTotalCoverageCommitmentAttoEth - data.migratedCoverageCommitmentAttoEth;
+		uint256 parentTotalCapacityOwnershipAttoRep = securityPool.parent().totalCapacityOwnershipAttoRep();
+		uint256 unmigratedCapacityOwnershipAttoRep =
+			parentTotalCapacityOwnershipAttoRep - data.migratedCapacityOwnershipAttoRep;
 		uint256 totalAttoRepPurchased = data.truthAuction.totalAttoRepPurchased();
-		data.auctionedCoverageCommitmentAttoEth = totalAttoRepPurchased == 0 ? 0 : unmigratedCoverageCommitmentAttoEth;
+		data.auctionedCapacityOwnershipAttoRep = totalAttoRepPurchased == 0 ? 0 : unmigratedCapacityOwnershipAttoRep;
+		uint256 parentBadDebtAtForkAttoEth = badDebtAtForkByPool[securityPool.parent()];
+		uint256 migratedBadDebtAttoEth = migratedBadDebtByPool[securityPool];
+		require(migratedBadDebtAttoEth <= parentBadDebtAtForkAttoEth, 'Bad debt high');
+		auctionedBadDebtByPool[securityPool] =
+			totalAttoRepPurchased == 0 ? 0 : parentBadDebtAtForkAttoEth - migratedBadDebtAttoEth;
 		securityPool.setPoolFinancials(
 			settlementCollateralAttoEth,
-			parentTotalCoverageCommitmentAttoEth,
-			data.migratedCoverageCommitmentAttoEth
+			parentTotalCapacityOwnershipAttoRep,
+			data.migratedCapacityOwnershipAttoRep,
+			parentBadDebtAtForkAttoEth
 		);
 		securityPool.setSystemState(SystemState.Operational);
 	}

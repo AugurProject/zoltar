@@ -7,7 +7,6 @@ const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const FORK_BURN_ENV = 'ZOLTAR_FORK_BURN_DIVISOR'
 const FORK_THRESHOLD_ENV = 'ZOLTAR_FORK_THRESHOLD_DIVISOR'
 const INITIAL_ESCALATION_DEPOSIT_ENV = 'ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT'
-const ATTO_REP = 10n ** 18n
 
 function getProcessEnv(name: string) {
 	const processValue = Reflect.get(globalThis, 'process')
@@ -50,10 +49,10 @@ describe('protocolConfig', () => {
 	test('getProtocolConfig resolves defaults, environment values, global overrides, and explicit overrides in precedence order', () => {
 		setProcessEnv(FORK_BURN_ENV, '7')
 		setProcessEnv(FORK_THRESHOLD_ENV, '23')
-		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, (4n * ATTO_REP).toString())
+		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, '4')
 		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
 			forkBurnDivisor: '9',
-			initialEscalationGameDepositAttoRep: (5n * ATTO_REP).toString(),
+			initialEscalationGameDepositAttoRep: DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
 		})
 
 		expect(
@@ -61,16 +60,18 @@ describe('protocolConfig', () => {
 				forkThresholdDivisor: '11',
 			}),
 		).toEqual({
+			...DEFAULT_PROTOCOL_CONFIG,
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDepositAttoRep: 5n * ATTO_REP,
+			initialEscalationGameDepositAttoRep: 1n,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: ATTO_REP - 1n })).toThrow('initialEscalationGameDepositAttoRep must be at least 1 REP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 0n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 attoREP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 2n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 attoREP')
 	})
 
 	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {

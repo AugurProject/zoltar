@@ -95,7 +95,7 @@ void describe('fork auction helpers', () => {
 		expect(migrationDescription).toContain('winning parent deposits may instead be claimed directly')
 		expect(migrationDescription).not.toMatch(/escalation deposits[^.]*\b(?:move|migrat)/i)
 		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('Truth auction is active')
-		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('coverage commitment')
+		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('capacity ownership')
 	})
 
 	void test('detects whether preview pool data reflects actual fork activity', () => {
@@ -649,12 +649,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCoverageCommitmentAttoEth: 8n * ONE_UNIT,
+				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCoverageCommitmentAttoEth: 2n * ONE_UNIT,
+			estimatedAssignedCapacityOwnershipAttoRep: 2n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT,
 			estimatedVaultRepBackingAttoRep: 2n * ONE_UNIT,
 		})
@@ -702,12 +702,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCoverageCommitmentAttoEth: undefined,
+				auctionedCapacityOwnershipAttoRep: undefined,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCoverageCommitmentAttoEth: undefined,
+			estimatedAssignedCapacityOwnershipAttoRep: undefined,
 			estimatedRefundedAttoEth: 0n,
 			estimatedVaultRepBackingAttoRep: 10n,
 		})
@@ -783,7 +783,7 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('summarizes selected settlement claims and refunds with estimated assigned coverage commitment', () => {
+	void test('summarizes selected settlement claims and refunds with estimated assigned capacity ownership', () => {
 		const finalizedAuction = createTruthAuction({
 			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 			clearingTick: 10n,
@@ -809,12 +809,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCoverageCommitmentAttoEth: 8n * ONE_UNIT,
+				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCoverageCommitmentAttoEth: 3n * ONE_UNIT,
+			estimatedAssignedCapacityOwnershipAttoRep: 3n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT + HALF_UNIT,
 			estimatedVaultRepBackingAttoRep: ONE_UNIT + HALF_UNIT,
 		})
@@ -836,12 +836,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCoverageCommitmentAttoEth: 8n * ONE_UNIT,
+				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCoverageCommitmentAttoEth: 0n,
+			estimatedAssignedCapacityOwnershipAttoRep: 0n,
 			estimatedRefundedAttoEth: ONE_UNIT,
 			estimatedVaultRepBackingAttoRep: 0n,
 		})

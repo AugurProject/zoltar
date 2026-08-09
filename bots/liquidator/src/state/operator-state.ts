@@ -25,7 +25,9 @@ export type PoolObservation = {
 	lastSettlementTimestamp: bigint
 	manager: Address
 	minLiquidationPriceDistanceBps: bigint
+	minimumSecurityBondDebtAttoEth: bigint
 	minimumToken1ReportAttoEth: bigint
+	minimumVaultRepDepositAttoRep: bigint
 	multiplierBps: bigint
 	parent: Address
 	parentUniverseId: bigint | undefined
@@ -38,7 +40,7 @@ export type PoolObservation = {
 	securityPoolForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
-	totalCoverageCommitmentAttoEth: bigint
+	totalCapacityOwnershipAttoRep: bigint
 	totalAttoRep: bigint
 	truncatedVaults: boolean
 	universeId: bigint
@@ -58,12 +60,17 @@ export type UniverseObservation = {
 export type StagedOperationObservation = {
 	operationAmountAttoRepOrAttoEth: bigint
 	id: bigint
-	initiatorVault: Address
+	liquidationApprovalId: `0x${string}`
 	isPendingSettlement: boolean
 	operation: bigint
+	operator: Address
 	queuedAt: bigint
+	receiverVault: Address
+	reservedLiquidationDebtAttoEth: bigint
 	snapshotTotalRepBackingUnits: bigint
-	snapshotTargetCoverageCommitmentAttoEth: bigint
+	snapshotTargetCapacityOwnershipAttoRep: bigint
+	snapshotTargetDisputeStakedAttoRep: bigint
+	snapshotTargetOpenInterestAttoEth: bigint
 	snapshotTargetBackingUnits: bigint
 	snapshotTotalPoolHeldAttoRep: bigint
 	targetVault: Address
@@ -101,7 +108,7 @@ export type PendingTransactionIntent = {
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
-	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; initiator: Address; target: Address; type: 'pending-liquidation' }
+	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
 	requiresMarketEvidence: boolean
 	sender: Address
 	serializedTransaction: Hex
@@ -209,10 +216,11 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 }
 
 function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint) {
-	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.coverageCommitmentAttoEth, multiplierBps, price)
+	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.openInterestAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
 	return {
 		address: vault.address,
-		coverageCommitmentDisplay: formatDecimalAmount(vault.coverageCommitmentAttoEth),
+		capacityOwnershipRep: formatDecimalAmount(vault.capacityOwnershipAttoRep),
+		openInterestDisplay: formatDecimalAmount(vault.openInterestAttoEth),
 		healthBps: healthBps?.toString(),
 		backingUnits: vault.backingUnits.toString(),
 		vaultRepBacking: formatDecimalAmount(vault.vaultAttoRepBacking),
@@ -223,7 +231,7 @@ function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint)
 function candidateView(candidate: LiquidationCandidate) {
 	return {
 		bonusValueEth: formatDecimalAmount(candidate.bonusValueAttoEth),
-		coverageCommitmentToTransferEth: formatDecimalAmount(candidate.coverageCommitmentToTransferAttoEth),
+		requestedDebtEth: formatDecimalAmount(candidate.requestedDebtAttoEth),
 		priceDistanceBps: candidate.priceDistanceBps.toString(),
 		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultAttoRepBackingToTransfer),
 		resultingHealthBps: candidate.resultingHealthBps.toString(),
@@ -236,7 +244,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const configurations: readonly CentralizedMarketSettings[] = marketConfigurations === undefined ? [] : 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
 	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
-	const assumedCoverageCommitmentAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.coverageCommitmentAttoEth, 0n)
+	const assumedOpenInterestAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.openInterestAttoEth, 0n)
 	const walletRep = [...state.walletRepByToken.values()].reduce((total, amount) => total + amount, 0n)
 	const rootConfiguration = configurations[0]
 	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
@@ -323,7 +331,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		metrics: {
 			approvedUniverseCount: [...universeMap.values()].filter(universe => universe.approved).length,
-			assumedCoverageCommitmentEth: formatDecimalAmount(assumedCoverageCommitmentAttoEth),
+			assumedOpenInterestEth: formatDecimalAmount(assumedOpenInterestAttoEth),
 			candidateCount: state.pools.reduce((total, pool) => total + pool.candidates.length, 0),
 			deployedRep: formatDecimalAmount(deployedRep),
 			eligiblePoolCount: state.pools.filter(pool => pool.selected && pool.approvedUniverse && pool.systemState === 0n).length,
@@ -401,7 +409,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				selected: pool.selected,
 				securityPoolForker: pool.securityPoolForker,
 				systemState: pool.systemState.toString(),
-				totalCoverageCommitmentEth: formatDecimalAmount(pool.totalCoverageCommitmentAttoEth),
+				totalCapacityOwnershipRep: formatDecimalAmount(pool.totalCapacityOwnershipAttoRep),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
 				truncatedVaults: pool.truncatedVaults,
 				universeId: pool.universeId.toString(),
@@ -566,7 +574,8 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 								? {
 										amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
 										coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-										initiator: getAddress(String(Reflect.get(rawExpectation, 'initiator'))),
+										operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
+										receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
 										target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
 										type: 'pending-liquidation' as const,
 									}

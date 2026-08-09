@@ -172,9 +172,17 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			uint256[3] memory sourcePrincipalByOutcomeAttoRep,
 			uint256[3] memory currentRepByOutcomeAttoRep
 		) = _exportUnresolvedRep(parentEscalationGame, vault);
-		(uint256 parentRepBackingUnits, uint256 parentCoverageCommitmentAttoEth, , uint256 parentFeeIndex) = parent
+		(uint256 parentRepBackingUnits, uint256 parentCapacityOwnershipAttoRep, , uint256 parentFeeIndex) = parent
 			.securityVaults(vault);
-		parent.configureVault(vault, parentRepBackingUnits, parentCoverageCommitmentAttoEth, parentFeeIndex);
+		parent.configureVault(
+			vault,
+			parentRepBackingUnits,
+			parentCapacityOwnershipAttoRep,
+			parentFeeIndex,
+			parent.vaultTargetHealthFactorBps(vault),
+			parent.vaultBadDebtAttoEth(vault),
+			parent.totalBadDebtAttoEth()
+		);
 		entitlement.sourcePrincipalByOutcomeAttoRep = sourcePrincipalByOutcomeAttoRep;
 		entitlement.currentRepByOutcomeAttoRep = currentRepByOutcomeAttoRep;
 		entitlement.totalCurrentAttoRep = _sumOutcomeAmounts(currentRepByOutcomeAttoRep);

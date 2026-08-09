@@ -113,7 +113,7 @@ contract SecurityPoolForkerAttackParentMock {
 	uint256 private immutable configuredQuestionId;
 	uint256 private immutable configuredStatoblastSecurityMultiplierBps;
 	uint256 private immutable configuredSettlementCollateralAttoEth;
-	uint256 private immutable configuredTotalCoverageCommitmentAttoEth;
+	uint256 private immutable configuredTotalCapacityOwnershipAttoRep;
 	uint256 private immutable configuredTotalRepBackingUnits;
 
 	constructor(
@@ -123,7 +123,7 @@ contract SecurityPoolForkerAttackParentMock {
 		uint256 configuredQuestion,
 		uint256 configuredMultiplier,
 		uint256 settlementCollateralAttoEth_,
-		uint256 configuredCoverageCommitmentAttoEth,
+		uint256 configuredCapacityOwnershipAttoRep,
 		uint256 configuredDenominator
 	) {
 		configuredSystemState = SystemState.PoolForked;
@@ -133,7 +133,7 @@ contract SecurityPoolForkerAttackParentMock {
 		configuredQuestionId = configuredQuestion;
 		configuredStatoblastSecurityMultiplierBps = configuredMultiplier;
 		configuredSettlementCollateralAttoEth = settlementCollateralAttoEth_;
-		configuredTotalCoverageCommitmentAttoEth = configuredCoverageCommitmentAttoEth;
+		configuredTotalCapacityOwnershipAttoRep = configuredCapacityOwnershipAttoRep;
 		configuredTotalRepBackingUnits = configuredDenominator;
 	}
 
@@ -165,8 +165,8 @@ contract SecurityPoolForkerAttackParentMock {
 		return configuredSettlementCollateralAttoEth;
 	}
 
-	function totalCoverageCommitmentAttoEth() external view returns (uint256) {
-		return configuredTotalCoverageCommitmentAttoEth;
+	function totalCapacityOwnershipAttoRep() external view returns (uint256) {
+		return configuredTotalCapacityOwnershipAttoRep;
 	}
 
 	function totalRepBackingUnits() external view returns (uint256) {
@@ -381,11 +381,15 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return 0;
 	}
 
-	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
+	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
 		return 0;
 	}
 
 	function totalRepBackingUnits() external pure returns (uint256) {
+		return 0;
+	}
+
+	function totalBadDebtAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -400,13 +404,17 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		pure
 		returns (
 			uint256 repBackingUnits,
-			uint256 coverageCommitmentAttoEth,
+			uint256 capacityOwnershipAttoRep,
 			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}
 
-	function configureVault(address, uint256, uint256, uint256) external pure {}
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external pure {}
+
+	function vaultTargetHealthFactorBps(address) external pure returns (uint256) {
+		return 0;
+	}
 }
 
 contract SecurityPoolForkerAlternatingChildGameMock {
@@ -540,7 +548,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		pure
 		returns (
 			uint256 repBackingUnits,
-			uint256 coverageCommitmentAttoEth,
+			uint256 capacityOwnershipAttoRep,
 			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
@@ -550,15 +558,19 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		return 0;
 	}
 
-	function configureVault(address, uint256, uint256, uint256) external {
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external {
 		if (operationalMode) useSecondOperationalEscalationGame = true;
+	}
+
+	function vaultTargetHealthFactorBps(address) external pure returns (uint256) {
+		return 0;
 	}
 
 	function totalRepBackingUnits() external pure returns (uint256) {
 		return 0;
 	}
 
-	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
+	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
 		return 0;
 	}
 }

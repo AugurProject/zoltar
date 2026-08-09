@@ -48,7 +48,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
-		feeEligibleCoverageCommitmentAttoEth: 0n,
+		feeEligibleCapacityOwnershipAttoRep: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -67,7 +67,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -340,7 +340,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).liquidationTargetVault).toBe(targetVaultB)
-		expect(requireHookState(hookState).coverageCommitmentTransferEthAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationDebtEthAmount).toBe('3')
 		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 	})
 
@@ -412,7 +412,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		})
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).coverageCommitmentTransferEthAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationDebtEthAmount).toBe('3')
 		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 		expect(requireHookState(hookState).securityPoolLiquidationError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')

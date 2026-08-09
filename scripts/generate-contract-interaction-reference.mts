@@ -46,9 +46,10 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = '9746e40a8de65c04034660ae970defc50ecc220fe886b27ddf0261349b37550c'
+const expectedProductionSoliditySourceFingerprint = 'ff4b8267251475abf5edd56414167ff3788a5cb59b344775e126315abdfccb88'
 
 const eventSourceByName: Record<string, string> = {
+	VaultBadDebtMigrated: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	Approval: 'solidity/contracts/IERC20.sol',
 	ApprovalForAll: 'solidity/contracts/peripherals/interfaces/IERC1155.sol',
 	AuctionStarted: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
@@ -63,7 +64,7 @@ const eventSourceByName: Record<string, string> = {
 	ChildPoolLinked: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	PoolHeldRepSweptToChild: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ChildRepSplit: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	ClaimAuctionProceeds: 'solidity/contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol',
+	ClaimAuctionProceeds: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ClaimDeposit: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	CompleteSetCreated: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
@@ -89,6 +90,13 @@ const eventSourceByName: Record<string, string> = {
 	GameStarted: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	InheritedThresholdTie: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	LocalDepositAppended: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
+	LiquidationApprovalConsumed: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalNonceInvalidated: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalReleased: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalReserved: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalRevoked: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalSet: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+	LiquidationRouteStaged: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	Migrate: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
 	VaultMigrationCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	MigrationRepAdded: 'solidity/contracts/Zoltar.sol',
@@ -96,8 +104,8 @@ const eventSourceByName: Record<string, string> = {
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	TotalRepBackingUnitsSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	VaultTargetHealthFactorSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PendingEthRefundWithdrawn: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ParentRepLocked: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	RepWithdrawnFromVault: 'solidity/contracts/peripherals/SecurityPool.sol',
@@ -115,7 +123,6 @@ const eventSourceByName: Record<string, string> = {
 	SecurityPoolRegistered: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	ShareTokenSupplySet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	SharesRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
-	StagedOperationDisputeStakedRepSnapshotted: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	StagedOperationQueued: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SystemStateSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	TruthAuctionFinalized: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
@@ -329,7 +336,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '2912c2ac272e5f9d98e61e5034c14408d4fccd4ffa20b6b51c15ae75d3237e73'
+const referencedEventAbiFingerprint = 'f73cedceb07d7243fbd91f9e0bdd7c5f19a886ba391f5e8bcd115408d9489206'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -383,26 +390,38 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	},
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': {
 		executeStagedOperation: ['public(uint256)'],
+		expireStagedOperation: ['external(uint256)'],
 		openOracleCallback: ['external(uint256,uint256,uint256,uint256,address,address)'],
 		recoverSettledPendingReport: ['public()'],
 		requestPrice: ['public(uint256,uint256)'],
+		requestPriceIfNeededAndStageLiquidation: ['external(address,address,uint256,bytes32,uint256,uint256,uint256)'],
 		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256,uint256)'],
+		setLiquidationApprovalRegistry: ['external(LiquidationApprovalRegistry)'],
 		setRepEthPrice: ['public(uint256)'],
 		setSecurityPool: ['public(ISecurityPool)'],
 	},
+	'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol': {
+		consume: ['external(uint256,uint256)'],
+		initialize: ['external(address)'],
+		invalidateLiquidationApprovalNonce: ['external(uint256)'],
+		permitLiquidationApproval: ['external(LiquidationApprovalParams,bytes)'],
+		release: ['external(uint256)'],
+		reserve: ['external(uint256,bytes32,address,address,address,uint256,uint256,uint256)'],
+		revokeLiquidationApproval: ['external(bytes32)'],
+		setLiquidationApproval: ['external(LiquidationApprovalParams)'],
+	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
-		addFeeEligibleCoverageCommitmentAttoEth: ['external(address,uint256)'],
+		addFeeEligibleCapacityOwnershipAttoRep: ['external(address,uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		burnEscalationWinnerHaircut: ['external(uint256)'],
-		configureVault: ['external(address,uint256,uint256,uint256)'],
+		configureVault: ['external(address,uint256,uint256,uint256,uint256,uint256,uint256)'],
 		createCompleteSet: ['external()'],
-		depositRepToVault: ['external(uint256)'],
+		depositRepToVault: ['external(uint256,uint256)'],
 		depositToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 		initializeForkedEscalationGame: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
-		performLiquidation: ['external(address,address,uint256,uint256,uint256,uint256,uint256)'],
-		executeCoverageCommitmentUpdate: ['external(address,uint256)'],
+		performLiquidation: ['external(uint256,address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)'],
 		withdrawRepFromVault: ['external(address,uint256)'],
 		receive: ['external payable()'],
 		redeemCompleteSet: ['external(uint256)'],
@@ -412,7 +431,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		resumeForkedEscalationGame: ['external()'],
 		setAwaitingForkContinuation: ['external(bool)'],
 		setTotalRepBackingUnits: ['external(uint256)'],
-		setPoolFinancials: ['external(uint256,uint256,uint256)'],
+		setPoolFinancials: ['external(uint256,uint256,uint256,uint256)'],
 		setStartingParams: ['external(uint256,uint256)'],
 		setSystemState: ['external(SystemState)'],
 		setTotalSharesAttoShares: ['external(uint256)'],
@@ -474,8 +493,9 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '73f9aad63165cacbff5bd02fd57a6b5a3f73737545018ecdf152c46f905c8c32',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'bd6c688818463887fe5caf84cdfbaf037c3138dd36abdf69f65a77381ecf8e44',
-	'solidity/contracts/peripherals/SecurityPool.sol': 'd7502ad42866b7bd50bb3eb0fc34d0be429834b08a968f5561b50ab1048de4e7',
+	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': '2a27b7ed5407ac8067de39d67bbe84902f4c1c36ab070eeaeb99375db6f8b8e1',
+	'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
+	'solidity/contracts/peripherals/SecurityPool.sol': 'a92b712be45bffcf5096ec978a2ddeed79f8c206958806221d662af785b90432',
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -488,6 +508,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/peripherals/EscalationGameClaimDelegate.sol': ['securityPool'],
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
+	'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol': ['securityPool'],
 	'solidity/contracts/peripherals/SecurityPool.sol': ['eventEmitter', 'factory'],
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': [],
 }
@@ -663,14 +684,14 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '36d2359ae4e137b17b36427dd66d17901731d27a28cd8ada8d1bd8826dd68adf',
+		compiledAbiFingerprint: 'c502f414482a9872fb01eaa78dccd3c19d5e1af5227c10047ba645da00fb3406',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
-		readAbiFingerprint: 'd78fb242d1e6ee936527b4e663eee6f67da2ed8d157bb0800dfa4f5366ce371e',
+		readAbiFingerprint: '855853487a8ab201b9e990820bac4f51ec6ae6520ae2dcf49efcc93e81c9a474',
 		readSurface:
-			'Use `initialEscalationGameDepositAttoRep` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `initialEscalationGameDepositAttoRep`, `minimumSecurityBondDebtAttoEth`, and `minimumVaultRepDepositAttoRep` for immutable deployment floors. The factory requires the escalation baseline to equal 1 attoREP, so each pool fixes its effective escalation deposit at construction as exactly `max(1 attoREP, theoretical REP supply / 10,000,000)`. The vault REP floor is `max(configured floor, theoretical REP supply / 100,000)`; the defaults are 1 ETH security-bond debt and 10 REP configured vault floor. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
-		readStorageDeclarations: [{ name: 'initialEscalationGameDepositAttoRep' }],
+		readStorageDeclarations: [{ name: 'initialEscalationGameDepositAttoRep' }, { name: 'minimumSecurityBondDebtAttoEth' }, { name: 'minimumVaultRepDepositAttoRep' }],
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
@@ -679,7 +700,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDepositAttoRep`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the non-decision threshold exceeds the construction-time effective escalation deposit `max(1 attoREP, theoretical REP supply / 10,000,000)`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
@@ -693,14 +714,14 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '969c06b939f28326001626365363af430b66a7927c3156766aa2589176266bd3',
+		compiledAbiFingerprint: 'e6f383cffdb24744a67bbbc1f3e6b8a19e496413050ad06e04804159b11e0565',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '788faaada85aee4f3cc7fa486d83e6b1d5376e9736d404120a69d5a8c82959e4',
+		readAbiFingerprint: '1d854f25a5b2ccdb83dbaf6ad1c99600c4eebd6b05764f0c8073183e47f585e2',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalCoverageCommitmentAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, `totalBadDebtAttoEth`, `vaultBadDebtAttoEth`, and `systemState`. Bad-debt getters are cumulative audit totals; active coverage commitment excludes recorded writeoffs. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `attoRepToBackingUnitsRoundUp`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 		securityBoundary:
-			'Price-sensitive withdrawal, coverage-commitment, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
+			'Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
 			{ name: 'securityPoolEventEmitter' },
 			{ name: 'getVaultCount' },
@@ -710,12 +731,13 @@ const contractReferences: ContractReference[] = [
 			{ name: 'attoSharesToAttoEth' },
 			{ name: 'attoEthToAttoShares' },
 			{ name: 'attoRepToBackingUnits' },
-			{ name: 'attoRepToBackingUnitsRoundUp' },
 			{ name: 'backingUnitsToAttoRep' },
 			{ name: 'getTotalPoolHeldAttoRep' },
 			{ name: 'totalAccruedFeesAttoEth' },
 			{ name: 'getPoolAccountingSnapshot' },
 			{ name: 'getVaultFeeRemainder' },
+			{ name: 'getCurrentMintingCapacityAttoEth' },
+			{ name: 'getVaultOpenInterestAttoEth' },
 			{ name: 'isEscalationResolved' },
 		],
 		readStorageDeclarations: [
@@ -734,7 +756,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'securityPoolForker' },
 			{ name: 'truthAuction' },
 			{ name: 'securityPoolFactory' },
-			{ name: 'totalCoverageCommitmentAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'totalCapacityOwnershipAttoRep', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'settlementCollateralAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'totalRepBackingUnits', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'statoblastSecurityMultiplierBps', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
@@ -748,6 +770,9 @@ const contractReferences: ContractReference[] = [
 			{ name: 'totalBadDebtAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'vaultBadDebtAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 			{ name: 'systemState', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'minimumSecurityBondDebtAttoEth', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'minimumVaultRepDepositAttoRep', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
+			{ name: 'vaultTargetHealthFactorBps', sourcePath: 'solidity/contracts/peripherals/SecurityPoolStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/SecurityPool.sol',
 		interactions: [
@@ -760,12 +785,12 @@ const contractReferences: ContractReference[] = [
 				signals: '`RepBurned` and ERC-20 `Transfer`; child REP also emits `Burn`',
 			},
 			{
-				call: '`depositRepToVault(attoRepAmount)`',
+				call: '`depositRepToVault(attoRepAmount, targetHealthFactorBps)`',
 				caller: 'Vault owner',
-				effect: 'Transfers REP into the pool and credits proportional REP backing units.',
+				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from the deposit and selected target health factor.',
 				declarations: [{ name: 'depositRepToVault' }],
-				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; resulting vault REP meets the minimum.',
-				signals: '`RepDepositedToVault`',
+				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; target health factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
+				signals: '`RepDepositedToVault`, the vault target-health-factor event, and accounting checkpoints',
 			},
 			{
 				call: '`redeemFees(vault)`',
@@ -781,7 +806,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible coverage commitment covers the resulting settlement collateral, not merely this deposit; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
+					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -816,7 +841,7 @@ const contractReferences: ContractReference[] = [
 					"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThresholdAttoRep - 1` instead. Repeat deposits use the existing game's stored `startBondAttoRep` and `nonDecisionThresholdAttoRep`. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.",
 				declarations: [{ name: 'depositToEscalationGame' }],
 				preconditions:
-					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict pool-held vault REP backing migration coverage; fresh price when coverage commitment is nonzero.',
+					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both live open-interest health branches; a fresh price is required when total capacity ownership is nonzero.',
 				signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 			},
 			{
@@ -841,23 +866,23 @@ const contractReferences: ContractReference[] = [
 				call: '`updateSettlementCollateral()`',
 				caller: 'Anyone',
 				effect:
-					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible coverage commitment it clears denominator-specific remainder and advances the timestamp without charging fees.",
+					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible capacity ownership it clears denominator-specific remainder and advances the timestamp without charging fees.",
 				declarations: [{ name: 'updateSettlementCollateral' }],
 				preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
-				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-coverage-commitment branch; no event for an unchanged timestamp',
+				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-capacity-ownership branch; no event for an unchanged timestamp',
 			},
 			{
 				call: '`updateRetentionRate()`',
 				caller: 'Anyone',
-				effect: 'Recalculates the retention rate from current collateral and vault-assigned, fee-eligible coverage commitment.',
+				effect: 'Recalculates the retention rate from current collateral and live oracle-priced minting capacity.',
 				declarations: [{ name: 'updateRetentionRate' }],
-				preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero fee-eligible coverage commitment selects the maximum retention rate.',
+				preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero live minting capacity selects the maximum retention rate.',
 				signals: '`PoolAccountingCheckpoint` only when the stored retention rate changes; no event for a no-op',
 			},
 			{
 				call: '`updateVaultFees(vault)`',
 				caller: 'Anyone for any address',
-				effect: 'First updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, updates active-vault membership, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible coverage commitment.',
+				effect: 'First updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, updates active-vault membership, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible capacity ownership.',
 				declarations: [{ name: 'updateVaultFees' }],
 				preconditions: 'No caller, nonzero-vault, or lifecycle restriction.',
 				signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
@@ -865,29 +890,21 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`withdrawRepFromVault(vault, attoRepAmount)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
-				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum, and transfers the resulting withdrawable REP to `vault`.',
+				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces the vault and pool capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
 				declarations: [{ name: 'withdrawRepFromVault' }],
-				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each preserve associated-REP pool coverage and strict pool-held vault REP backing migration coverage.',
-				signals: 'REP `Transfer`, `RepWithdrawnFromVault`, and `VaultAccountingCheckpoint`, including a zero-value transfer/event path if the trusted coordinator supplies zero',
+				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.',
+				signals: '`VaultTargetHealthFactorSet`; REP `Transfer`; `RepWithdrawnFromVault`; `VaultAccountingCheckpoint`; and applicable fee-accrual or retention `PoolAccountingCheckpoint` events, including a zero-value transfer/event path if the trusted coordinator supplies zero',
 			},
 			{
-				call: '`performLiquidation(...)`',
+				call: '`performLiquidation(operationId, operator, receiverVault, targetVault, requestedDebtAttoEth, snapshotTargetBackingUnits, snapshotTargetCapacityOwnershipAttoRep, snapshotTotalPoolHeldAttoRep, snapshotTotalRepBackingUnits, minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect:
-					"Moves the funded coverage commitment and its fixed 5%-bonus vault REP backing award to the caller. Dispute-staked REP claims, accrued claimable fees, and surplus vault REP backing remain with the target. When the user requests at least the target's full current coverage commitment through the coordinator, the pool's maximum-request path records any untransferred residual as realized attoETH-denominated bad debt in `vaultBadDebtAttoEth` and cumulative `totalBadDebtAttoEth`; the target vault and pool bear that nonrecoverable writeoff. It removes the writeoff from active and fee-eligible coverage commitment without minting REP backing units or socializing the bonus. If an otherwise funded slice would leave the caller below the minimum coverage commitment, that slice is not transferred and the complete target coverage commitment is recorded instead.",
+					"Capped by the target vault's open interest and fundable REP award, a nominal debt quote selects proportional capacity ownership rounded downward and moves that ownership to the explicitly selected receiver vault. Moved security-bond debt is the receiver's exact live open-interest increase and cannot exceed the nominal quote or request. On a delegated route, the coordinator additionally bounds it by the staged approval reservation; the self-receiving route has no approval reservation. The operator only submits the transaction. Dispute-staked REP claims, accrued claimable fees, surplus vault REP backing, and unmatched ownership remain with the target. On a full-target request, target open interest minus exact moved debt is recorded as attoETH-denominated bad debt; that residual can include both an award-unfunded slice and integer-allocation residue. Receiver or target dust cannot turn otherwise funded debt into bad debt.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false. Target REP backing units and coverage commitment must exactly match the quote; live target state is unsafe at the current REP-per-backing-unit rate. An ordinary coverage-commitment transfer is capped to the amount whose complete 105% award is funded by target vault REP backing. A partial target with remaining coverage commitment preserves its REP-backing and commitment floors. When commitment moves, the caller satisfies both floors and remains healthy. A bad-debt-only maximum execution performs no caller transfer or position-floor check.',
-				signals: 'Fee-accrual and pre-execution target or caller `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` and the post-transfer caller checkpoint only when coverage commitment moves; `VaultBadDebtRecorded` when a residual is written off; final target and pool accounting checkpoints',
-			},
-			{
-				call: '`executeCoverageCommitmentUpdate(callerVault, amountAttoEth)`',
-				caller: "This pool's `OpenOraclePriceCoordinator` only",
-				effect: 'Accrues the vault, replaces its total and fee-eligible coverage-commitment contribution, clears coverage-commitment-denominator rounding carry, updates active membership, and recalculates retention.',
-				declarations: [{ name: 'executeCoverageCommitmentUpdate' }],
-				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault and aggregate pool totals each pass associated-REP pool coverage and strict pool-held vault REP backing migration coverage; settlement collateral stays within vault-assigned, fee-eligible coverage commitment; the new coverage commitment is zero or meets the minimum.',
-				signals: 'Accrual checkpoints as needed; retention `PoolAccountingCheckpoint` if its rate changes; always final `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when replacing a coverage commitment with the same value',
+					'Fresh settled coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; receiver differs from target. Target snapshots must match. After target and receiver fee checkpoints, the liquidation delegate requires live target backing, dispute-staked REP, and open interest to remain at least `minLiquidationPriceDistanceBps` beyond the liquidation threshold and requires the live target state to remain unhealthy. When debt moves, the receiver must satisfy the protocol backing checks multiplied by its approved minimum health factor, using live post-liquidation state and upward-rounded requirements; its resulting debt must meet the configured debt floor and its REP must meet the vault floor. The target resulting debt must be zero or meet the debt floor; when debt remains, target REP must meet the vault floor.',
+				signals:
+					'Fee-accrual and target or receiver `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` identifies operation, operator, receiver, target, moved debt, moved ownership, and bad debt; `VaultBadDebtRecorded` records residual target debt on a full-target request; final pool accounting checkpoint',
 			},
 			{
 				call: '`setStartingParams(...)`',
@@ -947,10 +964,10 @@ const contractReferences: ContractReference[] = [
 				signals: '`SystemStateSet`, including for a repeated state',
 			},
 			{
-				call: '`configureVault(vault, repBackingUnits, coverageCommitmentAttoEth, vaultFeeIndex)`',
+				call: '`configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureVault' }],
-				effect: 'Tracks the vault, replaces its REP backing units, coverage commitment, and fee index, clears pooled fee-index remainder when coverage commitment changes, and updates active-vault ordering.',
+				effect: 'Tracks the vault, replaces its REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.',
 				preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},
@@ -971,11 +988,11 @@ const contractReferences: ContractReference[] = [
 				signals: '`ShareTokenSupplySet`, including for zero or a repeated value',
 			},
 			{
-				call: '`setPoolFinancials(newSettlementCollateralAttoEth, newTotalCoverageCommitmentAttoEth, newFeeEligibleCoverageCommitmentAttoEth)`',
+				call: '`setPoolFinancials(newSettlementCollateralAttoEth, newTotalCapacityOwnershipAttoRep, newFeeEligibleCapacityOwnershipAttoRep, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setPoolFinancials' }],
-				effect: 'Replaces settlement collateral and both coverage-commitment totals, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
-				preconditions: 'Total coverage commitment covers settlement collateral and fee-eligible coverage commitment does not exceed total coverage commitment; no lifecycle or value-change guard.',
+				effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
+				preconditions: 'Fee-eligible capacity ownership does not exceed total capacity ownership, and the supplied settlement collateral does not exceed the current price-converted minting capacity; no lifecycle or value-change guard.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{
@@ -995,11 +1012,11 @@ const contractReferences: ContractReference[] = [
 				signals: '`PoolAccountingCheckpoint`, including at zero amount; no dedicated ETH-transfer event',
 			},
 			{
-				call: '`addFeeEligibleCoverageCommitmentAttoEth(vault, amountAttoEth)`',
+				call: '`addFeeEligibleCapacityOwnershipAttoRep(vault, amountAttoRep)`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'addFeeEligibleCoverageCommitmentAttoEth' }],
-				effect: 'Adds newly auction-claimed coverage commitment to the live fee denominator, clears the pooled fee-index rounding remainder, and immediately recalculates retention against the assigned denominator.',
-				preconditions: 'The resulting fee-eligible coverage commitment cannot exceed total coverage commitment; no lifecycle, vault, positive-amount, or value-change guard.',
+				declarations: [{ name: 'addFeeEligibleCapacityOwnershipAttoRep' }],
+				effect: 'Adds newly auction-claimed capacity ownership to the live fee denominator, clears the pooled fee-index rounding remainder, then checkpoints elapsed fees and recalculates retention from collateral and unchanged total capacity ownership. The assignment itself does not change live minting capacity.',
+				preconditions: 'The resulting fee-eligible capacity ownership cannot exceed total capacity ownership; no lifecycle, vault, positive-amount, or value-change guard.',
 				signals: 'Retention-rate `PoolAccountingCheckpoint` first when the rate changes, then `VaultAccountingCheckpoint` and auction-claim `PoolAccountingCheckpoint`, including the latter two at zero amount; the calling forker emits `ClaimAuctionProceeds` only after the broader credit workflow completes',
 			},
 			{
@@ -1013,10 +1030,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '530598316337711bf3272d1fe05b7cb2761bc065fa91014339e893d1612acc91',
+		compiledAbiFingerprint: '53bc009e3dfbd79b99b31c22b2128cf93b16b73059ce344190ce65b39400183c',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
-		readAbiFingerprint: '66d0db5b32477fc4876e6af49fe7cc6a2fdfd15a0d33648b4fc8cef48dc7a556',
+		readAbiFingerprint: '2d321031db910e3feec1b22c481203de331c894217e60456fa429472808aa4a4',
 		readSurface:
 			'Use `zoltar`, `forkData`, `getMigratedAttoRep`, `getForkActivationTime`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
 		readDeclarations: [
@@ -1083,18 +1100,19 @@ const contractReferences: ContractReference[] = [
 				call: '`migrateVault(securityPool, outcomeIndex)`',
 				caller: 'Vault owner for their non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
-				effect: "Transfers the caller's REP backing units and coverage commitment into one child pool, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. Repeat calls can have no additional REP backing units or coverage commitment to move.",
+				effect:
+					"Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
 				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
-				signals: '`VaultMigrationCheckpoint`',
+				signals: '`VaultBadDebtMigrated` and `VaultMigrationCheckpoint`',
 			},
 			{
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault owner',
 				effect:
-					"First runs ordinary migration for the same vault, which may transfer REP backing units and coverage commitment to the selected child, checkpoint but retain claimable fees in the parent vault, and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may transfer REP backing units, capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
 				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
-				signals: 'Vault migration events plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
+				signals: 'Vault migration events, including `VaultBadDebtMigrated`, plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
 			},
 			{
 				call: '`claimForkedEscalationDeposits(...)`',
@@ -1118,9 +1136,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, activates the child at that settlement-collateral level, and fixes bidder REP-backing-unit and coverage-commitment rates. A nonzero repair contribution is rejected.',
+				effect: 'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, activates the child at that settlement-collateral level, and fixes bidder REP-backing-unit and capacity-ownership rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
+				preconditions:
+					'Truth auction started, its one-week window has passed, `msg.value` is zero, and migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
@@ -1128,18 +1147,18 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'settleAuctionBids' }],
 				effect:
-					'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP backing and coverage-commitment result; a winning dust bid may receive coverage commitment even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.',
+					'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP backing and capacity-ownership result. It also assigns the bidder vault its cumulative share of auctioned bad debt: intermediate cumulative shares round down and the final capacity claim receives the exact residual, so claim order cannot change the total. A winning dust bid may receive capacity ownership even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.',
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault owner and remain unsettled.',
-				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP backing or coverage commitment is credited',
+				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` with cumulative claimed and total auctioned bad debt when REP backing, capacity ownership, or bad debt is credited',
 			},
 			{
 				call: '`claimAuctionProceeds(securityPool, vault, tickIndices)`',
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect:
-					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child REP backing units, and independently credits the bid positional coverage-commitment allocation. A winning dust bid can receive positive coverage commitment when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
+					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child REP backing units, independently credits the bid positional capacity-ownership allocation, and assigns the bidder vault its cumulative share of auctioned bad debt. Intermediate cumulative shares round down and the final capacity claim receives the exact residual, so claim order cannot change the total. A winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
 				preconditions: 'Auction finalized. A nonempty list additionally requires every index to belong to the named vault owner and remain unsettled.',
-				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP backing or coverage commitment is credited; no event for an empty list',
+				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` with cumulative claimed and total auctioned bad debt when REP backing, capacity ownership, or bad debt is credited; no event for an empty list',
 			},
 			{
 				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)`',
@@ -1367,12 +1386,89 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'bc0868f818b5286199dc8824dfee5ab8447dc2ae4a4d1a3470cc68f49b61a556',
-		name: 'OpenOraclePriceCoordinator',
-		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, coverage-commitment, and liquidation operations behind it.',
-		readAbiFingerprint: 'ffa866abf9af610b796116aafe1af8755b7f09381b1ca344863eb6bb7d929cea',
+		compiledAbiFingerprint: '24fef7375af443bf5477c0c4afa6d6ce6ef852f82a8b17d46bd1cea15bc3c264',
+		name: 'LiquidationApprovalRegistry',
+		purpose: 'Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.',
+		readAbiFingerprint: '7c276b2f22b70ca6fece4a55e138e7567a7fc320e9e571a7b61a8314b8644ea2',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Use `coordinator` to identify the validating coordinator and implied security pool. `LIQUIDATION_APPROVAL_TYPEHASH`, `DOMAIN_SEPARATOR`, and `liquidationApprovalDigest` define the chain- and registry-bound EIP-712 message. `getLiquidationApproval` reports parameters plus available, reserved, consumed, and revoked state; `minimumLiquidationApprovalNonce` reports receiver invalidation state; `liquidationReservations` and `minimumHealthFactorBps` expose operation reservation state and its execution-time health floor.',
+		readDeclarations: [{ name: 'DOMAIN_SEPARATOR' }, { name: 'liquidationApprovalDigest' }, { name: 'getLiquidationApproval' }, { name: 'minimumHealthFactorBps' }],
+		readStorageDeclarations: [{ name: 'coordinator' }, { name: 'LIQUIDATION_APPROVAL_TYPEHASH' }, { name: 'minimumLiquidationApprovalNonce' }, { name: 'liquidationReservations' }],
+		sourcePath: 'solidity/contracts/peripherals/LiquidationApprovalRegistry.sol',
+		interactions: [
+			{
+				call: '`initialize(coordinator)`',
+				caller: 'Anyone while the registry remains uninitialized; normal factory deployment initializes the clone atomically',
+				effect: 'Binds this registry clone to one coordinator and therefore one security pool.',
+				declarations: [{ name: 'initialize' }],
+				preconditions: 'Coordinator is nonzero and the registry has not been initialized.',
+				signals: 'No event; the public `coordinator` getter records the binding.',
+			},
+			{
+				call: '`setLiquidationApproval(params)`',
+				caller: 'The receiver vault named by `params`',
+				effect: 'Installs explicit onchain bounded approval state and consumes the receiver-scoped nonce.',
+				declarations: [{ name: 'setLiquidationApproval' }],
+				preconditions: 'Correct local pool; nonzero receiver and operator; positive cumulative and per-operation limits with per-operation no greater than cumulative; health factor at least 10,000 BPS; live ordered validity window; unused, non-invalidated nonce.',
+				signals: '`LiquidationApprovalSet`',
+			},
+			{
+				call: '`permitLiquidationApproval(params, signature)`',
+				caller: 'Anyone relaying the receiver vault signature',
+				effect: 'Validates an EIP-712 EOA or ERC-1271 signature immediately, installs explicit approval state, and consumes the receiver-scoped nonce.',
+				declarations: [{ name: 'permitLiquidationApproval' }],
+				preconditions: 'Signature is valid for `params.receiverVault`; the chain ID, registry address, stable name/version, pool, receiver, operator, target scope, limits, health factor, window, and nonce are bound by the digest; direct-install validation rules also pass.',
+				signals: '`LiquidationApprovalSet`',
+			},
+			{
+				call: '`revokeLiquidationApproval(approvalId)`',
+				caller: 'Approval receiver vault only',
+				effect: 'Prevents new reservations while leaving reservations already attached to staged operations intact.',
+				declarations: [{ name: 'revokeLiquidationApproval' }],
+				preconditions: 'Approval exists and is not already revoked.',
+				signals: '`LiquidationApprovalRevoked` with available, reserved, and consumed totals',
+			},
+			{
+				call: '`invalidateLiquidationApprovalNonce(newNonce)`',
+				caller: 'Receiver vault invalidating its own older nonce range',
+				effect: 'Raises the minimum nonce accepted for new approval installation or reservation.',
+				declarations: [{ name: 'invalidateLiquidationApprovalNonce' }],
+				preconditions: 'New nonce is greater than the receiver current minimum.',
+				signals: '`LiquidationApprovalNonceInvalidated`',
+			},
+			{
+				call: '`reserve(operationId, approvalId, receiverVault, targetVault, operator, requestedDebtAttoEth, snapshotTargetDebtAttoEth, latestExecutionTimestamp)`',
+				caller: 'Bound coordinator only',
+				effect: 'Moves quota from available to pending reserved at staging, bounded by requested debt, target snapshot debt, per-operation limit, and available cumulative quota.',
+				declarations: [{ name: 'reserve' }],
+				preconditions: 'Approval matches local pool, receiver, exact operator, and exact or wildcard target; it is active, unrevoked, non-invalidated, valid through latest execution, and has positive reservable quota.',
+				signals: '`LiquidationApprovalReserved`',
+			},
+			{
+				call: '`release(operationId)`',
+				caller: 'Bound coordinator only',
+				effect: 'Returns an unsettled delegated reservation to available quota. A missing, self-route, or already settled reservation is a no-op.',
+				declarations: [{ name: 'release' }],
+				preconditions: 'Coordinator terminal cleanup path.',
+				signals: '`LiquidationApprovalReleased` when quota is returned',
+			},
+			{
+				call: '`consume(operationId, debtMovedAttoEth)`',
+				caller: 'Bound coordinator only',
+				effect: 'Permanently consumes exactly moved debt, releases unused reservation, and settles the reservation once.',
+				declarations: [{ name: 'consume' }],
+				preconditions: 'For a delegated reservation, it is unsettled and moved debt does not exceed reserved debt. A self route is a no-op.',
+				signals: '`LiquidationApprovalConsumed`',
+			},
+		],
+	},
+	{
+		compiledAbiFingerprint: '60cd10890a685efe179e17e93a783c660542bd6368f86fed87f46de03695b243',
+		name: 'OpenOraclePriceCoordinator',
+		purpose: 'Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.',
+		readAbiFingerprint: '288a73d13de5a0f593226105eb11eb177bf085ac2ee708a31645c3d7c4eb7237',
+		readSurface:
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -1419,18 +1515,27 @@ const contractReferences: ContractReference[] = [
 			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
 			{ name: 'stagedOperationCounter' },
 			{ name: 'stagedOperations' },
+			{ name: 'liquidationApprovalRegistry' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
+				call: '`requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, ...)`',
+				caller: 'Liquidation operator; a delegated receiver must have approved this exact operator',
+				effect: 'Stages explicit operator, receiver, and target roles and reserves bounded receiver quota before any oracle work. The self-receiving operator path uses a zero approval ID.',
+				declarations: [{ name: 'requestPriceIfNeededAndStageLiquidation' }],
+				preconditions: 'Receiver differs from target; delegated approval matches pool, receiver, operator, and target scope, has available cumulative and per-operation quota, and remains valid through latest execution.',
+				signals: '`LiquidationRouteStaged`; `LiquidationApprovalReserved` on a delegated route; staged-operation lifecycle events',
+			},
+			{
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
-				caller: 'Vault owner for self withdrawal or coverage-commitment updates; a different vault for liquidation. While a report is pending, only that report sponsor may stage more operations.',
+				caller: 'Vault owner for self withdrawal; legacy self-receiving liquidation callers remain supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
 					'Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'`securityPool.isEscalationResolved()` is false; valid target and nonzero amount except a zero coverage commitment; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, along with the coordinator-derived REP side and approvals, are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report. The caller must accept any positive unused-ETH refund.',
-				signals: '`StagedOperationQueued` immediately followed by `StagedOperationDisputeStakedRepSnapshotted`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
+					'`securityPool.isEscalationResolved()` is false; valid target, nonzero amount, and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
+				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)` with report funding',
@@ -1444,26 +1549,43 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`executeStagedOperation(operationId)`',
 				caller: 'Anyone',
-				effect: "Consumes and attempts one active staged operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
+				effect:
+					"Consumes an expired operation and releases its delegated reservation without requiring a valid price. Otherwise, consumes and attempts the active operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
 				declarations: [{ name: 'executeStagedOperation' }],
-				preconditions: 'Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried.',
-				signals: '`ExecutedStagedOperation` and `CoordinatorStateCheckpoint`',
+				preconditions: 'Operation exists. Expired cleanup requires no valid price; a non-expired operation requires a fresh coordinator price. Lifecycle failures are emitted rather than retried.',
+				signals: '`ExecutedStagedOperation`, either `LiquidationApprovalConsumed` or `LiquidationApprovalReleased` for a delegated liquidation, and `CoordinatorStateCheckpoint`',
+			},
+			{
+				call: '`expireStagedOperation(operationId)`',
+				caller: 'Anyone',
+				effect: 'Permissionlessly consumes an expired operation and releases its liquidation reservation without requiring a valid oracle price.',
+				declarations: [{ name: 'expireStagedOperation' }],
+				preconditions: 'Operation exists and its settlement-plus-validity window has elapsed.',
+				signals: '`ExecutedStagedOperation`, `LiquidationApprovalReleased` for a delegated liquidation, and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`recoverSettledPendingReport()`',
 				caller: 'Anyone',
-				effect: 'Clears a pending report whose normal callback path did not clear coordinator state. If the pending-operation slot names a live staged operation, deactivates and removes that operation from active and pending collections, then advances the slot; other staged operations remain active.',
+				effect: 'Clears a pending report whose normal callback path did not clear coordinator state, consumes every live operation attached to that report, and releases each delegated-liquidation reservation. Operations that were active but outside the bounded pending callback batch remain active.',
 				declarations: [{ name: 'recoverSettledPendingReport' }],
 				preconditions: 'A pending report ID exists and its stored OpenOracle `storedGame(reportId).settlementTimestamp` is nonzero.',
-				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`, and `CoordinatorStateCheckpoint`',
+				signals: '`PendingReportRecovered`, failed `ExecutedStagedOperation` for each live attached operation, `LiquidationApprovalReleased` for each attached delegated liquidation, and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`openOracleCallback(...)`',
 				caller: 'Configured `OpenOracle` only',
-				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
+				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A terminally rejected settlement consumes the pending batch and releases every liquidation reservation.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; excessive settlement basefee, a saturated `uint24` report counter, an uneconomic final history record at its recorded base fee plus configured priority fee, or zero values reject the price after clearing pending report state.',
 				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',
+			},
+			{
+				call: '`setLiquidationApprovalRegistry(registry)`',
+				caller: 'Coordinator deployment factory only',
+				effect: 'Binds the coordinator-local approval registry once.',
+				declarations: [{ name: 'setLiquidationApprovalRegistry' }],
+				preconditions: 'Registry is nonzero and no registry was previously installed.',
+				signals: 'No event; deterministic factory deployment and the public getter identify the registry.',
 			},
 			{
 				call: '`setSecurityPool(pool)`',
@@ -1674,7 +1796,7 @@ const contractReferences: ContractReference[] = [
 				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal)`',
 				caller: 'Auction owner only',
 				effect:
-					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit REP backing units and coverage commitment. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and coverage-commitment settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
+					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit REP backing units and capacity ownership. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and capacity-ownership settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled.',
 				signals: '`BidSettled` per processed bid; `EthRefundDeferred` when a positive push fails',
@@ -1919,7 +2041,7 @@ function assertReadDeclaration(source: string, declaration: ContractDeclaration,
 }
 
 function assertPublicStorageDeclaration(source: string, storageName: string, sourceLabel: string): string {
-	const declarationPattern = new RegExp(`^\\s*([^;{}]*\\bpublic(?:\\s+(?:constant|immutable))*\\s+${storageName}(?:\\s*=\\s*[^;]+)?);`, 'm')
+	const declarationPattern = new RegExp(`^\\s*([^;{}]*\\bpublic(?:\\s+(?:constant|immutable|override))*\\s+${storageName}(?:\\s*=\\s*[^;]+)?);`, 'm')
 	const match = source.match(declarationPattern)
 	assert.ok(match, `${sourceLabel} no longer declares public storage getter ${storageName}; update the interaction reference`)
 	return (match[1] ?? '').replace(/\s+/g, ' ').trim()
@@ -1978,7 +2100,7 @@ function getPublicReadDeclarationNames(source: string): string[] {
 function getPublicStorageDeclarationNames(source: string): string[] {
 	return Array.from(
 		new Set(
-			Array.from(source.matchAll(/^\s*(?:mapping\s*\([^;]+\)|[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*\])*)\s+public(?:\s+(?:constant|immutable))*\s+([A-Za-z_][A-Za-z0-9_]*)\b/gm)).map(match => {
+			Array.from(source.matchAll(/^\s*(?:mapping\s*\([^;]+\)|[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*\])*)\s+public(?:\s+(?:constant|immutable|override))*\s+([A-Za-z_][A-Za-z0-9_]*)\b/gm)).map(match => {
 				const name = match[1]
 				if (name === undefined) throw new Error('Expected a Solidity public-storage-name capture')
 				return name

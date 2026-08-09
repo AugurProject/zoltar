@@ -100,25 +100,21 @@ function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { fo
 	}
 }
 
-function getPendingOperationLabel(operation: 'liquidation' | 'setCoverageCommitment' | 'withdrawRep') {
+function getPendingOperationLabel(operation: 'liquidation' | 'withdrawRep') {
 	switch (operation) {
 		case 'liquidation':
 			return securityPoolCopy.liquidation
 		case 'withdrawRep':
 			return securityPoolCopy.withdrawRep
-		case 'setCoverageCommitment':
-			return securityPoolCopy.setCoverageCommitment
 		default:
 			return assertNever(operation)
 	}
 }
 
-function getPendingOperationAmountPresentation(operation: 'liquidation' | 'setCoverageCommitment' | 'withdrawRep') {
+function getPendingOperationAmountPresentation(operation: 'liquidation' | 'withdrawRep') {
 	switch (operation) {
 		case 'liquidation':
-			return { label: securityPoolCopy.coverageCommitmentTransfer, suffix: commonCopy.eth }
-		case 'setCoverageCommitment':
-			return { label: securityPoolCopy.coverageCommitment, suffix: commonCopy.eth }
+			return { label: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth }
 		case 'withdrawRep':
 			return { label: securityPoolCopy.repWithdrawal, suffix: commonCopy.rep }
 		default:
@@ -148,19 +144,32 @@ export function SecurityPoolWorkflowSection({
 	checkedSecurityPoolAddress,
 	closeLiquidationModal,
 	forkAuction,
-	coverageCommitmentTransferEthAmount,
-	maximumCoverageCommitmentTransferAttoEth,
+	liquidationDebtEthAmount,
+	maximumLiquidationDebtAttoEth,
 	liquidationManagerAddress,
 	liquidationFundingPreview,
 	liquidationFundingPreviewError,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	liquidationReceiverVault,
+	liquidationApprovalId,
+	liquidationApprovalDetails,
+	liquidationApprovalError,
+	liquidationReceiverVaultSummary,
+	liquidationReceiverVaultSummaryError,
+	liquidationReceiverVaultSummaryResolved,
 	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
 	loadingLiquidationFundingPreview,
+	loadingLiquidationApproval,
+	loadingLiquidationReceiverVaultSummary,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
+	onLiquidationReceiverVaultChange,
+	onLiquidationApprovalIdChange,
+	onLoadLiquidationApproval,
+	onLoadLiquidationReceiverVaultSummary,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
 	onBrowsePools,
@@ -431,7 +440,7 @@ export function SecurityPoolWorkflowSection({
 	const reportingOracleGuardMessage = (() => {
 		if (reportingLockedReason !== undefined) return undefined
 		if (!selectedPoolStateModel.actions.reportOutcome.enabled) return undefined
-		if ((loadedSelectedPool?.totalCoverageCommitmentAttoEth ?? 0n) === 0n) return undefined
+		if ((loadedSelectedPool?.totalCapacityOwnershipAttoRep ?? 0n) === 0n) return undefined
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()
@@ -490,9 +499,6 @@ export function SecurityPoolWorkflowSection({
 							lastOraclePrice: currentPoolOraclePrice ?? selectedPoolSummaryPool.lastOraclePrice,
 							lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
 						}}
-						repPerEthPrice={repPerEthPrice}
-						repPerEthSource={repPerEthSource}
-						repPerEthSourceUrl={repPerEthSourceUrl}
 						showTotalBacking
 						variant='hero'
 					>
@@ -516,7 +522,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolSummaryContent = (
 			<div className='selected-pool-context-summary'>
 				<div className='selected-pool-context-overview'>
-					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
+					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} showTotalBacking>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
 							<MetricField label={securityPoolCopy.parentPool}>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
@@ -553,7 +559,7 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
 		const queuedOperationHash = (() => {
-			if (securityVault.securityVaultResult?.action === 'queueSetCoverageCommitmentAttoEth' || securityVault.securityVaultResult?.action === 'queueWithdrawRep') return securityVault.securityVaultResult.hash
+			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep') return securityVault.securityVaultResult.hash
 			if (securityPoolOverviewResult?.action === 'queueLiquidation') return securityPoolOverviewResult.hash
 
 			return undefined
@@ -680,7 +686,7 @@ export function SecurityPoolWorkflowSection({
 		if (shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 	}, [onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting])
 	useEffect(() => {
-		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueSetCoverageCommitmentAttoEth' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
+		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
 		if (queuedOperationHash === undefined) {
 			lastImmediateQueuedOperationRefreshHash.current = undefined
 			return
@@ -874,7 +880,7 @@ export function SecurityPoolWorkflowSection({
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
 													repPerEthSourceUrl={repPerEthSourceUrl}
-													coverageCommitmentAttoEth={selectedVaultDetails.coverageCommitmentAttoEth}
+													capacityOwnershipAttoRep={selectedVaultDetails.capacityOwnershipAttoRep}
 													securityVaultDetails={selectedVaultDetails}
 													selectedPoolStatoblastSecurityMultiplierBps={securityVault.selectedPoolStatoblastSecurityMultiplierBps}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
@@ -912,7 +918,7 @@ export function SecurityPoolWorkflowSection({
 																</button>
 																<button
 																	className='secondary'
-																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.coverageCommitmentAttoEth)}
+																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.capacityOwnershipAttoRep)}
 																	disabled={accountState.address === undefined || !isOnActiveAppChain || !liquidationEnabled}
 																	title={!isOnActiveAppChain && accountState.address !== undefined ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : securityPoolCopy.reviewLiquidation}
 																>
@@ -950,7 +956,7 @@ export function SecurityPoolWorkflowSection({
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
-																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.coverageCommitmentAttoEth),
+																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.capacityOwnershipAttoRep),
 																	}),
 														}
 													})(),
@@ -961,7 +967,7 @@ export function SecurityPoolWorkflowSection({
 												oracleManagerDetails={currentPoolOracleManagerDetails}
 												poolState={selectedPoolStateModel}
 												selectedPoolTotalPoolHeldAttoRep={selectedPool?.totalPoolHeldAttoRep}
-												selectedPoolTotalCoverageCommitmentAttoEth={selectedPool?.totalCoverageCommitmentAttoEth}
+												selectedPoolTotalCapacityOwnershipAttoRep={selectedPool?.totalCapacityOwnershipAttoRep}
 												selectedMarketTitle={selectedPool?.marketDetails.title}
 												showHeader={false}
 												showLookupSection={false}
@@ -1037,7 +1043,7 @@ export function SecurityPoolWorkflowSection({
 													<MetricGrid className='entity-card-body'>
 														<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
 														<MetricField label={securityPoolCopy.initiator}>
-															<AddressValue address={operation.initiatorVault} />
+															<AddressValue address={operation.operator} />
 														</MetricField>
 														<MetricField label={commonCopy.targetVault}>
 															<AddressValue address={operation.targetVault} />
@@ -1194,8 +1200,8 @@ export function SecurityPoolWorkflowSection({
 				closeLiquidationModal={closeLiquidationModal}
 				currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 				isOnActiveAppChain={isOnActiveAppChain}
-				coverageCommitmentTransferEthAmount={coverageCommitmentTransferEthAmount}
-				maximumCoverageCommitmentTransferAttoEth={maximumCoverageCommitmentTransferAttoEth}
+				liquidationDebtEthAmount={liquidationDebtEthAmount}
+				maximumLiquidationDebtAttoEth={maximumLiquidationDebtAttoEth}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationFundingPreview={liquidationFundingPreview}
 				liquidationFundingPreviewError={liquidationFundingPreviewError}
@@ -1205,8 +1211,18 @@ export function SecurityPoolWorkflowSection({
 				loadingPoolOracleManager={loadingPoolOracleManager}
 				loadingLiquidationFundingPreview={loadingLiquidationFundingPreview}
 				liquidationTargetVault={liquidationTargetVault}
+				liquidationReceiverVault={liquidationReceiverVault}
+				liquidationApprovalId={liquidationApprovalId}
+				liquidationApprovalDetails={liquidationApprovalDetails}
+				liquidationApprovalError={liquidationApprovalError}
+				liquidationReceiverVaultSummaryError={liquidationReceiverVaultSummaryError}
+				liquidationReceiverVaultSummaryResolved={liquidationReceiverVaultSummaryResolved}
+				loadingLiquidationApproval={loadingLiquidationApproval}
+				loadingLiquidationReceiverVaultSummary={loadingLiquidationReceiverVaultSummary}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
 				onLoadLiquidationFundingPreview={onLoadLiquidationFundingPreview}
+				onLoadLiquidationApproval={onLoadLiquidationApproval}
+				onLoadLiquidationReceiverVaultSummary={onLoadLiquidationReceiverVaultSummary}
 				onSelectedPoolViewChange={onSelectedPoolViewChange}
 				poolState={selectedPoolStateModel}
 				poolOracleManagerError={liquidationPoolOracleManagerError}
@@ -1218,9 +1234,11 @@ export function SecurityPoolWorkflowSection({
 				securityPoolLiquidationError={securityPoolLiquidationError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				walletBalanceAttoEth={accountState.ethBalanceAttoEth}
-				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}
+				receiverVaultSummary={liquidationReceiverVaultSummary ?? selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationReceiverVault))}
 				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}
 				onLiquidationAmountChange={onLiquidationAmountChange}
+				onLiquidationReceiverVaultChange={onLiquidationReceiverVaultChange}
+				onLiquidationApprovalIdChange={onLiquidationApprovalIdChange}
 				onLiquidationTimeoutMinutesChange={onLiquidationTimeoutMinutesChange}
 				onQueueLiquidation={onQueueLiquidation}
 			/>

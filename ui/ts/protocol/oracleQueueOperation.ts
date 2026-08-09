@@ -3,7 +3,6 @@ import type { OracleQueueOperation } from '../types/contracts.js'
 
 export const LIQUIDATION_OPERATION_TYPE = 0
 export const WITHDRAW_REP_OPERATION_TYPE = 1
-export const SET_COVERAGE_COMMITMENT_OPERATION_TYPE = 2
 
 export function decodeOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
 	const operationValue = typeof operation === 'bigint' ? operation : BigInt(operation)
@@ -12,8 +11,6 @@ export function decodeOracleQueueOperation(operation: bigint | number): OracleQu
 			return 'liquidation'
 		case 1n:
 			return 'withdrawRep'
-		case 2n:
-			return 'setCoverageCommitment'
 		default:
 			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
@@ -25,8 +22,6 @@ export function encodeOracleQueueOperation(operation: OracleQueueOperation): num
 			return LIQUIDATION_OPERATION_TYPE
 		case 'withdrawRep':
 			return WITHDRAW_REP_OPERATION_TYPE
-		case 'setCoverageCommitment':
-			return SET_COVERAGE_COMMITMENT_OPERATION_TYPE
 		default:
 			return assertNever(operation)
 	}

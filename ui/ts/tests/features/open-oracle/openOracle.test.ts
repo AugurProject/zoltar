@@ -51,7 +51,7 @@ import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceCostAttoEth, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -1115,19 +1115,6 @@ describe('Open Oracle helpers', () => {
 		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(startWethBalanceAttoEth)
 	})
 
-	test('loadOracleManagerDetails preserves queued zero-amount coverage commitment operations', async () => {
-		await requestPriceIfNeededAndStageOperation(client, managerAddress, OperationType.SetCoverageCommitment, client.account.address, 0n)
-
-		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
-
-		expect(details.pendingOperationSlotId).toBeGreaterThan(0n)
-		expect(details.activeStagedOperationCount).toBe(1n)
-		expect(details.pendingOperation).toBeDefined()
-		expect(details.pendingOperation?.operation).toBe('setCoverageCommitment')
-		expect(details.pendingOperation?.amount).toBe(0n)
-		expect(details.pendingOperation?.targetVault).toBe(client.account.address)
-	})
-
 	test('queueOracleManagerOperation returns queued operation metadata for the pending settlement list', async () => {
 		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
@@ -1136,11 +1123,11 @@ describe('Open Oracle helpers', () => {
 			args: [],
 		})
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
-		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
+		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 
 		expect(result.queuedOperation).toBeDefined()
 		expect(result.queuedOperation?.isPendingSlot).toBe(true)
-		expect(result.queuedOperation?.operation).toBe('setCoverageCommitment')
+		expect(result.queuedOperation?.operation).toBe('liquidation')
 		expect(result.queuedOperation?.operationId).toBeGreaterThan(0n)
 		expect(result.stagedExecution).toBeUndefined()
 	})
@@ -1153,7 +1140,7 @@ describe('Open Oracle helpers', () => {
 			args: [],
 		})
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
-		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
+		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const firstOperationId = firstResult.queuedOperation?.operationId
@@ -1169,7 +1156,7 @@ describe('Open Oracle helpers', () => {
 		expect(details.pendingOperationSlotId).toBe(firstOperationId)
 		expect(details.pendingOperation?.operationId).toBe(firstOperationId)
 		expect(details.stagedOperations?.map(operation => operation.operationId)).toEqual([secondOperationId, firstOperationId])
-		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setCoverageCommitment'])
+		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'liquidation'])
 	})
 
 	test('queueOracleManagerOperation only lets the pending report sponsor add more queued operations', async () => {
@@ -1182,7 +1169,7 @@ describe('Open Oracle helpers', () => {
 		})
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
-		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
+		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', secondAddress, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
@@ -1191,8 +1178,8 @@ describe('Open Oracle helpers', () => {
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		installInjectedEthereum(mockWindow, secondAddress)
 		const secondUiWriteClient = createWalletWriteClient(secondAddress)
-		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setCoverageCommitment', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
-		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setCoverageCommitment', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[2]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1ReportAttoEth)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
+		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', secondAddress, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(queuedResult.queuedOperation).toBeDefined()
 		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)

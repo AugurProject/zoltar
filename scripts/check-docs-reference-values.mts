@@ -13,6 +13,8 @@ const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanati
 const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/explanation/zoltar.html', 'utf8'))
 const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanation/statoblast.html', 'utf8'))
 const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
+const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
+const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 const securityModel = await readFile('docs/reference/security-model.html', 'utf8')
@@ -31,6 +33,7 @@ const escalationGameSettlement = await readFile('solidity/contracts/peripherals/
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
 const escalationGameFactory = await readFile('solidity/contracts/peripherals/factories/EscalationGameFactory.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
+const liquidationApprovalRegistry = await readFile('solidity/contracts/peripherals/LiquidationApprovalRegistry.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/peripherals/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/peripherals/openOracle/UPSTREAM.md', 'utf8')
 const securityPool = await readFile('solidity/contracts/peripherals/SecurityPool.sol', 'utf8')
@@ -71,6 +74,7 @@ assertCoordinatorSettlementEconomics()
 assertOpenOracleVendorAndEventDocs()
 assertTruthAuctionCombinedRepCapDocs()
 assertMigrationSecurityCoverageCommitmentDocs()
+assertRepricingBoundaryDocs()
 assertLazyClaimCommitmentDocs()
 assertEscalationGameBytecodeDocs()
 assertLifecycleReferences()
@@ -100,21 +104,95 @@ function assertTruthAuctionCombinedRepCapDocs(): void {
 }
 
 function assertMigrationSecurityCoverageCommitmentDocs(): void {
-	assert.match(securityPoolUtils, /return\s+poolHeldVaultRepBackingAttoRep \* valueScale >\s+coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repEthPrice;/)
-	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)
-	assert.ok(!whitepaperStatoblast.includes('migratedOpenInterestValue'), 'the migration security inequality must use coverage commitment rather than routed OI')
-	assert.match(liquidationHtml, /valueScale = pricePrecision × BPS_DENOMINATOR/)
+	assert.match(securityPoolUtils, /function calculateMintingCapacityAttoEth\([\s\S]*Math\.mulDiv\(capacityOwnershipAttoRep, PRICE_PRECISION, repEthPrice\)[\s\S]*Math\.mulDiv\(capacityValueAttoEth, BPS_DENOMINATOR, securityMultiplierBps\)/)
+	const calculateCapacity = (capacityOwnershipAttoRep: bigint, repPerEth: bigint, securityMultiplierBps: bigint) => ((capacityOwnershipAttoRep * 10n ** 18n) / repPerEth / securityMultiplierBps) * 10_000n
+	assert.ok(calculateCapacity(100n * 10n ** 18n, 4n * 10n ** 18n, 20_000n) < calculateCapacity(100n * 10n ** 18n, 2n * 10n ** 18n, 20_000n), 'A higher REP-per-ETH quote must lower live ETH minting capacity')
+	assert.match(whitepaperStatoblast, /id="dynamic-capacity"/)
+	assert.match(securityPool, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
+	assert.equal((11n * 10_000n) / 30_000n, 3n, 'capacity ownership must round a nonzero remainder downward')
+	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme target health factor may round capacity ownership to zero')
+	assert.match(securityPoolUtils, /function isVaultHealthyAtFactor\([\s\S]*Math\.Rounding\.Ceil[\s\S]*poolHeldVaultRepBackingAttoRep \+ disputeStakedAttoRep < associatedRequiredRepAttoRep[\s\S]*return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep/)
+	assert.match(liquidationHtml, /id="capacity-and-health"/)
 	assert.doesNotMatch(securityPoolUtils, /function calculateLiquidationTransfer\(/, 'the obsolete bonus-priced liquidation preview must not remain externally callable')
 	const externalPureFunctions = [...securityPoolUtils.matchAll(/function\s+(\w+)\([^{}]*?\)\s+external\s+pure/g)].map(match => match[1])
-	assert.deepEqual(externalPureFunctions, ['calculateFeeAccrual', 'calculateVaultFee', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'isLiquidationBeyondMinPriceDistance', 'calculateRetentionRate'], 'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors')
+	assert.deepEqual(
+		externalPureFunctions,
+		['calculateCumulativeAuctionBadDebt', 'calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'isLiquidationBeyondMinPriceDistance', 'calculateRetentionRate'],
+		'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors',
+	)
 	for (const functionName of externalPureFunctions) {
-		assert.ok(operatorReference.includes(`\`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
+		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
+	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep\s*\}/)
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep" \}/)
+	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
+	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
+	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)
+	assert.match(coordinatorData, /"trigger": "requestPriceIfNeededAndStageLiquidation",\s*"preconditions": \["stale-cache", "pending-report", "pending callback batch is full"\],[\s\S]*?"the liquidation remains active outside the bounded callback batch"/)
+	assert.match(coordinatorData, /"trigger": "executeStagedOperation",\s*"preconditions": \["operation exists", "operation is expired", "cache may be stale"\],[\s\S]*?"operation is consumed without requiring a valid price"/)
+	assert.match(priceCoordinator, /event LiquidationRouteStaged\([\s\S]*address indexed operator,[\s\S]*address indexed receiverVault,[\s\S]*uint256 reservedDebtAttoEth[\s\S]*\);/)
+	assert.match(contractInteractionReference, /LiquidationApprovalRegistry[\s\S]*permitLiquidationApproval\(params, signature\)[\s\S]*revokeLiquidationApproval\(approvalId\)[\s\S]*invalidateLiquidationApprovalNonce\(newNonce\)[\s\S]*reserve\(operationId/)
+	assert.match(liquidationApprovalRegistry, /EIP712Domain\(string name,string version,uint256 chainId,address verifyingContract\)/)
+	assert.match(contractInteractionReference, /exactly `max\(1 attoREP, theoretical REP supply \/ 10,000,000\)`[\s\S]*max\(configured floor, theoretical REP supply \/ 100,000\)[\s\S]*1 ETH security-bond debt[\s\S]*10 REP configured vault floor/)
+	assert.doesNotMatch(contractInteractionReference, /max\(1 attoREP, configured floor, theoretical REP supply \/ 10,000,000\)/)
+	assert.match(operatorReference, /effective escalation deposit is exactly `max\(1 attoREP, theoretical REP supply \/ 10,000,000\)`/)
+	assert.doesNotMatch(operatorReference, /max\(1 attoREP, configured floor, theoretical REP supply \/ 10,000,000\)/)
+	assert.match(operatorReference, /funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting/)
+	assert.doesNotMatch(operatorReference, /backing-only liquidation/)
+	assert.match(
+		securityPoolLiquidationDelegate,
+		/receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*targetOpenInterestAttoEthAfter == 0 \|\| targetOpenInterestAttoEthAfter >= minimumSecurityBondDebtAttoEth[\s\S]*targetOpenInterestAttoEthAfter == 0 \|\| targetVaultRepBackingAfterAttoRep >= minimumVaultRepDepositAttoRep[\s\S]*securityVaults\[receiverVault\][\s\S]*minimumVaultRepDepositAttoRep/,
+	)
+	assert.match(
+		securityPoolLiquidationDelegate,
+		/debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;[\s\S]*debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= requestedDebtAttoEth[\s\S]*nominalDebtToMoveAttoEth != 0 && debtToMoveAttoEth == 0[\s\S]*badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth/,
+	)
+	assertCoordinatorDataFunctionInventory()
+}
+
+function assertRepricingBoundaryDocs(): void {
+	assert.match(invariantsHtml, /id="bal-03"/)
+	assert.match(invariantsHtml, /id="vault-02"/)
+	assert.match(securityPool, /function createCompleteSet\([\s\S]*uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*_requireCapacityNotExceeded\(nextSettlementCollateralAttoEth\)/)
+	assert.match(securityPool, /function getCurrentMintingCapacityAttoEth\(\)[\s\S]*SecurityPoolUtils\.calculateMintingCapacityAttoEth\(\s*totalCapacityOwnershipAttoRep,/)
+	const vaultOpenInterestBody = readSolidityFunctionBody(securityPool, 'function getVaultOpenInterestAttoEth(')
+	assert.match(vaultOpenInterestBody, /SecurityPoolUtils\.calculateVaultOpenInterestAttoEth\([\s\S]*totalCapacityOwnershipAttoRep/)
+	assert.doesNotMatch(vaultOpenInterestBody, /feeEligibleCapacityOwnershipAttoRep/)
+	assert.match(securityPoolLiquidationDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps/)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function assertCoordinatorDataFunctionInventory(): void {
+	const coordinatorIndex: unknown = JSON.parse(coordinatorData)
+	assert.ok(isRecord(coordinatorIndex))
+	const documentedFunctions = coordinatorIndex['functions']
+	assert.ok(isRecord(documentedFunctions), 'Coordinator data must provide its complete function inventory')
+	assert.ok(isRecord(compiledContractArtifacts))
+	const contracts = compiledContractArtifacts['contracts']
+	assert.ok(isRecord(contracts))
+	const coordinatorSource = contracts['contracts/peripherals/OpenOraclePriceCoordinator.sol']
+	assert.ok(isRecord(coordinatorSource))
+	const coordinatorArtifact = coordinatorSource['OpenOraclePriceCoordinator']
+	assert.ok(isRecord(coordinatorArtifact))
+	const abi = coordinatorArtifact['abi']
+	assert.ok(Array.isArray(abi))
+	const compiledFunctionNames = Array.from(
+		new Set(
+			abi.flatMap(entry => {
+				if (!isRecord(entry) || entry['type'] !== 'function' || typeof entry['name'] !== 'string') return []
+				return [entry['name']]
+			}),
+		),
+	).sort()
+	assert.deepEqual(Object.keys(documentedFunctions).sort(), compiledFunctionNames, 'Coordinator data function inventory must exactly match the compiled ABI')
 }
 
 function assertLazyClaimCommitmentDocs(): void {
 	assert.doesNotMatch(escalationGameTypes, /MAX_CLAIM_BUNDLES_PER_VAULT|MAX_CLAIM_OWNERS_PER_BUNDLE|MAX_PAYOUT_CLAIM_IMPORT_BATCH/)
-	assert.match(liquidationHtml, /Only that pool-held vault REP backing and funded coverage commitment move\. Accrued fees and escalation claims stay with the target vault/)
+	assert.match(liquidationHtml, /id="fig-liquidation-punitive-flow"/)
 	assert.doesNotMatch(liquidationHtml, /claim move|portfolio cap|owner slot/i)
 	assert.doesNotMatch(escalationGameClaimDelegate, /moveEscalationClaim|payoutClaimBundle|getClaimOwner|liquidationClaimRep/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
@@ -211,9 +289,11 @@ function assertNonDecisionLifecycleDocs(): void {
 function assertAuditFindingRemediations(): void {
 	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
 	const normalizedAuctionDesign = auctionDesign.replaceAll(/\s+/g, ' ')
+	assert.match(normalizedStatoblast, /settlement-collateral migration weight[\s\S]*transferred capacity ownership determines the vault's live proportional open-interest allocation in the child/)
+	assert.doesNotMatch(normalizedStatoblast, /vault's migrated OI share is its pool-held vault REP backing share/)
 	assert.doesNotMatch(normalizedStatoblast, /Retention-rate updates also no-op when total coverage commitment is zero/, 'Statoblast whitepaper must not retain the obsolete total-coverage commitment zero-retention rule')
-	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*feeEligibleCoverageCommitmentAttoEth/, 'SecurityPool retention updates must use fee-eligible coverage commitment')
-	assert.match(securityPoolUtils, /if \(coverageCommitmentAttoEth == 0\) return MAX_RETENTION_RATE;/, 'SecurityPoolUtils must select maximum retention for zero eligible coverage commitment')
+	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*getCurrentMintingCapacityAttoEth\(\)/, 'SecurityPool retention updates must use live oracle-priced minting capacity')
+	assert.match(securityPoolUtils, /if \(mintingCapacityAttoEth == 0\) return MAX_RETENTION_RATE;/, 'SecurityPoolUtils must select maximum retention for zero minting capacity')
 	assert.match(escalationGameCalculations, /if \(forkTime > getEscalationGameEndDate\(\)\) \{[\s\S]*actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;/, 'Escalation payout must restore the configured threshold only for forks strictly after the scheduled game end')
 	assert.doesNotMatch(normalizedStatoblast, /later unrelated fork (?:cannot reprice|leaves (?:the )?finalized payout unchanged)/i, 'Statoblast must not claim that a strictly later fork leaves unclaimed winning payouts unchanged')
 	for (const boundaryName of ['one second before', 'exactly at', 'one second after']) {
@@ -270,15 +350,15 @@ function assertInvariantCatalogOwnership(): void {
 
 function assertInvariantCatalogLifecycleBoundaries(): void {
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
-	const coverageCommitmentEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08"\s*>[\s\S]*?<\/details>/)?.[0]
+	const capacityOwnershipEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08"\s*>[\s\S]*?<\/details>/)?.[0]
 	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03"\s*>[\s\S]*?<\/details>/)?.[0]
 	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
 	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
-	assert.ok(coverageCommitmentEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified coverage commitment accounting')
+	assert.ok(capacityOwnershipEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified capacity ownership accounting')
 	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 active-index boundary accounting')
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
-	assert.match(coverageCommitmentEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
+	assert.match(capacityOwnershipEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
 	assert.match(vaultEntry, /A direct own-fork claim[\s\S]*may remain indexed with zero live state until its next pool-mediated synchronization/)
 	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
 	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefundsAttoEth<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*deferred <code>pendingEthRefundsAttoEth<\/code>/)
@@ -323,18 +403,18 @@ function assertCoordinatorRecoveryBranch(): void {
 		/settlement base fee exceeds the request-time cap[\s\S]*storedGame\(reportId\)\.numReports[\s\S]*final history record's WETH amount is too small[\s\S]*Report uneconomic[\s\S]*either settled token amount is zero[\s\S]*integer REP\/ETH calculation produces a zero price/,
 		'OpenOracle documentation must retain the current coordinator rejection conditions',
 	)
-	assert.match(openOracleIntegration, /rejected report does not replay the pending settlement operations[\s\S]*remain queued for a later valid price/, 'OpenOracle documentation must describe queued-operation behavior after rejection')
+	assert.match(openOracleIntegration, /rejected report does not replay its pending settlement operations[\s\S]*terminally fails every operation[\s\S]*releases any liquidation-approval reservation exactly once/, 'OpenOracle documentation must describe terminal operation and reservation cleanup after rejection')
 	assert.match(
 		openOracleIntegration,
-		/anyone can call <code>recoverSettledPendingReport<\/code>[\s\S]*clears the pending report and base-fee cap[\s\S]*deactivates and removes the live staged operation[\s\S]*does not treat the removed operation as executed/,
+		/anyone can call <code>recoverSettledPendingReport<\/code>[\s\S]*clears the pending report, sponsor, and base-fee cap[\s\S]*terminally fails every pending settlement operation[\s\S]*does not treat those operations as successful[\s\S]*reservation is released/,
 		'OpenOracle documentation must describe settled-report recovery effects',
 	)
 	assert.match(
 		priceCoordinator,
-		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No pending oracle price request can be recovered'\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)[\s\S]*pendingReportId = 0;[\s\S]*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_consumeRecoveredPendingOperation\(\)/,
-		'coordinator recovery must require settlement and clear pending state before consuming the pending operation',
+		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No report to recover'\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*pendingReportId = 0;[\s\S]*pendingReportSponsor = address\(0\);[\s\S]*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/,
+		'coordinator recovery must require settlement and clear pending state before failing every attached operation',
 	)
-	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle callback report id does not match the pending request'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
+	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle report mismatch'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
 	assert.match(openOracleIntegration, /data-source="requestPriceCostAttoEth = block\.basefee \\cdot 4 \\cdot \(callbackGasLimit \+ gasConsumedOpenOracleReportPrice\) \+ 101"/, 'OpenOracle documentation must retain the canonical request-cost equation')
 	const requestCostEquation = openOracleIntegration.match(/<figure class="equation" id="eq-openoracle-request-price-cost">[\s\S]*?<\/figure>/)?.[0]
 	assert.ok(requestCostEquation, 'OpenOracle documentation must retain the request-cost equation figure')
@@ -377,10 +457,10 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	for (const pinnedRevision of ['a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
 		assert.ok(openOracleProvenance.includes(pinnedRevision), `OpenOracle provenance must retain ${pinnedRevision}`)
 	}
-	assert.match(liquidationHtml, /Funded coverage commitment and its complete pool-held vault REP backing award move; claims, fees, and surplus stay, while a maximum request records untransferred residual coverage commitment as bad debt/)
+	assert.match(liquidationHtml, /id="punitive-liquidation"/)
 	assert.match(
 		operatorReference,
-		/calculateBundledLiquidationTransfer\(targetBackingUnits, targetCoverageCommitmentAttoEth, requestedCommitmentTransferAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits\)/,
+		/calculateBundledLiquidationTransfer\(targetBackingUnits, targetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep\)/,
 		'operator reference must preserve the current liquidation utility signature and parameter order',
 	)
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
@@ -421,7 +501,9 @@ function assertContractInteractionDistinctions(): void {
 	const migrateVaultRow = getContractInteractionRow('migrateVault(securityPool, outcomeIndex)')
 	const migrateVaultWithUnresolvedEscalationRow = getContractInteractionRow('migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)')
 	const claimForkedEscalationDepositsRow = getContractInteractionRow('claimForkedEscalationDeposits(...)')
-	const performLiquidationRow = getContractInteractionRow('performLiquidation(...)')
+	const performLiquidationRow = getContractInteractionRow(
+		'performLiquidation(operationId, operator, receiverVault, targetVault, requestedDebtAttoEth, snapshotTargetBackingUnits, snapshotTargetCapacityOwnershipAttoRep, snapshotTotalPoolHeldAttoRep, snapshotTotalRepBackingUnits, minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps)',
+	)
 	const claimDepositWithoutTransferRow = getContractInteractionRow('claimDepositForWinningWithoutTransfer(depositIndex, outcome)')
 	const recordForkedEscrowRow = getContractInteractionRow('recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep)')
 	const startTruthAuctionRow = getContractInteractionRow('startTruthAuction(securityPool)')
@@ -455,9 +537,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /getMigratedAttoRep`, `getForkActivationTime`/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`/)
 	assert.match(operatorReference, /factory has no owner role and no later `resumeFromFork` relay/)
-	assert.match(securityPoolFactory, /_initialEscalationGameDepositAttoRep >= 1e18[\s\S]*zoltar\.getNonDecisionThresholdAttoRep\(universeId\) > initialEscalationGameDepositAttoRep/)
+	assert.match(securityPoolFactory, /_initialEscalationGameDepositAttoRep == 1[\s\S]*zoltar\.getNonDecisionThresholdAttoRep\(universeId\) > _getInitialEscalationDepositAttoRep\(reputationToken\)/)
+	assert.match(securityPoolFactory, /SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*reputationToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
 	assert.match(securityPoolFactory, /initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep/)
-	assert.match(securityPool, /initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep/)
+	assert.match(securityPool, /initialEscalationGameDepositAttoRep = SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*repToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
+	assert.match(securityPoolUtils, /function calculateInitialEscalationDepositAttoRep\([\s\S]*theoreticalSupplyAttoRep \/ 10_000_000[\s\S]*supplyBasedDepositAttoRep == 0 \? 1 : supplyBasedDepositAttoRep/)
 	assert.match(securityPool, /deployEscalationGame\(\s*initialEscalationGameDepositAttoRep,\s*zoltar\.getNonDecisionThresholdAttoRep\(universeId\)\s*\)/)
 	assert.match(escalationGameFactory, /_nonDecisionThresholdAttoRep > 1[\s\S]*startBondAttoRep >= _nonDecisionThresholdAttoRep[\s\S]*startBondAttoRep = _nonDecisionThresholdAttoRep - 1/)
 	assert.match(contractInteractionReference, /On the first deposit, the live non-decision threshold must exceed one attoREP/)
@@ -474,7 +558,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(operatorReference, /Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
 	assert.match(
 		operatorReference,
-		/EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*no ownership or import surface[\s\S]*pool-held vault REP backing-only liquidation[\s\S]*fee and claim isolation/,
+		/EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, and `SecurityPoolLiquidationDelegate`[\s\S]*no ownership or import surface[\s\S]*funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting[\s\S]*isolating fees and claims/,
 	)
 	assert.match(operatorReference, /Migration, liquidation, and storage modules[\s\S]*`SecurityPoolLiquidationDelegate\.sol`[\s\S]*`EscalationGameForker\.sol` \(\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
@@ -487,7 +571,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameCarry, /function initializeForkCarrySnapshotWithResolutionBalances\([\s\S]*?\) external \{\s*_initializeForkCarrySnapshot\(/)
 	assert.match(escalationGameCarry, /function _initializeForkCarrySnapshot\([\s\S]*?require\(msg\.sender == address\(securityPool\), 'Only pool'\);\s*require\(forkContinuation, 'No fork mode'\);\s*require\(!forkCarrySnapshotInitialized\(\), 'Snapshot initialized'\)/)
 	assert.match(contractInteractionReference, /initializeForkCarrySnapshotWithResolutionBalances\(\.\.\.\)[\s\S]*no prior snapshot[\s\S]*Installs the immutable inherited peaks, leaf counts, carry totals, resolution balances, and normalized nullifier roots/)
-	assert.match(contractInteractionReference, /Transfers the caller's REP backing units and coverage commitment into one child pool/)
+	assert.match(contractInteractionReference, /Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool/)
 	assert.match(contractInteractionReference, /optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state/)
 	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds dispute-staked REP backing nor authorizes carried proofs/)
 	assert.match(contractInteractionReference, /external fork interrupted the game[\s\S]*winners settle in the child by carried proof[\s\S]*unresolved parent escalation-deposit accounting cleanup is optional/)
@@ -501,7 +585,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Only a positive migration amount with at least one selected outcome checks the eight-week window, existing child `ForkMigration` state/)
 	assert.match(contractInteractionReference, /child pool is not already deployed/)
 	assert.match(contractInteractionReference, /selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the child-game trust boundary \(#child-game-trust-boundary\), and is inside the eight-week claim window/)
-	assert.match(contractInteractionReference, /rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path/)
+	assert.match(contractInteractionReference, /terminally rejected settlement consumes the pending batch and releases every liquidation reservation/)
 	assert.match(contractInteractionReference, /setSecurityPool\(pool\)[\s\S]*Anyone while `securityPool` remains zero[\s\S]*zero value emits and checkpoints zero but leaves the setter callable/)
 	assert.match(contractInteractionReference, /setRepEthPrice\(price\)[\s\S]*Configured nonzero `SecurityPool` only/)
 	assert.match(openOracleIntegration, /setSecurityPool<\/code> once with the nonzero pool address/)
@@ -516,15 +600,15 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /`isEscalationResolved\(\)` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false/)
 	assert.match(contractInteractionReference, /createCompleteSet\(\)[\s\S]*Operational and unforked; `isEscalationResolved\(\)` is false; not awaiting continuation/)
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`securityPool\.isEscalationResolved\(\)` is false/)
-	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`StagedOperationQueued` immediately followed by `StagedOperationDisputeStakedRepSnapshotted`/)
+	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`/)
 	assert.doesNotMatch(contractInteractionReference, /Operational, unforked, unresolved|unresolved local escalation|Unresolved pool;/)
 	assert.match(contractInteractionReference, /positive ETH converts to at least one complete-set unit/)
 	assert.match(
 		securityPool,
-		/function createCompleteSet\(\) external payable isOperational \{[\s\S]*uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*_requireCapacityNotExceeded\(feeEligibleCoverageCommitmentAttoEth, nextSettlementCollateralAttoEth\);/,
-		'Complete-set issuance must compare resulting total collateral against fee-eligible coverage commitment',
+		/function createCompleteSet\(\) external payable isOperational \{[\s\S]*uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*_requireCapacityNotExceeded\(nextSettlementCollateralAttoEth\);/,
+		'Complete-set issuance must compare resulting total collateral against live oracle-priced capacity',
 	)
-	assert.match(contractInteractionReference, /createCompleteSet\(\)[\s\S]*vault-assigned, fee-eligible coverage commitment covers the resulting settlement collateral, not merely this deposit/, 'Generated complete-set prerequisites must identify the fee-eligible coverage commitment and resulting-total-collateral guard')
+	assert.match(contractInteractionReference, /createCompleteSet\(\)[\s\S]*live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit/, 'Generated complete-set prerequisites must identify live capacity and the resulting-total-collateral guard')
 	assert.match(contractInteractionReference, /redeemCompleteSet\(amountAttoShares\)[\s\S]*caller accepts the resulting ETH call, including zero value[\s\S]*rejection of that ETH call reverts the transaction/)
 	assert.match(securityPool, /function attoSharesToAttoEth\(uint256 amountAttoShares\)[\s\S]*return \(amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares/)
 	assert.match(securityPool, /function redeemCompleteSet\(uint256 amountAttoShares\)[\s\S]*uint256 settlementCollateralRedeemedAttoEth = attoSharesToAttoEth\(amountAttoShares\)/)
@@ -535,40 +619,19 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /redeemShares\(\)[\s\S]*caller accepts the resulting ETH call, including zero value[\s\S]*rejection of that ETH call reverts the transaction/)
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting claimable fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /withdrawRepFromVault\(vault, attoRepAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
-	assert.match(liquidationHtml, /data-source="associatedAttoRep \* pricePrecision \* BPS_DENOMINATOR >= coverageCommitmentAttoEth \* poolSecurityMultiplierBps \* repPerEthPrice"/)
-	assert.match(liquidationHtml, /data-source="coverageCommitmentAttoEth = 0 or poolHeldVaultRepBackingAttoRep \* pricePrecision \* BPS_DENOMINATOR > coverageCommitmentAttoEth \* migrationSecurityMultiplierBps \* repPerEthPrice"/)
-	assert.match(
-		liquidationHtml,
-		/reservedBackingUnits = ⌈MIN_REP_DEPOSIT_ATTO_REP × totalRepBackingUnits \/ totalAttoRep⌉[\s\S]*reserve is at least the target backing units, no partial coverage commitment or REP transfer is fundable[\s\S]*transferableVaultRepBackingAttoRep = ⌊\(targetBackingUnits - reservedBackingUnits\) × totalAttoRep \/ totalRepBackingUnits⌋[\s\S]*maximum request[\s\S]*requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth[\s\S]*transferableVaultRepBackingAttoRep = ⌊targetBackingUnits × totalAttoRep \/ totalRepBackingUnits⌋[\s\S]*user queues that amount through the coordinator[\s\S]*pool's maximum-request path/,
-	)
-	assert.match(securityPoolUtils, /if \(reservedBackingUnits >= targetBackingUnits\) return \(0, 0, 0\);/)
-	assert.match(securityPoolUtils, /bool resolveResidualAsBadDebt = requestedCommitmentTransferAttoEth >= targetCoverageCommitmentAttoEth;/)
-	assert.match(liquidationHtml, /positive funded slice would leave the caller's resulting coverage commitment below <code>MIN_COVERAGE_COMMITMENT_ATTO_ETH<\/code>[\s\S]*transfers no coverage commitment, REP, or REP backing units[\s\S]*no <code>VaultLiquidated<\/code> or post-transfer caller checkpoint/)
-	assert.match(securityPoolLiquidationDelegate, /securityVaults\[callerVault\]\.coverageCommitmentAttoEth \+ coverageCommitmentToTransferAttoEth <\s+SecurityPoolUtils\.MIN_COVERAGE_COMMITMENT_ATTO_ETH[\s\S]*coverageCommitmentToTransferAttoEth = 0;\s*vaultAttoRepBackingToTransfer = 0;\s*backingUnitsToTransfer = 0;/)
+	assert.match(diagramSpecs, /withdraw REP or liquidation/)
+	assert.doesNotMatch(diagramSpecs, /withdraw, capacity ownership/)
+	assert.match(securityPoolUtils, /capacityOwnershipToMoveAttoRep =[\s\S]*Math\.mulDiv\(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth\)/)
+	assert.match(securityPoolLiquidationDelegate, /receiverVault != targetVault[\s\S]*receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*revert\('Receiver debt below minimum'\)/)
+	assert.match(securityPoolLiquidationDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps[\s\S]*'Receiver bad'/)
 	assert.match(securityModel, /effective pool-held vault REP backing\s+multiplier at least the 10,500-BPS liquidation-award reserve/)
 	assert.doesNotMatch(securityModel, /pool multiplier strictly above the migration multiplier/)
 	for (const representation of [operatorReference, contractInteractionReference, contractReferenceGenerator]) {
 		assert.doesNotMatch(representation, /surplus remains unless|floors quote-to-backing-unit|dust may promote/)
 	}
-	assert.match(operatorReference, /Requests below the target coverage commitment are partial[\s\S]*Requests at or above the target coverage commitment are maximum requests[\s\S]*award and quote-to-backing-unit conversion round up/)
-	assert.match(operatorReference, /Coverage commitment moves only up to the amount whose complete 5%-bonus award is funded by target pool-held vault REP backing[\s\S]*maximum request records any untransferred coverage commitment as bad debt[\s\S]*Queued Execution[\s\S]*canonical lifecycle and rationale/)
-	for (const representation of [liquidationHtml, operatorReference, contractInteractionReference, contractReferenceGenerator, invariantsHtml, whitepaperStatoblast, diagramSpecs]) {
-		assert.doesNotMatch(representation, /(?:any|an) unfunded residual/, 'Recorded bad debt must not be classified exclusively as unfunded')
-	}
-	assert.match(contractInteractionReference, /halfway migration component strictly greater than one[\s\S]*effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve/)
-	assert.match(securityPoolUtils, /if \(coverageCommitmentAttoEth == 0\) return true/)
-	assert.match(securityPool, /function _requirePoolCoverage\([\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*totalPoolHeldAttoRep,\s*totalDisputeStakedAttoRep,\s*totalCoverageCommitmentAttoEthValue/)
-	assert.match(securityPool, /function executeCoverageCommitmentUpdate\([\s\S]*SecurityPoolUtils\.isVaultHealthy\([\s\S]*'Vault commitment'[\s\S]*SecurityPoolUtils\.isVaultHealthy\(\s*getTotalPoolHeldAttoRep\(\),\s*_getTotalDisputeStakedRep\(\),\s*totalCoverageCommitmentAttoEth[\s\S]*'Pool commitment'/)
-	for (const [label, representation] of [
-		['invariants', invariantsHtml],
-		['liquidation design', liquidationHtml],
-		['generated interaction reference', contractInteractionReference],
-		['interaction reference generator', contractReferenceGenerator],
-	] as const) {
-		assert.match(representation, /affected vault[\s\S]{0,300}(?:aggregate )?pool (?:backing|totals)/, `${label} must distinguish the affected vault from aggregate pool totals`)
-		assert.doesNotMatch(representation, /pool (?:is|becomes?|remain(?:s)?) (?:immediately )?liquidatable/, `${label} must not describe the pool as liquidatable`)
-	}
-	assert.match(invariantsHtml, /Exactly 150 pool-held vault REP backing is unsafe[\s\S]*Both the vault and aggregate totals must pass this example/)
+	assert.ok(operatorReference.includes('calculateBundledLiquidationTransfer('))
+	assert.match(securityPool, /function _requireVaultCoverage\([\s\S]*uint256 openInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
+	assert.match(securityPool, /function _requirePoolCoverage\([\s\S]*uint256 totalOpenInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
 	assert.match(initiateSecurityPoolForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*authorized by its declared share token[\s\S]*Declared-token authorization is not configured-factory registration/)
 	assert.match(
 		ownEscalationForkRow,
@@ -611,7 +674,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /finalize\(\)[\s\S]*owner accepts the proceeds ETH call, including zero value[\s\S]*A rejected call reverts finalization and its event/)
 	assert.match(
 		contractInteractionReference,
-		/withdrawBids\(withdrawFor, tickIndices, proRataTotal\)[\s\S]*gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and coverage-commitment settlement[\s\S]*An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary/,
+		/withdrawBids\(withdrawFor, tickIndices, proRataTotal\)[\s\S]*gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and capacity-ownership settlement[\s\S]*An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary/,
 	)
 	assert.match(contractInteractionReference, /withdrawPendingEthRefund\(\)[\s\S]*emits its withdrawal before transferring without the push-refund gas cap[\s\S]*callback-created deferrals follow the clear in log order[\s\S]*A rejected pull reverts the transfer, clear, and event[\s\S]*`PendingEthRefundWithdrawn`/)
 	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universe\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amountAttoRep, msg\.sender, outcomeIndexes\)/)
@@ -621,7 +684,7 @@ function assertContractInteractionDistinctions(): void {
 		contractInteractionReference,
 		/splitMigrationRep\(universeId, amountAttoRep, outcomeIndexes\)[\s\S]*An empty outcome list returns after the universe-fork guard without outcome validation, deployment, minting, or events[\s\S]*nonempty zero-amount call still validates every outcome[\s\S]*child REP `Transfer` and `Mint`, then `MigrationRepSplit`[\s\S]*no event for an empty list/,
 	)
-	assert.match(securityPoolForker, /function _claimAuctionProceeds\([\s\S]*require\(data\.truthAuction\.finalized\(\), 'Not final'\)[\s\S]*data\.truthAuction\.withdrawBids\([\s\S]*_creditAuctionProceeds\(/)
+	assert.match(securityPoolForker, /function _claimAuctionProceeds\([\s\S]*require\(data\.truthAuction\.finalized\(\), 'Not final'\)[\s\S]*data\.truthAuction\.withdrawBids\([\s\S]*SecurityPoolForkerVaultMigrationDelegate\.creditAuctionProceeds/)
 	assert.match(
 		contractInteractionReference,
 		/claimAuctionProceeds\(securityPool, vault, tickIndices\)[\s\S]*For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events[\s\S]*no event for an empty list/,
@@ -659,11 +722,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /initializeChildForkedEscalationGameIfNeeded\(parent, child, childEscalationGame\)[\s\S]*When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use/)
 	assert.match(startTruthAuctionRow, /game reported during immediate completion passes the child-game trust boundary \(#child-game-trust-boundary\)/)
 	assert.match(finalizeTruthAuctionRow, /game reported at completion passes the child-game trust boundary \(#child-game-trust-boundary\)/)
-	assert.match(performLiquidationRow, /complete 105% award is funded by target vault REP backing[\s\S]*fixed 5%-bonus vault REP backing award[\s\S]*Dispute-staked REP claims, accrued claimable fees, and surplus vault REP backing remain with the target/)
-	assert.match(performLiquidationRow, /pre-execution target or caller `VaultAccountingCheckpoint` events as needed[\s\S]*post-transfer caller checkpoint only when coverage commitment moves/)
-	assert.match(performLiquidationRow, /otherwise funded slice would leave the caller below the minimum coverage commitment[\s\S]*not transferred[\s\S]*complete target coverage commitment is recorded/)
-	assert.match(securityPool, /updateVaultFees\(targetVaultAddress\);\s*updateVaultFees\(callerVault\);[\s\S]*if \(coverageCommitmentToTransferAttoEth != 0\) _emitVaultAccountingCheckpoint\(callerVault\);/)
+	assert.match(securityPool, /updateVaultFees\(targetVaultAddress\);\s*updateVaultFees\(receiverVault\);[\s\S]*SecurityPoolLiquidationDelegate\.performBundledLiquidation\.selector/)
+	assert.match(securityPoolLiquidationDelegate, /securityVaults\[receiverVault\]\.capacityOwnershipAttoRep \+= capacityOwnershipToMoveAttoRep/)
 	assert.doesNotMatch(performLiquidationRow, /EscalationClaimMoved|Claim checkpoint pending|Claim move failed/)
+	assert.match(performLiquidationRow, /minLiquidationPriceDistanceBps[\s\S]*live target backing, dispute-staked REP, and open interest/)
+	assert.match(operatorReference, /Liquidation distance[\s\S]*minLiquidationPriceDistanceBps[\s\S]*SecurityPoolLiquidationDelegate\.sol/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
 	assert.doesNotMatch(securityPoolLiquidationDelegate, /_moveEscalationClaim|previewLiquidationClaimRep|moveEscalationClaim/)
 	assert.match(claimDepositWithoutTransferRow, /inverse-retention claim units[\s\S]*no local auction checkpoint[\s\S]*⌈originalPrincipal × truthAuctionRepBeforeAttoRep \/ truthAuctionRepRemainingAttoRep⌉[\s\S]*Other unconsumed deposits by the same depositor remain backed/)
@@ -709,34 +772,35 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*caller must accept any positive unused-ETH refund[\s\S]*rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report/)
 	assert.match(contractInteractionReference, /requestPrice\(proposedRepPerEthPrice, requestedInitialAttoWeth\)[\s\S]*caller must accept any positive excess-ETH refund[\s\S]*Callback rejection rolls back the report and initial position/)
 	assert.match(operatorReference, /Immediate execution[\s\S]*canonical refund warning[\s\S]*open-oracle\.html#refund-callback/)
-	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)/)
+	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/)
 	assert.match(contractInteractionReference, /recoverSettledPendingReport\(\)[\s\S]*stored OpenOracle `storedGame\(reportId\)\.settlementTimestamp` is nonzero/)
-	assert.match(operatorReference, /Recovery path[\s\S]*requires both a pending report and a nonzero `storedGame\(reportId\)\.settlementTimestamp`/)
-	assert.match(
-		contractInteractionReference,
-		/addFeeEligibleCoverageCommitmentAttoEth\(vault, amountAttoEth\)[\s\S]*no lifecycle, vault, positive-amount, or value-change guard[\s\S]*newly auction-claimed coverage commitment to the live fee denominator[\s\S]*immediately recalculates retention against the assigned denominator[\s\S]*including the latter two at zero amount/,
-	)
+	assert.match(operatorReference, /Recovery path[\s\S]*requires a pending report whose stored OpenOracle settlement timestamp is nonzero[\s\S]*consumes all associated pending operations[\s\S]*releases their liquidation reservations/)
+	assert.match(securityPool, /function addFeeEligibleCapacityOwnershipAttoRep\(address vault, uint256 amountAttoRep\) external onlyForker \{[\s\S]*feeEligibleCapacityOwnershipAttoRep \+= amountAttoRep;[\s\S]*updateRetentionRate\(\);[\s\S]*_emitVaultAccountingCheckpoint\(vault\);/)
+	assert.ok(contractInteractionReference.includes('addFeeEligibleCapacityOwnershipAttoRep(vault, amountAttoRep)'))
 	assert.match(securityPool, /function setAwaitingForkContinuation\(bool shouldAwait\) external onlyForker \{\s*awaitingForkContinuation = shouldAwait;\s*emit AwaitingForkContinuationSet\(awaitingForkContinuation\)/)
 	assert.match(contractInteractionReference, /setAwaitingForkContinuation\(shouldAwait\)[\s\S]*No lifecycle or value-change guard[\s\S]*`AwaitingForkContinuationSet`, including for a repeated value/)
 	assert.match(securityPool, /function setSystemState\(SystemState newState\) external onlyForker \{\s*systemState = newState;\s*emit SystemStateSet\(systemState\)/)
 	assert.match(contractInteractionReference, /setSystemState\(newState\)[\s\S]*No transition or value-change guard[\s\S]*`SystemStateSet`, including for a repeated state/)
-	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?_emitVaultAccountingCheckpoint\(vault\);\s*_emitPoolAccountingCheckpoint\(AccountingReason\.CoverageCommitmentChange, vault\)/)
-	assert.match(contractInteractionReference, /configureVault\(vault, repBackingUnits, coverageCommitmentAttoEth, vaultFeeIndex\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/)
+	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?vaultTargetHealthFactorBps\[vault\] = targetHealthFactorBps;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
+	assert.match(
+		contractInteractionReference,
+		/configureVault\(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/,
+	)
 	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newDenominator\) external onlyForker \{\s*totalRepBackingUnits = newDenominator;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
 	assert.match(contractInteractionReference, /setTotalRepBackingUnits\(newDenominator\)[\s\S]*No lifecycle or value-change guard[\s\S]*`TotalRepBackingUnitsSet`, including for zero or a repeated value/)
 	assert.match(securityPool, /function setTotalSharesAttoShares\(uint256 newTotalSharesAttoShares\) external onlyForker \{\s*shareTokenSupplyAttoShares = newTotalSharesAttoShares;\s*emit ShareTokenSupplySet\(shareTokenSupplyAttoShares\)/)
 	assert.match(contractInteractionReference, /setTotalSharesAttoShares\(newTotalSharesAttoShares\)[\s\S]*No lifecycle or value-change guard[\s\S]*`ShareTokenSupplySet`, including for zero or a repeated value/)
 	assert.match(securityPool, /function setPoolFinancials\([\s\S]*?lastUpdatedFeeAccumulator = block\.timestamp;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.ForkFinalization, address\(0x0\)\)/)
-	assert.match(contractInteractionReference, /setPoolFinancials\(newSettlementCollateralAttoEth, newTotalCoverageCommitmentAttoEth, newFeeEligibleCoverageCommitmentAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*`PoolAccountingCheckpoint`, including for repeated financial values/)
-	assert.match(securityPool, /function addFeeEligibleCoverageCommitmentAttoEth\(address vault, uint256 amountAttoEth\) external onlyForker \{[\s\S]*?_emitVaultAccountingCheckpoint\(vault\);\s*_emitPoolAccountingCheckpoint\(AccountingReason\.AuctionClaim, vault\)/)
+	assert.match(contractInteractionReference, /setPoolFinancials\(newSettlementCollateralAttoEth, newTotalCapacityOwnershipAttoRep, newFeeEligibleCapacityOwnershipAttoRep, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*`PoolAccountingCheckpoint`, including for repeated financial values/)
+	assert.match(securityPool, /function addFeeEligibleCapacityOwnershipAttoRep\(address vault, uint256 amountAttoRep\) external onlyForker \{[\s\S]*?_emitVaultAccountingCheckpoint\(vault\);\s*_emitPoolAccountingCheckpoint\(AccountingReason\.AuctionClaim, vault\)/)
 	assert.match(securityPoolForker, /Before finalization, only refundable bids can be settled/)
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	assert.match(securityPoolForkerVaultMigrationDelegate, /require\(address\(childrenByPoolAndOutcome\[parent\]\[outcomeIndex\]\) == address\(0x0\), 'Child pool exists'\)/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Base fee too high'\);\s*return;/)
+	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Base fee too high'\);\s*return;/)
 	assert.match(priceCoordinator, /finalReportDisputeStatus == FINAL_REPORT_COUNTER_SATURATED\s*\? 'Counter saturated'\s*: 'Report uneconomic'/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Empty oracle settlement'\);\s*return;/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Oracle price is zero'\);\s*return;/)
+	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Empty oracle settlement'\);\s*return;/)
+	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Oracle price is zero'\);\s*return;/)
 	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor,\s*'Only the pending report sponsor can queue more operations until settlement'/)
 	assert.match(priceCoordinator, /bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds\.length == 0/)
 	assert.match(priceCoordinator, /if \(shouldRequestPrice && isPendingSettlementOperationId\)/)
@@ -760,9 +824,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(pooledRepMigrationBody, /_transferForkMigratedCollateralToChild/)
 	const vaultMigrationBody = readSolidityFunctionBody(securityPoolForkerVaultMigrationBase, 'function _migrateNonEscrowedVaultAccounting(')
 	assert.match(vaultMigrationBody, /parent\.updateVaultFees\(vault\)/)
-	assert.match(vaultMigrationBody, /parent\.configureVault\(vault, 0, 0, parentVaultFeeIndex\)/)
+	assert.match(vaultMigrationBody, /SecurityPoolUtils\.configureForkMigratedVault\([\s\S]*migratedBadDebtByPool\[child\] \+= parentVaultBadDebtAttoEth/)
 	assert.match(vaultMigrationBody, /_transferForkMigratedCollateralToChild\(parent, child, migratedAttoRep\)/)
-	assert.match(contractInteractionReference, /Transfers the caller's REP backing units and coverage commitment into one child pool[\s\S]*retains claimable fees in the parent vault[\s\S]*routes proportional pool-level settlement collateral/)
+	assert.match(contractInteractionReference, /Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool[\s\S]*retains claimable fees in the parent vault[\s\S]*routes proportional pool-level settlement collateral/)
 	assert.match(shareToken, /if \(sourcePool\.systemState\(\) == SystemState\.Operational\) \{\s*forker\.initiateSecurityPoolFork\(sourcePool\)/)
 	assert.match(securityPool, /systemState = SystemState\.PoolForked/)
 	assert.match(securityPool, /shareToken\.authorize\(pool\)/)
@@ -770,7 +834,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /address\(escalationGame\) == address\(0x0\) \|\| _forkOccurredBeforeEscalationSettled\(escalationGame, forkTime\)/)
 	assert.match(securityPoolForker, /'Resolved'/)
 	assert.match(securityPoolForker, /securityPool\.setSystemState\(SystemState\.ForkTruthAuction\)/)
-	assert.match(securityPoolForkerAuctionSettlementBase, /securityPool\.addFeeEligibleCoverageCommitmentAttoEth\(vault, newCoverageCommitmentAttoEth\)/)
+	assert.match(securityPoolForkerAuctionSettlementBase, /SecurityPoolUtils\.creditForkAuctionVault\([\s\S]*badDebtToAssignAttoEth/)
 	assert.match(securityPoolForker, /if \(!trustedAuctionAddresses\[msg\.sender\]\) revert\(\);/)
 	assert.match(securityPoolForkerVaultMigrationBase, /trustedAuctionAddresses\[address\(truthAuction\)\] = true;[\s\S]*emit ChildPoolLinked\(parent, outcomeIndex, child, truthAuction\)/)
 	assert.match(securityPoolForkerVaultMigrationBase, /address\(truthAuction\)\.code\.length != 0/)
@@ -796,7 +860,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /exportVaultUnresolvedTotalsWithoutTransfer\(vault\)[\s\S]*has not exported before[\s\S]*Always `VaultUnresolvedTotalsExported` with `transferredRep = false`, including when every amount is zero[\s\S]*no REP transfer/)
 	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*parent,\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeAttoEthPerGas\s*\)/)
 	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*address\(0x0\),\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeAttoEthPerGas\s*\)/)
-	assert.match(priceCoordinatorFactory, /new OpenOraclePriceCoordinator\{ salt: keccak256\(abi\.encode\(msg\.sender, salt\)\) \}/)
+	assert.match(priceCoordinatorFactory, /bytes32 deploymentSalt = keccak256\(abi\.encode\(msg\.sender, salt\)\)[\s\S]*priceCoordinatorDeploymentWorker\.deploy\([\s\S]*deploymentSalt[\s\S]*liquidationApprovalRegistryDeployer\.deploy\([\s\S]*address\(coordinator\),\s*deploymentSalt/)
 	assert.match(truthAuctionFactory, /new UniformPriceDualCapBatchAuction\{ salt: keccak256\(abi\.encode\(msg\.sender, salt\)\) \}/)
 	assert.match(securityPoolDeployer, /create2\(0, add\(initCode, 0x20\), mload\(initCode\), 0\)/)
 	assert.match(securityPoolFactory, /shareTokenFactory\.deployShareToken\(originId, questionId\)/)
@@ -824,16 +888,15 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(truthAuction, /function finalize\(\) external[\s\S]*payable\(owner\)\.call\{ value: raisedAttoEthToSend \}/)
 	assert.match(invariantsHtml, /FORK-12[\s\S]*activates after value-free finalization with 9 ETH of tracked collateral/)
 	assert.doesNotMatch(invariantsHtml, /remains inactive until repair/)
-	assert.match(invariantsHtml, /AUC-06[\s\S]*complete unmigrated coverage commitment[\s\S]*independent of claim order/)
-	assert.match(invariantsHtml, /AUC-06[\s\S]*REP allocation rounds to zero[\s\S]*claiming that bid alone still credits the coverage commitment/)
-	assert.match(invariantsHtml, /AUTH-06[\s\S]*purchased REP remains pool-held[\s\S]*REP backing units and coverage commitment are credited to Bob's vault/)
+	assert.match(invariantsHtml, /AUC-06[\s\S]*complete unmigrated capacity ownership[\s\S]*independent of claim order/)
+	assert.match(invariantsHtml, /AUC-06[\s\S]*REP allocation rounds to zero[\s\S]*claiming that bid alone still credits the capacity ownership/)
+	assert.match(invariantsHtml, /AUTH-06[\s\S]*purchased REP remains pool-held[\s\S]*REP backing units and capacity ownership are credited to Bob's vault/)
 	assert.match(invariantsHtml, /VAULT-01[\s\S]*initially attributed 20 REP[\s\S]*15 REP of vault backing plus a separate 5 REP claim/)
 	assert.match(invariantsHtml, /AUC-06[\s\S]*keeps purchased REP pool-held[\s\S]*credits corresponding REP backing units/)
-	assert.match(liquidationHtml, /id="eq-migration-health-condition"[\s\S]*<mi>coverageCommitmentAttoEth<\/mi><mo>=<\/mo><mn>0<\/mn>/)
 	assert.match(invariantsHtml, /AUC-07[\s\S]*aggregate[\s\S]*underfundedWinningAttoEth \/ maxAttoRepBeingSold[\s\S]*dust winner can round to zero REP/)
 	assert.doesNotMatch(invariantsHtml, /fraction funded by the bid's retained ETH/)
-	assert.match(contractInteractionReference, /winning dust bid can receive positive coverage commitment when its REP allocation rounds to zero/)
-	assert.match(contractInteractionReference, /`ClaimAuctionProceeds` when REP backing or coverage commitment is credited/)
+	assert.match(contractInteractionReference, /winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero/)
+	assert.match(contractInteractionReference, /`ClaimAuctionProceeds` with cumulative claimed and total auctioned bad debt when REP backing, capacity ownership, or bad debt is credited/)
 	assert.match(truthAuction, /return cumulativeAllocationAfter - cumulativeAllocationBefore/)
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)
 	assert.match(zoltar, /safeTransferFrom\(migrator, Constants\.BURN_ADDRESS, amountAttoRep\)/)

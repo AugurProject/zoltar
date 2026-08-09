@@ -57,11 +57,11 @@ const settings = {
 		candidatePriority: 'largest-bonus',
 		fallbackRepPerEthPrice: '0',
 		maximumGasCostEth: '0.02',
-		maximumLiquidationCoverageCommitmentEth: '25',
+		maximumLiquidationDebtEth: '25',
 		maximumOracleRequestCostEth: '0.02',
 		maximumPerPoolRep: '10000',
 		maximumTotalDeployedRep: '25000',
-		minimumLiquidationCoverageCommitmentEth: '1',
+		minimumLiquidationDebtEth: '1',
 		minimumRepWithdrawalRep: '10',
 		minimumRewardValueEth: '0.02',
 		redeemFeesAboveEth: '0.01',
@@ -85,7 +85,7 @@ describe('liquidator settings', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)
 		expect(parsed.strategy.maximumAttoRepPerPool).toBe(10_000n * 10n ** 18n)
-		expect(parsed.strategy.minimumLiquidationCoverageCommitmentAttoEth).toBe(10n ** 18n)
+		expect(parsed.strategy.minimumLiquidationDebtAttoEth).toBe(10n ** 18n)
 		expect(parsed.strategy.walletAttoRepReserve).toBe(100n * 10n ** 18n)
 		const serialized = serializedSettings(parsed)
 		expect(serialized.strategy.maximumGasCostEth).toBe('0.02')

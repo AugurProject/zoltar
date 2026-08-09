@@ -1,5 +1,5 @@
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './deployment.js'
-export { createSecurityPool, loadAllSecurityPools, loadSecurityPoolPage, loadSecurityVaultDetails, originSecurityPoolExists } from './securityPools.js'
+export { createSecurityPool, loadAllSecurityPools, loadSecurityPoolPage, loadSecurityPoolVaultSummary, loadSecurityVaultDetails, originSecurityPoolExists } from './securityPools.js'
 export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from './zoltar.js'
 export { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool, withdrawForkedEscalationDeposits } from './reporting.js'
 export { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from './truthAuctions.js'

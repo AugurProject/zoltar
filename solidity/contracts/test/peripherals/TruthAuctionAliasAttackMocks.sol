@@ -107,11 +107,15 @@ contract TruthAuctionAliasAttackParentMock {
 		return configuredCollateral;
 	}
 
-	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
+	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
 		return 0;
 	}
 
 	function totalRepBackingUnits() external pure returns (uint256) {
+		return 0;
+	}
+
+	function totalBadDebtAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -201,7 +205,7 @@ contract TruthAuctionAliasAttackChildMock {
 
 	function setTotalSharesAttoShares(uint256) external pure {}
 
-	function setPoolFinancials(uint256, uint256, uint256) external pure {}
+	function setPoolFinancials(uint256, uint256, uint256, uint256) external pure {}
 
 	function updateRetentionRate() external pure {}
 
