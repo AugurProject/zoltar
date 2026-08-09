@@ -42,7 +42,9 @@ function actionLabel(pairExists: boolean, closedReason: string | undefined, tran
 	return mode === 'enter' ? `Simulate enter ${side} workflow` : `Simulate insured ${side} exit`
 }
 
-function transactionMessage(transactionState: TransactionState) {
+export function transactionMessage(transactionState: TransactionState) {
+	if (transactionState === 'approval') return 'Simulated share approval is pending in the wallet.'
+	if (transactionState === 'pending') return 'Simulated transaction is pending confirmation.'
 	if (transactionState === 'confirmed') return 'Simulated confirmation shown. Demo balances and reserves do not change.'
 	if (transactionState === 'reverted') return 'Simulated failure shown. Change the amount or outcome and try again.'
 	return undefined

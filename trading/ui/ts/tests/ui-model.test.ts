@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { demoPreviewPresentation, quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
+import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../features/MarketDetail.tsx'
 import { insuredExitLimitMessage, liquidityApprovalRequired, livePairInitialized } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
@@ -43,6 +43,11 @@ describe('standalone trading UI model', () => {
 	test('keeps displayed conditional prices complementary after rounding', () => {
 		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
 		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
+	})
+
+	test('announces nonterminal demo transaction progress', () => {
+		expect(transactionMessage('approval')).toContain('approval')
+		expect(transactionMessage('pending')).toContain('pending')
 	})
 
 	test('explains the actual blocker when a demo quote is unavailable', () => {
