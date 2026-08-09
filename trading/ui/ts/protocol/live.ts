@@ -1,0 +1,338 @@
+import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Abi, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { tradingContracts } from '../generated/contractArtifact.ts'
+import type { DeploymentConfiguration } from './config.ts'
+import type { InjectedEthereum } from './injected.ts'
+
+const deploymentComponents = [
+	{ name: 'securityPool', type: 'address' },
+	{ name: 'truthAuction', type: 'address' },
+	{ name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
+	{ name: 'shareToken', type: 'address' },
+	{ name: 'parent', type: 'address' },
+	{ name: 'universeId', type: 'uint248' },
+	{ name: 'questionId', type: 'uint256' },
+	{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+	{ name: 'initialReportPriorityFeeWeiPerGas', type: 'uint256' },
+	{ name: 'currentRetentionRate', type: 'uint256' },
+	{ name: 'completeSetCollateralAmount', type: 'uint256' },
+] as const
+
+const securityPoolFactoryAbi = [
+	{ type: 'function', name: 'securityPoolDeploymentCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'securityPoolDeploymentsRange',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		outputs: [{ name: 'deployments', type: 'tuple[]', components: deploymentComponents }],
+	},
+] as const satisfies Abi
+
+const securityPoolAbi = [
+	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'shareTokenSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'completeSetCollateralAmount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'systemState', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
+	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+	{ type: 'function', name: 'getActiveVaultCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'cashToShares', stateMutability: 'view', inputs: [{ name: 'eth', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'securityPoolForker', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const satisfies Abi
+
+const securityPoolForkerAbi = [{ type: 'function', name: 'getQuestionOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address' }], outputs: [{ type: 'uint8' }] }] as const satisfies Abi
+
+const questionDataAbi = [
+	{
+		type: 'function',
+		name: 'questions',
+		stateMutability: 'view',
+		inputs: [{ name: 'questionId', type: 'uint256' }],
+		outputs: [
+			{ name: 'title', type: 'string' },
+			{ name: 'description', type: 'string' },
+			{ name: 'startTime', type: 'uint256' },
+			{ name: 'endTime', type: 'uint256' },
+			{ name: 'numTicks', type: 'uint120' },
+			{ name: 'displayValueMin', type: 'int256' },
+			{ name: 'displayValueMax', type: 'int256' },
+			{ name: 'answerUnit', type: 'string' },
+		],
+	},
+] as const satisfies Abi
+
+const shareTokenAbi = [
+	{
+		type: 'function',
+		name: 'balanceOf',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'id', type: 'uint256' },
+		],
+		outputs: [{ type: 'uint256' }],
+	},
+	{
+		type: 'function',
+		name: 'isApprovedForAll',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'operator', type: 'address' },
+		],
+		outputs: [{ type: 'bool' }],
+	},
+	{
+		type: 'function',
+		name: 'setApprovalForAll',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'operator', type: 'address' },
+			{ name: 'approved', type: 'bool' },
+		],
+		outputs: [],
+	},
+] as const satisfies Abi
+
+const tradingFactory = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+const pair = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
+const router = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+const UI_SLIPPAGE_BPS = 50n
+
+function minimumAfterSlippage(amount: bigint) {
+	return (amount * (10_000n - UI_SLIPPAGE_BPS)) / 10_000n
+}
+
+export type LiveMarket = Readonly<{
+	pool: Address
+	pair: Address | undefined
+	shareToken: Address
+	universeId: bigint
+	questionId: bigint
+	title: string
+	description: string
+	endTime: bigint
+	statoblastSecurityMultiplierBps: bigint
+	initialReportPriorityFeeWeiPerGas: bigint
+	systemState: number
+	awaitingForkContinuation: boolean
+	activeVaultCount: bigint
+	shareTokenSupply: bigint
+	completeSetCollateral: bigint
+	feeBps: bigint
+	tradingStatus: number | undefined
+	questionOutcome: number
+	yesReserve: bigint
+	noReserve: bigint
+	lpTotalSupply: bigint
+}>
+
+export type LiveBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
+
+export function createTradingPublicClient(configuration: DeploymentConfiguration) {
+	return createPublicClient({ transport: http(configuration.rpcUrl) })
+}
+
+export function createTradingWalletClient(provider: InjectedEthereum, account: Address) {
+	return createWalletClient({ account, transport: custom(provider) })
+}
+
+export async function validateLiveDeployment(client: PublicClient, configuration: DeploymentConfiguration) {
+	const [configuredCoreFactory, configuredFee, configuredRouterFactory] = await Promise.all([
+		client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
+		client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'feeBps' }),
+		client.readContract({ abi: router.abi, address: configuration.router, functionName: 'factory' }),
+	])
+	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
+	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match deployment.json')
+	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
+}
+
+export async function connectWallet(provider: InjectedEthereum) {
+	const accounts = await provider.request({ method: 'eth_requestAccounts', params: [] })
+	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no account')
+	return getAddress(accounts[0])
+}
+
+export async function walletChainId(provider: InjectedEthereum) {
+	const result = await provider.request({ method: 'eth_chainId', params: [] })
+	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('Wallet returned an invalid chain ID')
+	return Number(BigInt(result))
+}
+
+export async function switchWalletChain(provider: InjectedEthereum, chainId: number) {
+	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${chainId.toString(16)}` }] })
+}
+
+export async function discoverLiveMarkets(client: PublicClient, configuration: DeploymentConfiguration): Promise<LiveMarket[]> {
+	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount' })
+	if (count === 0n) return []
+	const deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })
+	return await Promise.all(
+		deployments.map(async deployment => {
+			const { securityPool: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas } = deployment
+			const pool = getAddress(poolAddress)
+			const shareToken = getAddress(shareTokenAddress)
+			const [questionData, shareTokenSupply, completeSetCollateral, systemState, awaitingForkContinuation, activeVaultCount, pairAddress, forker] = await Promise.all([
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupply' }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'completeSetCollateralAmount' }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'systemState' }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'awaitingForkContinuation' }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getActiveVaultCount' }),
+				client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] }),
+				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'securityPoolForker' }),
+			])
+			const [question, questionOutcome] = await Promise.all([
+				client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
+				client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
+			])
+			const canonicalPair = pairAddress === zeroAddress ? undefined : getAddress(pairAddress)
+			let yesReserve = 0n
+			let noReserve = 0n
+			let lpTotalSupply = 0n
+			let feeBps = BigInt(configuration.feeBps)
+			let tradingStatus: number | undefined
+			if (canonicalPair !== undefined) {
+				const [reserves, supply, pairFee, pairStatus] = await Promise.all([
+					client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'getEffectiveReserves' }),
+					client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'totalSupply' }),
+					client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'feeBps' }),
+					client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'tradingStatus' }),
+				])
+				yesReserve = reserves[0]
+				noReserve = reserves[1]
+				lpTotalSupply = supply
+				feeBps = pairFee
+				tradingStatus = Number(pairStatus)
+			}
+			return {
+				pool,
+				pair: canonicalPair,
+				shareToken,
+				universeId,
+				questionId,
+				title: question.title,
+				description: question.description,
+				endTime: question.endTime,
+				statoblastSecurityMultiplierBps,
+				initialReportPriorityFeeWeiPerGas,
+				systemState: Number(systemState),
+				awaitingForkContinuation,
+				activeVaultCount,
+				shareTokenSupply,
+				completeSetCollateral,
+				feeBps,
+				tradingStatus,
+				questionOutcome: Number(questionOutcome),
+				yesReserve,
+				noReserve,
+				lpTotalSupply,
+			}
+		}),
+	)
+}
+
+export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address, routerAddress: Address): Promise<LiveBalances> {
+	const invalidId = market.universeId << 8n
+	const [invalid, yes, no, approved, lp, lpAllowance] = await Promise.all([
+		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId] }),
+		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId | 1n] }),
+		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId | 2n] }),
+		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'isApprovedForAll', args: [account, routerAddress] }),
+		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account] }),
+		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'allowance', args: [account, routerAddress] }),
+	])
+	return { invalid, yes, no, approved, lp, lpAllowance }
+}
+
+export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint) {
+	if (market.pair === undefined) throw new Error('Create and initialize the pair before trading')
+	const blockNumber = await client.getBlockNumber()
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount })
+	return { blockNumber, result: simulation.result, amount, side, market }
+}
+
+export async function submitFreshEntry(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateEntry>>): Promise<Hash> {
+	if ((await client.getBlockNumber()) !== quote.blockNumber) throw new Error('Quote is stale; simulate again before submission')
+	const refreshed = await simulateEntry(client, configuration, quote.market, account, quote.side, quote.amount)
+	if (refreshed.blockNumber !== quote.blockNumber) throw new Error('Quote changed blocks during revalidation')
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const pairAddress = quote.market.pair
+	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
+	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumAfterSlippage(refreshed.result.totalLongShares), account, deadline], value: quote.amount })
+}
+
+export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint) {
+	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	const blockNumber = await client.getBlockNumber()
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [market.pair, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline] })
+	return { blockNumber, result: simulation.result, completeSets, side, market }
+}
+
+export async function submitFreshExit(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateExit>>): Promise<Hash> {
+	if ((await client.getBlockNumber()) !== quote.blockNumber) throw new Error('Quote is stale; simulate again before submission')
+	const refreshed = await simulateExit(client, configuration, quote.market, account, quote.side, quote.completeSets)
+	if (refreshed.blockNumber !== quote.blockNumber) throw new Error('Quote changed blocks during revalidation')
+	const maximumLong = (refreshed.result.totalLongShares * 10_050n + 9_999n) / 10_000n
+	const minimumEth = (refreshed.result.ethOut * 9_950n) / 10_000n
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const pairAddress = quote.market.pair
+	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
+	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, quote.completeSets, maximumLong, minimumEth, account, deadline] })
+}
+
+export async function createPair(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address) {
+	return await client.writeContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'createPair', account, args: [market.pool] })
+}
+
+export async function approveRouter(client: WalletClient, market: LiveMarket, configuration: DeploymentConfiguration, account: Address) {
+	return await client.writeContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'setApprovalForAll', account, args: [configuration.router, true] })
+}
+
+export type LiquidityOperation = 'initialize' | 'add' | 'remove'
+
+export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n) {
+	const blockNumber = await client.getBlockNumber()
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	if (operation === 'initialize') {
+		const simulation =
+			market.pair === undefined
+				? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount })
+				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [market.pair, conditionalYesBps, 0n, account, deadline], value: amount })
+		return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
+	}
+	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	if (operation === 'add') {
+		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [market.pair, 0n, account, deadline], value: amount })
+		return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
+	}
+	const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [market.pair, amount, 0n, 0n, account, deadline] })
+	return { blockNumber, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
+}
+
+export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateLiquidity>>) {
+	if ((await client.getBlockNumber()) !== quote.blockNumber) throw new Error('Quote is stale; simulate again before submission')
+	const refreshed = await simulateLiquidity(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps)
+	if (refreshed.blockNumber !== quote.blockNumber) throw new Error('Quote changed blocks during revalidation')
+	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	if (quote.operation === 'initialize') {
+		return quote.market.pair === undefined
+			? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumAfterSlippage(refreshed.expectedLiquidity), account, deadline], value: quote.amount })
+			: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [quote.market.pair, quote.conditionalYesBps, minimumAfterSlippage(refreshed.expectedLiquidity), account, deadline], value: quote.amount })
+	}
+	const pairAddress = quote.market.pair
+	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
+	if (quote.operation === 'add') return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, minimumAfterSlippage(refreshed.expectedLiquidity), account, deadline], value: quote.amount })
+	return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, quote.amount, minimumAfterSlippage(refreshed.expectedYes), minimumAfterSlippage(refreshed.expectedNo), account, deadline] })
+}
+
+export async function approveLpRouter(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, amount: bigint) {
+	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
+}

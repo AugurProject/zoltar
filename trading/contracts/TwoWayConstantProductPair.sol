@@ -117,10 +117,12 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		return (yesReserve, noReserve);
 	}
 
+	function getEffectiveReserves() external view returns (uint256, uint256) {
+		return _effectiveReserves();
+	}
+
 	function tradingStatus() public view returns (TradingStatus status) {
 		if (totalSupply == 0) return TradingStatus.Uninitialized;
-		if (block.timestamp >= securityPool.questionData().getQuestionEndDate(questionId))
-			return TradingStatus.QuestionEnded;
 		if (securityPool.zoltar().getForkTime(universeId) != 0) return TradingStatus.UniverseForked;
 		if (securityPool.awaitingForkContinuation()) return TradingStatus.AwaitingForkContinuation;
 		if (securityPool.systemState() != SystemState.Operational) return TradingStatus.PoolInactive;
@@ -128,6 +130,8 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 			ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool) !=
 			BinaryOutcomes.BinaryOutcome.None
 		) return TradingStatus.QuestionResolved;
+		if (block.timestamp >= securityPool.questionData().getQuestionEndDate(questionId))
+			return TradingStatus.QuestionEnded;
 		return TradingStatus.Open;
 	}
 

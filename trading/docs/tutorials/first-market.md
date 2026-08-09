@@ -12,4 +12,4 @@ Start with a current operational SecurityPool whose question has exactly `Yes` a
 
 For a 70% Conditional YES price, one complete-set budget deposits approximately 30 parts YES to 70 parts NO. The NO reserve is larger because the opposite reserve determines the constant-product spot price. All INVALID and unused directional shares return to the initializer; only YES/NO reserve ownership is represented by LP tokens.
 
-The standalone UI currently demonstrates this screen with simulated fixtures only. It is not a live deployment client; see [UI configuration](../how-to/configure-ui.md).
+The standalone UI supports this workflow against a configured live deployment and also offers unmistakably labeled simulated fixtures for visual QA. See [UI configuration](../how-to/configure-ui.md).

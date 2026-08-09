@@ -8,4 +8,7 @@ await fs.mkdir(output, { recursive: true })
 const result = await Bun.build({ entrypoints: [path.join(uiRoot, 'ts/index.tsx')], outdir: output, naming: 'app.js', target: 'browser', minify: false, sourcemap: 'linked' })
 if (!result.success) throw new AggregateError(result.logs, 'Trading UI build failed')
 await Promise.all([fs.copyFile(path.join(uiRoot, 'index.html'), path.join(output, 'index.html')), fs.copyFile(path.join(uiRoot, 'css/app.css'), path.join(output, 'app.css'))])
+const deploymentSource = process.env.TRADING_UI_DEPLOYMENT
+if (deploymentSource === undefined) await fs.writeFile(path.join(output, 'deployment.json'), 'null\n')
+else await fs.copyFile(path.resolve(deploymentSource), path.join(output, 'deployment.json'))
 console.log(`Built standalone trading UI in ${output}`)

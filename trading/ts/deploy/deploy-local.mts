@@ -2,20 +2,12 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../artifacts/contractArtifact.ts'
+import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain } from './manifest.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
 const rpcUrl = process.env.TRADING_RPC_URL ?? 'http://127.0.0.1:8545'
 const coreManifestPath = process.env.ZOLTAR_DEPLOYMENT_MANIFEST
 if (coreManifestPath === undefined) throw new Error('Set ZOLTAR_DEPLOYMENT_MANIFEST to an existing local Zoltar deployment manifest')
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
-function requireAddress(value: unknown, label: string): Address {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new Error(`${label} must be an address`)
-	return value.toLowerCase() as Address
-}
 
 async function rpc(method: string, params: readonly unknown[]) {
 	const response = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
@@ -24,19 +16,6 @@ async function rpc(method: string, params: readonly unknown[]) {
 	const error = payload.error
 	if (isRecord(error)) throw new Error(`${method}: ${String(error.message ?? 'unknown JSON-RPC error')}`)
 	return payload.result
-}
-
-function findSecurityPoolFactory(manifest: unknown): Address {
-	if (!isRecord(manifest)) throw new Error('Core deployment manifest must be an object')
-	const direct = manifest.securityPoolFactory
-	if (direct !== undefined) return requireAddress(direct, 'securityPoolFactory')
-	const contracts = manifest.contracts
-	if (isRecord(contracts)) {
-		const candidate = contracts.SecurityPoolFactory ?? contracts.securityPoolFactory
-		if (isRecord(candidate)) return requireAddress(candidate.address, 'contracts.SecurityPoolFactory.address')
-		if (candidate !== undefined) return requireAddress(candidate, 'contracts.SecurityPoolFactory')
-	}
-	throw new Error('Core deployment manifest does not contain SecurityPoolFactory')
 }
 
 async function deploy(from: Address, data: Hex) {
@@ -59,7 +38,12 @@ function requireAddressHash(value: unknown, label: string): Hex {
 }
 
 const coreManifest: unknown = JSON.parse(await fs.readFile(coreManifestPath, 'utf8'))
-const securityPoolFactory = findSecurityPoolFactory(coreManifest)
+const coreDeployment = parseCoreDeploymentManifest(coreManifest)
+const securityPoolFactory = coreDeployment.securityPoolFactory
+const chainIdHex = await rpc('eth_chainId', [])
+if (typeof chainIdHex !== 'string' || !/^0x[0-9a-fA-F]+$/.test(chainIdHex)) throw new Error('eth_chainId returned an invalid value')
+const chainId = BigInt(chainIdHex)
+requireMatchingChain(coreDeployment.chainId, chainId)
 const code = await rpc('eth_getCode', [securityPoolFactory, 'latest'])
 if (typeof code !== 'string' || code === '0x') throw new Error('Configured SecurityPoolFactory has no code on the selected RPC chain')
 const accounts = await rpc('eth_accounts', [])
@@ -74,12 +58,10 @@ const factoryArtifact = { abi: factoryContract.abi, bytecode: `0x${factoryContra
 const routerArtifact = { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` as const }
 const factoryDeployment = await deploy(deployer, encodeDeployData({ abi: factoryArtifact.abi, bytecode: factoryArtifact.bytecode, args: [securityPoolFactory, feeBps] }))
 const routerDeployment = await deploy(deployer, encodeDeployData({ abi: routerArtifact.abi, bytecode: routerArtifact.bytecode, args: [factoryDeployment.address] }))
-const chainIdHex = await rpc('eth_chainId', [])
-if (typeof chainIdHex !== 'string') throw new Error('eth_chainId returned an invalid value')
 const compiler = isRecord(artifactDocument) ? artifactDocument.compiler : undefined
 const settings = isRecord(artifactDocument) ? artifactDocument.settings : undefined
 const manifest = {
-	network: { chainId: Number(BigInt(chainIdHex)), chainIdHex, rpcUrl },
+	network: { chainId: Number(chainId), chainIdHex, rpcUrl },
 	core: { securityPoolFactory, sourceManifest: path.resolve(coreManifestPath) },
 	trading: { factory: factoryDeployment.address, router: routerDeployment.address, feeBps: Number(feeBps) },
 	transactions: { factory: factoryDeployment.transactionHash, router: routerDeployment.transactionHash },

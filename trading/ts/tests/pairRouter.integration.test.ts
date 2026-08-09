@@ -3,12 +3,9 @@ import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shar
 import { useIsolatedAnvilNode } from '../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.ts'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { TEST_ADDRESSES } from '../../../solidity/ts/testSupport/simulator/utils/constants.ts'
-import { tradingContracts } from '../artifacts/contractArtifact.ts'
+import { compileArtifactsForTests } from './compileArtifactsForTests.ts'
 
-const mocks = tradingContracts['trading/contracts/test/TradingProtocolMocks.sol']
-const factoryArtifact = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
-const pairArtifact = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
-const routerArtifact = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+type TradingContracts = typeof import('../artifacts/contractArtifact.ts').tradingContracts
 const rate = 10n ** 18n
 const universe = 17n
 const question = 91n
@@ -24,6 +21,10 @@ describe('factory, pair, and router integration', () => {
 	let factory: Address
 	let router: Address
 	let pair: Address
+	let mocks: TradingContracts['trading/contracts/test/TradingProtocolMocks.sol']
+	let factoryArtifact: TradingContracts['trading/contracts/TwoWayConstantProductFactory.sol']['TwoWayConstantProductFactory']
+	let pairArtifact: TradingContracts['trading/contracts/TwoWayConstantProductPair.sol']['TwoWayConstantProductPair']
+	let routerArtifact: TradingContracts['trading/contracts/TwoWayConstantProductRouter.sol']['TwoWayConstantProductRouter']
 
 	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) {
 		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }), value })
@@ -49,6 +50,11 @@ describe('factory, pair, and router integration', () => {
 	}
 
 	beforeAll(async () => {
+		const contracts = await compileArtifactsForTests()
+		mocks = contracts['trading/contracts/test/TradingProtocolMocks.sol']
+		factoryArtifact = contracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+		pairArtifact = contracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
+		routerArtifact = contracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const ethereum = getAnvilWindowEthereum()
 		account = `0x${TEST_ADDRESSES[0].toString(16).padStart(40, '0')}`
 		await ethereum.impersonateAccount(account)
@@ -70,7 +76,7 @@ describe('factory, pair, and router integration', () => {
 		pair = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [pool] })
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [router, true] }))
 		await setBaselineSnapshot()
-	})
+	}, 120_000)
 
 	test('validates canonical identity and deterministic pair address', async () => {
 		const predicted = await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'predictPair', args: [pool] })
@@ -112,6 +118,18 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'removeLiquidity', args: [pair, liquidity, 1n, 1n, account, 10n ** 12n] }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
 		expect(await tokenBalance(pair, 0n)).toBe(0n)
+	})
+
+	test('reports a donation-adjusted pre-trade conditional price', async () => {
+		await initialize()
+		const donation = 1_000n * rate
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, donation] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, (universe << 8n) | 1n, donation, '0x'] }))
+		const yesBalance = await tokenBalance(pair, 1n)
+		const noBalance = await tokenBalance(pair, 2n)
+		const simulation = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, 10n ** 12n], value: 1n })
+		expect(simulation.result.conditionalYesBpsBefore).toBe((noBalance * 10_000n) / (yesBalance + noBalance))
 	})
 
 	test('benchmarks every hot operation against a funded pool fixture', async () => {

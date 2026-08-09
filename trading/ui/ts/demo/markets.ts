@@ -10,6 +10,7 @@ export type DemoMarket = Readonly<{
 	lifecycle: Lifecycle
 	yesReserve: bigint
 	noReserve: bigint
+	lpTotalSupply: bigint
 	feeBps: bigint
 	securityPool: Readonly<{
 		systemState: 'Operational' | 'Pool forked' | 'Fork migration' | 'Fork truth auction'
@@ -33,6 +34,12 @@ export function demoCashToShares(eth: bigint, market: DemoMarket) {
 	if (market.securityPool.shareTokenSupply === 0n) return eth * 10n ** 18n
 	if (market.securityPool.completeSetCollateral === 0n) throw new Error('SecurityPool exchange rate is undefined')
 	return (eth * market.securityPool.shareTokenSupply) / market.securityPool.completeSetCollateral
+}
+
+export function demoSharesToCash(shares: bigint, market: DemoMarket) {
+	if (shares < 0n) throw new Error('Share amount cannot be negative')
+	if (market.securityPool.shareTokenSupply === 0n) return 0n
+	return (shares * market.securityPool.completeSetCollateral) / market.securityPool.shareTokenSupply
 }
 
 export function demoMarket(scenario: string): DemoMarket {
@@ -60,8 +67,9 @@ export function demoMarket(scenario: string): DemoMarket {
 		pool: selectedPool,
 		endTime: '31 Dec 2026 · 23:59 UTC',
 		lifecycle,
-		yesReserve: 428_571_000_000_000_000_000n,
-		noReserve: 1_000_000_000_000_000_000_000n,
+		yesReserve: 428_571_000_000_000_000_000n * 10n ** 18n,
+		noReserve: 1_000_000_000_000_000_000_000n * 10n ** 18n,
+		lpTotalSupply: 428_571_000_000_000_000_000n * 10n ** 18n,
 		feeBps: 30n,
 		securityPool: {
 			systemState,
@@ -71,7 +79,7 @@ export function demoMarket(scenario: string): DemoMarket {
 			initialReportPriorityFeeGwei: 2n,
 			feeEligibleSecurityBondAllowance: 25n * 10n ** 18n,
 			completeSetCollateral: 12_342_500_000_000_000_000n,
-			shareTokenSupply: 12_500_000_000_000_000_000n,
+			shareTokenSupply: 12_500_000_000_000_000_000n * 10n ** 18n,
 			activeVaultCount: 3n,
 		},
 	}

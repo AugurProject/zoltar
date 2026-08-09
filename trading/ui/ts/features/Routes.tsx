@@ -98,11 +98,15 @@ export function quoteDemoEthLiquidity(market: DemoMarket, targetBps: bigint) {
 	} as const
 }
 
+export function quoteDemoRemoval(market: DemoMarket, liquidity: bigint) {
+	return quoteRemoveLiquidity(market.yesReserve, market.noReserve, liquidity, market.lpTotalSupply)
+}
+
 export function Liquidity({ market }: { market: DemoMarket }) {
 	const [probability, setProbability] = useState('70')
 	const targetBps = BigInt(Math.max(1, Math.min(99, Number(probability) || 0))) * 100n
 	const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, targetBps)
-	const removed = quoteRemoveLiquidity(market.yesReserve, market.noReserve, 100n * 10n ** 18n, 428_571n * 10n ** 18n)
+	const removed = quoteDemoRemoval(market, 100n * 10n ** 18n)
 	const actionAvailability = liquidityActionAvailability(market)
 	const closedReason = actionAvailability.createOrAdd ? undefined : lifecycleLabel(market.lifecycle)
 	return (
@@ -370,7 +374,7 @@ export function Help() {
 	)
 }
 
-export function Developer() {
+export function Developer({ demo = true }: { demo?: boolean }) {
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -379,13 +383,13 @@ export function Developer() {
 					<h1>Deployment</h1>
 					<p>Addresses are loaded from a project-local manifest. This build never invents public-network deployments.</p>
 				</div>
-				<Status tone='warn'>Demo configuration</Status>
+				<Status tone={demo ? 'warn' : 'neutral'}>{demo ? 'Demo configuration' : 'Runtime manifest'}</Status>
 			</header>
 			<section class='section'>
 				<dl class='fact-list'>
 					<div>
 						<dt>Chain</dt>
-						<dd>Anvil · 31337</dd>
+						<dd>{demo ? 'Anvil · 31337' : 'Read from deployment.json and verified against RPC'}</dd>
 					</div>
 					<div>
 						<dt>SecurityPoolFactory</dt>
@@ -404,7 +408,7 @@ export function Developer() {
 						<dd>Factory mapping by exact SecurityPool</dd>
 					</div>
 				</dl>
-				<div class='warning'>Demo data is simulated and is not evidence of live chain state.</div>
+				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : 'The live client validates the configured factory, router, fee, and core SecurityPoolFactory against the connected chain before discovering markets.'}</div>
 			</section>
 		</main>
 	)

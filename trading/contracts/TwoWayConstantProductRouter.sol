@@ -79,7 +79,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(msg.value > 0, 'ETH input is zero');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		(uint256 yesBefore, uint256 noBefore) = pair.getReserves();
+		(uint256 yesBefore, uint256 noBefore) = pair.getEffectiveReserves();
 		pool.createCompleteSet{ value: msg.value }();
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(
 			pool,

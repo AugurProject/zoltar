@@ -1012,6 +1012,32 @@ footer {
 	}
 }
 
+.live-market-button {
+	display: grid;
+	width: 100%;
+	gap: 0.35rem;
+	padding: 1rem;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--text);
+	text-align: left;
+}
+
+.live-market-button + .live-market-button {
+	margin-top: 0.75rem;
+}
+
+.live-market-button[aria-pressed="true"] {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.live-market-button span,
+.live-market-button code {
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	html {
 		scroll-behavior: auto;

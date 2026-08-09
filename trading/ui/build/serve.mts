@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dir, '../dist')
-const files = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.js.map': 'app.js.map', '/app.css': 'app.css' } as const
+const files = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.js.map': 'app.js.map', '/app.css': 'app.css', '/deployment.json': 'deployment.json' } as const
 Bun.serve({
 	port: 12346,
 	async fetch(request) {

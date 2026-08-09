@@ -2,8 +2,8 @@ import { useMemo, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoCashToShares, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { formatBpsMultiplier, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
+import { demoCashToShares, demoSharesToCash, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 
@@ -37,7 +37,7 @@ function transactionMessage(transactionState: TransactionState) {
 	return undefined
 }
 
-function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO') {
+function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', estimatedExitEth?: bigint) {
 	if (quote === undefined) return <p>Enter an amount and ensure this market has initialized liquidity.</p>
 	if ('oppositeSharesSwapped' in quote)
 		return (
@@ -84,7 +84,7 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 			</div>
 			<div class='metrics__strong'>
 				<dt>Estimated ETH</dt>
-				<dd>0.2471 ETH</dd>
+				<dd>{formatUnits(estimatedExitEth ?? 0n, 18, 8)} ETH</dd>
 			</div>
 		</dl>
 	)
@@ -103,7 +103,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 	const closedReason = tradingClosedReason(market.lifecycle)
 	const conditional = conditionalYesProbability(market.yesReserve, market.noReserve)
 	const yesPercent = Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
-	const collateralPerShare = (market.securityPool.completeSetCollateral * 10n ** 18n) / market.securityPool.shareTokenSupply
+	const collateralPerShare = formatEthPerShare(market.securityPool.completeSetCollateral, market.securityPool.shareTokenSupply)
 	const parsed = useMemo(() => {
 		try {
 			return { value: parseUnits(amount) }
@@ -115,8 +115,10 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 		if (parsed.value === undefined || parsed.value === 0n || market.pair === undefined) return undefined
 		const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 		if (mode === 'exit' && parsed.value >= oppositeReserve) return undefined
+		if (closedReason !== undefined) return undefined
 		return mode === 'enter' ? quoteDemoEnterPosition(market, side, parsed.value) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
-	}, [market, mode, parsed.value, side])
+	}, [closedReason, market, mode, parsed.value, side])
+	const estimatedExitEth = mode === 'exit' && parsed.value !== undefined ? demoSharesToCash(parsed.value, market) : undefined
 	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance: 1_820n * 10n ** 18n, invalidBalance: 750n * 10n ** 18n, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const exitExceedsInsurance = mode === 'exit' && parsed.value !== undefined && parsed.value > maxExit
 	const wrongNetwork = scenario === 'wrong-network'
@@ -174,11 +176,11 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 						</p>
 					) : null}
 					<div class='side-picker' aria-label='Outcome'>
-						<button type='button' aria-pressed={side === 'YES'} onClick={() => setSide('YES')}>
+						<button type='button' aria-pressed={side === 'YES'} disabled={closedReason !== undefined} onClick={() => setSide('YES')}>
 							<span>YES</span>
 							<small>Conditional price {yesPercent.toFixed(1)}%</small>
 						</button>
-						<button type='button' aria-pressed={side === 'NO'} onClick={() => setSide('NO')}>
+						<button type='button' aria-pressed={side === 'NO'} disabled={closedReason !== undefined} onClick={() => setSide('NO')}>
 							<span>NO</span>
 							<small>Conditional price {(100 - yesPercent).toFixed(1)}%</small>
 						</button>
@@ -186,7 +188,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					<label class='field'>
 						<span>{mode === 'enter' ? 'ETH amount' : 'Complete-set shares to redeem'}</span>
 						<div class='amount-input'>
-							<input value={amount} inputMode='decimal' aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'} aria-invalid={parsed.error !== undefined} onInput={event => setAmount(event.currentTarget.value)} />
+							<input value={amount} inputMode='decimal' disabled={closedReason !== undefined} aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'} aria-invalid={parsed.error !== undefined} onInput={event => setAmount(event.currentTarget.value)} />
 							<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
 						</div>
 						{parsed.error === undefined ? (
@@ -216,7 +218,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							<span>{quote === undefined ? 'Quote unavailable' : 'Authoritative preview'}</span>
 							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
 						</div>
-						{renderQuote(quote, side)}
+						{closedReason === undefined ? renderQuote(quote, side, estimatedExitEth) : <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>}
 					</div>
 					{wrongNetwork ? (
 						<p class='error' role='alert'>
@@ -259,7 +261,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							</div>
 							<div>
 								<dt>Collateral rate</dt>
-								<dd>{formatUnits(collateralPerShare)} ETH / share</dd>
+								<dd>{collateralPerShare}</dd>
 							</div>
 						</dl>
 					</section>

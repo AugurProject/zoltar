@@ -27,6 +27,7 @@ interface ITwoWayConstantProductPair {
 	function transfer(address recipient, uint256 amount) external returns (bool);
 	function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 	function getReserves() external view returns (uint256 yesReserve, uint256 noReserve);
+	function getEffectiveReserves() external view returns (uint256 yesReserve, uint256 noReserve);
 	function tradingStatus() external view returns (TradingStatus status);
 	function quoteExactInput(
 		bool yesForNo,

@@ -17,7 +17,7 @@ library TwoWayConstantProductMath {
 		require(feeBps < BPS_DENOMINATOR, 'Invalid fee');
 		uint256 netInput = Math.mulDiv(amountIn, BPS_DENOMINATOR - feeBps, BPS_DENOMINATOR);
 		require(netInput > 0, 'Net input is zero');
-		amountOut = Math.mulDiv(reserveOut, netInput, reserveIn + netInput);
+		amountOut = _ratioOfSum(reserveOut, netInput, reserveIn);
 		require(amountOut > 0 && amountOut < reserveOut, 'Insufficient output');
 		feeAmount = amountIn - netInput;
 	}
@@ -50,8 +50,8 @@ library TwoWayConstantProductMath {
 	}
 
 	function conditionalYesBps(uint256 yesReserve, uint256 noReserve) internal pure returns (uint256) {
-		require(yesReserve <= type(uint256).max - noReserve, 'Reserve sum overflow');
-		return Math.mulDiv(noReserve, BPS_DENOMINATOR, yesReserve + noReserve);
+		require(yesReserve > 0 || noReserve > 0, 'Empty reserves');
+		return _ratioOfSum(BPS_DENOMINATOR, noReserve, yesReserve);
 	}
 
 	function initialLiquidityAmounts(
@@ -67,5 +67,42 @@ library TwoWayConstantProductMath {
 			noAmount = Math.mulDiv(completeSets, conditionalYesBpsValue, BPS_DENOMINATOR - conditionalYesBpsValue);
 		}
 		require(yesAmount > 0 && noAmount > 0, 'Initial reserves round to zero');
+	}
+
+	function _ratioOfSum(uint256 scale, uint256 numeratorPart, uint256 otherPart) private pure returns (uint256) {
+		if (otherPart <= type(uint256).max - numeratorPart)
+			return Math.mulDiv(scale, numeratorPart, otherPart + numeratorPart);
+
+		// The denominator has 257 bits. The quotient is bounded by `scale`, so an exact
+		// binary search can compare 512-bit products without narrowing the denominator.
+		uint256 low;
+		uint256 high = scale;
+		while (low < high) {
+			uint256 midpoint = low + (high - low + 1) / 2;
+			if (_productOfSumAtMost(midpoint, otherPart, numeratorPart, scale, numeratorPart)) low = midpoint;
+			else high = midpoint - 1;
+		}
+		return low;
+	}
+
+	function _productOfSumAtMost(
+		uint256 multiplier,
+		uint256 first,
+		uint256 second,
+		uint256 rightMultiplier,
+		uint256 rightValue
+	) private pure returns (bool) {
+		(uint256 firstHigh, uint256 firstLow) = Math.mul512(multiplier, first);
+		(uint256 secondHigh, uint256 secondLow) = Math.mul512(multiplier, second);
+		(uint256 rightHigh, uint256 rightLow) = Math.mul512(rightMultiplier, rightValue);
+		unchecked {
+			uint256 lowSum = firstLow + secondLow;
+			uint256 carry = lowSum < firstLow ? 1 : 0;
+			uint256 highWithoutCarry = firstHigh + secondHigh;
+			if (highWithoutCarry < firstHigh) return false;
+			uint256 highSum = highWithoutCarry + carry;
+			if (highSum < highWithoutCarry) return false;
+			return highSum < rightHigh || (highSum == rightHigh && lowSum <= rightLow);
+		}
 	}
 }

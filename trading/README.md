@@ -27,7 +27,13 @@ bun run ui:serve
 
 Open `http://localhost:12346/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
 
-The current standalone UI is a demo-state implementation for visual QA. It does not yet load a deployment manifest, discover live markets, connect a wallet, or submit transactions; use the contracts and SDK from an integration client for live local workflows.
+For live use, build with a reviewed deployment manifest and open the same routes without `?demo=1`:
+
+```bash
+TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
+```
+
+The live client validates the manifest, discovers canonical SecurityPools and their exact pairs, displays pool settings and status, connects an injected wallet, and obtains authoritative router simulations before entry, exit, and liquidity transactions. It rejects a quote after the chain advances and re-simulates immediately before wallet submission.
 
 For a local deployment, first deploy Zoltar core to Anvil, then:
 
@@ -52,6 +58,7 @@ The script verifies that the configured core `SecurityPoolFactory` has bytecode 
 | `bun run ui:build` / `ui:serve` | Build or serve the standalone UI |
 | `bun run deploy:local` | Deploy against an existing local Zoltar manifest |
 | `bun run gas-costs` | Report bytecode sizes and funded-fixture operation gas |
+| `bun run ci` | Run the AMM-local frozen install, build, tests, formatting, and dependency audit |
 
 Root aliases use the `trading:*` prefix.
 

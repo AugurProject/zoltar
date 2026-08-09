@@ -9,4 +9,4 @@ Environment variables used by local deployment:
 | `ZOLTAR_DEPLOYMENT_MANIFEST` | Existing matching core manifest | Required |
 | `TRADING_FEE_BPS` | Immutable AMM fee | `30` |
 
-The unused future UI parser defines a separate flat JSON schema with numeric `chainId` and `feeBps`, string `chainName` and `rpcUrl`, and addresses `securityPoolFactory`, `factory`, and `router`. The current application does not invoke that parser, and the nested `deploy:local` output is not compatible with it. See [UI configuration](../how-to/configure-ui.md). Secrets do not belong in manifests or `.env.example`.
+The live UI directly accepts the nested `deploy:local` manifest. It also accepts a flat JSON schema with numeric `chainId` and `feeBps`, string `chainName` and `rpcUrl`, and addresses `securityPoolFactory`, `factory`, and `router`. Set `TRADING_UI_DEPLOYMENT` while building to copy a reviewed manifest to untracked `ui/dist/deployment.json`; see [UI configuration](../how-to/configure-ui.md). Secrets do not belong in manifests or `.env.example`.

@@ -1,7 +1,13 @@
 # Configure the standalone UI
 
-The checked-in UI currently provides walletless visual fixtures through `?demo=1`; it does not yet load RPC state or submit wallet transactions. Do not use its screens as evidence of a live deployment.
+The standalone UI has two explicitly separated modes. `?demo=1` provides walletless visual fixtures and is always labeled simulated; do not use demo screens as evidence of live chain state. Without that query parameter, the application requires a deployment manifest and reads live RPC and wallet state.
 
-`deploy:local` emits the authoritative nested manifest under `network`, `core`, and `trading`. The unused client configuration parser currently expects a separate flat document with `chainId`, `chainName`, `rpcUrl`, `securityPoolFactory`, `factory`, `router`, and `feeBps`; the deployment manifest is not directly consumable by the UI. A future live adapter must validate that every address belongs to the declared chain, discover pools and pairs rather than hard-coding them, simulate the actual router call, and revalidate immediately before wallet submission.
+`deploy:local` emits the authoritative nested manifest under `network`, `core`, and `trading`. Copy it into the built application with:
+
+```bash
+TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
+```
+
+The build copies it as untracked `ui/dist/deployment.json`. The parser also accepts the documented flat schema for deliberate hand-authored configurations. The live client validates required addresses and values, discovers pools from `SecurityPoolFactory` and pairs from the trading factory, and never hard-codes market addresses. The wallet must report the manifest chain before any submission. Entry, exit, and liquidity calls are simulated through the actual router, rejected after a block change, and simulated again immediately before submission with explicit slippage bounds.
 
 Serve built assets from the same origin. Production code may connect only to the configured RPC, the wallet provider, and explicit explorer links. Demo mode is unmistakably labeled and must never be presented as live state.

@@ -1,7 +1,7 @@
 # Units and rounding
 
 - ETH and collateral outputs use wei.
-- Shares and LP tokens use their atomic `uint256` units. Zoltar’s initial complete-set scale is `1e18` shares per wei, but retention makes the live ratio dynamic.
+- Shares and LP tokens use 18-decimal atomic `uint256` units: one displayed share is `1e18` atomic units. At an empty SecurityPool, one wei creates `1e18` atomic units (one displayed share) of every outcome. Protocol retention makes the later collateral-to-share ratio dynamic, so clients must use the current mutation result rather than assuming this initial rate.
 - Fees, slippage, initial conditional price, and displayed conditional price use basis points over 10,000 where applicable.
 - Deadlines and question end times are Unix seconds.
 - Universe IDs are `uint248`. A token ID is `(universeId << 8) | outcome`, with local outcomes INVALID=0, YES=1, NO=2.

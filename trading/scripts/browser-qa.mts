@@ -81,6 +81,8 @@ const scenarios = [
 	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets' },
 	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market' },
 	{ name: 'market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=baseline#/market' },
+	{ name: 'help-mobile', width: 390, height: 844, path: '/#/help' },
+	{ name: 'developer-live', width: 1440, height: 900, path: '/#/developer' },
 	{ name: 'no-entry', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&side=no#/market' },
 	{ name: 'insured-exit', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&mode=exit#/market' },
 	{ name: 'insufficient-invalid', width: 390, height: 844, path: '/?demo=1&scenario=insufficient-invalid&mode=exit#/market', scrollY: 650 },

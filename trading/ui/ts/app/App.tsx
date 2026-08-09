@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Developer, Help, Liquidity, MarketList, Portfolio } from '../features/Routes.tsx'
+import { LiveTrading } from '../features/LiveTrading.tsx'
 
 function currentRoute() {
 	return window.location.hash.replace(/^#\/?/, '') || 'markets'
@@ -25,13 +26,6 @@ function renderBanner(scenario: string, demo: boolean) {
 				<span>Switch to the configured chain before simulating or submitting.</span>
 			</div>
 		)
-	else if (!demo)
-		runtimeBanner = (
-			<div class='runtime-banner' role='status'>
-				<strong>Demo client only</strong>
-				<span>Live RPC and wallet adapters are not configured in this build.</span>
-			</div>
-		)
 	return (
 		<>
 			{demo ? (
@@ -45,30 +39,9 @@ function renderBanner(scenario: string, demo: boolean) {
 	)
 }
 
-function liveClientUnavailable() {
-	return (
-		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<span class='eyebrow'>Standalone client</span>
-					<h1>Live trading client not configured</h1>
-					<p>This build contains the contract SDK and visual demo, but no live RPC discovery or wallet submission adapter.</p>
-				</div>
-			</header>
-			<section class='section'>
-				<h2>Use simulated data for UI evaluation</h2>
-				<p>Demo data is always labeled and does not represent chain state. Use the contracts or SDK from an integration client for local transactions.</p>
-				<a class='primary-link' href='?demo=1#/markets'>
-					Open demo mode
-				</a>
-			</section>
-		</main>
-	)
-}
-
 function networkLabel(scenario: string, demo: boolean) {
 	if (scenario === 'wrong-network') return 'Unsupported · requires Anvil 31337'
-	return demo ? 'Anvil 31337' : 'No live network'
+	return demo ? 'Anvil 31337' : 'Configured live network'
 }
 
 export function App() {
@@ -84,8 +57,11 @@ export function App() {
 	}, [])
 	const resolvedContent = renderRoute(route, scenario, market)
 	let content = resolvedContent
-	if (!demo) content = liveClientUnavailable()
-	else if (scenario === 'loading')
+	if (!demo) {
+		if (route === 'help') content = <Help />
+		else if (route === 'developer') content = <Developer demo={false} />
+		else content = <LiveTrading route={route} />
+	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -139,8 +115,8 @@ export function App() {
 							<span />
 							{networkLabel(scenario, demo)}
 						</a>
-						<button class='wallet-button' disabled={!demo}>
-							{demo ? '0x8ba1…ba72' : 'Wallet unavailable'}
+						<button class='wallet-button' disabled>
+							{demo ? '0x8ba1…ba72' : 'Connect in market view'}
 						</button>
 					</div>
 				</header>
