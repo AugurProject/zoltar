@@ -27,6 +27,7 @@ import {
 	type LiquidityOperation,
 	type LiveBalances,
 	type LiveMarket,
+	type MarketLifecycle,
 } from '../protocol/live.ts'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
@@ -702,6 +703,10 @@ export function liquidityApprovalRequired(balanceState: BalanceState, operation:
 	return balanceState === 'ready' && operation === 'remove' && amount !== undefined && amount > 0n && allowance !== undefined && allowance < amount
 }
 
+export function liquidityOperationAvailable(operation: LiquidityOperation, market: MarketLifecycle, nowSeconds: bigint) {
+	return operation === 'remove' || marketAcceptsNewRisk(market, nowSeconds)
+}
+
 function LiveLiquidityControls({
 	configuration,
 	market,
@@ -742,6 +747,7 @@ function LiveLiquidityControls({
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
 	}, [probability])
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
+	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
 	const needsLpApproval = market.lpTotalSupply > 0n && liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
 	const workflowLocked = state === 'approval' || state === 'pending'
 
@@ -759,6 +765,16 @@ function LiveLiquidityControls({
 		if (!workflow.isActive()) setState('idle')
 	}, [balanceState])
 
+	useEffect(() => {
+		if (operationAvailable) return
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!workflow.isActive()) {
+			setState('idle')
+			setError(undefined)
+		}
+	}, [operationAvailable])
+
 	useEffect(
 		() => () => {
 			if (workflow.isActive()) workflow.finish()
@@ -768,7 +784,7 @@ function LiveLiquidityControls({
 	)
 
 	async function simulateCurrent() {
-		if (walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || (operation === 'initialize' && conditionalBps === undefined)) return
+		if (!operationAvailable || walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || (operation === 'initialize' && conditionalBps === undefined)) return
 		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
@@ -806,6 +822,12 @@ function LiveLiquidityControls({
 
 	async function submit() {
 		if (walletClient === undefined || account === undefined || quote === undefined) return
+		if (!liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)) {
+			setQuote(undefined)
+			setState('error')
+			setError('This market no longer accepts liquidity initialization or additions. Raw liquidity removal remains available.')
+			return
+		}
 		if (!workflow.begin()) return
 		onWorkflowLockChange(true)
 		setState('pending')
@@ -1001,7 +1023,7 @@ function LiveLiquidityControls({
 				</button>
 			) : null}
 			{!needsLpApproval && quote !== undefined ? (
-				<button class='primary-action' disabled={state !== 'ready'} onClick={submit}>
+				<button class='primary-action' disabled={state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)} onClick={submit}>
 					Submit liquidity transaction
 				</button>
 			) : null}

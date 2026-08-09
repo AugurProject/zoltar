@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../features/MarketDetail.tsx'
-import { insuredExitLimitMessage, liquidityApprovalRequired, livePairInitialized } from '../features/LiveTrading.tsx'
+import { insuredExitLimitMessage, liquidityApprovalRequired, liquidityOperationAvailable, livePairInitialized } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
@@ -21,6 +21,14 @@ describe('standalone trading UI model', () => {
 
 	test('keeps truth-auction liquidity removal available while create and add are closed', () => {
 		expect(liquidityActionAvailability(demoMarket('truth-auction'))).toEqual({ initialize: false, add: false, remove: true })
+	})
+
+	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
+		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
+		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
+		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
+		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
+		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
 	})
 
 	test('keeps demo liquidity states mutually exclusive', () => {

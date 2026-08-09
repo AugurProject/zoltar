@@ -161,7 +161,7 @@ export type LiveMarket = Readonly<{
 	lpTotalSupply: bigint
 }>
 
-type MarketLifecycle = Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
+export type MarketLifecycle = Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
 
 function resolvedOutcomeLabel(questionOutcome: number) {
 	if (questionOutcome === 0) return 'Resolved INVALID'
