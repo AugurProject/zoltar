@@ -4,7 +4,7 @@ import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalle
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
 import { insuredExitLimitMessage } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
-import { marketAcceptsNewRisk, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
+import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 describe('standalone trading UI model', () => {
@@ -93,6 +93,11 @@ describe('standalone trading UI model', () => {
 		expect(marketAcceptsNewRisk({ ...open, questionOutcome: 1 }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk({ ...open, systemState: 3 }, 1_000n)).toBeFalse()
 		expect(marketAcceptsNewRisk(open, 2_000n)).toBeFalse()
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, universeForkTime: 999n }, 1_000n)).toBe('Universe forked')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, awaitingForkContinuation: true }, 1_000n)).toBe('Awaiting fork continuation')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Pool inactive')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 	})
 
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {

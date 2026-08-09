@@ -8,12 +8,12 @@ import {
 	approveLpRouter,
 	approveRouter,
 	connectWallet,
-	createPair,
 	createTradingPublicClient,
 	createTradingWalletClient,
 	discoverLiveMarkets,
 	loadLiveBalances,
 	marketAcceptsNewRisk,
+	marketNewRiskBlocker,
 	simulateEntry,
 	simulateExit,
 	simulateLiquidity,
@@ -35,20 +35,11 @@ type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
 type Quote = Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>
 type TransactionState = 'idle' | 'simulating' | 'ready' | 'approval' | 'pending' | 'confirmed' | 'error'
 
-function statusLabel(market: LiveMarket) {
+function statusLabel(market: LiveMarket, nowSeconds: bigint) {
+	const blocker = marketNewRiskBlocker(market, nowSeconds)
+	if (blocker !== undefined) return blocker
 	if (market.pair === undefined) return 'Pair not created'
-	if (market.tradingStatus === 0) return 'Trading open'
-	if (market.tradingStatus === 1) return 'Question ended'
-	if (market.tradingStatus === 2) return 'Pool inactive'
-	if (market.tradingStatus === 3) return 'Awaiting fork continuation'
-	if (market.tradingStatus === 4) return 'Universe forked'
-	if (market.tradingStatus === 5) {
-		if (market.questionOutcome === 0) return 'Resolved INVALID'
-		if (market.questionOutcome === 1) return 'Resolved YES'
-		if (market.questionOutcome === 2) return 'Resolved NO'
-		return 'Question resolved'
-	}
-	return 'Pair uninitialized'
+	return market.tradingStatus === 6 ? 'Pair uninitialized' : 'Trading open'
 }
 
 function systemStateLabel(state: number) {
@@ -85,6 +76,21 @@ function configuredClient(configuration: DeploymentConfiguration) {
 	return createTradingPublicClient(configuration)
 }
 
+function MissingPairAction({ market }: { market: LiveMarket }) {
+	const blocker = marketNewRiskBlocker(market, BigInt(Math.floor(Date.now() / 1_000)))
+	if (blocker !== undefined)
+		return (
+			<button class='primary-action' disabled>
+				{blocker} — pair creation unavailable
+			</button>
+		)
+	return (
+		<a class='primary-action' href='#/liquidity'>
+			Create pair and initialize atomically in Liquidity
+		</a>
+	)
+}
+
 export function insuredExitLimitMessage(requested: bigint, maximum: bigint, invalidBalance: bigint) {
 	if (maximum === invalidBalance && requested > invalidBalance) return `Your INVALID balance covers only ${formatUnits(invalidBalance)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.`
 	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
@@ -104,6 +110,7 @@ export function LiveTrading({ route }: { route: string }) {
 	const [state, setState] = useState<TransactionState>('idle')
 	const [message, setMessage] = useState<string>()
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
+	const nowSeconds = BigInt(Math.floor(Date.now() / 1_000))
 	const parsedAmount = useMemo(() => {
 		try {
 			return { value: parseUnits(amount), error: undefined }
@@ -219,24 +226,6 @@ export function LiveTrading({ route }: { route: string }) {
 		}
 	}
 
-	async function deployPair() {
-		if (configuration === undefined || account === undefined || walletClient === undefined || selected === undefined) return
-		try {
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before submitting')
-			const currentAccount = await connectWallet(provider)
-			if (currentAccount !== account) throw new Error('Wallet account changed; reconnect before creating the pair')
-			setState('pending')
-			const hash = await createPair(walletClient, configuration, selected, account)
-			await walletClient.waitForTransactionReceipt({ hash })
-			await refresh(configuration, account)
-			setState('confirmed')
-		} catch (error) {
-			setState('error')
-			setMessage(error instanceof Error ? error.message : 'Pair creation failed')
-		}
-	}
-
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
@@ -293,7 +282,7 @@ export function LiveTrading({ route }: { route: string }) {
 							>
 								<strong>{market.title}</strong>
 								<span>
-									{statusLabel(market)} · universe {market.universeId.toString()}
+									{statusLabel(market, nowSeconds)} · universe {market.universeId.toString()}
 								</span>
 								<code>{shortAddress(market.pool)}</code>
 							</button>
@@ -311,7 +300,7 @@ export function LiveTrading({ route }: { route: string }) {
 								<span class='section-kicker'>Exact pool and branch</span>
 								<h2>{selected.title}</h2>
 							</div>
-							<Status tone={selected.tradingStatus === 0 ? 'good' : 'warn'}>{statusLabel(selected)}</Status>
+							<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
 						</div>
 						<dl class='fact-list'>
 							<div>
@@ -383,11 +372,7 @@ export function LiveTrading({ route }: { route: string }) {
 						</dl>
 						{route === 'liquidity' ? <LiveLiquidityControls configuration={configuration} market={selected} balances={balances} account={account} walletClient={walletClient} refresh={() => refresh(configuration, account)} /> : null}
 						{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} /> : null}
-						{route !== 'liquidity' && route !== 'portfolio' && selected.pair === undefined ? (
-							<button class='primary-action' disabled={account === undefined || state === 'pending'} onClick={deployPair}>
-								Create canonical pair
-							</button>
-						) : null}
+						{route !== 'liquidity' && route !== 'portfolio' && selected.pair === undefined ? <MissingPairAction market={selected} /> : null}
 						{route !== 'liquidity' && route !== 'portfolio' && selected.pair !== undefined ? (
 							<LivePositionControls
 								market={selected}

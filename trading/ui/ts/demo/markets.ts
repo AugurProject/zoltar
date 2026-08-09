@@ -53,7 +53,7 @@ export function demoMarket(scenario: string): DemoMarket {
 	let lifecycle: Lifecycle = 'open'
 	let systemState: DemoMarket['securityPool']['systemState'] = 'Operational'
 	let universe = 'Genesis universe'
-	if (scenario === 'ended') lifecycle = 'ended'
+	if (scenario === 'ended' || scenario === 'ended-missing-pair') lifecycle = 'ended'
 	if (scenario === 'forked') {
 		lifecycle = 'forked'
 		systemState = 'Pool forked'
@@ -90,7 +90,7 @@ export function demoMarket(scenario: string): DemoMarket {
 			activeVaultCount: 3n,
 		},
 	}
-	return scenario === 'missing-pair' ? { ...common, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n } : { ...common, pair: selectedPair }
+	return scenario === 'missing-pair' || scenario === 'ended-missing-pair' ? { ...common, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n } : { ...common, pair: selectedPair }
 }
 
 export function lifecycleLabel(lifecycle: Lifecycle) {

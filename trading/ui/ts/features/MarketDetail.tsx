@@ -133,6 +133,26 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 		window.setTimeout(() => setTransactionState('pending'), mode === 'exit' ? 450 : 0)
 		window.setTimeout(() => setTransactionState('confirmed'), 1_300)
 	}
+	let quoteContent = renderQuote(quote, side, estimatedExitAttoEth)
+	if (closedReason !== undefined && market.pair === undefined) quoteContent = <p>Trading and pair initialization are unavailable: {closedReason}.</p>
+	if (closedReason !== undefined && market.pair !== undefined) quoteContent = <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>
+	let primaryAction = (
+		<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || transactionState === 'pending'} onClick={submit}>
+			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
+		</button>
+	)
+	if (market.pair === undefined && closedReason === undefined)
+		primaryAction = (
+			<a class='primary-action' href='#/liquidity'>
+				Initialize this market in Liquidity
+			</a>
+		)
+	if (market.pair === undefined && closedReason !== undefined)
+		primaryAction = (
+			<button class='primary-action' disabled>
+				{closedReason} — pair initialization unavailable
+			</button>
+		)
 
 	return (
 		<main class='route' id='main-content'>
@@ -223,22 +243,14 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							<span>{quote === undefined ? 'Demo preview unavailable' : 'Illustrative demo preview'}</span>
 							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
 						</div>
-						{closedReason === undefined ? renderQuote(quote, side, estimatedExitAttoEth) : <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>}
+						{quoteContent}
 					</div>
 					{wrongNetwork ? (
 						<p class='error' role='alert'>
 							Switch to the configured network before simulating or submitting.
 						</p>
 					) : null}
-					{market.pair === undefined ? (
-						<a class='primary-action' href='#/liquidity'>
-							Initialize this market in Liquidity
-						</a>
-					) : (
-						<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || transactionState === 'pending'} onClick={submit}>
-							{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
-						</button>
-					)}
+					{primaryAction}
 					<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
 						{transactionMessage(transactionState)}
 					</div>

@@ -161,9 +161,34 @@ export type LiveMarket = Readonly<{
 	lpTotalSupply: bigint
 }>
 
-export function marketAcceptsNewRisk(market: Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>, nowSeconds: bigint) {
-	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) return market.tradingStatus === 0
-	return market.systemState === 0 && !market.awaitingForkContinuation && market.universeForkTime === 0n && market.questionOutcome === 3 && nowSeconds < market.endTime
+type MarketLifecycle = Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
+
+function resolvedOutcomeLabel(questionOutcome: number) {
+	if (questionOutcome === 0) return 'Resolved INVALID'
+	if (questionOutcome === 1) return 'Resolved YES'
+	if (questionOutcome === 2) return 'Resolved NO'
+	return 'Question resolved'
+}
+
+export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint) {
+	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) {
+		if (market.tradingStatus === 0) return undefined
+		if (market.tradingStatus === 1) return 'Question ended'
+		if (market.tradingStatus === 2) return 'Pool inactive'
+		if (market.tradingStatus === 3) return 'Awaiting fork continuation'
+		if (market.tradingStatus === 4) return 'Universe forked'
+		if (market.tradingStatus === 5) return resolvedOutcomeLabel(market.questionOutcome)
+	}
+	if (market.universeForkTime !== 0n) return 'Universe forked'
+	if (market.awaitingForkContinuation) return 'Awaiting fork continuation'
+	if (market.systemState !== 0) return 'Pool inactive'
+	if (market.questionOutcome !== 3) return resolvedOutcomeLabel(market.questionOutcome)
+	if (nowSeconds >= market.endTime) return 'Question ended'
+	return undefined
+}
+
+export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint) {
+	return marketNewRiskBlocker(market, nowSeconds) === undefined
 }
 
 export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
