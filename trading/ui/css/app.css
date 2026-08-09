@@ -747,6 +747,20 @@ summary {
 .row-action:disabled {
 	color: var(--muted);
 }
+.balance-recovery {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin: 0.75rem 0;
+}
+.balance-recovery p {
+	margin: 0;
+}
+.uninitialized-state p {
+	color: var(--muted);
+	font-size: 12px;
+}
 .two-column {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -901,6 +915,15 @@ footer {
 }
 
 @media (max-width: 900px) {
+	.brand,
+	.eyebrow[href],
+	details summary,
+	.market-row h2 a,
+	.table-row a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+	}
 	.site-header {
 		grid-template-columns: 1fr auto;
 		height: auto;

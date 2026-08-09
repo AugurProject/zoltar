@@ -210,129 +210,142 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 			</section>
 
 			<div class='detail-grid'>
-				<section class='section trade-panel' aria-labelledby='trade-heading'>
-					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>Insured position</span>
-							<h2 id='trade-heading'>{mode === 'enter' ? 'Enter with ETH' : 'Exit to ETH'}</h2>
-						</div>
-						<div class='segmented' aria-label='Position operation'>
-							<button
-								type='button'
-								aria-pressed={mode === 'enter'}
-								disabled={workflowLocked}
-								onClick={() => {
-									if (workflow.isActive()) return
-									setMode('enter')
-									resetTerminalState()
-								}}
-							>
-								Enter
-							</button>
-							<button
-								type='button'
-								aria-pressed={mode === 'exit'}
-								disabled={workflowLocked}
-								onClick={() => {
-									if (workflow.isActive()) return
-									setMode('exit')
-									resetTerminalState()
-								}}
-							>
-								Exit
-							</button>
-						</div>
-					</div>
-					{mode === 'enter' ? (
-						<p class='pool-mint-note'>
-							In a live transaction, submitted ETH would go to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. This demo applies that pool’s illustrative collateral rate locally.
-						</p>
-					) : null}
-					<div class='side-picker' aria-label='Outcome'>
-						<button
-							type='button'
-							aria-pressed={side === 'YES'}
-							disabled={closedReason !== undefined || workflowLocked}
-							onClick={() => {
-								if (workflow.isActive()) return
-								setSide('YES')
-								resetTerminalState()
-							}}
-						>
-							<span>YES</span>
-							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${yesPercent.toFixed(1)}%`}</small>
-						</button>
-						<button
-							type='button'
-							aria-pressed={side === 'NO'}
-							disabled={closedReason !== undefined || workflowLocked}
-							onClick={() => {
-								if (workflow.isActive()) return
-								setSide('NO')
-								resetTerminalState()
-							}}
-						>
-							<span>NO</span>
-							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${(100 - yesPercent).toFixed(1)}%`}</small>
-						</button>
-					</div>
-					<label class='field'>
-						<span>{mode === 'enter' ? 'ETH amount' : 'Complete-set shares to redeem'}</span>
-						<div class='amount-input'>
-							<input
-								value={amount}
-								inputMode='decimal'
-								disabled={closedReason !== undefined || workflowLocked}
-								aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'}
-								aria-invalid={parsed.error !== undefined}
-								onInput={event => {
-									if (workflow.isActive()) return
-									setAmount(event.currentTarget.value)
-									resetTerminalState()
-								}}
-							/>
-							<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
-						</div>
-						{parsed.error === undefined ? (
-							<small id='amount-help'>Values below are illustrative local math, not a router simulation.</small>
-						) : (
-							<small id='amount-error' class='error'>
-								{parsed.error}
-							</small>
-						)}
-					</label>
-					{mode === 'exit' ? (
-						<div class='coverage'>
+				{!initialized ? (
+					<section class='section uninitialized-state' aria-labelledby='initialization-heading'>
+						<div class='section-heading'>
 							<div>
-								<span>Maximum insured {side} exit</span>
-								<strong>{formatShareAmount(maxExit)}</strong>
+								<span class='section-kicker'>Conditional price unavailable</span>
+								<h2 id='initialization-heading'>Pair initialization required</h2>
 							</div>
-							<p>
-								This demo limit is derived from wallet {side} ({formatShareAmount(longBalance)}), wallet INVALID ({formatShareAmount(demoWalletBalances.invalid)}), and the displayed pair reserves. Excess directional shares remain in the wallet.
+						</div>
+						<p>Create initial YES/NO reserves before entering or exiting positions.</p>
+						{primaryAction}
+					</section>
+				) : (
+					<section class='section trade-panel' aria-labelledby='trade-heading'>
+						<div class='section-heading'>
+							<div>
+								<span class='section-kicker'>Insured position</span>
+								<h2 id='trade-heading'>{mode === 'enter' ? 'Enter with ETH' : 'Exit to ETH'}</h2>
+							</div>
+							<div class='segmented' aria-label='Position operation'>
+								<button
+									type='button'
+									aria-pressed={mode === 'enter'}
+									disabled={workflowLocked}
+									onClick={() => {
+										if (workflow.isActive()) return
+										setMode('enter')
+										resetTerminalState()
+									}}
+								>
+									Enter
+								</button>
+								<button
+									type='button'
+									aria-pressed={mode === 'exit'}
+									disabled={workflowLocked}
+									onClick={() => {
+										if (workflow.isActive()) return
+										setMode('exit')
+										resetTerminalState()
+									}}
+								>
+									Exit
+								</button>
+							</div>
+						</div>
+						{mode === 'enter' ? (
+							<p class='pool-mint-note'>
+								In a live transaction, submitted ETH would go to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. This demo applies that pool’s illustrative collateral rate locally.
 							</p>
-							{exitExceedsInsurance ? (
-								<p class='error' role='alert'>
-									{insuredExitLimitMessage(parsed.value ?? 0n, maxExit, demoWalletBalances.invalid)}
+						) : null}
+						<div class='side-picker' aria-label='Outcome'>
+							<button
+								type='button'
+								aria-pressed={side === 'YES'}
+								disabled={closedReason !== undefined || workflowLocked}
+								onClick={() => {
+									if (workflow.isActive()) return
+									setSide('YES')
+									resetTerminalState()
+								}}
+							>
+								<span>YES</span>
+								<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${yesPercent.toFixed(1)}%`}</small>
+							</button>
+							<button
+								type='button'
+								aria-pressed={side === 'NO'}
+								disabled={closedReason !== undefined || workflowLocked}
+								onClick={() => {
+									if (workflow.isActive()) return
+									setSide('NO')
+									resetTerminalState()
+								}}
+							>
+								<span>NO</span>
+								<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${(100 - yesPercent).toFixed(1)}%`}</small>
+							</button>
+						</div>
+						<label class='field'>
+							<span>{mode === 'enter' ? 'ETH amount' : 'Complete-set shares to redeem'}</span>
+							<div class='amount-input'>
+								<input
+									value={amount}
+									inputMode='decimal'
+									disabled={closedReason !== undefined || workflowLocked}
+									aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'}
+									aria-invalid={parsed.error !== undefined}
+									onInput={event => {
+										if (workflow.isActive()) return
+										setAmount(event.currentTarget.value)
+										resetTerminalState()
+									}}
+								/>
+								<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
+							</div>
+							{parsed.error === undefined ? (
+								<small id='amount-help'>Values below are illustrative local math, not a router simulation.</small>
+							) : (
+								<small id='amount-error' class='error'>
+									{parsed.error}
+								</small>
+							)}
+						</label>
+						{mode === 'exit' ? (
+							<div class='coverage'>
+								<div>
+									<span>Maximum insured {side} exit</span>
+									<strong>{formatShareAmount(maxExit)}</strong>
+								</div>
+								<p>
+									This demo limit is derived from wallet {side} ({formatShareAmount(longBalance)}), wallet INVALID ({formatShareAmount(demoWalletBalances.invalid)}), and the displayed pair reserves. Excess directional shares remain in the wallet.
 								</p>
-							) : null}
+								{exitExceedsInsurance ? (
+									<p class='error' role='alert'>
+										{insuredExitLimitMessage(parsed.value ?? 0n, maxExit, demoWalletBalances.invalid)}
+									</p>
+								) : null}
+							</div>
+						) : null}
+						<div class='quote' aria-live='polite'>
+							<div class='quote__title'>
+								<span>{quote === undefined ? 'Preview unavailable' : 'Trade breakdown'}</span>
+								<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
+							</div>
+							{quoteContent}
 						</div>
-					) : null}
-					<div class='quote' aria-live='polite'>
-						<div class='quote__title'>
-							<span>{quote === undefined ? 'Preview unavailable' : 'Trade breakdown'}</span>
-							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
+						{primaryAction}
+						<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
+							{transactionMessage(transactionState)}
 						</div>
-						{quoteContent}
-					</div>
-					{primaryAction}
-					<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
-						{transactionMessage(transactionState)}
-					</div>
-					<details>
-						<summary>Advanced · Raw share swap</summary>
-						<p>An uninsured share swap does not create new INVALID insurance. Use only when you intend to manage raw YES and NO balances.</p>
-					</details>
-				</section>
+						<details>
+							<summary>Advanced · Raw share swap</summary>
+							<p>An uninsured share swap does not create new INVALID insurance. Use only when you intend to manage raw YES and NO balances.</p>
+						</details>
+					</section>
+				)}
 
 				<aside class='detail-aside'>
 					<section class='section'>

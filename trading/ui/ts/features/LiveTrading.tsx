@@ -79,6 +79,19 @@ function configuredClient(configuration: DeploymentConfiguration) {
 	return createTradingPublicClient(configuration)
 }
 
+function BalanceLoadError({ message, retry, disabled = false }: { message: string; retry(): Promise<void>; disabled?: boolean }) {
+	return (
+		<div class='balance-recovery'>
+			<p class='error' role='alert'>
+				{message}
+			</p>
+			<button class='secondary-action' disabled={disabled} onClick={() => void retry()}>
+				Retry balances
+			</button>
+		</div>
+	)
+}
+
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {
 	return market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n && market.tradingStatus !== 6
 }
@@ -269,6 +282,30 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		)
 		return () => balanceRequests.invalidate()
 	}, [account, configuration, selected, walletContextInvalidated])
+
+	async function retryBalances() {
+		if (configuration === undefined || selected === undefined) return
+		if (account === undefined) {
+			await connect()
+			return
+		}
+		const request = balanceRequests.begin()
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!positionWorkflow.isActive()) setState('idle')
+		setBalanceState('loading')
+		setBalanceError(undefined)
+		try {
+			const loaded = await loadLiveBalances(configuredClient(configuration), selected, account, configuration.router)
+			if (!balanceRequests.isCurrent(request)) return
+			setBalances(loaded)
+			setBalanceState('ready')
+		} catch (error) {
+			if (!balanceRequests.isCurrent(request)) return
+			setBalanceState('error')
+			setBalanceError(error instanceof Error ? error.message : 'Balance refresh failed')
+		}
+	}
 
 	async function connect() {
 		if (positionWorkflow.isActive() || liquidityWorkflowLockedRef.current) return
@@ -466,7 +503,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				<div>
 					<span class='eyebrow'>Canonical SecurityPools · live RPC</span>
 					<h1>Two-way markets</h1>
-					<p>{configuration.chainName} · conditional prices only · INVALID is not traded.</p>
+					<p>{configuration.chainName} · conditional prices only · INVALID is insurance and is not priced by this AMM; it provides no invalidity estimate.</p>
 				</div>
 				<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
 					{account === undefined ? 'Connect wallet' : shortAddress(account)}
@@ -501,6 +538,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							</div>
 							<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
 						</div>
+						{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
 						<dl class='fact-list'>
 							<div>
 								<dt>SecurityPool</dt>
@@ -570,10 +608,20 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							</div>
 						</dl>
 						{route === 'liquidity' ? (
-							<LiveLiquidityControls configuration={configuration} market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} account={account} walletClient={walletClient} refresh={() => refresh(configuration)} onWorkflowLockChange={updateLiquidityWorkflowLock} />
+							<LiveLiquidityControls
+								configuration={configuration}
+								market={selected}
+								balances={balances}
+								balanceState={balanceState}
+								balanceError={balanceError}
+								account={account}
+								walletClient={walletClient}
+								refresh={() => refresh(configuration)}
+								retryBalances={retryBalances}
+								onWorkflowLockChange={updateLiquidityWorkflowLock}
+							/>
 						) : null}
-						{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} /> : null}
-						{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
+						{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} retryBalances={retryBalances} /> : null}
 						{route !== 'liquidity' && route !== 'portfolio' && selectedPairInitialized ? (
 							<LivePositionControls
 								market={selected}
@@ -609,6 +657,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								simulate={simulate}
 								approve={approve}
 								submit={submit}
+								retryBalances={retryBalances}
 							/>
 						) : null}
 					</section>
@@ -633,6 +682,7 @@ function LiveLiquidityControls({
 	account,
 	walletClient,
 	refresh,
+	retryBalances,
 	onWorkflowLockChange,
 }: {
 	configuration: DeploymentConfiguration
@@ -643,6 +693,7 @@ function LiveLiquidityControls({
 	account: Address | undefined
 	walletClient: WalletClient | undefined
 	refresh(): Promise<void>
+	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
 }) {
 	const defaultOperation: LiquidityOperation = market.pair === undefined || market.lpTotalSupply === 0n ? 'initialize' : 'add'
@@ -669,6 +720,13 @@ function LiveLiquidityControls({
 		if (!workflow.isActive()) setState('idle')
 		return () => simulationRequests.invalidate()
 	}, [account, configuration, market, walletClient])
+
+	useEffect(() => {
+		if (balanceState === 'ready') return
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!workflow.isActive()) setState('idle')
+	}, [balanceState])
 
 	useEffect(
 		() => () => {
@@ -757,7 +815,7 @@ function LiveLiquidityControls({
 			<h3>Live liquidity</h3>
 			{balanceState === 'disconnected' ? <p>Connect a wallet to load balances and simulate liquidity transactions.</p> : null}
 			{balanceState === 'loading' ? <p role='status'>Refreshing wallet balances and LP allowance…</p> : null}
-			{balanceState === 'error' ? <p class='error'>Wallet balances and LP allowance are unavailable: {balanceError ?? 'retry the SecurityPool refresh'}.</p> : null}
+			{balanceState === 'error' ? <BalanceLoadError message={`Wallet balances and LP allowance are unavailable: ${balanceError ?? 'balance refresh failed'}.`} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<div class='segmented' aria-label='Liquidity operation'>
 				<button
 					aria-pressed={operation === 'initialize'}
@@ -920,10 +978,10 @@ function LiveLiquidityControls({
 	)
 }
 
-function LivePortfolio({ market, balances, balanceState, balanceError }: { market: LiveMarket; balances: LiveBalances | undefined; balanceState: BalanceState; balanceError: string | undefined }) {
+function LivePortfolio({ market, balances, balanceState, balanceError, retryBalances }: { market: LiveMarket; balances: LiveBalances | undefined; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
 	if (balanceState === 'disconnected') return <p>Connect a wallet to load aggregate YES, NO, INVALID, and LP balances.</p>
 	if (balances === undefined && balanceState === 'loading') return <p role='status'>Loading aggregate wallet balances…</p>
-	if (balances === undefined) return <p class='error'>Wallet balances are unavailable: {balanceError ?? 'retry the SecurityPool refresh'}.</p>
+	if (balances === undefined) return <BalanceLoadError message={`Wallet balances are unavailable: ${balanceError ?? 'balance refresh failed'}.`} retry={retryBalances} />
 	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
 	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * balances.lp) / market.lpTotalSupply
 	let coveredSets = balances.invalid
@@ -935,7 +993,7 @@ function LivePortfolio({ market, balances, balanceState, balanceError }: { marke
 		<div class='operation-block' aria-busy={balanceState === 'loading'}>
 			<h3>Aggregate wallet exposure</h3>
 			{balanceState === 'loading' ? <p role='status'>Refreshing aggregate wallet balances…</p> : null}
-			{balanceState === 'error' ? <p class='error'>Displayed balances are stale because the latest refresh failed: {balanceError}</p> : null}
+			{balanceState === 'error' ? <BalanceLoadError message={`Displayed balances are stale because the latest refresh failed: ${balanceError ?? 'balance refresh failed'}.`} retry={retryBalances} /> : null}
 			<dl class='metrics'>
 				<div>
 					<dt>YES</dt>
@@ -1003,6 +1061,7 @@ function LivePositionControls({
 	simulate,
 	approve,
 	submit,
+	retryBalances,
 }: {
 	market: LiveMarket
 	balances: LiveBalances | undefined
@@ -1019,6 +1078,7 @@ function LivePositionControls({
 	simulate(): Promise<void>
 	approve(): Promise<void>
 	submit(): Promise<void>
+	retryBalances(): Promise<void>
 }) {
 	const yesPercent = market.yesReserve + market.noReserve === 0n ? 0 : Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10
 	const closed = market.tradingStatus !== 0
@@ -1065,7 +1125,7 @@ function LivePositionControls({
 				</div>
 			</dl>
 			{balanceState === 'loading' ? <p role='status'>Refreshing wallet balances and approvals…</p> : null}
-			{balanceState === 'error' ? <p class='error'>Wallet balances are unavailable; refresh before simulating. {balanceError}</p> : null}
+			{balanceState === 'error' ? <BalanceLoadError message={`Wallet balances are unavailable; retry before simulating. ${balanceError ?? 'Balance refresh failed.'}`} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<div class='segmented' aria-label='Live position operation'>
 				<button aria-pressed={mode === 'entry'} disabled={closed || workflowLocked} onClick={() => setMode('entry')}>
 					Enter
