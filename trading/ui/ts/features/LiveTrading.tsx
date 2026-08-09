@@ -3,7 +3,7 @@ import type { Address, WalletClient } from '@zoltar/shared/ethereum'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
-import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import type { DeploymentConfiguration } from '../protocol/config.ts'
 import {
 	approveLpRouter,
 	approveRouter,
@@ -96,8 +96,7 @@ export function insuredExitLimitMessage(requested: bigint, maximum: bigint, inva
 	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
 }
 
-export function LiveTrading({ route, onDeploymentStatus }: { route: string; onDeploymentStatus: (status: 'loading' | 'verified' | 'unavailable') => void }) {
-	const [configuration, setConfiguration] = useState<DeploymentConfiguration>()
+export function LiveTrading({ route, configuration, configurationError }: { route: string; configuration: DeploymentConfiguration | undefined; configurationError: string | undefined }) {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	const [selectedPool, setSelectedPool] = useState<Address>()
 	const [account, setAccount] = useState<Address>()
@@ -131,31 +130,12 @@ export function LiveTrading({ route, onDeploymentStatus }: { route: string; onDe
 	}
 
 	useEffect(() => {
-		let active = true
-		onDeploymentStatus('loading')
-		void (async () => {
-			try {
-				const loaded = await loadDeploymentConfiguration()
-				if (!active) return
-				if (loaded === undefined) {
-					setMessage('Missing deployment.json. Build with a reviewed trading deployment manifest.')
-					onDeploymentStatus('unavailable')
-					return
-				}
-				setConfiguration(loaded)
-				await refresh(loaded)
-				if (active) onDeploymentStatus('verified')
-			} catch (error) {
-				if (active) {
-					setMessage(error instanceof Error ? error.message : 'Unable to load the trading deployment')
-					onDeploymentStatus('unavailable')
-				}
-			}
-		})()
-		return () => {
-			active = false
+		if (configuration === undefined) {
+			setMessage(configurationError)
+			return
 		}
-	}, [onDeploymentStatus])
+		void refresh(configuration).catch(error => setMessage(error instanceof Error ? error.message : 'Unable to discover trading markets'))
+	}, [configuration, configurationError])
 
 	useEffect(() => {
 		if (configuration === undefined || account === undefined || selected === undefined) return
@@ -621,7 +601,7 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 			) : null}
 			{!needsLpApproval && quote !== undefined ? (
 				<button class='primary-action' disabled={state !== 'ready'} onClick={submit}>
-					Submit simulated liquidity transaction
+					Submit liquidity transaction
 				</button>
 			) : null}
 		</div>
@@ -867,7 +847,7 @@ function LivePositionControls({
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? (
 				<button class='primary-action' disabled={closed || state !== 'ready'} onClick={submit}>
-					Submit simulated transaction
+					Submit transaction
 				</button>
 			) : null}
 		</div>

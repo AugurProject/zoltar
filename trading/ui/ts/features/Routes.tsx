@@ -436,7 +436,21 @@ export function Help() {
 	)
 }
 
-export function Developer({ demo = true }: { demo?: boolean }) {
+export function Developer({ demo = true, deploymentStatus = 'loading' }: { demo?: boolean; deploymentStatus?: 'loading' | 'verified' | 'unavailable' }) {
+	let liveStatus = 'Checking deployment'
+	let liveChain = 'Validating deployment.json against RPC'
+	let liveTone: 'good' | 'warn' | 'neutral' = 'neutral'
+	let liveNotice = 'Live deployment details remain unavailable until deployment.json and its RPC contracts validate successfully.'
+	if (deploymentStatus === 'verified') {
+		liveStatus = 'Verified runtime manifest'
+		liveChain = 'Read from deployment.json and verified against RPC'
+		liveTone = 'good'
+		liveNotice = 'The live client validated the RPC chain ID, factory, router, fee, and core SecurityPoolFactory against deployment.json before discovering markets.'
+	} else if (deploymentStatus === 'unavailable') {
+		liveStatus = 'Deployment unavailable'
+		liveChain = 'Unavailable — inspect deployment.json and RPC configuration'
+		liveTone = 'warn'
+	}
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -445,13 +459,13 @@ export function Developer({ demo = true }: { demo?: boolean }) {
 					<h1>Deployment</h1>
 					<p>Addresses are loaded from a project-local manifest. This build never invents public-network deployments.</p>
 				</div>
-				<Status tone={demo ? 'warn' : 'neutral'}>{demo ? 'Demo configuration' : 'Runtime manifest'}</Status>
+				<Status tone={demo ? 'warn' : liveTone}>{demo ? 'Demo configuration' : liveStatus}</Status>
 			</header>
 			<section class='section'>
 				<dl class='fact-list'>
 					<div>
 						<dt>Chain</dt>
-						<dd>{demo ? 'Anvil · 31337' : 'Read from deployment.json and verified against RPC'}</dd>
+						<dd>{demo ? 'Anvil · 31337' : liveChain}</dd>
 					</div>
 					<div>
 						<dt>SecurityPoolFactory</dt>
@@ -470,7 +484,7 @@ export function Developer({ demo = true }: { demo?: boolean }) {
 						<dd>Factory mapping by exact SecurityPool</dd>
 					</div>
 				</dl>
-				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : 'The live client validates the RPC chain ID, factory, router, fee, and core SecurityPoolFactory against deployment.json before discovering markets.'}</div>
+				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : liveNotice}</div>
 			</section>
 		</main>
 	)

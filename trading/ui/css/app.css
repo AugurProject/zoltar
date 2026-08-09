@@ -192,7 +192,7 @@ nav a[aria-current="page"] {
 	background: var(--muted);
 	box-shadow: none;
 }
-.wallet-button,
+.wallet-context,
 .secondary-action {
 	padding: 0.62rem 0.85rem;
 	border: 1px solid var(--line-strong);
@@ -201,6 +201,9 @@ nav a[aria-current="page"] {
 	color: var(--text);
 	cursor: pointer;
 	font-size: 12px;
+}
+.wallet-context {
+	cursor: default;
 }
 .route {
 	width: min(1260px, calc(100% - 2rem));
@@ -903,6 +906,11 @@ footer {
 		font-size: 11px;
 	}
 	.network-pill {
+		max-width: 125px;
+		font-size: 9px;
+		line-height: 1.2;
+	}
+	.wallet-context {
 		display: none;
 	}
 	.detail-grid,

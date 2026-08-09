@@ -240,7 +240,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					) : null}
 					<div class='quote' aria-live='polite'>
 						<div class='quote__title'>
-							<span>{quote === undefined ? 'Demo preview unavailable' : 'Illustrative demo preview'}</span>
+							<span>{quote === undefined ? 'Preview unavailable' : 'Trade breakdown'}</span>
 							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
 						</div>
 						{quoteContent}

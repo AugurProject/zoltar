@@ -3,6 +3,8 @@ import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Developer, Help, Liquidity, MarketList, Portfolio } from '../features/Routes.tsx'
 import { LiveTrading } from '../features/LiveTrading.tsx'
+import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import { createTradingPublicClient, validateLiveDeployment } from '../protocol/live.ts'
 
 function currentRoute() {
 	return window.location.hash.replace(/^#\/?/, '') || 'markets'
@@ -58,6 +60,8 @@ function networkToneClass(scenario: string, demo: boolean, liveDeploymentStatus:
 export function App() {
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
+	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
+	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
 	const scenario = query.get('scenario') ?? 'baseline'
@@ -67,12 +71,37 @@ export function App() {
 		window.addEventListener('hashchange', update)
 		return () => window.removeEventListener('hashchange', update)
 	}, [])
+	useEffect(() => {
+		if (demo) return
+		let active = true
+		setLiveDeploymentStatus('loading')
+		void (async () => {
+			try {
+				const loaded = await loadDeploymentConfiguration()
+				if (!active) return
+				if (loaded === undefined) throw new Error('Missing deployment.json. Build with a reviewed trading deployment manifest.')
+				await validateLiveDeployment(createTradingPublicClient(loaded), loaded)
+				if (!active) return
+				setLiveConfiguration(loaded)
+				setLiveConfigurationError(undefined)
+				setLiveDeploymentStatus('verified')
+			} catch (error) {
+				if (!active) return
+				setLiveConfiguration(undefined)
+				setLiveConfigurationError(error instanceof Error ? error.message : 'Unable to load the trading deployment')
+				setLiveDeploymentStatus('unavailable')
+			}
+		})()
+		return () => {
+			active = false
+		}
+	}, [demo])
 	const resolvedContent = renderRoute(route, scenario, market)
 	let content = resolvedContent
 	if (!demo) {
 		if (route === 'help') content = <Help />
-		else if (route === 'developer') content = <Developer demo={false} />
-		else content = <LiveTrading route={route} onDeploymentStatus={setLiveDeploymentStatus} />
+		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
+		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} />
 	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
@@ -127,9 +156,7 @@ export function App() {
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>
-						<button class='wallet-button' disabled>
-							{demo ? '0x8ba1…ba72' : 'Connect in market view'}
-						</button>
+						<span class='wallet-context'>{demo ? '0x8ba1…ba72' : 'Connect in market view'}</span>
 					</div>
 				</header>
 			</div>
