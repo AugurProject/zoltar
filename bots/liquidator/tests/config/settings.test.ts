@@ -57,12 +57,12 @@ const settings = {
 		candidatePriority: 'largest-bonus',
 		fallbackRepPerEthPrice: '0',
 		maximumGasCostEth: '0.02',
-		maximumLiquidationDebtEth: '25',
+		maximumLiquidationCoverageCommitmentEth: '25',
 		maximumOracleRequestCostEth: '0.02',
-		maximumRepPerPool: '10000',
+		maximumPerPoolRep: '10000',
 		maximumTotalDeployedRep: '25000',
-		minimumLiquidationDebtEth: '1',
-		minimumRepWithdrawal: '10',
+		minimumLiquidationCoverageCommitmentEth: '1',
+		minimumRepWithdrawalRep: '10',
 		minimumRewardValueEth: '0.02',
 		redeemFeesAboveEth: '0.01',
 		stalePriceFundingBufferBps: 15000,
@@ -70,7 +70,7 @@ const settings = {
 		vaultTargetHealthBps: 12500,
 		vaultTopUpHealthBps: 11000,
 		vaultWithdrawHealthBps: 15000,
-		walletRepReserve: '100',
+		walletReserveRep: '100',
 	},
 	submission: {
 		minimumBundleRelaySuccesses: 1,
@@ -83,7 +83,13 @@ const settings = {
 describe('liquidator settings', () => {
 	test('round trips the operator configuration without losing decimal precision', () => {
 		const parsed = parseSettings(settings)
+		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)
+		expect(parsed.strategy.maximumAttoRepPerPool).toBe(10_000n * 10n ** 18n)
+		expect(parsed.strategy.minimumLiquidationCoverageCommitmentAttoEth).toBe(10n ** 18n)
+		expect(parsed.strategy.walletAttoRepReserve).toBe(100n * 10n ** 18n)
 		const serialized = serializedSettings(parsed)
+		expect(serialized.strategy.maximumGasCostEth).toBe('0.02')
+		expect(serialized.strategy.maximumPerPoolRep).toBe('10000')
 		expect(JSON.stringify(serialized.strategy)).toBe(JSON.stringify(settings.strategy))
 		expect(serialized.connectivity).toEqual({
 			publicRpcUrls: ['https://public.example/'],
@@ -138,10 +144,10 @@ describe('liquidator settings', () => {
 		const parsed = parseSettings({
 			...settings,
 			childMarketConfigurations: [childMarket],
-			desiredPools: [{ initialReportPriorityFeeWeiPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: '12500', universeId: '0' }],
+			desiredPools: [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: '12500', universeId: '0' }],
 		})
 		expect(parsed.childMarketConfigurations[0]?.assetAddress).toBe(getAddress(childMarket.assetAddress))
-		expect(parsed.desiredPools[0]).toEqual({ initialReportPriorityFeeWeiPerGas: 1_000_000_000n, questionId: 7n, statoblastSecurityMultiplierBps: 12_500n, universeId: 0n })
+		expect(parsed.desiredPools[0]).toEqual({ initialReportPriorityFeeAttoEthPerGas: 1_000_000_000n, questionId: 7n, statoblastSecurityMultiplierBps: 12_500n, universeId: 0n })
 	})
 
 	test('syncs the configuration and parent directory before returning success', async () => {

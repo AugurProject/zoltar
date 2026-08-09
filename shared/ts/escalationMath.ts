@@ -1,9 +1,10 @@
 export type EscalationOutcomeKey = 'invalid' | 'yes' | 'no'
-export type EscalationBalanceTuple = readonly [bigint, bigint, bigint]
+export type EscalationBalanceTuple = readonly [invalidBalanceAttoRep: bigint, yesBalanceAttoRep: bigint, noBalanceAttoRep: bigint]
 export type ProjectedEscalationDeposit = {
-	acceptedAmount: bigint
-	projectedBalances: EscalationBalanceTuple
+	acceptedAmountAttoRep: bigint
+	projectedBalancesAttoRep: EscalationBalanceTuple
 	reachesNonDecision: boolean
+	tieAdjusted: boolean
 }
 
 export const ESCALATION_TIME_LENGTH = 4233600n
@@ -12,11 +13,11 @@ const SCALE = 1000000n
 const LN2_SCALED = 693147n
 const MAX_ATANH_ITERATIONS = 16
 
-export function getEscalationBindingCapital(balances: EscalationBalanceTuple) {
-	const [invalidBalance, yesBalance, noBalance] = balances
-	if ((invalidBalance >= yesBalance && invalidBalance <= noBalance) || (invalidBalance >= noBalance && invalidBalance <= yesBalance)) return invalidBalance
-	if ((yesBalance >= invalidBalance && yesBalance <= noBalance) || (yesBalance >= noBalance && yesBalance <= invalidBalance)) return yesBalance
-	return noBalance
+export function getEscalationBindingCapitalAttoRep(balancesAttoRep: EscalationBalanceTuple) {
+	const [invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep] = balancesAttoRep
+	if ((invalidBalanceAttoRep >= yesBalanceAttoRep && invalidBalanceAttoRep <= noBalanceAttoRep) || (invalidBalanceAttoRep >= noBalanceAttoRep && invalidBalanceAttoRep <= yesBalanceAttoRep)) return invalidBalanceAttoRep
+	if ((yesBalanceAttoRep >= invalidBalanceAttoRep && yesBalanceAttoRep <= noBalanceAttoRep) || (yesBalanceAttoRep >= noBalanceAttoRep && yesBalanceAttoRep <= invalidBalanceAttoRep)) return yesBalanceAttoRep
+	return noBalanceAttoRep
 }
 
 function computeAtanhScaled(z: bigint) {
@@ -45,12 +46,35 @@ function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
 	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
 }
 
-export function computeEscalationTimeSinceStartFromAttritionCost(startBond: bigint, nonDecisionThreshold: bigint, attritionCost: bigint) {
-	if (attritionCost <= startBond) return 0n
-	if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH
-	const lnRatioScaled = computeLnRatioScaled(startBond, nonDecisionThreshold)
+export function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, lnRatioScaled: bigint, timeSinceStart: bigint) {
+	if (timeSinceStart <= 0n) return startBondAttoRep
+	if (timeSinceStart >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep
+	const exponent = (lnRatioScaled * timeSinceStart) / ESCALATION_TIME_LENGTH
+	const exponentPow2 = exponent / LN2_SCALED
+	const exponentRemainder = exponent - exponentPow2 * LN2_SCALED
+	let expScaled = SCALE + exponentRemainder
+	let term = exponentRemainder
+	for (let iteration = 2; iteration < MAX_ATANH_ITERATIONS; iteration += 1) {
+		term = (term * exponentRemainder) / (BigInt(iteration) * SCALE)
+		if (term === 0n) break
+		expScaled += term
+	}
+	expScaled <<= exponentPow2
+	const cost = (startBondAttoRep * expScaled) / SCALE
+	return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost
+}
+
+export function computeEscalationBindingCapitalAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
+	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('Escalation threshold must exceed the start bond')
+	return computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep), timeSinceStart)
+}
+
+export function computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, attritionCostAttoRep: bigint) {
+	if (attritionCostAttoRep <= startBondAttoRep) return 0n
+	if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH
+	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)
 	if (lnRatioScaled === 0n) return 0n
-	const lnCostRatioScaled = computeLnRatioScaled(startBond, attritionCost)
+	const lnCostRatioScaled = computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep)
 	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
 }
 
@@ -67,146 +91,160 @@ function getEscalationOutcomeIndex(outcome: EscalationOutcomeKey) {
 	}
 }
 
-function getMaxEscalationBalance(balances: EscalationBalanceTuple) {
-	const [invalidBalance, yesBalance, noBalance] = balances
-	if (invalidBalance > yesBalance) {
-		if (invalidBalance > noBalance) return invalidBalance
-		return noBalance
+function getMaxEscalationBalanceAttoRep(balancesAttoRep: EscalationBalanceTuple) {
+	const [invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep] = balancesAttoRep
+	if (invalidBalanceAttoRep > yesBalanceAttoRep) {
+		if (invalidBalanceAttoRep > noBalanceAttoRep) return invalidBalanceAttoRep
+		return noBalanceAttoRep
 	}
-	if (yesBalance > noBalance) return yesBalance
-	return noBalance
+	if (yesBalanceAttoRep > noBalanceAttoRep) return yesBalanceAttoRep
+	return noBalanceAttoRep
 }
 
-export function hasReachedNonDecision(balances: EscalationBalanceTuple, nonDecisionThreshold: bigint) {
+export function hasReachedNonDecision(balancesAttoRep: EscalationBalanceTuple, nonDecisionThresholdAttoRep: bigint) {
 	let thresholdHits = 0
-	if (balances[0] >= nonDecisionThreshold) thresholdHits += 1
-	if (balances[1] >= nonDecisionThreshold) thresholdHits += 1
-	if (balances[2] >= nonDecisionThreshold) thresholdHits += 1
+	if (balancesAttoRep[0] >= nonDecisionThresholdAttoRep) thresholdHits += 1
+	if (balancesAttoRep[1] >= nonDecisionThresholdAttoRep) thresholdHits += 1
+	if (balancesAttoRep[2] >= nonDecisionThresholdAttoRep) thresholdHits += 1
 	return thresholdHits >= 2
 }
 
-function setBalanceAtIndex(balances: EscalationBalanceTuple, index: number, value: bigint): EscalationBalanceTuple {
+function setBalanceAtIndex(balancesAttoRep: EscalationBalanceTuple, index: number, valueAttoRep: bigint): EscalationBalanceTuple {
 	switch (index) {
 		case 0:
-			return [value, balances[1], balances[2]]
+			return [valueAttoRep, balancesAttoRep[1], balancesAttoRep[2]]
 		case 1:
-			return [balances[0], value, balances[2]]
+			return [balancesAttoRep[0], valueAttoRep, balancesAttoRep[2]]
 		case 2:
-			return [balances[0], balances[1], value]
+			return [balancesAttoRep[0], balancesAttoRep[1], valueAttoRep]
 		default:
 			throw new RangeError(`Unknown escalation balance index: ${index.toString()}`)
 	}
 }
 
-export function projectEscalationDeposit({ amount, balances, nonDecisionThreshold, outcome, startBond }: { amount: bigint; balances: EscalationBalanceTuple; nonDecisionThreshold: bigint; outcome: EscalationOutcomeKey; startBond: bigint }): ProjectedEscalationDeposit | undefined {
-	if (amount < startBond) return undefined
+export function projectEscalationDeposit({
+	amountAttoRep,
+	balancesAttoRep,
+	nonDecisionThresholdAttoRep,
+	outcome,
+	startBondAttoRep,
+}: {
+	amountAttoRep: bigint
+	balancesAttoRep: EscalationBalanceTuple
+	nonDecisionThresholdAttoRep: bigint
+	outcome: EscalationOutcomeKey
+	startBondAttoRep: bigint
+}): ProjectedEscalationDeposit | undefined {
 	const outcomeIndex = getEscalationOutcomeIndex(outcome)
-	const currentBalance = balances[outcomeIndex]
-	if (currentBalance >= nonDecisionThreshold) return undefined
-	const room = nonDecisionThreshold - currentBalance
-	let acceptedAmount = amount > room ? room : amount
-	let newBalance = currentBalance + acceptedAmount
-	const maxBalance = getMaxEscalationBalance(balances)
+	const currentBalanceAttoRep = balancesAttoRep[outcomeIndex]
+	if (currentBalanceAttoRep >= nonDecisionThresholdAttoRep) return undefined
+	const roomAttoRep = nonDecisionThresholdAttoRep - currentBalanceAttoRep
+	let acceptedAmountAttoRep = amountAttoRep > roomAttoRep ? roomAttoRep : amountAttoRep
+	let newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
+	let tieAdjusted = false
+	const maxBalanceAttoRep = getMaxEscalationBalanceAttoRep(balancesAttoRep)
 	const otherHasMax = (() => {
-		if (outcomeIndex === 0) return balances[1] === maxBalance || balances[2] === maxBalance
-		if (outcomeIndex === 1) return balances[0] === maxBalance || balances[2] === maxBalance
-		return balances[0] === maxBalance || balances[1] === maxBalance
+		if (outcomeIndex === 0) return balancesAttoRep[1] === maxBalanceAttoRep || balancesAttoRep[2] === maxBalanceAttoRep
+		if (outcomeIndex === 1) return balancesAttoRep[0] === maxBalanceAttoRep || balancesAttoRep[2] === maxBalanceAttoRep
+		return balancesAttoRep[0] === maxBalanceAttoRep || balancesAttoRep[1] === maxBalanceAttoRep
 	})()
-	if (newBalance === maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
-		acceptedAmount -= 1n
-		if (acceptedAmount < startBond) return undefined
-		newBalance = currentBalance + acceptedAmount
+	if (newBalanceAttoRep === maxBalanceAttoRep && otherHasMax && maxBalanceAttoRep < nonDecisionThresholdAttoRep) {
+		tieAdjusted = true
+		acceptedAmountAttoRep -= 1n
+		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep
 	}
-	const projectedBalances = setBalanceAtIndex(balances, outcomeIndex, newBalance)
+	if (acceptedAmountAttoRep < startBondAttoRep && newBalanceAttoRep !== nonDecisionThresholdAttoRep) return undefined
+	const projectedBalancesAttoRep = setBalanceAtIndex(balancesAttoRep, outcomeIndex, newBalanceAttoRep)
 	return {
-		acceptedAmount,
-		projectedBalances,
-		reachesNonDecision: hasReachedNonDecision(projectedBalances, nonDecisionThreshold),
+		acceptedAmountAttoRep,
+		projectedBalancesAttoRep,
+		reachesNonDecision: hasReachedNonDecision(projectedBalancesAttoRep, nonDecisionThresholdAttoRep),
+		tieAdjusted,
 	}
 }
 
 function getWinningWithdrawalAmount({
-	bindingCapital,
-	depositAmount,
-	depositEnd,
-	depositStart,
-	forkThreshold,
-	nonDecisionThreshold,
-	winningOutcomeBalance,
+	bindingCapitalAttoRep,
+	depositAmountAttoRep,
+	depositEndAttoRep,
+	depositStartAttoRep,
+	forkThresholdAttoRep,
+	nonDecisionThresholdAttoRep,
+	winningOutcomeBalanceAttoRep,
 }: {
-	bindingCapital: bigint
-	depositAmount: bigint
-	depositEnd: bigint
-	depositStart: bigint
-	forkThreshold: bigint
-	nonDecisionThreshold: bigint
-	winningOutcomeBalance: bigint
+	bindingCapitalAttoRep: bigint
+	depositAmountAttoRep: bigint
+	depositEndAttoRep: bigint
+	depositStartAttoRep: bigint
+	forkThresholdAttoRep: bigint
+	nonDecisionThresholdAttoRep: bigint
+	winningOutcomeBalanceAttoRep: bigint
 }) {
-	const rewardEligibleCapAmount = bindingCapital + bindingCapital / 2n
-	const rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount
-	let amountToWithdraw: bigint
-	if (rewardEligiblePrincipalAmount === 0n) {
-		amountToWithdraw = depositAmount
+	const rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / 2n
+	const rewardEligiblePrincipalAttoRep = winningOutcomeBalanceAttoRep < rewardEligibleCapAttoRep ? winningOutcomeBalanceAttoRep : rewardEligibleCapAttoRep
+	let amountToWithdrawAttoRep: bigint
+	if (rewardEligiblePrincipalAttoRep === 0n) {
+		amountToWithdrawAttoRep = depositAmountAttoRep
 	} else {
-		const eligibleEndAmount = depositEnd < rewardEligibleCapAmount ? depositEnd : rewardEligibleCapAmount
-		const rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0n
-		const cappedRewardEligibleDepositAmount = rewardEligibleDepositAmount > depositAmount ? depositAmount : rewardEligibleDepositAmount
-		const rewardBonusPoolAmount = (bindingCapital * 3n) / 5n
-		const bonusShare = (cappedRewardEligibleDepositAmount * rewardBonusPoolAmount) / rewardEligiblePrincipalAmount
-		amountToWithdraw = depositAmount + bonusShare
+		const eligibleEndAttoRep = depositEndAttoRep < rewardEligibleCapAttoRep ? depositEndAttoRep : rewardEligibleCapAttoRep
+		const rewardEligibleDepositAttoRep = eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0n
+		const cappedRewardEligibleDepositAttoRep = rewardEligibleDepositAttoRep > depositAmountAttoRep ? depositAmountAttoRep : rewardEligibleDepositAttoRep
+		const rewardBonusPoolAttoRep = (bindingCapitalAttoRep * 3n) / 5n
+		const bonusAttoRep = (cappedRewardEligibleDepositAttoRep * rewardBonusPoolAttoRep) / rewardEligiblePrincipalAttoRep
+		amountToWithdrawAttoRep = depositAmountAttoRep + bonusAttoRep
 	}
-	if (forkThreshold < nonDecisionThreshold) return (amountToWithdraw * forkThreshold) / nonDecisionThreshold
-	return amountToWithdraw
+	if (forkThresholdAttoRep < nonDecisionThresholdAttoRep) return (amountToWithdrawAttoRep * forkThresholdAttoRep) / nonDecisionThresholdAttoRep
+	return amountToWithdrawAttoRep
 }
 
 export function getWinningEscalationDepositClaimAmount({
-	bindingCapital,
-	depositAmount,
-	cumulativeAmount,
-	forkThreshold,
-	nonDecisionThreshold,
-	winningOutcomeBalance,
+	bindingCapitalAttoRep,
+	depositAmountAttoRep,
+	cumulativeAmountAttoRep,
+	forkThresholdAttoRep,
+	nonDecisionThresholdAttoRep,
+	winningOutcomeBalanceAttoRep,
 }: {
-	bindingCapital: bigint
-	depositAmount: bigint
-	cumulativeAmount: bigint
-	forkThreshold: bigint
-	nonDecisionThreshold: bigint
-	winningOutcomeBalance: bigint
+	bindingCapitalAttoRep: bigint
+	depositAmountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
+	forkThresholdAttoRep: bigint
+	nonDecisionThresholdAttoRep: bigint
+	winningOutcomeBalanceAttoRep: bigint
 }) {
 	return getWinningWithdrawalAmount({
-		bindingCapital,
-		depositAmount,
-		depositEnd: cumulativeAmount,
-		depositStart: cumulativeAmount - depositAmount,
-		forkThreshold,
-		nonDecisionThreshold,
-		winningOutcomeBalance,
+		bindingCapitalAttoRep,
+		depositAmountAttoRep,
+		depositEndAttoRep: cumulativeAmountAttoRep,
+		depositStartAttoRep: cumulativeAmountAttoRep - depositAmountAttoRep,
+		forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep,
+		winningOutcomeBalanceAttoRep,
 	})
 }
 
 export function getWinningImportedEscalationDepositClaimAmount({
-	bindingCapital,
-	depositAmount,
-	postDepositCumulativeAmount,
-	forkThreshold,
-	nonDecisionThreshold,
-	winningOutcomeBalance,
+	bindingCapitalAttoRep,
+	depositAmountAttoRep,
+	postDepositCumulativeAmountAttoRep,
+	forkThresholdAttoRep,
+	nonDecisionThresholdAttoRep,
+	winningOutcomeBalanceAttoRep,
 }: {
-	bindingCapital: bigint
-	depositAmount: bigint
-	postDepositCumulativeAmount: bigint
-	forkThreshold: bigint
-	nonDecisionThreshold: bigint
-	winningOutcomeBalance: bigint
+	bindingCapitalAttoRep: bigint
+	depositAmountAttoRep: bigint
+	postDepositCumulativeAmountAttoRep: bigint
+	forkThresholdAttoRep: bigint
+	nonDecisionThresholdAttoRep: bigint
+	winningOutcomeBalanceAttoRep: bigint
 }) {
 	return getWinningWithdrawalAmount({
-		bindingCapital,
-		depositAmount,
-		depositEnd: postDepositCumulativeAmount,
-		depositStart: postDepositCumulativeAmount - depositAmount,
-		forkThreshold,
-		nonDecisionThreshold,
-		winningOutcomeBalance,
+		bindingCapitalAttoRep,
+		depositAmountAttoRep,
+		depositEndAttoRep: postDepositCumulativeAmountAttoRep,
+		depositStartAttoRep: postDepositCumulativeAmountAttoRep - depositAmountAttoRep,
+		forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep,
+		winningOutcomeBalanceAttoRep,
 	})
 }

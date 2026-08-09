@@ -27,7 +27,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ZoltarQuestionData immutable questionData;
 	ISecurityPoolForker immutable securityPoolForker;
 	SecurityPoolDeployer immutable securityPoolDeployer;
-	uint256 public immutable initialEscalationGameDeposit;
+	uint256 public immutable initialEscalationGameDepositAttoRep;
 	SecurityPoolDeployment[] private securityPoolDeployments;
 	mapping(bytes32 => ISecurityPool) private securityPoolsById;
 	mapping(bytes32 => bool) private securityPoolIdClaims;
@@ -43,9 +43,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 indexed universeId,
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialReportPriorityFeeWeiPerGas,
+		uint256 initialReportPriorityFeeAttoEthPerGas,
 		uint256 currentRetentionRate,
-		uint256 completeSetCollateralAmount
+		uint256 settlementCollateralAttoEth
 	);
 	event SecurityPoolRegistered(
 		bytes32 indexed originId,
@@ -63,9 +63,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ShareTokenFactory _shareTokenFactory,
 		UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory,
 		PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory,
-		uint256 _initialEscalationGameDeposit
+		uint256 _initialEscalationGameDepositAttoRep
 	) {
-		require(_initialEscalationGameDeposit >= 1e18, 'Initial escalation game deposit must be at least 1 REP');
+		require(_initialEscalationGameDepositAttoRep >= 1e18, 'Initial escalation game deposit must be at least 1 REP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -74,7 +74,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
-		initialEscalationGameDeposit = _initialEscalationGameDeposit;
+		initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep;
 		securityPoolDeployer = new SecurityPoolDeployer();
 	}
 
@@ -98,14 +98,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 originUniverseId,
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialReportPriorityFeeWeiPerGas
+		uint256 initialReportPriorityFeeAttoEthPerGas
 	) public pure returns (bytes32) {
 		return
 			keccak256(
 				abi.encode(
 					questionId,
 					statoblastSecurityMultiplierBps,
-					initialReportPriorityFeeWeiPerGas,
+					initialReportPriorityFeeAttoEthPerGas,
 					originUniverseId
 				)
 			);
@@ -140,7 +140,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
 		uint256 currentRetentionRate,
-		uint256 completeSetCollateralAmount
+		uint256 settlementCollateralAttoEth
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
 		bytes32 originId = securityPoolOriginIds[parent];
@@ -151,9 +151,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bool hasInheritedForkOutcome =
 			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Security pool child must use parent share token');
-		uint256 initialReportPriorityFeeWeiPerGas = parent
+		uint256 initialReportPriorityFeeAttoEthPerGas = parent
 			.priceOracleManagerAndOperatorQueuer()
-			.initialReportPriorityFeeWeiPerGas();
+			.initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(
 			abi.encode(
@@ -161,7 +161,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialReportPriorityFeeWeiPerGas
+				initialReportPriorityFeeAttoEthPerGas
 			)
 		);
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
@@ -169,7 +169,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			.deployPriceOracleManagerAndOperatorQueuer(
 				openOracle,
 				reputationToken,
-				initialReportPriorityFeeWeiPerGas,
+				initialReportPriorityFeeAttoEthPerGas,
 				securityPoolSalt
 			);
 
@@ -185,7 +185,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			questionId,
 			statoblastSecurityMultiplierBps,
 			currentRetentionRate,
-			completeSetCollateralAmount,
+			settlementCollateralAttoEth,
 			address(truthAuction)
 		);
 		_registerSecurityPool(originId, universeId, securityPool, hasInheritedForkOutcome);
@@ -199,9 +199,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialReportPriorityFeeWeiPerGas,
+				initialReportPriorityFeeAttoEthPerGas,
 				currentRetentionRate,
-				completeSetCollateralAmount
+				settlementCollateralAttoEth
 			)
 		);
 	}
@@ -210,7 +210,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 universeId,
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialReportPriorityFeeWeiPerGas
+		uint256 initialReportPriorityFeeAttoEthPerGas
 	) external returns (ISecurityPool securityPool) {
 		// Origin pool deployment is intentionally public, so first deployers must not be able to
 		// lock unsafe economic parameters into the canonical pool for a question/multiplier/
@@ -237,14 +237,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
 		require(
-			zoltar.getNonDecisionThreshold(universeId) > initialEscalationGameDeposit,
+			zoltar.getNonDecisionThresholdAttoRep(universeId) > initialEscalationGameDepositAttoRep,
 			'Escalation threshold too low'
 		);
 		bytes32 originId = getOriginId(
 			universeId,
 			questionId,
 			statoblastSecurityMultiplierBps,
-			initialReportPriorityFeeWeiPerGas
+			initialReportPriorityFeeAttoEthPerGas
 		);
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(
@@ -253,14 +253,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialReportPriorityFeeWeiPerGas
+				initialReportPriorityFeeAttoEthPerGas
 			)
 		);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(
 				openOracle,
 				reputationToken,
-				initialReportPriorityFeeWeiPerGas,
+				initialReportPriorityFeeAttoEthPerGas,
 				securityPoolSalt
 			);
 
@@ -291,7 +291,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialReportPriorityFeeWeiPerGas,
+				initialReportPriorityFeeAttoEthPerGas,
 				initialRetentionRate,
 				0
 			)
@@ -332,9 +332,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			deployment.universeId,
 			deployment.questionId,
 			deployment.statoblastSecurityMultiplierBps,
-			deployment.initialReportPriorityFeeWeiPerGas,
+			deployment.initialReportPriorityFeeAttoEthPerGas,
 			deployment.currentRetentionRate,
-			deployment.completeSetCollateralAmount
+			deployment.settlementCollateralAttoEth
 		);
 	}
 
@@ -346,7 +346,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
 		uint256 currentRetentionRate,
-		uint256 completeSetCollateralAmount,
+		uint256 settlementCollateralAttoEth,
 		address truthAuction
 	) private returns (ISecurityPool securityPool) {
 		securityPool = securityPoolDeployer.deploy(
@@ -361,11 +361,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			universeId,
 			questionId,
 			statoblastSecurityMultiplierBps,
-			initialEscalationGameDeposit,
+			initialEscalationGameDepositAttoRep,
 			truthAuction
 		);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
-		securityPool.setStartingParams(currentRetentionRate, completeSetCollateralAmount);
+		securityPool.setStartingParams(currentRetentionRate, settlementCollateralAttoEth);
 	}
 }

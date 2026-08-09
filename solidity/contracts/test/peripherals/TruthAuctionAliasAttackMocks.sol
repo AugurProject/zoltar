@@ -103,23 +103,23 @@ contract TruthAuctionAliasAttackParentMock {
 		if (balance > 0) require(configuredRepToken.transfer(msg.sender, balance), 'REP transfer');
 	}
 
-	function completeSetCollateralAmount() external view returns (uint256) {
+	function settlementCollateralAttoEth() external view returns (uint256) {
 		return configuredCollateral;
 	}
 
-	function totalSecurityBondAllowance() external pure returns (uint256) {
+	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
-	function poolOwnershipDenominator() external pure returns (uint256) {
+	function totalRepBackingUnits() external pure returns (uint256) {
 		return 0;
 	}
 
-	function shareTokenSupply() external pure returns (uint256) {
+	function shareTokenSupplyAttoShares() external pure returns (uint256) {
 		return 0;
 	}
 
-	function updateCollateralAmount() external pure {}
+	function updateSettlementCollateral() external pure {}
 
 	function authorizeChildPool(ISecurityPool) external pure {}
 }
@@ -133,7 +133,7 @@ contract TruthAuctionAliasAttackChildMock {
 	address payable private immutable attackReceiver;
 	uint248 private immutable configuredUniverse;
 	SystemState private currentSystemState = SystemState.ForkMigration;
-	uint256 private ownershipDenominator;
+	uint256 private backingUnitsDenominator;
 
 	uint256 public stolenEth;
 
@@ -187,19 +187,19 @@ contract TruthAuctionAliasAttackChildMock {
 		return configuredRepToken;
 	}
 
-	function setOwnershipDenominator(uint256 newDenominator) external {
-		ownershipDenominator = newDenominator;
+	function setTotalRepBackingUnits(uint256 newDenominator) external {
+		backingUnitsDenominator = newDenominator;
 	}
 
-	function poolOwnershipDenominator() external view returns (uint256) {
-		return ownershipDenominator;
+	function totalRepBackingUnits() external view returns (uint256) {
+		return backingUnitsDenominator;
 	}
 
 	function setSystemState(SystemState newState) external {
 		currentSystemState = newState;
 	}
 
-	function setTotalShares(uint256) external pure {}
+	function setTotalSharesAttoShares(uint256) external pure {}
 
 	function setPoolFinancials(uint256, uint256, uint256) external pure {}
 

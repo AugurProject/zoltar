@@ -154,13 +154,13 @@ describe('useZoltarUniverse', () => {
 			loadZoltarUniverseSummary: mock(async () => ({
 				childUniverses: [],
 				forkQuestionDetails: undefined,
-				forkThreshold: 100n,
+				forkThresholdAttoRep: 100n,
 				forkTime: 0n,
 				forkingOutcomeIndex: 0n,
 				hasForked: false,
 				parentUniverseId: 0n,
 				reputationToken: zeroAddress,
-				totalTheoreticalSupply: 1000n,
+				totalTheoreticalSupplyAttoRep: 1000n,
 				universeId: 1n,
 			})),
 		})

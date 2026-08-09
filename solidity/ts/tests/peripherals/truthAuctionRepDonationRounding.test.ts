@@ -21,16 +21,16 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 	const {
 		addressString,
-		approveAndDepositRep,
+		approveAndDepositRepToVault,
 		createCompleteSet,
 		createWriteClient,
 		DAY,
 		GENESIS_REPUTATION_TOKEN,
 		getChildUniverseId,
-		getCompleteSetCollateralAmount,
+		getSettlementCollateralAttoEth,
 		getERC20Balance,
-		getEthRaiseCap,
-		getMigratedRep,
+		getEthRaiseCapAttoEth,
+		getMigratedAttoRep,
 		getSecurityPoolAddresses,
 		getSecurityPoolForkerForkData,
 		getSecurityVault,
@@ -39,7 +39,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		migrateRepToZoltar,
 		migrateVault,
 		OperationType,
-		poolOwnershipToRep,
+		backingUnitsToAttoRep,
 		QuestionOutcome,
 		repDeposit,
 		startTruthAuction,
@@ -65,18 +65,18 @@ describe('Truth-auction REP donation rounding regression', () => {
 	test('full vault migration reconciles donated REP and skips the truth auction', async () => {
 		const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), createWriteClient(mockWindow, TEST_ADDRESSES[2], 0), createWriteClient(mockWindow, TEST_ADDRESSES[3], 0), createWriteClient(mockWindow, TEST_ADDRESSES[4], 0), createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)]
 		for (const vaultClient of vaultClients.slice(1)) {
-			await approveAndDepositRep(vaultClient, repDeposit, questionId)
+			await approveAndDepositRepToVault(vaultClient, repDeposit, questionId)
 		}
 
-		const allowancePerVault = repDeposit / 2n
+		const coverageCommitmentAttoEthPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, vaultClient.account.address, allowancePerVault)
+			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, vaultClient.account.address, coverageCommitmentAttoEthPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
-		const totalAllowance = allowancePerVault * BigInt(vaultClients.length)
+		const totalCoverageCommitmentAttoEth = coverageCommitmentAttoEthPerVault * BigInt(vaultClients.length)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalAllowance)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalCoverageCommitmentAttoEth)
 
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), totalVaultRep, 'test setup should start with exactly six equal vault deposits')
 
@@ -91,8 +91,8 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		await triggerExternalForkForSecurityPool(undefined, 'audit donated REP rounding')
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		const forkTimeCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(parentForkData.auctionableRepAtFork, totalVaultRep + donatedRep, 'the fork snapshot should count unsolicited REP as auctionable vault REP')
+		const forkTimeCollateral = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(parentForkData.auctionableAttoRepAtFork, totalVaultRep + donatedRep, 'the fork snapshot should count unsolicited REP as auctionable vault REP')
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		for (const vaultClient of vaultClients) {
@@ -101,21 +101,21 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
-		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		strictEqualTypeSafe(migratedRep, parentForkData.auctionableRepAtFork, 'migrating the complete ownership denominator should reconcile every fork-time REP unit')
+		const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(migratedAttoRep, parentForkData.auctionableAttoRepAtFork, 'migrating the complete backingUnits denominator should reconcile every fork-time REP unit')
 
 		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, vaultClients[0].account.address)
-		const honestRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, honestVault.repDepositShare)
+		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits)
 		strictEqualTypeSafe(honestRep, repDeposit, 'the migrated vault should retain its full 1,000 REP claim')
-		strictEqualTypeSafe(honestVault.securityBondAllowance, allowancePerVault, 'the migrated vault should retain its security-bond allowance')
+		strictEqualTypeSafe(honestVault.coverageCommitmentAttoEth, coverageCommitmentAttoEthPerVault, 'the migrated vault should retain its coverage commitment')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
-		const ethRaiseCap = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
-		strictEqualTypeSafe(ethRaiseCap, 0n, 'full ownership migration should finalize without starting an auction')
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), forkTimeCollateral, 'full ownership migration should activate with the complete fork-time collateral snapshot')
+		const attoEthRaiseCap = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
+		strictEqualTypeSafe(attoEthRaiseCap, 0n, 'full backingUnits migration should finalize without starting an auction')
+		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), forkTimeCollateral, 'full backingUnits migration should activate with the complete fork-time collateral snapshot')
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the fully migrated child should activate immediately')
-		strictEqualTypeSafe(await poolOwnershipToRep(client, yesSecurityPool.securityPool, honestVault.repDepositShare), repDeposit, 'auction finalization should not dilute migrated vault ownership')
+		strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits), repDeposit, 'auction finalization should not dilute migrated vault backingUnits')
 	})
 })

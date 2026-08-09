@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, riskLimitMismatch } from '#core/safety-controls'
+import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, riskLimitMismatch } from '#core/safety-controls'
 
 describe('execution risk controls', () => {
 	test('does not reserve capital for a finalized non-included attempt', () => {
@@ -11,21 +11,21 @@ describe('execution risk controls', () => {
 	test('reserves lifecycle and slippage costs before calling an opportunity profitable', () => {
 		expect(
 			adjustedNetProfitWeth({
-				entryGasCostWeth: 1n,
-				hedgeSlippageReserveWeth: 2n,
-				lifecycleGasReserveWeth: 3n,
-				profitBeforeGasWeth: 10n,
+				entryGasCostAttoWeth: 1n,
+				hedgeSlippageReserveAttoWeth: 2n,
+				lifecycleGasReserveAttoWeth: 3n,
+				profitBeforeGasAttoWeth: 10n,
 			}),
 		).toBe(4n)
-		const profitBeforeGasWeth = 20n
+		const profitBeforeGasAttoWeth = 20n
 		const simulatedEntryGasCostWeth = 9n
-		expect(profitBeforeGasWeth - simulatedEntryGasCostWeth).toBeGreaterThanOrEqual(10n)
+		expect(profitBeforeGasAttoWeth - simulatedEntryGasCostWeth).toBeGreaterThanOrEqual(10n)
 		expect(
 			adjustedNetProfitWeth({
-				entryGasCostWeth: simulatedEntryGasCostWeth,
-				hedgeSlippageReserveWeth: 2n,
-				lifecycleGasReserveWeth: 3n,
-				profitBeforeGasWeth,
+				entryGasCostAttoWeth: simulatedEntryGasCostWeth,
+				hedgeSlippageReserveAttoWeth: 2n,
+				lifecycleGasReserveAttoWeth: 3n,
+				profitBeforeGasAttoWeth,
 			}),
 		).toBeLessThan(10n)
 	})
@@ -33,35 +33,35 @@ describe('execution risk controls', () => {
 	test('projects the atomic public and private lifecycle transaction', () => {
 		const parameters = {
 			callbackGasLimit: 4_000_000n,
-			configuredReserveWeth: 1n,
+			configuredReserveAttoWeth: 1n,
 			gasPrice: 2n,
 		}
-		const publicReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'public' })
-		const privateReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'private' })
+		const publicReserve = projectedLifecycleGasReserveAttoWeth({ ...parameters, submissionMode: 'public' })
+		const privateReserve = projectedLifecycleGasReserveAttoWeth({ ...parameters, submissionMode: 'private' })
 		expect(publicReserve).toBe(9_800_000n)
 		expect(privateReserve).toBe(9_800_000n)
-		expect(projectedLifecycleGasReserveWeth({ ...parameters, configuredReserveWeth: 9_800_001n, submissionMode: 'private' })).toBe(9_800_001n)
-		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve })).toBe(0n)
-		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve - 1n })).toBe(-1n)
+		expect(projectedLifecycleGasReserveAttoWeth({ ...parameters, configuredReserveAttoWeth: 9_800_001n, submissionMode: 'private' })).toBe(9_800_001n)
+		expect(adjustedNetProfitWeth({ entryGasCostAttoWeth: 0n, hedgeSlippageReserveAttoWeth: 0n, lifecycleGasReserveAttoWeth: privateReserve, profitBeforeGasAttoWeth: privateReserve })).toBe(0n)
+		expect(adjustedNetProfitWeth({ entryGasCostAttoWeth: 0n, hedgeSlippageReserveAttoWeth: 0n, lifecycleGasReserveAttoWeth: privateReserve, profitBeforeGasAttoWeth: privateReserve - 1n })).toBe(-1n)
 
 		const noPositions: never[] = []
-		const dailyLimit = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendWeth: privateReserve }
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions: noPositions, projectedGasCostWeth: privateReserve }, dailyLimit)).toBeUndefined()
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions: noPositions, projectedGasCostWeth: privateReserve + 1n }, dailyLimit)).toContain('UTC-day gas spend')
+		const dailyLimit = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: privateReserve }
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions: noPositions, projectedGasCostAttoWeth: privateReserve }, dailyLimit)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions: noPositions, projectedGasCostAttoWeth: privateReserve + 1n }, dailyLimit)).toContain('UTC-day gas spend')
 	})
 
 	test('fails closed on every portfolio loss limit', () => {
 		const safe = {
-			capitalAtRiskWeth: DEFAULT_RISK_LIMITS.maxPositionNotionalWeth,
+			capitalAtRiskAttoWeth: DEFAULT_RISK_LIMITS.maxPositionNotionalAttoWeth,
 			concurrentPositions: 0,
-			dailyGasSpentWeth: 0n,
-			projectedLockedWeth: DEFAULT_RISK_LIMITS.maxTotalLockedWeth,
+			dailyGasSpentAttoWeth: 0n,
+			projectedLockedAttoWeth: DEFAULT_RISK_LIMITS.maxTotalLockedAttoWeth,
 		}
 		expect(riskLimitMismatch(safe, DEFAULT_RISK_LIMITS)).toBeUndefined()
 		expect(riskLimitMismatch({ ...safe, concurrentPositions: 1 }, DEFAULT_RISK_LIMITS)).toContain('concurrent')
-		expect(riskLimitMismatch({ ...safe, capitalAtRiskWeth: safe.capitalAtRiskWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('position notional')
-		expect(riskLimitMismatch({ ...safe, projectedLockedWeth: safe.projectedLockedWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('locked capital')
-		expect(riskLimitMismatch({ ...safe, dailyGasSpentWeth: DEFAULT_RISK_LIMITS.maxDailyGasSpendWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('UTC-day gas spend')
+		expect(riskLimitMismatch({ ...safe, capitalAtRiskAttoWeth: safe.capitalAtRiskAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('position notional')
+		expect(riskLimitMismatch({ ...safe, projectedLockedAttoWeth: safe.projectedLockedAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('locked capital')
+		expect(riskLimitMismatch({ ...safe, dailyGasSpentAttoWeth: DEFAULT_RISK_LIMITS.maxDailyGasSpendAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('UTC-day gas spend')
 	})
 
 	test('rechecks refreshed capital and relay-simulated gas against every portfolio cap', () => {
@@ -83,14 +83,14 @@ describe('execution risk controls', () => {
 		const limits = {
 			...DEFAULT_RISK_LIMITS,
 			maxConcurrentPositions: 2,
-			maxDailyGasSpendWeth: 20n * 10n ** 15n,
-			maxPositionNotionalWeth: 3n * 10n ** 18n,
-			maxTotalLockedWeth: 5n * 10n ** 18n,
+			maxDailyGasSpendAttoWeth: 20n * 10n ** 15n,
+			maxPositionNotionalAttoWeth: 3n * 10n ** 18n,
+			maxTotalLockedAttoWeth: 5n * 10n ** 18n,
 		}
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n, positions, projectedGasCostWeth: 5n * 10n ** 15n }, limits, now)).toBeUndefined()
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n + 1n, positions, projectedGasCostWeth: 5n * 10n ** 15n }, limits, now)).toContain('position notional')
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n + 1n, positions: [], projectedGasCostWeth: 0n }, { ...limits, maxPositionNotionalWeth: 10n * 10n ** 18n, maxTotalLockedWeth: 3n * 10n ** 18n }, now)).toContain('locked capital')
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 1n, positions, projectedGasCostWeth: 5n * 10n ** 15n + 1n }, limits, now)).toContain('UTC-day gas spend')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 3n * 10n ** 18n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, now)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 3n * 10n ** 18n + 1n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, now)).toContain('position notional')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 3n * 10n ** 18n + 1n, positions: [], projectedGasCostAttoWeth: 0n }, { ...limits, maxPositionNotionalAttoWeth: 10n * 10n ** 18n, maxTotalLockedAttoWeth: 3n * 10n ** 18n }, now)).toContain('locked capital')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 1n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, now)).toContain('UTC-day gas spend')
 	})
 
 	test('charges gas to canonical mined UTC days instead of local staging or recovery time', () => {
@@ -108,11 +108,11 @@ describe('execution risk controls', () => {
 				status: 'closed',
 			},
 		]
-		const limits = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendWeth: 20n * 10n ** 15n }
+		const limits = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: 20n * 10n ** 15n }
 		const minedDay = new Date('2026-07-25T12:00:00.000Z')
 		const recoveryDay = new Date('2026-07-26T12:00:00.000Z')
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions, projectedGasCostWeth: 5n * 10n ** 15n }, limits, minedDay)).toBeUndefined()
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions, projectedGasCostWeth: 5n * 10n ** 15n + 1n }, limits, minedDay)).toContain('UTC-day gas spend')
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions, projectedGasCostWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, minedDay)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, minedDay)).toContain('UTC-day gas spend')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toBeUndefined()
 	})
 })

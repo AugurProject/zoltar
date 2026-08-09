@@ -586,7 +586,7 @@ locked through later dispute rounds.
   price.
 - The full adverse movement permitted by the signed hedge limit
   (`runtime.maxHedgeSlippageBps`).
-- The larger of `runtime.riskLimits.lifecycleGasReserveWeth` and
+- The larger of `runtime.riskLimits.lifecycleGasReserveAttoWeth` and
   `(callbackGasLimit + 900,000) × gas price`. Public and private delivery use the
   same single atomic lifecycle call.
 
@@ -855,7 +855,7 @@ exact-input and exact-output quotes against these exact pool keys:
 
 Every supported key has `currency0 = native ETH`, `currency1 = report token`, and
 `hooks = address(0)`. The exact swap amount must be no greater than
-`2^127 - 1` atomic units so every PoolManager delta fits a signed `int128`.
+`2^127 - 1` token base units so every PoolManager delta fits a signed `int128`.
 For a buy, `zeroForOne = true`: the requested exact token output and returned token
 delta are positive, while the native input delta is negative and cannot exceed the
 signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
@@ -1051,7 +1051,7 @@ Immediately before journal write and delivery, the bot rechecks that notional, t
 total of every non-closed durable position, and the UTC-day gas total. Public mode
 uses `1,200,000 × gas price` for the candidate entry; private mode uses the largest
 gas usage from the successful relay simulations. Both add the lifecycle reserve. A
-value equal to a configured cap is allowed; one wei above it is rejected.
+value equal to a configured cap is allowed; one attoETH above it is rejected.
 
 Actual gas is assigned to the UTC day of each receipt's quorum-confirmed canonical
 block timestamp, not the local time at which the transaction was staged or later

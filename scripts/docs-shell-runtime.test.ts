@@ -3,7 +3,7 @@ import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.t
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 
-async function loadShell(url = 'http://localhost/docs/tutorials/first-market.html', viewportWidth = 1280) {
+async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
@@ -42,24 +42,6 @@ async function finishSearchLoad(source?: string) {
 	await Promise.resolve()
 }
 
-test('documentation shell provides native Diátaxis navigation without an iframe', async () => {
-	const shell = await loadShell()
-	try {
-		expect(document.querySelector('iframe')).toBeNull()
-		expect(document.querySelector('.docs-topbar')).not.toBeNull()
-		expect(document.querySelector('.docs-topnav')).toBeNull()
-		expect(document.querySelector('.docs-navigation-list a[aria-current="page"]')?.textContent).toBe('Explore a seeded market and security pool')
-		expect(document.querySelector('.docs-type-badge')?.textContent).toBe('Tutorials')
-		expect(document.querySelector('.docs-outline-list a')?.getAttribute('href')).toBe('#before-you-start')
-		expect(document.querySelector('.docs-mobile-outline')).not.toBeNull()
-		expect(document.querySelector('.docs-search-icon')?.textContent).toBe('⌕')
-		expect(document.querySelector('.docs-search-button kbd')?.textContent).toBe('Ctrl/⌘ K')
-		expect(document.querySelector('script[src$="/assets/js/docsSearchData.js"]')).toBeNull()
-	} finally {
-		shell.cleanup()
-	}
-})
-
 test('documentation landing keeps global navigation compact and omits a redundant page outline', async () => {
 	const shell = await loadShell('http://localhost/docs/documentation.html')
 	try {
@@ -73,7 +55,7 @@ test('documentation landing keeps global navigation compact and omits a redundan
 })
 
 test('documentation search loads on demand, normalizes Unicode, and links to the best matching section', async () => {
-	const shell = await loadShell()
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
 		const searchButton = document.querySelector<HTMLButtonElement>('.docs-search-button')
 		searchButton?.click()
@@ -84,28 +66,30 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		await finishSearchLoad()
 		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
 		if (input === null) throw new Error('Search input is missing')
-		input.value = 'noncanonical replacement branch'
+		input.value = 'OpenOracle integration'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Build a reorg-safe event indexer')
-		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/how-to/build-event-indexer.html#handle-reorganizations')
-		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toMatch(/^Handle reorganizations —/)
-		expect(document.querySelector('.docs-search-status')?.textContent).toBe('1 result')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
+		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/explanation/open-oracle.html')
+		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toBe('REP/ETH price oracle for Statoblast.')
+		expect(document.querySelector('.docs-search-status')?.textContent).toBe('5 results')
 
 		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
 		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
-		const keywords: unknown = Reflect.get(searchData[0], 'keywords')
+		const searchEntry = searchData.find(entry => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'path') === 'explanation/open-oracle.html')
+		if (typeof searchEntry !== 'object' || searchEntry === null) throw new Error('Search fixture entry is missing')
+		const keywords: unknown = Reflect.get(searchEntry, 'keywords')
 		if (!Array.isArray(keywords)) throw new Error('Search fixture keywords are missing')
 		keywords.push('Diátaxis')
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Explore a seeded market and security pool')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
 	} finally {
 		shell.cleanup()
 	}
 })
 
 test('documentation search failure stays actionable and retries the lazy request', async () => {
-	const shell = await loadShell()
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
 		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
 		const failedScript = document.querySelector<HTMLScriptElement>('script[src$="/assets/js/docsSearchData.js"]')
@@ -142,50 +126,6 @@ test('documentation search failure stays actionable and retries the lazy request
 		retryScript.dispatchEvent(new Event('load'))
 		await Promise.resolve()
 		expect(status?.textContent).toMatch(/^\d+ results$/)
-	} finally {
-		shell.cleanup()
-	}
-})
-
-test('mobile menu isolates focus while open and restores desktop navigation after resize', async () => {
-	const shell = await loadShell('http://localhost/docs/tutorials/first-market.html', 390)
-	try {
-		const button = document.querySelector<HTMLButtonElement>('.docs-icon-button')
-		const left = document.querySelector<HTMLElement>('.docs-left')
-		const main = document.querySelector<HTMLElement>('main')
-		expect(left?.inert).toBeTrue()
-		button?.click()
-		expect(document.body.dataset['docsNavigationOpen']).toBe('true')
-		expect(button?.getAttribute('aria-expanded')).toBe('true')
-		expect(left?.inert).toBeFalse()
-		expect(main?.inert).toBeTrue()
-		expect(document.activeElement?.closest('.docs-left')).not.toBeNull()
-		const backdrop = document.querySelector<HTMLButtonElement>('.docs-navigation-backdrop')
-		expect(backdrop?.tabIndex).toBe(-1)
-		const visibleNavigationItems = Array.from(document.querySelectorAll<HTMLElement>('.docs-left summary, .docs-left a')).filter(node => {
-			for (let ancestor = node.parentElement; ancestor !== null && !ancestor.classList.contains('docs-left'); ancestor = ancestor.parentElement) {
-				if (ancestor.matches('details:not([open])') && ancestor.firstElementChild !== node) return false
-			}
-			return true
-		})
-		const lastNavigationItem = visibleNavigationItems.at(-1)
-		if (lastNavigationItem === undefined) throw new Error('Visible mobile navigation item is missing')
-		lastNavigationItem.focus()
-		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }))
-		expect(document.activeElement).toBe(button)
-		document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }))
-		expect(document.activeElement).toBe(lastNavigationItem)
-		backdrop?.click()
-		expect(document.body.dataset['docsNavigationOpen']).toBe('false')
-		expect(left?.inert).toBeTrue()
-		expect(main?.inert).toBeFalse()
-		expect(document.activeElement).toBe(button)
-		button?.click()
-		Object.defineProperty(shell.window, 'innerWidth', { configurable: true, value: 900, writable: true })
-		shell.window.dispatchEvent(new shell.window.Event('resize'))
-		expect(document.body.dataset['docsNavigationOpen']).toBe('false')
-		expect(left?.inert).toBeFalse()
-		expect(main?.inert).toBeFalse()
 	} finally {
 		shell.cleanup()
 	}

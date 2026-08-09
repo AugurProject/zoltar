@@ -33,15 +33,15 @@ function createDeferred<T>() {
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 0n,
-		escalationEscrowedRep: 0n,
+		disputeStakedAttoRep: 0n,
 		managerAddress: MANAGER_ADDRESS,
-		poolOwnershipDenominator: 1n,
-		repDepositShare: 10n * 10n ** 18n,
+		totalRepBackingUnits: 1n,
+		vaultAttoRepBacking: 10n * 10n ** 18n,
 		repToken: REP_TOKEN_ADDRESS,
-		securityBondAllowance: 0n,
+		coverageCommitmentAttoEth: 0n,
 		securityPoolAddress: SECURITY_POOL_ADDRESS,
-		totalSecurityBondAllowance: 0n,
-		unpaidEthFees: 0n,
+		totalCoverageCommitmentAttoEth: 0n,
+		claimableFeesAttoEth: 0n,
 		universeId: 1n,
 		vaultAddress: WALLET_ADDRESS,
 		...overrides,
@@ -63,8 +63,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: undefined,
-		queuedOperationEthCost: 1n,
-		requestPriceEthCost: 10n,
+		queuedOperationCostAttoEth: 1n,
+		requestPriceCostAttoEth: 10n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
@@ -80,19 +80,19 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 			getBalance: async () => 0n,
 		})),
 		createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
-		depositRepToSecurityPool: async () => {
-			throw new Error('depositRepToSecurityPool should not be called in this test')
+		depositRepToVaultToSecurityPool: async () => {
+			throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 		},
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-			currentRepBalance: 1n,
-			currentWethBalance: 1n,
+			currentRepBalanceAttoRep: 1n,
+			currentWethBalanceAttoEth: 1n,
 			initialReportAmount2: 1n,
-			maximumInitialWeth: 1n,
-			minimumToken1Report: 1n,
+			maximumInitialAttoWeth: 1n,
+			minimumToken1ReportAttoEth: 1n,
 			proposedRepPerEthPrice: 1n,
 			reputationTokenAddress: REP_TOKEN_ADDRESS,
-			requestedInitialWeth: 0n,
-			wethShortfall: 0n,
+			requestedInitialAttoWeth: 0n,
+			wethShortfallAttoEth: 0n,
 		})),
 		loadErc20Balance: mock(async () => 0n),
 		loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
@@ -100,8 +100,8 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 		queueOracleManagerOperation: async () => {
 			throw new Error('queueOracleManagerOperation should not be called in this test')
 		},
-		redeemRepFromSecurityPool: async () => {
-			throw new Error('redeemRepFromSecurityPool should not be called in this test')
+		redeemRepFromVaultFromSecurityPool: async () => {
+			throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 		},
 		redeemSecurityVaultFees: async () => {
 			throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -168,8 +168,8 @@ describe('useSecurityVaultOperations', () => {
 
 		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20,
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
@@ -177,8 +177,8 @@ describe('useSecurityVaultOperations', () => {
 			queueOracleManagerOperation: mock(async () => {
 				throw new Error('queueOracleManagerOperation should not be called in this test')
 			}),
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -202,7 +202,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				depositAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
@@ -234,15 +234,15 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
 			loadSecurityVaultDetails: mock(async () => await loadSecurityVaultDetailsDeferred.promise),
 			queueOracleManagerOperation,
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -266,7 +266,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -289,9 +289,9 @@ describe('useSecurityVaultOperations', () => {
 		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
 	})
 
-	test('setSecurityBondAllowance blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {
+	test('setCoverageCommitment blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
-			action: 'queueSetSecurityBondAllowance' as const,
+			action: 'queueSetCoverageCommitmentAttoEth' as const,
 			hash: '0x03' as const,
 		}))
 		const dependencies = createSecurityVaultOperationsDependencies({
@@ -299,17 +299,17 @@ describe('useSecurityVaultOperations', () => {
 				getBalance: async () => 10n ** 18n,
 			})),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 0n,
-				currentWethBalance: 0n,
+				currentRepBalanceAttoRep: 0n,
+				currentWethBalanceAttoEth: 0n,
 				initialReportAmount2: 5n,
-				maximumInitialWeth: 5n,
-				minimumToken1Report: 5n,
+				maximumInitialAttoWeth: 5n,
+				minimumToken1ReportAttoEth: 5n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialWeth: 0n,
-				wethShortfall: 5n,
+				requestedInitialAttoWeth: 0n,
+				wethShortfallAttoEth: 5n,
 			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 1n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 1n })),
 			queueOracleManagerOperation,
 		})
 		let hookState: UseSecurityVaultOperationsState | undefined
@@ -322,13 +322,13 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				securityBondAllowanceAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				coverageCommitmentEthAmount: '1',
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).setSecurityBondAllowance()
+			await requireHookState(hookState).setCoverageCommitment()
 		})
 
 		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
@@ -337,9 +337,9 @@ describe('useSecurityVaultOperations', () => {
 		})
 	})
 
-	test('setSecurityBondAllowance can stage a fresh attached operation without a currently valid price', async () => {
+	test('setCoverageCommitment can stage a fresh attached operation without a currently valid price', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
-			action: 'queueSetSecurityBondAllowance' as const,
+			action: 'queueSetCoverageCommitmentAttoEth' as const,
 			hash: '0x03' as const,
 		}))
 
@@ -347,25 +347,25 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 10n,
-				currentWethBalance: 10n,
+				currentRepBalanceAttoRep: 10n,
+				currentWethBalanceAttoEth: 10n,
 				initialReportAmount2: 10n,
-				maximumInitialWeth: 10n,
-				minimumToken1Report: 10n,
+				maximumInitialAttoWeth: 10n,
+				minimumToken1ReportAttoEth: 10n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialWeth: 0n,
-				wethShortfall: 0n,
+				requestedInitialAttoWeth: 0n,
+				wethShortfallAttoEth: 0n,
 			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 10n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 10n })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -388,17 +388,17 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				securityBondAllowanceAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				coverageCommitmentEthAmount: '1',
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).setSecurityBondAllowance()
+			await requireHookState(hookState).setCoverageCommitment()
 		})
 
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setSecurityBondsAllowance', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
+		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setCoverageCommitment', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
 	})
 
 	test('withdrawRep can stage a fresh attached operation without a currently valid price', async () => {
@@ -411,25 +411,25 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 10n,
-				currentWethBalance: 10n,
+				currentRepBalanceAttoRep: 10n,
+				currentWethBalanceAttoEth: 10n,
 				initialReportAmount2: 10n,
-				maximumInitialWeth: 10n,
-				minimumToken1Report: 10n,
+				maximumInitialAttoWeth: 10n,
+				minimumToken1ReportAttoEth: 10n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialWeth: 0n,
-				wethShortfall: 0n,
+				requestedInitialAttoWeth: 0n,
+				wethShortfallAttoEth: 0n,
 			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 10n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 10n })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -453,7 +453,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -475,17 +475,17 @@ describe('useSecurityVaultOperations', () => {
 				getBalance: async () => 10n ** 18n,
 			})),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalance: 0n,
-				currentWethBalance: 0n,
+				currentRepBalanceAttoRep: 0n,
+				currentWethBalanceAttoEth: 0n,
 				initialReportAmount2: 5n,
-				maximumInitialWeth: 5n,
-				minimumToken1Report: 5n,
+				maximumInitialAttoWeth: 5n,
+				minimumToken1ReportAttoEth: 5n,
 				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialWeth: 0n,
-				wethShortfall: 5n,
+				requestedInitialAttoWeth: 0n,
+				wethShortfallAttoEth: 5n,
 			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 1n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 1n })),
 			queueOracleManagerOperation,
 		})
 		let hookState: UseSecurityVaultOperationsState | undefined
@@ -499,7 +499,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -524,15 +524,15 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: true })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -558,7 +558,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '5',
 			}))
 		})
@@ -570,11 +570,11 @@ describe('useSecurityVaultOperations', () => {
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
 	})
 
-	test('depositRep ignores a stale preflight balance refresh after the selected vault changes', async () => {
+	test('depositRepToVault ignores a stale preflight balance refresh after the selected vault changes', async () => {
 		const staleBalance = createDeferred<bigint>()
 		let balanceLoads = 0
-		const depositRepToSecurityPool = mock(async () => ({
-			action: 'depositRep' as const,
+		const depositRepToVaultToSecurityPool = mock(async () => ({
+			action: 'depositRepToVault' as const,
 			hash: '0x06' as const,
 		}))
 
@@ -582,7 +582,7 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool,
+			depositRepToVaultToSecurityPool,
 			loadErc20Balance: mock(async () => {
 				balanceLoads += 1
 				if (balanceLoads === 1) return await staleBalance.promise
@@ -593,8 +593,8 @@ describe('useSecurityVaultOperations', () => {
 			queueOracleManagerOperation: mock(async () => {
 				throw new Error('queueOracleManagerOperation should not be called in this test')
 			}),
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -618,13 +618,13 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				depositAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 			}))
 		})
 
 		let depositPromise = Promise.resolve()
 		await act(() => {
-			depositPromise = requireHookState(hookState).depositRep()
+			depositPromise = requireHookState(hookState).depositRepToVault()
 		})
 
 		await waitFor(() => expect(balanceLoads).toBe(1))
@@ -632,7 +632,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 
@@ -641,7 +641,7 @@ describe('useSecurityVaultOperations', () => {
 			await depositPromise
 		})
 
-		expect(depositRepToSecurityPool).not.toHaveBeenCalled()
+		expect(depositRepToVaultToSecurityPool).not.toHaveBeenCalled()
 	})
 
 	test('redeemFees ignores a stale selection change before the first write starts', async () => {
@@ -659,8 +659,8 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
@@ -668,8 +668,8 @@ describe('useSecurityVaultOperations', () => {
 			queueOracleManagerOperation: mock(async () => {
 				throw new Error('queueOracleManagerOperation should not be called in this test')
 			}),
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees,
 			updateSecurityVaultFees,
@@ -699,7 +699,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 
@@ -725,15 +725,15 @@ describe('useSecurityVaultOperations', () => {
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
-			depositRepToSecurityPool: mock(async () => {
-				throw new Error('depositRepToSecurityPool should not be called in this test')
+			depositRepToVaultToSecurityPool: mock(async () => {
+				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 1n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 1n })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
-			redeemRepFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			redeemRepFromVaultFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
 			}),
 			redeemSecurityVaultFees: mock(async () => {
 				throw new Error('redeemSecurityVaultFees should not be called in this test')
@@ -755,7 +755,7 @@ describe('useSecurityVaultOperations', () => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
 				repWithdrawAmount: '1',
-				selectedVaultAddress: WALLET_ADDRESS,
+				selectedVaultOwner: WALLET_ADDRESS,
 				stagedOperationTimeoutMinutes: '1',
 			}))
 		})
@@ -770,7 +770,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
 				...current,
-				selectedVaultAddress: getAddress('0x0000000000000000000000000000000000000009'),
+				selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009'),
 			}))
 		})
 

@@ -28,9 +28,9 @@ describe('security pool state engine', () => {
 		expect(new Set(getEnabledActionIds(model))).toEqual(
 			new Set([
 				'approveRep',
-				'depositRep',
+				'depositRepToVault',
 				'queueWithdrawRep',
-				'queueSetSecurityBondAllowance',
+				'queueSetCoverageCommitmentAttoEth',
 				'redeemFees',
 				'createCompleteSet',
 				'redeemCompleteSet',
@@ -55,7 +55,7 @@ describe('security pool state engine', () => {
 				'settleForkedEscalation',
 			]),
 		)
-		expectActionBlocked(model, 'redeemRep')
+		expectActionBlocked(model, 'redeemRepFromVault')
 		expectActionBlocked(model, 'migrateShares')
 		expectActionBlocked(model, 'redeemShares')
 	})
@@ -67,11 +67,11 @@ describe('security pool state engine', () => {
 		})
 
 		expect(model.lifecycleState).toBe('ended')
-		expectActionEnabled(model, 'redeemRep')
+		expectActionEnabled(model, 'redeemRepFromVault')
 		expectActionEnabled(model, 'redeemFees')
 		expectActionEnabled(model, 'redeemCompleteSet')
 		expectActionEnabled(model, 'redeemShares')
-		expectActionBlocked(model, 'depositRep')
+		expectActionBlocked(model, 'depositRepToVault')
 		expectActionBlocked(model, 'executeStagedOperation')
 	})
 
@@ -125,7 +125,7 @@ describe('security pool state engine', () => {
 		expect(migration.forkStage).toBe('migration')
 		expectActionEnabled(migration, 'createChildUniverse')
 		expectActionBlocked(migration, 'initiateFork')
-		expectActionBlocked(migration, 'depositRep')
+		expectActionBlocked(migration, 'depositRepToVault')
 		expectActionBlocked(migration, 'requestPrice')
 		expectActionBlocked(migration, 'executeStagedOperation')
 

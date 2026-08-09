@@ -62,7 +62,7 @@ declare module 'solc' {
 				readonly creation: {
 					readonly codeDepositCost: string
 					readonly executionCost: string
-					readonly totalCost: string
+					readonly totalCostAttoRep: string
 				}
 				readonly external: {
 					readonly [functionSignature: string]: string

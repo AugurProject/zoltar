@@ -4,8 +4,8 @@ import type { Configuration } from '#config/configuration'
 import { executionSnapshotWithQuorum, selectBestExecution } from '#execution/execution-orchestration'
 import type { ExecutionCandidate, Pool, ReadClient } from '#core/operator-types'
 import { errorMessage, requiredBigint, requiredBigintArray, requiredHash, requiredTuple } from '#core/rpc-validation'
-import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from '#core/safety-controls'
-import { calculateFee, calculateNextAmount1, evaluateBuyRep, evaluateSellRep, hedgeSlippageReserveWeth, type ArbitrageQuote } from '#core/strategy'
+import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
+import { calculateFee, calculateNextAmount1, evaluateBuyRep, evaluateSellRep, hedgeSlippageReserveAttoWeth, type ArbitrageQuote } from '#core/strategy'
 import { STANDARD_UNISWAP_FEES, standardV4QuotePlans, v4QuotePlan } from '#core/uniswap-v4'
 import { constantProductExactInput, constantProductExactOutput, type Venue } from '#core/venue-strategy'
 import type { PositionRecord } from '#state/position-store'
@@ -17,7 +17,7 @@ const FEES = STANDARD_UNISWAP_FEES
 const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')
 
 export function candidateRiskMismatch(candidate: ExecutionCandidate, positions: readonly PositionRecord[], limits: RiskLimits, now = new Date()) {
-	return positionRiskLimitMismatch({ capitalAtRiskWeth: candidate.capitalAtRiskWeth, positions, projectedGasCostWeth: candidate.projectedGasCostWeth }, limits, now)
+	return positionRiskLimitMismatch({ capitalAtRiskAttoWeth: candidate.capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: candidate.projectedGasCostAttoWeth }, limits, now)
 }
 
 function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
@@ -154,15 +154,15 @@ async function quoteV4ExactOutput(client: ReadClient, quoter: Address, parameter
 	return requiredBigint(result[0], 'Uniswap V4 exact-output amount')
 }
 
-export function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGasReserveWeth: bigint, config: Pick<Configuration, 'maxHedgeSlippageBps'>) {
-	const slippageReserveWeth = hedgeSlippageReserveWeth(quote.direction, quote.direction === 'sell-rep' ? quote.grossProceedsWeth : quote.hedgeCostWeth, config.maxHedgeSlippageBps)
+export function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGasReserveAttoWeth: bigint, config: Pick<Configuration, 'maxHedgeSlippageBps'>) {
+	const slippageReserveAttoWeth = hedgeSlippageReserveAttoWeth(quote.direction, quote.direction === 'sell-rep' ? quote.grossProceedsAttoWeth : quote.hedgeCostAttoWeth, config.maxHedgeSlippageBps)
 	return {
 		...quote,
-		netProfitWeth: adjustedNetProfitWeth({
-			entryGasCostWeth: gasCost,
-			hedgeSlippageReserveWeth: slippageReserveWeth,
-			lifecycleGasReserveWeth,
-			profitBeforeGasWeth: quote.profitBeforeGasWeth,
+		netProfitAttoWeth: adjustedNetProfitWeth({
+			entryGasCostAttoWeth: gasCost,
+			hedgeSlippageReserveAttoWeth: slippageReserveAttoWeth,
+			lifecycleGasReserveAttoWeth,
+			profitBeforeGasAttoWeth: quote.profitBeforeGasAttoWeth,
 		}),
 	}
 }
@@ -170,9 +170,9 @@ export function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, life
 export async function evaluate(client: ReadClient, config: Configuration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, marketBlock: { hash: `0x${string}`; number: bigint; observedAt: number }) {
 	const game = report.game
 	const gasCost = gasPrice * 1_200_000n
-	const lifecycleGasReserveWeth = projectedLifecycleGasReserveWeth({
+	const lifecycleGasReserveAttoWeth = projectedLifecycleGasReserveAttoWeth({
 		callbackGasLimit: BigInt(game.callbackGasLimit),
-		configuredReserveWeth: config.riskLimits.lifecycleGasReserveWeth,
+		configuredReserveAttoWeth: config.riskLimits.lifecycleGasReserveAttoWeth,
 		gasPrice,
 		submissionMode: config.submission.mode,
 	})
@@ -180,13 +180,13 @@ export async function evaluate(client: ReadClient, config: Configuration, report
 	const candidates: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; quote: ArbitrageQuote; venue: Venue }[] = []
 	const observations: MarketConsensusObservation[] = []
 	const observeVenue = (venue: Venue, marketId: Address, sell: ArbitrageQuote | undefined, buy: ArbitrageQuote | undefined) => {
-		if (sell === undefined || buy === undefined || sell.grossProceedsWeth <= 0n || buy.hedgeCostWeth <= 0n) return
-		const sellPrice = (game.currentAmount2 * 10n ** 18n) / sell.grossProceedsWeth
-		const buyPrice = (repWithFees * 10n ** 18n) / buy.hedgeCostWeth
+		if (sell === undefined || buy === undefined || sell.grossProceedsAttoWeth <= 0n || buy.hedgeCostAttoWeth <= 0n) return
+		const sellPrice = (game.currentAmount2 * 10n ** 18n) / sell.grossProceedsAttoWeth
+		const buyPrice = (repWithFees * 10n ** 18n) / buy.hedgeCostAttoWeth
 		observations.push({
 			assetId: game.token2,
-			askDepthEth: buy.hedgeCostWeth,
-			bidDepthEth: sell.grossProceedsWeth,
+			askDepthAttoEth: buy.hedgeCostAttoWeth,
+			bidDepthAttoEth: sell.grossProceedsAttoWeth,
 			blockHash: marketBlock.hash,
 			blockNumber: marketBlock.number,
 			chainId: config.network.chain.id,
@@ -199,21 +199,21 @@ export async function evaluate(client: ReadClient, config: Configuration, report
 		})
 	}
 	const v3Settled = await Promise.allSettled([
-		(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
-		(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+		(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveAttoWeth, config))(),
+		(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, marketBlock.number), 0n), gasCost, lifecycleGasReserveAttoWeth, config))(),
 	])
 	for (const result of v3Settled) if (result.status === 'rejected') console.error(`pool=${pool.address} quoteSkipped=${errorMessage(result.reason)}`)
 	const v3Sell = v3Settled[0]?.status === 'fulfilled' ? v3Settled[0].value : undefined
 	const v3Buy = v3Settled[1]?.status === 'fulfilled' ? v3Settled[1].value : undefined
-	const v3 = selectBestExecution([...(v3Sell === undefined ? [] : [v3Sell]), ...(v3Buy === undefined ? [] : [v3Buy])], candidate => candidate.netProfitWeth)
+	const v3 = selectBestExecution([...(v3Sell === undefined ? [] : [v3Sell]), ...(v3Buy === undefined ? [] : [v3Buy])], candidate => candidate.netProfitAttoWeth)
 	observeVenue('uniswap-v3', pool.address, v3Sell, v3Buy)
 	if (v3 !== undefined) candidates.push({ hedgeFee: pool.fee, hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })
 	if (pool.v2Pair !== undefined) {
 		try {
 			const reserves = await constantProductReserves(client, pool.v2Pair, pool.token, marketBlock.number)
-			const v2Sell = safetyAdjustedQuote(evaluateSellRep(game, constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth), 0n), gasCost, lifecycleGasReserveWeth, config)
-			const v2Buy = safetyAdjustedQuote(evaluateBuyRep(game, constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken), 0n), gasCost, lifecycleGasReserveWeth, config)
-			const v2 = selectBestExecution([v2Sell, v2Buy], candidate => candidate.netProfitWeth)
+			const v2Sell = safetyAdjustedQuote(evaluateSellRep(game, constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth), 0n), gasCost, lifecycleGasReserveAttoWeth, config)
+			const v2Buy = safetyAdjustedQuote(evaluateBuyRep(game, constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken), 0n), gasCost, lifecycleGasReserveAttoWeth, config)
+			const v2 = selectBestExecution([v2Sell, v2Buy], candidate => candidate.netProfitAttoWeth)
 			observeVenue('uniswap-v2', pool.v2Pair, v2Sell, v2Buy)
 			if (v2 !== undefined) candidates.push({ hedgeFee: 3_000, hedgePool: pool.v2Pair, quote: v2, venue: 'uniswap-v2' })
 		} catch (error) {
@@ -224,18 +224,18 @@ export async function evaluate(client: ReadClient, config: Configuration, report
 		const v4Quoter = config.v4Quoter
 		for (const plan of standardV4QuotePlans(pool.token, game.currentAmount2, repWithFees)) {
 			const v4Settled = await Promise.allSettled([
-				(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, plan.sell, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
-				(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, plan.buy, marketBlock.number), 0n), gasCost, lifecycleGasReserveWeth, config))(),
+				(async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, plan.sell, marketBlock.number), 0n), gasCost, lifecycleGasReserveAttoWeth, config))(),
+				(async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, plan.buy, marketBlock.number), 0n), gasCost, lifecycleGasReserveAttoWeth, config))(),
 			])
 			for (const result of v4Settled) if (result.status === 'rejected') console.error(`poolManager=${config.v4PoolManager} fee=${plan.fee.toString()} quoteSkipped=${errorMessage(result.reason)}`)
 			const v4Sell = v4Settled[0]?.status === 'fulfilled' ? v4Settled[0].value : undefined
 			const v4Buy = v4Settled[1]?.status === 'fulfilled' ? v4Settled[1].value : undefined
-			const v4 = selectBestExecution([...(v4Sell === undefined ? [] : [v4Sell]), ...(v4Buy === undefined ? [] : [v4Buy])], candidate => candidate.netProfitWeth)
+			const v4 = selectBestExecution([...(v4Sell === undefined ? [] : [v4Sell]), ...(v4Buy === undefined ? [] : [v4Buy])], candidate => candidate.netProfitAttoWeth)
 			observeVenue('uniswap-v4', config.v4PoolManager, v4Sell, v4Buy)
 			if (v4 !== undefined) candidates.push({ hedgeFee: plan.fee, hedgePool: config.v4PoolManager, quote: v4, venue: 'uniswap-v4' })
 		}
 	}
-	return { candidate: selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth), observations }
+	return { candidate: selectBestExecution(candidates, candidate => candidate.quote.netProfitAttoWeth), observations }
 }
 
 export async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, hedgeVenue: Venue, hedgeFee: (typeof FEES)[number], blockNumber: bigint, account: Address) {

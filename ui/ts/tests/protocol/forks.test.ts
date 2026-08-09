@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { depositRepToSecurityPool, finalizeSecurityPoolTruthAuction, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
+import { depositRepToVaultToSecurityPool, finalizeSecurityPoolTruthAuction, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
 import { getForkOutcomeKey } from '../../protocol/helpers.js'
 import { peripherals_tokens_ShareToken_ShareToken } from '../../contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
@@ -64,13 +64,13 @@ describe('forks protocol client', () => {
 		expect(getForkOutcomeKey(1n, securityPoolAddress)).toBe('yes')
 	})
 
-	test('depositRepToSecurityPool rejects zero amounts before encoding a transaction', async () => {
+	test('depositRepToVaultToSecurityPool rejects zero amounts before encoding a transaction', async () => {
 		let sendTransactionCount = 0
 		const client = createForkMockWriteClient(() => {
 			sendTransactionCount += 1
 		})
 
-		await expect(depositRepToSecurityPool(asWriteClient(client), securityPoolAddress, 0n)).rejects.toThrow('REP deposit amount must be greater than zero')
+		await expect(depositRepToVaultToSecurityPool(asWriteClient(client), securityPoolAddress, 0n)).rejects.toThrow('REP deposit amount must be greater than zero')
 		expect(sendTransactionCount).toBe(0)
 	})
 
@@ -164,7 +164,7 @@ describe('forks protocol client', () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const finalizedClearingTick = 12n
 		const syntheticThreshold = 7n * 10n ** 17n
-		const underfundedWinningEth = 9n * 10n ** 18n
+		const underfundedWinningAttoEth = 9n * 10n ** 18n
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
 			multicall: async request => {
@@ -175,7 +175,7 @@ describe('forks protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				if (getContractFunctionName(firstContract) === 'computeClearing') {
-					return [[false, 99n, underfundedWinningEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningEth, finalizedClearingTick]
+					return [[false, 99n, underfundedWinningAttoEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningAttoEth, finalizedClearingTick]
 				}
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
@@ -194,7 +194,7 @@ describe('forks protocol client', () => {
 		expect(details.truthAuction.clearingTick).toBe(finalizedClearingTick)
 		expect(details.truthAuction.clearingPrice).toBe(syntheticThreshold)
 		expect(details.truthAuction.underfundedThreshold).toBe(syntheticThreshold)
-		expect(details.truthAuction.underfundedWinningEth).toBe(underfundedWinningEth)
+		expect(details.truthAuction.underfundedWinningAttoEth).toBe(underfundedWinningAttoEth)
 	})
 
 	test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
@@ -230,7 +230,7 @@ describe('forks protocol client', () => {
 		expect(details.truthAuction.clearingTick).toBe(0n)
 		expect(details.truthAuction.clearingPrice).toBeUndefined()
 		expect(details.truthAuction.underfundedThreshold).toBe(noWinningPrefixThreshold)
-		expect(details.truthAuction.underfundedWinningEth).toBe(0n)
+		expect(details.truthAuction.underfundedWinningAttoEth).toBe(0n)
 	})
 
 	test('loadForkAuctionDetails surfaces own-fork migration diagnostics only for own-fork pools', async () => {
@@ -256,11 +256,11 @@ describe('forks protocol client', () => {
 
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)
 
-		expect(details.auctionableRepAtFork).toBe(30n)
+		expect(details.auctionableAttoRepAtFork).toBe(30n)
 		expect(details.ownForkRepBuckets).toEqual({
-			vaultRepAtFork: 12n,
-			escalationChildRepPerSelectedOutcome: 9n,
-			escrowSourceRepAtFork: 18n,
+			vaultRepAtForkAttoRep: 12n,
+			escalationChildRepPerSelectedOutcomeAttoRep: 9n,
+			escrowSourceRepAtForkAttoRep: 18n,
 		})
 	})
 })

@@ -196,15 +196,15 @@ export function useReportingOperations(
 				if (!isCurrentSelection()) return undefined
 				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
 				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
-				if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
-				if (!latestDetails.viewerVaultExists) throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
+				if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP backing that would become dispute-staked for this report.')
+				if (!latestDetails.viewerVaultExists) throw new Error('Reporting moves pool-held REP backing from your security vault into dispute-staked REP. Deposit REP into your vault before reporting.')
 				const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
 				if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
 					if (remainingSelectedOutcomeCapacity === 0n) throw new Error('No remaining contribution capacity is available on the selected side.')
 					throw new Error(`Only ${formatCurrencyBalance(remainingSelectedOutcomeCapacity)} REP remains before the selected side reaches the threshold.`)
 				}
-				const availableVaultRep = latestDetails.viewerVaultAvailableEscalationRep ?? 0n
-				if (contributionPreview.actualDepositAmount > availableVaultRep) throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
+				const poolHeldVaultRepBackingAttoRep = latestDetails.viewerPoolHeldVaultRepBackingAttoRep ?? 0n
+				if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep) throw new Error(`Insufficient pool-held vault REP backing. Deposit ${formatCurrencyBalance(contributionPreview.actualDepositAmount - poolHeldVaultRepBackingAttoRep)} more REP into your vault before reporting.`)
 				if (!isCurrentSelection()) return undefined
 
 				return await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, selectedOutcome, reportAmount)
@@ -229,7 +229,7 @@ export function useReportingOperations(
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
 				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning carried proofs in the child continuation after it finalizes; parent deposits do not need migration.')
-				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning carried proofs in the finalized child; the optional parent-lock cleanup window has closed.')
+				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning carried proofs in the finalized child; the optional unresolved parent escalation-deposit accounting cleanup window has closed.')
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error('Escalation deposits cannot be settled until the question is finalized.')
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]

@@ -13,12 +13,36 @@ import * as zoltarCopy from '../copy/zoltar.js'
 test('fork migration empty states are complete templates', () => {
 	expect(forkAuctionCopy.formatNoUnresolvedDeposits('yes')).toBe('No yes unresolved deposits remain for this wallet.')
 	expect(forkAuctionCopy.formatNoClaimableParentEscalationDeposits('Yes')).toBe('No Yes parent escalation deposits are currently available for a direct claim by this wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail).toBe('No parent escrowed REP is currently visible for a direct claim by the connected wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail).not.toMatch(/migrat/i)
+	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).toBe('No parent dispute-staked REP is currently visible for a direct claim by the connected wallet.')
+	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).not.toMatch(/migrat/i)
+})
+
+test('vault operation and fork migration copy uses accounting roles without promising queueing', () => {
+	expect(securityPoolCopy.settingCoverageCommitment).toBe('Setting coverage commitment…')
+	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
+	expect(forkAuctionCopy.selectedChildPoolRepReadinessLoading).toContain('pool-held REP')
+	expect(forkAuctionCopy.poolRepAlreadyMigratedDetail).toContain('Pool-held REP')
+	expect(forkAuctionCopy.poolRepStagedForVaultMigrationDetail).toContain('Pool-held REP')
+})
+
+test('truth-auction settlement copy identifies REP backing-unit credits', () => {
+	const coverageCommitment = 'auctioned coverage commitment'
+	const settlementCopy = [
+		forkAuctionCopy.formatWinningClaimCoverageCommitmentHeadline(coverageCommitment),
+		forkAuctionCopy.formatWinningClaimSettlementNotice(coverageCommitment),
+		forkAuctionCopy.formatMixedSettlementPreviewDetail(coverageCommitment),
+		forkAuctionCopy.formatWinningSettlementPreviewDetail(coverageCommitment),
+		forkAuctionCopy.formatWinningBidBatchSettlementDetail(coverageCommitment),
+		forkAuctionCopy.formatMixedBidBatchSettlementDetail(coverageCommitment),
+		forkAuctionCopy.formatFinalizedSettlementDetail(coverageCommitment),
+		forkAuctionCopy.formatStartTruthAuctionDetail(coverageCommitment),
+	]
+	for (const copy of settlementCopy) expect(copy).toContain('REP backing units')
+	expect(forkAuctionCopy.estimatedVaultRepBackingAttoRep).toBe('Estimated REP backing')
 })
 
 test('security-pool count summaries own their complete prose', () => {
-	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault address above to inspect any specific vault.')
+	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault owner address above to inspect any specific vault.')
 })
 
 test('reporting risk copy keeps escalation claims with their committed depositor', () => {

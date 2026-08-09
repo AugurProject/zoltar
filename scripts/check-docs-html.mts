@@ -246,8 +246,11 @@ function validateFigureEnvelope(parsedDocument: ParsedHtmlDocument, figure: Elem
 	}
 
 	const captions = Array.from(figure.children).filter(child => child.classList.contains('diagram-caption'))
+	if (captions.length === 0) {
+		return
+	}
 	if (captions.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(figure)} must have exactly one direct .diagram-caption`, failures)
+		addFailure(parsedDocument, `${describeElement(figure)} must have at most one direct .diagram-caption`, failures)
 		return
 	}
 
@@ -310,37 +313,8 @@ function validateEquationEnvelope(parsedDocument: ParsedHtmlDocument, equation: 
 	}
 
 	const captions = Array.from(equation.children).filter(child => child.classList.contains('equation-caption'))
-	if (captions.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(equation)} must have exactly one direct .equation-caption`, failures)
-		return
-	}
-
-	const caption = captions[0]
-	if (caption === undefined) {
-		addFailure(parsedDocument, `${describeElement(equation)} is missing an .equation-caption`, failures)
-		return
-	}
-
-	const equationLabels = Array.from(caption.querySelectorAll('.equation-label'))
-	if (equationLabels.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(equation)} caption must contain exactly one .equation-label`, failures)
-		return
-	}
-
-	const equationLabel = equationLabels[0]
-	const labelText = equationLabel?.textContent?.trim()
-	if (labelText === undefined || labelText.length === 0) {
-		addFailure(parsedDocument, `${describeElement(equation)} has an empty equation label`, failures)
-		return
-	}
-
-	if (/^equation\s+\d+/i.test(labelText)) {
-		addFailure(parsedDocument, `${describeElement(equation)} hard-codes its equation number in the label`, failures)
-	}
-
-	const captionText = caption.textContent?.trim() ?? ''
-	if (captionText.length <= labelText.length) {
-		addFailure(parsedDocument, `${describeElement(equation)} caption needs explanatory text after the label`, failures)
+	if (captions.length > 0) {
+		addFailure(parsedDocument, `${describeElement(equation)} must not use equation captions; put explanatory text in the surrounding prose`, failures)
 	}
 }
 

@@ -34,7 +34,7 @@ contract SecurityPoolDeployer {
 		uint248 universeId,
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialEscalationGameDeposit,
+		uint256 initialEscalationGameDepositAttoRep,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
 		require(msg.sender == address(factory), 'Only SecurityPoolFactory can use the deployer');
@@ -52,7 +52,7 @@ contract SecurityPoolDeployer {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialEscalationGameDeposit,
+				initialEscalationGameDepositAttoRep,
 				truthAuction
 			);
 	}
@@ -83,7 +83,7 @@ contract SecurityPoolDeploymentWorker {
 		uint248 universeId,
 		uint256 questionId,
 		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialEscalationGameDeposit,
+		uint256 initialEscalationGameDepositAttoRep,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
 		require(msg.sender == deployer, 'Only SecurityPoolDeployer can use the deployment worker');
@@ -103,7 +103,7 @@ contract SecurityPoolDeploymentWorker {
 				universeId,
 				questionId,
 				statoblastSecurityMultiplierBps,
-				initialEscalationGameDeposit,
+				initialEscalationGameDepositAttoRep,
 				truthAuction
 			)
 		);

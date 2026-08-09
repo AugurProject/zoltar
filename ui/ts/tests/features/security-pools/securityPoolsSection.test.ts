@@ -18,8 +18,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -85,11 +85,11 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onDepositRep: () => undefined,
+		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
-		onRedeemRep: () => undefined,
-		onSetSecurityBondAllowance: () => undefined,
+		onRedeemRepFromVault: () => undefined,
+		onSetCoverageCommitment: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
@@ -102,9 +102,9 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		securityVaultForm: {
 			depositAmount: '',
 			repWithdrawAmount: '',
-			securityBondAllowanceAmount: '',
+			coverageCommitmentEthAmount: '',
 			securityPoolAddress: '',
-			selectedVaultAddress: '',
+			selectedVaultOwner: '',
 		},
 		securityVaultMissing: false,
 		securityVaultRepApproval: {
@@ -112,7 +112,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 			loading: false,
 			value: 0n,
 		},
-		securityVaultRepBalance: undefined,
+		walletRepBalanceAttoRep: undefined,
 		securityVaultResult: undefined,
 		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
@@ -184,27 +184,27 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleSecurityBondAllowance: 5n * 10n ** 18n,
+		feeEligibleCoverageCommitmentAttoEth: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
-		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
 		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 5n * 10n ** 18n,
+		totalPoolHeldAttoRep: 0n,
+		totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -226,8 +226,8 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		forkAuction: createForkAuctionProps(),
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
+		coverageCommitmentTransferEthAmount: '',
+		maximumCoverageCommitmentTransferAttoEth: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
@@ -554,7 +554,7 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: createdPoolAddress,
 							statoblastSecurityMultiplierBps: 20_000n,
@@ -593,7 +593,7 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: '0x00000000000000000000000000000000000000a5',
 							statoblastSecurityMultiplierBps: 20_000n,
@@ -645,11 +645,11 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
-		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
+		expect(contextQueries.queryByText('Total Coverage commitment')).toBeNull()
 		expect(contextQueries.getByText('Security Pool Address')).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
-		expect(within(contextDetails).getByText('Total Free REP')).not.toBeNull()
+		expect(within(contextDetails).getByText('Pool-held REP')).not.toBeNull()
 		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 

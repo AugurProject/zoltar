@@ -1,5 +1,5 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../../../types/app.js'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
 import { parseBigIntInput, tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
@@ -27,7 +27,7 @@ export function getDefaultMarketFormState(): MarketFormState {
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
-		initialReportPriorityFeeGwei: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, 9),
+		initialReportPriorityFeeGwei: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 9),
 		marketId: '',
 		statoblastSecurityMultiplierBps: '2',
 	}
@@ -44,9 +44,9 @@ export function tryParseStatoblastSecurityMultiplierBpsInput(value: string) {
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
 		depositAmount: '0',
-		securityBondAllowanceAmount: '0',
+		coverageCommitmentEthAmount: '0',
 		repWithdrawAmount: '0',
-		selectedVaultAddress: '',
+		selectedVaultOwner: '',
 		securityPoolAddress: '',
 		stagedOperationTimeoutMinutes: '5',
 	}
@@ -75,7 +75,7 @@ export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState
 		multiplier: '100',
 		protocolFee: '0',
 		settlementTime: DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS,
-		settlerReward: '0',
+		settlerRewardEthAmount: '0',
 		token1Address: '',
 		token2Address: '',
 	}
@@ -138,7 +138,15 @@ export function parseRepAmountInput(value: string, label: string) {
 	return parseDecimalInput(value, label, 18)
 }
 
+export function parseEthAmountInput(value: string, label: string) {
+	return parseDecimalInput(value, label, 18)
+}
+
 export function tryParseRepAmountInput(value: string) {
+	return tryParseDecimalInput(value, 18)
+}
+
+export function tryParseEthAmountInput(value: string) {
 	return tryParseDecimalInput(value, 18)
 }
 

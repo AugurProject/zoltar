@@ -14,12 +14,12 @@ export type OpenOracleCreateValidationParameters = {
 	escalationHalt: bigint
 	exactToken1Report: bigint
 	initialToken2Amount: bigint
-	ethValue: bigint
+	ethValueAttoEth: bigint
 	feePercentage: bigint
 	multiplier: bigint
 	protocolFee: bigint
 	settlementTime: bigint
-	settlerReward: bigint
+	settlerRewardAttoEth: bigint
 	token1Address: Address
 	token2Address: Address
 }
@@ -30,7 +30,7 @@ export type OpenOracleCreateParameterValidation = {
 }
 
 export function getOpenOracleCreateParameterValidation(
-	{ disputeDelay, escalationHalt, exactToken1Report, initialToken2Amount, ethValue, feePercentage, multiplier, protocolFee, settlementTime, settlerReward, token1Address, token2Address }: OpenOracleCreateValidationParameters,
+	{ disputeDelay, escalationHalt, exactToken1Report, initialToken2Amount, ethValueAttoEth, feePercentage, multiplier, protocolFee, settlementTime, settlerRewardAttoEth, token1Address, token2Address }: OpenOracleCreateValidationParameters,
 	{ skipToken1MagnitudeValidation = false }: { skipToken1MagnitudeValidation?: boolean } = {},
 ): OpenOracleCreateParameterValidation | undefined {
 	if (sameAddress(token1Address, token2Address)) return { field: 'token2Address', message: 'Base and quote tokens must use different addresses.' }
@@ -42,11 +42,11 @@ export function getOpenOracleCreateParameterValidation(
 	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return { field: 'initialToken2Amount', message: 'Quote token amount exceeds the contract maximum.' }
 	if (escalationHalt < 0n) return { field: 'escalationHalt', message: 'Escalation halt must be non-negative.' }
 	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return { field: 'escalationHalt', message: 'Escalation halt exceeds the contract maximum.' }
-	if (ethValue < 0n) return { field: 'ethValue', message: 'ETH value to send must be non-negative.' }
-	if (ethValue > OPEN_ORACLE_UINT96_MAX) return { field: 'ethValue', message: 'ETH value to send exceeds the contract maximum.' }
-	if (settlerReward < 0n) return { field: 'settlerReward', message: 'Settler reward must be non-negative.' }
-	if (settlerReward > OPEN_ORACLE_UINT96_MAX) return { field: 'settlerReward', message: 'Settler reward exceeds the contract maximum.' }
-	if (ethValue !== settlerReward) return { field: 'ethValue', message: 'ETH value to send must equal the settler reward for ERC-20 token pairs.' }
+	if (ethValueAttoEth < 0n) return { field: 'ethValueAttoEth', message: 'ETH value to send must be non-negative.' }
+	if (ethValueAttoEth > OPEN_ORACLE_UINT96_MAX) return { field: 'ethValueAttoEth', message: 'ETH value to send exceeds the contract maximum.' }
+	if (settlerRewardAttoEth < 0n) return { field: 'settlerRewardAttoEth', message: 'Settler reward must be non-negative.' }
+	if (settlerRewardAttoEth > OPEN_ORACLE_UINT96_MAX) return { field: 'settlerRewardAttoEth', message: 'Settler reward exceeds the contract maximum.' }
+	if (ethValueAttoEth !== settlerRewardAttoEth) return { field: 'ethValueAttoEth', message: 'ETH value to send must equal the settler reward for ERC-20 token pairs.' }
 	if (settlementTime < 0n) return { field: 'settlementTime', message: 'Enter a valid settlement time.' }
 	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return { field: 'settlementTime', message: 'Settlement time exceeds the contract maximum.' }
 	if (disputeDelay < 0n) return { field: 'disputeDelay', message: 'Enter a valid dispute delay.' }

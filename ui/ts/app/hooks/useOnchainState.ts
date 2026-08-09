@@ -80,23 +80,23 @@ async function validateConfiguredReadBackend(backend: ChainBackend): Promise<Rea
 type LoadWalletStateParameters = {
 	chainIdPromise: Promise<string> | undefined
 	connectedAddress: Address | undefined
-	ethBalancePromise: Promise<bigint> | undefined
+	ethBalanceAttoEthPromise: Promise<bigint> | undefined
 	fallbackChainId?: string
 	getAccountState: () => AccountState
 	isCurrent: () => boolean
 	setAccountState: (state: AccountState) => void
 	setEthBalanceErrorMessage?: (message: string | undefined) => void
 	setErrorMessage: (message: string | undefined) => void
-	setWethBalanceErrorMessage?: (message: string | undefined) => void
+	setWethBalanceAttoEthErrorMessage?: (message: string | undefined) => void
 	trackLoad: <TResult>(work: () => Promise<TResult>) => Promise<TResult>
-	wethBalancePromise: Promise<bigint> | undefined
+	wethBalanceAttoEthPromise: Promise<bigint> | undefined
 }
 
-export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalancePromise, fallbackChainId, getAccountState, isCurrent, setAccountState, setErrorMessage, setEthBalanceErrorMessage, setWethBalanceErrorMessage, trackLoad, wethBalancePromise }: LoadWalletStateParameters) {
-	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalancePromise === undefined || wethBalancePromise === undefined) return
+export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalanceAttoEthPromise, fallbackChainId, getAccountState, isCurrent, setAccountState, setErrorMessage, setEthBalanceErrorMessage, setWethBalanceAttoEthErrorMessage, trackLoad, wethBalanceAttoEthPromise }: LoadWalletStateParameters) {
+	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalanceAttoEthPromise === undefined || wethBalanceAttoEthPromise === undefined) return
 	const resolvedFallbackChainId = fallbackChainId ?? '0x1'
-	const ethBalanceError = setEthBalanceErrorMessage ?? setErrorMessage
-	const wethBalanceError = setWethBalanceErrorMessage ?? setErrorMessage
+	const ethBalanceAttoEthError = setEthBalanceErrorMessage ?? setErrorMessage
+	const wethBalanceAttoEthError = setWethBalanceAttoEthErrorMessage ?? setErrorMessage
 
 	void trackLoad(async () => {
 		try {
@@ -112,25 +112,25 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 
 	void trackLoad(async () => {
 		try {
-			const ethBalance = await ethBalancePromise
+			const ethBalanceAttoEth = await ethBalanceAttoEthPromise
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), ethBalance })
+			setAccountState({ ...getAccountState(), ethBalanceAttoEth })
 		} catch (error) {
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), ethBalance: undefined })
-			ethBalanceError(getErrorMessage(error, setEthBalanceErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh ETH balance'))
+			setAccountState({ ...getAccountState(), ethBalanceAttoEth: undefined })
+			ethBalanceAttoEthError(getErrorMessage(error, setEthBalanceErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh ETH balance'))
 		}
 	})
 
 	void trackLoad(async () => {
 		try {
-			const wethBalance = await wethBalancePromise
+			const wethBalanceAttoEth = await wethBalanceAttoEthPromise
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), wethBalance })
+			setAccountState({ ...getAccountState(), wethBalanceAttoEth })
 		} catch (error) {
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), wethBalance: undefined })
-			wethBalanceError(getErrorMessage(error, setWethBalanceErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh WETH balance'))
+			setAccountState({ ...getAccountState(), wethBalanceAttoEth: undefined })
+			wethBalanceAttoEthError(getErrorMessage(error, setWethBalanceAttoEthErrorMessage === undefined ? 'Failed to refresh wallet balances' : 'Failed to refresh WETH balance'))
 		}
 	})
 }
@@ -173,8 +173,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
-		ethBalance: undefined,
-		wethBalance: undefined,
+		ethBalanceAttoEth: undefined,
+		wethBalanceAttoEth: undefined,
 	})
 	const deploymentStatuses = useSignal<DeploymentStatus[]>(
 		dependencies.getDeploymentSteps().map(step => ({
@@ -214,8 +214,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	chainClockContextRef.current = { activeEnvironmentNonce, enableChainClock }
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const deploymentStatusError = useSignal<string | undefined>(undefined)
-	const ethBalanceError = useSignal<string | undefined>(undefined)
-	const wethBalanceError = useSignal<string | undefined>(undefined)
+	const ethBalanceAttoEthError = useSignal<string | undefined>(undefined)
+	const wethBalanceAttoEthError = useSignal<string | undefined>(undefined)
 	const chainClockError = useSignal<string | undefined>(undefined)
 	const readBackendMessage = useSignal<string | undefined>(undefined)
 	const readBackendValidated = useSignal(false)
@@ -301,16 +301,16 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		accountState.value = {
 			address: undefined,
 			chainId: undefined,
-			ethBalance: undefined,
-			wethBalance: undefined,
+			ethBalanceAttoEth: undefined,
+			wethBalanceAttoEth: undefined,
 		}
 		invalidateDeploymentState()
 		clearChainClock()
 		walletBootstrapComplete.value = false
 		errorMessage.value = undefined
 		deploymentStatusError.value = undefined
-		ethBalanceError.value = undefined
-		wethBalanceError.value = undefined
+		ethBalanceAttoEthError.value = undefined
+		wethBalanceAttoEthError.value = undefined
 		chainClockError.value = undefined
 		readBackendMessage.value = undefined
 		readBackendValidated.value = false
@@ -338,8 +338,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			deploymentStatusError.value = undefined
 		}
 		if (shouldLoadWalletState) {
-			ethBalanceError.value = undefined
-			wethBalanceError.value = undefined
+			ethBalanceAttoEthError.value = undefined
+			wethBalanceAttoEthError.value = undefined
 		}
 		if (shouldLoadChainClock) chainClockError.value = undefined
 		if (!preserveValidatedReadiness) {
@@ -350,8 +350,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			accountState.value = {
 				address: undefined,
 				chainId: undefined,
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			}
 			if (shouldLoadDeploymentState) {
 				invalidateDeploymentState()
@@ -447,20 +447,20 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				accountState.value = {
 					address: connectedAddress,
 					chainId: accountState.value.chainId,
-					ethBalance: undefined,
-					wethBalance: undefined,
+					ethBalanceAttoEth: undefined,
+					wethBalanceAttoEth: undefined,
 				}
 
 				walletBootstrapComplete.value = true
 
 				if (connectedAddress !== undefined && walletOnExpectedChain) {
 					const readClient = createConnectedReadClient()
-					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalancePromise = dependencies.loadErc20Balance(readClient, getWethAddress(), connectedAddress)
+					const ethBalanceAttoEthPromise = readClient.getBalance({ address: connectedAddress })
+					const wethBalanceAttoEthPromise = dependencies.loadErc20Balance(readClient, getWethAddress(), connectedAddress)
 					void loadWalletState({
 						chainIdPromise: Promise.resolve(connectedChainId ?? backend.profile.chainIdHex),
 						connectedAddress,
-						ethBalancePromise,
+						ethBalanceAttoEthPromise,
 						fallbackChainId: backend.profile.chainIdHex,
 						getAccountState: () => accountState.value,
 						isCurrent,
@@ -471,18 +471,18 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 							errorMessage.value = message
 						},
 						setEthBalanceErrorMessage: message => {
-							ethBalanceError.value = message
+							ethBalanceAttoEthError.value = message
 						},
-						setWethBalanceErrorMessage: message => {
-							wethBalanceError.value = message
+						setWethBalanceAttoEthErrorMessage: message => {
+							wethBalanceAttoEthError.value = message
 						},
 						trackLoad: walletStateLoad.track,
-						wethBalancePromise,
+						wethBalanceAttoEthPromise,
 					})
 				} else if (connectedAddress !== undefined) {
-					accountState.value = { ...accountState.value, chainId: connectedChainId ?? backend.profile.chainIdHex, ethBalance: undefined, wethBalance: undefined }
+					accountState.value = { ...accountState.value, chainId: connectedChainId ?? backend.profile.chainIdHex, ethBalanceAttoEth: undefined, wethBalanceAttoEth: undefined }
 				} else {
-					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, ethBalance: undefined, wethBalance: undefined }
+					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, ethBalanceAttoEth: undefined, wethBalanceAttoEth: undefined }
 				}
 			} catch (error) {
 				if (!isCurrent()) return
@@ -649,7 +649,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		deploymentStatusError: deploymentStatusError.value,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
-		errorMessages: [errorMessage.value, deploymentStatusError.value, ethBalanceError.value, wethBalanceError.value].filter((message): message is string => message !== undefined),
+		errorMessages: [errorMessage.value, deploymentStatusError.value, ethBalanceAttoEthError.value, wethBalanceAttoEthError.value].filter((message): message is string => message !== undefined),
 		readBackendMessage: readBackendMessage.value,
 		readBackendValidated: readBackendValidated.value,
 		readBackendStatus: readBackendStatus.value,

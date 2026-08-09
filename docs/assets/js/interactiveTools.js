@@ -9,38 +9,28 @@ const presetDefinitions = {
 			values: { aliceEth: '3', bobEth: '4', carolEth: '6', ethRaiseCap: '30', repInventory: '4' },
 		},
 	],
-	'escalation-deposit-example': [
-		{
-			label: 'Clip at threshold',
-			values: { depositLifecycle: '1', invalidBalance: '2', noBalance: '8', nonDecisionThreshold: '10', proposedDeposit: '12', yesBalance: '4' },
-		},
-		{
-			label: 'Avoid a tie',
-			values: { depositLifecycle: '1', invalidBalance: '2', noBalance: '3', nonDecisionThreshold: '15', proposedDeposit: '5', yesBalance: '8' },
-		},
-	],
-	'resolution-edge-example': [
-		{
-			label: 'Still contested',
-			values: { invalidBalance: '4', noBalance: '7', runningCost: '5', yesBalance: '6' },
-		},
-		{
-			label: 'Strict Yes lead',
-			values: { invalidBalance: '2', noBalance: '3', runningCost: '8', yesBalance: '12' },
-		},
-		{
-			label: 'All zero',
-			values: { invalidBalance: '0', noBalance: '0', runningCost: '5', yesBalance: '0' },
-		},
-	],
 	'collateral-repair-example': [
 		{
 			label: 'Fully repaired',
-			values: { auctionRaised: '2.5', forkCollateralReceived: '47.5', parentCollateral: '50' },
+			values: { auctionRaised: '2.5', forkSettlementCollateralReceived: '47.5', parentSettlementCollateral: '50' },
 		},
 		{
 			label: 'Residual shortfall',
-			values: { auctionRaised: '5', forkCollateralReceived: '35', parentCollateral: '50' },
+			values: { auctionRaised: '5', forkSettlementCollateralReceived: '35', parentSettlementCollateral: '50' },
+		},
+	],
+	'escalation-game-example': [
+		{
+			label: 'Leader deposit does not extend',
+			values: { days: '7', invalid: '1', no: '1', yes: '4' },
+		},
+		{
+			label: 'Median increases',
+			values: { days: '7', invalid: '1', no: '4', yes: '4' },
+		},
+		{
+			label: 'After the deadline',
+			values: { days: '56', invalid: '1', no: '4', yes: '4' },
 		},
 	],
 	'initial-report-estimator-example': [
@@ -70,15 +60,15 @@ const presetDefinitions = {
 	'liquidation-health-example': [
 		{
 			label: 'Healthy vault',
-			values: { debt: '75', multiplier: '2', price: '5', rep: '1000' },
+			values: { coverageCommitment: '75', multiplier: '2', price: '5', rep: '1000' },
 		},
 		{
 			label: 'Liquidatable vault',
-			values: { debt: '75', multiplier: '2', price: '10', rep: '1000' },
+			values: { coverageCommitment: '75', multiplier: '2', price: '10', rep: '1000' },
 		},
 		{
 			label: 'Severe shortfall',
-			values: { debt: '150', multiplier: '3', price: '15', rep: '500' },
+			values: { coverageCommitment: '150', multiplier: '3', price: '15', rep: '500' },
 		},
 	],
 	'liquidation-path-example': [

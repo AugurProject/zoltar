@@ -244,7 +244,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			await client.readContract({
 				abi: Zoltar_Zoltar.abi,
 				address: zoltar,
-				functionName: 'getForkThreshold',
+				functionName: 'getForkThresholdAttoRep',
 				args: [0n],
 			}),
 			FORK_THRESHOLD,
@@ -316,7 +316,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 
 		// Snapshot initialization transfers the full parent REP principal. Replacing it
-		// with one wei less than the exact post-fork backing tests both the view gate and
+		// with one attoREP less than the exact post-fork backing tests both the view gate and
 		// the state-changing resume guard at the solvency boundary.
 		await writeContractAndWait(client, () =>
 			client.writeContract({
@@ -334,7 +334,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [escalationGame, childBacking - 1n],
 			}),
 		)
-		assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), childBacking - 1n, 'child game must begin one wei below the safe post-fork backing')
+		assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), childBacking - 1n, 'child game must begin one attoREP below the safe post-fork backing')
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -343,7 +343,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [],
 			}),
 			false,
-			'the funding view must reject a one-wei shortfall',
+			'the funding view must reject a one-attoETH shortfall',
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -401,9 +401,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 		const proof = {
 			depositor: client.account.address,
-			amount: NON_DECISION_THRESHOLD,
+			amountAttoRep: NON_DECISION_THRESHOLD,
 			parentDepositIndex: yesParentDepositIndex,
-			cumulativeAmount: NON_DECISION_THRESHOLD,
+			cumulativeAmountAttoRep: NON_DECISION_THRESHOLD,
 			sourceNodeId: yesSourceNodeId,
 			leafIndex: 0n,
 			merkleMountainRangeSiblings: [] as readonly Hex[],

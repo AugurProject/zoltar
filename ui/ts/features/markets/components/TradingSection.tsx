@@ -32,13 +32,13 @@ import {
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
-	convertCollateralAmountToShareAmount,
-	convertShareAmountToCollateralAmount,
+	convertAttoSharesToSettlementCollateralAttoEth,
+	convertSettlementCollateralAttoEthToAttoShares,
 	getTradingRedeemSharesGuardMessage,
 	hasUndefinedCompleteSetExchangeRate,
-	hasRepBackedPoolWithNoActiveAllowance,
+	hasRepBackedPoolWithNoActiveCoverageCommitment,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
-	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 } from '../lib/trading.js'
 import { tryParseTradingAmountInput } from '../lib/marketForm.js'
@@ -87,48 +87,48 @@ export function TradingSection({
 	const migrateSharesEnabled = resolvedPoolState.actions.migrateShares.enabled
 	const redeemSharesEnabled = resolvedPoolState.actions.redeemShares.enabled
 	const shareBalances = tradingDetails?.shareBalances
-	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
-	const displayMaxRedeemableCompleteSets = convertShareAmountToCollateralAmount(maxRedeemableCompleteSets, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
+	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const displayShareBalances =
 		shareBalances === undefined
 			? undefined
 			: {
-					invalid: convertShareAmountToCollateralAmount(shareBalances.invalid, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
-					no: convertShareAmountToCollateralAmount(shareBalances.no, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
-					yes: convertShareAmountToCollateralAmount(shareBalances.yes, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
+					invalid: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.invalidAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
+					no: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.noAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
+					yes: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.yesAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
 				}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const mintedShareAmount = mintAmount === undefined ? undefined : convertCollateralAmountToShareAmount(mintAmount, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
-	const resultingEthBalance = mintAmount === undefined || accountState.ethBalance === undefined || mintAmount > accountState.ethBalance ? undefined : accountState.ethBalance - mintAmount
+	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(mintAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
-	const redeemShareAmount = redeemAmount === undefined ? undefined : convertCollateralAmountToShareAmount(redeemAmount, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
-	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + redeemAmount
+	const redeemAmountAttoShares = redeemAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(redeemAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + redeemAmount
 	const resolvedWinningShareBalance = selectedPool === undefined || selectedPool.questionOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(shareBalances, selectedPool.questionOutcome)
-	const resolvedWinningPayout = convertShareAmountToCollateralAmount(resolvedWinningShareBalance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const resolvedWinningPayout = convertAttoSharesToSettlementCollateralAttoEth(resolvedWinningShareBalance, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
-		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
-		ethBalance: accountState.ethBalance,
-		feeEligibleSecurityBondAllowance: selectedPool?.feeEligibleSecurityBondAllowance,
+		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
+		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
+		feeEligibleCoverageCommitmentAttoEth: selectedPool?.feeEligibleCoverageCommitmentAttoEth,
 		hasSelectedPool,
 		isOnActiveAppChain,
 		mintAmountInput: tradingForm.completeSetAmount,
-		shareTokenSupply: selectedPool?.shareTokenSupply,
-		totalRepDeposit: selectedPool?.totalRepDeposit,
+		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
+		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
-		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
+		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
 		hasSelectedPool,
 		isOnActiveAppChain,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
-		shareTokenSupply: selectedPool?.shareTokenSupply,
+		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,
@@ -146,7 +146,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isOnActiveAppChain,
 	})
-	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.feeEligibleSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.feeEligibleCoverageCommitmentAttoEth, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
@@ -156,11 +156,11 @@ export function TradingSection({
 			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
-			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
+			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.feeEligibleSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+					if (hasRepBackedPoolWithNoActiveCoverageCommitment(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}
@@ -178,8 +178,8 @@ export function TradingSection({
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
-				if (maxRedeemableCompleteSets === undefined) return tradingCopy.loadingWalletShareBalances
-				if (maxRedeemableCompleteSets === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
+				if (maxRedeemableCompleteSetsAttoShares === undefined) return tradingCopy.loadingWalletShareBalances
+				if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 				return undefined
 			})()
@@ -367,11 +367,11 @@ export function TradingSection({
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
-						<MetricField label={tradingCopy.bondAllowanceInUse}>
-							<CurrencyValue value={selectedPool.feeEligibleSecurityBondAllowance} suffix={commonCopy.eth} />
+						<MetricField label={tradingCopy.coverageCommitmentAttoEthInUse}>
+							<CurrencyValue value={selectedPool.feeEligibleCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={tradingCopy.repBacking}>
-							<CurrencyValue value={selectedPool.totalRepDeposit} suffix={commonCopy.rep} />
+							<CurrencyValue value={selectedPool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</MetricGrid>
 				)}
@@ -388,21 +388,21 @@ export function TradingSection({
 						{
 							label: tradingCopy.estimatedSharesReceived,
 							value:
-								mintedShareAmount === undefined ? (
+								mintedAmountAttoShares === undefined ? (
 									transactionReviewCopy.amountUnavailable
 								) : (
 									<span>
 										{commonCopy.yes}
 										{' + '}
-										<CurrencyValue value={mintedShareAmount} />
+										<CurrencyValue value={mintedAmountAttoShares} />
 										{' · '}
 										{commonCopy.no}
 										{' + '}
-										<CurrencyValue value={mintedShareAmount} />
+										<CurrencyValue value={mintedAmountAttoShares} />
 										{' · '}
 										{commonCopy.invalid}
 										{' + '}
-										<CurrencyValue value={mintedShareAmount} />
+										<CurrencyValue value={mintedAmountAttoShares} />
 									</span>
 								),
 						},
@@ -449,11 +449,11 @@ export function TradingSection({
 						{
 							label: transactionReviewCopy.youPay,
 							value:
-								redeemShareAmount === undefined ? (
+								redeemAmountAttoShares === undefined ? (
 									transactionReviewCopy.amountUnavailable
 								) : (
 									<span>
-										{tradingCopy.matchingOutcomeShares}: <CurrencyValue value={redeemShareAmount} />
+										{tradingCopy.matchingOutcomeShares}: <CurrencyValue value={redeemAmountAttoShares} />
 									</span>
 								),
 						},
@@ -547,7 +547,7 @@ export function TradingSection({
 						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={resolvedWinningPayout} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={retentionFeeDisclosure}
-					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
+					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.resolvedShareRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },

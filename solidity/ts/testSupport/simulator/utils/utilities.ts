@@ -135,13 +135,13 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 
 	// Set total theoretical supply for REP token.
 	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
-	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
-	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
+	// `totalTheoreticalSupplyAttoRep` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
+	const totalTheoreticalSupplyAttoRep = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
 	const theoreticalSupplySlot = `0x${REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT.toString(16).padStart(64, '0')}`
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
-				[theoreticalSupplySlot]: totalTheoreticalSupply,
+				[theoreticalSupplySlot]: totalTheoreticalSupplyAttoRep,
 			},
 		},
 	})

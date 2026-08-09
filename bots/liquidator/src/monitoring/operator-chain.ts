@@ -40,7 +40,7 @@ export async function desiredPoolStatus(settings: OperatorSettings, desired: Des
 			const originId = await client.readContract({
 				abi: securityPoolFactoryAbi,
 				address: settings.deployment.securityPoolFactory,
-				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeWeiPerGas],
+				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas],
 				functionName: 'getOriginId',
 			})
 			return {

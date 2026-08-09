@@ -14,16 +14,16 @@ import {
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 contract EscalationGameProofVerifier {
-	function computeIterativeAttritionCost(
-		uint256 startBond,
-		uint256 nonDecisionThreshold,
+	function computeIterativeAttritionCostAttoRep(
+		uint256 startBondAttoRep,
+		uint256 nonDecisionThresholdAttoRep,
 		uint256 lnRatioScaled,
 		uint256 timeSinceStart,
 		uint256 escalationTimeLength
 	) external pure returns (uint256) {
 		require(timeSinceStart <= escalationTimeLength, 'Time too high');
-		if (timeSinceStart == 0) return startBond;
-		if (timeSinceStart == escalationTimeLength) return nonDecisionThreshold;
+		if (timeSinceStart == 0) return startBondAttoRep;
+		if (timeSinceStart == escalationTimeLength) return nonDecisionThresholdAttoRep;
 		uint256 exponent = (lnRatioScaled * timeSinceStart) / escalationTimeLength;
 		uint256 exponentPow2 = exponent / LN2_SCALED;
 		uint256 exponentRemainder = exponent - exponentPow2 * LN2_SCALED;
@@ -39,94 +39,120 @@ contract EscalationGameProofVerifier {
 			}
 		}
 		expScaled <<= exponentPow2;
-		uint256 cost = (startBond * expScaled) / SCALE;
-		return cost > nonDecisionThreshold ? nonDecisionThreshold : cost;
+		uint256 cost = (startBondAttoRep * expScaled) / SCALE;
+		return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost;
 	}
 
 	function computeAcceptedDepositAmount(
 		uint256 outcomeIndex,
-		uint256 requestedAmount,
-		uint256 currentBalance,
-		uint256 room,
-		uint256 startBond,
-		uint256 nonDecisionThreshold,
-		uint256[3] calldata balances
-	) external pure returns (uint256 acceptedAmount, uint256 newBalance) {
-		acceptedAmount = requestedAmount > room ? room : requestedAmount;
-		newBalance = currentBalance + acceptedAmount;
-		uint256 maxBalance = _maxOutcomeBalance(balances[0], balances[1], balances[2]);
-		bool otherHasMax = _otherOutcomeHasBalance(outcomeIndex, balances[0], balances[1], balances[2], maxBalance);
-		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
-			acceptedAmount -= 1;
-			newBalance = currentBalance + acceptedAmount;
+		uint256 requestedAmountAttoRep,
+		uint256 currentBalanceAttoRep,
+		uint256 roomAttoRep,
+		uint256 startBondAttoRep,
+		uint256 nonDecisionThresholdAttoRep,
+		uint256[3] calldata balancesAttoRep
+	) external pure returns (uint256 acceptedAmountAttoRep, uint256 newBalanceAttoRep) {
+		acceptedAmountAttoRep = requestedAmountAttoRep > roomAttoRep ? roomAttoRep : requestedAmountAttoRep;
+		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
+		uint256 maxBalanceAttoRep = _maxOutcomeBalance(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2]);
+		bool otherHasMax = _otherOutcomeHasBalance(
+			outcomeIndex,
+			balancesAttoRep[0],
+			balancesAttoRep[1],
+			balancesAttoRep[2],
+			maxBalanceAttoRep
+		);
+		if (newBalanceAttoRep == maxBalanceAttoRep && otherHasMax && maxBalanceAttoRep < nonDecisionThresholdAttoRep) {
+			acceptedAmountAttoRep -= 1;
+			newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
 		}
-		require(acceptedAmount >= startBond || newBalance == nonDecisionThreshold, 'Below start bond');
+		require(
+			acceptedAmountAttoRep >= startBondAttoRep || newBalanceAttoRep == nonDecisionThresholdAttoRep,
+			'Below start bond'
+		);
 	}
 
 	function computeWinningWithdrawal(
-		uint256 depositAmount,
-		uint256 cumulativeAmount,
-		uint256 bindingCapitalAmount,
-		uint256 winningOutcomeBalance,
-		uint256 actualForkThreshold,
-		uint256 nonDecisionThreshold
-	) external pure returns (uint256 amountToWithdraw, uint256 burnAmount) {
-		uint256 depositStart = cumulativeAmount - depositAmount;
-		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 rewardEligiblePrincipalAmount =
-			winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
-		if (rewardEligiblePrincipalAmount == 0) {
-			amountToWithdraw = depositAmount;
+		uint256 depositAmountAttoRep,
+		uint256 cumulativeAmountAttoRep,
+		uint256 bindingCapitalAttoRep,
+		uint256 winningOutcomeBalanceAttoRep,
+		uint256 actualForkThresholdAttoRep,
+		uint256 nonDecisionThresholdAttoRep
+	) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		uint256 depositStartAttoRep = cumulativeAmountAttoRep - depositAmountAttoRep;
+		uint256 rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / EXCESS_REWARD_WINDOW_DIVISOR;
+		uint256 rewardEligiblePrincipalAttoRep =
+			winningOutcomeBalanceAttoRep < rewardEligibleCapAttoRep
+				? winningOutcomeBalanceAttoRep
+				: rewardEligibleCapAttoRep;
+		if (rewardEligiblePrincipalAttoRep == 0) {
+			amountToWithdrawAttoRep = depositAmountAttoRep;
 		} else {
-			uint256 eligibleEndAmount =
-				cumulativeAmount < rewardEligibleCapAmount ? cumulativeAmount : rewardEligibleCapAmount;
-			uint256 rewardEligibleDepositAmount =
-				eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
-			if (rewardEligibleDepositAmount > depositAmount) rewardEligibleDepositAmount = depositAmount;
-			uint256 bonusShare =
-				(rewardEligibleDepositAmount * ((bindingCapitalAmount * 3) / 5)) / rewardEligiblePrincipalAmount;
-			burnAmount =
-				(rewardEligibleDepositAmount * ((bindingCapitalAmount * 2) / 5)) / rewardEligiblePrincipalAmount;
-			amountToWithdraw = depositAmount + bonusShare;
+			uint256 eligibleEndAttoRep =
+				cumulativeAmountAttoRep < rewardEligibleCapAttoRep ? cumulativeAmountAttoRep : rewardEligibleCapAttoRep;
+			uint256 rewardEligibleDepositAttoRep =
+				eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0;
+			if (rewardEligibleDepositAttoRep > depositAmountAttoRep)
+				rewardEligibleDepositAttoRep = depositAmountAttoRep;
+			uint256 bonusAttoRep =
+				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 3) / 5)) / rewardEligiblePrincipalAttoRep;
+			burnAmountAttoRep =
+				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 2) / 5)) / rewardEligiblePrincipalAttoRep;
+			amountToWithdrawAttoRep = depositAmountAttoRep + bonusAttoRep;
 		}
-		if (actualForkThreshold < nonDecisionThreshold) {
-			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
+		if (actualForkThresholdAttoRep < nonDecisionThresholdAttoRep) {
+			amountToWithdrawAttoRep =
+				(amountToWithdrawAttoRep * actualForkThresholdAttoRep) / nonDecisionThresholdAttoRep;
 		}
 	}
 
 	function resolveQuestion(
-		uint256[3] calldata balances,
-		uint256 currentTotalCost
+		uint256[3] calldata balancesAttoRep,
+		uint256 currentTotalCostAttoRep
 	) external pure returns (BinaryOutcomes.BinaryOutcome) {
-		if (_countBalancesAtLeast(balances[0], balances[1], balances[2], currentTotalCost) >= 2) {
+		if (
+			_countBalancesAtLeast(
+				balancesAttoRep[0],
+				balancesAttoRep[1],
+				balancesAttoRep[2],
+				currentTotalCostAttoRep
+			) >= 2
+		) {
 			return BinaryOutcomes.BinaryOutcome.None;
 		}
-		if (balances[0] == 0 && balances[1] == 0 && balances[2] == 0) {
+		if (balancesAttoRep[0] == 0 && balancesAttoRep[1] == 0 && balancesAttoRep[2] == 0) {
 			return BinaryOutcomes.BinaryOutcome.Invalid;
 		}
-		return _getStrictLeaderOrNone(balances[0], balances[1], balances[2]);
+		return _getStrictLeaderOrNone(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2]);
 	}
 
 	function hasReachedNonDecision(
-		uint256[3] calldata balances,
-		uint256 nonDecisionThreshold
+		uint256[3] calldata balancesAttoRep,
+		uint256 nonDecisionThresholdAttoRep
 	) external pure returns (bool) {
-		return _countBalancesAtLeast(balances[0], balances[1], balances[2], nonDecisionThreshold) >= 2;
+		return
+			_countBalancesAtLeast(
+				balancesAttoRep[0],
+				balancesAttoRep[1],
+				balancesAttoRep[2],
+				nonDecisionThresholdAttoRep
+			) >= 2;
 	}
 
-	function medianBalance(uint256[3] calldata balances) external pure returns (uint256) {
-		uint256 invalidBalance = balances[0];
-		uint256 yesBalance = balances[1];
-		uint256 noBalance = balances[2];
+	function medianBalanceAttoRep(uint256[3] calldata balancesAttoRep) external pure returns (uint256 medianAttoRep) {
+		uint256 invalidBalanceAttoRep = balancesAttoRep[0];
+		uint256 yesBalanceAttoRep = balancesAttoRep[1];
+		uint256 noBalanceAttoRep = balancesAttoRep[2];
 		if (
-			(invalidBalance >= yesBalance && invalidBalance <= noBalance) ||
-			(invalidBalance >= noBalance && invalidBalance <= yesBalance)
-		) return invalidBalance;
+			(invalidBalanceAttoRep >= yesBalanceAttoRep && invalidBalanceAttoRep <= noBalanceAttoRep) ||
+			(invalidBalanceAttoRep >= noBalanceAttoRep && invalidBalanceAttoRep <= yesBalanceAttoRep)
+		) return invalidBalanceAttoRep;
 		if (
-			(yesBalance >= invalidBalance && yesBalance <= noBalance) ||
-			(yesBalance >= noBalance && yesBalance <= invalidBalance)
-		) return yesBalance;
-		return noBalance;
+			(yesBalanceAttoRep >= invalidBalanceAttoRep && yesBalanceAttoRep <= noBalanceAttoRep) ||
+			(yesBalanceAttoRep >= noBalanceAttoRep && yesBalanceAttoRep <= invalidBalanceAttoRep)
+		) return yesBalanceAttoRep;
+		return noBalanceAttoRep;
 	}
 	function computeEmptyNullifierRoot() external pure returns (bytes32 root) {
 		root = bytes32(0);
@@ -273,46 +299,51 @@ contract EscalationGameProofVerifier {
 	}
 
 	function _countBalancesAtLeast(
-		uint256 invalidBalance,
-		uint256 yesBalance,
-		uint256 noBalance,
+		uint256 invalidBalanceAttoRep,
+		uint256 yesBalanceAttoRep,
+		uint256 noBalanceAttoRep,
 		uint256 threshold
 	) private pure returns (uint8 count) {
-		if (invalidBalance >= threshold) count += 1;
-		if (yesBalance >= threshold) count += 1;
-		if (noBalance >= threshold) count += 1;
+		if (invalidBalanceAttoRep >= threshold) count += 1;
+		if (yesBalanceAttoRep >= threshold) count += 1;
+		if (noBalanceAttoRep >= threshold) count += 1;
 	}
 
 	function _maxOutcomeBalance(
-		uint256 invalidBalance,
-		uint256 yesBalance,
-		uint256 noBalance
-	) private pure returns (uint256 maxBalance) {
-		maxBalance = invalidBalance;
-		if (yesBalance > maxBalance) maxBalance = yesBalance;
-		if (noBalance > maxBalance) maxBalance = noBalance;
+		uint256 invalidBalanceAttoRep,
+		uint256 yesBalanceAttoRep,
+		uint256 noBalanceAttoRep
+	) private pure returns (uint256 maximumBalanceAttoRep) {
+		maximumBalanceAttoRep = invalidBalanceAttoRep;
+		if (yesBalanceAttoRep > maximumBalanceAttoRep) maximumBalanceAttoRep = yesBalanceAttoRep;
+		if (noBalanceAttoRep > maximumBalanceAttoRep) maximumBalanceAttoRep = noBalanceAttoRep;
 	}
 
 	function _otherOutcomeHasBalance(
 		uint256 outcomeIndex,
-		uint256 invalidBalance,
-		uint256 yesBalance,
-		uint256 noBalance,
-		uint256 targetBalance
+		uint256 invalidBalanceAttoRep,
+		uint256 yesBalanceAttoRep,
+		uint256 noBalanceAttoRep,
+		uint256 targetBalanceAttoRep
 	) private pure returns (bool) {
-		if (outcomeIndex == 0) return yesBalance == targetBalance || noBalance == targetBalance;
-		if (outcomeIndex == 1) return invalidBalance == targetBalance || noBalance == targetBalance;
-		return invalidBalance == targetBalance || yesBalance == targetBalance;
+		if (outcomeIndex == 0)
+			return yesBalanceAttoRep == targetBalanceAttoRep || noBalanceAttoRep == targetBalanceAttoRep;
+		if (outcomeIndex == 1)
+			return invalidBalanceAttoRep == targetBalanceAttoRep || noBalanceAttoRep == targetBalanceAttoRep;
+		return invalidBalanceAttoRep == targetBalanceAttoRep || yesBalanceAttoRep == targetBalanceAttoRep;
 	}
 
 	function _getStrictLeaderOrNone(
-		uint256 invalidBalance,
-		uint256 yesBalance,
-		uint256 noBalance
+		uint256 invalidBalanceAttoRep,
+		uint256 yesBalanceAttoRep,
+		uint256 noBalanceAttoRep
 	) private pure returns (BinaryOutcomes.BinaryOutcome) {
-		if (invalidBalance > yesBalance && invalidBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (yesBalance > invalidBalance && yesBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Yes;
-		if (noBalance > invalidBalance && noBalance > yesBalance) return BinaryOutcomes.BinaryOutcome.No;
+		if (invalidBalanceAttoRep > yesBalanceAttoRep && invalidBalanceAttoRep > noBalanceAttoRep)
+			return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (yesBalanceAttoRep > invalidBalanceAttoRep && yesBalanceAttoRep > noBalanceAttoRep)
+			return BinaryOutcomes.BinaryOutcome.Yes;
+		if (noBalanceAttoRep > invalidBalanceAttoRep && noBalanceAttoRep > yesBalanceAttoRep)
+			return BinaryOutcomes.BinaryOutcome.No;
 		return BinaryOutcomes.BinaryOutcome.None;
 	}
 }

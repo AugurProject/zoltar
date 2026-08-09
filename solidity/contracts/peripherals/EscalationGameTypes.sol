@@ -20,15 +20,15 @@ enum NonDecisionState {
 
 struct Deposit {
 	address depositor;
-	uint256 amount;
-	uint256 cumulativeAmount;
+	uint256 amountAttoRep;
+	uint256 cumulativeAmountAttoRep;
 }
 
 struct CarryLeafView {
 	address depositor;
-	uint256 amount;
+	uint256 amountAttoRep;
 	uint256 parentDepositIndex;
-	uint256 cumulativeAmount;
+	uint256 cumulativeAmountAttoRep;
 	uint256 sourceNodeId;
 }
 
@@ -36,21 +36,21 @@ struct OutcomeState {
 	// Snapshot fields are the inherited proof baseline for this outcome.
 	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
 	// currentLeafCount/currentPeaks are the descendant export snapshot, updated incrementally as local carry changes.
-	// localHeadNodeId/localUnresolvedTotal track local carry added after the inherited snapshot.
+	// localHeadNodeId/localUnresolvedTotalAttoRep track local carry added after the inherited snapshot.
 	// Total principal currently assigned to this outcome by local deposits placed directly in this escalation game.
-	uint256 balance;
+	uint256 balanceAttoRep;
 	// Local deposits placed directly in this escalation game, preserved in arrival order for payout ordering.
 	Deposit[] deposits;
 	// The inherited carry snapshot this escalation game started with for this outcome.
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
-	uint256 inheritedUnresolvedTotal;
+	uint256 inheritedUnresolvedTotalAttoRep;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
-	uint256 localUnresolvedTotal;
+	uint256 localUnresolvedTotalAttoRep;
 	uint256[] localNodeIds;
 	mapping(uint256 => mapping(uint256 => bytes32)) currentCarryNodeHashes;
 	// Authoritative settled-set for inherited and local carried parentDepositIndexes in this instance.
@@ -60,17 +60,17 @@ struct OutcomeState {
 }
 
 struct OutcomeStateView {
-	uint256 balance;
+	uint256 balanceAttoRep;
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
-	uint256 inheritedUnresolvedTotal;
+	uint256 inheritedUnresolvedTotalAttoRep;
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
-	uint256 localUnresolvedTotal;
+	uint256 localUnresolvedTotalAttoRep;
 	bytes32 currentCarryRoot;
-	uint256 currentCarryTotal;
+	uint256 currentCarryTotalAttoRep;
 }
 
 struct Node {
@@ -78,19 +78,19 @@ struct Node {
 	uint256 parentNodeId;
 	address depositor;
 	BinaryOutcomes.BinaryOutcome outcome;
-	uint256 amount;
+	uint256 amountAttoRep;
 	// Stable ordering key inherited from the source escalation game.
 	uint256 parentDepositIndex;
 	// Prefix-position data needed for payout-order proofs.
-	uint256 cumulativeAmount;
+	uint256 cumulativeAmountAttoRep;
 	uint256 carryLeafIndex;
 }
 
 struct CarriedDepositProof {
 	address depositor;
-	uint256 amount;
+	uint256 amountAttoRep;
 	uint256 parentDepositIndex;
-	uint256 cumulativeAmount;
+	uint256 cumulativeAmountAttoRep;
 	uint256 sourceNodeId;
 	uint256 leafIndex;
 	bytes32[] merkleMountainRangeSiblings;
@@ -99,14 +99,14 @@ struct CarriedDepositProof {
 }
 
 struct ForkedEscrowState {
-	uint256 sourcePrincipal;
-	uint256 sourcePrincipalClaimed;
-	uint256 childRep;
-	uint256 childRepClaimed;
+	uint256 sourcePrincipalAttoRep;
+	uint256 sourcePrincipalClaimedAttoRep;
+	uint256 childAttoRep;
+	uint256 childRepClaimedAttoRep;
 }
 
 // Escalation claims are deliberately not tokens. A bundle is keyed by, and
 // permanently owned by, the vault that originated its deposits.
 struct EscalationClaimBundle {
-	uint256 escrowedRep;
+	uint256 disputeStakedRepClaimUnits;
 }

@@ -102,7 +102,7 @@ describe('GlobalTransactionTray', () => {
 		const presentations = [
 			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
 			createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n }),
-			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', initialReportPriorityFeeWeiPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
+			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
 		]
 		const renderedComponent = await renderIntoDocument(
 			<>

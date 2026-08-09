@@ -6,17 +6,17 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 	const artifacts = loadContractsJson(import.meta.dir)
 	const layout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPool.sol', 'SecurityPool'))
 	const expectedSlots = new Map<string, string>([
-		['totalSecurityBondAllowance', '1'],
-		['completeSetCollateralAmount', '2'],
-		['poolOwnershipDenominator', '3'],
-		['totalFeesOwedToVaults', '6'],
+		['totalCoverageCommitmentAttoEth', '1'],
+		['settlementCollateralAttoEth', '2'],
+		['totalRepBackingUnits', '3'],
+		['totalClaimableVaultFeesAttoEth', '6'],
 		['lastUpdatedFeeAccumulator', '7'],
 		['feeIndex', '8'],
 		['feeIndexRemainder', '9'],
 		['totalFeesOwedRemainder', '10'],
-		['unallocatedFeeReserve', '11'],
-		['feeEligibleSecurityBondAllowance', '12'],
-		['uncheckpointedFeeEligibleAllowance', '13'],
+		['unallocatedAccruedFeesAttoEth', '11'],
+		['feeEligibleCoverageCommitmentAttoEth', '12'],
+		['uncheckpointedFeeEligibleCoverageCommitmentAttoEth', '13'],
 		['currentRetentionRate', '14'],
 		['securityVaults', '16'],
 		['vaultFeeRemainders', '17'],
@@ -45,9 +45,9 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 			}
 		}),
 		[
-			{ label: 'poolOwnership', slot: '0', offset: 0 },
-			{ label: 'securityBondAllowance', slot: '1', offset: 0 },
-			{ label: 'unpaidEthFees', slot: '2', offset: 0 },
+			{ label: 'repBackingUnits', slot: '0', offset: 0 },
+			{ label: 'coverageCommitmentAttoEth', slot: '1', offset: 0 },
+			{ label: 'claimableFeesAttoEth', slot: '2', offset: 0 },
 			{ label: 'feeIndex', slot: '3', offset: 0 },
 		],
 	)

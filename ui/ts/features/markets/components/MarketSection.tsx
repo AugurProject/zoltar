@@ -58,13 +58,13 @@ export function MarketSection({
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
-	zoltarForkRepBalance,
-	zoltarMigrationChildRepBalances,
+	zoltarForkRepBalanceAttoRep,
+	zoltarMigrationChildRepBalancesAttoRep,
 	zoltarMigrationActiveAction,
 	zoltarMigrationError,
 	zoltarMigrationForm,
 	zoltarMigrationPending,
-	zoltarMigrationPreparedRepBalance,
+	zoltarMigrationPreparedRepBalanceAttoRep,
 	zoltarQuestionCount,
 	zoltarQuestionPage,
 	zoltarQuestions,
@@ -269,7 +269,7 @@ export function MarketSection({
 								zoltarForkError={zoltarForkError}
 								zoltarForkPending={zoltarForkPending}
 								zoltarForkQuestionId={selectedForkQuestionId ?? ''}
-								zoltarForkRepBalance={zoltarForkRepBalance}
+								zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 								zoltarQuestions={zoltarQuestions}
 								zoltarUniverse={zoltarUniverse}
 								zoltarUniverseState={zoltarUniverseState}
@@ -287,15 +287,15 @@ export function MarketSection({
 						onMigrateInternalRep={onMigrateInternalRep}
 						onPrepareRepForMigration={onPrepareRepForMigration}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
-						zoltarForkRepBalance={zoltarForkRepBalance}
+						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkActiveAction={zoltarForkActiveAction}
-						zoltarMigrationChildRepBalances={zoltarMigrationChildRepBalances}
+						zoltarMigrationChildRepBalancesAttoRep={zoltarMigrationChildRepBalancesAttoRep}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationError={zoltarMigrationError}
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
-						zoltarMigrationPreparedRepBalance={zoltarMigrationPreparedRepBalance}
+						zoltarMigrationPreparedRepBalanceAttoRep={zoltarMigrationPreparedRepBalanceAttoRep}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}

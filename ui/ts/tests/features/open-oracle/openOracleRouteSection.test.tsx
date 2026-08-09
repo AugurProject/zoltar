@@ -18,14 +18,14 @@ import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
-const ETH = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -131,7 +131,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		reportTimestamp: 0n,
 		settlementTime: 86400n,
 		settlementTimestamp: 0n,
-		settlerReward: 10n ** 15n,
+		settlerRewardAttoEth: 10n ** 15n,
 		stateHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 		timeType: true,
 		token1: '0x2000000000000000000000000000000000000000',
@@ -150,7 +150,7 @@ function InteractiveOpenOracleCreateSection({ initialForm }: { initialForm: Open
 	return (
 		<OpenOracleSection
 			{...createOpenOracleSectionProps({
-				accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+				accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 				onOpenOracleCreateFormChange: update => setForm(current => ({ ...current, ...update })),
 				openOracleCreateForm: form,
 			})}
@@ -218,7 +218,7 @@ describe('OpenOracleSection route create view', () => {
 						multiplier: '2',
 						protocolFee: '0',
 						settlementTime: '7200',
-						settlerReward: '0.1',
+						settlerRewardEthAmount: '0.1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -300,7 +300,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 				}),
 			),
 		)
@@ -318,7 +318,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
 						token1Address: '0x2000000000000000000000000000000000000000',
@@ -530,13 +530,13 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 1_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 1_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
 						ethValue: '1100',
 						exactToken1Report: '1',
 						initialToken2Amount: '1',
-						settlerReward: '1100',
+						settlerRewardEthAmount: '1100',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -553,7 +553,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
 						disputeDelay: '10',
@@ -564,7 +564,7 @@ describe('OpenOracleSection route create view', () => {
 						multiplier: '100',
 						protocolFee: '1',
 						settlementTime: '60',
-						settlerReward: '1',
+						settlerRewardEthAmount: '1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -581,7 +581,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
 						disputeDelay: '10',
@@ -593,7 +593,7 @@ describe('OpenOracleSection route create view', () => {
 						multiplier: '100',
 						protocolFee: '1',
 						settlementTime: '60',
-						settlerReward: '1',
+						settlerRewardEthAmount: '1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -611,7 +611,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...defaultForm,
 						escalationHalt: '25',
@@ -620,7 +620,7 @@ describe('OpenOracleSection route create view', () => {
 						ethValue: '1',
 						feePercentage: '2',
 						protocolFee: '0.5',
-						settlerReward: '1',
+						settlerRewardEthAmount: '1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -646,7 +646,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					accountState: createAccountState({ ethBalanceAttoEth: 2_000n * ATTO_ETH_PER_ETH }),
 				}),
 			),
 		)
@@ -884,7 +884,7 @@ describe('OpenOracleSection route create view', () => {
 					activeView: 'selected-report',
 					onWithdrawOpenOracleBalance: balance => withdrawnBalances.push(balance),
 					openOracleReportDetails: reportDetails,
-					openOracleWithdrawableBalances: { eth: 7n * ETH, token1: 100n * ETH, token2: 0n },
+					openOracleWithdrawableBalances: { ethAttoEth: 7n * ATTO_ETH_PER_ETH, token1: 100n * ATTO_ETH_PER_ETH, token2: 0n },
 				})}
 			/>,
 		)
@@ -900,7 +900,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('7 ETH')).not.toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm withdrawal' }))
 		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
-		expect(withdrawnBalances).toEqual(['eth'])
+		expect(withdrawnBalances).toEqual(['ethAttoEth'])
 	})
 
 	test('shows pending copy only for the balance being withdrawn', async () => {
@@ -915,9 +915,9 @@ describe('OpenOracleSection route create view', () => {
 				{...createOpenOracleSectionProps({
 					activeView: 'selected-report',
 					openOracleActiveAction: 'withdrawBalance',
-					openOracleActiveWithdrawalBalance: 'eth',
+					openOracleActiveWithdrawalBalance: 'ethAttoEth',
 					openOracleReportDetails: reportDetails,
-					openOracleWithdrawableBalances: { eth: 7n, token1: 100n, token2: 0n },
+					openOracleWithdrawableBalances: { ethAttoEth: 7n, token1: 100n, token2: 0n },
 				})}
 			/>,
 		)
@@ -945,7 +945,7 @@ describe('OpenOracleSection route create view', () => {
 						balance: 'token1',
 						message: 'Your withdrawable REPv2 balance changed. Review the updated amount and confirm again',
 					},
-					openOracleWithdrawableBalances: { eth: 0n, token1: 125n * ETH, token2: 0n },
+					openOracleWithdrawableBalances: { ethAttoEth: 0n, token1: 125n * ATTO_ETH_PER_ETH, token2: 0n },
 				})}
 			/>,
 		)
@@ -975,7 +975,7 @@ describe('OpenOracleSection route create view', () => {
 					activeView: 'selected-report',
 					onCancelOpenOracleWithdrawalBalanceCheck: cancelWithdrawalBalanceCheck,
 					openOracleReportDetails: reportDetails,
-					openOracleWithdrawableBalances: { eth: 7n * ETH, token1: 0n, token2: 0n },
+					openOracleWithdrawableBalances: { ethAttoEth: 7n * ATTO_ETH_PER_ETH, token1: 0n, token2: 0n },
 				})}
 			/>,
 		)

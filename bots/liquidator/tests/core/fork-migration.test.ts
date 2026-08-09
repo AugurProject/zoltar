@@ -62,12 +62,12 @@ function settings(approvedUniverses = ['101']) {
 			candidatePriority: 'largest-bonus',
 			fallbackRepPerEthPrice: '0',
 			maximumGasCostEth: '0.02',
-			maximumLiquidationDebtEth: '25',
+			maximumLiquidationCoverageCommitmentEth: '25',
 			maximumOracleRequestCostEth: '0.02',
-			maximumRepPerPool: '10000',
+			maximumPerPoolRep: '10000',
 			maximumTotalDeployedRep: '25000',
-			minimumLiquidationDebtEth: '1',
-			minimumRepWithdrawal: '10',
+			minimumLiquidationCoverageCommitmentEth: '1',
+			minimumRepWithdrawalRep: '10',
 			minimumRewardValueEth: '0.02',
 			redeemFeesAboveEth: '0.01',
 			stalePriceFundingBufferBps: 15_000,
@@ -75,7 +75,7 @@ function settings(approvedUniverses = ['101']) {
 			vaultTargetHealthBps: 12_500,
 			vaultTopUpHealthBps: 11_000,
 			vaultWithdrawHealthBps: 15_000,
-			walletRepReserve: '100',
+			walletReserveRep: '100',
 		},
 		submission: {
 			minimumBundleRelaySuccesses: 1,
@@ -86,30 +86,30 @@ function settings(approvedUniverses = ['101']) {
 	})
 }
 
-function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultRep?: bigint }): PoolObservation {
+function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultAttoRep?: bigint }): PoolObservation {
 	return {
 		activeVaultCount: 0n,
 		address: getAddress(parameters.address),
 		approvedUniverse: parameters.approvedUniverse ?? false,
 		botVault: {
 			address: wallet,
-			allowance: 0n,
-			ownership: parameters.vaultRep ?? 0n,
-			rep: parameters.vaultRep ?? 0n,
-			unpaidEthFees: 0n,
+			coverageCommitmentAttoEth: 0n,
+			backingUnits: parameters.vaultAttoRep ?? 0n,
+			vaultAttoRepBacking: parameters.vaultAttoRep ?? 0n,
+			claimableFeesAttoEth: 0n,
 		},
 		candidates: [],
-		collateralEth: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
 		forkActivationTime: parameters.forkActivationTime ?? 0n,
 		forkOutcomeIndex: parameters.forkOutcomeIndex,
-		initialReportPriorityFeeWeiPerGas: 0n,
+		initialReportPriorityFeeAttoEthPerGas: 0n,
 		isPriceValid: true,
 		lastPrice: 0n,
 		lastSettlementTimestamp: 0n,
 		manager: zeroAddress,
 		minLiquidationPriceDistanceBps: 0n,
-		minimumToken1Report: 0n,
+		minimumToken1ReportAttoEth: 0n,
 		multiplierBps: 20_000n,
 		parent: getAddress(parameters.parent ?? zeroAddress),
 		parentUniverseId: parameters.parentUniverseId,
@@ -117,13 +117,13 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		pendingReportSponsor: zeroAddress,
 		questionId: 1n,
 		repToken: zeroAddress,
-		requestPriceCostEth: 0n,
+		requestPriceCostAttoEth: 0n,
 		selected: parameters.selected ?? false,
 		securityPoolForker: forker,
 		stagedOperations: [],
 		systemState: parameters.systemState ?? 0n,
-		totalAllowanceEth: 0n,
-		totalRep: 0n,
+		totalCoverageCommitmentAttoEth: 0n,
+		totalAttoRep: 0n,
 		truncatedVaults: false,
 		universeId: parameters.universeId,
 		vaults: [],
@@ -136,7 +136,7 @@ const parent = pool({
 	selected: true,
 	systemState: 1n,
 	universeId: 0n,
-	vaultRep: 20n,
+	vaultAttoRep: 20n,
 })
 
 const approvedChild = pool({
@@ -224,8 +224,8 @@ describe('fork migration strategy', () => {
 		state.pools = [rootPool, childPool]
 		state.centralizedMarket = {
 			assetId: rootRep,
-			askDepthEth: 4n * 10n ** 18n,
-			bidDepthEth: 4n * 10n ** 18n,
+			askDepthAttoEth: 4n * 10n ** 18n,
+			bidDepthAttoEth: 4n * 10n ** 18n,
 			chainId: 1,
 			maximumPriceRepPerEth: 10n * 10n ** 18n,
 			minimumPriceRepPerEth: 10n * 10n ** 18n,
@@ -235,12 +235,12 @@ describe('fork migration strategy', () => {
 			reliable: true,
 		}
 		const observedAt = Date.now()
-		const marketObservation = (kind: 'cex' | 'dex', sourceId: string) => ({ assetId: rootRep, askDepthEth: 2n * 10n ** 18n, bidDepthEth: 2n * 10n ** 18n, chainId: 1, kind, observationId: `${kind}:${sourceId}:1`, observedAt, priceRepPerEth: 10n * 10n ** 18n, sourceId })
+		const marketObservation = (kind: 'cex' | 'dex', sourceId: string) => ({ assetId: rootRep, askDepthAttoEth: 2n * 10n ** 18n, bidDepthAttoEth: 2n * 10n ** 18n, chainId: 1, kind, observationId: `${kind}:${sourceId}:1`, observedAt, priceRepPerEth: 10n * 10n ** 18n, sourceId })
 		state.marketConsensus = {
 			assetId: rootRep,
 			cex: {
-				askDepthEth: 4n * 10n ** 18n,
-				bidDepthEth: 4n * 10n ** 18n,
+				askDepthAttoEth: 4n * 10n ** 18n,
+				bidDepthAttoEth: 4n * 10n ** 18n,
 				kind: 'cex',
 				maximumPriceRepPerEth: 10n * 10n ** 18n,
 				minimumPriceRepPerEth: 10n * 10n ** 18n,
@@ -251,8 +251,8 @@ describe('fork migration strategy', () => {
 			},
 			chainId: 1,
 			dex: {
-				askDepthEth: 4n * 10n ** 18n,
-				bidDepthEth: 4n * 10n ** 18n,
+				askDepthAttoEth: 4n * 10n ** 18n,
+				bidDepthAttoEth: 4n * 10n ** 18n,
 				kind: 'dex',
 				maximumPriceRepPerEth: 10n * 10n ** 18n,
 				minimumPriceRepPerEth: 10n * 10n ** 18n,
@@ -277,14 +277,14 @@ describe('fork migration strategy', () => {
 			],
 			venueConsensus: {
 				allowSingleGroupFallback: false,
-				dexProbeDepthEth: 1n * 10n ** 18n,
+				dexProbeDepthAttoEth: 1n * 10n ** 18n,
 				dexSources: [
 					{ feeBps: 30, pair: getAddress('0x0000000000000000000000000000000000000011'), sourceId: 'one' },
 					{ feeBps: 30, pair: getAddress('0x0000000000000000000000000000000000000012'), sourceId: 'two' },
 				],
 				maximumGroupDeviationBps: 500n,
-				minimumDexAskDepthEth: 1n * 10n ** 18n,
-				minimumDexBidDepthEth: 1n * 10n ** 18n,
+				minimumDexAskDepthAttoEth: 1n * 10n ** 18n,
+				minimumDexBidDepthAttoEth: 1n * 10n ** 18n,
 				minimumDexSourceCount: 2,
 				minimumSourceObservationCount: 2,
 				minimumSourceObservationSpanMilliseconds: 10_000,
@@ -320,10 +320,10 @@ describe('fork migration strategy', () => {
 
 		const centralizedObservation = {
 			assetId: rootRep,
-			askDepthEth: 2n * 10n ** 18n,
+			askDepthAttoEth: 2n * 10n ** 18n,
 			bestAskQuote: '0.1',
 			bestBidQuote: '0.09',
-			bidDepthEth: 2n * 10n ** 18n,
+			bidDepthAttoEth: 2n * 10n ** 18n,
 			chainId: 1,
 			exchangeId: 'alpha',
 			ethTickerTimestamp: observedAt,
@@ -350,16 +350,16 @@ describe('fork migration strategy', () => {
 			...parent,
 			stagedOperations: [
 				{
-					amount: 1n,
+					operationAmountAttoRepOrAttoEth: 1n,
 					id: 1n,
 					initiatorVault: wallet,
 					isPendingSettlement: true,
 					operation: 0n,
 					queuedAt: 1n,
-					snapshotDenominator: 1n,
-					snapshotTargetAllowance: 1n,
-					snapshotTargetOwnership: 1n,
-					snapshotTotalRep: 1n,
+					snapshotTotalRepBackingUnits: 1n,
+					snapshotTargetCoverageCommitmentAttoEth: 1n,
+					snapshotTargetBackingUnits: 1n,
+					snapshotTotalPoolHeldAttoRep: 1n,
 					targetVault: getAddress('0x0000000000000000000000000000000000000099'),
 					validForSeconds: 240n,
 				},

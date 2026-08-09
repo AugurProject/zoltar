@@ -1,18 +1,20 @@
 import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
 import {
 	calculateAnnualizedRetentionFeePercent,
-	calculateAuctionModel,
+	computeCanonicalEscalationBindingCapital,
+	computeCanonicalEscalationDeadlineDays,
+	projectDocumentationEscalationDeposit,
 	calculateCollateralRepairModel,
-	calculateEscalationDepositModel,
+	calculateAuctionModel,
 	calculateForkThresholdSeries,
-	calculateOracleSecurityModel,
-	calculateResolutionModel,
 	contractInteractionEdges,
-	normalizedEscalationCost,
+	ESCALATION_ACTIVATION_DELAY_DAYS,
+	ESCALATION_TIME_LENGTH_DAYS,
 	quantitativeChartAxisLabels,
 	quantitativeChartIds,
 } from './chartModels'
-import { hasDiagramOverflow, resolveChartEnvelopeWidth, updateDiagramControl } from './diagramControl'
+import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
+import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -338,8 +340,10 @@ function copyDataAttributes(element: Element | undefined, attributes: Record<str
 
 function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const data = diagramData(spec)
+	const rectangleLayers = layerDiagramRectangles(data.rectangles)
+	const orderedRectangles = [...rectangleLayers.background, ...rectangleLayers.foreground]
 	const lineMarks = data.lines.map(item =>
-		line(item.points, {
+		line(item.hasArrow ? fitArrowEndpointOutsideRectangles(item.points, data.rectangles, Math.max(5, item.strokeWidth * 2)) : item.points, {
 			...(item.className === undefined ? {} : { className: item.className }),
 			curve: 'linear',
 			...(item.hasArrow ? { markerEnd: 'arrow' } : {}),
@@ -350,16 +354,17 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 			y: 'y',
 		}),
 	)
-	const rectangleMarks = data.rectangles.map(item =>
-		rect([item], {
-			...(item.className === undefined ? {} : { className: item.className }),
-			rx: item.rx,
-			x1: 'x',
-			x2: datum => datum.x + datum.width,
-			y1: 'y',
-			y2: datum => datum.y + datum.height,
-		}),
-	)
+	const rectangleMarks = (rectangles: DiagramRect[]) =>
+		rectangles.map(item =>
+			rect([item], {
+				...(item.className === undefined ? {} : { className: item.className }),
+				rx: item.rx,
+				x1: 'x',
+				x2: datum => datum.x + datum.width,
+				y1: 'y',
+				y2: datum => datum.y + datum.height,
+			}),
+		)
 	const dotMarks = data.dots.map(item =>
 		dot([item], {
 			...(item.className === undefined ? {} : { className: item.className }),
@@ -385,7 +390,7 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 		ariaLabel: spec.ariaLabel,
 		height: spec.height,
 		margin: 0,
-		marks: [...lineMarks, ...rectangleMarks, ...dotMarks, ...textMarks],
+		marks: [...rectangleMarks(rectangleLayers.background), ...lineMarks, ...rectangleMarks(rectangleLayers.foreground), ...dotMarks, ...textMarks],
 		style: {
 			background: 'transparent',
 			color: 'currentColor',
@@ -398,7 +403,7 @@ function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
 	const rectangleElements = Array.from(chart.querySelectorAll<SVGRectElement>('g[aria-label="rect"] > rect'))
 	const lineElements = Array.from(chart.querySelectorAll<SVGPathElement>('g[aria-label="line"] > path'))
 	const textElements = Array.from(chart.querySelectorAll<SVGTextElement>('g[aria-label="text"] > text'))
-	data.rectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
+	orderedRectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
 	data.lines.forEach((item, index) => copyDataAttributes(lineElements[index], item.attributes))
 	data.texts.forEach((item, index) => copyDataAttributes(textElements[index], item.attributes))
 	return chart
@@ -410,25 +415,21 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 	return Number.isFinite(value) ? value : fallback
 }
 
-function formatAtomicRep(value: bigint): string {
-	const scale = 1_000_000_000_000_000_000n
-	const whole = value / scale
-	const fraction = (value % scale).toString().padStart(18, '0')
-	return `${whole}.${fraction}`
-}
-
-function escalationCostChart(spec: ChartSpec): SVGSVGElement {
+function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-statoblast-escalation-cost-curve']
-	const curve = Array.from({ length: 61 }, (_, index) => {
-		const elapsed = index / 60
+	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
+	const startBond = readInput(simulator, 'startBond', 1)
+	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
+	const curve = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => {
 		return {
-			elapsed,
-			requiredRep: normalizedEscalationCost(elapsed),
+			day,
+			bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
 		}
 	})
 	const start = curve[0]
-	const end = curve[curve.length - 1]
-	if (start === undefined || end === undefined) {
+	const activation = curve[ESCALATION_ACTIVATION_DELAY_DAYS]
+	const end = curve[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
+	if (start === undefined || activation === undefined || end === undefined) {
 		throw new Error('Escalation cost curve must include both endpoints')
 	}
 	return plot({
@@ -442,48 +443,48 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 		marks: [
 			areaY(curve, {
 				fill: 'var(--gold-soft, #f3e4c6)',
-				x: 'elapsed',
-				y: 'requiredRep',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
 			lineY(curve, {
 				stroke: 'var(--gold, #8a5d18)',
 				strokeWidth: 3,
-				x: 'elapsed',
-				y: 'requiredRep',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			ruleY([start.requiredRep], { stroke: 'var(--green, #1d735d)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			ruleY([end.requiredRep], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			dot([start, end], {
+			ruleX([ESCALATION_ACTIVATION_DELAY_DAYS], { stroke: 'var(--blue, #245f9f)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			dot([activation, end], {
 				fill: (_datum, index) => (index === 0 ? 'var(--green, #1d735d)' : 'var(--red, #99453f)'),
 				r: 6,
-				x: 'elapsed',
-				y: 'requiredRep',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			text([{ elapsed: start.elapsed, label: `start bond ${(start.requiredRep * 100).toFixed(1)}%`, requiredRep: start.requiredRep }], {
+			text([{ day: activation.day, label: `day ${activation.day}: activation / ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
 				dx: 9,
 				dy: -10,
 				fill: 'var(--green, #1d735d)',
 				fontWeight: 700,
 				text: 'label',
 				textAnchor: 'start',
-				x: 'elapsed',
-				y: 'requiredRep',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
-			text([{ elapsed: end.elapsed, label: 'non-decision threshold 100%', requiredRep: end.requiredRep }], {
+			text([{ day: end.day, label: `day ${end.day}: threshold / ${nonDecisionThreshold} REP`, bindingCapital: end.bindingCapital }], {
 				dx: -9,
 				dy: 14,
 				fill: 'var(--red, #99453f)',
 				fontWeight: 700,
 				text: 'label',
 				textAnchor: 'end',
-				x: 'elapsed',
-				y: 'requiredRep',
+				x: 'day',
+				y: 'bindingCapital',
 			}),
+			text([{ day: 0, label: 'day 0: game starts', bindingCapital: 0 }], { dx: 8, dy: -8, fill: 'var(--ink, currentColor)', fontWeight: 650, text: 'label', textAnchor: 'start', x: 'day', y: 'bindingCapital' }),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, 1], grid: true, label: axes.x, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
-		y: { domain: [0, 1.06], grid: true, label: axes.y, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
+		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
+		y: { domain: [0, Math.max(nonDecisionThreshold * 1.08, 1)], grid: true, label: axes.y, tickFormat: (value: number) => `${value.toFixed(1)} REP` },
 	}) as SVGSVGElement
 }
 
@@ -501,11 +502,11 @@ function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
 		marks: [
 			areaY(generations, { fill: 'var(--blue-soft, #dceaf8)', x: 'generation', y: 'theoreticalSupply' }),
 			lineY(generations, { stroke: 'var(--blue, #245f9f)', strokeWidth: 3, x: 'generation', y: 'theoreticalSupply' }),
-			lineY(generations, { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '6,4', strokeWidth: 2, x: 'generation', y: 'forkThreshold' }),
+			lineY(generations, { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '6,4', strokeWidth: 2, x: 'generation', y: 'forkThresholdRep' }),
 			text(
 				[
 					{ generation: 15, label: 'theoretical supply', value: generations[15]?.theoreticalSupply ?? 0 },
-					{ generation: 15, label: 'next fork threshold', value: generations[15]?.forkThreshold ?? 0 },
+					{ generation: 15, label: 'next fork threshold', value: generations[15]?.forkThresholdRep ?? 0 },
 				],
 				{ dy: -8, fill: datum => (datum.label === 'theoretical supply' ? 'var(--blue, #245f9f)' : 'var(--gold, #8a5d18)'), fontWeight: 650, text: 'label', x: 'generation', y: 'value' },
 			),
@@ -969,8 +970,6 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 			dot(bids, {
 				fill: 'status',
 				r: 6,
-				tip: true,
-				title: bid => `${bid.name}: ${bid.eth.toFixed(2)} ETH at ${bid.price.toFixed(2)} ETH/REP`,
 				x: 'cumulativeRep',
 				y: 'price',
 			}),
@@ -1031,247 +1030,52 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
 	const example = mount.closest('#collateral-repair-example')
-	const parentCollateral = Math.max(readInput(example, 'parentCollateral', 50), 0)
-	const model = calculateCollateralRepairModel(parentCollateral, readInput(example, 'forkCollateralReceived', 47.5), readInput(example, 'auctionRaised', 2.5))
+	const parentSettlementCollateral = Math.max(readInput(example, 'parentSettlementCollateral', 50), 0)
+	const forkSettlementCollateralReceived = readInput(example, 'forkSettlementCollateralReceived', 47.5)
+	const auctionRaised = readInput(example, 'auctionRaised', 2.5)
+	const model = calculateCollateralRepairModel(parentSettlementCollateral, forkSettlementCollateralReceived, auctionRaised)
+	if (example !== null) {
+		const values = {
+			auctionRaised: `${auctionRaised.toFixed(2)} ETH`,
+			forkSettlementCollateralReceived: `${forkSettlementCollateralReceived.toFixed(2)} ETH`,
+			parentSettlementCollateral: `${parentSettlementCollateral.toFixed(2)} ETH`,
+		}
+		for (const [name, value] of Object.entries(values)) example.querySelector(`[data-example-value="${name}"]`)?.replaceChildren(String(value))
+		example.querySelector('[data-example-output="routedCollateral"]')?.replaceChildren(`${model.received.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="initialShortfall"]')?.replaceChildren(`${model.initialShortfall.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="remainingShortfall"]')?.replaceChildren(`${model.remainingShortfall.toFixed(2)} ETH`)
+		example.querySelector('[data-example-output="repairStatus"]')?.replaceChildren(model.remainingShortfall === 0 ? 'no contribution required' : 'shortfall remains')
+	}
 	const parts = [
 		{ kind: 'Migration-routed', x1: 0, x2: model.received },
 		{ kind: 'Auction repair', x1: model.received, x2: model.received + model.repairEth },
 	]
 	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. Migration routed ${model.received.toFixed(2)} ETH and the auction repairs ${model.repairEth.toFixed(2)} ETH toward the ${parentCollateral.toFixed(2)} ETH target, leaving ${model.remainingShortfall.toFixed(2)} ETH unfilled.`,
+		ariaDescription: `${spec.ariaDescription}. Migration routed ${model.received.toFixed(2)} ETH and the auction repairs ${model.repairEth.toFixed(2)} ETH toward the ${parentSettlementCollateral.toFixed(2)} ETH target, leaving ${model.remainingShortfall.toFixed(2)} ETH unfilled.`,
 		ariaLabel: spec.ariaLabel,
 		color: {
 			domain: ['Migration-routed', 'Auction repair'],
 			range: ['var(--blue, #245f9f)', 'var(--green, #1d735d)'],
 		},
 		height: spec.height,
-		marginBottom: 44,
-		marginLeft: 124,
-		marginRight: 28,
-		marginTop: 52,
-		marks: [
-			barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }),
-			ruleX([parentCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			text(
-				[
-					{ kind: 'Migration-routed', label: '■ Migration-routed', value: parentCollateral * 0.24 },
-					{ kind: 'Auction repair', label: '■ Auction repair', value: parentCollateral * 0.68 },
-				],
-				{
-					dy: -55,
-					fill: 'kind',
-					fontSize: 12,
-					text: 'label',
-					x: 'value',
-					y: () => 'Child collateral',
-				},
-			),
-			text([{ label: `target ${parentCollateral.toFixed(2)} ETH`, value: parentCollateral }], {
-				dx: -6,
-				dy: -55,
-				fontSize: 12,
-				text: 'label',
-				textAnchor: 'end',
-				x: 'value',
-				y: () => 'Child collateral',
-			}),
-		],
+		marginBottom: 32,
+		marginLeft: 12,
+		marginRight: 12,
+		marginTop: 20,
+		marks: [barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }), ruleX([parentSettlementCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, Math.max(parentCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
-		y: { label: axes.y },
+		x: { domain: [0, Math.max(parentSettlementCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
+		y: { axis: null, label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.remainingShortfall === 0 ? 'repaired' : 'partial'
 	mount.dataset['chartState'] = chart.dataset['chartState']
 	return chart
 }
 
-function oracleSecurityChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['plot-open-oracle-integration-2']
-	const example = mount.closest('#binary-censorship-example')
-	const honestPrice = Math.max(readInput(example, 'honestPrice', 900), 0.0001)
-	const manipulatedPrice = Math.max(readInput(example, 'manipulatedPrice', 1017), 0.0001)
-	const liquidationThresholdPrice = Math.max(readInput(example, 'liquidationThresholdPrice', 101), 0.0001)
-	const minLiquidationPriceDistanceBps = Math.max(readInput(example, 'minLiquidationPriceDistanceBps', 1000), 0)
-	const externalPayoff = Math.max(readInput(example, 'externalPayoff', 1000), 0)
-	const oracleLiquidity = Math.max(readInput(example, 'oracleReportLiquidity', 4000), 0)
-	const disputeBarrier = Math.max(readInput(example, 'honestDisputeBarrierFraction', 0.01), 0)
-	const selectedDuration = Math.max(readInput(example, 'censorshipDuration', 24), 0)
-	const targetGriefRatio = Math.max(readInput(example, 'targetGriefRatio', 1), 0)
-	const model = calculateOracleSecurityModel({
-		censorshipDuration: selectedDuration,
-		externalPayoff,
-		honestDisputeBarrierFraction: disputeBarrier,
-		honestPrice,
-		liquidationThresholdPrice,
-		manipulatedPrice,
-		minLiquidationPriceDistanceBps,
-		oracleReportLiquidity: oracleLiquidity,
-		targetGriefRatio,
-	})
-	const costRate = model.censorshipRate * oracleLiquidity
-	const maxDuration = Math.max(168, selectedDuration)
-	const costs = Array.from({ length: maxDuration + 1 }, (_, duration) => ({
-		cost: duration * costRate,
-		duration,
-	}))
-	const selectedCost = model.censorshipCost
-	const horizontalRules = [
-		{ label: 'Conditional attacker payoff', value: model.attackerProfit },
-		{ label: 'Target payoff + grief cost', value: model.griefTarget },
-	]
-
-	return plot({
-		ariaDescription: `${spec.ariaDescription}. Liquidation is ${model.liquidationExecutable ? 'executable' : 'not executable'}, so attacker payoff is ${model.attackerProfit.toFixed(2)} ETH. At ${selectedDuration.toFixed(0)} steps, censorship costs ${selectedCost.toFixed(2)} ETH; the payoff-plus-grief target is ${model.griefTarget.toFixed(2)} ETH.`,
-		ariaLabel: 'Interactive censorship cost and attacker payoff',
-		height: spec.height,
-		marginBottom: 48,
-		marginLeft: 72,
-		marginRight: 24,
-		marginTop: 18,
-		marks: [
-			areaY(costs, {
-				fill: 'var(--gold-soft, #f3e4c6)',
-				x: 'duration',
-				y: 'cost',
-			}),
-			lineY(costs, {
-				stroke: 'var(--gold, #8a5d18)',
-				strokeWidth: 3,
-				x: 'duration',
-				y: 'cost',
-			}),
-			ruleY(horizontalRules, {
-				stroke: (_datum, index) => (index === 0 ? 'var(--red, #99453f)' : 'var(--green, #1d735d)'),
-				strokeDasharray: '5,4',
-				strokeWidth: 2,
-				y: 'value',
-			}),
-			ruleX([selectedDuration], {
-				stroke: 'var(--blue, #245f9f)',
-				strokeDasharray: '5,4',
-			}),
-			text([{ label: 'attacker payoff', value: model.attackerProfit }], {
-				dy: -6,
-				fill: 'var(--red, #99453f)',
-				fontSize: 11,
-				text: 'label',
-				textAnchor: 'start',
-				x: maxDuration * 0.63,
-				y: 'value',
-			}),
-			text([{ label: 'payoff + grief target', value: model.griefTarget }], {
-				dy: -20,
-				fill: 'var(--green, #1d735d)',
-				fontSize: 11,
-				text: 'label',
-				textAnchor: 'start',
-				x: maxDuration * 0.63,
-				y: 'value',
-			}),
-			dot([{ cost: selectedCost, duration: selectedDuration }], {
-				fill: selectedCost >= model.griefTarget ? 'var(--green, #1d735d)' : 'var(--red, #99453f)',
-				r: 6,
-				tip: true,
-				title: `Selected: ${selectedDuration.toFixed(0)} steps, ${selectedCost.toFixed(2)} ETH`,
-				x: 'duration',
-				y: 'cost',
-			}),
-		],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, maxDuration], grid: true, label: axes.x },
-		y: { grid: true, label: axes.y },
-	}) as SVGSVGElement
-}
-
-function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-7']
-	const example = mount.closest('#escalation-deposit-example')
-	const repeatDeposit = readInput(example, 'depositLifecycle', 0) === 1
-	const invalidBalance = repeatDeposit ? readInput(example, 'invalidBalance', 1) : 0
-	const yesBalance = repeatDeposit ? readInput(example, 'yesBalance', 9) : 0
-	const noBalance = repeatDeposit ? readInput(example, 'noBalance', 7) : 0
-	const model = calculateEscalationDepositModel({
-		invalidBalance,
-		noBalance,
-		nonDecisionThreshold: readInput(example, 'nonDecisionThreshold', 10),
-		proposedDeposit: readInput(example, 'proposedDeposit', 5),
-		repeatDeposit,
-		startBond: readInput(example, 'startBond', 2),
-		yesBalance,
-	})
-	const balances = [
-		{ balance: invalidBalance, phase: 'Before', side: 'Invalid' },
-		{ balance: yesBalance, phase: 'Before', side: 'Yes' },
-		{ balance: noBalance, phase: 'Before', side: 'No' },
-		{ balance: invalidBalance, phase: 'After', side: 'Invalid' },
-		{ balance: yesBalance, phase: 'After', side: 'Yes' },
-		{ balance: model.noAfter, phase: 'After', side: 'No' },
-	]
-	const acceptedLabel = model.tieAdjusted ? formatAtomicRep(model.acceptedAtomic) : model.accepted.toFixed(6)
-	const noAfterLabel = model.tieAdjusted ? formatAtomicRep(model.noAfterAtomic) : model.noAfter.toFixed(6)
-	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. This is a ${repeatDeposit ? 'repeat deposit into an existing game' : 'first deposit that creates the game'} with an effective start bond of ${formatAtomicRep(model.effectiveStartBondAtomic)} REP. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
-		ariaLabel: spec.ariaLabel,
-		color: {
-			domain: ['Invalid', 'Yes', 'No'],
-			range: ['var(--red, #99453f)', 'var(--green, #1d735d)', 'var(--blue, #245f9f)'],
-		},
-		fx: { domain: ['Before', 'After'], label: null },
-		height: spec.height,
-		marginBottom: 42,
-		marginLeft: 58,
-		marginRight: 24,
-		marginTop: 28,
-		marks: [barX(balances, { fill: 'side', fx: 'phase', inset: 2, x: 'balance', y: 'side' }), ruleX([model.threshold], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, Math.max(model.threshold, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
-		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
-	}) as SVGSVGElement
-	chart.dataset['chartState'] = model.previewReverts ? 'reverts' : 'accepted'
-	return chart
-}
-
-function resolutionChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-8']
-	const example = mount.closest('#resolution-edge-example')
-	const invalidBalance = readInput(example, 'invalidBalance', 4)
-	const yesBalance = readInput(example, 'yesBalance', 6)
-	const noBalance = readInput(example, 'noBalance', 7)
-	const runningCost = readInput(example, 'runningCost', 5)
-	const model = calculateResolutionModel({ invalidBalance, noBalance, runningCost, yesBalance })
-	const balances = [
-		{ balance: invalidBalance, side: 'Invalid' },
-		{ balance: yesBalance, side: 'Yes' },
-		{ balance: noBalance, side: 'No' },
-	]
-	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. ${model.atCost} outcomes meet the ${runningCost.toFixed(2)} REP running cost, so the helper returns ${model.result}.`,
-		ariaLabel: spec.ariaLabel,
-		color: {
-			domain: ['Invalid', 'Yes', 'No'],
-			range: ['var(--red, #99453f)', 'var(--green, #1d735d)', 'var(--blue, #245f9f)'],
-		},
-		height: spec.height,
-		marginBottom: 42,
-		marginLeft: 58,
-		marginRight: 24,
-		marginTop: 22,
-		marks: [barX(balances, { fill: 'side', inset: 3, x: 'balance', y: 'side' }), ruleX([runningCost], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, Math.max(runningCost, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
-		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
-	}) as SVGSVGElement
-	chart.dataset['chartState'] = model.result.toLowerCase()
-	return chart
-}
-
 function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
-		return escalationCostChart(spec)
+		return bindingCapitalThresholdChart(spec)
 	}
 	if (chartId === 'fig-zoltar-fork-threshold-decay') {
 		return forkThresholdDecayChart(spec)
@@ -1284,15 +1088,6 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
-	}
-	if (chartId === 'plot-open-oracle-integration-2') {
-		return oracleSecurityChart(spec, mount)
-	}
-	if (chartId === 'plot-statoblast-whitepaper-7') {
-		return escalationDepositChart(spec, mount)
-	}
-	if (chartId === 'plot-statoblast-whitepaper-8') {
-		return resolutionChart(spec, mount)
 	}
 	if (chartId === 'plot-statoblast-whitepaper-19') {
 		return collateralRepairChart(spec, mount)
@@ -1328,12 +1123,84 @@ function updateDiagramToolbar(overflowEnvelope: HTMLElement): void {
 	const button = toolbar?.querySelector<HTMLButtonElement>('button')
 	const cue = toolbar?.querySelector<HTMLElement>('.plot-chart-pan-cue')
 	if (toolbar === null || toolbar === undefined || button === null || button === undefined || cue === null || cue === undefined) return
-	const needsControl = fullSizeDiagramOverflows(overflowEnvelope)
+	const isExpanded = overflowEnvelope.classList.contains('plot-figure-expanded')
+	const needsControl = isExpanded || fullSizeDiagramOverflows(overflowEnvelope)
 	toolbar.hidden = !needsControl
 	if (!needsControl) return
-	const isFit = overflowEnvelope.classList.contains('plot-figure-fit')
-	updateDiagramControl(button, cue, isFit)
+	updateDiagramControl(button, cue, isExpanded)
 }
+
+type ExpandedDiagram = {
+	attributes: DiagramAttributeState
+	background: DiagramBackgroundState[]
+	button: HTMLButtonElement
+	envelope: HTMLElement
+	restoreFocus: HTMLElement | undefined
+}
+
+let expandedDiagram: ExpandedDiagram | undefined
+
+function setDiagramExpanded(overflowEnvelope: HTMLElement, button: HTMLButtonElement, expanded: boolean): void {
+	if (expanded && expandedDiagram !== undefined && expandedDiagram.envelope !== overflowEnvelope) {
+		setDiagramExpanded(expandedDiagram.envelope, expandedDiagram.button, false)
+	}
+	overflowEnvelope.classList.toggle('plot-figure-expanded', expanded)
+	document.body.classList.toggle('docs-diagram-expanded', expanded)
+	if (expanded) {
+		const background = isolateDiagramBackground(overflowEnvelope)
+		expandedDiagram = {
+			attributes: expandDiagramAttributes(overflowEnvelope),
+			background,
+			button,
+			envelope: overflowEnvelope,
+			restoreFocus: document.activeElement instanceof HTMLElement ? document.activeElement : undefined,
+		}
+		button.focus()
+	} else {
+		if (expandedDiagram?.envelope === overflowEnvelope) {
+			const { attributes, background, restoreFocus } = expandedDiagram
+			restoreDiagramBackground(background)
+			expandedDiagram = undefined
+			restoreDiagramAttributes(overflowEnvelope, attributes)
+			window.dispatchEvent(new Event('resize'))
+			restoreFocus?.focus()
+		}
+	}
+	updateDiagramToolbar(overflowEnvelope)
+	dispatchChartLayout()
+}
+
+document.addEventListener('keydown', event => {
+	if (expandedDiagram === undefined) return
+	if (event.key === 'Escape') {
+		event.preventDefault()
+		setDiagramExpanded(expandedDiagram.envelope, expandedDiagram.button, false)
+		return
+	}
+	if (event.key !== 'Tab') return
+	const focusable = Array.from(expandedDiagram.envelope.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(element => !element.hidden)
+	if (focusable.length === 0) {
+		event.preventDefault()
+		expandedDiagram.envelope.focus()
+		return
+	}
+	const activeElement = document.activeElement
+	const currentIndex = activeElement instanceof HTMLElement ? focusable.indexOf(activeElement) : -1
+	let nextIndex: number
+	if (event.shiftKey) {
+		nextIndex = currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1
+	} else {
+		nextIndex = currentIndex === focusable.length - 1 ? 0 : currentIndex + 1
+	}
+	event.preventDefault()
+	focusable[nextIndex]?.focus()
+})
+
+window.addEventListener('resize', () => {
+	requestAnimationFrame(() => {
+		if (expandedDiagram !== undefined) enforceDiagramBackground(expandedDiagram.background)
+	})
+})
 
 function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 	let toolbar = overflowEnvelope.querySelector<HTMLElement>(':scope > .plot-chart-toolbar')
@@ -1344,15 +1211,15 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 		toolbar.setAttribute('aria-label', 'Diagram display')
 		const button = document.createElement('button')
 		button.type = 'button'
+		if (overflowEnvelope.id.length === 0) overflowEnvelope.id = `plot-diagram-${document.querySelectorAll('.plot-chart-toolbar').length + 1}`
+		button.setAttribute('aria-controls', overflowEnvelope.id)
 		const cue = document.createElement('span')
 		cue.className = 'plot-chart-pan-cue'
 		toolbar.append(button, cue)
 		overflowEnvelope.prepend(toolbar)
 		overflowEnvelope.classList.add('plot-figure-fit')
 		button.addEventListener('click', () => {
-			overflowEnvelope.classList.toggle('plot-figure-fit')
-			updateDiagramToolbar(overflowEnvelope)
-			dispatchChartLayout()
+			setDiagramExpanded(overflowEnvelope, button, !overflowEnvelope.classList.contains('plot-figure-expanded'))
 		})
 	}
 	updateDiagramToolbar(overflowEnvelope)
@@ -1412,7 +1279,7 @@ function renderMount(mount: HTMLElement): void {
 	overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-diagram', !isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)
-	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Scrollable figure: ${spec.ariaLabel}`)
+	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Responsive diagram: ${spec.ariaLabel}`)
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)
@@ -1456,11 +1323,86 @@ window.setTimeout(restoreDocumentFragment, 600)
 window.addEventListener('load', restoreDocumentFragment)
 window.addEventListener('docs:tools-ready', restoreDocumentFragment)
 
-for (const chartId of ['fig-auction-clearing-ladder', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
+function updateEscalationSimulator(): void {
+	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
+	if (simulator === null) return
+	const read = (name: string, fallback: number) => readInput(simulator, name, fallback)
+	const startBond = Math.max(read('startBond', 1), 0.000001)
+	let nonDecisionThreshold = read('nonDecisionThreshold', 10)
+	const thresholdInput = simulator.querySelector<HTMLInputElement>('[data-example-input="nonDecisionThreshold"]')
+	if (thresholdInput !== null) {
+		thresholdInput.min = (startBond + 0.1).toFixed(1)
+		if (Number(thresholdInput.value) < Number(thresholdInput.min)) thresholdInput.value = thresholdInput.min
+		nonDecisionThreshold = Number(thresholdInput.value)
+	}
+	const error = simulator.querySelector<HTMLElement>('[data-escalation-error]')
+	if (nonDecisionThreshold <= startBond) {
+		if (error !== null) {
+			error.hidden = false
+			error.textContent = 'Choose a non-decision threshold above the start bond.'
+		}
+		return
+	}
+	if (error !== null) error.hidden = true
+	const balances: { Invalid: number; No: number; Yes: number } = { Yes: Math.min(read('yes', 1), nonDecisionThreshold), No: Math.min(read('no', 1), nonDecisionThreshold), Invalid: Math.min(read('invalid', 0), nonDecisionThreshold) }
+	const ordered = (
+		[
+			['Yes', balances.Yes],
+			['No', balances.No],
+			['Invalid', balances.Invalid],
+		] as [string, number][]
+	).sort((left, right) => right[1] - left[1])
+	const balanceValues = [balances.Yes, balances.No, balances.Invalid]
+	const median = [...balanceValues].sort((left, right) => left - right)[1] ?? 0
+	const daysSinceStart = read('days', 0)
+	const deadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, median)
+	const depositOutcome = simulator.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')?.value ?? 'yes'
+	const depositAmount = Math.max(read('depositAmount', startBond), 0)
+	const beforeBalances: [bigint, bigint, bigint] = [BigInt(Math.round(balances.Invalid * 1e18)), BigInt(Math.round(balances.Yes * 1e18)), BigInt(Math.round(balances.No * 1e18))]
+	const projection = projectDocumentationEscalationDeposit({ amountRep: depositAmount, balances: beforeBalances, nonDecisionThresholdRep: nonDecisionThreshold, outcome: depositOutcome as 'invalid' | 'yes' | 'no', startBondRep: startBond })
+	const afterBalances = projection === undefined ? balances : { Invalid: Number(projection.projectedBalancesAttoRep[0]) / 1e18, Yes: Number(projection.projectedBalancesAttoRep[1]) / 1e18, No: Number(projection.projectedBalancesAttoRep[2]) / 1e18 }
+	const projectedMedian = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid].sort((left, right) => left - right)[1] ?? 0
+	const afterDeadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, projectedMedian)
+	for (const [name, balance] of Object.entries(balances)) simulator.querySelector<HTMLElement>(`[data-escalation-value="${name.toLowerCase()}"]`)?.replaceChildren(`${balance} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="startBond"]')?.replaceChildren(`${startBond} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="nonDecisionThreshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
+	simulator.querySelector<HTMLElement>('[data-example-value="depositAmount"]')?.replaceChildren(`${depositAmount} REP`)
+	simulator.querySelector<HTMLElement>('[data-escalation-value="days"]')?.replaceChildren(`${daysSinceStart} days`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="startBond"]')?.replaceChildren(`${startBond} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="threshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(ordered[0]?.[1] === ordered[1]?.[1] ? 'No strict leader' : (ordered[0]?.[0] ?? 'None'))
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${median} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="balances"]')?.replaceChildren(`Yes ${balances.Yes} → ${afterBalances.Yes} REP; No ${balances.No} → ${afterBalances.No} REP; Invalid ${balances.Invalid} → ${afterBalances.Invalid} REP`)
+	const accepted = projection === undefined ? 0 : Number(projection.acceptedAmountAttoRep) / 1e18
+	let depositState = 'rejected'
+	if (projection !== undefined) {
+		if (projection.tieAdjusted) depositState = `accepted with tie adjustment: ${accepted} REP`
+		else if (accepted < depositAmount) depositState = `accepted and clipped: ${accepted} REP`
+		else depositState = `accepted: ${accepted} REP`
+	}
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deposit"]')?.replaceChildren(`${depositState}${projection?.reachesNonDecision === true ? ' (non-decision reached)' : ''}`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="activation"]')?.replaceChildren(daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS ? `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (${ESCALATION_ACTIVATION_DELAY_DAYS - daysSinceStart} days remaining)` : `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (active)`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)} → day ${afterDeadlineDays.toFixed(1)}`)
+	const thresholdReached = balanceValues.filter(balance => balance >= nonDecisionThreshold).length >= 2
+	let state = 'deadline pending'
+	if (thresholdReached) state = 'non-decision: fork path'
+	else if (daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS) state = 'activation pending'
+	else if (daysSinceStart > deadlineDays && (ordered[0]?.[1] ?? 0) > (ordered[1]?.[1] ?? 0)) state = `locally resolvable: ${ordered[0]?.[0] ?? 'None'}`
+	else if (daysSinceStart > deadlineDays) state = balanceValues.every(balance => balance === 0) ? 'resolved: Invalid' : 'unresolved tie'
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')?.replaceChildren(state)
+}
+
+updateEscalationSimulator()
+
+for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19', 'fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
-	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
-	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {
+	let inputRoot: Element | null
+	if (chartId === 'fig-auction-clearing-ladder') inputRoot = document.querySelector('#simple-auction-example')
+	else if (chartId === 'fig-statoblast-escalation-cost-curve') inputRoot = document.querySelector('#escalation-game-example')
+	else inputRoot = mount?.closest('.interactive-example') ?? null
+	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
+			if (chartId === 'fig-statoblast-escalation-cost-curve') updateEscalationSimulator()
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)
 				dispatchChartLayout()

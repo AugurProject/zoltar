@@ -12,9 +12,23 @@
 			<header>
 				<p><a href="../documentation.html">Documentation index</a></p>
 				<h1>Contract Interaction Map</h1>
+				<p><strong>Mental model:</strong> actors enter through pools, oracle coordination, Zoltar universes, and child repair; custody boundaries explain the call graph.</p>
 				<p>This map connects the primary deployed Zoltar registry and Statoblast market contracts. It emphasizes contract-to-contract calls and asset movement, not every public user entrypoint. Factory-only deployment workers, delegate modules, event emitters, and compatibility contracts are summarized separately so the runtime path stays legible.</p>
 				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">the Statoblast whitepaper</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
+			<section id="conceptual-model">
+				<h2>Conceptual Model Before the Graph</h2>
+				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
+				<ul>
+					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and REP branches.</li>
+					<li>A security pool tracks market collateral, vault accounting, open interest, and lifecycle state.</li>
+					<li>The share token tracks outcome-share balances.</li>
+					<li>The price coordinator stages operations that require a fresh REP/ETH price.</li>
+					<li>The escalation game escrows reporting REP and tracks local dispute state.</li>
+					<li>The pool forker creates and repairs child pools after a fork.</li>
+				</ul>
+				<p>One complete-set path is: a trader calls <code>SecurityPool</code>, the pool accepts ETH collateral, and the pool calls <code>ShareToken</code> to mint one share for every outcome. The event stream records the supply and accounting changes. The detailed graph below shows primary protocol interactions; supporting factories, delegates, emitters, callbacks, and compatibility contracts are summarized rather than expanded.</p>
+			</section>
 
 			<section id="overview">
 				<h2>Primary Interaction Flow</h2>
@@ -90,7 +104,7 @@
 								<td><code>SecurityPool</code></td>
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td>Risk operations</td>
-								<td>Reads the coordinator's last valid REP/ETH price. Vault users and liquidators stage withdrawals, allowance changes, and liquidations directly on the coordinator before restricted pool execution.</td>
+								<td>Reads the coordinator's last valid REP/ETH price. Vault owners and liquidators stage withdrawals, coverage commitment changes, and liquidations directly on the coordinator before restricted pool execution.</td>
 							</tr>
 							<tr data-edge-id="coordinator-oracle-report" data-source="Price Coordinator" data-receiver="OpenOracle" data-phase="Price discovery">
 								<td><code>OpenOraclePriceCoordinator</code></td>
@@ -108,7 +122,7 @@
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td><code>SecurityPool</code></td>
 								<td>Risk execution</td>
-								<td>After price and snapshot checks, calls the pool-only execution entrypoints for liquidation, REP withdrawal, or security-bond allowance changes.</td>
+								<td>After price and snapshot checks, calls the pool-only execution entrypoints for liquidation, REP withdrawal, or coverage commitment changes.</td>
 							</tr>
 							<tr data-edge-id="share-token-forker-migration" data-source="Share Token" data-receiver="Pool Forker" data-phase="Share migration">
 								<td><code>ShareToken</code></td>
@@ -126,13 +140,13 @@
 								<td><code>SecurityPoolForker</code></td>
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td>Fork migration</td>
-								<td>Deploys and owns the pool-specific adapter, transfers parent REP to it, and instructs it to lock, fork, split, and sweep child REP.</td>
+								<td>Deploys and controls the pool-specific adapter, transfers parent REP to it, and instructs it to lock, fork, split, and sweep child REP.</td>
 							</tr>
 							<tr data-edge-id="migration-proxy-zoltar" data-source="Migration Proxy" data-receiver="Zoltar" data-phase="Fork migration">
 								<td><code>SecurityPoolMigrationProxy</code></td>
 								<td><code>Zoltar</code></td>
 								<td>Fork migration</td>
-								<td>Acts as the literal Zoltar caller whose stable address owns the migration ledger balance while parent REP is locked and split into child-universe REP.</td>
+								<td>Acts as the literal Zoltar caller whose stable address holds the migration ledger balance while parent REP is locked and split into child-universe REP.</td>
 							</tr>
 							<tr data-edge-id="forker-child-deployment" data-source="Pool Forker" data-receiver="Pool Factory" data-phase="Fork migration">
 								<td><code>SecurityPoolForker</code></td>
@@ -167,7 +181,7 @@
 					</li>
 					<li>
 						<strong>Trade and resolve locally:</strong>
-						<code>SecurityPool</code> exchanges ETH collateral for complete sets through <code>ShareToken</code>, then escrows reporting REP in <code>EscalationGame</code>.
+						<code>SecurityPool</code> accepts ETH collateral and mints one share for every outcome through <code>ShareToken</code>, then escrows reporting REP in <code>EscalationGame</code>.
 					</li>
 					<li>
 						<strong>Reprice and liquidate:</strong>
@@ -220,10 +234,18 @@
 					</li>
 				</ul>
 			</section>
+			<section id="actors-and-boundaries">
+				<h2>Actors, custody, and one operation</h2>
+				<p>The protocol consists of several participants with distinct responsibilities. Market creators configure security pools, traders mint and hold complete sets and outcome shares, vault owners provide REP backing, liquidators repair under-collateralized vaults, auction bidders recapitalize child pools after forks, keepers execute permissionless maintenance operations, and indexers reconstruct protocol state from emitted events.</p>
+
+				<p>Each contract handles a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator runs price-sensitive operations that need a REP/ETH price. Zoltar manages universes, questions, REP, and forks. An operation may involve several contracts, but that does not move every asset or piece of state between them.</p>
+
+				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Each contract changes only the state it manages, while emitted events let external indexers reconstruct the operation.</p>
+
+				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the custody and responsibility boundaries described above remain stable across deployments.</p>
+			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script src="../assets/js/protocolTerms.js"></script>
-		<script src="../assets/js/termTooltips.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>
 		<script src="../assets/js/docsShell.js"></script>

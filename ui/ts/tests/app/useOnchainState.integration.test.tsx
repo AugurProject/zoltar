@@ -42,9 +42,9 @@ function createDeferred<T>() {
 	return { promise, reject, resolve }
 }
 
-function createReadClient({ ethBalance = 0n, blockNumber = 10n, blockTimestamp = BigInt(Math.floor(Date.now() / 1000)) }: { ethBalance?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
+function createReadClient({ ethBalanceAttoEth = 0n, blockNumber = 10n, blockTimestamp = BigInt(Math.floor(Date.now() / 1000)) }: { ethBalanceAttoEth?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
 	return {
-		getBalance: async () => ethBalance,
+		getBalance: async () => ethBalanceAttoEth,
 		getBlock: async () => ({ number: blockNumber, timestamp: blockTimestamp }),
 		getChainId: async () => 1,
 		readContract: async () => 0n,
@@ -230,7 +230,7 @@ describe('useOnchainState (integration)', () => {
 		const { backend, subscriptionState } = createBackend({
 			accountAddress: account,
 			getChainId: async () => '0x01',
-			readClient: createReadClient({ ethBalance: 123n, blockNumber: 100n, blockTimestamp: 200n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 123n, blockNumber: 100n, blockTimestamp: 200n }),
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
 			augurStatoblastDeployed: false,
@@ -256,8 +256,8 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).accountState).toMatchObject({
 			address: account,
 			chainId: '0x01',
-			ethBalance: 123n,
-			wethBalance: 555n,
+			ethBalanceAttoEth: 123n,
+			wethBalanceAttoEth: 555n,
 		})
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
@@ -506,7 +506,7 @@ describe('useOnchainState (integration)', () => {
 		})
 		const rpcBlockTimestamp = BigInt(Math.floor(Date.now() / 1000))
 		const rpcReadClient = {
-			...createReadClient({ blockNumber: 321n, blockTimestamp: rpcBlockTimestamp, ethBalance: 123n }),
+			...createReadClient({ blockNumber: 321n, blockTimestamp: rpcBlockTimestamp, ethBalanceAttoEth: 123n }),
 			getChainId: async () => 1,
 		} as ReadClient
 		const { backend, subscriptionState } = createBackend({
@@ -528,8 +528,8 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).accountState).toMatchObject({
 			address: account,
 			chainId: '0xaa36a7',
-			ethBalance: undefined,
-			wethBalance: undefined,
+			ethBalanceAttoEth: undefined,
+			wethBalanceAttoEth: undefined,
 		})
 		expect(requireHookState(hookState).readBackendMessage).toBeUndefined()
 		expect(requireHookState(hookState).currentBlockNumber).toBe(321n)
@@ -632,7 +632,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).accountState.wethBalance).toBe(456n))
+		await waitFor(() => expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(456n))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 		expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true)
 
@@ -642,8 +642,8 @@ describe('useOnchainState (integration)', () => {
 		})
 		await waitFor(() => expect(requireHookState(hookState).errorMessages).toHaveLength(3))
 
-		expect(requireHookState(hookState).accountState.ethBalance).toBeUndefined()
-		expect(requireHookState(hookState).accountState.wethBalance).toBeUndefined()
+		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBeUndefined()
+		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBeUndefined()
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		expect(requireHookState(hookState).augurStatoblastDeployed).toBeUndefined()
 		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
@@ -662,7 +662,7 @@ describe('useOnchainState (integration)', () => {
 				if (failureMode === 'chain') throw new Error('chain discovery failed')
 				return MAINNET_NETWORK_PROFILE.chainIdHex
 			},
-			readClient: createReadClient({ ethBalance: 123n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 123n }),
 		})
 		const dependencies = createOnchainStateDependencies({
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
@@ -680,7 +680,7 @@ describe('useOnchainState (integration)', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const waitForTrustedState = async () => {
-			await waitFor(() => expect(requireHookState(hookState).accountState.wethBalance).toBe(456n))
+			await waitFor(() => expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(456n))
 			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 			expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true)
 		}
@@ -688,8 +688,8 @@ describe('useOnchainState (integration)', () => {
 			expect(requireHookState(hookState).accountState).toEqual({
 				address: undefined,
 				chainId: undefined,
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			})
 			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 			expect(requireHookState(hookState).augurStatoblastDeployed).toBeUndefined()
@@ -1071,7 +1071,7 @@ describe('useOnchainState (integration)', () => {
 			waitUntilReady: async () => {
 				await readySignal.promise
 			},
-			readClient: createReadClient({ ethBalance: 0n, blockNumber: 1n, blockTimestamp: 2n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 0n, blockNumber: 1n, blockTimestamp: 2n }),
 		})
 		let dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
@@ -1185,11 +1185,11 @@ describe('useOnchainState (integration)', () => {
 		}>()
 		const { backend: firstBackend } = createBackend({
 			accountAddress: firstAccount,
-			readClient: createReadClient({ ethBalance: 11n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 11n }),
 		})
 		const { backend: replacementBackend } = createBackend({
 			getAccounts: async () => await replacementAccounts.promise,
-			readClient: createReadClient({ ethBalance: 22n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 22n }),
 		})
 		let snapshotLoadCount = 0
 		const dependencies = createOnchainStateDependencies({
@@ -1225,8 +1225,8 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).accountState).toEqual({
 			address: undefined,
 			chainId: undefined,
-			ethBalance: undefined,
-			wethBalance: undefined,
+			ethBalanceAttoEth: undefined,
+			wethBalanceAttoEth: undefined,
 		})
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
@@ -1381,13 +1381,13 @@ describe('useOnchainState (integration)', () => {
 
 	test('wallet-only refresh updates balances without rereading deployment status or chain clock', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a6')
-		let ethBalance = 123n
-		let wethBalance = 555n
+		let ethBalanceAttoEth = 123n
+		let wethBalanceAttoEth = 555n
 		let blockNumber = 100n
 		let blockTimestamp = 200n
 		let getBlockCalls = 0
 		const readClient = {
-			getBalance: async () => ethBalance,
+			getBalance: async () => ethBalanceAttoEth,
 			getBlock: async () => {
 				getBlockCalls += 1
 				return { number: blockNumber, timestamp: blockTimestamp }
@@ -1404,7 +1404,7 @@ describe('useOnchainState (integration)', () => {
 			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
-		const loadErc20Balance = mock(async () => wethBalance)
+		const loadErc20Balance = mock(async () => wethBalanceAttoEth)
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
@@ -1419,16 +1419,16 @@ describe('useOnchainState (integration)', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
-		expect(requireHookState(hookState).accountState.ethBalance).toBe(123n)
-		expect(requireHookState(hookState).accountState.wethBalance).toBe(555n)
+		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
+		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(555n)
 		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
 		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 		const initialGetBlockCalls = getBlockCalls
 
-		ethBalance = 999n
-		wethBalance = 777n
+		ethBalanceAttoEth = 999n
+		wethBalanceAttoEth = 777n
 		blockNumber = 999n
 		blockTimestamp = 888n
 
@@ -1440,8 +1440,8 @@ describe('useOnchainState (integration)', () => {
 		})
 
 		await waitFor(() => {
-			expect(requireHookState(hookState).accountState.ethBalance).toBe(999n)
-			expect(requireHookState(hookState).accountState.wethBalance).toBe(777n)
+			expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(999n)
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(777n)
 		})
 		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
 		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
@@ -1561,7 +1561,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('executes backend subscriptions and unsubscribes on cleanup', async () => {
 		const { backend, subscriptionState } = createBackend({
-			readClient: createReadClient({ ethBalance: 3n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 3n }),
 		})
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
@@ -1596,7 +1596,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('updates Statoblast deployment state when all deployment statuses are marked deployed', async () => {
 		const { backend } = createBackend({
-			readClient: createReadClient({ ethBalance: 4n }),
+			readClient: createReadClient({ ethBalanceAttoEth: 4n }),
 		})
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps: () => deploymentStatuses,
@@ -1747,8 +1747,8 @@ describe('useOnchainState (integration)', () => {
 
 		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
-		expect(requireHookState(hookState).accountState.ethBalance).toBe(321n)
-		expect(requireHookState(hookState).accountState.wethBalance).toBe(654n)
+		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(321n)
+		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(654n)
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)

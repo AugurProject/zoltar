@@ -97,7 +97,7 @@ describe('Auction tick math fuzz', () => {
 				args: [tick],
 			})
 			const roundingDifference = solidityPrice > exactRationalPrice ? solidityPrice - exactRationalPrice : exactRationalPrice - solidityPrice
-			assert.ok(roundingDifference <= 8n, `tickToPrice exceeded the 8 wei rounding budget at tick ${tick.toString()}`)
+			assert.ok(roundingDifference <= 8n, `tickToPrice exceeded the 8 attoETH rounding budget at tick ${tick.toString()}`)
 		}
 	})
 

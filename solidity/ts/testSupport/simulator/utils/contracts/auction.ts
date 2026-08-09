@@ -8,7 +8,7 @@ import { getInfraContractAddresses } from './deployPeripherals'
 type AuctionTickSummary = {
 	tick: bigint
 	price: bigint
-	currentTotalEth: bigint
+	currentTotalBidAttoEth: bigint
 	submissionCount: bigint
 	active: boolean
 }
@@ -17,9 +17,9 @@ type AuctionBidView = {
 	tick: bigint
 	bidIndex: bigint
 	bidder: Address
-	ethAmount: bigint
-	cumulativeEth: bigint
-	activeCumulativeEthBeforeBid: bigint
+	bidAmountAttoEth: bigint
+	cumulativeBidAttoEth: bigint
+	activeCumulativeBidBeforeAttoEth: bigint
 	claimed: boolean
 	refunded: boolean
 }
@@ -34,7 +34,7 @@ function mapAuctionTickSummary(summary: unknown): AuctionTickSummary {
 	return {
 		tick: requireBigInt(getTupleField(summary, 0, 'tick', 'Auction tick summary'), 'Auction tick summary tick'),
 		price: requireBigInt(getTupleField(summary, 1, 'price', 'Auction tick summary'), 'Auction tick summary price'),
-		currentTotalEth: requireBigInt(getTupleField(summary, 2, 'currentTotalEth', 'Auction tick summary'), 'Auction tick summary current total ETH'),
+		currentTotalBidAttoEth: requireBigInt(getTupleField(summary, 2, 'currentTotalBidAttoEth', 'Auction tick summary'), 'Auction tick summary current total ETH'),
 		submissionCount: requireBigInt(getTupleField(summary, 3, 'submissionCount', 'Auction tick summary'), 'Auction tick summary submission count'),
 		active: requireBoolean(getTupleField(summary, 4, 'active', 'Auction tick summary'), 'Auction tick summary active flag'),
 	}
@@ -45,32 +45,32 @@ function mapAuctionBidView(bid: unknown): AuctionBidView {
 		tick: requireBigInt(getTupleField(bid, 0, 'tick', 'Auction bid view'), 'Auction bid tick'),
 		bidIndex: requireBigInt(getTupleField(bid, 1, 'bidIndex', 'Auction bid view'), 'Auction bid index'),
 		bidder: requireAddress(getTupleField(bid, 2, 'bidder', 'Auction bid view'), 'Auction bidder'),
-		ethAmount: requireBigInt(getTupleField(bid, 3, 'ethAmount', 'Auction bid view'), 'Auction bid ETH amount'),
-		cumulativeEth: requireBigInt(getTupleField(bid, 4, 'cumulativeEth', 'Auction bid view'), 'Auction bid cumulative ETH'),
-		activeCumulativeEthBeforeBid: requireBigInt(getTupleField(bid, 5, 'activeCumulativeEthBeforeBid', 'Auction bid view'), 'Auction bid active cumulative ETH before bid'),
+		bidAmountAttoEth: requireBigInt(getTupleField(bid, 3, 'bidAmountAttoEth', 'Auction bid view'), 'Auction bid ETH amount'),
+		cumulativeBidAttoEth: requireBigInt(getTupleField(bid, 4, 'cumulativeBidAttoEth', 'Auction bid view'), 'Auction bid cumulative ETH'),
+		activeCumulativeBidBeforeAttoEth: requireBigInt(getTupleField(bid, 5, 'activeCumulativeBidBeforeAttoEth', 'Auction bid view'), 'Auction bid active cumulative ETH before bid'),
 		claimed: requireBoolean(getTupleField(bid, 6, 'claimed', 'Auction bid view'), 'Auction bid claimed flag'),
 		refunded: requireBoolean(getTupleField(bid, 7, 'refunded', 'Auction bid view'), 'Auction bid refunded flag'),
 	}
 }
 
-export const startAuction = async (client: WriteClient, auctionAddress: Address, ethRaiseCap: bigint, maxRepBeingSold: bigint) =>
+export const startAuction = async (client: WriteClient, auctionAddress: Address, attoEthRaiseCap: bigint, maxAttoRepBeingSold: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'startAuction',
 			address: auctionAddress,
-			args: [ethRaiseCap, maxRepBeingSold],
+			args: [attoEthRaiseCap, maxAttoRepBeingSold],
 		}),
 	)
 
-export const submitBid = async (client: WriteClient, auctionAddress: Address, tick: bigint, ethAmount: bigint) =>
+export const submitBid = async (client: WriteClient, auctionAddress: Address, tick: bigint, bidAmountAttoEth: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'submitBid',
 			address: auctionAddress,
 			args: [tick],
-			value: ethAmount,
+			value: bidAmountAttoEth,
 		}),
 	)
 
@@ -97,8 +97,8 @@ export const computeClearing = async (client: ReadClient, auctionAddress: Addres
 	return {
 		hitCap: requireBoolean(result[0], 'Auction clearing hitCap'),
 		foundTick: requireBigInt(result[1], 'Auction clearing found tick'),
-		accumulatedEth: requireBigInt(result[2], 'Auction clearing accumulated ETH'),
-		ethAtClearingTick: requireBigInt(result[3], 'Auction clearing ETH at tick'),
+		accumulatedBidAttoEth: requireBigInt(result[2], 'Auction clearing accumulated ETH'),
+		bidAtClearingTickAttoEth: requireBigInt(result[3], 'Auction clearing ETH at tick'),
 	}
 }
 
@@ -135,8 +135,8 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 		'Auction withdraw simulation',
 	)
 	return {
-		totalFilledRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
-		totalEthRefund: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
+		totalFilledAttoRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
+		totalRefundAttoEth: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
 		totalProRataAllocation: requireBigInt(result[2], 'Auction withdraw simulation pro-rata allocation'),
 	}
 }
@@ -173,55 +173,55 @@ export const getClearingTick = async (client: ReadClient, auctionAddress: Addres
 		'Auction clearing tick',
 	)
 
-export const getMinBidSize = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+export const getMinBidSizeAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'minBidSize',
+			functionName: 'minBidSizeAttoEth',
 			address: auctionAddress,
 			args: [],
 		}),
 		'Auction min bid size',
 	)
 
-export const getMaxRepBeingSold = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+export const getMaxRepBeingSoldAttoRep = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'maxRepBeingSold',
+			functionName: 'maxAttoRepBeingSold',
 			address: auctionAddress,
 			args: [],
 		}),
 		'Auction max REP being sold',
 	)
 
-export const getEthRaiseCap = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'ethRaiseCap',
+			functionName: 'attoEthRaiseCap',
 			address: auctionAddress,
 			args: [],
 		}),
 		'Auction ETH raise cap',
 	)
 
-export const getEthRaised = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+export const getEthRaisedAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'ethRaised',
+			functionName: 'attoEthRaised',
 			address: auctionAddress,
 			args: [],
 		}),
 		'Auction ETH raised',
 	)
 
-export const getTotalRepPurchased = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+export const getTotalRepPurchasedAttoRep = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'totalRepPurchased',
+			functionName: 'totalAttoRepPurchased',
 			address: auctionAddress,
 			args: [],
 		}),

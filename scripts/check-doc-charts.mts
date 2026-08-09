@@ -6,6 +6,7 @@ import ts from 'typescript'
 
 import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
 import { hasDiagramOverflow, resolveChartEnvelopeWidth } from '../docs/charts/diagramControl'
+import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from '../docs/charts/diagramGeometry'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
@@ -14,7 +15,7 @@ const diagramControlPath = path.join(repositoryRoot, 'docs/charts/diagramControl
 const sharedDocsCssPath = path.join(repositoryRoot, 'docs/assets/css/shared-docs.css')
 const generatedPath = path.join(repositoryRoot, 'docs/assets/js/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
-const expectedChartCount = 38
+const expectedChartCount = 23
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
 const axisFreeNativeChartIds = new Set(['fig-contract-interaction-map'])
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
@@ -28,6 +29,27 @@ if (resolveChartEnvelopeWidth(0, 780, 1024) !== 780 || resolveChartEnvelopeWidth
 }
 if (!hasDiagramOverflow(934, 976) || !hasDiagramOverflow(957, 976) || hasDiagramOverflow(976, 976)) {
 	throw new Error('Documentation diagram controls must follow measured CSS-driven overflow at standalone breakpoint widths')
+}
+const exposedArrow = fitArrowEndpointOutsideRectangles(
+	[
+		{ x: 0, y: 10 },
+		{ x: 100, y: 10 },
+	],
+	[
+		{ height: 40, width: 80, x: 80, y: -10 },
+		{ height: 20, width: 40, x: 100, y: 0 },
+	],
+	5,
+)
+if (exposedArrow.at(-1)?.x !== 95 || exposedArrow.at(-1)?.y !== 10) {
+	throw new Error('Documentation arrowheads must stop outside destination nodes so later-painted shapes cannot cover them')
+}
+const nestedRectangleLayers = layerDiagramRectangles([
+	{ height: 40, width: 80, x: 80, y: -10 },
+	{ height: 20, width: 40, x: 100, y: 0 },
+])
+if (nestedRectangleLayers.background.length !== 1 || nestedRectangleLayers.foreground.length !== 1 || nestedRectangleLayers.background[0]?.x !== 80 || nestedRectangleLayers.foreground[0]?.x !== 100) {
+	throw new Error('Documentation diagram containers must paint below edges while destination nodes paint above them')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -319,24 +341,34 @@ if (axisUsesRegisteredLabel(detachedLabelOptions, 'y', detachedLabelSource)) {
 if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createElementNS|RenderFunction|narrativeMark/.test(runtimeSource)) {
 	throw new Error('Documentation flowcharts must use native Observable Plot marks without raw SVG DOM reconstruction')
 }
-if (!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Scrollable figure: ${spec.ariaLabel}')) {
+if (!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Responsive diagram: ${spec.ariaLabel}')) {
 	throw new Error('Documentation figure overflow wrappers must be keyboard-focusable and accessibly named')
 }
 if (
 	!runtimeSource.includes('responsiveChartSpec(spec, overflowEnvelope)') ||
 	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)") ||
 	!runtimeSource.includes('fullSizeDiagramOverflows(overflowEnvelope)') ||
-	!runtimeSource.includes('updateDiagramControl(button, cue, isFit)') ||
+	!runtimeSource.includes('updateDiagramControl(button, cue, isExpanded)') ||
+	!runtimeSource.includes('setDiagramExpanded(overflowEnvelope') ||
+	!runtimeSource.includes('fitArrowEndpointOutsideRectangles(item.points, data.rectangles') ||
+	!runtimeSource.includes('...rectangleMarks(rectangleLayers.background), ...lineMarks, ...rectangleMarks(rectangleLayers.foreground)') ||
+	!runtimeSource.includes("document.addEventListener('keydown'") ||
+	!runtimeSource.includes("window.addEventListener('resize'") ||
+	!runtimeSource.includes('enforceDiagramBackground(expandedDiagram.background)') ||
+	!runtimeSource.includes("window.dispatchEvent(new Event('resize'))") ||
+	!diagramControlSource.includes('state.element.inert = true') ||
+	!runtimeSource.includes("button.setAttribute('aria-controls'") ||
 	!runtimeSource.includes("overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)") ||
 	!runtimeSource.includes("overflowEnvelope.classList.add('plot-figure-fit')") ||
 	!runtimeSource.includes('if (!needsControl) return') ||
 	runtimeSource.includes("matchMedia('(max-width: 640px)')") ||
-	!diagramControlSource.includes("'View full size'") ||
-	!diagramControlSource.includes("'Fit to width'") ||
+	!diagramControlSource.includes("'View full screen'") ||
+	!diagramControlSource.includes("'Close full screen'") ||
 	!diagramControlSource.includes("button.removeAttribute('aria-pressed')") ||
+	!diagramControlSource.includes("button.setAttribute('aria-expanded'") ||
 	!sharedDocsCssSource.includes('.plot-figure-diagram:not(.plot-figure-fit) > .plot-chart') ||
 	!sharedDocsCssSource.includes('.plot-figure-diagram:not(.plot-figure-fit) > .plot-chart > svg') ||
-	!sharedDocsCssSource.includes('width: auto !important') ||
+	!sharedDocsCssSource.includes('.plot-figure-expanded') ||
 	!runtimeSource.includes("new CustomEvent('docs:charts-rendered')") ||
 	!runtimeSource.includes('restoreDocumentFragment')
 ) {

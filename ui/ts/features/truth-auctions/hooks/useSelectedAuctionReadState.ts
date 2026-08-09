@@ -205,7 +205,7 @@ export function useSelectedAuctionReadState({
 			.catch(error => {
 				if (cancelled) return
 				setSelectedOutcomeMigrationSeedStatus(undefined)
-				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool REP is ready for the ${selectedAuctionLabel} child pool.`))
+				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool-held REP is ready for the ${selectedAuctionLabel} child pool.`))
 			})
 			.finally(() => {
 				if (cancelled) return

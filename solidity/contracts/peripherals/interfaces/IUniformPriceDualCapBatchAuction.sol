@@ -9,61 +9,61 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 		PreFinalizationRefund
 	}
 
-	/// @notice Lifecycle anchor. Timestamps use Unix seconds; ETH values use wei and REP uses token base units.
+	/// @notice Lifecycle anchor. Timestamps use Unix seconds; ETH values use attoETH and REP values use attoREP.
 	event AuctionStarted(
 		uint256 startTimestamp,
 		uint256 endTimestamp,
-		uint256 ethRaiseCap,
-		uint256 maxRepBeingSold,
-		uint256 minBidSize
+		uint256 attoEthRaiseCap,
+		uint256 maxAttoRepBeingSold,
+		uint256 minBidSizeAttoEth
 	);
-	/// @notice Stable per-tick bid identity and the resulting FIFO cumulative ETH position. ETH values use wei.
+	/// @notice Stable per-tick bid identity and the resulting FIFO cumulative ETH position. ETH values use attoETH.
 	event BidSubmitted(
 		address indexed bidder,
 		int256 indexed tick,
 		uint256 indexed bidIndex,
-		uint256 ethAmount,
-		uint256 cumulativeEthAtTick
+		uint256 bidAmountAttoEth,
+		uint256 cumulativeBidAtTickAttoEth
 	);
-	/// @notice Final aggregate clearing state; ETH fields use wei, REP uses token base units,
-	/// `grossEthAccepted` is the accepted ETH transferred to the owner, and `funded` distinguishes
+	/// @notice Final aggregate clearing state; ETH fields use attoETH and REP fields use attoREP,
+	/// `grossAcceptedAttoEth` is the accepted ETH transferred to the owner, and `funded` distinguishes
 	/// cap-clearing from underfunded mode.
 	event AuctionFinalized(
 		int256 indexed clearingTick,
-		uint256 grossEthAccepted,
-		uint256 repSold,
-		uint256 ethFilledAtClearingTick,
+		uint256 grossAcceptedAttoEth,
+		uint256 attoRepSold,
+		uint256 bidAtClearingTickAttoEth,
 		bool funded
 	);
-	/// @notice One bid's complete settlement or pre-finalization refund. ETH fields use wei, REP uses token base
-	/// units, and `ethUsed + ethRefund` equals `originalEthAmount`.
+	/// @notice One bid's complete settlement or pre-finalization refund. ETH fields use attoETH, REP fields use
+	/// attoREP, and `bidUsedAttoEth + refundAttoEth` equals `originalBidAmountAttoEth`.
 	event BidSettled(
 		address indexed bidder,
 		int256 indexed tick,
 		uint256 indexed bidIndex,
-		uint256 originalEthAmount,
-		uint256 ethUsed,
-		uint256 repFilled,
-		uint256 ethRefund,
+		uint256 originalBidAmountAttoEth,
+		uint256 bidUsedAttoEth,
+		uint256 attoRepFilled,
+		uint256 refundAttoEth,
 		BidSettlementStatus status
 	);
 	/// @notice A bounded-gas push refund that fails remains escrowed for later pull withdrawal.
-	event EthRefundDeferred(address indexed bidder, uint256 amount, uint256 pendingAmount);
+	event EthRefundDeferred(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth);
 	/// @notice A bidder's complete deferred ETH refund balance was cleared before its successful pull callback.
-	event PendingEthRefundWithdrawn(address indexed bidder, uint256 amount);
+	event PendingEthRefundWithdrawn(address indexed bidder, uint256 amountAttoEth);
 }
 
 interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
 	struct Bid {
 		address bidder;
-		uint256 ethAmount;
-		uint256 cumulativeEth;
+		uint256 bidAmountAttoEth;
+		uint256 cumulativeBidAttoEth;
 	}
 
 	struct TickSummary {
 		int256 tick;
 		uint256 price;
-		uint256 currentTotalEth;
+		uint256 currentTotalBidAttoEth;
 		uint256 submissionCount;
 		bool active;
 	}
@@ -72,9 +72,9 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 		int256 tick;
 		uint256 bidIndex;
 		address bidder;
-		uint256 ethAmount;
-		uint256 cumulativeEth;
-		uint256 activeCumulativeEthBeforeBid;
+		uint256 bidAmountAttoEth;
+		uint256 cumulativeBidAttoEth;
+		uint256 activeCumulativeBidBeforeAttoEth;
 		bool claimed;
 		bool refunded;
 	}
@@ -86,36 +86,36 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 
 	function owner() external view returns (address);
 
-	function maxRepBeingSold() external view returns (uint256);
-	function ethRaiseCap() external view returns (uint256);
-	function pendingEthRefunds(address bidder) external view returns (uint256);
+	function maxAttoRepBeingSold() external view returns (uint256);
+	function attoEthRaiseCap() external view returns (uint256);
+	function pendingEthRefundsAttoEth(address bidder) external view returns (uint256);
 
 	function finalized() external view returns (bool);
 	function clearingTick() external view returns (int256);
-	function ethFilledAtClearing() external view returns (uint256);
-	function ethRaised() external view returns (uint256);
-	function totalRepPurchased() external view returns (uint256);
+	function ethFilledAtClearingAttoEth() external view returns (uint256);
+	function attoEthRaised() external view returns (uint256);
+	function totalAttoRepPurchased() external view returns (uint256);
 
 	function auctionStarted() external view returns (uint256);
-	function minBidSize() external view returns (uint256);
+	function minBidSizeAttoEth() external view returns (uint256);
 
-	function startAuction(uint256 ethRaiseCap, uint256 maxRepBeingSold) external;
+	function startAuction(uint256 attoEthRaiseCap, uint256 maxAttoRepBeingSold) external;
 
 	function submitBid(int256 tick) external payable;
 
 	function finalize() external;
-	function previewFinalization() external view returns (uint256 ethToSend, uint256 repPurchased);
+	function previewFinalization() external view returns (uint256 raisedAttoEthToSend, uint256 repPurchasedAttoRep);
 
 	function computeClearing()
 		external
 		view
-		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick);
+		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth);
 
 	function withdrawBids(
 		address withdrawFor,
 		TickIndex[] calldata tickIndices,
 		uint256 proRataTotal
-	) external returns (uint256 totalFilledRep, uint256 totalEthRefund, uint256 totalProRataAllocation);
+	) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation);
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 

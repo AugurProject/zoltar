@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import './ERC20.sol';
 
 contract GenesisReputationToken is ERC20 {
-	uint256 private immutable totalTheoreticalSupply;
+	uint256 private immutable totalTheoreticalSupplyAttoRep;
 
 	constructor(address[] memory initialHolders, uint256[] memory initialBalances) ERC20('Reputation', 'REP') {
 		require(initialHolders.length != 0, 'Genesis REP requires at least one initial holder');
@@ -22,10 +22,10 @@ contract GenesisReputationToken is ERC20 {
 			_mint(holder, balance);
 			supply += balance;
 		}
-		totalTheoreticalSupply = supply;
+		totalTheoreticalSupplyAttoRep = supply;
 	}
 
-	function getTotalTheoreticalSupply() external view returns (uint256) {
-		return totalTheoreticalSupply;
+	function getTotalTheoreticalSupplyAttoRep() external view returns (uint256) {
+		return totalTheoreticalSupplyAttoRep;
 	}
 }

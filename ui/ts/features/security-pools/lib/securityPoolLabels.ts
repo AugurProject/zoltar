@@ -4,7 +4,7 @@ import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
 
-type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance'
+type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-coverage-commitment'
 type RepExitMode = 'redeem' | 'withdraw'
 
 export function formatSecurityPoolPageSummary(matchingPoolCount: number, loadedPoolCount: number) {
@@ -17,14 +17,14 @@ export function getVaultLauncherWalletReason(action: VaultLauncherAction, repExi
 	if (action === 'claim-fees') return securityPoolCopy.connectWalletBeforeClaimingFees
 	if (action === 'deposit-rep') return securityPoolCopy.connectWalletBeforeDepositingRep
 	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.connectWalletBeforeRedeemingRep : securityPoolCopy.connectWalletBeforeWithdrawingRep
-	return securityPoolCopy.connectWalletBeforeSettingBondAllowance
+	return securityPoolCopy.connectWalletBeforeSettingCoverageCommitment
 }
 
-export function getVaultLauncherOwnershipReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
+export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
 	if (action === 'claim-fees') return securityPoolCopy.selectOwnVaultToClaimFees
 	if (action === 'deposit-rep') return securityPoolCopy.selectOwnVaultToDepositRep
 	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.selectOwnVaultToRedeemRep : securityPoolCopy.selectOwnVaultToWithdrawRep
-	return securityPoolCopy.selectOwnVaultToSetBondAllowance
+	return securityPoolCopy.selectOwnVaultToSetCoverageCommitment
 }
 
 export function getSecurityPoolLifecycleLabel(state: SecurityPoolLifecycleState | undefined) {

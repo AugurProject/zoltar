@@ -12,7 +12,7 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
-const REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000b2' as const
 
@@ -29,14 +29,14 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 				universeId: 2n,
 			},
 		],
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		forkQuestionDetails: undefined,
 		forkTime: 1n,
 		forkingOutcomeIndex: 0n,
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1000n,
+		totalTheoreticalSupplyAttoRep: 1000n,
 		universeId: 1n,
 		zoltarAddress: ZOLTAR_ADDRESS,
 		...overrides,
@@ -65,15 +65,15 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarForkApproval: {
 			error: undefined,
 			loading: false,
-			value: 20n * REP,
+			value: 20n * ATTO_REP,
 		},
-		zoltarForkRepBalance: 20n * REP,
+		zoltarForkRepBalanceAttoRep: 20n * ATTO_REP,
 		zoltarMigrationActiveAction: undefined,
-		zoltarMigrationChildRepBalances: { '2': 0n },
+		zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
 		zoltarMigrationError: undefined,
 		zoltarMigrationForm: createForm(),
 		zoltarMigrationPending: false,
-		zoltarMigrationPreparedRepBalance: 10n * REP,
+		zoltarMigrationPreparedRepBalanceAttoRep: 10n * ATTO_REP,
 		zoltarUniverse: createUniverse(),
 		zoltarUniverseState: 'ready',
 		...overrides,
@@ -137,9 +137,9 @@ describe('ZoltarMigrationSection', () => {
 					zoltarForkApproval: {
 						error: undefined,
 						loading: false,
-						value: 10n * REP,
+						value: 10n * ATTO_REP,
 					},
-					zoltarMigrationPreparedRepBalance: 0n,
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 				}),
 			),
 		)
@@ -166,7 +166,7 @@ describe('ZoltarMigrationSection', () => {
 						loading: false,
 						value: 0n,
 					},
-					zoltarMigrationPreparedRepBalance: 0n,
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 				}),
 			),
 		)
@@ -242,7 +242,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					zoltarMigrationChildRepBalances: { '2': 5n * REP },
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * ATTO_REP },
 					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
 				}),
 			),
@@ -261,7 +261,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					zoltarMigrationChildRepBalances: { '2': 0n },
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
 					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
 				}),
 			),

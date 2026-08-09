@@ -6,7 +6,7 @@ import * as url from 'node:url'
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
 	forkThresholdDivisor: string
-	initialEscalationGameDeposit: string
+	initialEscalationGameDepositAttoRep: string
 }
 
 type ManifestDeploymentStep = {
@@ -61,14 +61,14 @@ function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 	if (!isRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
 	const forkBurnDivisor = Reflect.get(source, 'forkBurnDivisor')
 	const forkThresholdDivisor = Reflect.get(source, 'forkThresholdDivisor')
-	const initialEscalationGameDeposit = Reflect.get(source, 'initialEscalationGameDeposit')
+	const initialEscalationGameDepositAttoRep = Reflect.get(source, 'initialEscalationGameDepositAttoRep')
 	if (typeof forkBurnDivisor !== 'bigint') throw new Error('Mainnet protocol config forkBurnDivisor must be a bigint')
 	if (typeof forkThresholdDivisor !== 'bigint') throw new Error('Mainnet protocol config forkThresholdDivisor must be a bigint')
-	if (typeof initialEscalationGameDeposit !== 'bigint') throw new Error('Mainnet protocol config initialEscalationGameDeposit must be a bigint')
+	if (typeof initialEscalationGameDepositAttoRep !== 'bigint') throw new Error('Mainnet protocol config initialEscalationGameDepositAttoRep must be a bigint')
 	return {
 		forkBurnDivisor: forkBurnDivisor.toString(),
 		forkThresholdDivisor: forkThresholdDivisor.toString(),
-		initialEscalationGameDeposit: initialEscalationGameDeposit.toString(),
+		initialEscalationGameDepositAttoRep: initialEscalationGameDepositAttoRep.toString(),
 	}
 }
 
@@ -174,7 +174,7 @@ async function readManifest(manifestId: ManifestId): Promise<DeploymentManifest>
 		protocolConfig: {
 			forkBurnDivisor: readStringField(protocolConfig, 'forkBurnDivisor', 'protocolConfig.forkBurnDivisor'),
 			forkThresholdDivisor: readStringField(protocolConfig, 'forkThresholdDivisor', 'protocolConfig.forkThresholdDivisor'),
-			initialEscalationGameDeposit: readStringField(protocolConfig, 'initialEscalationGameDeposit', 'protocolConfig.initialEscalationGameDeposit'),
+			initialEscalationGameDepositAttoRep: readStringField(protocolConfig, 'initialEscalationGameDepositAttoRep', 'protocolConfig.initialEscalationGameDepositAttoRep'),
 		},
 		deploymentSteps: readDeploymentSteps(deploymentSteps),
 		derivedContracts: readDeploymentSteps(derivedContracts),

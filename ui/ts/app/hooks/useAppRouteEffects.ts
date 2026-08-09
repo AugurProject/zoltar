@@ -22,7 +22,7 @@ type Props = {
 	setForkAuctionFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	setOpenOracleFormReportId: (reportId: string) => void
 	setReportingFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setSecurityVaultFormSelectedVaultAddress: (selectedVaultAddress: string) => void
+	setSecurityVaultFormSelectedVaultOwner: (selectedVaultOwner: string) => void
 	setSecurityVaultFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityPoolFormMarketId: (marketId: string) => void
 	setTradingFormSecurityPoolAddress: (securityPoolAddress: string) => void
@@ -59,7 +59,7 @@ export function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Ap
 	return route === 'security-pools'
 }
 
-export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: AppRoute; securityPoolAddress: string }) {
+export function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: AppRoute; securityPoolAddress: string }) {
 	if (route !== 'security-pools') return undefined
 	const normalizedSecurityPoolAddress = normalizeAddress(securityPoolAddress) ?? ''
 	const normalizedLastSecurityPoolAddress = normalizeAddress(lastSecurityPoolAddress)
@@ -86,7 +86,7 @@ export function useAppRouteEffects({
 	setForkAuctionFormSecurityPoolAddress,
 	setOpenOracleFormReportId,
 	setReportingFormSecurityPoolAddress,
-	setSecurityVaultFormSelectedVaultAddress,
+	setSecurityVaultFormSelectedVaultOwner,
 	setSecurityVaultFormSecurityPoolAddress,
 	setSecurityPoolFormMarketId,
 	setTradingFormSecurityPoolAddress,
@@ -165,19 +165,19 @@ export function useAppRouteEffects({
 	}, [route, securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
 
 	useEffect(() => {
-		const nextSelectedVaultAddress = getSelectedVaultAddressForRoutePoolChange({
+		const nextSelectedVaultOwner = getSelectedVaultOwnerForRoutePoolChange({
 			accountAddress,
 			lastSecurityPoolAddress: lastSelectedSecurityPoolAddress.current,
 			route,
 			securityPoolAddress,
 		})
-		if (nextSelectedVaultAddress !== undefined) setSecurityVaultFormSelectedVaultAddress(nextSelectedVaultAddress)
+		if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
 		if (route !== 'security-pools') {
 			lastSelectedSecurityPoolAddress.current = undefined
 			return
 		}
 		lastSelectedSecurityPoolAddress.current = normalizeAddress(securityPoolAddress) ?? ''
-	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultAddress])
+	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultOwner])
 
 	useEffect(() => {
 		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current

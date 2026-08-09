@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { formatSecurityPoolPageSummary, getSecurityPoolLifecycleLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../../../features/security-pools/lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getSecurityPoolLifecycleLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../../../features/security-pools/lib/securityPoolLabels.js'
 
 void describe('security pool lifecycle label', () => {
 	void test('maps each known lifecycle state and undefined', () => {
@@ -29,12 +29,12 @@ void describe('security pool lifecycle label', () => {
 		expect(getVaultLauncherWalletReason('deposit-rep', 'withdraw')).toBe('Connect a wallet before depositing REP.')
 		expect(getVaultLauncherWalletReason('rep-exit', 'redeem')).toBe('Connect a wallet before redeeming REP.')
 		expect(getVaultLauncherWalletReason('rep-exit', 'withdraw')).toBe('Connect a wallet before withdrawing REP.')
-		expect(getVaultLauncherWalletReason('set-bond-allowance', 'withdraw')).toBe('Connect a wallet before setting the security bond allowance.')
-		expect(getVaultLauncherOwnershipReason('claim-fees', 'withdraw')).toBe('Select your own vault to claim fees.')
-		expect(getVaultLauncherOwnershipReason('deposit-rep', 'withdraw')).toBe('Select your own vault to deposit REP.')
-		expect(getVaultLauncherOwnershipReason('rep-exit', 'redeem')).toBe('Select your own vault to redeem REP.')
-		expect(getVaultLauncherOwnershipReason('rep-exit', 'withdraw')).toBe('Select your own vault to withdraw REP.')
-		expect(getVaultLauncherOwnershipReason('set-bond-allowance', 'withdraw')).toBe('Select your own vault to set the security bond allowance.')
+		expect(getVaultLauncherWalletReason('set-coverage-commitment', 'withdraw')).toBe('Connect a wallet before setting the coverage commitment.')
+		expect(getVaultLauncherVaultOwnerReason('claim-fees', 'withdraw')).toBe('Select your own vault to claim fees.')
+		expect(getVaultLauncherVaultOwnerReason('deposit-rep', 'withdraw')).toBe('Select your own vault to deposit REP.')
+		expect(getVaultLauncherVaultOwnerReason('rep-exit', 'redeem')).toBe('Select your own vault to redeem REP.')
+		expect(getVaultLauncherVaultOwnerReason('rep-exit', 'withdraw')).toBe('Select your own vault to withdraw REP.')
+		expect(getVaultLauncherVaultOwnerReason('set-coverage-commitment', 'withdraw')).toBe('Select your own vault to set the coverage commitment.')
 	})
 
 	void test('selects count grammar outside the copy layer', () => {

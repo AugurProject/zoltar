@@ -12,29 +12,11 @@ The codebase is split into these main areas:
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `scripts/` contains repository-wide build, validation, and test orchestration
+- `bots/` contains liquidator and open oracle arbitrager bots
 
 Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-feature UI primitives remain in `components`, application composition belongs in `app`, and contract reads and writes belong in `protocol`.
 
-Protocol documentation lives in `docs/`:
-
-- [Security model](https://augurproject.github.io/zoltar/docs/reference/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, account-authority, and cryptographic assumptions A01–A28
-- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
-- [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html#clearing) — funded and underfunded clearing mechanics
-- [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
-
-For oracle audit classification, use the
-[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#intentional-economic-tradeoffs)
-and [attack model](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html#attack-model).
-For weak-demand auction behavior, use
-[Truth-auction clearing](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html#clearing).
-The invariant catalog owns the current requirement, status, and evidence for
-[`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/reference/invariants.html#ext-05).
-
-Deterministic deployment outputs live in the generated
-[`mainnet`](./docs/mainnet-deployment-addresses.json) and
-[`Sepolia`](./docs/sepolia-deployment-addresses.json) manifests. The repo keeps
-those files as source-of-truth data instead of maintaining separate prose pages
-for the same addresses.
+Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 ## Prerequisites
 
@@ -104,13 +86,7 @@ that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
 are defined in
 [`shared/ts/sepoliaRepAllocations.ts`](./shared/ts/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
-dependent deployment address. See the
-[Genesis REP deployment procedure](./docs/reference/operator-guardrails.html#genesis-rep-deployment)
-for constructor guards and recovery steps.
-
-Sepolia quote-dependent actions query live, network-local Uniswap liquidity.
-The [OpenOracle integration guide](./docs/explanation/open-oracle.html#openoracle-role)
-owns the quote-source order and address-selection details.
+dependent deployment address.
 
 ## Browser Simulation
 
@@ -127,13 +103,8 @@ Simulation mode details:
 - The activation flag is `?simulate=1`
 - The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
-- The default seeded scenario is `?simulate=1&simScenario=baseline`
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, and `simScenario=securitypoolx2-auction`
-- The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
-- Its **Mint 1 million REP** control credits only the selected QA account inside the tab-local simulation. It raises the simulated REP theoretical supply and, when Zoltar is deployed, synchronizes the genesis universe supply and fork threshold. It does not request a wallet transaction or mint on mainnet or Sepolia. Resetting the simulation or closing the tab discards unsaved credited REP; an explicitly saved or exported simulation snapshot can restore it only inside another browser-local simulation. On public Sepolia, Genesis REP remains limited to the constructor-fixed [allocation list](#sepolia); mainnet REP is unaffected.
-- Simulation does not call Uniswap. Supported REP/ETH, REP/WETH, and REP/USDC quote paths use the configured browser-local mock; unsupported pairs degrade. Simulation prices are not evidence of mainnet liquidity.
-- Mainnet and Sepolia quote-dependent flows rely on live RPC data and available network-local Uniswap liquidity under [A24 client and RPC integrity](https://augurproject.github.io/zoltar/docs/reference/security-model.html#assumption-a24). Available and representative liquidity is an official-client limitation, not a protocol security assumption. If a quote is stale, unavailable, or unsupported, affected client actions should remain blocked or degraded rather than falling back to simulated prices.
-- The live simulation chain is ephemeral and exists only in the current browser tab session; explicitly saved or exported snapshots can recreate its state in a later browser-local session
+- The live simulation chain is ephemeral and exists only in the current brow
 
 ## Common Commands
 
@@ -251,7 +222,4 @@ Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the comm
 
 - `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
-- `bun run test:launch-invariants` is the targeted pre-release gate for adversarial fork, truth-auction, unresolved escalation carry, and auction edge-case invariants.
 - `bun run coverage` runs every canonically discovered TypeScript test, reports weighted coverage for UI, shared, and tooling source, counts statically identified executable lines and functions in unloaded source as zero-hit coverage, and checks product TypeScript from the `origin/main` merge base through committed, staged, unstaged, and untracked task changes. Set `COVERAGE_BASE_REF` or pass `--base-ref` to the reporter to use another comparison ref. Use `bun run coverage:full` to enforce the same policy with the slower Solidity bytecode trace phase.
-- The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.
-- The repo uses exact dependency versions for reproducible installs.

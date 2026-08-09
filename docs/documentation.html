@@ -11,55 +11,26 @@
 	<body class="doc-openoracle docs-home">
 		<main>
 			<header>
-				<p class="docs-type-badge">Protocol documentation</p>
-				<h1>Build a clear model of Statoblast</h1>
-				<p>Choose the kind of help you need. Learn in a guided environment, complete a task, look up an exact contract rule, or understand the protocol's design.</p>
+				<h1>Introduction to Statoblast</h1>
+				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./explanation/zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
+
+				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href="./explanation/escalation-game.html">escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="./reference/security-model.html">security model</a>.</p>
+
+				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
+
+				<p>It is designed so that:</p>
+
+				<ul>
+					<li>Honest reporting is economically rewarded.</li>
+					<li>Dishonest reporting becomes increasingly expensive.</li>
+					<li>Anyone can challenge an incorrect resolution by risking REP.</li>
+					<li>Markets continue operating even when participants fundamentally disagree.</li>
+					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
+				</ul>
 			</header>
-
-			<section id="tutorials">
-				<h2>Tutorials</h2>
-				<p>Start here when the protocol is new to you. Each tutorial provides a safe, linear learning experience in simulation.</p>
-				<ul>
-					<li><a href="./tutorials/first-market.html">Explore a seeded market and security pool</a></li>
-					<li><a href="./tutorials/disputed-market.html">Inspect a market after an escalation fork</a></li>
-					<li><a href="./tutorials/fork-migration.html">Trace a fork into child recovery</a></li>
-					<li><a href="./tutorials/oracle-operation.html">Inspect an accepted oracle price</a></li>
-				</ul>
-			</section>
-
-			<section id="how-to-guides">
-				<h2>How-to guides</h2>
-				<p>Use these while doing real work. They assume familiarity and stay focused on a concrete operational or integration goal.</p>
-				<ul>
-					<li><a href="./how-to/prepare-release.html">Prepare an immutable release</a></li>
-					<li><a href="./how-to/operate-security-pool.html">Operate a security pool</a></li>
-					<li><a href="./how-to/migrate-fork.html">Migrate through a fork</a></li>
-					<li><a href="./how-to/build-event-indexer.html">Build a reorg-safe event indexer</a></li>
-				</ul>
-			</section>
-
-			<section id="reference">
-				<h2>Reference</h2>
-				<p>Consult authoritative descriptions of the machinery: contracts, events, invariants, assumptions, deployment state, and proof formats.</p>
-				<ul>
-					<li><a href="./reference/contracts.html">Contract interactions</a></li>
-					<li><a href="./reference/event-stream.html">Event stream</a></li>
-					<li><a href="./reference/invariants.html">Protocol invariants</a></li>
-					<li><a href="./reference/security-model.html">Security model</a></li>
-					<li><a href="./reference/merkle-mountain-range.html">Merkle Mountain Range proofs</a></li>
-				</ul>
-			</section>
-
-			<section id="explanation">
-				<h2>Explanation</h2>
-				<p>Step back from the controls to understand branching truth, security pools, contract boundaries, liquidation incentives, and collateral repair.</p>
-				<ul>
-					<li><a href="./explanation/statoblast.html">Statoblast protocol</a></li>
-					<li><a href="./explanation/zoltar.html">Zoltar and branching truth</a></li>
-					<li><a href="./explanation/contract-architecture.html">Contract architecture</a></li>
-					<li><a href="./explanation/open-oracle.html">OpenOracle integration</a></li>
-				</ul>
-			</section>
+			<nav aria-label="Start here">
+				<a class="button" href="./explanation/statoblast.html">Explore the protocol lifecycle</a>
+			</nav>
 		</main>
 		<script src="./assets/js/docsData.js"></script>
 		<script src="./assets/js/docsShell.js"></script>

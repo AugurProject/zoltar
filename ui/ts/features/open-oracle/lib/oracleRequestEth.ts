@@ -4,16 +4,16 @@ import { resolveOracleOperationEthFunding } from '../../../protocol/oracleReques
 
 export { resolveOracleOperationEthFunding }
 
-function getBufferedOracleRequestEthValue(requestPriceEthCost: bigint | undefined) {
-	if (requestPriceEthCost === undefined) return undefined
-	return addOpenOracleBountyBuffer(requestPriceEthCost)
+function getBufferedOracleRequestEthValue(requestPriceCostAttoEth: bigint | undefined) {
+	if (requestPriceCostAttoEth === undefined) return undefined
+	return addOpenOracleBountyBuffer(requestPriceCostAttoEth)
 }
 
-export function getOracleRequestEthGuardMessage({ actionLabel, includeBuffer = false, requiredEthCost, walletEthBalance }: { actionLabel: string; includeBuffer?: boolean; requiredEthCost: bigint | undefined; walletEthBalance: bigint | undefined }) {
-	const requiredEthValue = includeBuffer ? getBufferedOracleRequestEthValue(requiredEthCost) : requiredEthCost
+export function getOracleRequestEthGuardMessage({ actionLabel, includeBuffer = false, requiredCostAttoEth, walletBalanceAttoEth }: { actionLabel: string; includeBuffer?: boolean; requiredCostAttoEth: bigint | undefined; walletBalanceAttoEth: bigint | undefined }) {
+	const requiredEthValue = includeBuffer ? getBufferedOracleRequestEthValue(requiredCostAttoEth) : requiredCostAttoEth
 	if (requiredEthValue === undefined) return undefined
 	if (requiredEthValue === 0n) return undefined
-	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
-	if (walletEthBalance >= requiredEthValue) return undefined
-	return `Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to ${actionLabel}.`
+	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (walletBalanceAttoEth >= requiredEthValue) return undefined
+	return `Need ${formatCurrencyBalance(requiredEthValue - walletBalanceAttoEth)} more ETH in this wallet to ${actionLabel}.`
 }

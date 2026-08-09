@@ -447,14 +447,14 @@ void describe('simulation backend', () => {
 		const wethCode = await readClient.getCode({
 			address: backend.profile.wethAddress,
 		})
-		const repBalance = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
-		const wethBalance = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
+		const repBalanceAttoRep = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+		const wethBalanceAttoEth = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
 		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
 
 		expect(repCode).not.toBe('0x')
 		expect(wethCode).not.toBe('0x')
-		expect(repBalance > 0n).toBe(true)
-		expect(wethBalance > 0n).toBe(true)
+		expect(repBalanceAttoRep > 0n).toBe(true)
+		expect(wethBalanceAttoEth > 0n).toBe(true)
 		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
 	}, 30_000)
@@ -626,8 +626,8 @@ void describe('simulation backend', () => {
 				expect(restoredBackend.queryDelayMilliseconds).toBe(250)
 				expect(restoredBackend.transactionDelayMilliseconds).toBe(0)
 				expect(restoredBackend.repPerEthPrice).toBe(2n * 10n ** 18n)
-				const repBalance = await loadErc20Balance(restoredBackend.createReadClient(), restoredBackend.profile.genesisRepTokenAddress, secondaryAccount)
-				expect(repBalance >= SIMULATION_REP_MINT_AMOUNT).toBe(true)
+				const repBalanceAttoRep = await loadErc20Balance(restoredBackend.createReadClient(), restoredBackend.profile.genesisRepTokenAddress, secondaryAccount)
+				expect(repBalanceAttoRep >= SIMULATION_REP_MINT_AMOUNT).toBe(true)
 
 				await restoredBackend.reset()
 				expect(restoredBackend.selectedAccount).toBe(secondaryAccount)

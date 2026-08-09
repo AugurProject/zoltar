@@ -10,11 +10,11 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 	event ClaimAuctionProceeds(
 		ISecurityPool indexed securityPool,
 		address indexed vault,
-		uint256 amount,
-		uint256 poolOwnershipAmount,
-		uint256 poolOwnershipDenominator,
-		uint256 claimedAuctionRepPurchased,
-		uint256 claimedAuctionedSecurityBondAllowance
+		uint256 amountAttoRep,
+		uint256 repBackingUnits,
+		uint256 totalRepBackingUnits,
+		uint256 claimedAuctionRepPurchasedAttoRep,
+		uint256 claimedAuctionedCoverageCommitmentAttoEth
 	);
 
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
@@ -23,40 +23,44 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		ISecurityPool securityPool,
 		address vault,
 		SecurityPoolForkerForkData storage data,
-		uint256 amount,
-		uint256 newSecurityBondAllowance,
-		uint256 totalRepPurchased
+		uint256 amountAttoRep,
+		uint256 newCoverageCommitmentAttoEth,
+		uint256 totalAttoRepPurchased
 	) internal {
-		if (amount == 0 && newSecurityBondAllowance == 0) return;
-		uint256 auctionPoolOwnershipPerRep = data.auctionPoolOwnershipPerRep;
-		if (amount > 0) require(auctionPoolOwnershipPerRep > 0, 'Rate');
-		uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep;
-		uint256 nextClaimedAuctionPoolOwnership = data.claimedAuctionPoolOwnership + poolOwnershipAmount;
-		require(nextClaimedAuctionPoolOwnership <= totalRepPurchased * auctionPoolOwnershipPerRep, 'REP');
-		uint256 nextClaimedAuctionedSecurityBondAllowance =
-			data.claimedAuctionedSecurityBondAllowance + newSecurityBondAllowance;
-		require(nextClaimedAuctionedSecurityBondAllowance <= data.auctionedSecurityBondAllowance, 'Allowance');
-		data.claimedAuctionRepPurchased += amount;
-		data.claimedAuctionedSecurityBondAllowance = nextClaimedAuctionedSecurityBondAllowance;
-		data.claimedAuctionPoolOwnership = nextClaimedAuctionPoolOwnership;
+		if (amountAttoRep == 0 && newCoverageCommitmentAttoEth == 0) return;
+		uint256 auctionRepBackingUnitsPerAttoRep = data.auctionRepBackingUnitsPerAttoRep;
+		if (amountAttoRep > 0) require(auctionRepBackingUnitsPerAttoRep > 0, 'Rate');
+		uint256 auctionRepBackingUnits = amountAttoRep * auctionRepBackingUnitsPerAttoRep;
+		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
+		require(nextClaimedAuctionRepBackingUnits <= totalAttoRepPurchased * auctionRepBackingUnitsPerAttoRep, 'REP');
+		uint256 nextClaimedAuctionedCoverageCommitmentAttoEth =
+			data.claimedAuctionedCoverageCommitmentAttoEth + newCoverageCommitmentAttoEth;
+		require(nextClaimedAuctionedCoverageCommitmentAttoEth <= data.auctionedCoverageCommitmentAttoEth, 'Commitment');
+		data.claimedAuctionRepPurchasedAttoRep += amountAttoRep;
+		data.claimedAuctionedCoverageCommitmentAttoEth = nextClaimedAuctionedCoverageCommitmentAttoEth;
+		data.claimedAuctionRepBackingUnits = nextClaimedAuctionRepBackingUnits;
 		securityPool.updateVaultFees(vault);
-		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
-			.securityVaults(vault);
+		(
+			uint256 currentVaultRepBackingUnits,
+			uint256 currentCoverageCommitmentAttoEth,
+			,
+			uint256 currentFeeIndex
+		) = securityPool.securityVaults(vault);
 		securityPool.configureVault(
 			vault,
-			poolOwnership + poolOwnershipAmount,
-			currentSecurityBondAllowance + newSecurityBondAllowance,
+			currentVaultRepBackingUnits + auctionRepBackingUnits,
+			currentCoverageCommitmentAttoEth + newCoverageCommitmentAttoEth,
 			currentFeeIndex
 		);
-		securityPool.addFeeEligibleSecurityBondAllowance(vault, newSecurityBondAllowance);
+		securityPool.addFeeEligibleCoverageCommitmentAttoEth(vault, newCoverageCommitmentAttoEth);
 		emit ClaimAuctionProceeds(
 			securityPool,
 			vault,
-			amount,
-			poolOwnershipAmount,
-			securityPool.poolOwnershipDenominator(),
-			data.claimedAuctionRepPurchased,
-			data.claimedAuctionedSecurityBondAllowance
+			amountAttoRep,
+			auctionRepBackingUnits,
+			securityPool.totalRepBackingUnits(),
+			data.claimedAuctionRepPurchasedAttoRep,
+			data.claimedAuctionedCoverageCommitmentAttoEth
 		);
 	}
 }

@@ -599,7 +599,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		const reportDetailsSnapshot = openOracleReportDetails.value
 		const withdrawalTokenSymbol = (() => {
 			if (actionName !== 'withdrawBalance' || reportDetailsSnapshot === undefined) return undefined
-			if (openOracleActiveWithdrawalBalance.value === 'eth') return 'ETH'
+			if (openOracleActiveWithdrawalBalance.value === 'ethAttoEth') return 'ETH'
 			if (openOracleActiveWithdrawalBalance.value === 'token1') return reportDetailsSnapshot.token1Symbol
 			if (openOracleActiveWithdrawalBalance.value === 'token2') return reportDetailsSnapshot.token2Symbol
 			return undefined
@@ -772,13 +772,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			await runOracleAction(
 				'createReportInstance',
 				async walletAddress => {
-					const walletEthBalance = await readClient.getBalance({ address: walletAddress })
+					const walletBalanceAttoEth = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
 						ethValueInput: submittedOpenOracleCreateForm.ethValue,
 						isOnActiveAppChain: true,
-						settlerRewardInput: submittedOpenOracleCreateForm.settlerReward,
+						settlerRewardInput: submittedOpenOracleCreateForm.settlerRewardEthAmount,
 						walletConnected: true,
-						walletEthBalance,
+						walletBalanceAttoEth,
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
 					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })

@@ -42,8 +42,8 @@ void describe('deployed simulation backend', () => {
 		}
 		const zoltarBalanceAfter = await readClient.getBalance({ address: zoltarStep.address })
 
-		expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
-		expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
+		expect(universeSummaryAfter.totalTheoreticalSupplyAttoRep).toBe(universeSummaryBefore.totalTheoreticalSupplyAttoRep + SIMULATION_REP_MINT_AMOUNT)
+		expect(universeSummaryAfter.forkThresholdAttoRep).toBe(universeSummaryBefore.forkThresholdAttoRep + SIMULATION_REP_MINT_AMOUNT / 20n)
 		expect(zoltarBalanceAfter).toBe(zoltarBalanceBefore)
 	}, 60_000)
 

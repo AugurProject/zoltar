@@ -9,15 +9,15 @@ type Activity = {
 
 type Vault = {
 	address: string
-	allowanceEth: string
+	coverageCommitmentDisplay: string
 	healthBps?: string
-	rep: string
-	unpaidEthFees: string
+	vaultRepBacking: string
+	claimableFeesEth: string
 }
 
 type Candidate = {
 	bonusValueEth: string
-	debtToMoveEth: string
+	coverageCommitmentToTransferEth: string
 	target: string
 	topUpRep: string
 }
@@ -28,7 +28,7 @@ type Pool = {
 	approvedUniverse: boolean
 	botVault: Vault
 	candidates: Candidate[]
-	collateralEth: string
+	settlementCollateralEth: string
 	centralizedPriceAllowed: boolean
 	centralizedPriceDeviationBps?: string
 	isPriceValid: boolean
@@ -37,8 +37,8 @@ type Pool = {
 	questionId: string
 	selected: boolean
 	systemState: string
-	totalAllowanceEth: string
-	totalRep: string
+	totalCoverageCommitmentEth: string
+	totalPoolHeldRep: string
 	truncatedVaults: boolean
 	universeId: string
 }
@@ -102,7 +102,7 @@ type Snapshot = {
 	lastScanAt?: string
 	metrics: {
 		approvedUniverseCount: number
-		assumedDebtEth: string
+		assumedCoverageCommitmentEth: string
 		candidateCount: number
 		deployedRep: string
 		eligiblePoolCount: number
@@ -239,7 +239,7 @@ function renderMetrics(snapshot: Snapshot) {
 		metric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
 		metric('Candidates', snapshot.metrics.candidateCount.toString()),
 		metric('Deployed REP', snapshot.metrics.deployedRep),
-		metric('Assumed debt', `${snapshot.metrics.assumedDebtEth} ETH`),
+		metric('Coverage commitment assumed', `${snapshot.metrics.assumedCoverageCommitmentEth} ETH`),
 		metric('Wallet ETH', snapshot.metrics.walletEth),
 		metric('Wallet REP', snapshot.metrics.walletRep),
 	)
@@ -535,8 +535,8 @@ function publicFailure(error: unknown, message: string) {
 
 function botVaultState(vault: Vault) {
 	const health = vault.healthBps === undefined ? undefined : BigInt(vault.healthBps)
-	if (vault.rep === '0' && vault.allowanceEth === '0') return 'Inactive'
-	if (health === undefined) return 'No assumed debt'
+	if (vault.vaultRepBacking === '0' && vault.coverageCommitmentDisplay === '0') return 'Inactive'
+	if (health === undefined) return 'No assumed coverage commitment'
 	if (health < 10_000n) return `Top-up required · ${health.toString()} bps`
 	return `Healthy · ${health.toString()} bps`
 }
@@ -631,8 +631,8 @@ function renderPools(snapshot: Snapshot) {
 				cell(addressDetails),
 				cell(stacked(`#${pool.questionId}`, `${pool.multiplierBps} bps collateral`)),
 				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
-				cell(stacked(`${pool.totalRep} REP`, `${pool.totalAllowanceEth} ETH allowance · ${pool.activeVaultCount} vaults`)),
-				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.rep} REP · ${pool.botVault.allowanceEth} ETH assumed · ${pool.botVault.unpaidEthFees} ETH fees`)),
+				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCoverageCommitmentEth} ETH coverage commitment · ${pool.activeVaultCount} vaults`)),
+				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.coverageCommitmentDisplay} ETH assumed · ${pool.botVault.claimableFeesEth} ETH fees`)),
 				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
 			]
 			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']

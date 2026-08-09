@@ -67,7 +67,7 @@ describe('security pool creation helper', () => {
 		await createQuestion(client, questionData, outcomes)
 
 		const result = await createSecurityPool(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), {
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId,
 			statoblastSecurityMultiplierBps: 20_000n,
 		})
@@ -110,7 +110,7 @@ describe('security pool creation helper', () => {
 		const fakeClient = fakeClientBase as UiWriteClient
 
 		const result = await createSecurityPool(fakeClient, {
-			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: 123n,
 			statoblastSecurityMultiplierBps: 20_000n,
 		})

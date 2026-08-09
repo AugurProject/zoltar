@@ -12,6 +12,7 @@ import {
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
 	createSecurityPoolCreationTransactionIntent,
+	createSecurityVaultSuccessPresentation,
 	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
@@ -33,7 +34,12 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action'], over
 
 describe('transaction presentations', () => {
 	test('preserves protocol acronym casing and question terminology', () => {
-		expect(createSecurityVaultTransactionIntent('depositRep').submittedTitle).toBe('Deposit REP')
+		expect(createSecurityVaultTransactionIntent('depositRepToVault').submittedTitle).toBe('Deposit REP')
+		expect(createSecurityVaultTransactionIntent('queueSetCoverageCommitmentAttoEth').submittedTitle).toBe('Set coverage commitment')
+		expect(createSecurityVaultSuccessPresentation({ action: 'queueSetCoverageCommitmentAttoEth', hash: '0x1234' }).title).toBe('Set coverage commitment')
+		expect(createSecurityVaultTransactionIntent('queueSetCoverageCommitmentAttoEth').submittedTitle).not.toContain('Atto')
+		expect(createSecurityVaultTransactionIntent('queueWithdrawRep').submittedTitle).toBe('Withdraw REP')
+		expect(createSecurityVaultSuccessPresentation({ action: 'queueWithdrawRep', hash: '0x1234' }).title).toBe('Withdraw REP')
 		for (const [marketType, expectedLabel] of [
 			['binary', 'Binary'],
 			['categorical', 'Categorical'],
@@ -45,7 +51,7 @@ describe('transaction presentations', () => {
 	})
 
 	test('keeps vault identity in transaction intent rows', () => {
-		const intent = createSecurityVaultTransactionIntent('depositRep', {
+		const intent = createSecurityVaultTransactionIntent('depositRepToVault', {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
@@ -176,15 +182,15 @@ describe('transaction presentations', () => {
 		}
 	})
 
-	test('describes truth-auction claim settlement as REP plus auctioned bond allowance', () => {
+	test('describes truth-auction claim settlement as REP plus auctioned coverage commitment', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
-		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received child-pool REP plus Auctioned Bond Allowance (OI Debt), assigning the remaining open-interest debt; refund-only rows returned locked ETH.')
+		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned coverage commitment, assigning the remaining coverage commitment; refund-only rows returned locked ETH.')
 	})
 
-	test('describes finalized refund-only settlement without OI debt assignment', () => {
+	test('describes finalized refund-only settlement without coverage commitment assignment', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds', { settlementMode: 'refund' }))
 		expect(presentation.title).toBe('Settle Finalized Refunds')
-		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning child-pool REP or Auctioned Bond Allowance (OI Debt).')
+		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning REP backing units or Auctioned coverage commitment.')
 	})
 
 	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {
@@ -193,10 +199,10 @@ describe('transaction presentations', () => {
 		expect(intent.submittedDetail).toBeUndefined()
 	})
 
-	test('describes unresolved escalation migration as optional parent-lock cleanup', () => {
+	test('describes unresolved escalation migration as optional parent escalation-deposit accounting cleanup', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
-		expect(presentation.title).toBe('Clear Parent Escalation Locks')
-		expect(presentation.detail).toBe('The wallet’s parent escalation-lock accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.')
+		expect(presentation.title).toBe('Clear Unresolved Parent Escalation-Deposit Accounting')
+		expect(presentation.detail).toBe('The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.')
 	})
 
 	test('describes direct parent escalation claims without calling them migration', () => {

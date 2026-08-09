@@ -1,6 +1,6 @@
 import {
-	computeEscalationTimeSinceStartFromAttritionCost,
-	getEscalationBindingCapital,
+	computeEscalationTimeSinceStartFromAttritionCostAttoRep,
+	getEscalationBindingCapitalAttoRep,
 	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
 	getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount,
 	projectEscalationDeposit,
@@ -11,18 +11,18 @@ import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { requireDefined } from '../../../lib/required.js'
 import { getTimeRemaining } from '../../../lib/time.js'
 type ReportingAmountSuggestion = {
-	amount: bigint | undefined
+	amountAttoRep: bigint | undefined
 	reason: string | undefined
 }
 const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
-export { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBindingCapital }
+export { computeEscalationTimeSinceStartFromAttritionCostAttoRep, getEscalationBindingCapitalAttoRep }
 const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 type ProjectedEscalationEndTime = {
-	acceptedAmount: bigint
+	acceptedAmountAttoRep: bigint
 	endsImmediately: boolean
 	projectedEndTime: bigint
 }
@@ -34,7 +34,7 @@ type ReportingTimerPreview =
 			timeUntilStart: bigint
 	  }
 	| {
-			acceptedAmount: bigint
+			acceptedAmountAttoRep: bigint
 			actualState: 'ends-immediately' | 'extends' | 'unchanged'
 			hypotheticalDuration: bigint
 			kind: 'active-or-pending'
@@ -54,7 +54,7 @@ function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutco
 	}
 }
 function getAvailableRoom(details: ActiveReportingDetails, selectedBalance: bigint) {
-	return details.nonDecisionThreshold > selectedBalance ? details.nonDecisionThreshold - selectedBalance : 0n
+	return details.nonDecisionThresholdAttoRep > selectedBalance ? details.nonDecisionThresholdAttoRep - selectedBalance : 0n
 }
 function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
 	return selectedBalance > largestOtherBalance
@@ -85,55 +85,55 @@ export function getEscalationBalanceTuple(sides: EscalationSide[]): EscalationBa
 	const noBalance = sides.find(side => side.key === 'no')?.balance ?? 0n
 	return [invalidBalance, yesBalance, noBalance]
 }
-function computeHypotheticalBindingDuration(startBond: bigint, nonDecisionThreshold: bigint, bindingCapital: bigint) {
-	if (bindingCapital <= 0n) return 0n
-	return computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+function computeHypotheticalBindingDuration(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, bindingCapitalAttoRep: bigint) {
+	if (bindingCapitalAttoRep <= 0n) return 0n
+	return computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, bindingCapitalAttoRep)
 }
 export function projectEscalationEndTime(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ProjectedEscalationEndTime | undefined {
 	if (amount <= 0n) return undefined
 	const projectedDeposit = projectEscalationDeposit({
-		amount,
-		balances: getEscalationBalanceTuple(details.sides),
-		nonDecisionThreshold: details.nonDecisionThreshold,
+		amountAttoRep: amount,
+		balancesAttoRep: getEscalationBalanceTuple(details.sides),
+		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
 		outcome,
-		startBond: details.startBond,
+		startBondAttoRep: details.startBondAttoRep,
 	})
 	if (projectedDeposit === undefined) return undefined
 	if (projectedDeposit.reachesNonDecision)
 		return {
-			acceptedAmount: projectedDeposit.acceptedAmount,
+			acceptedAmountAttoRep: projectedDeposit.acceptedAmountAttoRep,
 			endsImmediately: true,
 			projectedEndTime: details.currentTime,
 		}
-	const projectedBindingCapital = getEscalationBindingCapital(projectedDeposit.projectedBalances)
+	const projectedBindingCapital = getEscalationBindingCapitalAttoRep(projectedDeposit.projectedBalancesAttoRep)
 	return {
-		acceptedAmount: projectedDeposit.acceptedAmount,
+		acceptedAmountAttoRep: projectedDeposit.acceptedAmountAttoRep,
 		endsImmediately: false,
-		projectedEndTime: details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, projectedBindingCapital),
+		projectedEndTime: details.activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, projectedBindingCapital),
 	}
 }
 function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
 	return computeWinningEscalationDepositClaimAmount({
-		bindingCapital: details.bindingCapital,
-		cumulativeAmount: deposit.cumulativeAmount,
-		depositAmount: deposit.amount,
-		forkThreshold: details.forkThreshold,
-		nonDecisionThreshold: details.nonDecisionThreshold,
-		winningOutcomeBalance,
+		bindingCapitalAttoRep: details.bindingCapital,
+		cumulativeAmountAttoRep: deposit.cumulativeAmountAttoRep,
+		depositAmountAttoRep: deposit.amountAttoRep,
+		forkThresholdAttoRep: details.forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
+		winningOutcomeBalanceAttoRep: winningOutcomeBalance,
 	})
 }
 function getWinningImportedEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: ImportedEscalationDeposit) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
 	return computeWinningImportedEscalationDepositClaimAmount({
-		bindingCapital: details.bindingCapital,
-		postDepositCumulativeAmount: deposit.cumulativeAmount,
-		depositAmount: deposit.amount,
-		forkThreshold: details.forkThreshold,
-		nonDecisionThreshold: details.nonDecisionThreshold,
-		winningOutcomeBalance,
+		bindingCapitalAttoRep: details.bindingCapital,
+		postDepositCumulativeAmountAttoRep: deposit.cumulativeAmountAttoRep,
+		depositAmountAttoRep: deposit.amountAttoRep,
+		forkThresholdAttoRep: details.forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
+		winningOutcomeBalanceAttoRep: winningOutcomeBalance,
 	})
 }
 export function getEscalationDepositClaimAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
@@ -150,15 +150,15 @@ export function getImportedEscalationDepositClaimAmount(details: ReportingDetail
 }
 
 export function getRemainingSelectedOutcomeContributionCapacity(details: ReportingDetails, outcome: ReportingOutcomeKey) {
-	if (details.status === 'not-started') return details.nonDecisionThreshold
+	if (details.status === 'not-started') return details.nonDecisionThresholdAttoRep
 	const selectedSide = details.sides.find(side => side.key === outcome)
 	if (selectedSide === undefined) return 0n
-	return details.nonDecisionThreshold > selectedSide.balance ? details.nonDecisionThreshold - selectedSide.balance : 0n
+	return details.nonDecisionThresholdAttoRep > selectedSide.balance ? details.nonDecisionThresholdAttoRep - selectedSide.balance : 0n
 }
 
 export function getReportingTimerPreview(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingTimerPreview | undefined {
 	if (amount <= 0n) return undefined
-	const hypotheticalDuration = computeHypotheticalBindingDuration(details.startBond, details.nonDecisionThreshold, amount)
+	const hypotheticalDuration = computeHypotheticalBindingDuration(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)
 	if (details.status === 'not-started') {
 		const preview = previewReportingContribution(details, outcome, amount)
 		if (preview.actualDepositAmount === undefined) return undefined
@@ -174,21 +174,21 @@ export function getReportingTimerPreview(details: ReportingDetails, outcome: Rep
 	if (projection === undefined) return undefined
 	if (projection.endsImmediately)
 		return {
-			acceptedAmount: projection.acceptedAmount,
+			acceptedAmountAttoRep: projection.acceptedAmountAttoRep,
 			actualState: 'ends-immediately',
 			hypotheticalDuration,
 			kind: 'active-or-pending',
 		}
 	if (projection.projectedEndTime > details.escalationEndTime)
 		return {
-			acceptedAmount: projection.acceptedAmount,
+			acceptedAmountAttoRep: projection.acceptedAmountAttoRep,
 			actualState: 'extends',
 			hypotheticalDuration,
 			kind: 'active-or-pending',
 			timerIncrease: projection.projectedEndTime - details.escalationEndTime,
 		}
 	return {
-		acceptedAmount: projection.acceptedAmount,
+		acceptedAmountAttoRep: projection.acceptedAmountAttoRep,
 		actualState: 'unchanged',
 		hypotheticalDuration,
 		kind: 'active-or-pending',
@@ -203,110 +203,110 @@ export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
 }
 export function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
-	if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
-	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amount: 0n, reason: undefined }
+	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
+	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amountAttoRep: 0n, reason: undefined }
 	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
-	const enteredAmount = details.startBond > requiredLeadAmount ? details.startBond : requiredLeadAmount
-	const amount = roundUpToRepUnit(enteredAmount)
+	const enteredAmount = details.startBondAttoRep > requiredLeadAmount ? details.startBondAttoRep : requiredLeadAmount
+	const amountAttoRep = roundUpToRepUnit(enteredAmount)
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
-	const effectiveAmount = amount > availableRoom ? availableRoom : amount
+	const effectiveAmount = amountAttoRep > availableRoom ? availableRoom : amountAttoRep
 	if (availableRoom === 0n)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'No remaining contribution capacity is available on the selected side.',
 		}
 	if (selectedSide.balance + effectiveAmount <= largestOtherBalance) {
-		const cappedEnteredAmount = details.startBond > availableRoom ? details.startBond : availableRoom
+		const cappedEnteredAmount = details.startBondAttoRep > availableRoom ? details.startBondAttoRep : availableRoom
 		return {
-			amount: roundUpToRepUnit(cappedEnteredAmount),
+			amountAttoRep: roundUpToRepUnit(cappedEnteredAmount),
 			reason: undefined,
 		}
 	}
-	return { amount, reason: undefined }
+	return { amountAttoRep, reason: undefined }
 }
 export function getReportingMinimumOutcomeChangeContribution(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	if (details === undefined)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: LOAD_REPORTING_PRESETS_REASON,
 		}
 	if (details.status === 'not-started')
 		return {
-			amount: details.startBond,
+			amountAttoRep: details.startBondAttoRep,
 			reason: undefined,
 		}
 	if (isPoolQuestionFinalized(details))
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: ESCALATION_RESOLVED_REASON,
 		}
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
-	if (minContribution.amount === 0n && minContribution.reason === undefined)
+	if (minContribution.amountAttoRep === 0n && minContribution.reason === undefined)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: SELECTED_SIDE_ALREADY_LEADS_REASON,
 		}
 	return minContribution
 }
 export function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
-	if (minContribution.amount === undefined)
+	if (minContribution.amountAttoRep === undefined)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: minContribution.reason ?? 'Max profit preset is unavailable.',
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
-	if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
+	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
 	const rewardEligibleCap = largestOtherBalance + largestOtherBalance / 2n
-	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThreshold ? rewardEligibleCap : details.nonDecisionThreshold
+	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThresholdAttoRep ? rewardEligibleCap : details.nonDecisionThresholdAttoRep
 	if (isUniqueWinner(selectedSide.balance, largestOtherBalance) && selectedSide.balance >= targetFinalBalance)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
 		}
 	const requiredWindowAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
-	const minimumEnteredAmount = minContribution.amount > requiredWindowAmount ? minContribution.amount : requiredWindowAmount
-	const enteredAmount = details.startBond > minimumEnteredAmount ? details.startBond : minimumEnteredAmount
-	const amount = roundUpToRepUnit(enteredAmount)
+	const minimumEnteredAmount = minContribution.amountAttoRep > requiredWindowAmount ? minContribution.amountAttoRep : requiredWindowAmount
+	const enteredAmount = details.startBondAttoRep > minimumEnteredAmount ? details.startBondAttoRep : minimumEnteredAmount
+	const amountAttoRep = roundUpToRepUnit(enteredAmount)
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
-	const effectiveAmount = amount > availableRoom ? availableRoom : amount
+	const effectiveAmount = amountAttoRep > availableRoom ? availableRoom : amountAttoRep
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Max profit preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
 		}
-	return { amount, reason: undefined }
+	return { amountAttoRep, reason: undefined }
 }
 export function getReportingMaxProfitContribution(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	if (details === undefined)
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: LOAD_REPORTING_PRESETS_REASON,
 		}
 	if (details.status === 'not-started')
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: MAX_PROFIT_NOT_STARTED_REASON,
 		}
 	if (isPoolQuestionFinalized(details))
 		return {
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: ESCALATION_RESOLVED_REASON,
 		}
 	return getMaxProfitContribution(details, selectedOutcome)
 }
-export function getSelectedOutcomeRewardWindowFillTimestamp(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, acceptedAmount: bigint) {
-	if (acceptedAmount <= 0n) return undefined
+export function getSelectedOutcomeRewardWindowFillTimestamp(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, acceptedAmountAttoRep: bigint) {
+	if (acceptedAmountAttoRep <= 0n) return undefined
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return undefined
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
-	const effectiveAmount = acceptedAmount > availableRoom ? availableRoom : acceptedAmount
+	const effectiveAmount = acceptedAmountAttoRep > availableRoom ? availableRoom : acceptedAmountAttoRep
 	const projectedSelectedBalance = selectedSide.balance + effectiveAmount
 	const rewardEligibleCap = largestOtherBalance + largestOtherBalance / 2n
 	if (rewardEligibleCap <= 0n) return undefined
-	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThreshold ? rewardEligibleCap : details.nonDecisionThreshold
+	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThresholdAttoRep ? rewardEligibleCap : details.nonDecisionThresholdAttoRep
 	if (projectedSelectedBalance >= targetFinalBalance) return undefined
-	return details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, targetFinalBalance)
+	return details.activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, targetFinalBalance)
 }
 export function calculateEstimatedEscalationReturn(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, amount: bigint) {
 	if (amount <= 0n)
@@ -341,10 +341,10 @@ export function calculateEstimatedEscalationReturn(details: ActiveReportingDetai
 	const eligibleEnd = depositEnd < rewardEligibleCap ? depositEnd : rewardEligibleCap
 	const rewardEligibleDepositAmount = eligibleEnd > depositStart ? eligibleEnd - depositStart : 0n
 	const rewardBonusPool = (bindingCapital * 3n) / 5n
-	const bonusShare = (rewardEligibleDepositAmount * rewardBonusPool) / rewardEligiblePrincipal
+	const bonusAttoRep = (rewardEligibleDepositAmount * rewardBonusPool) / rewardEligiblePrincipal
 	return {
-		payout: effectiveAmount + bonusShare,
-		profit: bonusShare,
+		payout: effectiveAmount + bonusAttoRep,
+		profit: bonusAttoRep,
 	}
 }
 type EscalationContributionPreview =
@@ -372,22 +372,22 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 			actualDepositAmount: undefined,
 			reason: 'Select a valid reporting outcome.',
 		}
-	if (selectedSide.balance >= details.nonDecisionThreshold)
+	if (selectedSide.balance >= details.nonDecisionThresholdAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Selected side is already full at ${formatCurrencyBalance(details.nonDecisionThreshold)} REP.`,
+			reason: `Selected side is already full at ${formatCurrencyBalance(details.nonDecisionThresholdAttoRep)} REP.`,
 		}
-	if (amount < details.startBond)
+	if (amount < details.startBondAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Enter at least ${formatCurrencyBalance(details.startBond)} REP to meet the current start bond.`,
+			reason: `Enter at least ${formatCurrencyBalance(details.startBondAttoRep)} REP to meet the current start bond.`,
 		}
 	const projectedDeposit = projectEscalationDeposit({
-		amount,
-		balances: getEscalationBalanceTuple(details.sides),
-		nonDecisionThreshold: details.nonDecisionThreshold,
+		amountAttoRep: amount,
+		balancesAttoRep: getEscalationBalanceTuple(details.sides),
+		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
 		outcome,
-		startBond: details.startBond,
+		startBondAttoRep: details.startBondAttoRep,
 	})
 	if (projectedDeposit === undefined)
 		return {
@@ -395,16 +395,16 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 			reason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
 		}
 	return {
-		actualDepositAmount: projectedDeposit.acceptedAmount,
+		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
 		reason: undefined,
 	}
 }
 export function previewReportingContribution(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingContributionPreview {
 	if (details.status === 'not-started') {
-		if (amount < details.startBond)
+		if (amount < details.startBondAttoRep)
 			return {
 				actualDepositAmount: undefined,
-				reason: `Enter at least ${formatCurrencyBalance(details.startBond)} REP to start the escalation game.`,
+				reason: `Enter at least ${formatCurrencyBalance(details.startBondAttoRep)} REP to start the escalation game.`,
 			}
 		return {
 			actualDepositAmount: amount,

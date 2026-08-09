@@ -23,59 +23,61 @@ contract EscalationGame is EscalationGameSettlement {
 		depositDelegate = new EscalationGameDepositDelegate();
 	}
 
-	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
-		_initializeStartParams(_startBond, _nonDecisionThreshold);
+	function start(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external {
+		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
 		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		activationTime = block.timestamp + activationDelay;
-		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
+		emit GameStarted(activationTime, startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
 
 	function startFromFork(
-		uint256 _startBond,
-		uint256 _nonDecisionThreshold,
+		uint256 _startBondAttoRep,
+		uint256 _nonDecisionThresholdAttoRep,
 		uint256 elapsedAtFork,
 		BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome,
 		bool _winnerHaircutPaidByFork,
-		uint256 _forkCarryInitialBacking
+		uint256 _forkCarryInitialBackingAttoRep
 	) external {
-		_initializeStartParams(_startBond, _nonDecisionThreshold);
+		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
 		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert();
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
 		winnerHaircutPaidByFork = _winnerHaircutPaidByFork;
-		forkCarryInitialBacking = _forkCarryInitialBacking;
-		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+		forkCarryInitialBackingAttoRep = _forkCarryInitialBackingAttoRep;
+		emit GameContinuedFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork);
 	}
 
 	function resumeFromFork() external {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
 	}
 
-	function applyTruthAuctionHaircut(uint256 repToRemove) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.applyTruthAuctionHaircut, (repToRemove)));
+	function applyTruthAuctionHaircut(uint256 repToRemoveAttoRep) external {
+		_delegateDepositCall(
+			abi.encodeCall(EscalationGameDepositDelegate.applyTruthAuctionHaircut, (repToRemoveAttoRep))
+		);
 	}
 
 	function previewDepositOnOutcome(
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amount
-	) external view returns (uint256 acceptedAmount, uint256 resultingCumulativeAmount) {
+		uint256 amountAttoRep
+	) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
 		require(
 			nonDecisionState == NonDecisionState.None &&
 				outcome != BinaryOutcomes.BinaryOutcome.None &&
 				getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None &&
-				outcomeState[uint8(outcome)].balance < nonDecisionThreshold &&
-				amount >= startBond,
+				outcomeState[uint8(outcome)].balanceAttoRep < nonDecisionThresholdAttoRep &&
+				amountAttoRep >= startBondAttoRep,
 			'Invalid deposit preview'
 		);
 		uint256 outcomeIndex = uint256(outcome);
-		uint256 currentBalance = outcomeState[outcomeIndex].balance;
-		uint256 room = nonDecisionThreshold - currentBalance;
-		(acceptedAmount, resultingCumulativeAmount) = _getAcceptedDepositAmount(
+		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
+		uint256 room = nonDecisionThresholdAttoRep - currentBalance;
+		(acceptedAmountAttoRep, resultingCumulativeAmountAttoRep) = _getAcceptedDepositAmount(
 			outcomeIndex,
-			amount,
+			amountAttoRep,
 			currentBalance,
 			room
 		);
@@ -84,25 +86,28 @@ contract EscalationGame is EscalationGameSettlement {
 	function recordDepositFromSecurityPool(
 		address depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amount,
-		uint256 expectedCumulativeAmount
+		uint256 amountAttoRep,
+		uint256 expectedCumulativeAttoRep
 	) external returns (uint256 parentDepositIndex) {
 		require(msg.sender == address(securityPool), 'Only security pool');
 		bytes memory returnData = _delegateDepositCall(
 			abi.encodeCall(
 				EscalationGameDepositDelegate.recordDeposit,
-				(depositor, outcome, amount, expectedCumulativeAmount)
+				(depositor, outcome, amountAttoRep, expectedCumulativeAttoRep)
 			)
 		);
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
 
-	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {
+	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {
 		if (owner != msg.sender) revert();
-		require(activationTime == 0 && _nonDecisionThreshold > _startBond && _startBond > 0, 'Invalid game start');
-		startBond = _startBond;
-		nonDecisionThreshold = _nonDecisionThreshold;
-		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBond, _nonDecisionThreshold);
+		require(
+			activationTime == 0 && _nonDecisionThresholdAttoRep > _startBondAttoRep && _startBondAttoRep > 0,
+			'Invalid game start'
+		);
+		startBondAttoRep = _startBondAttoRep;
+		nonDecisionThresholdAttoRep = _nonDecisionThresholdAttoRep;
+		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBondAttoRep, _nonDecisionThresholdAttoRep);
 	}
 
 	function _getDepositDelegate() internal view override returns (address) {

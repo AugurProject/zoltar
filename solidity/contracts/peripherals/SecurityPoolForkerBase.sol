@@ -26,17 +26,18 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		return keccak256(abi.encode(factory, originId, outcomeIndex, parentDepositIndex));
 	}
 
-	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
-		uint256 poolOwnershipDenominator = securityPool.poolOwnershipDenominator();
-		uint256 childRepBalance = securityPool.repToken().balanceOf(address(securityPool));
-		if (poolOwnershipDenominator == 0 || childRepBalance == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
-		return (repAmount * poolOwnershipDenominator) / childRepBalance;
+	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 attoRepAmount) public view returns (uint256) {
+		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
+		uint256 childRepBalanceAttoRep = securityPool.repToken().balanceOf(address(securityPool));
+		if (totalRepBackingUnits == 0 || childRepBalanceAttoRep == 0)
+			return attoRepAmount * SecurityPoolUtils.PRICE_PRECISION;
+		return (attoRepAmount * totalRepBackingUnits) / childRepBalanceAttoRep;
 	}
 
-	function poolOwnershipToRep(ISecurityPool securityPool, uint256 poolOwnership) public view returns (uint256) {
+	function backingUnitsToAttoRep(ISecurityPool securityPool, uint256 repBackingUnits) public view returns (uint256) {
 		return
-			(poolOwnership * securityPool.repToken().balanceOf(address(securityPool))) /
-			securityPool.poolOwnershipDenominator();
+			(repBackingUnits * securityPool.repToken().balanceOf(address(securityPool))) /
+			securityPool.totalRepBackingUnits();
 	}
 
 	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {
@@ -87,8 +88,8 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 				forkDataByPool[parent].escalationSnapshotId,
 				snapshot.carryPeaks,
 				snapshot.carryLeafCounts,
-				snapshot.carryTotals,
-				snapshot.resolutionBalances,
+				snapshot.carryTotalsAttoRep,
+				snapshot.resolutionBalancesAttoRep,
 				snapshot.nullifierRoots
 			);
 		}
@@ -98,13 +99,13 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 
 	function _initializeOwnForkRepBuckets(
 		ISecurityPool parent,
-		uint256 vaultRepAtFork,
-		uint256 escalationChildRepAtFork,
-		uint256 escalationSourceRep
+		uint256 vaultRepAtForkAttoRep,
+		uint256 escalationChildRepAtForkAttoRep,
+		uint256 escalationSourceAttoRep
 	) internal {
 		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[parent];
-		repBuckets.vaultRepAtFork = vaultRepAtFork;
-		repBuckets.escalationChildRepAtFork = escalationChildRepAtFork;
-		repBuckets.escalationSourceRepAtFork = escalationSourceRep;
+		repBuckets.vaultRepAtForkAttoRep = vaultRepAtForkAttoRep;
+		repBuckets.escalationChildRepAtForkAttoRep = escalationChildRepAtForkAttoRep;
+		repBuckets.escalationSourceRepAtForkAttoRep = escalationSourceAttoRep;
 	}
 }

@@ -35,7 +35,7 @@ function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
 			reportTimestamp: 1n,
 			settlementTime: 10n,
 			settlementTimestamp: 0n,
-			settlerReward: 0n,
+			settlerRewardAttoEth: 0n,
 			token1: token1Address,
 			token2: token2Address,
 		},
@@ -200,14 +200,14 @@ describe('openOracle protocol client', () => {
 					return [
 						previewOperationIds,
 						previewOperationIds.map(operationId => ({
-							amount: operationId,
+							operationAmountAttoRepOrAttoEth: operationId,
 							initiatorVault: vaultAddress,
 							operation: 1,
 							queuedAt: 0n,
-							snapshotDenominator: 0n,
-							snapshotTargetAllowance: 0n,
-							snapshotTargetOwnership: 0n,
-							snapshotTotalRep: 0n,
+							snapshotTotalRepBackingUnits: 0n,
+							snapshotTargetCoverageCommitmentAttoEth: 0n,
+							snapshotTargetBackingUnits: 0n,
+							snapshotTotalPoolHeldAttoRep: 0n,
 							targetVault: vaultAddress,
 							validForSeconds: 60n,
 						})),
@@ -215,14 +215,14 @@ describe('openOracle protocol client', () => {
 				}
 				if (request.functionName === 'getPendingOperationSlot') {
 					return {
-						amount: 999n,
+						operationAmountAttoRepOrAttoEth: 999n,
 						initiatorVault: vaultAddress,
 						operation: 0,
 						queuedAt: 0n,
-						snapshotDenominator: 0n,
-						snapshotTargetAllowance: 0n,
-						snapshotTargetOwnership: 0n,
-						snapshotTotalRep: 0n,
+						snapshotTotalRepBackingUnits: 0n,
+						snapshotTargetCoverageCommitmentAttoEth: 0n,
+						snapshotTargetBackingUnits: 0n,
+						snapshotTotalPoolHeldAttoRep: 0n,
 						targetVault: alternateSecurityPoolAddress,
 						validForSeconds: 60n,
 					}
@@ -233,7 +233,7 @@ describe('openOracle protocol client', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
-		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationEthCost', 'getRequestPriceEthCost', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount'])
+		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationCostAttoEth', 'getRequestPriceCostAttoEth', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount'])
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
@@ -273,7 +273,7 @@ describe('openOracle protocol client', () => {
 				reportTimestamp: 1n,
 				settlementTime: 1n,
 				settlementTimestamp: 0n,
-				settlerReward: 0n,
+				settlerRewardAttoEth: 0n,
 				token1: token1Address,
 				token2: token2Address,
 			},
@@ -310,7 +310,7 @@ describe('openOracle protocol client', () => {
 		})
 
 		await expect(loadOpenOracleWithdrawableBalances(readClient, getOpenOracleAddress(), holder, token1Address, token2Address)).resolves.toEqual({
-			eth: 5n,
+			ethAttoEth: 5n,
 			token1: 7n,
 			token2: 9n,
 		})

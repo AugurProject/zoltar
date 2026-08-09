@@ -9,7 +9,7 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ReportingSection } from '../../../features/reporting/components/ReportingSection.js'
 import { formatDuration, formatTimestamp } from '../../../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../../../features/reporting/lib/reporting.js'
-import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital, getSelectedOutcomeRewardWindowFillTimestamp } from '../../../features/reporting/lib/reportingDomain.js'
+import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapitalAttoRep, getSelectedOutcomeRewardWindowFillTimestamp } from '../../../features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../../../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../../../types/contracts.js'
 import type { ReportingSectionProps } from '../../../features/types.js'
@@ -17,10 +17,10 @@ import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
-const REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 
 function rep(value: bigint) {
-	return value * REP
+	return value * ATTO_REP
 }
 
 function getClosestSection(heading: HTMLElement | null) {
@@ -42,8 +42,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -69,8 +69,8 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 
 function createDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDeposit {
 	return {
-		amount: rep(1n),
-		cumulativeAmount: rep(1n),
+		amountAttoRep: rep(1n),
+		cumulativeAmountAttoRep: rep(1n),
 		depositIndex: 0n,
 		depositor: zeroAddress,
 		...overrides,
@@ -80,15 +80,15 @@ function createDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDe
 function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: rep(10n),
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(20n),
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
-		forkThreshold: rep(40n),
+		forkThresholdAttoRep: rep(40n),
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: rep(20n),
+		nonDecisionThresholdAttoRep: rep(20n),
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
@@ -97,17 +97,17 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 			{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
-		startBond: rep(3n),
+		startBondAttoRep: rep(3n),
 		status: 'active',
 		systemState: 'operational',
-		totalCost: rep(20n),
+		totalCostAttoRep: rep(20n),
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 1n * REP,
-		viewerVaultRepDepositShare: 11n * REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -118,40 +118,40 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
 		{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 	]
-	const startBond = overrides.startBond ?? rep(1n)
-	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
-	const forkThreshold = overrides.forkThreshold ?? nonDecisionThreshold * 2n
+	const startBondAttoRep = overrides.startBondAttoRep ?? rep(1n)
+	const nonDecisionThresholdAttoRep = overrides.nonDecisionThresholdAttoRep ?? rep(20n)
+	const forkThresholdAttoRep = overrides.forkThresholdAttoRep ?? nonDecisionThresholdAttoRep * 2n
 	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
-	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
-	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+	const bindingCapital = getEscalationBindingCapitalAttoRep(getEscalationBalanceTuple(sides))
+	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, bindingCapital)
 
 	const baseDetails: ActiveReportingDetails = {
 		bindingCapital,
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(2n),
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
-		forkThreshold,
+		forkThresholdAttoRep,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold,
+		nonDecisionThresholdAttoRep,
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
 		sides,
-		startBond,
+		startBondAttoRep,
 		activationTime,
 		status: 'active',
 		systemState: 'operational',
-		totalCost: 0n,
+		totalCostAttoRep: 0n,
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 1n * REP,
-		viewerVaultRepDepositShare: 11n * REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 	}
 
 	return {
@@ -160,33 +160,33 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		bindingCapital,
 		currentTime,
 		escalationEndTime,
-		forkThreshold,
-		nonDecisionThreshold,
+		forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep,
 		sides,
-		startBond,
+		startBondAttoRep,
 		activationTime,
 	}
 }
 
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
-		completeSetCollateralAmount: 1n * REP,
+		settlementCollateralAttoEth: 1n * ATTO_REP,
 		currentTime: 150n,
-		forkThreshold: rep(100n),
+		forkThresholdAttoRep: rep(100n),
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: rep(50n),
+		nonDecisionThresholdAttoRep: rep(50n),
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
-		startBond: rep(3n),
+		startBondAttoRep: rep(3n),
 		status: 'not-started',
 		systemState: 'operational',
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 0n,
-		viewerVaultRepDepositShare: 10n * REP,
+		viewerVaultDisputeStakedAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -485,15 +485,15 @@ describe('ReportingSection', () => {
 		expect(metricsQueries.getByText('Start bond')).not.toBeNull()
 	})
 
-	test('shows the exact one-atomic-unit difference between a not-started threshold and normalized bond', async () => {
+	test('shows the exact one-attoREP difference between a not-started threshold and normalized bond', async () => {
 		const threshold = rep(5n)
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: createNotStartedReportingDetails({
-						nonDecisionThreshold: threshold,
-						startBond: threshold - 1n,
+						nonDecisionThresholdAttoRep: threshold,
+						startBondAttoRep: threshold - 1n,
 					}),
 				}),
 			),
@@ -540,8 +540,8 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
-		expect(reportOutcomeSection.textContent?.includes('Total side stake')).toBe(true)
-		expect(reportOutcomeSection.textContent?.includes('Your side stake')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Total side dispute-staked REP')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Your side dispute-staked REP')).toBe(true)
 		expect(firstSide.compareDocumentPosition(amountInput) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
@@ -613,13 +613,13 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Assumes no later contributions.')).toBe(true)
 	})
 
-	test('removes the approval explainer copy and still blocks when unlocked vault REP is insufficient', async () => {
+	test('removes the approval explainer copy and still blocks when pool-held vault REP backing is insufficient', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
-						viewerVaultAvailableEscalationRep: 2n * REP,
+						viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP,
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',
@@ -630,8 +630,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
-		expect(document.body.textContent?.includes('Available unlocked vault REP for reporting:')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Need 3 more unlocked REP in your vault before reporting.')
+		expect(document.body.textContent?.includes('Pool-held vault REP backing available for reporting:')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Report Yes', "Deposit 3 more REP into your vault's pool-held backing before reporting.")
 	})
 
 	test('renders a compact withdraw-only mode without the reporting banner or report form', async () => {
@@ -926,7 +926,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
+		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
@@ -1211,7 +1211,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('separates the 3-day first-report window from the later check-back deadline for larger first reports', async () => {
-		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n))
+		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCostAttoRep(rep(3n), rep(50n), rep(10n))
 		const latestCheckBackTimestamp = 150n + ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1341,7 +1341,7 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingDetails: createDynamicReportingDetails({
-						nonDecisionThreshold: rep(10n),
+						nonDecisionThresholdAttoRep: rep(10n),
 						sides: [
 							{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
@@ -1384,7 +1384,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(findProjectionPreviewText().includes('Timer ChangeNo change')).toBe(true)
-		expect(document.body.textContent?.includes('this action would lock')).toBe(true)
+		expect(document.body.textContent?.includes('from pool-held backing into dispute-staked REP')).toBe(true)
 		expect(document.body.textContent?.includes('instead of the full entered amount.')).toBe(true)
 	})
 
@@ -1416,19 +1416,19 @@ describe('ReportingSection', () => {
 		expect(previewBefore).not.toBe(previewAfter)
 	})
 
-	test('autofills the max contribution with the smaller of outcome capacity and available vault REP', async () => {
+	test('autofills the max contribution with the smaller of outcome capacity and pool-held vault REP backing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ReportingSectionHarness
 				initialProps={{
 					reportingDetails: createReportingDetails({
-						nonDecisionThreshold: rep(20n),
+						nonDecisionThresholdAttoRep: rep(20n),
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						startBond: rep(1n),
-						viewerVaultAvailableEscalationRep: rep(10n),
+						startBondAttoRep: rep(1n),
+						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1456,9 +1456,9 @@ describe('ReportingSection', () => {
 							{ balance: rep(18n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						nonDecisionThreshold: rep(20n),
-						startBond: rep(1n),
-						viewerVaultAvailableEscalationRep: rep(10n),
+						nonDecisionThresholdAttoRep: rep(20n),
+						startBondAttoRep: rep(1n),
+						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1476,14 +1476,14 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('2')
 	})
 
-	test('autofills the pre-start max contribution with the threshold when it is smaller than available vault REP', async () => {
+	test('autofills the pre-start max contribution with the threshold when it is smaller than pool-held vault REP backing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ReportingSectionHarness
 				initialProps={{
 					reportingDetails: createNotStartedReportingDetails({
-						nonDecisionThreshold: rep(6n),
-						viewerVaultAvailableEscalationRep: rep(10n),
-						viewerVaultRepDepositShare: rep(10n),
+						nonDecisionThresholdAttoRep: rep(6n),
+						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
+						viewerVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1539,9 +1539,9 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingDetails: createNotStartedReportingDetails({
-						nonDecisionThreshold: rep(20n),
-						startBond: rep(1n),
-						viewerVaultAvailableEscalationRep: rep(10n),
+						nonDecisionThresholdAttoRep: rep(20n),
+						startBondAttoRep: rep(1n),
+						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '25',
@@ -1566,9 +1566,9 @@ describe('ReportingSection', () => {
 							{ balance: rep(18n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						nonDecisionThreshold: rep(20n),
-						startBond: rep(1n),
-						viewerVaultAvailableEscalationRep: rep(10n),
+						nonDecisionThresholdAttoRep: rep(20n),
+						startBondAttoRep: rep(1n),
+						viewerPoolHeldVaultRepBackingAttoRep: rep(10n),
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',
@@ -1601,7 +1601,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger the universe fork here if this pool should fork.'
+		const settlementReason = 'Dispute-staked REP remains in escalation after non-decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
 		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', settlementReason)
@@ -1658,7 +1658,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('The optional parent-lock cleanup window has closed. Child proof eligibility is unchanged.')).toBe(true)
+		expect(document.body.textContent?.includes('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child proof eligibility is unchanged.')).toBe(true)
 		expect(document.body.textContent?.includes('must migrate in Fork & Migration')).toBe(false)
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
@@ -1709,7 +1709,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
@@ -1798,13 +1798,13 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
-						nonDecisionThreshold: rep(20n),
+						nonDecisionThresholdAttoRep: rep(20n),
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						startBond: rep(1n),
+						startBondAttoRep: rep(1n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -1913,7 +1913,7 @@ describe('ReportingSection', () => {
 								importedUserDeposits: [],
 								key: 'yes',
 								label: 'Yes',
-								userDeposits: [createDeposit(), createDeposit({ amount: rep(2n), cumulativeAmount: rep(3n), depositIndex: 1n })],
+								userDeposits: [createDeposit(), createDeposit({ amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(3n), depositIndex: 1n })],
 							},
 							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
@@ -1980,13 +1980,13 @@ describe('ReportingSection', () => {
 				initialProps: {
 					reportingDetails: createReportingDetails({
 						currentRequiredBond: rep(1_000n),
-						nonDecisionThreshold: rep(2_000n),
+						nonDecisionThresholdAttoRep: rep(2_000n),
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						startBond: rep(1n),
+						startBondAttoRep: rep(1n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'no',
@@ -2010,13 +2010,13 @@ describe('ReportingSection', () => {
 				initialProps: {
 					reportingDetails: createReportingDetails({
 						currentRequiredBond: rep(1_000n),
-						nonDecisionThreshold: rep(2_000n),
+						nonDecisionThresholdAttoRep: rep(2_000n),
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						startBond: rep(1n),
+						startBondAttoRep: rep(1n),
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'no',

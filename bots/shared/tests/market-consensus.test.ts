@@ -18,10 +18,10 @@ const settings: MarketConsensusSettings = {
 	maximumGroupDeviationBps: 500n,
 	maximumObservationAgeMilliseconds: 30_000,
 	maximumVenueDispersionBps: 500n,
-	minimumAskDepthEthPerSource: 1n * UNIT,
-	minimumBidDepthEthPerSource: 1n * UNIT,
-	minimumCexAskDepthEth: 2n * UNIT,
-	minimumCexBidDepthEth: 2n * UNIT,
+	minimumAskDepthAttoEthPerSource: 1n * UNIT,
+	minimumBidDepthAttoEthPerSource: 1n * UNIT,
+	minimumCexAskDepthAttoEth: 2n * UNIT,
+	minimumCexBidDepthAttoEth: 2n * UNIT,
 	minimumCexSourceCount: 2,
 	minimumDexSourceCount: 2,
 	minimumSourceObservationCount: 1,
@@ -30,7 +30,7 @@ const settings: MarketConsensusSettings = {
 }
 
 function observation(kind: 'cex' | 'dex', sourceId: string, price: bigint, marketId?: string): MarketConsensusObservation {
-	return { assetId: 'rep', askDepthEth: 2n * UNIT, bidDepthEth: 2n * UNIT, chainId: 1, kind, ...(marketId === undefined ? {} : { marketId }), observationId: `${kind}:${sourceId}:1`, observedAt: 10_000, priceRepPerEth: price * UNIT, sourceId }
+	return { assetId: 'rep', askDepthAttoEth: 2n * UNIT, bidDepthAttoEth: 2n * UNIT, chainId: 1, kind, ...(marketId === undefined ? {} : { marketId }), observationId: `${kind}:${sourceId}:1`, observedAt: 10_000, priceRepPerEth: price * UNIT, sourceId }
 }
 
 describe('cross-venue market consensus', () => {
@@ -150,7 +150,7 @@ describe('cross-venue market consensus', () => {
 		expect(estimateMarketConsensus([alpha, conflictingAlpha, ...remaining], strict, 'rep', 1, 10_000).reliable).toBe(false)
 		expect(estimateMarketConsensus([conflictingAlpha, alpha, ...remaining], strict, 'rep', 1, 10_000).reliable).toBe(false)
 		expect(estimateMarketConsensus([alpha, { ...alpha }, ...remaining], strict, 'rep', 1, 10_000).reliable).toBe(true)
-		const deeperAlpha = { ...conflictingAlpha, askDepthEth: 3n * UNIT, bidDepthEth: 3n * UNIT }
+		const deeperAlpha = { ...conflictingAlpha, askDepthAttoEth: 3n * UNIT, bidDepthAttoEth: 3n * UNIT }
 		expect(estimateMarketConsensus([alpha, deeperAlpha, ...remaining.map(value => ({ ...value, priceRepPerEth: 400n * UNIT }))], strict, 'rep', 1, 10_000).reliable).toBe(true)
 		expect(estimateMarketConsensus([deeperAlpha, alpha, ...remaining.map(value => ({ ...value, priceRepPerEth: 400n * UNIT }))], strict, 'rep', 1, 10_000).reliable).toBe(true)
 	})

@@ -10,18 +10,18 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
-const createPoolAccountingSnapshot = (completeSetCollateralAmount = 0n, totalSecurityBondAllowance = 0n, feeEligibleSecurityBondAllowance = totalSecurityBondAllowance) => ({
-	completeSetCollateralAmount,
+const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCoverageCommitmentAttoEth = 0n, feeEligibleCoverageCommitmentAttoEth = totalCoverageCommitmentAttoEth) => ({
+	settlementCollateralAttoEth,
 	currentRetentionRate: 0n,
-	feeEligibleSecurityBondAllowance,
+	feeEligibleCoverageCommitmentAttoEth,
 	feeIndex: 0n,
 	feeIndexRemainder: 0n,
 	lastUpdatedFeeAccumulator: 0n,
 	totalFeesOwedRemainder: 0n,
-	totalFeesOwedToVaults: 0n,
-	totalSecurityBondAllowance,
-	unallocatedFeeReserve: 0n,
-	uncheckpointedFeeEligibleAllowance: 0n,
+	totalClaimableVaultFeesAttoEth: 0n,
+	totalCoverageCommitmentAttoEth,
+	unallocatedAccruedFeesAttoEth: 0n,
+	uncheckpointedFeeEligibleCoverageCommitmentAttoEth: 0n,
 })
 
 describe('securityPools protocol client', () => {
@@ -56,7 +56,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -67,9 +67,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -103,7 +103,7 @@ describe('securityPools protocol client', () => {
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -114,9 +114,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -147,7 +147,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
 					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
@@ -161,9 +161,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -174,9 +174,9 @@ describe('securityPools protocol client', () => {
 							universeId: 1n,
 						},
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: parentSecurityPoolAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -212,7 +212,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
 					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
@@ -226,9 +226,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -239,9 +239,9 @@ describe('securityPools protocol client', () => {
 							universeId: 1n,
 						},
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: parentSecurityPoolAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -280,7 +280,7 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'completeSetCollateralAmount') {
+				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
@@ -301,7 +301,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -316,9 +316,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'getActiveVaults') return previewVaultAddresses
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
-				if (request.functionName === 'getTotalRepBalance') return 100n
-				if (request.functionName === 'poolOwnershipDenominator') return 10n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -331,7 +331,7 @@ describe('securityPools protocol client', () => {
 		expect(securityVaultSummaryBatchCount).toBe(1)
 		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
-		expect(pool.vaults.map(vault => vault.escalationEscrowedRep)).toEqual([5n, 6n])
+		expect(pool.vaults.map(vault => vault.disputeStakedAttoRep)).toEqual([5n, 6n])
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
@@ -347,7 +347,7 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'completeSetCollateralAmount') {
+				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
@@ -362,7 +362,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -381,8 +381,8 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalRepBalance') return 100n
-				if (request.functionName === 'poolOwnershipDenominator') return 10n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -397,7 +397,7 @@ describe('securityPools protocol client', () => {
 		expect(pool.hasLoadedVaults).toBe(true)
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
 		expect(pool.vaultCount).toBe(5n)
-		expect(pool.totalRepDeposit).toBe(100n)
+		expect(pool.totalPoolHeldAttoRep).toBe(100n)
 		expect(pool.questionId).toBe('0x1')
 	})
 
@@ -412,7 +412,7 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'completeSetCollateralAmount') {
+				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
@@ -427,7 +427,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -445,8 +445,8 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Empty browse-page loads should not fetch per-vault summaries')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalRepBalance') return 100n
-				if (request.functionName === 'poolOwnershipDenominator') return 10n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -474,11 +474,11 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'completeSetCollateralAmount') {
+				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, createPoolAccountingSnapshot(0n, 9n, 3n), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
-				if (functionName === 'poolOwnershipToRep') return [5n]
+				if (functionName === 'backingUnitsToAttoRep') return [5n]
 				if (functionName === 'securityVaults') {
 					const address = Reflect.get(firstContract, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
@@ -492,9 +492,9 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -505,9 +505,9 @@ describe('securityPools protocol client', () => {
 							universeId: 1n,
 						},
 						{
-							completeSetCollateralAmount: 0n,
+							settlementCollateralAttoEth: 0n,
 							currentRetentionRate: 0n,
-							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -534,8 +534,8 @@ describe('securityPools protocol client', () => {
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
-				if (request.functionName === 'getTotalRepBalance') return 5n
-				if (request.functionName === 'poolOwnershipDenominator') return 1n
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 5n
+				if (request.functionName === 'totalRepBackingUnits') return 1n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -554,9 +554,9 @@ describe('securityPools protocol client', () => {
 		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
-		expect(selectedPool.feeEligibleSecurityBondAllowance).toBe(3n)
-		expect(selectedPool.totalRepDeposit).toBe(5n)
-		expect(selectedPool.totalSecurityBondAllowance).toBe(9n)
+		expect(selectedPool.feeEligibleCoverageCommitmentAttoEth).toBe(3n)
+		expect(selectedPool.totalPoolHeldAttoRep).toBe(5n)
+		expect(selectedPool.totalCoverageCommitmentAttoEth).toBe(9n)
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
@@ -580,13 +580,13 @@ describe('securityPools protocol client', () => {
 		const capacity = await loadSecurityPoolMintCapacity(client, securityPoolAddress)
 
 		expect(capacity).toEqual({
-			completeSetCollateralAmount: 11n,
-			feeEligibleSecurityBondAllowance: 17n,
-			shareTokenSupply: 22n,
-			totalRepDeposit: 33n,
-			totalSecurityBondAllowance: 44n,
+			settlementCollateralAttoEth: 11n,
+			feeEligibleCoverageCommitmentAttoEth: 17n,
+			shareTokenSupplyAttoShares: 22n,
+			totalPoolHeldAttoRep: 33n,
+			totalCoverageCommitmentAttoEth: 44n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupply', 'getTotalRepBalance'])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep'])
 		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
 	})
 })

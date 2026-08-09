@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../../../features/security-pools/lib/securityPoolCreationGuards.js'
 import type { MarketDetails } from '../../../types/contracts.js'
 
@@ -127,7 +127,7 @@ describe('security pool creation guards', () => {
 		expect(getInitialReportPriorityFeeValidationMessage('0.0000000001')).toBe('Enter a gwei value with at most 9 decimal places.')
 		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0 gwei.')
 		expect(getInitialReportPriorityFeeValidationMessage('0.000000001')).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
 	})
 })

@@ -55,8 +55,8 @@ describe('truthAuctions protocol client', () => {
 			if (request.functionName === 'getTickCount') return 3n
 			if (request.functionName === 'getTickPage')
 				return [
-					{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
-					{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
+					{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 4n, active: true },
+					{ tick: 5n, price: 6n, currentTotalBidAttoEth: 7n, submissionCount: 8n, active: false },
 				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -72,22 +72,22 @@ describe('truthAuctions protocol client', () => {
 			pageSize: 5,
 			tickCount: 3n,
 			ticks: [
-				{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
-				{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
+				{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 4n, active: true },
+				{ tick: 5n, price: 6n, currentTotalBidAttoEth: 7n, submissionCount: 8n, active: false },
 			],
 		})
 	})
 
 	test('loadTruthAuctionTickSummary maps a direct tick summary read', async () => {
 		const client = createMockReadClient(async request => {
-			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalEth: 11n, submissionCount: 12n, active: false }
+			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalBidAttoEth: 11n, submissionCount: 12n, active: false }
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
 		await expect(loadTruthAuctionTickSummary(client, truthAuctionAddress, 9n)).resolves.toEqual({
 			tick: 9n,
 			price: 10n,
-			currentTotalEth: 11n,
+			currentTotalBidAttoEth: 11n,
 			submissionCount: 12n,
 			active: false,
 		})
@@ -96,7 +96,7 @@ describe('truthAuctions protocol client', () => {
 	test('loadTruthAuctionTickPage rejects malformed tick summary pages instead of trusting ABI shapes', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getTickCount') return 1n
-			if (request.functionName === 'getTickPage') return [{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 'bad-count', active: true }]
+			if (request.functionName === 'getTickPage') return [{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 'bad-count', active: true }]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -113,8 +113,8 @@ describe('truthAuctions protocol client', () => {
 			if (request.functionName === 'activeTickCount') return 4n
 			if (request.functionName === 'getActiveTickPage')
 				return [
-					{ tick: 12n, price: 7n, currentTotalEth: 6n, submissionCount: 2n, active: true },
-					{ tick: 10n, price: 5n, currentTotalEth: 4n, submissionCount: 1n, active: true },
+					{ tick: 12n, price: 7n, currentTotalBidAttoEth: 6n, submissionCount: 2n, active: true },
+					{ tick: 10n, price: 5n, currentTotalBidAttoEth: 4n, submissionCount: 1n, active: true },
 				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -130,8 +130,8 @@ describe('truthAuctions protocol client', () => {
 			pageSize: 2,
 			tickCount: 4n,
 			ticks: [
-				{ tick: 12n, price: 7n, currentTotalEth: 6n, submissionCount: 2n, active: true },
-				{ tick: 10n, price: 5n, currentTotalEth: 4n, submissionCount: 1n, active: true },
+				{ tick: 12n, price: 7n, currentTotalBidAttoEth: 6n, submissionCount: 2n, active: true },
+				{ tick: 10n, price: 5n, currentTotalBidAttoEth: 4n, submissionCount: 1n, active: true },
 			],
 		})
 	})
@@ -166,7 +166,7 @@ describe('truthAuctions protocol client', () => {
 	test('loadTruthAuctionTickBidPage rejects malformed per-tick bid pages instead of trusting ABI shapes', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getBidCountAtTick') return 1n
-			if (request.functionName === 'getBidPageAtTick') return [{ tick: 11n, bidIndex: 0n, bidder: securityPoolAddress, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: 'bad-refund-flag' }]
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 11n, bidIndex: 0n, bidder: securityPoolAddress, bidAmountAttoEth: 3n, cumulativeBidAttoEth: 3n, activeCumulativeBidBeforeAttoEth: 0n, claimed: false, refunded: 'bad-refund-flag' }]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -176,7 +176,7 @@ describe('truthAuctions protocol client', () => {
 	test('loadTruthAuctionBidderBidPage rejects malformed bid pages instead of trusting ABI shapes', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getBidderBidCount') return 1n
-			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, bidder: 'not-an-address', ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }]
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, bidder: 'not-an-address', bidAmountAttoEth: 3n, cumulativeBidAttoEth: 3n, activeCumulativeBidBeforeAttoEth: 0n, claimed: false, refunded: false }]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -194,8 +194,8 @@ describe('truthAuctions protocol client', () => {
 			if (request.functionName === 'getBidderBidCount') return 4n
 			if (request.functionName === 'getBidderBidPage')
 				return [
-					{ tick: 10n, bidIndex: 0n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
-					{ tick: 11n, bidIndex: 1n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
+					{ tick: 10n, bidIndex: 0n, bidder, bidAmountAttoEth: 3n, cumulativeBidAttoEth: 3n, activeCumulativeBidBeforeAttoEth: 0n, claimed: false, refunded: false },
+					{ tick: 11n, bidIndex: 1n, bidder, bidAmountAttoEth: 5n, cumulativeBidAttoEth: 8n, activeCumulativeBidBeforeAttoEth: 3n, claimed: true, refunded: true },
 				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -212,8 +212,8 @@ describe('truthAuctions protocol client', () => {
 			pageSize: 2,
 			bidCount: 4n,
 			bids: [
-				{ tick: 10n, bidIndex: 0n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
-				{ tick: 11n, bidIndex: 1n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
+				{ tick: 10n, bidIndex: 0n, bidder, bidAmountAttoEth: 3n, cumulativeBidAttoEth: 3n, activeCumulativeBidBeforeAttoEth: 0n, claimed: false, refunded: false },
+				{ tick: 11n, bidIndex: 1n, bidder, bidAmountAttoEth: 5n, cumulativeBidAttoEth: 8n, activeCumulativeBidBeforeAttoEth: 3n, claimed: true, refunded: true },
 			],
 		})
 	})

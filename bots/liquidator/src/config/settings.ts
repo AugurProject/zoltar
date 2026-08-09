@@ -7,10 +7,10 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
-export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
+export type CandidatePriority = 'largest-bonus' | 'largest-coverage-commitment' | 'lowest-top-up'
 
 export type DesiredPoolSettings = {
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	questionId: bigint
 	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
@@ -23,25 +23,48 @@ export type StrategySettings = {
 	allowAutomaticWithdrawals: boolean
 	candidatePriority: CandidatePriority
 	fallbackRepPerEthPrice: bigint
-	maximumGasCostEth: bigint
-	maximumLiquidationDebtEth: bigint
-	maximumOracleRequestCostEth: bigint
-	maximumRepPerPool: bigint
+	maximumGasCostAttoEth: bigint
+	maximumLiquidationCoverageCommitmentAttoEth: bigint
+	maximumOracleRequestCostAttoEth: bigint
+	maximumAttoRepPerPool: bigint
 	maximumTotalDeployedRep: bigint
-	minimumLiquidationDebtEth: bigint
-	minimumRepWithdrawal: bigint
-	minimumRewardValueEth: bigint
-	redeemFeesAboveEth: bigint
+	minimumLiquidationCoverageCommitmentAttoEth: bigint
+	minimumRepWithdrawalAttoRep: bigint
+	minimumRewardValueAttoEth: bigint
+	redeemFeesAboveAttoEth: bigint
 	stalePriceFundingBufferBps: bigint
 	stagedOperationValidForSeconds: bigint
 	vaultTargetHealthBps: bigint
 	vaultTopUpHealthBps: bigint
 	vaultWithdrawHealthBps: bigint
-	walletRepReserve: bigint
+	walletAttoRepReserve: bigint
 }
 
+type AtomicStrategyAmountKey =
+	| 'maximumGasCostAttoEth'
+	| 'maximumLiquidationCoverageCommitmentAttoEth'
+	| 'maximumOracleRequestCostAttoEth'
+	| 'maximumAttoRepPerPool'
+	| 'maximumTotalDeployedRep'
+	| 'minimumLiquidationCoverageCommitmentAttoEth'
+	| 'minimumRepWithdrawalAttoRep'
+	| 'minimumRewardValueAttoEth'
+	| 'redeemFeesAboveAttoEth'
+	| 'walletAttoRepReserve'
+
 export type StoredStrategySettings = {
-	[K in keyof StrategySettings]: StrategySettings[K] extends bigint ? string | number : StrategySettings[K]
+	[K in Exclude<keyof StrategySettings, AtomicStrategyAmountKey>]: StrategySettings[K] extends bigint ? string | number : StrategySettings[K]
+} & {
+	maximumGasCostEth: string | number
+	maximumLiquidationCoverageCommitmentEth: string | number
+	maximumOracleRequestCostEth: string | number
+	maximumPerPoolRep: string | number
+	maximumTotalDeployedRep: string | number
+	minimumLiquidationCoverageCommitmentEth: string | number
+	minimumRepWithdrawalRep: string | number
+	minimumRewardValueEth: string | number
+	redeemFeesAboveEth: string | number
+	walletReserveRep: string | number
 }
 
 export type OperatorSettings = {
@@ -145,7 +168,7 @@ function parseNetworkName(value: unknown): NetworkName {
 }
 
 function parseCandidatePriority(value: unknown): CandidatePriority {
-	if (value === 'largest-bonus' || value === 'largest-debt' || value === 'lowest-top-up') return value
+	if (value === 'largest-bonus' || value === 'largest-coverage-commitment' || value === 'lowest-top-up') return value
 	throw new Error('strategy.candidatePriority is invalid')
 }
 
@@ -168,7 +191,7 @@ export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
 	const parsed = value.map((entry, index) => {
 		const desired = record(entry, `desiredPools[${index.toString()}]`)
 		const pool = {
-			initialReportPriorityFeeWeiPerGas: uint256(desired['initialReportPriorityFeeWeiPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeWeiPerGas`),
+			initialReportPriorityFeeAttoEthPerGas: uint256(desired['initialReportPriorityFeeAttoEthPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeAttoEthPerGas`),
 			questionId: uint256(desired['questionId'], `desiredPools[${index.toString()}].questionId`),
 			statoblastSecurityMultiplierBps: uint256(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`),
 			universeId: universeId(desired['universeId'], `desiredPools[${index.toString()}].universeId`),
@@ -176,7 +199,7 @@ export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
 		if (pool.statoblastSecurityMultiplierBps <= 10_000n) throw new Error(`desiredPools[${index.toString()}].statoblastSecurityMultiplierBps must exceed 10000`)
 		return pool
 	})
-	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeWeiPerGas.toString()}`)
+	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeAttoEthPerGas.toString()}`)
 	if (new Set(ids).size !== ids.length) throw new Error('desiredPools must not contain duplicates')
 	return parsed
 }
@@ -190,26 +213,26 @@ export function parseStrategy(value: unknown): StrategySettings {
 		allowAutomaticWithdrawals: boolean(strategy['allowAutomaticWithdrawals'], 'strategy.allowAutomaticWithdrawals'),
 		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
 		fallbackRepPerEthPrice: parseDecimalAmount(strategy['fallbackRepPerEthPrice'], 'strategy.fallbackRepPerEthPrice'),
-		maximumGasCostEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
-		maximumLiquidationDebtEth: parseDecimalAmount(strategy['maximumLiquidationDebtEth'], 'strategy.maximumLiquidationDebtEth'),
-		maximumOracleRequestCostEth: parseDecimalAmount(strategy['maximumOracleRequestCostEth'], 'strategy.maximumOracleRequestCostEth'),
-		maximumRepPerPool: parseDecimalAmount(strategy['maximumRepPerPool'], 'strategy.maximumRepPerPool'),
+		maximumGasCostAttoEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
+		maximumLiquidationCoverageCommitmentAttoEth: parseDecimalAmount(strategy['maximumLiquidationCoverageCommitmentEth'], 'strategy.maximumLiquidationCoverageCommitmentEth'),
+		maximumOracleRequestCostAttoEth: parseDecimalAmount(strategy['maximumOracleRequestCostEth'], 'strategy.maximumOracleRequestCostEth'),
+		maximumAttoRepPerPool: parseDecimalAmount(strategy['maximumPerPoolRep'], 'strategy.maximumPerPoolRep'),
 		maximumTotalDeployedRep: parseDecimalAmount(strategy['maximumTotalDeployedRep'], 'strategy.maximumTotalDeployedRep'),
-		minimumLiquidationDebtEth: parseDecimalAmount(strategy['minimumLiquidationDebtEth'], 'strategy.minimumLiquidationDebtEth'),
-		minimumRepWithdrawal: parseDecimalAmount(strategy['minimumRepWithdrawal'], 'strategy.minimumRepWithdrawal'),
-		minimumRewardValueEth: parseDecimalAmount(strategy['minimumRewardValueEth'], 'strategy.minimumRewardValueEth'),
-		redeemFeesAboveEth: parseDecimalAmount(strategy['redeemFeesAboveEth'], 'strategy.redeemFeesAboveEth'),
+		minimumLiquidationCoverageCommitmentAttoEth: parseDecimalAmount(strategy['minimumLiquidationCoverageCommitmentEth'], 'strategy.minimumLiquidationCoverageCommitmentEth'),
+		minimumRepWithdrawalAttoRep: parseDecimalAmount(strategy['minimumRepWithdrawalRep'], 'strategy.minimumRepWithdrawalRep'),
+		minimumRewardValueAttoEth: parseDecimalAmount(strategy['minimumRewardValueEth'], 'strategy.minimumRewardValueEth'),
+		redeemFeesAboveAttoEth: parseDecimalAmount(strategy['redeemFeesAboveEth'], 'strategy.redeemFeesAboveEth'),
 		stalePriceFundingBufferBps: BigInt(integer(strategy['stalePriceFundingBufferBps'], 'strategy.stalePriceFundingBufferBps', 10_000, 1_000_000)),
 		stagedOperationValidForSeconds: BigInt(integer(strategy['stagedOperationValidForSeconds'], 'strategy.stagedOperationValidForSeconds', 1, 300)),
 		vaultTargetHealthBps: BigInt(integer(strategy['vaultTargetHealthBps'], 'strategy.vaultTargetHealthBps', 10_001, 1_000_000)),
 		vaultTopUpHealthBps: BigInt(integer(strategy['vaultTopUpHealthBps'], 'strategy.vaultTopUpHealthBps', 10_000, 1_000_000)),
 		vaultWithdrawHealthBps: BigInt(integer(strategy['vaultWithdrawHealthBps'], 'strategy.vaultWithdrawHealthBps', 10_001, 1_000_000)),
-		walletRepReserve: parseDecimalAmount(strategy['walletRepReserve'], 'strategy.walletRepReserve'),
+		walletAttoRepReserve: parseDecimalAmount(strategy['walletReserveRep'], 'strategy.walletReserveRep'),
 	}
-	if (parsed.minimumLiquidationDebtEth > parsed.maximumLiquidationDebtEth) throw new Error('Minimum liquidation debt cannot exceed the maximum')
+	if (parsed.minimumLiquidationCoverageCommitmentAttoEth > parsed.maximumLiquidationCoverageCommitmentAttoEth) throw new Error('Minimum liquidation coverage commitment cannot exceed the maximum')
 	if (parsed.vaultTopUpHealthBps > parsed.vaultTargetHealthBps) throw new Error('Top-up health must not exceed target health')
 	if (parsed.vaultTargetHealthBps >= parsed.vaultWithdrawHealthBps) throw new Error('Withdrawal health must exceed target health')
-	if (parsed.maximumRepPerPool > parsed.maximumTotalDeployedRep) throw new Error('Per-pool REP limit cannot exceed the total deployed REP limit')
+	if (parsed.maximumAttoRepPerPool > parsed.maximumTotalDeployedRep) throw new Error('Per-pool REP limit cannot exceed the total deployed REP limit')
 	return parsed
 }
 
@@ -317,7 +340,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		},
 		deployment: settings.deployment,
 		desiredPools: settings.desiredPools.map(pool => ({
-			initialReportPriorityFeeWeiPerGas: pool.initialReportPriorityFeeWeiPerGas.toString(),
+			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 			questionId: pool.questionId.toString(),
 			statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
 			universeId: pool.universeId.toString(),
@@ -328,23 +351,27 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		runtime: settings.runtime,
 		selectedPools: settings.selectedPools,
 		strategy: {
-			...settings.strategy,
+			allowAutomaticDeposits: settings.strategy.allowAutomaticDeposits,
+			allowAutomaticPoolCreation: settings.strategy.allowAutomaticPoolCreation,
+			allowAutomaticVaultMigrations: settings.strategy.allowAutomaticVaultMigrations,
+			allowAutomaticWithdrawals: settings.strategy.allowAutomaticWithdrawals,
+			candidatePriority: settings.strategy.candidatePriority,
 			fallbackRepPerEthPrice: formatDecimalAmount(settings.strategy.fallbackRepPerEthPrice),
-			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostEth),
-			maximumLiquidationDebtEth: formatDecimalAmount(settings.strategy.maximumLiquidationDebtEth),
-			maximumOracleRequestCostEth: formatDecimalAmount(settings.strategy.maximumOracleRequestCostEth),
-			maximumRepPerPool: formatDecimalAmount(settings.strategy.maximumRepPerPool),
+			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),
+			maximumLiquidationCoverageCommitmentEth: formatDecimalAmount(settings.strategy.maximumLiquidationCoverageCommitmentAttoEth),
+			maximumOracleRequestCostEth: formatDecimalAmount(settings.strategy.maximumOracleRequestCostAttoEth),
+			maximumPerPoolRep: formatDecimalAmount(settings.strategy.maximumAttoRepPerPool),
 			maximumTotalDeployedRep: formatDecimalAmount(settings.strategy.maximumTotalDeployedRep),
-			minimumLiquidationDebtEth: formatDecimalAmount(settings.strategy.minimumLiquidationDebtEth),
-			minimumRepWithdrawal: formatDecimalAmount(settings.strategy.minimumRepWithdrawal),
-			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueEth),
-			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveEth),
+			minimumLiquidationCoverageCommitmentEth: formatDecimalAmount(settings.strategy.minimumLiquidationCoverageCommitmentAttoEth),
+			minimumRepWithdrawalRep: formatDecimalAmount(settings.strategy.minimumRepWithdrawalAttoRep),
+			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueAttoEth),
+			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveAttoEth),
 			stalePriceFundingBufferBps: Number(settings.strategy.stalePriceFundingBufferBps),
 			stagedOperationValidForSeconds: Number(settings.strategy.stagedOperationValidForSeconds),
 			vaultTargetHealthBps: Number(settings.strategy.vaultTargetHealthBps),
 			vaultTopUpHealthBps: Number(settings.strategy.vaultTopUpHealthBps),
 			vaultWithdrawHealthBps: Number(settings.strategy.vaultWithdrawHealthBps),
-			walletRepReserve: formatDecimalAmount(settings.strategy.walletRepReserve),
+			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),
 		},
 		submission: settings.submission,
 		version: 1,

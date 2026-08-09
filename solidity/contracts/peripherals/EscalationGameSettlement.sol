@@ -15,11 +15,15 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	)
 		public
 		onlySecurityPoolOrForker
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
+		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		(depositor, amountToWithdraw, originalDepositAmount) = _claimDepositForWinning(depositIndex, outcome, true);
-		_creditClaimOwners(depositor, amountToWithdraw);
+		(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = _claimDepositForWinning(
+			depositIndex,
+			outcome,
+			true
+		);
+		_creditClaimOwners(depositor, amountToWithdrawAttoRep);
 	}
 
 	function claimDepositForWinningWithoutTransfer(
@@ -28,7 +32,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	)
 		public
 		onlySecurityPoolOrForker
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
+		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		return _claimDepositForWinning(depositIndex, outcome, false);
 	}
@@ -36,13 +40,13 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function exportUnresolvedDeposit(
 		uint256 depositIndex,
 		BinaryOutcomes.BinaryOutcome outcome
-	) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+	) public onlySecurityPoolOrForker returns (address depositor, uint256 amountAttoRep, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		uint8 outcomeIndex = uint8(outcome);
 		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex, CarryConsumptionReason.Export);
 		depositor = deposit.depositor;
-		amount = deposit.amount;
-		_consumeEscrowedRepForBundle(depositor, amount);
+		amountAttoRep = deposit.amountAttoRep;
+		_consumeEscrowedRepForBundle(depositor, amountAttoRep);
 		parentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
 	}
 
@@ -52,14 +56,14 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	)
 		public
 		onlySecurityPoolOrForker
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
+		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
-		originalDepositAmount = proof.amount;
+		originalDepositAmountAttoRep = proof.amountAttoRep;
 		require(
 			!ISecurityPoolForker(securityPool.securityPoolForker()).isEscalationDepositClaimedDirectly(
 				securityPool.parent(),
@@ -73,32 +77,32 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_emitCarryDepositConsumed(
 			outcomeIndex,
 			proof.depositor,
-			proof.amount,
+			proof.amountAttoRep,
 			proof.parentDepositIndex,
 			proof.sourceNodeId,
 			CarryConsumptionReason.WinningClaim
 		);
-		uint256 burnAmount;
-		(amountToWithdraw, burnAmount) = _computeCarriedWinningWithdrawal(
+		uint256 burnAmountAttoRep;
+		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(
 			outcomeIndex,
-			proof.amount,
-			proof.cumulativeAmount,
+			proof.amountAttoRep,
+			proof.cumulativeAmountAttoRep,
 			proof.parentDepositIndex
 		);
 		_delegateDepositCall(
 			abi.encodeCall(
 				EscalationGameDepositDelegate.creditExternalClaimOwners,
-				(forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdraw, burnAmount)
+				(forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)
 			)
 		);
-		_burnWinningHaircut(burnAmount, winnerHaircutPaidByFork);
+		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
 		emit ClaimDeposit(
 			depositor,
 			outcome,
 			proof.parentDepositIndex,
-			originalDepositAmount,
-			amountToWithdraw,
-			burnAmount,
+			originalDepositAmountAttoRep,
+			amountToWithdrawAttoRep,
+			burnAmountAttoRep,
 			true
 		);
 	}
@@ -106,18 +110,18 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function withdrawDeposit(
 		uint256 depositIndex,
 		BinaryOutcomes.BinaryOutcome outcome
-	) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
+	) public returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		if (outcome == questionResolution) {
-			(depositor, amountToWithdraw, originalDepositAmount) = claimDepositForWinning(
+			(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = claimDepositForWinning(
 				depositIndex,
 				questionResolution
 			);
-			return (depositor, amountToWithdraw, originalDepositAmount);
+			return (depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep);
 		}
 		Deposit memory deposit = _consumeLocalDeposit(
 			uint8(outcome),
@@ -125,28 +129,28 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			CarryConsumptionReason.LosingSettlement
 		);
 		depositor = deposit.depositor;
-		originalDepositAmount = deposit.amount;
-		_consumeEscrowedRepForBundle(depositor, originalDepositAmount);
+		originalDepositAmountAttoRep = deposit.amountAttoRep;
+		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
 	}
 
 	function sweepResidualRepToSecurityPool() external {
 		require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		require(_totalUnresolvedPrincipal() == 0, 'Principal remains');
-		totalEscrowedRep -= forkCarryEscrowedRep;
-		forkCarryEscrowedRep = 0;
-		require(totalEscrowedRep == 0, 'Escrowed REP remains');
-		uint256 amount = repToken.balanceOf(address(this));
-		require(amount > 0, 'No sweepable REP');
-		_safeTransferRep(address(securityPool), amount);
-		emit ResidualRepSweptToSecurityPool(amount);
+		totalDisputeStakedAttoRep -= forkCarryDisputeStakedAttoRep;
+		forkCarryDisputeStakedAttoRep = 0;
+		require(totalDisputeStakedAttoRep == 0, 'Escrowed REP remains');
+		uint256 amountAttoRep = repToken.balanceOf(address(this));
+		require(amountAttoRep > 0, 'No sweepable REP');
+		_safeTransferRep(address(securityPool), amountAttoRep);
+		emit ResidualRepSweptToSecurityPool(amountAttoRep);
 	}
 
-	function drainAllRep(address receiver) external returns (uint256 amount) {
+	function drainAllRep(address receiver) external returns (uint256 amountAttoRep) {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(receiver != address(0x0), 'REP receiver zero');
-		amount = repToken.balanceOf(address(this));
-		if (amount == 0) return 0;
-		_safeTransferRep(receiver, amount);
+		amountAttoRep = repToken.balanceOf(address(this));
+		if (amountAttoRep == 0) return 0;
+		_safeTransferRep(receiver, amountAttoRep);
 	}
 
 	function getDepositsByOutcome(
@@ -182,37 +186,37 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		uint256 depositIndex,
 		BinaryOutcomes.BinaryOutcome outcome,
 		bool transferredRep
-	) private returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
+	) private returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		Deposit memory deposit = _consumeLocalDeposit(
 			uint8(outcome),
 			depositIndex,
 			transferredRep ? CarryConsumptionReason.WinningClaim : CarryConsumptionReason.DirectParentClaim
 		);
 		depositor = deposit.depositor;
-		originalDepositAmount = deposit.amount;
-		uint256 burnAmount;
-		(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(
+		originalDepositAmountAttoRep = deposit.amountAttoRep;
+		uint256 burnAmountAttoRep;
+		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeWinningWithdrawal(
 			uint8(outcome),
-			deposit.amount,
-			deposit.cumulativeAmount
+			deposit.amountAttoRep,
+			deposit.cumulativeAmountAttoRep
 		);
-		_consumeEscrowedRepForBundle(depositor, originalDepositAmount);
-		if (transferredRep) _burnWinningHaircut(burnAmount, false);
+		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
+		if (transferredRep) _burnWinningHaircut(burnAmountAttoRep, false);
 		emit ClaimDeposit(
 			depositor,
 			outcome,
 			_getStableLocalParentDepositIndex(uint8(outcome), depositIndex),
-			originalDepositAmount,
-			amountToWithdraw,
-			burnAmount,
+			originalDepositAmountAttoRep,
+			amountToWithdrawAttoRep,
+			burnAmountAttoRep,
 			transferredRep
 		);
 	}
 
-	function _burnWinningHaircut(uint256 burnAmount, bool haircutPaidByFork) private {
-		if (burnAmount == 0) return;
+	function _burnWinningHaircut(uint256 burnAmountAttoRep, bool haircutPaidByFork) private {
+		if (burnAmountAttoRep == 0) return;
 		if (haircutPaidByFork) return;
-		_safeTransferRep(address(securityPool), burnAmount);
-		securityPool.burnEscalationWinnerHaircut(burnAmount);
+		_safeTransferRep(address(securityPool), burnAmountAttoRep);
+		securityPool.burnEscalationWinnerHaircut(burnAmountAttoRep);
 	}
 }

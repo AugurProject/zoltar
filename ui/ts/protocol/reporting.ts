@@ -28,7 +28,7 @@ const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 		name: 'getEscalationMigrationEntitlementStatus',
 		outputs: [
 			{ name: 'initialized', type: 'bool' },
-			{ name: 'totalCurrentRep', type: 'uint256' },
+			{ name: 'totalCurrentAttoRep', type: 'uint256' },
 			{ name: 'materializedByOutcome', type: 'bool[3]' },
 		],
 		stateMutability: 'view',
@@ -38,25 +38,25 @@ const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 const CONTRACT_PAGE_SIZE = 30n
 const NULLIFIER_DEPTH = 64
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
-const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
+const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
 	escalationGameAddress: Address
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	universeId: bigint
 	zoltarAddress: Address
-	initialEscalationGameDeposit: bigint
+	initialEscalationGameDepositAttoRep: bigint
 	systemStateValue: bigint | number
 	questionOutcomeValue: bigint | number
 	parentSecurityPoolAddress: Address
 }
 
 type CarryLeafViewStruct = {
-	cumulativeAmount: bigint
+	cumulativeAmountAttoRep: bigint
 	depositor: Address
 	parentDepositIndex: bigint
-	amount: bigint
+	amountAttoRep: bigint
 	sourceNodeId: bigint
 }
 
@@ -70,20 +70,20 @@ type HistoricalCarrySnapshotEntry = {
 }
 
 type EscalationDepositViewStruct = {
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 	depositor: Address
 }
 
 function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrapReadResult {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress] = requireTupleValue(value, 9, 'reporting bootstrap')
+	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress] = requireTupleValue(value, 9, 'reporting bootstrap')
 	return {
 		questionId: requireBigintValue(questionId, 'reporting question id'),
 		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting escalation game address'),
-		completeSetCollateralAmount: requireBigintValue(completeSetCollateralAmount, 'reporting complete set collateral amount'),
+		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'reporting complete set collateral amount'),
 		universeId: requireBigintValue(universeId, 'reporting universe id'),
 		zoltarAddress: requireAddressValue(zoltarAddress, 'reporting zoltar address'),
-		initialEscalationGameDeposit: requireBigintValue(initialEscalationGameDeposit, 'reporting initial escalation game deposit'),
+		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'reporting initial escalation game deposit'),
 		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting system state'),
 		questionOutcomeValue: requireIntegerLikeValue(questionOutcomeValue, 'reporting question outcome'),
 		parentSecurityPoolAddress: requireAddressValue(parentSecurityPoolAddress, 'reporting parent security pool address'),
@@ -92,10 +92,10 @@ function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrap
 
 function requireEscalationDepositView(value: unknown, context: string): EscalationDepositViewStruct {
 	const deposit = requireObjectValue(value, context)
-	if ('amount' in deposit && 'cumulativeAmount' in deposit && 'depositor' in deposit) {
+	if ('amountAttoRep' in deposit && 'cumulativeAmountAttoRep' in deposit && 'depositor' in deposit) {
 		return {
-			amount: requireBigintValue(deposit.amount, context),
-			cumulativeAmount: requireBigintValue(deposit.cumulativeAmount, context),
+			amountAttoRep: requireBigintValue(deposit.amountAttoRep, context),
+			cumulativeAmountAttoRep: requireBigintValue(deposit.cumulativeAmountAttoRep, context),
 			depositor: requireAddressValue(deposit.depositor, context),
 		}
 	}
@@ -121,12 +121,12 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 		)
 		const normalizedPage = page
 			.map((deposit, index) => ({
-				amount: deposit.amount,
-				cumulativeAmount: deposit.cumulativeAmount,
+				amountAttoRep: deposit.amountAttoRep,
+				cumulativeAmountAttoRep: deposit.cumulativeAmountAttoRep,
 				depositIndex: currentIndex + BigInt(index),
 				depositor: deposit.depositor,
 			}))
-			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amount > 0n)
+			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amountAttoRep > 0n)
 		deposits.push(...normalizedPage)
 		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
@@ -136,12 +136,12 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 
 function requireCarryLeafView(value: unknown, context: string): CarryLeafViewStruct {
 	const leaf = requireObjectValue(value, context)
-	if ('amount' in leaf && 'cumulativeAmount' in leaf && 'depositor' in leaf && 'parentDepositIndex' in leaf && 'sourceNodeId' in leaf) {
+	if ('amountAttoRep' in leaf && 'cumulativeAmountAttoRep' in leaf && 'depositor' in leaf && 'parentDepositIndex' in leaf && 'sourceNodeId' in leaf) {
 		return {
-			cumulativeAmount: requireBigintValue(leaf.cumulativeAmount, context),
+			cumulativeAmountAttoRep: requireBigintValue(leaf.cumulativeAmountAttoRep, context),
 			depositor: requireAddressValue(leaf.depositor, context),
 			parentDepositIndex: requireBigintValue(leaf.parentDepositIndex, context),
-			amount: requireBigintValue(leaf.amount, context),
+			amountAttoRep: requireBigintValue(leaf.amountAttoRep, context),
 			sourceNodeId: requireBigintValue(leaf.sourceNodeId, context),
 		}
 	}
@@ -179,13 +179,13 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 }
 
 function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcome: ReportingOutcomeKey): { leaf: HistoricalCarryLeafViewStruct; parentNodeId: bigint } {
-	const [parentNodeId, depositor, nodeOutcome, amount, parentDepositIndex, cumulativeAmount, carryLeafIndex] = requireTupleValue(value, 7, 'historical carry node')
+	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'historical carry node')
 	if (requireIntegerLikeValue(nodeOutcome, 'historical carry node outcome') !== getReportingOutcomeValue(outcome)) throw new Error('Unexpected historical carry node outcome')
 	return {
 		leaf: {
-			amount: requireBigintValue(amount, 'historical carry node amount'),
+			amountAttoRep: requireBigintValue(amountAttoRep, 'historical carry node amount'),
 			carryLeafIndex: requireBigintValue(carryLeafIndex, 'historical carry node leaf index'),
-			cumulativeAmount: requireBigintValue(cumulativeAmount, 'historical carry node cumulative amount'),
+			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'historical carry node cumulative amount'),
 			depositor: requireAddressValue(depositor, 'historical carry node depositor'),
 			parentDepositIndex: requireBigintValue(parentDepositIndex, 'historical carry node parent deposit index'),
 			sourceNodeId,
@@ -453,15 +453,15 @@ async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Pick<
 	return parentSnapshotLeaves
 		.filter(leaf => sameAddress(leaf.depositor, depositor) && !consumedParentDepositIndexSet.has(leaf.parentDepositIndex.toString()))
 		.map(leaf => ({
-			amount: leaf.amount,
-			cumulativeAmount: leaf.cumulativeAmount,
+			amountAttoRep: leaf.amountAttoRep,
+			cumulativeAmountAttoRep: leaf.cumulativeAmountAttoRep,
 			depositor: leaf.depositor,
 			parentDepositIndex: leaf.parentDepositIndex,
 		}))
 }
 
 function hashCarryLeaf(leaf: CarryLeafViewStruct, outcome: ReportingOutcomeKey): Hex {
-	return keccak256(encodeAbiParameters(CARRY_LEAF_ABI, [leaf.depositor, getReportingOutcomeValue(outcome), leaf.amount, leaf.parentDepositIndex, leaf.cumulativeAmount, leaf.sourceNodeId]))
+	return keccak256(encodeAbiParameters(CARRY_LEAF_ABI, [leaf.depositor, getReportingOutcomeValue(outcome), leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, leaf.sourceNodeId]))
 }
 
 function hashCarryParent(left: Hex, right: Hex): Hex {
@@ -628,11 +628,11 @@ class SparseNullifier {
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
-			viewerVaultAvailableEscalationRep: undefined,
+			viewerPoolHeldVaultRepBackingAttoRep: undefined,
 			viewerEscalationMigrationEntitlement: undefined,
 			viewerVaultExists: false,
-			viewerVaultEscrowedRep: undefined,
-			viewerVaultRepDepositShare: undefined,
+			viewerVaultDisputeStakedAttoRep: undefined,
+			viewerVaultRepBackingAttoRep: undefined,
 		}
 	const [viewerVaultTuple, escalationMigrationEntitlementTuple] = await Promise.all([
 		client.readContract({
@@ -650,16 +650,16 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	])
 	const [entitlementInitialized, entitlementTotalCurrentRep, materializedByOutcome] = escalationMigrationEntitlementTuple
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
-	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex] = viewerVaultTuples[0] ?? []
-	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
-	const viewerVaultRepDepositShare =
-		viewerPoolOwnership === 0n
+	const [viewerRepBackingUnits, viewerCoverageCommitmentAttoEth, viewerClaimableFeesAttoEth, viewerFeeIndex] = viewerVaultTuples[0] ?? []
+	if (typeof viewerRepBackingUnits !== 'bigint' || typeof viewerCoverageCommitmentAttoEth !== 'bigint' || typeof viewerClaimableFeesAttoEth !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
+	const viewerVaultRepBackingAttoRep =
+		viewerRepBackingUnits === 0n
 			? 0n
 			: await client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'poolOwnershipToRep',
+					functionName: 'backingUnitsToAttoRep',
 					address: securityPoolAddress,
-					args: [viewerPoolOwnership],
+					args: [viewerRepBackingUnits],
 				})
 	const escalationGameAddress = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -667,18 +667,18 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		address: securityPoolAddress,
 		args: [],
 	})
-	const viewerVaultEscrowedRep = sameAddress(escalationGameAddress, zeroAddress)
+	const viewerVaultDisputeStakedAttoRep = sameAddress(escalationGameAddress, zeroAddress)
 		? 0n
 		: await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'escrowedRepByVault',
+				functionName: 'disputeStakedRepByVaultAttoRep',
 				address: escalationGameAddress,
 				args: [accountAddress],
 			})
-	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerVaultEscrowedRep !== 0n
-	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare
+	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerCoverageCommitmentAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
+	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
 	return {
-		viewerVaultAvailableEscalationRep,
+		viewerPoolHeldVaultRepBackingAttoRep,
 		viewerEscalationMigrationEntitlement: {
 			initialized: entitlementInitialized,
 			materializedByOutcome: {
@@ -686,11 +686,11 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				yes: materializedByOutcome[1],
 				no: materializedByOutcome[2],
 			},
-			totalCurrentRep: entitlementTotalCurrentRep,
+			totalCurrentAttoRep: entitlementTotalCurrentRep,
 		},
 		viewerVaultExists,
-		viewerVaultEscrowedRep,
-		viewerVaultRepDepositShare,
+		viewerVaultDisputeStakedAttoRep,
+		viewerVaultRepBackingAttoRep,
 	}
 }
 
@@ -710,7 +710,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'completeSetCollateralAmount',
+			functionName: 'settlementCollateralAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -728,7 +728,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'initialEscalationGameDeposit',
+			functionName: 'initialEscalationGameDepositAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -751,10 +751,10 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	]
-	const { questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress } = requireReportingBootstrapReadResult(await readRequiredMulticall(client, reportingPoolReads))
+	const { questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress } = requireReportingBootstrapReadResult(await readRequiredMulticall(client, reportingPoolReads))
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
-	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
+	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThresholdAttoRep] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
@@ -762,25 +762,25 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: zoltarAddress,
-			functionName: 'getForkThreshold',
+			functionName: 'getForkThresholdAttoRep',
 			args: [universeId],
 		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
-		const nonDecisionThreshold = forkThreshold / 2n + (forkThreshold % 2n)
-		const startBond = nonDecisionThreshold > 1n && initialEscalationGameDeposit >= nonDecisionThreshold ? nonDecisionThreshold - 1n : initialEscalationGameDeposit
+		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
+		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
 		return {
-			completeSetCollateralAmount,
+			settlementCollateralAttoEth,
 			currentTime: block.timestamp,
-			forkThreshold,
+			forkThresholdAttoRep,
 			marketDetails,
-			nonDecisionThreshold,
+			nonDecisionThresholdAttoRep,
 			parentSecurityPoolAddress,
 			questionOutcome: normalizedQuestionOutcome,
 			securityPoolAddress,
 			settlementState: normalizedQuestionOutcome !== 'none' && systemState === 'operational' ? 'resolved' : 'locked',
-			startBond,
+			startBondAttoRep,
 			status: 'not-started',
 			systemState,
 			universeId,
@@ -789,16 +789,16 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
-	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
+	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startBond',
+			functionName: 'startBondAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThreshold',
+			functionName: 'nonDecisionThresholdAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
@@ -810,13 +810,13 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCost',
+			functionName: 'totalCostAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBindingCapital',
+			functionName: 'getBindingCapitalAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
@@ -848,7 +848,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		}),
 	])
-	const balances: [bigint, bigint, bigint] = [invalidOutcomeState.balance, yesOutcomeState.balance, noOutcomeState.balance]
+	const balances: [bigint, bigint, bigint] = [invalidOutcomeState.balanceAttoRep, yesOutcomeState.balanceAttoRep, noOutcomeState.balanceAttoRep]
 	const useCarrySnapshot = forkContinuationSnapshot !== undefined
 	const [invalidDeposits, yesDeposits, noDeposits, invalidParentSnapshotDeposits, yesParentSnapshotDeposits, noParentSnapshotDeposits] = await Promise.all([
 		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
@@ -892,38 +892,38 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 	return {
 		bindingCapital,
-		completeSetCollateralAmount,
-		currentRequiredBond: totalCost === 0n ? startBond : totalCost,
+		settlementCollateralAttoEth,
+		currentRequiredBond: totalCostAttoRep === 0n ? startBondAttoRep : totalCostAttoRep,
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThreshold,
+		forkThresholdAttoRep,
 		hasReachedNonDecision,
 		marketDetails,
-		nonDecisionThreshold,
+		nonDecisionThresholdAttoRep,
 		parentSecurityPoolAddress,
 		questionOutcome: normalizedQuestionOutcome,
 		securityPoolAddress,
 		sides,
-		startBond,
+		startBondAttoRep,
 		status: 'active',
 		systemState,
 		settlementState,
 		activationTime,
-		totalCost,
+		totalCostAttoRep,
 		universeId,
 		parentWithdrawalEnabled: settlementState === 'resolved',
 		...viewerVaultState,
 	}
 }
 
-export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
-		args: [getReportingOutcomeValue(outcome), amount],
+		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}))
 	return {
 		action: 'reportOutcome',
@@ -1013,8 +1013,8 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		const { merkleMountainRangePeakIndex, merkleMountainRangeSiblings, peakRelativeLeafIndex } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree.getProof(parentDepositIndex)
 		proofs.push({
-			amount: targetLeaf.amount,
-			cumulativeAmount: targetLeaf.cumulativeAmount,
+			amountAttoRep: targetLeaf.amountAttoRep,
+			cumulativeAmountAttoRep: targetLeaf.cumulativeAmountAttoRep,
 			depositor: targetLeaf.depositor,
 			leafIndex: BigInt(peakRelativeLeafIndex),
 			merkleMountainRangePeakIndex,

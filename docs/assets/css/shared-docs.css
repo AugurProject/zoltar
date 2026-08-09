@@ -92,6 +92,53 @@
 	overflow-wrap: anywhere;
 }
 
+body.docs-diagram-expanded {
+	overflow: hidden;
+}
+
+.plot-figure-expanded {
+	position: fixed !important;
+	z-index: 1000;
+	inset: 0.75rem;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	width: auto !important;
+	max-width: none !important;
+	height: auto;
+	margin: 0 !important;
+	padding: 0.75rem !important;
+	border: 1px solid var(--line, rgba(0, 0, 0, 0.15)) !important;
+	border-radius: 0.75rem !important;
+	background: var(--paper, #fff) !important;
+	box-shadow: 0 1.5rem 4rem rgba(15, 23, 31, 0.28) !important;
+	overflow: hidden !important;
+}
+
+.plot-figure-expanded > .plot-chart-toolbar {
+	position: static;
+	margin-bottom: 0.5rem;
+}
+
+.plot-figure-expanded > .plot-chart {
+	display: flex;
+	min-height: 0;
+	align-items: center;
+	justify-content: center;
+}
+
+.plot-figure-expanded > .plot-chart > svg {
+	width: 100% !important;
+	height: auto !important;
+	max-width: 100% !important;
+	max-height: 100% !important;
+}
+
+.plot-figure-expanded > .diagram-caption {
+	max-height: min(24vh, 10rem);
+	margin-top: 0.5rem;
+	overflow-y: auto;
+}
+
 .plot-chart-fallback {
 	display: block;
 	padding: 1rem;
@@ -112,31 +159,6 @@
 
 .security-assumption-ref strong {
 	color: var(--ink, #1f2529);
-}
-
-.term-tooltip {
-	position: fixed;
-	z-index: 1000;
-	max-width: min(22rem, calc(100vw - 1.5rem));
-	padding: 0.65rem 0.8rem;
-	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
-	border-radius: 0.5rem;
-	background: color-mix(in srgb, var(--paper, #fff) 96%, var(--bg, #f5f7f8));
-	box-shadow: 0 0.9rem 2.2rem rgba(15, 23, 31, 0.14);
-	color: var(--ink, #1f2529);
-	font-size: 0.92rem;
-	line-height: 1.45;
-	pointer-events: none;
-	opacity: 0;
-	transform: translateY(0.2rem);
-	transition:
-		opacity 80ms ease,
-		transform 80ms ease;
-}
-
-.term-tooltip[data-visible="true"] {
-	opacity: 1;
-	transform: translateY(0);
 }
 
 /* OpenOracle integration document */
@@ -585,6 +607,16 @@ body.doc-openoracle table {
 	border-collapse: collapse;
 	font-size: 0.95rem;
 }
+body.doc-openoracle pre.code-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.doc-openoracle pre.code-scroll:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
 body.doc-openoracle .table-scroll {
 	margin-top: 0.75rem;
 	overflow-x: auto;
@@ -931,21 +963,6 @@ body.doc-openoracle .equation-label {
 	margin-right: 0.35rem;
 	color: var(--ink);
 	font-weight: 700;
-}
-body.doc-openoracle .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.doc-openoracle .term[data-has-tooltip="true"] {
-	cursor: help;
-}
-body.doc-openoracle .term:focus-visible {
-	outline: 2px solid var(--blue);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.doc-openoracle .equation math {
 	display: block;
@@ -1857,6 +1874,17 @@ body.paper-statoblast .example-bar-red {
 	stroke: var(--red);
 	stroke-width: 1.5;
 }
+.equation {
+	counter-increment: equation;
+}
+.equation::before {
+	display: block;
+	margin-bottom: 0.5rem;
+	color: var(--muted);
+	font-size: 0.85rem;
+	font-weight: 800;
+	content: "Equation " counter(equation);
+}
 body.paper-statoblast .equation,
 body.paper-statoblast .diagram {
 	scroll-margin-top: 1rem;
@@ -1869,7 +1897,6 @@ body.paper-statoblast .diagram {
 	scrollbar-width: thin;
 }
 body.paper-statoblast .equation {
-	counter-increment: equation;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
 	background: var(--code-bg);
@@ -2111,18 +2138,6 @@ body.paper-statoblast .timeline-card p,
 body.paper-statoblast .implementation-note p {
 	margin: 0;
 	color: var(--muted);
-}
-body.paper-statoblast .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.paper-statoblast .term:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.paper-statoblast .implementation-note {
 	border-left: 0.3rem solid var(--blue);
@@ -2841,7 +2856,6 @@ body.paper-zoltar .clean-list li {
 	padding-left: 0.2rem;
 }
 body.paper-zoltar .equation {
-	counter-increment: equation;
 	scroll-margin-top: 1rem;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
@@ -3054,18 +3068,6 @@ body.paper-zoltar .timeline-card p,
 body.paper-zoltar .implementation-note p {
 	margin: 0;
 	color: var(--muted);
-}
-body.paper-zoltar .term {
-	border-bottom: 1px dotted currentColor;
-	cursor: help;
-	font-weight: 650;
-	text-decoration: none;
-	text-underline-offset: 0.18em;
-}
-body.paper-zoltar .term:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 0.12rem;
-	border-radius: 0.15rem;
 }
 body.paper-zoltar .implementation-note {
 	border-left: 0.3rem solid var(--blue);
@@ -3402,6 +3404,27 @@ body.paper-zoltar .footer-note {
 		color: var(--ink);
 	}
 
+	body.docs-shell-page a.button {
+		display: inline-block;
+		padding: 0.65rem 0.9rem;
+		border: 1px solid var(--accent);
+		border-radius: 0.45rem;
+		background: var(--accent);
+		color: var(--paper);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	body.docs-shell-page a.button:hover {
+		background: var(--ink);
+		color: var(--paper);
+	}
+
+	body.docs-shell-page a.button:focus-visible {
+		outline: 3px solid var(--ink);
+		outline-offset: 3px;
+	}
+
 	body.docs-shell-page :is(a, button, input, select, [tabindex]):focus-visible {
 		outline: 3px solid var(--accent-soft);
 		outline-offset: 2px;
@@ -3581,6 +3604,33 @@ body.paper-zoltar .footer-note {
 		display: none;
 	}
 
+	.plot-figure-expanded {
+		grid-template-rows: auto auto minmax(0, 1fr);
+	}
+
+	.plot-figure-expanded > .plot-chart {
+		align-items: flex-start;
+	}
+
+	.plot-figure-expanded > .diagram-caption {
+		max-height: none;
+	}
+
+	body.paper-statoblast #fig-statoblast-proportional-migration > .plot-chart {
+		display: block;
+		width: 100% !important;
+		max-width: 100% !important;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: thin;
+	}
+
+	body.paper-statoblast #fig-statoblast-proportional-migration > .plot-chart > svg {
+		width: 42rem !important;
+		min-width: 42rem !important;
+		max-width: none !important;
+	}
+
 	body.paper-statoblast .architecture-map-heading,
 	body.paper-statoblast .architecture-layer,
 	body.paper-statoblast .architecture-path {
@@ -3690,6 +3740,23 @@ body.paper-zoltar .footer-note {
 	padding-inline-start: 0.65rem;
 	color: var(--ink);
 	white-space: normal;
+}
+
+.docs-equation-compact-relation {
+	font-weight: 750;
+}
+
+.docs-equation-compact-cases {
+	display: grid;
+	gap: 0.3rem;
+	margin-top: 0.25rem;
+	padding-left: 0.65rem;
+	border-left: 2px solid var(--line, rgba(0, 0, 0, 0.16));
+}
+
+.docs-equation-compact-case {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .docs-auto-table-scroll {

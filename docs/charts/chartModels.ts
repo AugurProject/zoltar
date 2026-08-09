@@ -1,3 +1,5 @@
+import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/ts/escalationMath'
+
 export type AuctionBidInput = {
 	eth: number
 	key: 'alice' | 'bob' | 'carol'
@@ -5,27 +7,15 @@ export type AuctionBidInput = {
 	price: number
 }
 
-export const quantitativeChartIds = [
-	'fig-auction-clearing-ladder',
-	'fig-statoblast-escalation-cost-curve',
-	'fig-statoblast-retention-utilization',
-	'fig-zoltar-fork-threshold-decay',
-	'plot-open-oracle-integration-2',
-	'plot-statoblast-whitepaper-7',
-	'plot-statoblast-whitepaper-8',
-	'plot-statoblast-whitepaper-19',
-] as const
+export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay', 'plot-statoblast-whitepaper-19'] as const
 
 type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
-	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed escalation interval (% of interval)', y: 'Required bond (% of non-decision threshold)' },
-	'fig-statoblast-retention-utilization': { x: 'Fee-eligible allowance utilization (%)', y: 'Annualized open-interest fee (%)' },
+	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Required support threshold / attrition cost (REP)' },
+	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
-	'plot-open-oracle-integration-2': { x: 'Censorship duration (steps)', y: 'Cost or payoff (ETH)' },
-	'plot-statoblast-whitepaper-7': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
-	'plot-statoblast-whitepaper-8': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
 }
 
@@ -54,7 +44,7 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		price,
 		totalEth: activeBids.filter(bid => bid.price === price).reduce((sum, bid) => sum + bid.eth, 0),
 	}))
-	let accumulatedEth = 0
+	let accumulatedBidEth = 0
 	let clearingPrice = 0
 	let ethFilledAtClearing = 0
 	let funded = false
@@ -63,14 +53,14 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 	const demandPoints: AuctionModel['demandPoints'] = []
 	const chartRepByKey = new Map<AuctionBidInput['key'], number>()
 	for (const tick of ticks) {
-		if (accumulatedEth > 0 && accumulatedEth / tick.price > repInventory) {
+		if (accumulatedBidEth > 0 && accumulatedBidEth / tick.price > repInventory) {
 			funded = true
 			clearingPrice = lastValidPrice
 			ethFilledAtClearing = lastValidEthAtTick
 			break
 		}
-		const ethToTake = Math.min(tick.totalEth, Math.max(0, ethRaiseCap - accumulatedEth))
-		const newAccumulatedEth = accumulatedEth + ethToTake
+		const ethToTake = Math.min(tick.totalEth, Math.max(0, ethRaiseCap - accumulatedBidEth))
+		const newAccumulatedEth = accumulatedBidEth + ethToTake
 		const candidateRep = newAccumulatedEth / tick.price
 		demandPoints.push({ cumulativeRep: candidateRep, price: tick.price })
 		for (const bid of tick.bids) {
@@ -79,18 +69,18 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		if (candidateRep >= repInventory) {
 			funded = true
 			clearingPrice = tick.price
-			ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * tick.price - accumulatedEth))
-			accumulatedEth += ethFilledAtClearing
+			ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * tick.price - accumulatedBidEth))
+			accumulatedBidEth += ethFilledAtClearing
 			break
 		}
 		if (newAccumulatedEth >= ethRaiseCap) {
 			funded = true
 			clearingPrice = tick.price
 			ethFilledAtClearing = ethToTake
-			accumulatedEth = newAccumulatedEth
+			accumulatedBidEth = newAccumulatedEth
 			break
 		}
-		accumulatedEth = newAccumulatedEth
+		accumulatedBidEth = newAccumulatedEth
 		lastValidPrice = tick.price
 		lastValidEthAtTick = ethToTake
 	}
@@ -109,15 +99,15 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 			}
 		}
 	} else {
-		const winningEth = activeBids.reduce((sum, bid) => sum + bid.eth, 0)
-		accumulatedEth = winningEth
-		if (winningEth > 0) {
+		const winningEthAmount = activeBids.reduce((sum, bid) => sum + bid.eth, 0)
+		accumulatedBidEth = winningEthAmount
+		if (winningEthAmount > 0) {
 			for (const bid of activeBids) {
-				repByKey.set(bid.key, (bid.eth * repInventory) / winningEth)
+				repByKey.set(bid.key, (bid.eth * repInventory) / winningEthAmount)
 			}
 		}
 		clearingPrice = qualificationPrice
-		effectivePrice = winningEth > 0 ? winningEth / repInventory : 0
+		effectivePrice = winningEthAmount > 0 ? winningEthAmount / repInventory : 0
 	}
 
 	const results = bids.map(bid => {
@@ -134,15 +124,15 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		clearingPrice,
 		demandPoints,
 		effectivePrice,
-		ethRaised: accumulatedEth,
+		ethRaised: accumulatedBidEth,
 		mode: funded ? 'uniform' : 'underfunded',
 		qualificationPrice,
 	}
 }
 
 export function calculateCollateralRepairModel(
-	parentCollateral: number,
-	forkCollateralReceived: number,
+	parentSettlementCollateral: number,
+	forkSettlementCollateralReceived: number,
 	auctionRaised: number,
 ): {
 	initialShortfall: number
@@ -150,8 +140,8 @@ export function calculateCollateralRepairModel(
 	remainingShortfall: number
 	repairEth: number
 } {
-	const received = Math.min(Math.max(forkCollateralReceived, 0), Math.max(parentCollateral, 0))
-	const initialShortfall = Math.max(0, parentCollateral - received)
+	const received = Math.min(Math.max(forkSettlementCollateralReceived, 0), Math.max(parentSettlementCollateral, 0))
+	const initialShortfall = Math.max(0, parentSettlementCollateral - received)
 	const repairEth = Math.min(Math.max(auctionRaised, 0), initialShortfall)
 	return {
 		initialShortfall,
@@ -159,82 +149,6 @@ export function calculateCollateralRepairModel(
 		remainingShortfall: initialShortfall - repairEth,
 		repairEth,
 	}
-}
-
-export type OracleSecurityModel = {
-	attackerProfit: number
-	censorshipCost: number
-	censorshipRate: number
-	executionErrorThreshold: number
-	griefTarget: number
-	liquidationExecutable: boolean
-	manipulatedPriceError: number
-	safeCensorshipDuration: number
-}
-
-export function calculateOracleSecurityModel(input: {
-	censorshipDuration: number
-	externalPayoff: number
-	honestDisputeBarrierFraction: number
-	honestPrice: number
-	liquidationThresholdPrice: number
-	manipulatedPrice: number
-	minLiquidationPriceDistanceBps: number
-	oracleReportLiquidity: number
-	targetGriefRatio: number
-}): OracleSecurityModel {
-	const liquidationDistanceFraction = Math.min(Math.max(input.minLiquidationPriceDistanceBps, 0), 10_000) / 10_000
-	const discountedHonestPrice = input.honestPrice * (1 - liquidationDistanceFraction)
-	const executionErrorThreshold = discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, input.liquidationThresholdPrice / discountedHonestPrice - 1)
-	const manipulatedPriceError = Math.max(0, (input.manipulatedPrice - input.honestPrice) / input.honestPrice)
-	const liquidationExecutable = input.manipulatedPrice > input.liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold
-	const attackerProfit = liquidationExecutable ? input.externalPayoff : 0
-	const censorshipRate = Math.max(0, manipulatedPriceError - input.honestDisputeBarrierFraction)
-	const censorshipCost = input.censorshipDuration * censorshipRate * input.oracleReportLiquidity
-	const oracleLiquidityRatio = input.oracleReportLiquidity / input.externalPayoff
-	const safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (input.targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
-	return {
-		attackerProfit,
-		censorshipCost,
-		censorshipRate,
-		executionErrorThreshold,
-		griefTarget: liquidationExecutable ? (input.targetGriefRatio + 1) * input.externalPayoff : 0,
-		liquidationExecutable,
-		manipulatedPriceError,
-		safeCensorshipDuration,
-	}
-}
-
-const atomicScale = 1_000_000_000_000_000_000n
-
-export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }): {
-	accepted: number
-	acceptedAtomic: bigint
-	effectiveStartBondAtomic: bigint
-	noAfter: number
-	noAfterAtomic: bigint
-	previewReverts: boolean
-	threshold: number
-	tieAdjusted: boolean
-} {
-	const threshold = Math.max(input.nonDecisionThreshold, 1)
-	const thresholdAtomic = BigInt(Math.round(threshold * Number(atomicScale)))
-	const enteredStartBondAtomic = BigInt(Math.round(input.startBond * Number(atomicScale)))
-	const effectiveStartBondAtomic = !input.repeatDeposit && enteredStartBondAtomic >= thresholdAtomic ? thresholdAtomic - 1n : enteredStartBondAtomic
-	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAtomic <= 0n || enteredStartBondAtomic >= thresholdAtomic)
-	const nonDecisionReached = [input.invalidBalance, input.yesBalance, input.noBalance].filter(balance => BigInt(Math.round(balance * Number(atomicScale))) >= thresholdAtomic).length >= 2
-	const room = Math.max(0, threshold - input.noBalance)
-	const clipped = Math.min(input.proposedDeposit, room)
-	const maxBefore = Math.max(input.invalidBalance, input.yesBalance, input.noBalance)
-	const tieAdjusted = input.noBalance + clipped === maxBefore && input.noBalance + clipped < threshold
-	const clippedAtomic = BigInt(Math.round(clipped * Number(atomicScale)))
-	const acceptedAtomicPreview = tieAdjusted && clippedAtomic > 0n ? clippedAtomic - 1n : clippedAtomic
-	const noAfterAtomicPreview = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomicPreview
-	const previewReverts = invalidStoredParameters || nonDecisionReached || input.noBalance >= threshold || BigInt(Math.round(input.proposedDeposit * Number(atomicScale))) < effectiveStartBondAtomic || (acceptedAtomicPreview < effectiveStartBondAtomic && noAfterAtomicPreview !== thresholdAtomic)
-	const acceptedAtomic = previewReverts ? 0n : acceptedAtomicPreview
-	const accepted = Number(acceptedAtomic) / Number(atomicScale)
-	const noAfterAtomic = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomic
-	return { accepted, acceptedAtomic, effectiveStartBondAtomic, noAfter: input.noBalance + accepted, noAfterAtomic, previewReverts, threshold, tieAdjusted }
 }
 
 export function calculateResolutionModel(input: { invalidBalance: number; noBalance: number; runningCost: number; yesBalance: number }): { atCost: number; result: 'Invalid' | 'No' | 'None' | 'Yes' } {
@@ -251,8 +165,51 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 	return { atCost, result: 'None' }
 }
 
-export function normalizedEscalationCost(elapsed: number): number {
-	return Math.exp(2.4 * (elapsed - 1))
+export const ESCALATION_ACTIVATION_DELAY_DAYS = 3
+export const ESCALATION_TIME_LENGTH_DAYS = Number(ESCALATION_TIME_LENGTH) / 86_400
+export const ESCALATION_TIME_LENGTH_SECONDS = ESCALATION_TIME_LENGTH
+
+const ATTO_REP = 10n ** 18n
+
+export function toAttoRep(value: number) {
+	return BigInt(Math.round(value * 1_000_000)) * 1_000_000_000_000n
+}
+
+export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
+	const elapsedSeconds = BigInt(Math.round(Math.max(0, elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
+	return Number(computeEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds)) / Number(ATTO_REP)
+}
+
+export function computeCanonicalEscalationDeadlineDays(startBondRep: number, nonDecisionThresholdRep: number, bindingCapitalRep: number) {
+	const startBondAttoRep = toAttoRep(startBondRep)
+	const thresholdAttoRep = toAttoRep(nonDecisionThresholdRep)
+	const bindingCapitalAttoRep = toAttoRep(bindingCapitalRep)
+	if (bindingCapitalAttoRep <= startBondAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS
+	if (bindingCapitalAttoRep >= thresholdAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS
+	const elapsedSeconds = computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, thresholdAttoRep, bindingCapitalAttoRep)
+	return ESCALATION_ACTIVATION_DELAY_DAYS + Number(elapsedSeconds) / 86_400
+}
+
+export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
+	return projectEscalationDeposit({
+		amountAttoRep: toAttoRep(input.amountRep),
+		balancesAttoRep: input.balances,
+		nonDecisionThresholdAttoRep: toAttoRep(input.nonDecisionThresholdRep),
+		outcome: input.outcome,
+		startBondAttoRep: toAttoRep(input.startBondRep),
+	})
+}
+
+export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }) {
+	const threshold = Math.max(input.nonDecisionThreshold, 1)
+	const thresholdAttoRep = toAttoRep(threshold)
+	const enteredStartBondAttoRep = toAttoRep(input.startBond)
+	const effectiveStartBondAttoRep = !input.repeatDeposit && enteredStartBondAttoRep >= thresholdAttoRep ? thresholdAttoRep - 1n : enteredStartBondAttoRep
+	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAttoRep <= 0n || enteredStartBondAttoRep >= thresholdAttoRep)
+	const projection = projectEscalationDeposit({ amountAttoRep: toAttoRep(input.proposedDeposit), balancesAttoRep: [toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], nonDecisionThresholdAttoRep: thresholdAttoRep, outcome: 'no', startBondAttoRep: effectiveStartBondAttoRep })
+	const previewReverts = invalidStoredParameters || hasReachedNonDecision([toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], thresholdAttoRep) || projection === undefined
+	const acceptedAttoRep = previewReverts ? 0n : projection.acceptedAmountAttoRep
+	return { accepted: Number(acceptedAttoRep) / Number(ATTO_REP), acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + Number(acceptedAttoRep) / Number(ATTO_REP), noAfterAttoRep: toAttoRep(input.noBalance) + acceptedAttoRep, previewReverts, threshold, tieAdjusted: projection?.tieAdjusted ?? false }
 }
 
 export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {
@@ -264,7 +221,7 @@ export function calculateAnnualizedRetentionFeePercent(utilizationPercent: numbe
 }
 
 export type ForkThresholdPoint = {
-	forkThreshold: number
+	forkThresholdRep: number
 	generation: number
 	theoreticalSupply: number
 }
@@ -273,7 +230,7 @@ export function calculateForkThresholdSeries(generationCount: number, genesisThe
 	return Array.from({ length: Math.max(0, generationCount) }, (_, generation) => {
 		const theoreticalSupply = genesisTheoreticalSupply * 0.99 ** generation
 		return {
-			forkThreshold: theoreticalSupply / 20,
+			forkThresholdRep: theoreticalSupply / 20,
 			generation,
 			theoreticalSupply,
 		}

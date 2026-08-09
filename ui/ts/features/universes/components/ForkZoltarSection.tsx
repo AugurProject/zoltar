@@ -41,7 +41,7 @@ type ForkZoltarSectionProps = {
 	zoltarForkError: string | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
-	zoltarForkRepBalance: bigint | undefined
+	zoltarForkRepBalanceAttoRep: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
@@ -61,7 +61,7 @@ export function ForkZoltarSection({
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
-	zoltarForkRepBalance,
+	zoltarForkRepBalanceAttoRep,
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
@@ -72,8 +72,8 @@ export function ForkZoltarSection({
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
-	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
-	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThreshold, zoltarForkApproval.value)
+	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= rootUniverse.forkThresholdAttoRep
+	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThresholdAttoRep, zoltarForkApproval.value)
 	const hasEnoughApproval = rootUniverse !== undefined && approvalRequirement.hasSufficientApproval
 	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
 	const selectedQuestionId = zoltarForkQuestionId.trim()
@@ -91,9 +91,9 @@ export function ForkZoltarSection({
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
-	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalance === undefined || zoltarForkRepBalance < rootUniverse.forkThreshold ? undefined : zoltarForkRepBalance - rootUniverse.forkThreshold
-	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThreshold / rootUniverse.forkBurnDivisor
-	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThreshold - permanentRepBurn
+	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalanceAttoRep === undefined || zoltarForkRepBalanceAttoRep < rootUniverse.forkThresholdAttoRep ? undefined : zoltarForkRepBalanceAttoRep - rootUniverse.forkThresholdAttoRep
+	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThresholdAttoRep / rootUniverse.forkBurnDivisor
+	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThresholdAttoRep - permanentRepBurn
 	const approvalGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
 		if (walletPresentation !== undefined) return walletPresentation.detail
@@ -132,8 +132,8 @@ export function ForkZoltarSection({
 	return (
 		<>
 			<DataGrid>
-				<MetricField label={commonCopy.forkThreshold}>
-					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix={commonCopy.rep} />
+				<MetricField label={commonCopy.forkThresholdAttoRep}>
+					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
 				</MetricField>
 			</DataGrid>
 
@@ -149,8 +149,8 @@ export function ForkZoltarSection({
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
 						pendingLabel={zoltarCopy.forkRepApprovalPending}
-						requiredAmount={rootUniverse?.forkThreshold}
-						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
+						requiredAmount={rootUniverse?.forkThresholdAttoRep}
+						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThresholdAttoRep.toString() ?? ''}`}
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -170,7 +170,7 @@ export function ForkZoltarSection({
 
 				<TransactionReview
 					primary={[
-						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={rootUniverse?.forkThreshold} suffix={commonCopy.rep} /> },
+						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} /> },
 						{ label: zoltarCopy.migrationCustodyCredit, value: <CurrencyValue value={migrationCustodyCredit} suffix={commonCopy.rep} /> },
 					]}
 					details={[
