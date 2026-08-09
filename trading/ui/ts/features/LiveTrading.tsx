@@ -137,7 +137,6 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 			const detail = error instanceof Error ? error.message : 'SecurityPool discovery failed'
 			setDiscoveryError(detail)
 			setDiscoveryState('error')
-			throw error
 		}
 	}
 
@@ -146,7 +145,7 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 			setMessage(configurationError)
 			return
 		}
-		void refresh(configuration).catch(error => setMessage(error instanceof Error ? error.message : 'Unable to discover trading markets'))
+		void refresh(configuration)
 	}, [configuration, configurationError])
 
 	useEffect(() => {
@@ -244,14 +243,14 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 				<p class='error' role='alert'>
 					SecurityPool discovery failed: {discoveryError}
 				</p>
-				<button class='secondary-action' onClick={() => void refresh().catch(error => setMessage(error instanceof Error ? error.message : 'SecurityPool discovery failed'))}>
+				<button class='secondary-action' onClick={() => void refresh()}>
 					Retry discovery
 				</button>
 			</div>
 		)
 	else if (markets.length === 0) discoveryContent = <p>No SecurityPools are deployed on this configured chain.</p>
-	else
-		discoveryContent = markets.map(market => (
+	else {
+		const marketButtons = markets.map(market => (
 			<button
 				key={market.pool}
 				class='live-market-button'
@@ -268,6 +267,21 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 				<code>{shortAddress(market.pool)}</code>
 			</button>
 		))
+		discoveryContent =
+			discoveryState === 'error' ? (
+				<div>
+					<p class='error' role='alert'>
+						SecurityPool refresh failed; showing the last successful result: {discoveryError}
+					</p>
+					<button class='secondary-action' onClick={() => void refresh()}>
+						Retry discovery
+					</button>
+					{marketButtons}
+				</div>
+			) : (
+				marketButtons
+			)
+	}
 	let selectionContent = <p>Select a deployed SecurityPool.</p>
 	if (discoveryState === 'loading' && markets.length === 0) selectionContent = <p role='status'>Waiting for SecurityPool discovery…</p>
 	else if (discoveryState === 'error' && markets.length === 0) selectionContent = <p>Discovery failed. Retry from the SecurityPools panel.</p>
@@ -297,7 +311,7 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 							<span class='section-kicker'>Factory discovery</span>
 							<h2>SecurityPools</h2>
 						</div>
-						<button class='secondary-action' disabled={discoveryState === 'loading'} onClick={() => void refresh().catch(error => setMessage(error instanceof Error ? error.message : 'SecurityPool discovery failed'))}>
+						<button class='secondary-action' disabled={discoveryState === 'loading'} onClick={() => void refresh()}>
 							Refresh
 						</button>
 					</div>

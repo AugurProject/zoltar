@@ -1054,7 +1054,8 @@ footer {
 
 .live-market-button[aria-pressed="true"] {
 	border-color: var(--accent);
-	background: var(--accent-soft);
+	background: var(--accent-dark);
+	box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .live-market-button span,
