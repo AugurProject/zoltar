@@ -68,7 +68,7 @@ Root aliases use the `trading:*` prefix.
 
 The pair synchronizes valid YES/NO donations before mutations, rejects INVALID and foreign shares in ERC-1155 callbacks, uses `uint256` reserves, and keeps fees in reserves. Initial LP supply uses `min(yesReserve, noReserve)` as an accounting scale and permanently locks 1,000 units. Ownership ratios—not the absolute token count—are authoritative.
 
-The router creates and redeems complete sets using observed balance and ETH deltas. It never assumes `shares == wei`, preserves pre-existing forced ETH and token balances, and restores its starting share balances before completing an operation.
+The router creates and redeems complete sets using observed balance and attoETH deltas. It never assumes a fixed attoETH-to-attoShares ratio, preserves pre-existing forced ETH and token balances, and restores its starting share balances before completing an operation.
 
 ## Documentation
 

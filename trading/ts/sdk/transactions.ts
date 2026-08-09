@@ -18,20 +18,20 @@ export type SimulationClient<T> = Readonly<{
 	simulate(request: ContractRequest): Promise<T>
 }>
 
-export function enterPositionRequest(router: Address, pair: Address, longOutcome: 'YES' | 'NO', ethAmount: bigint, minimumLongShares: bigint, recipient: Address, deadline: bigint): ContractRequest {
-	return { address: router, functionName: 'enterPosition', args: [pair, longOutcome === 'YES' ? 1 : 2, minimumLongShares, recipient, deadline], value: ethAmount }
+export function enterPositionRequest(router: Address, pair: Address, longOutcome: 'YES' | 'NO', amountAttoEth: bigint, minimumLongAttoShares: bigint, recipient: Address, deadline: bigint): ContractRequest {
+	return { address: router, functionName: 'enterPosition', args: [pair, longOutcome === 'YES' ? 1 : 2, minimumLongAttoShares, recipient, deadline], value: amountAttoEth }
 }
 
-export function exitPositionRequest(router: Address, pair: Address, longOutcome: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint): ContractRequest {
-	return { address: router, functionName: 'exitPosition', args: [pair, longOutcome === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEth, recipient, deadline] }
+export function exitPositionRequest(router: Address, pair: Address, longOutcome: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumAttoEth: bigint, recipient: Address, deadline: bigint): ContractRequest {
+	return { address: router, functionName: 'exitPosition', args: [pair, longOutcome === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumAttoEth, recipient, deadline] }
 }
 
-export function initializeLiquidityRequest(router: Address, pool: Address, ethAmount: bigint, conditionalYesBps: bigint, minimumLiquidity: bigint, recipient: Address, deadline: bigint): ContractRequest {
-	return { address: router, functionName: 'createPairAndInitializeWithEth', args: [pool, conditionalYesBps, minimumLiquidity, recipient, deadline], value: ethAmount }
+export function initializeLiquidityRequest(router: Address, pool: Address, amountAttoEth: bigint, conditionalYesBps: bigint, minimumLiquidity: bigint, recipient: Address, deadline: bigint): ContractRequest {
+	return { address: router, functionName: 'createPairAndInitializeWithEth', args: [pool, conditionalYesBps, minimumLiquidity, recipient, deadline], value: amountAttoEth }
 }
 
-export function addLiquidityRequest(router: Address, pair: Address, ethAmount: bigint, minimumLiquidity: bigint, recipient: Address, deadline: bigint): ContractRequest {
-	return { address: router, functionName: 'addLiquidityWithEth', args: [pair, minimumLiquidity, recipient, deadline], value: ethAmount }
+export function addLiquidityRequest(router: Address, pair: Address, amountAttoEth: bigint, minimumLiquidity: bigint, recipient: Address, deadline: bigint): ContractRequest {
+	return { address: router, functionName: 'addLiquidityWithEth', args: [pair, minimumLiquidity, recipient, deadline], value: amountAttoEth }
 }
 
 export function removeLiquidityRequest(router: Address, pair: Address, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, recipient: Address, deadline: bigint): ContractRequest {

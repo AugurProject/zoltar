@@ -5,7 +5,7 @@ const repositoryRoot = path.resolve(projectRoot, '..')
 
 const steps = [
 	{ command: ['bun', 'install', '--frozen-lockfile'], cwd: projectRoot },
-	{ command: ['bun', 'run', 'ensure-shared-build'], cwd: repositoryRoot },
+	{ command: ['bun', 'run', 'ensure-contract-artifacts'], cwd: repositoryRoot },
 	{ command: ['bun', 'run', 'refresh:shared-dependencies'], cwd: repositoryRoot },
 	{ command: ['bun', 'run', 'compile'], cwd: projectRoot },
 	{ command: ['bun', 'run', 'refresh:shared-dependencies'], cwd: repositoryRoot },

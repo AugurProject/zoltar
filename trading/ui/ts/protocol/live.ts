@@ -12,9 +12,23 @@ const deploymentComponents = [
 	{ name: 'universeId', type: 'uint248' },
 	{ name: 'questionId', type: 'uint256' },
 	{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
-	{ name: 'initialReportPriorityFeeWeiPerGas', type: 'uint256' },
+	{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
 	{ name: 'currentRetentionRate', type: 'uint256' },
-	{ name: 'completeSetCollateralAmount', type: 'uint256' },
+	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
+] as const
+
+const poolAccountingComponents = [
+	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
+	{ name: 'totalCoverageCommitmentAttoEth', type: 'uint256' },
+	{ name: 'feeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
+	{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
+	{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
+	{ name: 'feeIndex', type: 'uint256' },
+	{ name: 'feeIndexRemainder', type: 'uint256' },
+	{ name: 'totalFeesOwedRemainder', type: 'uint256' },
+	{ name: 'uncheckpointedFeeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
+	{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
+	{ name: 'currentRetentionRate', type: 'uint256' },
 ] as const
 
 const securityPoolFactoryAbi = [
@@ -34,12 +48,11 @@ const securityPoolFactoryAbi = [
 const securityPoolAbi = [
 	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'shareTokenSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'completeSetCollateralAmount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'shareTokenSupplyAttoShares', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+	{ type: 'function', name: 'getPoolAccountingSnapshot', stateMutability: 'view', inputs: [], outputs: [{ name: 'snapshot', type: 'tuple', components: poolAccountingComponents }] },
 	{ type: 'function', name: 'systemState', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
 	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 	{ type: 'function', name: 'getActiveVaultCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'cashToShares', stateMutability: 'view', inputs: [{ name: 'eth', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
 	{ type: 'function', name: 'securityPoolForker', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const satisfies Abi
 
@@ -116,12 +129,15 @@ export type LiveMarket = Readonly<{
 	description: string
 	endTime: bigint
 	statoblastSecurityMultiplierBps: bigint
-	initialReportPriorityFeeWeiPerGas: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	systemState: number
 	awaitingForkContinuation: boolean
 	activeVaultCount: bigint
-	shareTokenSupply: bigint
-	completeSetCollateral: bigint
+	shareTokenSupplyAttoShares: bigint
+	settlementCollateralAttoEth: bigint
+	currentRetentionRate: bigint
+	totalCoverageCommitmentAttoEth: bigint
+	feeEligibleCoverageCommitmentAttoEth: bigint
 	feeBps: bigint
 	tradingStatus: number | undefined
 	questionOutcome: number
@@ -167,25 +183,41 @@ export async function switchWalletChain(provider: InjectedEthereum, chainId: num
 	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${chainId.toString(16)}` }] })
 }
 
+export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
+	const [questionData, shareTokenSupplyAttoShares, accounting, systemState, awaitingForkContinuation, activeVaultCount, forker] = await Promise.all([
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getPoolAccountingSnapshot' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'systemState' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'awaitingForkContinuation' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getActiveVaultCount' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'securityPoolForker' }),
+	])
+	return {
+		questionData,
+		shareTokenSupplyAttoShares,
+		settlementCollateralAttoEth: accounting.settlementCollateralAttoEth,
+		currentRetentionRate: accounting.currentRetentionRate,
+		totalCoverageCommitmentAttoEth: accounting.totalCoverageCommitmentAttoEth,
+		feeEligibleCoverageCommitmentAttoEth: accounting.feeEligibleCoverageCommitmentAttoEth,
+		systemState,
+		awaitingForkContinuation,
+		activeVaultCount,
+		forker,
+	}
+}
+
 export async function discoverLiveMarkets(client: PublicClient, configuration: DeploymentConfiguration): Promise<LiveMarket[]> {
 	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount' })
 	if (count === 0n) return []
 	const deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })
 	return await Promise.all(
 		deployments.map(async deployment => {
-			const { securityPool: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas } = deployment
+			const { securityPool: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas } = deployment
 			const pool = getAddress(poolAddress)
 			const shareToken = getAddress(shareTokenAddress)
-			const [questionData, shareTokenSupply, completeSetCollateral, systemState, awaitingForkContinuation, activeVaultCount, pairAddress, forker] = await Promise.all([
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupply' }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'completeSetCollateralAmount' }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'systemState' }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'awaitingForkContinuation' }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getActiveVaultCount' }),
-				client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] }),
-				client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'securityPoolForker' }),
-			])
+			const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
+			const { questionData, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCoverageCommitmentAttoEth, feeEligibleCoverageCommitmentAttoEth, systemState, awaitingForkContinuation, activeVaultCount, forker } = poolSettings
 			const [question, questionOutcome] = await Promise.all([
 				client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 				client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
@@ -219,12 +251,15 @@ export async function discoverLiveMarkets(client: PublicClient, configuration: D
 				description: question.description,
 				endTime: question.endTime,
 				statoblastSecurityMultiplierBps,
-				initialReportPriorityFeeWeiPerGas,
+				initialReportPriorityFeeAttoEthPerGas,
 				systemState: Number(systemState),
 				awaitingForkContinuation,
 				activeVaultCount,
-				shareTokenSupply,
-				completeSetCollateral,
+				shareTokenSupplyAttoShares,
+				settlementCollateralAttoEth,
+				currentRetentionRate,
+				totalCoverageCommitmentAttoEth,
+				feeEligibleCoverageCommitmentAttoEth,
 				feeBps,
 				tradingStatus,
 				questionOutcome: Number(questionOutcome),

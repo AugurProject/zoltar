@@ -334,15 +334,25 @@ export function LiveTrading({ route }: { route: string }) {
 							</div>
 							<div>
 								<dt>Initial report priority fee</dt>
-								<dd>{formatUnits(selected.initialReportPriorityFeeWeiPerGas, 9)} gwei / gas</dd>
+								<dd>{formatUnits(selected.initialReportPriorityFeeAttoEthPerGas, 9)} gwei / gas</dd>
 							</div>
 							<div>
 								<dt>Active vaults</dt>
 								<dd>{selected.activeVaultCount.toString()}</dd>
 							</div>
 							<div>
+								<dt>Current retention</dt>
+								<dd>{formatUnits(selected.currentRetentionRate * 100n, 18, 2)}%</dd>
+							</div>
+							<div>
+								<dt>Total / fee-eligible coverage commitment</dt>
+								<dd>
+									{formatUnits(selected.totalCoverageCommitmentAttoEth)} / {formatUnits(selected.feeEligibleCoverageCommitmentAttoEth)} ETH
+								</dd>
+							</div>
+							<div>
 								<dt>Collateral rate</dt>
-								<dd>{selected.shareTokenSupply === 0n ? 'No complete sets yet' : formatEthPerShare(selected.completeSetCollateral, selected.shareTokenSupply)}</dd>
+								<dd>{selected.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(selected.settlementCollateralAttoEth, selected.shareTokenSupplyAttoShares)}</dd>
 							</div>
 							<div>
 								<dt>AMM fee</dt>

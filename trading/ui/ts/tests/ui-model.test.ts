@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
-import { demoCashToShares, demoMarket, demoSharesToCash, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
 import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 
@@ -45,9 +45,9 @@ describe('standalone trading UI model', () => {
 
 	test('converts ETH to share units using the live SecurityPool exchange rate once', () => {
 		const market = demoMarket('baseline')
-		const shares = demoCashToShares(250_000_000_000_000_000n, market)
+		const shares = demoAttoEthToAttoShares(250_000_000_000_000_000n, market)
 		expect(formatShareAmount(shares)).toBe('253,190,196,475,592,465.0597 shares')
-		expect((shares * market.securityPool.completeSetCollateral) / market.securityPool.shareTokenSupply).toBeLessThanOrEqual(250_000_000_000_000_000n)
+		expect((shares * market.securityPool.settlementCollateralAttoEth) / market.securityPool.shareTokenSupplyAttoShares).toBeLessThanOrEqual(250_000_000_000_000_000n)
 	})
 
 	test('wires the live-rate complete-set amount into the enter quote', () => {
@@ -58,9 +58,9 @@ describe('standalone trading UI model', () => {
 
 	test('derives exit ETH from the current SecurityPool redemption rate', () => {
 		const market = demoMarket('baseline')
-		const shares = demoCashToShares(250_000_000_000_000_000n, market)
-		expect(demoSharesToCash(shares, market)).toBeLessThanOrEqual(250_000_000_000_000_000n)
-		expect(demoSharesToCash(shares * 2n, market)).toBeGreaterThan(demoSharesToCash(shares, market))
+		const shares = demoAttoEthToAttoShares(250_000_000_000_000_000n, market)
+		expect(demoAttoSharesToAttoEth(shares, market)).toBeLessThanOrEqual(250_000_000_000_000_000n)
+		expect(demoAttoSharesToAttoEth(shares * 2n, market)).toBeGreaterThan(demoAttoSharesToAttoEth(shares, market))
 	})
 
 	test('uses the authoritative LP supply for removal previews', () => {

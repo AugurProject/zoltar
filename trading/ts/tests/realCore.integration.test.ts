@@ -2,10 +2,11 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { usePeripheralsVaultAccountingFixture } from '../../../solidity/ts/tests/peripherals/fixture.ts'
 import { writeContractAndWait } from '../../../solidity/ts/testSupport/simulator/utils/clients.ts'
+import { loadLiveSecurityPoolSettings } from '../../ui/ts/protocol/live.ts'
 import { compileArtifactsForTests } from './compileArtifactsForTests.ts'
 
 type TradingContracts = typeof import('../artifacts/contractArtifact.ts').tradingContracts
-const cashToSharesAbi = [{ type: 'function', name: 'cashToShares', stateMutability: 'view', inputs: [{ name: 'eth', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
+const attoEthToAttoSharesAbi = [{ type: 'function', name: 'attoEthToAttoShares', stateMutability: 'view', inputs: [{ name: 'amountAttoEth', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 
 describe('trading against authoritative Zoltar contracts', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
@@ -37,8 +38,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = fixture.addressString(fixture.TEST_ADDRESSES[0])
-		await fixture.approveAndDepositRep(fixture.client, fixture.repDeposit, fixture.questionId)
-		await fixture.manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.SetSecurityBondsAllowance, fixture.client.account.address, fixture.reportBond * 2n)
+		await fixture.manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.SetCoverageCommitment, fixture.client.account.address, fixture.repDeposit / 4n)
 		factory = await deploy(factoryArtifact, [fixture.getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
@@ -49,9 +49,13 @@ describe('trading against authoritative Zoltar contracts', () => {
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 7_000n, 1n, account, deadline], value: 1n }))
+		const poolSettings = await loadLiveSecurityPoolSettings(fixture.client, fixture.securityPoolAddresses.securityPool)
+		expect(poolSettings.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
+		expect(poolSettings.settlementCollateralAttoEth).toBe(1n)
+		expect(poolSettings.totalCoverageCommitmentAttoEth).toBeGreaterThanOrEqual(poolSettings.settlementCollateralAttoEth)
 		expect(await shareBalance(pair, 0n)).toBe(0n)
 		const invalidBefore = await shareBalance(account, 0n)
-		const expectedMint = await fixture.client.readContract({ abi: cashToSharesAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'cashToShares', args: [1n] })
+		const expectedMint = await fixture.client.readContract({ abi: attoEthToAttoSharesAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoEthToAttoShares', args: [1n] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 1n }))
 		expect((await shareBalance(account, 0n)) - invalidBefore).toBe(expectedMint)
 		expect(await shareBalance(pair, 0n)).toBe(0n)

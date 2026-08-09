@@ -2,7 +2,7 @@ import { useMemo, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoCashToShares, demoSharesToCash, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -37,7 +37,7 @@ function transactionMessage(transactionState: TransactionState) {
 	return undefined
 }
 
-function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', estimatedExitEth?: bigint) {
+function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', estimatedExitAttoEth?: bigint) {
 	if (quote === undefined) return <p>Enter an amount and ensure this market has initialized liquidity.</p>
 	if ('oppositeSharesSwapped' in quote)
 		return (
@@ -84,14 +84,14 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 			</div>
 			<div class='metrics__strong'>
 				<dt>Estimated ETH</dt>
-				<dd>{formatUnits(estimatedExitEth ?? 0n, 18, 8)} ETH</dd>
+				<dd>{formatUnits(estimatedExitAttoEth ?? 0n, 18, 8)} ETH</dd>
 			</div>
 		</dl>
 	)
 }
 
-export function quoteDemoEnterPosition(market: DemoMarket, side: 'YES' | 'NO', eth: bigint) {
-	return quoteEnterPosition(side, demoCashToShares(eth, market), market.yesReserve, market.noReserve, market.feeBps)
+export function quoteDemoEnterPosition(market: DemoMarket, side: 'YES' | 'NO', amountAttoEth: bigint) {
+	return quoteEnterPosition(side, demoAttoEthToAttoShares(amountAttoEth, market), market.yesReserve, market.noReserve, market.feeBps)
 }
 
 export function MarketDetail({ market, scenario }: { market: DemoMarket; scenario: string }) {
@@ -103,7 +103,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 	const closedReason = tradingClosedReason(market.lifecycle)
 	const conditional = conditionalYesProbability(market.yesReserve, market.noReserve)
 	const yesPercent = Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
-	const collateralPerShare = formatEthPerShare(market.securityPool.completeSetCollateral, market.securityPool.shareTokenSupply)
+	const collateralPerShare = formatEthPerShare(market.securityPool.settlementCollateralAttoEth, market.securityPool.shareTokenSupplyAttoShares)
 	const parsed = useMemo(() => {
 		try {
 			return { value: parseUnits(amount) }
@@ -118,7 +118,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 		if (closedReason !== undefined) return undefined
 		return mode === 'enter' ? quoteDemoEnterPosition(market, side, parsed.value) : quoteExitPosition(side, parsed.value, market.yesReserve, market.noReserve, market.feeBps)
 	}, [closedReason, market, mode, parsed.value, side])
-	const estimatedExitEth = mode === 'exit' && parsed.value !== undefined ? demoSharesToCash(parsed.value, market) : undefined
+	const estimatedExitAttoEth = mode === 'exit' && parsed.value !== undefined ? demoAttoSharesToAttoEth(parsed.value, market) : undefined
 	const maxExit = maximumInsuredExit({ longOutcome: side, longBalance: 1_820n * 10n ** 18n, invalidBalance: 750n * 10n ** 18n, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const exitExceedsInsurance = mode === 'exit' && parsed.value !== undefined && parsed.value > maxExit
 	const wrongNetwork = scenario === 'wrong-network'
@@ -218,7 +218,7 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							<span>{quote === undefined ? 'Quote unavailable' : 'Authoritative preview'}</span>
 							<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
 						</div>
-						{closedReason === undefined ? renderQuote(quote, side, estimatedExitEth) : <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>}
+						{closedReason === undefined ? renderQuote(quote, side, estimatedExitAttoEth) : <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>}
 					</div>
 					{wrongNetwork ? (
 						<p class='error' role='alert'>

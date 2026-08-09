@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoCashToShares, lifecycleLabel } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, lifecycleLabel } from '../demo/markets.ts'
 import { formatBpsMultiplier, formatShareAmount, formatUnits } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -65,12 +65,12 @@ export function MarketList({ market }: { market: DemoMarket }) {
 								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
 							</div>
 							<div>
-								<dt>Bond allowance</dt>
-								<dd>{formatUnits(market.securityPool.feeEligibleSecurityBondAllowance)} ETH</dd>
+								<dt>Fee-eligible coverage commitment</dt>
+								<dd>{formatUnits(market.securityPool.feeEligibleCoverageCommitmentAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Collateral</dt>
-								<dd>{formatUnits(market.securityPool.completeSetCollateral)} ETH</dd>
+								<dd>{formatUnits(market.securityPool.settlementCollateralAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Fork continuation</dt>
@@ -89,8 +89,8 @@ export function liquidityActionAvailability(market: DemoMarket) {
 }
 
 export function quoteDemoEthLiquidity(market: DemoMarket, targetBps: bigint) {
-	const initialCompleteSetShares = demoCashToShares(1n * 10n ** 18n, market)
-	const addedCompleteSetShares = demoCashToShares(1n * 10n ** 17n, market)
+	const initialCompleteSetShares = demoAttoEthToAttoShares(1n * 10n ** 18n, market)
+	const addedCompleteSetShares = demoAttoEthToAttoShares(1n * 10n ** 17n, market)
 	return {
 		initial: quoteInitialLiquidity(initialCompleteSetShares, targetBps),
 		added: quoteAddLiquidity(market.yesReserve, market.noReserve, addedCompleteSetShares, addedCompleteSetShares),

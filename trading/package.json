@@ -11,7 +11,7 @@
 		"compile": "bun ./ts/compiler/compile.mts",
 		"generate": "bun run compile",
 		"tsc": "bun x tsc --project tsconfig.json",
-		"test": "cd .. && bun run ensure-shared-build && cd trading && bun run compile && cd .. && bun run refresh:shared-dependencies && cd trading && bun run tsc && bun test ./ts/tests ./ui/ts/tests",
+		"test": "cd .. && bun run ensure-contract-artifacts && cd trading && bun run compile && cd .. && bun run refresh:shared-dependencies && cd trading && bun run tsc && bun test ./ts/tests ./ui/ts/tests",
 		"coverage": "bun test --coverage ./ts/tests ./ui/ts/tests",
 		"check": "bunx @biomejs/biome check package.json tsconfig.json scripts ts ui/ts ui/build ui/css docs README.md SECURITY.md AGENTS.md && bun run format:check && bun run test",
 		"format": "bunx @biomejs/biome format --write package.json tsconfig.json scripts ts ui/ts ui/build ui/css docs README.md SECURITY.md AGENTS.md && cd .. && bunx prettier --write 'trading/contracts/**/*.sol'",

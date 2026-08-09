@@ -18,9 +18,9 @@ export type DemoMarket = Readonly<{
 		awaitingForkContinuation: boolean
 		statoblastSecurityMultiplierBps: bigint
 		initialReportPriorityFeeGwei: bigint
-		feeEligibleSecurityBondAllowance: bigint
-		completeSetCollateral: bigint
-		shareTokenSupply: bigint
+		feeEligibleCoverageCommitmentAttoEth: bigint
+		settlementCollateralAttoEth: bigint
+		shareTokenSupplyAttoShares: bigint
 		activeVaultCount: bigint
 	}>
 }>
@@ -30,16 +30,16 @@ const pair = `0x${'7c'.repeat(20)}` as const
 const childPool = `0x${'4b'.repeat(20)}` as const
 const childPair = `0x${'8d'.repeat(20)}` as const
 
-export function demoCashToShares(eth: bigint, market: DemoMarket) {
-	if (market.securityPool.shareTokenSupply === 0n) return eth * 10n ** 18n
-	if (market.securityPool.completeSetCollateral === 0n) throw new Error('SecurityPool exchange rate is undefined')
-	return (eth * market.securityPool.shareTokenSupply) / market.securityPool.completeSetCollateral
+export function demoAttoEthToAttoShares(amountAttoEth: bigint, market: DemoMarket) {
+	if (market.securityPool.shareTokenSupplyAttoShares === 0n) return amountAttoEth * 10n ** 18n
+	if (market.securityPool.settlementCollateralAttoEth === 0n) throw new Error('SecurityPool exchange rate is undefined')
+	return (amountAttoEth * market.securityPool.shareTokenSupplyAttoShares) / market.securityPool.settlementCollateralAttoEth
 }
 
-export function demoSharesToCash(shares: bigint, market: DemoMarket) {
-	if (shares < 0n) throw new Error('Share amount cannot be negative')
-	if (market.securityPool.shareTokenSupply === 0n) return 0n
-	return (shares * market.securityPool.completeSetCollateral) / market.securityPool.shareTokenSupply
+export function demoAttoSharesToAttoEth(amountAttoShares: bigint, market: DemoMarket) {
+	if (amountAttoShares < 0n) throw new Error('Share amount cannot be negative')
+	if (market.securityPool.shareTokenSupplyAttoShares === 0n) return 0n
+	return (amountAttoShares * market.securityPool.settlementCollateralAttoEth) / market.securityPool.shareTokenSupplyAttoShares
 }
 
 export function demoMarket(scenario: string): DemoMarket {
@@ -77,9 +77,9 @@ export function demoMarket(scenario: string): DemoMarket {
 			awaitingForkContinuation: false,
 			statoblastSecurityMultiplierBps: 20_000n,
 			initialReportPriorityFeeGwei: 2n,
-			feeEligibleSecurityBondAllowance: 25n * 10n ** 18n,
-			completeSetCollateral: 12_342_500_000_000_000_000n,
-			shareTokenSupply: 12_500_000_000_000_000_000n * 10n ** 18n,
+			feeEligibleCoverageCommitmentAttoEth: 25n * 10n ** 18n,
+			settlementCollateralAttoEth: 12_342_500_000_000_000_000n,
+			shareTokenSupplyAttoShares: 12_500_000_000_000_000_000n * 10n ** 18n,
 			activeVaultCount: 3n,
 		},
 	}

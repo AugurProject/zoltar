@@ -181,8 +181,8 @@ contract TradingMockSecurityPool {
 	SystemState public systemState = SystemState.Operational;
 	bool public awaitingForkContinuation;
 	uint256 public sharesPerEth;
-	uint256 public shareTokenSupply;
-	uint256 public completeSetCollateralAmount;
+	uint256 public shareTokenSupplyAttoShares;
+	uint256 public settlementCollateralAttoEth;
 
 	constructor(
 		TradingMockShareToken token,
@@ -217,27 +217,27 @@ contract TradingMockSecurityPool {
 		awaitingForkContinuation = value;
 	}
 
-	function cashToShares(uint256 amount) public view returns (uint256) {
-		return amount * sharesPerEth;
+	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
+		return amountAttoEth * sharesPerEth;
 	}
 
-	function sharesToCash(uint256 amount) public view returns (uint256) {
-		return amount / sharesPerEth;
+	function attoSharesToAttoEth(uint256 amountAttoShares) public view returns (uint256) {
+		return amountAttoShares / sharesPerEth;
 	}
 
 	function createCompleteSet() external payable {
-		uint256 amount = cashToShares(msg.value);
+		uint256 amount = attoEthToAttoShares(msg.value);
 		require(amount > 0, 'Mint is zero');
-		shareTokenSupply += amount;
-		completeSetCollateralAmount += msg.value;
+		shareTokenSupplyAttoShares += amount;
+		settlementCollateralAttoEth += msg.value;
 		shareToken.mintCompleteSets(universeId, msg.sender, amount);
 	}
 
 	function redeemCompleteSet(uint256 amount) external {
-		uint256 ethAmount = sharesToCash(amount);
+		uint256 ethAmount = attoSharesToAttoEth(amount);
 		shareToken.burnCompleteSets(universeId, msg.sender, amount);
-		shareTokenSupply -= amount;
-		completeSetCollateralAmount -= ethAmount;
+		shareTokenSupplyAttoShares -= amount;
+		settlementCollateralAttoEth -= ethAmount;
 		(bool success, ) = payable(msg.sender).call{ value: ethAmount }('');
 		require(success, 'ETH transfer');
 	}
