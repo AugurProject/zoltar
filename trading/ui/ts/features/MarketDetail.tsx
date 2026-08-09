@@ -19,10 +19,19 @@ function initialTransactionState(scenario: string): TransactionState {
 	return 'idle'
 }
 
-function quoteStatus(scenario: string, hasQuote: boolean): { tone: 'good' | 'warn' | 'neutral'; label: string } {
-	if (scenario === 'stale') return { tone: 'warn', label: 'Demo preview stale' }
-	if (!hasQuote) return { tone: 'neutral', label: 'Waiting for input' }
-	return { tone: 'good', label: 'Illustrative demo math' }
+export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closedReason, inputValid, capacityAvailable }: { scenario: string; hasQuote: boolean; pairExists: boolean; closedReason: string | undefined; inputValid: boolean; capacityAvailable: boolean }): {
+	tone: 'good' | 'warn' | 'neutral'
+	label: string
+	message: string | undefined
+} {
+	if (scenario === 'stale') return { tone: 'warn', label: 'Demo preview stale', message: 'Refresh the preview before relying on the displayed values.' }
+	if (hasQuote) return { tone: 'good', label: 'Illustrative demo math', message: undefined }
+	if (closedReason !== undefined)
+		return pairExists ? { tone: 'warn', label: 'Trading closed', message: `Trading and added liquidity are unavailable: ${closedReason}. Raw LP removal remains available.` } : { tone: 'warn', label: 'Trading closed', message: `Trading and pair initialization are unavailable: ${closedReason}.` }
+	if (!pairExists) return { tone: 'warn', label: 'Pair initialization required', message: 'Create and initialize the pair before previewing a trade.' }
+	if (!inputValid) return { tone: 'neutral', label: 'Valid input required', message: 'Enter a positive, valid amount to preview this trade.' }
+	if (!capacityAvailable) return { tone: 'warn', label: 'Insufficient pair liquidity', message: 'Reduce the exit amount below the opposite-outcome reserve.' }
+	return { tone: 'warn', label: 'Preview unavailable', message: 'The current inputs cannot be quoted.' }
 }
 
 function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
@@ -39,8 +48,8 @@ function transactionMessage(transactionState: TransactionState) {
 	return undefined
 }
 
-function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', estimatedExitAttoEth?: bigint) {
-	if (quote === undefined) return <p>Enter an amount and ensure this market has initialized liquidity.</p>
+function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', unavailableMessage: string | undefined, estimatedExitAttoEth?: bigint) {
+	if (quote === undefined) return <p>{unavailableMessage ?? 'The current inputs cannot be quoted.'}</p>
 	if ('oppositeSharesSwapped' in quote)
 		return (
 			<dl class='metrics'>
@@ -129,7 +138,10 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const exitExceedsInsurance = mode === 'exit' && parsed.value !== undefined && parsed.value > maxExit
 	const wrongNetwork = scenario === 'wrong-network'
 	const actionBlocker = wrongNetwork ? 'Switch network to continue' : closedReason
-	const displayedQuoteStatus = quoteStatus(scenario, quote !== undefined)
+	const inputValid = parsed.value !== undefined && parsed.value > 0n
+	const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
+	const capacityAvailable = mode !== 'exit' || parsed.value === undefined || parsed.value < oppositeReserve
+	const displayedQuoteStatus = demoPreviewPresentation({ scenario, hasQuote: quote !== undefined, pairExists: market.pair !== undefined, closedReason, inputValid, capacityAvailable })
 	const workflowLocked = transactionState === 'approval' || transactionState === 'pending'
 	useEffect(() => {
 		if (workflowLocked) onWorkflowLockChange(true)
@@ -155,9 +167,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 			}, 1_300),
 		)
 	}
-	let quoteContent = renderQuote(quote, side, estimatedExitAttoEth)
-	if (closedReason !== undefined && market.pair === undefined) quoteContent = <p>Trading and pair initialization are unavailable: {closedReason}.</p>
-	if (closedReason !== undefined && market.pair !== undefined) quoteContent = <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>
+	const quoteContent = renderQuote(quote, side, displayedQuoteStatus.message, estimatedExitAttoEth)
 	let primaryAction = (
 		<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || workflowLocked} onClick={submit}>
 			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
@@ -314,11 +324,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						</div>
 						{quoteContent}
 					</div>
-					{wrongNetwork ? (
-						<p class='error' role='alert'>
-							Switch to the configured network before simulating or submitting.
-						</p>
-					) : null}
 					{primaryAction}
 					<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
 						{transactionMessage(transactionState)}
