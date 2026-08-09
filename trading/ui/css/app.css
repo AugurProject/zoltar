@@ -171,6 +171,8 @@ nav a[aria-current="page"] {
 .network-pill {
 	display: flex;
 	align-items: center;
+	min-height: 44px;
+	padding-inline: 0.4rem;
 	gap: 0.45rem;
 	color: var(--muted);
 	font:

@@ -28,7 +28,7 @@ import {
 	type LiveBalances,
 	type LiveMarket,
 } from '../protocol/live.ts'
-import { getInjectedEthereum } from '../protocol/injected.ts'
+import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
@@ -106,6 +106,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	const accountRef = useRef(account)
 	accountRef.current = account
 	const [walletClient, setWalletClient] = useState<WalletClient>()
+	const [walletProvider, setWalletProvider] = useState<InjectedEthereum>()
+	const [walletContextInvalidated, setWalletContextInvalidated] = useState(false)
 	const [balances, setBalances] = useState<LiveBalances>()
 	const [balanceState, setBalanceState] = useState<BalanceState>('disconnected')
 	const [balanceError, setBalanceError] = useState<string>()
@@ -207,11 +209,34 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	}, [route])
 
 	useEffect(() => {
+		setWalletProvider(getInjectedEthereum())
+	}, [])
+
+	useEffect(() => {
+		if (walletProvider === undefined) return
+		return subscribeToWalletContextChanges(walletProvider, (eventName: WalletContextChangeEvent) => {
+			balanceRequests.invalidate()
+			simulationRequests.invalidate()
+			accountRef.current = undefined
+			setWalletProvider(undefined)
+			setWalletClient(undefined)
+			setAccount(undefined)
+			setBalances(undefined)
+			setBalanceState('error')
+			setBalanceError('Wallet context changed; reconnect to refresh balances and approvals')
+			setWalletContextInvalidated(true)
+			setQuote(undefined)
+			if (!positionWorkflow.isActive()) setState('error')
+			setMessage(eventName === 'accountsChanged' ? 'Wallet account changed. Reconnect before simulating or submitting.' : 'Wallet network changed. Reconnect on the configured network before simulating or submitting.')
+		})
+	}, [walletProvider])
+
+	useEffect(() => {
 		const request = balanceRequests.begin()
 		if (configuration === undefined || account === undefined || selected === undefined) {
 			setBalances(undefined)
-			setBalanceState('disconnected')
-			setBalanceError(undefined)
+			setBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
+			if (!walletContextInvalidated) setBalanceError(undefined)
 			return
 		}
 		setBalanceState('loading')
@@ -232,13 +257,14 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			},
 		)
 		return () => balanceRequests.invalidate()
-	}, [account, configuration, selected])
+	}, [account, configuration, selected, walletContextInvalidated])
 
 	async function connect() {
 		if (positionWorkflow.isActive() || liquidityWorkflowLockedRef.current) return
 		try {
 			const provider = getInjectedEthereum()
 			if (provider === undefined) throw new Error('No injected wallet was found')
+			setWalletProvider(provider)
 			if (configuration === undefined) throw new Error('Deployment configuration is unavailable')
 			let chainId = await walletChainId(provider)
 			if (chainId !== configuration.chainId) {
@@ -252,8 +278,10 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			setBalances(undefined)
 			setBalanceState('loading')
 			setBalanceError(undefined)
+			setWalletContextInvalidated(false)
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
+			setWalletProvider(provider)
 			setMessage(undefined)
 			await refresh(configuration)
 		} catch (error) {
@@ -625,10 +653,9 @@ function LiveLiquidityControls({
 	const workflowLocked = state === 'approval' || state === 'pending'
 
 	useEffect(() => {
-		if (workflow.isActive()) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		setState('idle')
+		if (!workflow.isActive()) setState('idle')
 		return () => simulationRequests.invalidate()
 	}, [account, configuration, market, walletClient])
 
