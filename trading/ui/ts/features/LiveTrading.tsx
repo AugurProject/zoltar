@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, WalletClient } from '@zoltar/shared/ethereum'
 import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
+import { createLatestRequestGuard } from '../app/latestRequest.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -32,7 +33,8 @@ import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
 type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
-type Quote = Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>
+type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfiguration; walletClient: WalletClient }>
+type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>) & QuoteContext
 type TransactionState = 'idle' | 'simulating' | 'ready' | 'approval' | 'pending' | 'confirmed' | 'error'
 
 function statusLabel(market: LiveMarket, nowSeconds: bigint) {
@@ -110,6 +112,9 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 	const [message, setMessage] = useState<string>()
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
 	const [discoveryError, setDiscoveryError] = useState<string>()
+	const discoveryRequests = useRef(createLatestRequestGuard()).current
+	const balanceRequests = useRef(createLatestRequestGuard()).current
+	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
 	const nowSeconds = BigInt(Math.floor(Date.now() / 1_000))
 	const parsedAmount = useMemo(() => {
@@ -120,20 +125,25 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 		}
 	}, [amount])
 
-	async function refresh(nextConfiguration = configuration, nextAccount = account) {
+	async function refresh(nextConfiguration = configuration) {
 		if (nextConfiguration === undefined) return
+		const request = discoveryRequests.begin()
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		setState('idle')
 		setDiscoveryState('loading')
 		setDiscoveryError(undefined)
 		try {
 			const client = configuredClient(nextConfiguration)
 			await validateLiveDeployment(client, nextConfiguration)
+			if (!discoveryRequests.isCurrent(request)) return
 			const discovered = await discoverLiveMarkets(client, nextConfiguration)
+			if (!discoveryRequests.isCurrent(request)) return
 			setMarkets(discovered)
 			if (selectedPool === undefined && discovered[0] !== undefined) setSelectedPool(discovered[0].pool)
-			const current = discovered.find(market => market.pool === selectedPool) ?? discovered[0]
-			if (current !== undefined && nextAccount !== undefined) setBalances(await loadLiveBalances(client, current, nextAccount, nextConfiguration.router))
 			setDiscoveryState('ready')
 		} catch (error) {
+			if (!discoveryRequests.isCurrent(request)) return
 			const detail = error instanceof Error ? error.message : 'SecurityPool discovery failed'
 			setDiscoveryError(detail)
 			setDiscoveryState('error')
@@ -142,6 +152,9 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 
 	useEffect(() => {
 		if (configuration === undefined) {
+			discoveryRequests.invalidate()
+			balanceRequests.invalidate()
+			simulationRequests.invalidate()
 			setMessage(configurationError)
 			return
 		}
@@ -149,9 +162,25 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 	}, [configuration, configurationError])
 
 	useEffect(() => {
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		setState('idle')
+	}, [route])
+
+	useEffect(() => {
+		const request = balanceRequests.begin()
+		setBalances(undefined)
 		if (configuration === undefined || account === undefined || selected === undefined) return
-		void loadLiveBalances(configuredClient(configuration), selected, account, configuration.router).then(setBalances, error => setMessage(error instanceof Error ? error.message : 'Balance refresh failed'))
-	}, [account, configuration, selected?.pool])
+		void loadLiveBalances(configuredClient(configuration), selected, account, configuration.router).then(
+			loaded => {
+				if (balanceRequests.isCurrent(request)) setBalances(loaded)
+			},
+			error => {
+				if (balanceRequests.isCurrent(request)) setMessage(error instanceof Error ? error.message : 'Balance refresh failed')
+			},
+		)
+		return () => balanceRequests.invalidate()
+	}, [account, configuration, selected])
 
 	async function connect() {
 		try {
@@ -165,10 +194,12 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 			}
 			if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
 			const connected = await connectWallet(provider)
+			balanceRequests.invalidate()
+			simulationRequests.invalidate()
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
 			setMessage(undefined)
-			await refresh(configuration, connected)
+			await refresh(configuration)
 		} catch (error) {
 			setMessage(error instanceof Error ? error.message : 'Wallet connection failed')
 		}
@@ -176,13 +207,17 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 
 	async function simulate() {
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n) return
+		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
 			setMessage(undefined)
-			const nextQuote = mode === 'entry' ? { kind: 'entry' as const, value: await simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value) } : { kind: 'exit' as const, value: await simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value) }
+			const context = { account, configuration, walletClient }
+			const nextQuote: Quote = mode === 'entry' ? { ...context, kind: 'entry', value: await simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value) } : { ...context, kind: 'exit', value: await simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value) }
+			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
 			setState('ready')
 		} catch (error) {
+			if (!simulationRequests.isCurrent(request)) return
 			setQuote(undefined)
 			setState('error')
 			setMessage(error instanceof Error ? error.message : 'Router simulation failed')
@@ -191,11 +226,13 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 
 	async function approve() {
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined) return
+		const balanceRequest = balanceRequests.begin()
 		try {
 			setState('approval')
 			const hash = await approveRouter(walletClient, selected, configuration, account)
 			await walletClient.waitForTransactionReceipt({ hash })
-			setBalances(await loadLiveBalances(configuredClient(configuration), selected, account, configuration.router))
+			const loaded = await loadLiveBalances(configuredClient(configuration), selected, account, configuration.router)
+			if (balanceRequests.isCurrent(balanceRequest)) setBalances(loaded)
 			setState('idle')
 		} catch (error) {
 			setState('error')
@@ -206,6 +243,20 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 	async function submit() {
 		if (configuration === undefined || account === undefined || walletClient === undefined || quote === undefined) return
 		try {
+			const quotedAmount = quote.kind === 'entry' ? quote.value.amount : quote.value.completeSets
+			if (
+				selected === undefined ||
+				quote.account !== account ||
+				quote.walletClient !== walletClient ||
+				quote.configuration.chainId !== configuration.chainId ||
+				quote.configuration.router !== configuration.router ||
+				quote.value.market.pool !== selected.pool ||
+				quote.value.side !== side ||
+				quote.kind !== mode ||
+				parsedAmount.value !== quotedAmount
+			)
+				throw new Error('Trade inputs changed; simulate the current selection again')
+			simulationRequests.invalidate()
 			const provider = getInjectedEthereum()
 			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before submitting')
 			const currentAccount = await connectWallet(provider)
@@ -215,8 +266,8 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 			const receipt = await walletClient.waitForTransactionReceipt({ hash })
 			if (receipt.status === 'reverted') throw new Error('Transaction reverted')
 			setQuote(undefined)
+			await refresh(configuration)
 			setState('confirmed')
-			await refresh(configuration, account)
 		} catch (error) {
 			setState('error')
 			setMessage(error instanceof Error ? error.message : 'Transaction failed')
@@ -256,8 +307,12 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 				class='live-market-button'
 				aria-pressed={selected?.pool === market.pool}
 				onClick={() => {
+					balanceRequests.invalidate()
+					simulationRequests.invalidate()
+					setBalances(undefined)
 					setSelectedPool(market.pool)
 					setQuote(undefined)
+					setState('idle')
 				}}
 			>
 				<strong>{market.title}</strong>
@@ -396,7 +451,7 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 								<dd>{Number(selected.feeBps) / 100}%</dd>
 							</div>
 						</dl>
-						{route === 'liquidity' ? <LiveLiquidityControls configuration={configuration} market={selected} balances={balances} account={account} walletClient={walletClient} refresh={() => refresh(configuration, account)} /> : null}
+						{route === 'liquidity' ? <LiveLiquidityControls configuration={configuration} market={selected} balances={balances} account={account} walletClient={walletClient} refresh={() => refresh(configuration)} /> : null}
 						{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} /> : null}
 						{route !== 'liquidity' && route !== 'portfolio' && selected.pair === undefined ? <MissingPairAction market={selected} /> : null}
 						{route !== 'liquidity' && route !== 'portfolio' && selected.pair !== undefined ? (
@@ -409,16 +464,19 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 								quote={quote}
 								state={state}
 								setMode={value => {
+									simulationRequests.invalidate()
 									setMode(value)
 									setQuote(undefined)
 									setState('idle')
 								}}
 								setSide={value => {
+									simulationRequests.invalidate()
 									setSide(value)
 									setQuote(undefined)
 									setState('idle')
 								}}
 								setAmount={value => {
+									simulationRequests.invalidate()
 									setAmount(value)
 									setQuote(undefined)
 									setState('idle')
@@ -435,7 +493,7 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 	)
 }
 
-type LiquidityQuote = Awaited<ReturnType<typeof simulateLiquidity>>
+type LiquidityQuote = Awaited<ReturnType<typeof simulateLiquidity>> & QuoteContext
 
 function LiveLiquidityControls({ configuration, market, balances, account, walletClient, refresh }: { configuration: DeploymentConfiguration; market: LiveMarket; balances: LiveBalances | undefined; account: Address | undefined; walletClient: WalletClient | undefined; refresh(): Promise<void> }) {
 	const defaultOperation: LiquidityOperation = market.pair === undefined || market.lpTotalSupply === 0n ? 'initialize' : 'add'
@@ -445,6 +503,7 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 	const [quote, setQuote] = useState<LiquidityQuote>()
 	const [state, setState] = useState<TransactionState>('idle')
 	const [error, setError] = useState<string>()
+	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const parsed = useMemo(() => parseUnitsOrUndefined(amount), [amount])
 	const conditionalBps = useMemo(() => {
 		const value = parseUnitsOrUndefined(probability, 2)
@@ -452,15 +511,28 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 	}, [probability])
 	const closedForAdding = !marketAcceptsNewRisk(market, BigInt(Math.floor(Date.now() / 1_000)))
 	const needsLpApproval = operation === 'remove' && market.lpTotalSupply > 0n && parsed !== undefined && (balances?.lpAllowance ?? 0n) < parsed
+	const workflowLocked = state === 'approval' || state === 'pending'
+
+	useEffect(() => {
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		setState('idle')
+		return () => simulationRequests.invalidate()
+	}, [account, configuration, market, walletClient])
 
 	async function simulateCurrent() {
 		if (walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || (operation === 'initialize' && conditionalBps === undefined)) return
+		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
 			setError(undefined)
-			setQuote(await simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n))
+			const simulated = await simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n)
+			const nextQuote: LiquidityQuote = { ...simulated, account, configuration, walletClient }
+			if (!simulationRequests.isCurrent(request)) return
+			setQuote(nextQuote)
 			setState('ready')
 		} catch (caught) {
+			if (!simulationRequests.isCurrent(request)) return
 			setState('error')
 			setError(caught instanceof Error ? caught.message : 'Liquidity simulation failed')
 		}
@@ -483,6 +555,18 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 	async function submit() {
 		if (walletClient === undefined || account === undefined || quote === undefined) return
 		try {
+			if (
+				quote.account !== account ||
+				quote.walletClient !== walletClient ||
+				quote.configuration.chainId !== configuration.chainId ||
+				quote.configuration.router !== configuration.router ||
+				quote.market.pool !== market.pool ||
+				quote.operation !== operation ||
+				quote.amount !== parsed ||
+				(operation === 'initialize' && quote.conditionalYesBps !== conditionalBps)
+			)
+				throw new Error('Liquidity inputs changed; simulate the current selection again')
+			simulationRequests.invalidate()
 			const provider = getInjectedEthereum()
 			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before submitting')
 			const currentAccount = await connectWallet(provider)
@@ -506,30 +590,36 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 			<div class='segmented' aria-label='Liquidity operation'>
 				<button
 					aria-pressed={operation === 'initialize'}
-					disabled={market.lpTotalSupply > 0n || closedForAdding}
+					disabled={market.lpTotalSupply > 0n || closedForAdding || workflowLocked}
 					onClick={() => {
+						simulationRequests.invalidate()
 						setOperation('initialize')
 						setQuote(undefined)
+						setState('idle')
 					}}
 				>
 					Initialize
 				</button>
 				<button
 					aria-pressed={operation === 'add'}
-					disabled={market.lpTotalSupply === 0n || closedForAdding}
+					disabled={market.lpTotalSupply === 0n || closedForAdding || workflowLocked}
 					onClick={() => {
+						simulationRequests.invalidate()
 						setOperation('add')
 						setQuote(undefined)
+						setState('idle')
 					}}
 				>
 					Add
 				</button>
 				<button
 					aria-pressed={operation === 'remove'}
-					disabled={market.lpTotalSupply === 0n}
+					disabled={market.lpTotalSupply === 0n || workflowLocked}
 					onClick={() => {
+						simulationRequests.invalidate()
 						setOperation('remove')
 						setQuote(undefined)
+						setState('idle')
 					}}
 				>
 					Remove
@@ -540,10 +630,13 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 				<div class='amount-input'>
 					<input
 						value={amount}
+						disabled={workflowLocked}
 						inputMode='decimal'
 						onInput={event => {
+							simulationRequests.invalidate()
 							setAmount(event.currentTarget.value)
 							setQuote(undefined)
+							setState('idle')
 						}}
 					/>
 					<span>{operation === 'remove' ? 'LP' : 'ETH'}</span>
@@ -555,10 +648,13 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 					<div class='amount-input'>
 						<input
 							value={probability}
+							disabled={workflowLocked}
 							inputMode='numeric'
 							onInput={event => {
+								simulationRequests.invalidate()
 								setProbability(event.currentTarget.value)
 								setQuote(undefined)
+								setState('idle')
 							}}
 						/>
 						<span>%</span>
@@ -630,12 +726,12 @@ function LiveLiquidityControls({ configuration, market, balances, account, walle
 				{stateLabel(state)}
 			</p>
 			{needsLpApproval ? (
-				<button class='primary-action' disabled={state === 'approval'} onClick={approveLp}>
+				<button class='primary-action' disabled={workflowLocked} onClick={approveLp}>
 					Approve exact LP amount
 				</button>
 			) : null}
 			{!needsLpApproval && quote === undefined ? (
-				<button class='primary-action' disabled={account === undefined || parsed === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding)} onClick={simulateCurrent}>
+				<button class='primary-action' disabled={account === undefined || parsed === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || state === 'simulating' || workflowLocked} onClick={simulateCurrent}>
 					Simulate liquidity transaction
 				</button>
 			) : null}
@@ -747,6 +843,7 @@ function LivePositionControls({
 	const parsedInput = parseUnitsOrUndefined(amount)
 	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
 	const entryPriceImpact = quote?.kind === 'entry' ? Number(quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore) / 100 : undefined
+	const workflowLocked = state === 'approval' || state === 'pending'
 	return (
 		<div class='operation-block'>
 			<ProbabilityBar yesPercent={yesPercent} />
@@ -778,25 +875,25 @@ function LivePositionControls({
 				</div>
 			</dl>
 			<div class='segmented' aria-label='Live position operation'>
-				<button aria-pressed={mode === 'entry'} disabled={closed} onClick={() => setMode('entry')}>
+				<button aria-pressed={mode === 'entry'} disabled={closed || workflowLocked} onClick={() => setMode('entry')}>
 					Enter
 				</button>
-				<button aria-pressed={mode === 'exit'} disabled={closed} onClick={() => setMode('exit')}>
+				<button aria-pressed={mode === 'exit'} disabled={closed || workflowLocked} onClick={() => setMode('exit')}>
 					Exit
 				</button>
 			</div>
 			<div class='side-picker' aria-label='Outcome'>
-				<button aria-pressed={side === 'YES'} disabled={closed} onClick={() => setSide('YES')}>
+				<button aria-pressed={side === 'YES'} disabled={closed || workflowLocked} onClick={() => setSide('YES')}>
 					YES
 				</button>
-				<button aria-pressed={side === 'NO'} disabled={closed} onClick={() => setSide('NO')}>
+				<button aria-pressed={side === 'NO'} disabled={closed || workflowLocked} onClick={() => setSide('NO')}>
 					NO
 				</button>
 			</div>
 			<label class='field'>
 				<span>{mode === 'entry' ? 'ETH amount' : 'Complete-set shares to redeem'}</span>
 				<div class='amount-input'>
-					<input value={amount} disabled={closed} inputMode='decimal' onInput={event => setAmount(event.currentTarget.value)} />
+					<input value={amount} disabled={closed || workflowLocked} inputMode='decimal' onInput={event => setAmount(event.currentTarget.value)} />
 					<span>{mode === 'entry' ? 'ETH' : 'shares'}</span>
 				</div>
 			</label>
@@ -876,12 +973,15 @@ function LivePositionControls({
 				{stateLabel(state)}
 			</p>
 			{mode === 'exit' && balances?.approved === false ? (
-				<button class='primary-action' disabled={closed || state === 'approval'} onClick={approve}>
-					Approve router for this pool’s shares
-				</button>
+				<>
+					<p>This ERC-1155 approval covers every token ID in the pool’s ShareToken, including shares on other universe branches. Revoke it through a compatible wallet or ShareToken contract interface when it is no longer needed.</p>
+					<button class='primary-action' disabled={closed || workflowLocked} onClick={approve}>
+						Approve router for all ShareToken shares
+					</button>
+				</>
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote === undefined ? (
-				<button class='primary-action' disabled={closed || balances === undefined || parsedInput === undefined || parsedInput === 0n || exceedsInsurance || state === 'simulating'} onClick={simulate}>
+				<button class='primary-action' disabled={closed || balances === undefined || parsedInput === undefined || parsedInput === 0n || exceedsInsurance || state === 'simulating' || workflowLocked} onClick={simulate}>
 					Simulate authoritative router call
 				</button>
 			) : null}

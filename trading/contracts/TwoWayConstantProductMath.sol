@@ -78,7 +78,7 @@ library TwoWayConstantProductMath {
 		uint256 low;
 		uint256 high = scale;
 		while (low < high) {
-			uint256 midpoint = low + (high - low + 1) / 2;
+			uint256 midpoint = low + (high - low) / 2 + 1;
 			if (_productOfSumAtMost(midpoint, otherPart, numeratorPart, scale, numeratorPart)) low = midpoint;
 			else high = midpoint - 1;
 		}
