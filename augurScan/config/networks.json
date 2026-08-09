@@ -1,0 +1,24 @@
+[
+	{
+		"id": "mainnet",
+		"name": "Ethereum Mainnet",
+		"chainId": 1,
+		"rpcUrlEnv": "MAINNET_RPC_URL",
+		"startBlockEnv": "MAINNET_START_BLOCK",
+		"defaultRpcUrl": "https://ethereum.dark.florist",
+		"explorerBaseUrl": "https://etherscan.io",
+		"confirmationDepth": 64,
+		"manifest": "mainnet.json"
+	},
+	{
+		"id": "sepolia",
+		"name": "Sepolia",
+		"chainId": 11155111,
+		"rpcUrlEnv": "SEPOLIA_RPC_URL",
+		"startBlockEnv": "SEPOLIA_START_BLOCK",
+		"defaultRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+		"explorerBaseUrl": "https://sepolia.etherscan.io",
+		"confirmationDepth": 64,
+		"manifest": "sepolia.json"
+	}
+]

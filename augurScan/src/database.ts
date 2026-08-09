@@ -1,0 +1,345 @@
+import { type ReservedSQL, SQL } from 'bun'
+import type { Address, Hash, Hex } from './ethereum.ts'
+import { projectionsFrom } from './projections.ts'
+import type { ContractMetadata, DecodedRecord, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+
+export type StoredTransaction = {
+	readonly hash: Hash
+	readonly transactionIndex: number
+	readonly from: Address
+	readonly to: Address | null
+	readonly value: bigint
+	readonly input: Hex
+	readonly status: 'success' | 'reverted'
+	readonly gasUsed: bigint
+	readonly receipt: unknown
+	readonly decoded: DecodedRecord
+}
+
+export type IndexedBlock = {
+	readonly number: bigint
+	readonly hash: Hash
+	readonly parentHash: Hash
+	readonly timestamp: Date
+	readonly observedHead: bigint
+	readonly finalizedThrough: bigint
+	readonly contracts: readonly ContractMetadata[]
+	readonly tokenMetadata: readonly TokenMetadata[]
+	readonly transactions: readonly StoredTransaction[]
+	readonly logs: readonly StoredLog[]
+}
+
+export type IndexerLease = {
+	readonly backendPid: number
+	readonly connection: ReservedSQL
+	readonly assertHeld: () => Promise<void>
+	readonly release: () => Promise<void>
+}
+
+export class ScannerDatabase {
+	readonly sql: SQL
+
+	constructor(url: string) {
+		this.sql = new SQL(url, { max: 10, idleTimeout: 30 })
+	}
+
+	async close(): Promise<void> {
+		await this.sql.close()
+	}
+
+	async tryAcquireIndexerLock(chainId: number): Promise<IndexerLease | undefined> {
+		const connection = await this.sql.reserve()
+		try {
+			const rows = await connection`SELECT pg_try_advisory_lock(92138472, ${chainId}) AS locked, pg_backend_pid() AS backend_pid`
+			if (rows[0]?.['locked'] !== true) {
+				connection.release()
+				return undefined
+			}
+			let released = false
+			return {
+				backendPid: Number(rows[0]?.['backend_pid']),
+				connection,
+				assertHeld: async () => {
+					if (released) throw new Error('Indexer lease was released')
+					const leaseRows = await connection`
+						SELECT EXISTS (
+							SELECT 1 FROM pg_locks
+							WHERE locktype = 'advisory'
+								AND pid = pg_backend_pid()
+								AND classid::bigint = 92138472
+								AND objid::bigint = ${chainId}
+								AND granted
+						) AS held
+					`
+					if (leaseRows[0]?.['held'] !== true) throw new Error('Indexer lease is no longer held')
+				},
+				release: async () => {
+					if (released) return
+					released = true
+					try {
+						await connection`SELECT pg_advisory_unlock(92138472, ${chainId})`
+					} finally {
+						connection.release()
+					}
+				},
+			}
+		} catch (error) {
+			connection.release()
+			throw error
+		}
+	}
+
+	async seedNetwork(network: NetworkConfig, lease?: IndexerLease): Promise<void> {
+		const sql = lease?.connection ?? this.sql
+		await sql.begin(async (transaction) => {
+			await transaction`
+				INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block)
+				VALUES (${network.chainId}, ${network.id}, ${network.name}, ${network.explorerBaseUrl}, ${network.startBlock.toString()})
+				ON CONFLICT (chain_id) DO UPDATE SET
+					id = EXCLUDED.id,
+					name = EXCLUDED.name,
+					explorer_base_url = EXCLUDED.explorer_base_url,
+					start_block = EXCLUDED.start_block,
+					updated_at = now()
+			`
+			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance = 'manifest'`
+			for (const [address, label, kind] of network.contracts) {
+				await this.upsertContract(network.chainId, { address, label, kind, provenance: 'manifest' }, transaction)
+			}
+			await transaction`
+				UPDATE contracts AS contract SET
+					label = discovery.label,
+					kind = discovery.kind,
+					provenance = discovery.provenance,
+					discovery_block = discovery.block_number,
+					discovery_tx_hash = discovery.tx_hash,
+					canonical = true
+				FROM (
+					SELECT DISTINCT ON (address) address, label, kind, provenance, block_number, tx_hash
+					FROM contract_discoveries
+					WHERE chain_id = ${network.chainId} AND canonical
+					ORDER BY address, block_number DESC
+				) AS discovery
+				WHERE contract.chain_id = ${network.chainId}
+					AND contract.address = discovery.address
+					AND NOT contract.canonical
+			`
+		})
+	}
+
+	async upsertContract(chainId: number, contract: ContractMetadata, sql: SQL = this.sql): Promise<void> {
+		await sql`
+			INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, discovery_tx_hash)
+			VALUES (${chainId}, ${contract.address.toLowerCase()}, ${contract.label}, ${contract.kind}, ${contract.provenance}, ${contract.discoveryBlock?.toString() ?? null}, ${contract.discoveryTxHash ?? null})
+			ON CONFLICT (chain_id, address) DO UPDATE SET
+				label = CASE WHEN EXCLUDED.provenance = 'manifest' THEN EXCLUDED.label WHEN contracts.provenance = 'manifest' THEN contracts.label ELSE EXCLUDED.label END,
+				kind = CASE WHEN EXCLUDED.provenance = 'manifest' THEN EXCLUDED.kind WHEN contracts.provenance = 'manifest' THEN contracts.kind ELSE EXCLUDED.kind END,
+				provenance = CASE WHEN EXCLUDED.provenance = 'manifest' OR contracts.provenance = 'manifest' THEN 'manifest' ELSE EXCLUDED.provenance END,
+				discovery_block = CASE WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_block ELSE EXCLUDED.discovery_block END,
+				discovery_tx_hash = CASE WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END,
+				canonical = true
+		`
+	}
+
+	async contracts(chainId: number): Promise<Map<string, ContractMetadata>> {
+		const rows = await this
+			.sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
+		return new Map(
+			rows.map((row: Record<string, unknown>) => {
+				const address = String(row['address']) as Address
+				const block = row['discovery_block']
+				return [
+					address,
+					{
+						address,
+						label: String(row['label']),
+						kind: String(row['kind']),
+						provenance: String(row['provenance']),
+						...(block === null || block === undefined ? {} : { discoveryBlock: BigInt(String(block)) }),
+						...(row['discovery_tx_hash'] === null || row['discovery_tx_hash'] === undefined
+							? {}
+							: { discoveryTxHash: String(row['discovery_tx_hash']) as Hash }),
+					},
+				]
+			}),
+		)
+	}
+
+	async tokenMetadata(chainId: number): Promise<Map<string, TokenMetadata>> {
+		const rows = await this.sql`SELECT address, name, symbol, decimals, read_error, read_block FROM token_metadata WHERE chain_id = ${chainId} AND canonical`
+		return new Map(
+			rows.map((row: Record<string, unknown>) => {
+				const address = String(row['address']) as Address
+				return [
+					address,
+					{
+						address,
+						...(row['name'] === null ? {} : { name: String(row['name']) }),
+						...(row['symbol'] === null ? {} : { symbol: String(row['symbol']) }),
+						...(row['decimals'] === null ? {} : { decimals: Number(row['decimals']) }),
+						...(row['read_error'] === null ? {} : { readError: String(row['read_error']) }),
+						readBlock: BigInt(String(row['read_block'])),
+					},
+				]
+			}),
+		)
+	}
+
+	async checkpoint(chainId: number): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
+		const rows = await this.sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId}`
+		const row = rows[0]
+		if (row === undefined || row['indexed_block'] === null || row['indexed_hash'] === null) return undefined
+		return { number: BigInt(String(row['indexed_block'])), hash: String(row['indexed_hash']) as Hash }
+	}
+
+	async canonicalHash(chainId: number, number: bigint): Promise<Hash | undefined> {
+		const rows = await this.sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND number = ${number.toString()} AND canonical`
+		const hash = rows[0]?.['hash']
+		return hash === undefined ? undefined : (String(hash) as Hash)
+	}
+
+	async rewind(chainId: number, ancestor: bigint, ancestorHash: Hash | undefined, lease: IndexerLease): Promise<void> {
+		await lease.assertHeld()
+		await lease.connection.begin(async (transaction) => {
+			await transaction`UPDATE blocks SET canonical = false, finalized = false WHERE chain_id = ${chainId} AND number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE transactions SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE logs SET canonical = false, finalized = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE contract_discoveries SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE questions SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE pools SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE pool_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE pool_state_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE vault_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE universe_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND provenance <> 'manifest' AND discovery_block > ${ancestor.toString()}`
+			await transaction`
+				UPDATE networks SET indexed_block = ${ancestor < 0n ? null : ancestor.toString()}, indexed_hash = ${ancestorHash ?? null},
+					indexed_timestamp = (SELECT timestamp FROM blocks WHERE chain_id = ${chainId} AND hash = ${ancestorHash ?? null}), phase = 'backfilling', updated_at = now()
+				WHERE chain_id = ${chainId}
+			`
+		})
+	}
+
+	async storeBlock(chainId: number, block: IndexedBlock, lease: IndexerLease): Promise<void> {
+		await lease.assertHeld()
+		await lease.connection.begin(async (transaction) => {
+			await transaction`
+				INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical, finalized)
+				VALUES (${chainId}, ${block.number.toString()}, ${block.hash}, ${block.parentHash}, ${block.timestamp}, true, ${block.number <= block.finalizedThrough})
+				ON CONFLICT (chain_id, hash) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized
+			`
+			for (const metadata of block.tokenMetadata) {
+				await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND address = ${metadata.address.toLowerCase()} AND canonical AND block_hash <> ${block.hash}`
+				await transaction`
+					INSERT INTO token_metadata (chain_id, address, block_hash, name, symbol, decimals, read_error, read_block, canonical, updated_at)
+					VALUES (${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name ?? null}, ${metadata.symbol ?? null}, ${metadata.decimals ?? null}, ${metadata.readError ?? null}, ${metadata.readBlock.toString()}, true, now())
+					ON CONFLICT (chain_id, address, block_hash) DO UPDATE SET name = EXCLUDED.name, symbol = EXCLUDED.symbol, decimals = EXCLUDED.decimals, read_error = EXCLUDED.read_error, read_block = EXCLUDED.read_block, canonical = true, updated_at = now()
+				`
+			}
+			for (const contract of block.contracts) {
+				if (contract.discoveryTxHash === undefined || contract.discoveryBlock === undefined)
+					throw new Error('Dynamic contract discovery is missing its chain position')
+				await transaction`
+					INSERT INTO contract_discoveries (chain_id, address, block_hash, block_number, tx_hash, label, kind, provenance, canonical)
+					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${block.hash}, ${contract.discoveryBlock.toString()}, ${contract.discoveryTxHash}, ${contract.label}, ${contract.kind}, ${contract.provenance}, true)
+					ON CONFLICT (chain_id, address, block_hash, tx_hash) DO UPDATE SET canonical = true
+				`
+				await transaction`
+					INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, discovery_tx_hash, canonical)
+					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${contract.label}, ${contract.kind}, ${contract.provenance}, ${contract.discoveryBlock?.toString() ?? null}, ${contract.discoveryTxHash ?? null}, true)
+					ON CONFLICT (chain_id, address) DO UPDATE SET
+						canonical = true,
+						label = CASE WHEN contracts.provenance = 'manifest' THEN contracts.label ELSE EXCLUDED.label END,
+						kind = CASE WHEN contracts.provenance = 'manifest' THEN contracts.kind ELSE EXCLUDED.kind END,
+						provenance = CASE WHEN contracts.provenance = 'manifest' THEN contracts.provenance ELSE EXCLUDED.provenance END,
+						discovery_block = CASE WHEN contracts.provenance = 'manifest' THEN contracts.discovery_block ELSE EXCLUDED.discovery_block END,
+						discovery_tx_hash = CASE WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END
+				`
+			}
+			for (const item of block.transactions) {
+				await transaction`
+					INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
+					VALUES (${chainId}, ${item.hash}, ${block.hash}, ${block.number.toString()}, ${item.transactionIndex}, ${item.from.toLowerCase()}, ${item.to?.toLowerCase() ?? null}, ${item.value.toString()}, ${item.input}, ${item.status}, ${item.gasUsed.toString()}, ${JSON.stringify(item.receipt)}, true)
+					ON CONFLICT (chain_id, block_hash, hash) DO UPDATE SET canonical = true
+				`
+				await transaction`
+					INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary)
+					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, ${JSON.stringify(item.decoded.arguments ?? null)}, ${JSON.stringify(item.decoded.displayArguments ?? null)}, ${JSON.stringify(item.decoded.argumentSchema ?? [])}, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary})
+					ON CONFLICT (chain_id, block_hash, tx_hash) DO UPDATE SET function_name = EXCLUDED.function_name, function_signature = EXCLUDED.function_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
+				`
+			}
+			for (const item of block.logs) {
+				await transaction`
+					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
+					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, ${JSON.stringify(item.topics)}, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, ${JSON.stringify(item.decoded.arguments ?? null)}, ${JSON.stringify(item.decoded.displayArguments ?? null)}, ${JSON.stringify(item.decoded.argumentSchema ?? [])}, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})
+					ON CONFLICT (chain_id, block_hash, tx_hash, log_index) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized, event_name = EXCLUDED.event_name, event_signature = EXCLUDED.event_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
+				`
+				for (const projection of projectionsFrom(item)) {
+					const position = [chainId, item.blockHash, item.transactionHash, item.logIndex, item.blockNumber.toString()] as const
+					if (projection.type === 'question') {
+						await transaction`
+							INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, created_timestamp, title, description, start_time, end_time, num_ticks, display_value_min, display_value_max, answer_unit, outcome_options, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.questionId}, ${projection.createdTimestamp}, ${projection.title}, ${projection.description}, ${projection.startTime}, ${projection.endTime}, ${projection.numTicks}, ${projection.displayValueMin}, ${projection.displayValueMax}, ${projection.answerUnit}, ${JSON.stringify(projection.outcomeOptions)}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, question_id) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'pool') {
+						await transaction`
+							INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, truth_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.parentAddress}, ${projection.universeId}, ${projection.questionId}, ${projection.truthAuctionAddress}, ${projection.coordinatorAddress}, ${projection.shareTokenAddress}, ${projection.securityMultiplierBps}, ${projection.initialPriorityFeeAttoEthPerGas}, ${projection.initialRetentionRate}, ${projection.initialSettlementCollateralAttoEth}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'poolSnapshot') {
+						await transaction`
+							INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_coverage_commitment_atto_eth, fee_eligible_coverage_commitment_atto_eth, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_coverage_atto_eth, last_updated_fee_accumulator, current_retention_rate, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalCoverageCommitmentAttoEth}, ${projection.feeEligibleCoverageCommitmentAttoEth}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleCoverageAttoEth}, ${projection.lastUpdatedFeeAccumulator}, ${projection.currentRetentionRate}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'vaultSnapshot') {
+						await transaction`
+							INSERT INTO vault_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address, rep_backing_units, coverage_commitment_atto_eth, claimable_fees_atto_eth, fee_index, vault_fee_remainder, resulting_total_rep_backing_units, resulting_fee_eligible_coverage_atto_eth, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.vaultAddress}, ${projection.repBackingUnits}, ${projection.coverageCommitmentAttoEth}, ${projection.claimableFeesAttoEth}, ${projection.feeIndex}, ${projection.vaultFeeRemainder}, ${projection.resultingTotalRepBackingUnits}, ${projection.resultingFeeEligibleCoverageAttoEth}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address, vault_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'poolState') {
+						await transaction`
+							INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.eventName}, ${JSON.stringify(projection.state)}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true, state = EXCLUDED.state
+						`
+						continue
+					}
+					await transaction`
+						INSERT INTO universe_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_id, event_name, parent_universe_id, forking_outcome_index, reputation_token_address, fork_question_id, fork_time, forker_address, fork_threshold_atto_rep, migration_rep_balance_atto_rep, theoretical_supply_atto_rep, canonical)
+						VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.universeId}, ${projection.eventName}, ${projection.parentUniverseId ?? null}, ${projection.forkingOutcomeIndex ?? null}, ${projection.reputationTokenAddress ?? null}, ${projection.forkQuestionId ?? null}, ${projection.forkTime ?? null}, ${projection.forkerAddress ?? null}, ${projection.forkThresholdAttoRep ?? null}, ${projection.migrationRepBalanceAttoRep ?? null}, ${projection.theoreticalSupplyAttoRep ?? null}, true)
+						ON CONFLICT (chain_id, block_hash, tx_hash, log_index, universe_id) DO UPDATE SET canonical = true
+					`
+				}
+			}
+			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND number <= ${block.finalizedThrough.toString()}`
+			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND block_number <= ${block.finalizedThrough.toString()}`
+			await transaction`
+				UPDATE networks SET indexed_block = ${block.number.toString()}, indexed_hash = ${block.hash}, indexed_timestamp = ${block.timestamp}, observed_block = ${block.observedHead.toString()}, finalized_block = ${block.finalizedThrough.toString()}, phase = ${block.number >= block.observedHead ? 'live' : 'backfilling'}, last_poll_at = now(), last_error = null, updated_at = now()
+				WHERE chain_id = ${chainId}
+			`
+		})
+	}
+
+	async updateObservedHead(chainId: number, head: bigint, phase: string, lease: IndexerLease): Promise<void> {
+		await lease.assertHeld()
+		await lease.connection`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_error = null, updated_at = now() WHERE chain_id = ${chainId}`
+	}
+
+	async recordFailure(chainId: number, message: string, lease: IndexerLease): Promise<void> {
+		await lease.assertHeld()
+		await lease.connection`UPDATE networks SET phase = 'degraded', last_error = ${message.slice(0, 2000)}, last_poll_at = now(), updated_at = now() WHERE chain_id = ${chainId}`
+	}
+}

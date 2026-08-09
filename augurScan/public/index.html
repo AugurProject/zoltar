@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="color-scheme" content="dark" />
+		<title>augurScan — protocol observability</title>
+		<link rel="stylesheet" href="/styles.css" />
+		<script src="/app.js" type="module"></script>
+	</head>
+	<body>
+		<a class="skip-link" href="#activity">Skip to content</a>
+		<header class="site-header">
+			<div class="brand-block">
+				<div class="mark" aria-hidden="true">A</div>
+				<div>
+					<p class="eyebrow">Protocol observability</p>
+					<h1>augurScan</h1>
+				</div>
+			</div>
+			<div class="header-actions">
+				<nav class="product-nav" aria-label="Primary navigation">
+					<a href="/">Activity</a>
+					<a href="/system">System state</a>
+				</nav>
+				<div class="connection"><span class="pulse" aria-hidden="true"></span><span id="connection-label">Connecting</span></div>
+			</div>
+		</header>
+
+		<main>
+			<section aria-labelledby="network-heading">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Indexer status</p>
+						<h2 id="network-heading">Network heads</h2>
+					</div>
+					<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
+				</div>
+				<div id="network-cards" class="network-cards" aria-live="polite" aria-busy="true"></div>
+			</section>
+
+			<section id="activity" class="activity" aria-labelledby="activity-heading">
+				<div class="section-heading activity-heading">
+					<div>
+						<p class="eyebrow">Canonical event stream</p>
+						<h2 id="activity-heading">Project logs</h2>
+					</div>
+					<button id="new-logs" class="new-logs" type="button" hidden>Show new logs</button>
+				</div>
+				<form id="filters" class="filters" role="search">
+					<label
+						><span>Network</span
+						><select id="network-filter">
+							<option value="">All networks</option>
+						</select></label
+					>
+					<label><span>Event</span><input id="event-filter" type="search" placeholder="Transfer, Report…" /></label>
+					<label><span>Address</span><input id="address-filter" type="search" placeholder="0x…" spellcheck="false" /></label>
+					<label
+						><span>Decode</span
+						><select id="decode-filter">
+							<option value="">Any status</option>
+							<option value="true">Decoded</option>
+							<option value="false">Unknown</option>
+						</select></label
+					>
+					<button class="primary" type="submit">Apply filters</button>
+				</form>
+
+				<div class="feed-shell">
+					<div class="feed-header" aria-hidden="true"><span>Chain / block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>Status</span></div>
+					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
+					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true" aria-live="polite"></div>
+				</div>
+				<button id="more" class="more" type="button" hidden>Show more</button>
+			</section>
+
+			<section id="system" class="system" aria-labelledby="system-heading" hidden>
+				<div class="section-heading system-heading">
+					<div>
+						<p class="eyebrow">Canonical state projections</p>
+						<h2 id="system-heading">Protocol system state</h2>
+					</div>
+					<label class="system-network"
+						><span>Network</span
+						><select id="system-network-filter">
+							<option value="">All networks</option>
+						</select></label
+					>
+				</div>
+				<div id="system-alert" class="system-alert" role="alert" hidden></div>
+				<div id="system-status" class="system-status" role="status" aria-live="polite" hidden></div>
+				<div id="state-stats" class="state-stats" aria-live="polite" aria-busy="true"></div>
+				<div class="state-tabs" role="tablist" aria-label="System entities">
+					<button type="button" role="tab" aria-selected="true" data-state-tab="pools">Pools</button>
+					<button type="button" role="tab" aria-selected="false" data-state-tab="questions">Questions</button>
+					<button type="button" role="tab" aria-selected="false" data-state-tab="vaults">Vaults</button>
+					<button type="button" role="tab" aria-selected="false" data-state-tab="universes">Universes</button>
+				</div>
+				<div class="state-workspace">
+					<aside class="entity-panel" aria-label="Entity browser">
+						<div class="entity-panel-bar">
+							<div>
+								<p class="eyebrow">Indexed registry</p>
+								<h3 id="entity-list-title">All pools</h3>
+							</div>
+							<span id="entity-count" class="entity-count">0</span>
+						</div>
+						<label class="entity-search"><span class="sr-only">Filter current entities</span><input id="entity-search" type="search" placeholder="Filter pools…" /></label>
+						<div id="entity-list" class="entity-list" role="listbox" aria-labelledby="entity-list-title" aria-busy="true"></div>
+					</aside>
+					<article id="state-detail" class="state-detail" aria-live="polite" aria-busy="true">
+						<div class="state-placeholder">
+							<p class="eyebrow">Historical projection</p>
+							<h3>Loading system state…</h3>
+						</div>
+					</article>
+				</div>
+			</section>
+		</main>
+
+		<dialog id="detail-dialog" aria-labelledby="detail-title">
+			<div class="dialog-bar">
+				<div>
+					<p class="eyebrow">Log evidence</p>
+					<h2 id="detail-title">Event details</h2>
+				</div>
+				<button id="close-detail" class="icon-button" type="button" aria-label="Close details">×</button>
+			</div>
+			<div id="detail-content" class="detail-content"></div>
+		</dialog>
+	</body>
+</html>
