@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Developer, Help, Liquidity, MarketList, Portfolio } from '../features/Routes.tsx'
@@ -10,8 +10,8 @@ function currentRoute() {
 	return window.location.hash.replace(/^#\/?/, '') || 'markets'
 }
 
-function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>) {
-	if (route === 'market') return <MarketDetail market={market} scenario={scenario} />
+function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>, onWorkflowLockChange: (locked: boolean) => void) {
+	if (route === 'market') return <MarketDetail market={market} scenario={scenario} onWorkflowLockChange={onWorkflowLockChange} />
 	if (route === 'liquidity') return <Liquidity market={market} />
 	if (route === 'portfolio') return <Portfolio market={market} />
 	if (route === 'help') return <Help />
@@ -62,12 +62,29 @@ export function App() {
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
+	const [workflowLocked, setWorkflowLocked] = useState(false)
+	const routeRef = useRef(route)
+	const workflowLockedRef = useRef(workflowLocked)
+	routeRef.current = route
+	workflowLockedRef.current = workflowLocked
+	const updateWorkflowLock = useCallback((locked: boolean) => {
+		workflowLockedRef.current = locked
+		setWorkflowLocked(locked)
+	}, [])
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
 	const scenario = query.get('scenario') ?? 'baseline'
 	const market = demoMarket(scenario)
 	useEffect(() => {
-		const update = () => setRoute(currentRoute())
+		const update = () => {
+			if (workflowLockedRef.current) {
+				window.history.replaceState(undefined, '', `${window.location.pathname}${window.location.search}#/${routeRef.current}`)
+				return
+			}
+			const nextRoute = currentRoute()
+			routeRef.current = nextRoute
+			setRoute(nextRoute)
+		}
 		window.addEventListener('hashchange', update)
 		return () => window.removeEventListener('hashchange', update)
 	}, [])
@@ -96,12 +113,12 @@ export function App() {
 			active = false
 		}
 	}, [demo])
-	const resolvedContent = renderRoute(route, scenario, market)
+	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
 	if (!demo) {
 		if (route === 'help') content = <Help />
 		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
-		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} />
+		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} onWorkflowLockChange={updateWorkflowLock} />
 	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
@@ -121,13 +138,23 @@ export function App() {
 	const banner = renderBanner(scenario, demo)
 	return (
 		<div class='app-shell'>
-			<a class='skip-link' href='#main-content'>
+			<a
+				class='skip-link'
+				href='#main-content'
+				onClick={event => {
+					event.preventDefault()
+					const main = document.getElementById('main-content')
+					if (!(main instanceof HTMLElement)) return
+					main.tabIndex = -1
+					main.focus()
+				}}
+			>
 				Skip to content
 			</a>
 			<div class='site-chrome'>
 				{banner}
 				<header class='site-header'>
-					<a class='brand' href='#/markets' aria-label='Zoltar Trading home'>
+					<a class='brand' href='#/markets' aria-label='Zoltar Trading home' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 						<span class='brand__mark'>Z</span>
 						<span>
 							<strong>Zoltar</strong>
@@ -135,24 +162,24 @@ export function App() {
 						</span>
 					</a>
 					<nav aria-label='Primary'>
-						<a aria-current={route === 'markets' ? 'page' : undefined} href='#/markets'>
+						<a aria-current={route === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Markets
 						</a>
-						<a aria-current={route === 'liquidity' ? 'page' : undefined} href='#/liquidity'>
+						<a aria-current={route === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Liquidity
 						</a>
-						<a aria-current={route === 'portfolio' ? 'page' : undefined} href='#/portfolio'>
+						<a aria-current={route === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Portfolio
 						</a>
-						<a aria-current={route === 'help' ? 'page' : undefined} href='#/help'>
+						<a aria-current={route === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Help
 						</a>
-						<a aria-current={route === 'developer' ? 'page' : undefined} href='#/developer'>
+						<a aria-current={route === 'developer' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/developer' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Developer
 						</a>
 					</nav>
 					<div class='header-actions'>
-						<a class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`} href='#/developer'>
+						<a class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`} href='#/developer' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>

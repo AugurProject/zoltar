@@ -158,6 +158,10 @@ nav a[aria-current="page"] {
 	background: var(--surface-raised);
 	color: var(--text);
 }
+.site-header a[aria-disabled="true"] {
+	opacity: 0.55;
+	cursor: wait;
+}
 .header-actions {
 	display: flex;
 	justify-content: flex-end;

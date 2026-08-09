@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
@@ -7,6 +7,7 @@ import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits,
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { insuredExitLimitMessage } from './LiveTrading.tsx'
+import { createExclusiveWorkflowGuard } from '../app/latestRequest.ts'
 
 type TransactionState = 'idle' | 'approval' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
 
@@ -95,12 +96,14 @@ export function quoteDemoEnterPosition(market: DemoMarket, side: 'YES' | 'NO', a
 	return quoteEnterPosition(side, demoAttoEthToAttoShares(amountAttoEth, market), market.yesReserve, market.noReserve, market.feeBps)
 }
 
-export function MarketDetail({ market, scenario }: { market: DemoMarket; scenario: string }) {
+export function MarketDetail({ market, scenario, onWorkflowLockChange = () => undefined }: { market: DemoMarket; scenario: string; onWorkflowLockChange?: (locked: boolean) => void }) {
 	const query = new URLSearchParams(window.location.search)
 	const [side, setSide] = useState<'YES' | 'NO'>(query.get('side') === 'no' ? 'NO' : 'YES')
 	const [mode, setMode] = useState<'enter' | 'exit'>(query.get('mode') === 'exit' ? 'exit' : 'enter')
 	const [amount, setAmount] = useState(scenario === 'insufficient-invalid' ? '900' : '0.25')
 	const [transactionState, setTransactionState] = useState<TransactionState>(initialTransactionState(scenario))
+	const workflow = useRef(createExclusiveWorkflowGuard()).current
+	const timers = useRef<number[]>([])
 	const closedReason = tradingClosedReason(market.lifecycle)
 	const initialized = market.yesReserve + market.noReserve > 0n
 	const conditional = initialized ? conditionalYesProbability(market.yesReserve, market.noReserve) : undefined
@@ -127,17 +130,36 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 	const wrongNetwork = scenario === 'wrong-network'
 	const actionBlocker = wrongNetwork ? 'Switch network to continue' : closedReason
 	const displayedQuoteStatus = quoteStatus(scenario, quote !== undefined)
+	const workflowLocked = transactionState === 'approval' || transactionState === 'pending'
+	useEffect(() => {
+		if (workflowLocked) onWorkflowLockChange(true)
+		return () => {
+			for (const timer of timers.current) window.clearTimeout(timer)
+			if (workflow.isActive()) workflow.finish()
+			onWorkflowLockChange(false)
+		}
+	}, [])
+	const resetTerminalState = () => {
+		if (!workflowLocked) setTransactionState('idle')
+	}
 	const submit = () => {
-		if (transactionState === 'pending') return
+		if (!workflow.begin()) return
+		onWorkflowLockChange(true)
 		setTransactionState(mode === 'exit' ? 'approval' : 'pending')
-		window.setTimeout(() => setTransactionState('pending'), mode === 'exit' ? 450 : 0)
-		window.setTimeout(() => setTransactionState('confirmed'), 1_300)
+		timers.current.push(window.setTimeout(() => setTransactionState('pending'), mode === 'exit' ? 450 : 0))
+		timers.current.push(
+			window.setTimeout(() => {
+				setTransactionState('confirmed')
+				workflow.finish()
+				onWorkflowLockChange(false)
+			}, 1_300),
+		)
 	}
 	let quoteContent = renderQuote(quote, side, estimatedExitAttoEth)
 	if (closedReason !== undefined && market.pair === undefined) quoteContent = <p>Trading and pair initialization are unavailable: {closedReason}.</p>
 	if (closedReason !== undefined && market.pair !== undefined) quoteContent = <p>Trading and added liquidity are unavailable: {closedReason}. Raw LP removal remains available.</p>
 	let primaryAction = (
-		<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || transactionState === 'pending'} onClick={submit}>
+		<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || workflowLocked} onClick={submit}>
 			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
 		</button>
 	)
@@ -185,10 +207,28 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 							<h2 id='trade-heading'>{mode === 'enter' ? 'Enter with ETH' : 'Exit to ETH'}</h2>
 						</div>
 						<div class='segmented' aria-label='Position operation'>
-							<button type='button' aria-pressed={mode === 'enter'} onClick={() => setMode('enter')}>
+							<button
+								type='button'
+								aria-pressed={mode === 'enter'}
+								disabled={workflowLocked}
+								onClick={() => {
+									if (workflow.isActive()) return
+									setMode('enter')
+									resetTerminalState()
+								}}
+							>
 								Enter
 							</button>
-							<button type='button' aria-pressed={mode === 'exit'} onClick={() => setMode('exit')}>
+							<button
+								type='button'
+								aria-pressed={mode === 'exit'}
+								disabled={workflowLocked}
+								onClick={() => {
+									if (workflow.isActive()) return
+									setMode('exit')
+									resetTerminalState()
+								}}
+							>
 								Exit
 							</button>
 						</div>
@@ -199,11 +239,29 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 						</p>
 					) : null}
 					<div class='side-picker' aria-label='Outcome'>
-						<button type='button' aria-pressed={side === 'YES'} disabled={closedReason !== undefined} onClick={() => setSide('YES')}>
+						<button
+							type='button'
+							aria-pressed={side === 'YES'}
+							disabled={closedReason !== undefined || workflowLocked}
+							onClick={() => {
+								if (workflow.isActive()) return
+								setSide('YES')
+								resetTerminalState()
+							}}
+						>
 							<span>YES</span>
 							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${yesPercent.toFixed(1)}%`}</small>
 						</button>
-						<button type='button' aria-pressed={side === 'NO'} disabled={closedReason !== undefined} onClick={() => setSide('NO')}>
+						<button
+							type='button'
+							aria-pressed={side === 'NO'}
+							disabled={closedReason !== undefined || workflowLocked}
+							onClick={() => {
+								if (workflow.isActive()) return
+								setSide('NO')
+								resetTerminalState()
+							}}
+						>
 							<span>NO</span>
 							<small>{yesPercent === undefined ? 'Conditional price unavailable' : `Conditional price ${(100 - yesPercent).toFixed(1)}%`}</small>
 						</button>
@@ -211,7 +269,18 @@ export function MarketDetail({ market, scenario }: { market: DemoMarket; scenari
 					<label class='field'>
 						<span>{mode === 'enter' ? 'ETH amount' : 'Complete-set shares to redeem'}</span>
 						<div class='amount-input'>
-							<input value={amount} inputMode='decimal' disabled={closedReason !== undefined} aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'} aria-invalid={parsed.error !== undefined} onInput={event => setAmount(event.currentTarget.value)} />
+							<input
+								value={amount}
+								inputMode='decimal'
+								disabled={closedReason !== undefined || workflowLocked}
+								aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'}
+								aria-invalid={parsed.error !== undefined}
+								onInput={event => {
+									if (workflow.isActive()) return
+									setAmount(event.currentTarget.value)
+									resetTerminalState()
+								}}
+							/>
 							<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
 						</div>
 						{parsed.error === undefined ? (

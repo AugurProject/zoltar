@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
-import { formatBpsMultiplier, formatShareAmount, formatUnits } from '../app/format.ts'
+import { formatBpsMultiplier, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
@@ -122,10 +122,18 @@ export function quoteDemoRemoval(market: DemoMarket, liquidity: bigint) {
 	return quoteRemoveLiquidity(market.yesReserve, market.noReserve, liquidity, market.lpTotalSupply)
 }
 
+export function parseConditionalProbabilityBps(input: string): { value: bigint | undefined; error: string | undefined } {
+	const value = parseUnitsOrUndefined(input, 2)
+	if (value === undefined) return { value: undefined, error: 'Enter a percentage with at most two decimal places.' }
+	if (value === 0n) return { value: undefined, error: 'Conditional YES price must be above 0%.' }
+	if (value >= 10_000n) return { value: undefined, error: 'Conditional YES price must be below 100%.' }
+	return { value, error: undefined }
+}
+
 export function Liquidity({ market }: { market: DemoMarket }) {
 	const [probability, setProbability] = useState('70')
-	const targetBps = BigInt(Math.max(1, Math.min(99, Number(probability) || 0))) * 100n
-	const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, targetBps)
+	const parsedProbability = parseConditionalProbabilityBps(probability)
+	const liquidityQuote = parsedProbability.value === undefined ? undefined : quoteDemoEthLiquidity(market, parsedProbability.value)
 	const actionAvailability = liquidityActionAvailability(market)
 	const removed = actionAvailability.remove ? quoteDemoRemoval(market, 100n * 10n ** 18n) : undefined
 	const closedReason = market.lifecycle === 'open' ? undefined : lifecycleLabel(market.lifecycle)
@@ -181,29 +189,36 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 						<label class='field'>
 							<span>Target Conditional YES price</span>
 							<div class='amount-input'>
-								<input value={probability} inputMode='numeric' onInput={event => setProbability(event.currentTarget.value)} />
+								<input value={probability} inputMode='decimal' aria-invalid={parsedProbability.error !== undefined} aria-describedby={parsedProbability.error === undefined ? undefined : 'conditional-price-error'} onInput={event => setProbability(event.currentTarget.value)} />
 								<span>%</span>
 							</div>
+							{parsedProbability.error === undefined ? null : (
+								<small class='error' id='conditional-price-error' role='alert'>
+									{parsedProbability.error}
+								</small>
+							)}
 						</label>
-						<ProbabilityBar yesPercent={Number(targetBps) / 100} />
-						<dl class='metrics'>
-							<div>
-								<dt>YES reserve</dt>
-								<dd>{formatShareAmount(initial.yesUsed)}</dd>
-							</div>
-							<div>
-								<dt>NO reserve</dt>
-								<dd>{formatShareAmount(initial.noUsed)}</dd>
-							</div>
-							<div>
-								<dt>Unused YES returned</dt>
-								<dd>{formatShareAmount(initial.yesReturned)}</dd>
-							</div>
-							<div>
-								<dt>INVALID retained</dt>
-								<dd>{formatShareAmount(initial.invalidReturned)}</dd>
-							</div>
-						</dl>
+						{parsedProbability.value === undefined ? null : <ProbabilityBar yesPercent={Number(parsedProbability.value) / 100} />}
+						{liquidityQuote === undefined ? null : (
+							<dl class='metrics'>
+								<div>
+									<dt>YES reserve</dt>
+									<dd>{formatShareAmount(liquidityQuote.initial.yesUsed)}</dd>
+								</div>
+								<div>
+									<dt>NO reserve</dt>
+									<dd>{formatShareAmount(liquidityQuote.initial.noUsed)}</dd>
+								</div>
+								<div>
+									<dt>Unused YES returned</dt>
+									<dd>{formatShareAmount(liquidityQuote.initial.yesReturned)}</dd>
+								</div>
+								<div>
+									<dt>INVALID retained</dt>
+									<dd>{formatShareAmount(liquidityQuote.initial.invalidReturned)}</dd>
+								</div>
+							</dl>
+						)}
 						<div class='warning'>
 							<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
 						</div>
@@ -220,25 +235,25 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 								<h2>{actionAvailability.add ? 'Add or remove liquidity' : 'Remove liquidity'}</h2>
 							</div>
 						</div>
-						{added === undefined || !actionAvailability.add ? null : (
+						{liquidityQuote?.added === undefined || !actionAvailability.add ? null : (
 							<div class='operation-block'>
 								<h3>Add from 0.1 ETH</h3>
 								<dl class='metrics'>
 									<div>
 										<dt>YES used</dt>
-										<dd>{formatShareAmount(added.yesUsed)}</dd>
+										<dd>{formatShareAmount(liquidityQuote.added.yesUsed)}</dd>
 									</div>
 									<div>
 										<dt>NO used</dt>
-										<dd>{formatShareAmount(added.noUsed)}</dd>
+										<dd>{formatShareAmount(liquidityQuote.added.noUsed)}</dd>
 									</div>
 									<div>
 										<dt>INVALID retained</dt>
-										<dd>{formatShareAmount(addedCompleteSetShares)}</dd>
+										<dd>{formatShareAmount(liquidityQuote.addedCompleteSetShares)}</dd>
 									</div>
 									<div>
 										<dt>Unused NO returned</dt>
-										<dd>{formatShareAmount(added.noReturned)}</dd>
+										<dd>{formatShareAmount(liquidityQuote.added.noReturned)}</dd>
 									</div>
 								</dl>
 								<button class='secondary-action' disabled>

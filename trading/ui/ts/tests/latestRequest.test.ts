@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createLatestRequestGuard } from '../app/latestRequest.ts'
+import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
 
 function deferred<T>() {
 	let resolvePromise: (value: T) => void = () => undefined
@@ -46,5 +46,39 @@ describe('latest asynchronous request guard', () => {
 		await firstCompletion
 
 		expect(visibleBalance).toBe('new pool balance')
+	})
+})
+
+describe('exclusive asynchronous workflow guard', () => {
+	test('admits exactly one wallet workflow until the active one finishes', () => {
+		const guard = createExclusiveWorkflowGuard()
+		expect(guard.begin()).toBeTrue()
+		expect(guard.begin()).toBeFalse()
+		expect(guard.isActive()).toBeTrue()
+		guard.finish()
+		expect(guard.isActive()).toBeFalse()
+		expect(guard.begin()).toBeTrue()
+	})
+
+	test('prevents a rapid second wallet write while the first preflight is deferred', async () => {
+		const guard = createExclusiveWorkflowGuard()
+		const preflight = deferred<void>()
+		let writes = 0
+		const submit = async () => {
+			if (!guard.begin()) return
+			try {
+				await preflight.promise
+				writes += 1
+			} finally {
+				guard.finish()
+			}
+		}
+		const first = submit()
+		const duplicate = submit()
+		expect(guard.isActive()).toBeTrue()
+		expect(writes).toBe(0)
+		preflight.resolve()
+		await Promise.all([first, duplicate])
+		expect(writes).toBe(1)
 	})
 })

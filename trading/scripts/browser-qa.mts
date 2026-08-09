@@ -94,6 +94,23 @@ const scenarios = [
 	{ name: 'ended-pair-missing-market', width: 1440, height: 900, path: '/?demo=1&scenario=ended-missing-pair#/market', scrollY: 500 },
 	{ name: 'ended-pair-missing-liquidity', width: 1440, height: 900, path: '/?demo=1&scenario=ended-missing-pair#/liquidity' },
 	{ name: 'liquidity-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/liquidity' },
+	{
+		name: 'liquidity-fractional-price',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=missing-pair&qa=fractional#/liquidity',
+		evaluate: `(() => { const input = document.querySelector('.field input:not([readonly])'); if (!(input instanceof HTMLInputElement)) return false; input.value = '70.25'; input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		assertExpression: `document.querySelector('.probability')?.getAttribute('aria-label')?.includes('70.3 percent') === true`,
+	},
+	{
+		name: 'liquidity-invalid-price-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=missing-pair&qa=invalid#/liquidity',
+		evaluate: `(() => { const input = document.querySelector('.field input:not([readonly])'); if (!(input instanceof HTMLInputElement)) return false; input.value = '100'; input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		assertExpression: `document.body.textContent?.includes('must be below 100%') === true`,
+		scrollY: 420,
+	},
 	{ name: 'liquidity-mobile', width: 390, height: 844, path: '/?demo=1&scenario=missing-pair#/liquidity', scrollY: 420 },
 	{ name: 'portfolio-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/portfolio' },
 	{ name: 'portfolio-mobile', width: 390, height: 844, path: '/?demo=1&scenario=baseline#/portfolio', scrollY: 360 },
@@ -106,7 +123,17 @@ const scenarios = [
 	{ name: 'pending', width: 1440, height: 900, path: '/?demo=1&scenario=pending#/market', scrollY: 900 },
 	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', scrollY: 900 },
 	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', scrollY: 900 },
-	{ name: 'clicked-pending', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 150, scrollY: 900 },
+	{
+		name: 'clicked-pending',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=baseline#/market',
+		clickSelector: '.primary-action',
+		afterClickExpression: `location.hash = '#/help'`,
+		clickWaitMs: 150,
+		assertExpression: `location.hash === '#/market' && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled)`,
+		scrollY: 900,
+	},
 	{ name: 'clicked-confirmed', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 1_500, scrollY: 900 },
 ] as const
 
@@ -115,9 +142,21 @@ try {
 		await command('Emulation.setDeviceMetricsOverride', { width: scenario.width, height: scenario.height, deviceScaleFactor: 1, mobile: false })
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)
+		if ('evaluate' in scenario) {
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true })
+			const result = evaluated.result
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}`)
+			await Bun.sleep(100)
+		}
 		if ('clickSelector' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.clickSelector)})?.click()` })
+			if ('afterClickExpression' in scenario) await command('Runtime.evaluate', { expression: scenario.afterClickExpression })
 			await Bun.sleep(scenario.clickWaitMs)
+		}
+		if ('assertExpression' in scenario) {
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true })
+			const result = evaluated.result
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}`)
 		}
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })

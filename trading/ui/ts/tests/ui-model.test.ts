@@ -3,7 +3,7 @@ import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits,
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { quoteDemoEnterPosition } from '../features/MarketDetail.tsx'
 import { insuredExitLimitMessage } from '../features/LiveTrading.tsx'
-import { liquidityActionAvailability, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
+import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
@@ -27,6 +27,15 @@ describe('standalone trading UI model', () => {
 		expect(liquidityActionAvailability(demoMarket('missing-pair'))).toEqual({ initialize: true, add: false, remove: false })
 		expect(liquidityActionAvailability(demoMarket('ended-missing-pair'))).toEqual({ initialize: false, add: false, remove: false })
 		expect(quoteDemoEthLiquidity(demoMarket('missing-pair'), 7_000n).added).toBeUndefined()
+	})
+
+	test('parses demo conditional prices as bounded two-decimal fixed point', () => {
+		expect(parseConditionalProbabilityBps('70.25')).toEqual({ value: 7_025n, error: undefined })
+		expect(parseConditionalProbabilityBps('0').error).toContain('above 0%')
+		expect(parseConditionalProbabilityBps('100').error).toContain('below 100%')
+		expect(parseConditionalProbabilityBps('70.251').error).toContain('at most two decimal places')
+		expect(parseConditionalProbabilityBps('not-a-price').error).toContain('at most two decimal places')
+		expect(parseConditionalProbabilityBps('9'.repeat(1_000)).error).toContain('below 100%')
 	})
 
 	test('uses the live SecurityPool rate for ETH-funded liquidity previews', () => {

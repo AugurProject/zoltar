@@ -15,3 +15,20 @@ export function createLatestRequestGuard() {
 		},
 	}
 }
+
+export function createExclusiveWorkflowGuard() {
+	let active = false
+	return {
+		begin() {
+			if (active) return false
+			active = true
+			return true
+		},
+		finish() {
+			active = false
+		},
+		isActive() {
+			return active
+		},
+	}
+}
