@@ -26,6 +26,70 @@ test('rejects malformed address filters before querying', async () => {
 	}
 })
 
+test('rejects unsupported decoded filters before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const response = await handleApi(new Request('http://localhost/api/v1/logs?decoded=maybe'), database)
+	expect(response?.status).toBe(400)
+	expect(await response?.json()).toEqual({ error: 'decoded must be true or false' })
+})
+
+test('rejects negative and overlong log identifiers before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const hash = `0x${'1'.repeat(64)}`
+	for (const identifier of [`-1/${hash}/${hash}/0`, `/${hash}/${hash}/0`, `1/${hash}/${hash}/-1`, `1/${hash}/${hash}/`, `1/${hash}/${hash}/0/extra`]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/logs/${identifier}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'Invalid log identifier' })
+	}
+})
+
+test('rejects overlong state and contract identifiers before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const address = `0x${'1'.repeat(40)}`
+	for (const path of [
+		`state/pools/1/${address}/extra`,
+		`state/vaults/1/${address}/${address}/extra`,
+		'state/universes/1/0/extra',
+		'state/questions/1/0/extra',
+		`contracts/1/${address}/extra`,
+	]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+})
+
+test('rejects non-decimal contract chain identifiers before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const address = `0x${'1'.repeat(40)}`
+	for (const chain of ['1e2', '0x10']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/contracts/${chain}/${address}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'Invalid contract identifier' })
+	}
+})
+
+test('rejects non-decimal integer query parameters before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of ['logs?chainId=1e2', 'logs?limit=0x10', 'state/catalog?chainId=0x10', 'actions?chainId=1e2']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+})
+
+test('rejects empty state chain identifiers before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const address = `0x${'1'.repeat(40)}`
+	const response = await handleApi(new Request(`http://localhost/api/v1/state/pools//${address}`), database)
+	expect(response?.status).toBe(400)
+	expect(await response?.json()).toEqual({ error: 'Invalid state identifier' })
+})
+
 test('rejects malformed cursor timestamps and numeric positions before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)

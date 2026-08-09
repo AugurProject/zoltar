@@ -4,6 +4,7 @@ class ApiRequestError extends Error {}
 
 const integer = (value: string | null, name: string): number | undefined => {
 	if (value === null || value === '') return undefined
+	if (!/^\d+$/.test(value)) throw new ApiRequestError(`${name} must be a non-negative integer`)
 	const result = Number(value)
 	if (!Number.isSafeInteger(result) || result < 0) throw new ApiRequestError(`${name} must be a non-negative integer`)
 	return result
@@ -38,6 +39,11 @@ const isExactIsoTimestamp = (value: string): boolean => {
 
 const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 const isPostgresInteger = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= 2_147_483_647
+const routeInteger = (value: string | undefined, postgresInteger = false): number | undefined => {
+	if (value === undefined || !/^\d+$/.test(value)) return undefined
+	const result = Number(value)
+	return (postgresInteger ? isPostgresInteger(result) : isNonNegativeSafeInteger(result)) ? result : undefined
+}
 
 export const parseCursor = (value: string | null): readonly [string, number, number, number, number] | undefined => {
 	if (value === null) return undefined
@@ -73,6 +79,7 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	const event = url.searchParams.get('event')?.trim() || undefined
 	const address = evmAddress(url.searchParams.get('address'), 'address')
 	const decoded = url.searchParams.get('decoded')
+	if (decoded !== null && decoded !== '' && decoded !== 'true' && decoded !== 'false') throw new ApiRequestError('decoded must be true or false')
 	const values: Array<string | number> = []
 	const clauses = ['l.canonical = true']
 	const bind = (value: string | number): string => {
@@ -108,17 +115,18 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 }
 
 const logDetail = async (sql: SQL, parts: readonly string[]): Promise<Response> => {
-	const chainId = Number(parts[0])
+	const chainId = routeInteger(parts[0])
 	const blockHash = parts[1]
 	const hash = parts[2]
-	const logIndex = Number(parts[3])
+	const logIndex = routeInteger(parts[3], true)
 	if (
-		!Number.isSafeInteger(chainId) ||
+		parts.length !== 4 ||
+		chainId === undefined ||
 		blockHash === undefined ||
 		!/^0x[0-9a-fA-F]{64}$/.test(blockHash) ||
 		hash === undefined ||
 		!/^0x[0-9a-fA-F]{64}$/.test(hash) ||
-		!Number.isSafeInteger(logIndex)
+		logIndex === undefined
 	)
 		return json({ error: 'Invalid log identifier' }, 400)
 	const rows = await sql`
@@ -208,11 +216,11 @@ const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 
 const stateHistory = async (sql: SQL, parts: readonly string[]): Promise<Response> => {
 	const type = parts[0]
-	const chainId = Number(parts[1])
-	if (!Number.isSafeInteger(chainId) || chainId < 0) return json({ error: 'Invalid state identifier' }, 400)
+	const chainId = routeInteger(parts[1])
+	if (chainId === undefined) return json({ error: 'Invalid state identifier' }, 400)
 	if (type === 'pools') {
 		const address = parts[2]?.toLowerCase()
-		if (address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: 'Invalid pool address' }, 400)
+		if (parts.length !== 3 || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: 'Invalid pool address' }, 400)
 		const [snapshots, events] = await Promise.all([
 			sql`SELECT s.*, b.timestamp FROM pool_snapshots s JOIN blocks b ON b.chain_id = s.chain_id AND b.hash = s.block_hash WHERE s.chain_id = ${chainId} AND s.pool_address = ${address} AND s.canonical ORDER BY s.block_number, s.log_index`,
 			sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical ORDER BY e.block_number, e.log_index`,
@@ -222,7 +230,7 @@ const stateHistory = async (sql: SQL, parts: readonly string[]): Promise<Respons
 	if (type === 'vaults') {
 		const pool = parts[2]?.toLowerCase()
 		const vault = parts[3]?.toLowerCase()
-		if (pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault))
+		if (parts.length !== 4 || pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault))
 			return json({ error: 'Invalid vault identifier' }, 400)
 		const snapshots =
 			await sql`SELECT v.*, b.timestamp FROM vault_snapshots v JOIN blocks b ON b.chain_id = v.chain_id AND b.hash = v.block_hash WHERE v.chain_id = ${chainId} AND v.pool_address = ${pool} AND v.vault_address = ${vault} AND v.canonical ORDER BY v.block_number, v.log_index`
@@ -230,14 +238,14 @@ const stateHistory = async (sql: SQL, parts: readonly string[]): Promise<Respons
 	}
 	if (type === 'universes') {
 		const universeId = parts[2]
-		if (universeId === undefined || !/^\d+$/.test(universeId)) return json({ error: 'Invalid universe identifier' }, 400)
+		if (parts.length !== 3 || universeId === undefined || !/^\d+$/.test(universeId)) return json({ error: 'Invalid universe identifier' }, 400)
 		const events =
 			await sql`SELECT u.*, b.timestamp FROM universe_events u JOIN blocks b ON b.chain_id = u.chain_id AND b.hash = u.block_hash WHERE u.chain_id = ${chainId} AND u.universe_id = ${universeId} AND u.canonical ORDER BY u.block_number, u.log_index`
 		return json({ events })
 	}
 	if (type === 'questions') {
 		const questionId = parts[2]
-		if (questionId === undefined || !/^\d+$/.test(questionId)) return json({ error: 'Invalid question identifier' }, 400)
+		if (parts.length !== 3 || questionId === undefined || !/^\d+$/.test(questionId)) return json({ error: 'Invalid question identifier' }, 400)
 		const [pools, forks] = await Promise.all([
 			sql`SELECT p.pool_address, p.universe_id, p.block_number, b.timestamp FROM pools p JOIN blocks b ON b.chain_id = p.chain_id AND b.hash = p.block_hash WHERE p.chain_id = ${chainId} AND p.question_id = ${questionId} AND p.canonical ORDER BY p.block_number`,
 			sql`SELECT u.universe_id, u.block_number, u.fork_time AS timestamp FROM universe_events u WHERE u.chain_id = ${chainId} AND u.fork_question_id = ${questionId} AND u.event_name = 'UniverseForked' AND u.canonical ORDER BY u.block_number`,
@@ -269,10 +277,12 @@ export const handleApi = async (request: Request, sql: SQL): Promise<Response | 
 			return json({ items: rows })
 		}
 		if (url.pathname.startsWith('/api/v1/contracts/')) {
-			const [chain, address] = url.pathname.slice('/api/v1/contracts/'.length).split('/')
-			const chainId = integer(chain ?? null, 'chainId')
-			if (chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address)) return json({ error: 'Invalid contract identifier' }, 400)
-			const rows = await sql`SELECT * FROM contracts WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()}`
+			const parts = url.pathname.slice('/api/v1/contracts/'.length).split('/')
+			const [chain, address] = parts
+			const chainId = routeInteger(chain)
+			if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address))
+				return json({ error: 'Invalid contract identifier' }, 400)
+			const rows = await sql`SELECT * FROM contracts WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()} AND canonical`
 			return rows.length === 0 ? json({ error: 'Contract not found' }, 404) : json(rows[0])
 		}
 	} catch (error) {

@@ -11,6 +11,8 @@ const chainId = 31_337
 const address = getAddress('0x1000000000000000000000000000000000000001')
 const discoveredAddress = getAddress('0x2000000000000000000000000000000000000002')
 const promotedAddress = getAddress('0x3000000000000000000000000000000000000003')
+const rediscoveredAddress = getAddress('0x4000000000000000000000000000000000000004')
+const orphanOnlyAddress = getAddress('0x5000000000000000000000000000000000000005')
 const transactionHash = keccak256(stringToHex('augurScan integration transaction'))
 const blockHash = (name: string) => keccak256(stringToHex(name))
 
@@ -127,7 +129,17 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		const writeLease = await database.tryAcquireIndexerLock(chainId)
 		if (writeLease === undefined) throw new Error('writer did not acquire its lock')
 		const genesisHash = blockHash('genesis')
-		const first = indexedBlock('block-one', genesisHash)
+		const initialDiscovery: ContractMetadata = {
+			address: rediscoveredAddress,
+			label: 'Original discovery',
+			kind: 'reputationToken',
+			provenance: 'Zoltar.UniverseCreated',
+			discoveryBlock: 1n,
+			discoveryTxHash: transactionHash,
+		}
+		const first = indexedBlock('block-one', genesisHash, [initialDiscovery], undefined, [
+			{ address: rediscoveredAddress, name: 'Original token', symbol: 'OLD', decimals: 18, readBlock: 1n },
+		])
 		await database.storeBlock(chainId, first, writeLease)
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
 
@@ -154,8 +166,19 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			discoveryBlock: 2n,
 			discoveryTxHash: transactionHash,
 		}
-		const orphan = indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery], 'orphan event', [
+		const laterRediscovery: ContractMetadata = {
+			...initialDiscovery,
+			label: 'Orphaned rediscovery',
+			discoveryBlock: 2n,
+		}
+		const orphanOnlyDiscovery: ContractMetadata = {
+			...laterRediscovery,
+			address: orphanOnlyAddress,
+			label: 'Orphan-only helper',
+		}
+		const orphan = indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery, laterRediscovery, orphanOnlyDiscovery], 'orphan event', [
 			{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
+			{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
 		])
 		await database.storeBlock(chainId, orphan, writeLease)
 		await database.seedNetwork(
@@ -178,6 +201,19 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		})
 		await database.rewind(chainId, 1n, first.hash, writeLease)
 		expect((await database.contracts(chainId)).get(promotedAddress.toLowerCase())?.provenance).toBe('manifest')
+		expect((await database.contracts(chainId)).get(rediscoveredAddress.toLowerCase())).toMatchObject({
+			label: 'Original discovery',
+			kind: 'reputationToken',
+			discoveryBlock: 1n,
+		})
+		expect((await database.tokenMetadata(chainId)).get(rediscoveredAddress.toLowerCase())).toMatchObject({
+			name: 'Original token',
+			symbol: 'OLD',
+			decimals: 18,
+			readBlock: 1n,
+		})
+		const orphanContractResponse = await handleApi(new Request(`http://localhost/api/v1/contracts/${chainId}/${orphanOnlyAddress}`), database.sql)
+		expect(orphanContractResponse?.status).toBe(404)
 
 		const replacement = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [
 			{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 6, readBlock: 2n },

@@ -214,6 +214,38 @@ export class ScannerDatabase {
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND provenance <> 'manifest' AND discovery_block > ${ancestor.toString()}`
 			await transaction`
+				UPDATE contracts AS contract SET
+					label = discovery.label,
+					kind = discovery.kind,
+					provenance = discovery.provenance,
+					discovery_block = discovery.block_number,
+					discovery_tx_hash = discovery.tx_hash,
+					canonical = true
+				FROM (
+					SELECT DISTINCT ON (address) address, label, kind, provenance, block_number, tx_hash
+					FROM contract_discoveries
+					WHERE chain_id = ${chainId} AND canonical
+					ORDER BY address, block_number DESC
+				) AS discovery
+				WHERE contract.chain_id = ${chainId}
+					AND contract.address = discovery.address
+					AND NOT contract.canonical
+			`
+			await transaction`
+				UPDATE token_metadata AS metadata SET canonical = true, updated_at = now()
+				FROM (
+					SELECT DISTINCT ON (candidate.address) candidate.address, candidate.block_hash
+					FROM token_metadata AS candidate
+					JOIN blocks AS block ON block.chain_id = candidate.chain_id AND block.hash = candidate.block_hash
+					WHERE candidate.chain_id = ${chainId} AND block.canonical
+					ORDER BY candidate.address, candidate.read_block DESC, candidate.updated_at DESC
+				) AS previous
+				WHERE metadata.chain_id = ${chainId}
+					AND metadata.address = previous.address
+					AND metadata.block_hash = previous.block_hash
+					AND NOT metadata.canonical
+			`
+			await transaction`
 				UPDATE networks SET indexed_block = ${ancestor < 0n ? null : ancestor.toString()}, indexed_hash = ${ancestorHash ?? null},
 					indexed_timestamp = (SELECT timestamp FROM blocks WHERE chain_id = ${chainId} AND hash = ${ancestorHash ?? null}), phase = 'backfilling', updated_at = now()
 				WHERE chain_id = ${chainId}
