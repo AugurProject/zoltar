@@ -4,6 +4,8 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="color-scheme" content="dark" />
+		<meta name="description" content="Live, historical, and decoded protocol evidence for Zoltar networks." />
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff6846'/%3E%3Cpath d='M17 48 28 16h8l11 32h-8l-2-7H27l-2 7Zm12-14h6l-3-10Z' fill='%230b0d12'/%3E%3C/svg%3E" />
 		<title>augurScan — protocol observability</title>
 		<link rel="stylesheet" href="/styles.css" />
 		<script src="/app.js" type="module"></script>
@@ -23,7 +25,7 @@
 					<a href="/">Activity</a>
 					<a href="/system">System state</a>
 				</nav>
-				<div class="connection"><span class="pulse" aria-hidden="true"></span><span id="connection-label">Connecting</span></div>
+				<div class="connection" role="status" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="connection-label">Connecting</span></div>
 			</div>
 		</header>
 
@@ -34,7 +36,10 @@
 						<p class="eyebrow">Indexer status</p>
 						<h2 id="network-heading">Network heads</h2>
 					</div>
-					<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
+					<div class="status-actions">
+						<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
+						<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
+					</div>
 				</div>
 				<div id="network-cards" class="network-cards" aria-live="polite" aria-busy="true"></div>
 			</section>
@@ -65,7 +70,9 @@
 						</select></label
 					>
 					<button class="primary" type="submit">Apply filters</button>
+					<button id="clear-filters" class="secondary" type="button" disabled>Clear filters</button>
 				</form>
+				<p id="activity-summary" class="activity-summary" role="status" aria-live="polite">Waiting for activity</p>
 
 				<div class="feed-shell">
 					<div class="feed-header" aria-hidden="true"><span>Chain / block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>Status</span></div>
@@ -92,10 +99,10 @@
 				<div id="system-status" class="system-status" role="status" aria-live="polite" hidden></div>
 				<div id="state-stats" class="state-stats" aria-live="polite" aria-busy="true"></div>
 				<div class="state-tabs" role="tablist" aria-label="System entities">
-					<button type="button" role="tab" aria-selected="true" data-state-tab="pools">Pools</button>
-					<button type="button" role="tab" aria-selected="false" data-state-tab="questions">Questions</button>
-					<button type="button" role="tab" aria-selected="false" data-state-tab="vaults">Vaults</button>
-					<button type="button" role="tab" aria-selected="false" data-state-tab="universes">Universes</button>
+					<button id="tab-pools" type="button" role="tab" aria-controls="state-detail" aria-selected="true" data-state-tab="pools">Pools</button>
+					<button id="tab-questions" type="button" role="tab" aria-controls="state-detail" aria-selected="false" data-state-tab="questions">Questions</button>
+					<button id="tab-vaults" type="button" role="tab" aria-controls="state-detail" aria-selected="false" data-state-tab="vaults">Vaults</button>
+					<button id="tab-universes" type="button" role="tab" aria-controls="state-detail" aria-selected="false" data-state-tab="universes">Universes</button>
 				</div>
 				<div class="state-workspace">
 					<aside class="entity-panel" aria-label="Entity browser">
@@ -109,7 +116,7 @@
 						<label class="entity-search"><span class="sr-only">Filter current entities</span><input id="entity-search" type="search" placeholder="Filter pools…" /></label>
 						<div id="entity-list" class="entity-list" role="listbox" aria-labelledby="entity-list-title" aria-busy="true"></div>
 					</aside>
-					<article id="state-detail" class="state-detail" aria-live="polite" aria-busy="true">
+					<article id="state-detail" class="state-detail" role="tabpanel" aria-labelledby="tab-pools" aria-live="polite" aria-busy="true">
 						<div class="state-placeholder">
 							<p class="eyebrow">Historical projection</p>
 							<h3>Loading system state…</h3>

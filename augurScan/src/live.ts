@@ -8,7 +8,7 @@ export class LiveBus {
 			start: (controller) => {
 				activeController = controller
 				this.#clients.add(controller)
-				controller.enqueue(this.#encoder.encode(': connected\n\n'))
+				controller.enqueue(this.#encoder.encode('retry: 5000\n: connected\n\n'))
 			},
 			cancel: () => {
 				if (activeController !== undefined) this.#clients.delete(activeController)
@@ -16,8 +16,15 @@ export class LiveBus {
 		})
 	}
 
+	heartbeat(): void {
+		this.#enqueue(this.#encoder.encode(': heartbeat\n\n'))
+	}
+
 	publish(event: string, value: unknown): void {
-		const payload = this.#encoder.encode(`event: ${event}\ndata: ${JSON.stringify(value)}\n\n`)
+		this.#enqueue(this.#encoder.encode(`event: ${event}\ndata: ${JSON.stringify(value)}\n\n`))
+	}
+
+	#enqueue(payload: Uint8Array): void {
 		for (const controller of this.#clients) {
 			try {
 				controller.enqueue(payload)
@@ -39,4 +46,11 @@ export class LiveBus {
 		}
 		this.#clients.clear()
 	}
+}
+
+export const HEARTBEAT_INTERVAL_MS = 15_000
+
+export const startHeartbeat = (target: { heartbeat(): void }): (() => void) => {
+	const timer = setInterval(() => target.heartbeat(), HEARTBEAT_INTERVAL_MS)
+	return () => clearInterval(timer)
 }

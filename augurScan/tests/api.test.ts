@@ -16,6 +16,16 @@ test('returns request validation failures as 400 responses', async () => {
 	expect(await response?.json()).toEqual({ error: 'limit must be a non-negative integer' })
 })
 
+test('rejects malformed address filters before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const address of ['0x1234', `0x${'g'.repeat(40)}`, `0x${'1'.repeat(41)}`]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/logs?address=${address}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'address must be a complete 20-byte EVM address' })
+	}
+})
+
 test('rejects malformed cursor timestamps and numeric positions before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)

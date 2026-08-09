@@ -166,6 +166,11 @@ main {
 		0.72rem / 1.4 ui-monospace,
 		monospace;
 }
+.status-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
 .network-cards {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -225,11 +230,25 @@ main {
 	background: rgba(255, 129, 122, 0.08);
 }
 .block-number {
+	display: inline-block;
 	margin-top: 0.9rem;
+	color: var(--text);
 	font:
 		650 1.45rem / 1 ui-monospace,
 		monospace;
 	letter-spacing: -0.04em;
+	text-decoration: none;
+}
+.block-number[href]:hover {
+	color: var(--cyan);
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+.block-number[href]::after {
+	content: " ↗";
+	color: var(--cyan);
+	font-size: 0.7em;
+	vertical-align: top;
 }
 .block-meta {
 	display: flex;
@@ -240,6 +259,7 @@ main {
 		0.68rem / 1.3 ui-monospace,
 		monospace;
 }
+.block-meta time + .age::before,
 .block-meta span + span::before {
 	content: "·";
 	margin-right: 0.55rem;
@@ -712,7 +732,7 @@ main {
 }
 .filters {
 	display: grid;
-	grid-template-columns: minmax(150px, 0.7fr) minmax(170px, 1fr) minmax(220px, 1.25fr) minmax(145px, 0.65fr) auto;
+	grid-template-columns: minmax(150px, 0.7fr) minmax(170px, 1fr) minmax(220px, 1.25fr) minmax(145px, 0.65fr) auto auto;
 	gap: 0.65rem;
 	align-items: end;
 	margin-bottom: 0.8rem;
@@ -748,10 +768,14 @@ button:focus-visible {
 	outline-offset: 2px;
 }
 button:disabled {
-	cursor: wait;
+	cursor: default;
 	opacity: 0.55;
 }
+button[aria-busy="true"]:disabled {
+	cursor: wait;
+}
 .primary,
+.secondary,
 .more,
 .new-logs {
 	height: 40px;
@@ -761,6 +785,27 @@ button:disabled {
 	color: #071516;
 	background: var(--cyan);
 	font-weight: 700;
+}
+.secondary {
+	color: var(--text);
+	border-color: var(--line);
+	background: var(--panel);
+}
+.secondary:not(:disabled):hover {
+	border-color: var(--cyan);
+}
+.secondary.compact {
+	height: 32px;
+	padding: 0 0.75rem;
+	font-size: 0.72rem;
+}
+.activity-summary {
+	min-height: 1.1rem;
+	margin: -0.2rem 0 0.55rem;
+	color: var(--muted);
+	font:
+		0.68rem / 1.4 ui-monospace,
+		monospace;
 }
 .new-logs {
 	height: 34px;
@@ -1103,7 +1148,15 @@ dialog::backdrop {
 		text-overflow: ellipsis;
 	}
 	.connection {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.header-actions {
 		gap: 0.6rem;
@@ -1125,8 +1178,23 @@ dialog::backdrop {
 		max-width: 130px;
 		text-align: right;
 	}
+	.status-actions {
+		align-items: flex-end;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
 	.network-cards {
 		grid-template-columns: 1fr;
+	}
+	.block-meta {
+		flex-wrap: wrap;
+	}
+	.block-meta time {
+		flex-basis: 100%;
+	}
+	.block-meta time + .age::before {
+		content: none;
+		margin-right: 0;
 	}
 	.filters {
 		grid-template-columns: 1fr 1fr;
@@ -1134,7 +1202,11 @@ dialog::backdrop {
 	.filters label:nth-child(3) {
 		grid-column: 1 / -1;
 	}
-	.primary {
+	.filters label:nth-child(4) {
+		grid-column: 1 / -1;
+	}
+	.primary,
+	.secondary {
 		width: 100%;
 	}
 	.activity {

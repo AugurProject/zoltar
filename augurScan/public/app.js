@@ -6,11 +6,18 @@ const networkFilter = $('#network-filter')
 const dialog = $('#detail-dialog')
 const detailContent = $('#detail-content')
 const connection = $('.connection')
-const isDemo = new URL(location.href).searchParams.get('demo') === '1'
-const demoState = new URL(location.href).searchParams.get('state')
-const detailState = new URL(location.href).searchParams.get('detailState')
-const networkState = new URL(location.href).searchParams.get('networkState')
+const pageUrl = new URL(location.href)
+const isDemo = pageUrl.searchParams.get('demo') === '1'
+const demoState = pageUrl.searchParams.get('state')
+const detailState = pageUrl.searchParams.get('detailState')
+const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
+const initialActivityFilters = {
+	network: pageUrl.searchParams.get('chainId') ?? '',
+	event: pageUrl.searchParams.get('event') ?? '',
+	address: pageUrl.searchParams.get('address') ?? '',
+	decoded: pageUrl.searchParams.get('decoded') ?? '',
+}
 
 let nextCursor
 let newLogCount = 0
@@ -19,7 +26,6 @@ let demoDetailErrorConsumed = false
 let demoStateDetailRequests = 0
 let logsRequestVersion = 0
 let detailRequestVersion = 0
-let networkRequestVersion = 0
 let pendingBlockUpdates = 0
 let blockRefreshTimer
 let streamHasOpened = false
@@ -29,6 +35,9 @@ let selectedEntityKey
 let catalogRequestVersion = 0
 let stateDetailRequestVersion = 0
 let lastNetworkSuccessAt
+let stream
+let networkLoadPromise
+let networkFollowUpPromise
 
 const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 const demoNetworks = [
@@ -44,6 +53,7 @@ const demoNetworks = [
 		phase: 'live',
 		last_poll_at: new Date().toISOString(),
 		last_error: null,
+		explorer_base_url: 'https://etherscan.io',
 	},
 	{
 		chain_id: '11155111',
@@ -57,6 +67,7 @@ const demoNetworks = [
 		phase: 'backfilling',
 		last_poll_at: new Date().toISOString(),
 		last_error: null,
+		explorer_base_url: 'https://sepolia.etherscan.io',
 	},
 ]
 const demoEvents = [
@@ -458,6 +469,7 @@ const age = (value) => {
 	if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
 	return `${Math.floor(seconds / 86400)}d ago`
 }
+const exactTimestamp = (value) => (value ? new Date(value).toISOString() : 'No indexed timestamp')
 
 const api = async (path) => {
 	if (isDemo) {
@@ -541,11 +553,28 @@ const renderNetworks = (networks) => {
 		const heading = element('h3', '', network.name)
 		const badge = element('span', 'badge', network.phase)
 		title.append(heading, badge)
-		const block = element('p', 'block-number', network.indexed_block ? `#${number(network.indexed_block)}` : 'Awaiting first block')
+		const block = element(
+			network.indexed_block && network.explorer_base_url ? 'a' : 'p',
+			'block-number',
+			network.indexed_block ? `#${number(network.indexed_block)}` : 'Awaiting first block',
+		)
+		if (block instanceof HTMLAnchorElement) {
+			block.href = `${String(network.explorer_base_url).replace(/\/$/, '')}/block/${network.indexed_block}`
+			block.target = '_blank'
+			block.rel = 'noreferrer'
+			block.title = `Open block ${network.indexed_block} in the network explorer`
+		}
 		const meta = element('div', 'block-meta')
-		const indexedTime = element('span', '', network.indexed_timestamp ? `${time(network.indexed_timestamp)} UTC` : 'No timestamp')
+		const indexedTime = element(
+			'time',
+			'',
+			network.indexed_timestamp ? `${exactTimestamp(network.indexed_timestamp).slice(0, 10)} · ${time(network.indexed_timestamp)} UTC` : 'No timestamp',
+		)
+		if (network.indexed_timestamp) indexedTime.dateTime = exactTimestamp(network.indexed_timestamp)
+		indexedTime.title = exactTimestamp(network.indexed_timestamp)
 		const ageNode = element('span', 'age', age(network.indexed_timestamp))
 		ageNode.dataset.time = network.indexed_timestamp ?? ''
+		ageNode.title = exactTimestamp(network.indexed_timestamp)
 		const lag =
 			network.indexed_block === null || network.observed_block === null
 				? 'head unknown'
@@ -558,35 +587,82 @@ const renderNetworks = (networks) => {
 	networkCards.setAttribute('aria-busy', 'false')
 }
 
-const loadNetworks = async () => {
-	const requestVersion = ++networkRequestVersion
-	try {
-		const { items } = await api('/api/v1/networks')
-		if (requestVersion !== networkRequestVersion) return
-		renderNetworks(items)
-		const selected = networkFilter.value
-		const existing = new Set([...networkFilter.options].map((option) => option.value))
-		const existingSystem = new Set([...$('#system-network-filter').options].map((option) => option.value))
-		for (const network of items) {
-			if (!existing.has(String(network.chain_id))) networkFilter.append(new Option(network.name, network.chain_id))
-			if (!existingSystem.has(String(network.chain_id))) $('#system-network-filter').append(new Option(network.name, network.chain_id))
+const reconcileNetworkOptions = (select, items, initialValue = '') => {
+	const selected = select.dataset.restored === 'true' ? select.value : initialValue
+	select.replaceChildren(new Option('All networks', ''), ...items.map((network) => new Option(network.name, network.chain_id)))
+	select.value = [...select.options].some((option) => option.value === selected) ? selected : ''
+	select.dataset.restored = 'true'
+}
+
+const setManualNetworkRefreshBusy = (busy) => {
+	const refreshButton = $('#refresh-networks')
+	refreshButton.disabled = busy
+	if (busy) {
+		refreshButton.setAttribute('aria-busy', 'true')
+		refreshButton.textContent = 'Refreshing…'
+	} else {
+		refreshButton.removeAttribute('aria-busy')
+		refreshButton.textContent = 'Refresh status'
+	}
+}
+
+const loadNetworks = async ({ manual = false, synchronizeActivity = true, refreshAfterCurrent = false } = {}) => {
+	if (networkLoadPromise !== undefined) {
+		if (!manual && !refreshAfterCurrent) return await networkLoadPromise
+		if (refreshAfterCurrent && networkFollowUpPromise !== undefined) return await networkFollowUpPromise
+		if (manual) setManualNetworkRefreshBusy(true)
+		const activeLoad = networkLoadPromise
+		const followUp = activeLoad
+			.then(async () => {
+				if (networkLoadPromise === activeLoad) networkLoadPromise = undefined
+				return await loadNetworks({ manual, synchronizeActivity })
+			})
+			.finally(() => {
+				if (networkFollowUpPromise === followUp) networkFollowUpPromise = undefined
+			})
+		if (refreshAfterCurrent) networkFollowUpPromise = followUp
+		return await followUp
+	}
+	if (manual) setManualNetworkRefreshBusy(true)
+	const run = (async () => {
+		try {
+			const { items } = await api('/api/v1/networks')
+			const previousActivityNetwork = networkFilter.value
+			const previousSystemNetwork = $('#system-network-filter').value
+			renderNetworks(items)
+			reconcileNetworkOptions(networkFilter, items, initialActivityFilters.network)
+			reconcileNetworkOptions($('#system-network-filter'), items)
+			lastNetworkSuccessAt = new Date()
+			$('#last-updated').classList.remove('error')
+			$('#last-updated').textContent = `Status checked ${time(lastNetworkSuccessAt)} UTC`
+			$('#last-updated').title = lastNetworkSuccessAt.toISOString()
+			connection.className = 'connection live'
+			$('#connection-label').textContent = isDemo ? 'Demo fixture' : 'Live connection'
+			if (!isSystem && synchronizeActivity && previousActivityNetwork !== networkFilter.value) {
+				syncActivityFilterUrl()
+				if (validateAddressFilter()) await loadLogs()
+				else showInvalidAddressFilter()
+			}
+			if (isSystem && previousSystemNetwork !== $('#system-network-filter').value) await loadSystemState()
+		} catch (error) {
+			connection.className = 'connection error'
+			$('#connection-label').textContent = 'Status unavailable'
+			$('#last-updated').classList.add('error')
+			$('#last-updated').textContent = lastNetworkSuccessAt
+				? `Last checked ${time(lastNetworkSuccessAt)} UTC · refresh failed, retrying`
+				: 'Status unavailable · retrying automatically'
+			networkCards.setAttribute('aria-busy', 'false')
+			if (networkCards.childElementCount === 0) networkCards.append(element('p', 'network-error', error.message))
 		}
-		networkFilter.value = selected
-		lastNetworkSuccessAt = new Date()
-		$('#last-updated').classList.remove('error')
-		$('#last-updated').textContent = `Status checked ${time(lastNetworkSuccessAt)} UTC`
-		connection.className = 'connection live'
-		$('#connection-label').textContent = isDemo ? 'Demo fixture' : 'Live connection'
-	} catch (error) {
-		if (requestVersion !== networkRequestVersion) return
-		connection.className = 'connection error'
-		$('#connection-label').textContent = 'Status unavailable'
-		$('#last-updated').classList.add('error')
-		$('#last-updated').textContent = lastNetworkSuccessAt
-			? `Last checked ${time(lastNetworkSuccessAt)} UTC · refresh failed, retrying`
-			: 'Status unavailable · retrying automatically'
-		networkCards.setAttribute('aria-busy', 'false')
-		if (networkCards.childElementCount === 0) networkCards.append(element('p', 'network-error', error.message))
+	})()
+	const tracked = run.finally(() => {
+		if (networkLoadPromise === tracked) networkLoadPromise = undefined
+	})
+	networkLoadPromise = tracked
+	try {
+		await tracked
+	} finally {
+		if (manual) setManualNetworkRefreshBusy(false)
 	}
 }
 
@@ -595,14 +671,16 @@ const rowFor = (log) => {
 	row.type = 'button'
 	row.setAttribute(
 		'aria-label',
-		`${log.network_id} block ${log.block_number}, ${log.event_name ?? 'unknown event'} from ${log.contract_label ?? log.emitter_address}`,
+		`${log.network_id} block ${log.block_number} at ${exactTimestamp(log.block_timestamp)}, ${log.event_name ?? 'unknown event'} from ${log.contract_label ?? log.emitter_address}`,
 	)
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
 	chain.append(element('i', 'chain-dot'), element('span', '', `${log.network_id} · #${number(log.block_number)}`), openCue)
-	const timestamp = element('span', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
+	const timestamp = element('time', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
 	timestamp.dataset.time = log.block_timestamp
+	timestamp.dateTime = exactTimestamp(log.block_timestamp)
+	timestamp.title = exactTimestamp(log.block_timestamp)
 	const contract = element('span', 'cell')
 	contract.append(element('span', 'contract-name', log.contract_label ?? 'Unknown contract'), element('span', 'contract-address', short(log.emitter_address)))
 	const event = element('span', 'cell event-name', log.event_name ?? 'Unknown event')
@@ -617,7 +695,8 @@ const rowFor = (log) => {
 
 const queryPath = (cursor) => {
 	const params = new URLSearchParams({ limit: '100' })
-	if (networkFilter.value) params.set('chainId', networkFilter.value)
+	const selectedNetwork = networkFilter.dataset.restored === 'true' ? networkFilter.value : initialActivityFilters.network
+	if (selectedNetwork) params.set('chainId', selectedNetwork)
 	if ($('#event-filter').value.trim()) params.set('event', $('#event-filter').value.trim())
 	if ($('#address-filter').value.trim()) params.set('address', $('#address-filter').value.trim())
 	if ($('#decode-filter').value) params.set('decoded', $('#decode-filter').value)
@@ -625,14 +704,56 @@ const queryPath = (cursor) => {
 	return `/api/v1/logs?${params}`
 }
 
+const activityFilterValues = () => ({
+	network: networkFilter.dataset.restored === 'true' ? networkFilter.value : initialActivityFilters.network,
+	event: $('#event-filter').value.trim(),
+	address: $('#address-filter').value.trim(),
+	decoded: $('#decode-filter').value,
+})
+
+const syncActivityFilterUrl = () => {
+	const url = new URL(location.href)
+	for (const [name, value] of Object.entries(activityFilterValues())) {
+		const parameter = name === 'network' ? 'chainId' : name
+		if (value) url.searchParams.set(parameter, value)
+		else url.searchParams.delete(parameter)
+	}
+	history.replaceState(null, '', url)
+}
+
+const validateAddressFilter = (report = false) => {
+	const input = $('#address-filter')
+	const value = input.value.trim()
+	input.setCustomValidity(value === '' || /^0x[0-9a-fA-F]{40}$/.test(value) ? '' : 'Enter a complete 20-byte EVM address (0x plus 40 hexadecimal characters).')
+	return report ? input.reportValidity() : input.validity.valid
+}
+
+const showInvalidAddressFilter = () => {
+	feed.replaceChildren()
+	feed.setAttribute('aria-busy', 'false')
+	feedState.hidden = false
+	feedState.textContent = $('#address-filter').validationMessage
+	$('#activity-summary').textContent = 'Invalid address filter'
+	$('#more').hidden = true
+	setLogControlsBusy(false)
+}
+
+const hasActivityFilters = () => Object.values(activityFilterValues()).some(Boolean)
+
 const setLogControlsBusy = (busy) => {
 	for (const control of [$('#filters button[type="submit"]'), $('#more'), $('#new-logs')]) control.disabled = busy
+	$('#clear-filters').disabled = busy || !hasActivityFilters()
 }
 
 const loadLogs = async ({ append = false } = {}) => {
 	const requestVersion = ++logsRequestVersion
+	const moreButton = $('#more')
 	feed.setAttribute('aria-busy', 'true')
 	setLogControlsBusy(true)
+	if (append) {
+		moreButton.setAttribute('aria-busy', 'true')
+		moreButton.textContent = 'Loading more…'
+	}
 	if (!append) $('#more').hidden = true
 	feedState.hidden = false
 	feedState.textContent = append ? 'Loading more activity…' : 'Loading indexed activity…'
@@ -646,6 +767,8 @@ const loadLogs = async ({ append = false } = {}) => {
 		$('#more').hidden = !nextCursor
 		feedState.hidden = feed.childElementCount > 0
 		if (feed.childElementCount === 0) feedState.textContent = 'No canonical project logs match these filters yet.'
+		$('#activity-summary').textContent =
+			feed.childElementCount === 0 ? 'No logs shown' : `${feed.childElementCount} canonical log${feed.childElementCount === 1 ? '' : 's'} shown`
 		newLogCount = 0
 		$('#new-logs').hidden = true
 	} catch (error) {
@@ -654,6 +777,7 @@ const loadLogs = async ({ append = false } = {}) => {
 		$('#more').hidden = true
 		feedState.hidden = false
 		const message = element('span', '', `Activity unavailable: ${error.message}`)
+		$('#activity-summary').textContent = 'Activity unavailable'
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
 		retry.addEventListener('click', () => loadLogs())
@@ -662,6 +786,8 @@ const loadLogs = async ({ append = false } = {}) => {
 		if (requestVersion === logsRequestVersion) {
 			feed.setAttribute('aria-busy', 'false')
 			setLogControlsBusy(false)
+			moreButton.removeAttribute('aria-busy')
+			moreButton.textContent = 'Show more'
 		}
 	}
 }
@@ -675,9 +801,14 @@ const detailCard = (term, description, wide = false) => {
 const copyButton = (value, label) => {
 	const button = element('button', 'copy-button', `Copy ${label}`)
 	button.type = 'button'
+	button.setAttribute('aria-live', 'polite')
 	button.addEventListener('click', async () => {
-		await navigator.clipboard.writeText(String(value))
-		button.textContent = 'Copied'
+		try {
+			await navigator.clipboard.writeText(String(value))
+			button.textContent = 'Copied'
+		} catch (error) {
+			button.textContent = error instanceof Error ? 'Copy failed' : 'Copy unavailable'
+		}
 		setTimeout(() => {
 			button.textContent = `Copy ${label}`
 		}, 1200)
@@ -708,7 +839,7 @@ const openDetail = async (log) => {
 		if (requestVersion !== detailRequestVersion) return
 		const grid = element('div', 'detail-grid')
 		grid.append(
-			detailCard('Network / block', `${detail.network_id} · #${number(detail.block_number)} · ${time(detail.block_timestamp)} UTC`),
+			detailCard('Network / block', `${detail.network_id} · #${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
 			detailCard('Canonical status', `${detail.canonical ? 'Canonical' : 'Orphaned'} · ${detail.finalized ? 'Finalized' : 'Unfinalized'}`),
 			detailCard('Contract', `${detail.contract_label ?? 'Unknown'} · ${detail.emitter_address}`, true),
 			detailCard('Contract identity', `${detail.contract_kind ?? 'unknown kind'} · ${detail.contract_provenance ?? 'unknown provenance'}`, true),
@@ -1400,13 +1531,18 @@ const renderEntityList = ({ refreshSelected = false } = {}) => {
 		list.append(row)
 	}
 	list.setAttribute('aria-busy', 'false')
-	const selected = catalogItems.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
+	const selected = items.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
 	if (selected !== undefined) {
 		if (refreshSelected) selectEntity(selected, { preserveDetail: true })
 		return
 	}
 	if (items[0] !== undefined) selectEntity(items[0])
-	else $('#state-detail').replaceChildren(element('div', 'state-placeholder', `No indexed ${activeStateType} match this view.`))
+	else {
+		stateDetailRequestVersion++
+		selectedEntityKey = undefined
+		$('#state-detail').setAttribute('aria-busy', 'false')
+		$('#state-detail').replaceChildren(element('div', 'state-placeholder', `No indexed ${activeStateType} match this view.`))
+	}
 }
 
 const renderStateStats = () => {
@@ -1491,16 +1627,39 @@ const loadSystemState = async () => {
 }
 
 const setStateTab = (type) => {
+	stateDetailRequestVersion++
 	activeStateType = type
 	selectedEntityKey = undefined
-	for (const tab of document.querySelectorAll('[data-state-tab]')) tab.setAttribute('aria-selected', String(tab.dataset.stateTab === type))
+	$('#state-detail').setAttribute('aria-busy', 'false')
+	for (const tab of document.querySelectorAll('[data-state-tab]')) {
+		const selected = tab.dataset.stateTab === type
+		tab.setAttribute('aria-selected', String(selected))
+		tab.tabIndex = selected ? 0 : -1
+	}
+	$('#state-detail').setAttribute('aria-labelledby', `tab-${type}`)
 	if (stateData !== undefined) renderEntityList()
 }
 
 $('#filters').addEventListener('submit', (event) => {
 	event.preventDefault()
+	if (!validateAddressFilter(true)) return
+	syncActivityFilterUrl()
 	loadLogs()
 })
+$('#clear-filters').addEventListener('click', () => {
+	networkFilter.value = ''
+	$('#event-filter').value = ''
+	$('#address-filter').value = ''
+	$('#decode-filter').value = ''
+	validateAddressFilter()
+	syncActivityFilterUrl()
+	loadLogs()
+})
+$('#address-filter').addEventListener('input', validateAddressFilter)
+$('#filters').addEventListener('input', () => {
+	$('#clear-filters').disabled = !hasActivityFilters()
+})
+$('#refresh-networks').addEventListener('click', () => loadNetworks({ manual: true }))
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
 $('#new-logs').addEventListener('click', () => loadLogs())
 $('#close-detail').addEventListener('click', closeDetail)
@@ -1508,8 +1667,30 @@ dialog.addEventListener('click', (event) => {
 	if (event.target === dialog) closeDetail()
 })
 dialog.addEventListener('close', clearDetailUrl)
-for (const tab of document.querySelectorAll('[data-state-tab]')) tab.addEventListener('click', () => setStateTab(tab.dataset.stateTab))
+const stateTabs = [...document.querySelectorAll('[data-state-tab]')]
+for (const tab of stateTabs) {
+	tab.addEventListener('click', () => setStateTab(tab.dataset.stateTab))
+	tab.addEventListener('keydown', (event) => {
+		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+		event.preventDefault()
+		const current = stateTabs.indexOf(tab)
+		const next =
+			event.key === 'Home'
+				? 0
+				: event.key === 'End'
+					? stateTabs.length - 1
+					: (current + (event.key === 'ArrowRight' ? 1 : -1) + stateTabs.length) % stateTabs.length
+		stateTabs[next].focus()
+		setStateTab(stateTabs[next].dataset.stateTab)
+	})
+}
 $('#entity-search').addEventListener('input', () => {
+	if (stateData !== undefined) renderEntityList()
+})
+$('#entity-search').addEventListener('keydown', (event) => {
+	if (event.key !== 'Escape' || event.currentTarget.value === '') return
+	event.preventDefault()
+	event.currentTarget.value = ''
 	if (stateData !== undefined) renderEntityList()
 })
 $('#system-network-filter').addEventListener('change', loadSystemState)
@@ -1540,38 +1721,81 @@ const queueBlockRefresh = () => {
 	}, 1_000)
 }
 
-if (!isDemo) {
-	const stream = new EventSource('/api/v1/stream')
-	stream.addEventListener('open', () => {
+const connectStream = () => {
+	if (isDemo || stream !== undefined) return
+	const nextStream = new EventSource('/api/v1/stream')
+	stream = nextStream
+	nextStream.addEventListener('open', () => {
 		connection.className = 'connection live'
 		$('#connection-label').textContent = 'Live connection'
 		if (streamHasOpened) refreshAfterUpdates(1)
 		streamHasOpened = true
 	})
-	stream.addEventListener('error', () => {
+	nextStream.addEventListener('error', () => {
 		connection.className = 'connection error'
 		$('#connection-label').textContent = 'Reconnecting'
 	})
-	stream.addEventListener('block', queueBlockRefresh)
+	nextStream.addEventListener('block', queueBlockRefresh)
 }
+
+connectStream()
+addEventListener('pagehide', () => {
+	stream?.close()
+	stream = undefined
+	streamHasOpened = false
+	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
+	blockRefreshTimer = undefined
+	pendingBlockUpdates = 0
+})
+addEventListener('pageshow', async (event) => {
+	if (!event.persisted) return
+	connectStream()
+	await loadNetworks({ refreshAfterCurrent: true })
+	if (isSystem) await loadSystemState()
+	else if (validateAddressFilter()) await loadLogs()
+	else showInvalidAddressFilter()
+})
 
 setInterval(() => {
 	for (const node of document.querySelectorAll('[data-time]'))
 		node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset.time)} · ${age(node.dataset.time)}` : age(node.dataset.time)
 }, 1000)
-setInterval(loadNetworks, 12_000)
+setInterval(() => {
+	if (!document.hidden) loadNetworks()
+}, 12_000)
+document.addEventListener('visibilitychange', () => {
+	if (!document.hidden) loadNetworks({ refreshAfterCurrent: true })
+})
 
-const deepLink = new URL(location.href).searchParams.get('log')
+$('#event-filter').value = initialActivityFilters.event
+$('#address-filter').value = initialActivityFilters.address
+$('#decode-filter').value = ['true', 'false'].includes(initialActivityFilters.decoded) ? initialActivityFilters.decoded : ''
+if (initialActivityFilters.network) {
+	networkFilter.append(new Option(`Chain ${initialActivityFilters.network}`, initialActivityFilters.network))
+	networkFilter.value = initialActivityFilters.network
+	networkFilter.dataset.restored = 'true'
+}
+validateAddressFilter()
+$('#clear-filters').disabled = !hasActivityFilters()
+
+const deepLink = pageUrl.searchParams.get('log')
 $('#activity').hidden = isSystem
 $('#system').hidden = !isSystem
 $('.skip-link').href = isSystem ? '#system' : '#activity'
 for (const link of document.querySelectorAll('.product-nav a')) if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
-const requestedTab = new URL(location.href).searchParams.get('tab')
-if (isSystem && ['pools', 'questions', 'vaults', 'universes'].includes(requestedTab)) setStateTab(requestedTab)
-if (isSystem) selectedEntityKey = new URL(location.href).searchParams.get('entity') ?? undefined
+const requestedTab = pageUrl.searchParams.get('tab')
+if (isSystem) setStateTab(['pools', 'questions', 'vaults', 'universes'].includes(requestedTab) ? requestedTab : 'pools')
+if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefined
 
-const initialDashboardLoad = isSystem ? Promise.all([loadNetworks(), loadSystemState()]) : Promise.all([loadNetworks(), loadLogs()])
+const initialDashboardLoad = isSystem
+	? Promise.all([loadNetworks(), loadSystemState()])
+	: (async () => {
+			await loadNetworks({ synchronizeActivity: false })
+			syncActivityFilterUrl()
+			if (validateAddressFilter()) await loadLogs()
+			else showInvalidAddressFilter()
+		})()
 if (!isSystem && deepLink !== null) {
 	const [chainId, blockHash, transactionHash, logIndex] = deepLink.split(':')
 	if (chainId && blockHash && transactionHash && logIndex)

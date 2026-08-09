@@ -9,6 +9,13 @@ const integer = (value: string | null, name: string): number | undefined => {
 	return result
 }
 
+const evmAddress = (value: string | null, name: string): string | undefined => {
+	if (value === null || value.trim() === '') return undefined
+	const result = value.trim().toLowerCase()
+	if (!/^0x[0-9a-f]{40}$/.test(result)) throw new ApiRequestError(`${name} must be a complete 20-byte EVM address`)
+	return result
+}
+
 const normalize = (value: unknown): unknown => {
 	if (typeof value === 'bigint') return value.toString()
 	if (value instanceof Date) return value.toISOString()
@@ -64,7 +71,7 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const cursor = parseCursor(url.searchParams.get('cursor'))
 	const event = url.searchParams.get('event')?.trim() || undefined
-	const address = url.searchParams.get('address')?.trim().toLowerCase() || undefined
+	const address = evmAddress(url.searchParams.get('address'), 'address')
 	const decoded = url.searchParams.get('decoded')
 	const values: Array<string | number> = []
 	const clauses = ['l.canonical = true']

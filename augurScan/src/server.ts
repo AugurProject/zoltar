@@ -3,7 +3,7 @@ import { handleApi } from './api.ts'
 import { loadNetworks, runtimeConfig } from './config.ts'
 import { ScannerDatabase } from './database.ts'
 import { startIndexers } from './indexer.ts'
-import { LiveBus } from './live.ts'
+import { LiveBus, startHeartbeat } from './live.ts'
 import { migrate } from './migrate.ts'
 
 const database = new ScannerDatabase(runtimeConfig.postgresUrl)
@@ -12,6 +12,7 @@ const networks = await loadNetworks()
 if (runtimeConfig.disableIndexer) for (const network of networks) await database.seedNetwork(network)
 
 const bus = new LiveBus()
+const stopHeartbeat = startHeartbeat(bus)
 const abortController = new AbortController()
 const indexers = runtimeConfig.disableIndexer ? [] : startIndexers(networks, database, bus, abortController.signal)
 const publicRoot = path.resolve(import.meta.dir, '../public')
@@ -79,6 +80,7 @@ let shutdownPromise: Promise<void> | undefined
 const shutdown = (): Promise<void> => {
 	shutdownPromise ??= (async () => {
 		abortController.abort()
+		stopHeartbeat()
 		bus.close()
 		await server.stop(true)
 		await Promise.allSettled(indexers)
