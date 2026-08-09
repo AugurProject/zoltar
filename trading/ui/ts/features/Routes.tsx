@@ -217,10 +217,10 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 						<div class='section-heading'>
 							<div>
 								<span class='section-kicker'>Initialized pair</span>
-								<h2>Add or remove liquidity</h2>
+								<h2>{actionAvailability.add ? 'Add or remove liquidity' : 'Remove liquidity'}</h2>
 							</div>
 						</div>
-						{added === undefined ? null : (
+						{added === undefined || !actionAvailability.add ? null : (
 							<div class='operation-block'>
 								<h3>Add from 0.1 ETH</h3>
 								<dl class='metrics'>

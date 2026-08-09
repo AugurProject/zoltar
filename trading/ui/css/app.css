@@ -9,7 +9,7 @@
 	--line-strong: #3b4958;
 	--text: #edf2f6;
 	--muted: #94a2b2;
-	--faint: #687686;
+	--faint: #7d8b9b;
 	--accent: #d9ff76;
 	--accent-dark: #17220b;
 	--yes: #87d7a4;
@@ -192,6 +192,7 @@ nav a[aria-current="page"] {
 	background: var(--muted);
 	box-shadow: none;
 }
+.wallet-button,
 .wallet-context,
 .secondary-action {
 	padding: 0.62rem 0.85rem;

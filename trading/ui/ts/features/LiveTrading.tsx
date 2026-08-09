@@ -108,6 +108,8 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 	const [quote, setQuote] = useState<Quote>()
 	const [state, setState] = useState<TransactionState>('idle')
 	const [message, setMessage] = useState<string>()
+	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
+	const [discoveryError, setDiscoveryError] = useState<string>()
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
 	const nowSeconds = BigInt(Math.floor(Date.now() / 1_000))
 	const parsedAmount = useMemo(() => {
@@ -120,13 +122,23 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 
 	async function refresh(nextConfiguration = configuration, nextAccount = account) {
 		if (nextConfiguration === undefined) return
-		const client = configuredClient(nextConfiguration)
-		await validateLiveDeployment(client, nextConfiguration)
-		const discovered = await discoverLiveMarkets(client, nextConfiguration)
-		setMarkets(discovered)
-		if (selectedPool === undefined && discovered[0] !== undefined) setSelectedPool(discovered[0].pool)
-		const current = discovered.find(market => market.pool === selectedPool) ?? discovered[0]
-		if (current !== undefined && nextAccount !== undefined) setBalances(await loadLiveBalances(client, current, nextAccount, nextConfiguration.router))
+		setDiscoveryState('loading')
+		setDiscoveryError(undefined)
+		try {
+			const client = configuredClient(nextConfiguration)
+			await validateLiveDeployment(client, nextConfiguration)
+			const discovered = await discoverLiveMarkets(client, nextConfiguration)
+			setMarkets(discovered)
+			if (selectedPool === undefined && discovered[0] !== undefined) setSelectedPool(discovered[0].pool)
+			const current = discovered.find(market => market.pool === selectedPool) ?? discovered[0]
+			if (current !== undefined && nextAccount !== undefined) setBalances(await loadLiveBalances(client, current, nextAccount, nextConfiguration.router))
+			setDiscoveryState('ready')
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : 'SecurityPool discovery failed'
+			setDiscoveryError(detail)
+			setDiscoveryState('error')
+			throw error
+		}
 	}
 
 	useEffect(() => {
@@ -224,6 +236,42 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 				</header>
 			</main>
 		)
+	let discoveryContent
+	if (discoveryState === 'loading' && markets.length === 0) discoveryContent = <p role='status'>Discovering SecurityPools from the configured factory…</p>
+	else if (discoveryState === 'error' && markets.length === 0)
+		discoveryContent = (
+			<div>
+				<p class='error' role='alert'>
+					SecurityPool discovery failed: {discoveryError}
+				</p>
+				<button class='secondary-action' onClick={() => void refresh().catch(error => setMessage(error instanceof Error ? error.message : 'SecurityPool discovery failed'))}>
+					Retry discovery
+				</button>
+			</div>
+		)
+	else if (markets.length === 0) discoveryContent = <p>No SecurityPools are deployed on this configured chain.</p>
+	else
+		discoveryContent = markets.map(market => (
+			<button
+				key={market.pool}
+				class='live-market-button'
+				aria-pressed={selected?.pool === market.pool}
+				onClick={() => {
+					setSelectedPool(market.pool)
+					setQuote(undefined)
+				}}
+			>
+				<strong>{market.title}</strong>
+				<span>
+					{statusLabel(market, nowSeconds)} · universe {market.universeId.toString()}
+				</span>
+				<code>{shortAddress(market.pool)}</code>
+			</button>
+		))
+	let selectionContent = <p>Select a deployed SecurityPool.</p>
+	if (discoveryState === 'loading' && markets.length === 0) selectionContent = <p role='status'>Waiting for SecurityPool discovery…</p>
+	else if (discoveryState === 'error' && markets.length === 0) selectionContent = <p>Discovery failed. Retry from the SecurityPools panel.</p>
+	else if (markets.length === 0) selectionContent = <p>No SecurityPool is available to select.</p>
 
 	return (
 		<main class='route' id='main-content'>
@@ -243,42 +291,20 @@ export function LiveTrading({ route, configuration, configurationError }: { rout
 				</p>
 			)}
 			<div class='two-column'>
-				<section class='section'>
+				<section class='section' aria-busy={discoveryState === 'loading'}>
 					<div class='section-heading'>
 						<div>
 							<span class='section-kicker'>Factory discovery</span>
 							<h2>SecurityPools</h2>
 						</div>
-						<button class='secondary-action' onClick={() => void refresh()}>
+						<button class='secondary-action' disabled={discoveryState === 'loading'} onClick={() => void refresh().catch(error => setMessage(error instanceof Error ? error.message : 'SecurityPool discovery failed'))}>
 							Refresh
 						</button>
 					</div>
-					{markets.length === 0 ? (
-						<p>No SecurityPools are deployed on this configured chain.</p>
-					) : (
-						markets.map(market => (
-							<button
-								key={market.pool}
-								class='live-market-button'
-								aria-pressed={selected?.pool === market.pool}
-								onClick={() => {
-									setSelectedPool(market.pool)
-									setQuote(undefined)
-								}}
-							>
-								<strong>{market.title}</strong>
-								<span>
-									{statusLabel(market, nowSeconds)} · universe {market.universeId.toString()}
-								</span>
-								<code>{shortAddress(market.pool)}</code>
-							</button>
-						))
-					)}
+					{discoveryContent}
 				</section>
 				{selected === undefined ? (
-					<section class='section'>
-						<p>Select a deployed SecurityPool.</p>
-					</section>
+					<section class='section'>{selectionContent}</section>
 				) : (
 					<section class='section' key={selected.pool}>
 						<div class='section-heading'>
