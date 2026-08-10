@@ -10,6 +10,7 @@
 	--amber: #f2b65d;
 	--red: #ff817a;
 	--green: #6ee7a0;
+	--mono: ui-monospace, monospace;
 	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	color: var(--text);
 	background: var(--bg);
@@ -830,8 +831,7 @@ button[aria-busy="true"]:disabled {
 }
 .primary,
 .secondary,
-.more,
-.new-logs {
+.more {
 	height: 40px;
 	padding: 0 1rem;
 	border: 1px solid #4cbdb8;
@@ -861,10 +861,84 @@ button[aria-busy="true"]:disabled {
 		0.68rem / 1.4 ui-monospace,
 		monospace;
 }
-.new-logs {
-	height: 34px;
-	color: var(--cyan);
-	background: var(--cyan-soft);
+.live-update-region {
+	min-height: 37px;
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 0.75rem;
+}
+
+.live-update-status {
+	max-width: min(430px, calc(100vw - 2rem));
+	margin: 0;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid color-mix(in srgb, var(--cyan) 55%, var(--line));
+	border-radius: 9px;
+	color: var(--text);
+	background: color-mix(in srgb, var(--panel) 92%, var(--cyan));
+	box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+	font: 0.7rem / 1.45 var(--mono);
+}
+
+.live-added {
+	outline: 2px solid color-mix(in srgb, var(--cyan) 70%, var(--line));
+	outline-offset: -2px;
+	animation: live-added 700ms ease-out;
+}
+
+.live-changed {
+	outline: 2px dashed color-mix(in srgb, var(--cyan) 70%, var(--line));
+	outline-offset: -2px;
+	animation: live-changed 1.25s ease-out;
+}
+
+.live-change-marker {
+	display: inline-flex;
+	width: max-content;
+	padding: 0.18rem 0.34rem;
+	color: #061315;
+	background: var(--cyan);
+	border-radius: 4px;
+	font: 700 0.54rem / 1 var(--mono);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.entity-row > .live-change-marker,
+.address-profile-content > [data-live-key] > .live-change-marker {
+	margin-bottom: 0.45rem;
+}
+
+.state-stat > .live-change-marker {
+	display: flex;
+	margin-bottom: 0.45rem;
+}
+
+.live-toast-active {
+	animation: live-toast 320ms ease-out;
+}
+
+@keyframes live-added {
+	from {
+		opacity: 0;
+		transform: translateY(-9px);
+		background-color: color-mix(in srgb, var(--cyan) 17%, var(--panel));
+	}
+}
+
+@keyframes live-changed {
+	0%,
+	35% {
+		border-color: color-mix(in srgb, var(--cyan) 70%, var(--line));
+		background-color: color-mix(in srgb, var(--cyan) 12%, var(--panel));
+	}
+}
+
+@keyframes live-toast {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
 }
 .feed-shell {
 	position: relative;
@@ -1125,7 +1199,10 @@ dialog::backdrop {
 	text-transform: uppercase;
 }
 .arguments td:first-child {
+	min-width: 6rem;
 	color: var(--cyan);
+	overflow-wrap: normal;
+	word-break: normal;
 }
 .decoded-value {
 	overflow-wrap: anywhere;
@@ -1591,7 +1668,10 @@ dialog::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.loading-line {
+	.loading-line,
+	.live-added,
+	.live-changed,
+	.live-toast-active {
 		animation: none;
 	}
 }
@@ -1630,6 +1710,16 @@ dialog::backdrop {
 		display: flex;
 		align-items: center;
 		min-height: 44px;
+	}
+}
+
+@media (max-width: 600px) {
+	.live-update-region {
+		justify-content: stretch;
+	}
+	.live-update-status {
+		width: 100%;
+		max-width: none;
 	}
 }
 

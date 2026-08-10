@@ -36,6 +36,9 @@
 		</header>
 
 		<main>
+			<div class="live-update-region">
+				<p id="live-update-status" class="live-update-status" role="status" aria-live="polite" hidden></p>
+			</div>
 			<div id="freshness-banner" class="freshness-banner" role="alert" hidden>
 				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
 				<button id="refresh-stale" class="secondary compact" type="button">Retry now</button>
@@ -62,7 +65,6 @@
 						<p class="eyebrow">Canonical event stream</p>
 						<h2 id="activity-heading">Project logs</h2>
 					</div>
-					<button id="new-logs" class="new-logs" type="button" hidden>Show new logs</button>
 				</div>
 				<form id="filters" class="filters" role="search">
 					<label><span>Event</span><input id="event-filter" type="search" placeholder="Transfer, Report…" /></label>

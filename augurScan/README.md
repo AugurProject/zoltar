@@ -6,6 +6,8 @@ The selector in the top-right header sets the `chainId` URL parameter for Activi
 
 Address links stay inside augurScan. Known addresses use their protocol name; unknown addresses use a shortened address. `/address?chainId=:chainId&address=:address` shows the address's balances, separate REP tokens, pools, vaults, interaction counts, and recent canonical transactions, with Etherscan available as a secondary link.
 
+Every visible route refreshes automatically after a committed block notification and on the 12-second status cycle. Activity prepends new canonical logs while preserving the reader's scroll position; system registries, selected history, rich-list rows, address balances, protocol references, and open account-transaction details refresh in place. New and changed records receive a brief highlight, a live status reports the indexed block, and `prefers-reduced-motion` disables the animations without disabling updates.
+
 ## Start with Docker
 
 From this directory:

@@ -1,3 +1,5 @@
+import { classifyLiveRecords, mergeUniqueRecords, reconcilePaginatedTotal } from './live-update.js'
+
 const $ = (selector) => document.querySelector(selector)
 const feed = $('#feed')
 const feedState = $('#feed-state')
@@ -19,14 +21,22 @@ const initialChainId = pageUrl.searchParams.get('chainId') ?? ''
 const initialActivityFilters = {
 	event: pageUrl.searchParams.get('event') ?? '',
 	address: pageUrl.searchParams.get('address') ?? '',
-	decoded: pageUrl.searchParams.get('decoded') ?? '',
+	decoded: ['true', 'false'].includes(pageUrl.searchParams.get('decoded')) ? pageUrl.searchParams.get('decoded') : '',
 }
 
 let nextCursor
-let newLogCount = 0
+let appliedActivityFilters = { ...initialActivityFilters }
 let demoErrorConsumed = false
 let demoDetailErrorConsumed = false
 let demoStateDetailRequests = 0
+let demoTransactionRequests = 0
+let demoLogRequests = 0
+let demoReorgObserved = false
+let demoEvictedAddress
+let demoReorgRefreshErrorConsumed = false
+let demoTransactionSnapshotInvalidated = false
+let demoCanonicalRouteRefreshErrorConsumed = false
+let demoTransactionRestoreErrorConsumed = false
 let logsRequestVersion = 0
 let detailRequestVersion = 0
 let pendingBlockUpdates = 0
@@ -53,10 +63,94 @@ let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
 let activeAccount
+let activeAccountTransactions
+let pendingCanonicalAccount
+let preservePendingOnDialogClose = false
 let addressProfileRequestVersion = 0
 let currentAddressProfile
 const addressIdentityCache = new Map()
 let polledReorgRefreshTimer
+let liveUpdateStatusTimer
+let lastRouteLiveChanges = { added: 0, changed: 0 }
+
+const liveSnapshot = (container, selector = '[data-live-key]') =>
+	new Map([...container.querySelectorAll(selector)].map((node) => [node.dataset.liveKey, node.dataset.liveSignature ?? node.textContent]))
+
+const setLiveRecord = (node, key, value) => {
+	node.dataset.liveKey = key
+	node.dataset.liveSignature = typeof value === 'string' ? value : JSON.stringify(value)
+	return node
+}
+
+const retryCanonicalViewOr = (fallback) => (canonicalRefreshRequired ? refreshAfterUpdates(1, true) : fallback())
+
+const animateLiveNode = (node, className) => {
+	node.classList.remove('live-added', 'live-changed', className)
+	if (className === 'live-added' || className === 'live-changed') {
+		node
+			.querySelector(
+				':scope > .live-change-marker, :scope > .rich-row-main .live-change-marker, :scope > .chain-block .live-change-marker, :scope > .state-stat .live-change-marker',
+			)
+			?.remove()
+		const marker = element('span', 'live-change-marker', className === 'live-added' ? 'New' : 'Updated')
+		const markerTarget = node.matches('.log-row')
+			? node.querySelector('.chain-block')
+			: node.matches('.rich-row')
+				? node.querySelector('.rich-identity')
+				: node.matches('.address-profile-stats')
+					? node.querySelector('.state-stat')
+					: node
+		markerTarget?.prepend(marker)
+		window.setTimeout(() => marker.remove(), 4_500)
+	}
+	requestAnimationFrame(() => {
+		node.classList.add(className)
+		const clear = () => node.classList.remove(className)
+		node.addEventListener('animationend', clear, { once: true })
+		window.setTimeout(clear, 1_600)
+	})
+}
+
+const applyLiveChanges = (container, previous, { live, selector = '[data-live-key]' } = {}) => {
+	const changes = { added: 0, changed: 0 }
+	if (!live) return changes
+	const nodes = [...container.querySelectorAll(selector)]
+	const classified = classifyLiveRecords(
+		previous,
+		nodes.map((node) => ({ key: node.dataset.liveKey, signature: node.dataset.liveSignature })),
+	)
+	for (const [index, record] of classified.entries()) {
+		const node = nodes[index]
+		if (record.state === 'added') {
+			changes.added++
+			animateLiveNode(node, 'live-added')
+		} else if (record.state === 'changed') {
+			changes.changed++
+			animateLiveNode(node, 'live-changed')
+		}
+	}
+	return changes
+}
+
+const announceLiveUpdate = (label, changes = lastRouteLiveChanges, nouns = { added: 'new item', changed: 'updated item' }) => {
+	const status = $('#live-update-status')
+	const network = latestNetworks.find((item) => String(item.chain_id) === selectedChainId())
+	const block = network?.indexed_block ? ` at block #${number(network.indexed_block)}` : ''
+	const changeCopy = [
+		changes.added > 0 ? counted(changes.added, nouns.added, nouns.addedPlural) : '',
+		changes.changed > 0 ? counted(changes.changed, nouns.changed, nouns.changedPlural) : '',
+	]
+		.filter(Boolean)
+		.join(' · ')
+	status.textContent = `${label} refreshed${block}${changeCopy ? ` · ${changeCopy}` : ''}`
+	status.hidden = false
+	animateLiveNode(status, 'live-toast-active')
+	if (liveUpdateStatusTimer !== undefined) clearTimeout(liveUpdateStatusTimer)
+	liveUpdateStatusTimer = window.setTimeout(() => {
+		status.hidden = true
+		liveUpdateStatusTimer = undefined
+	}, 4_500)
+}
 
 const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 const demoNetworks = [
@@ -578,6 +672,51 @@ const demoHistory = (path) => {
 	}
 }
 
+let demoLiveSequence = 0
+const applyDemoBlock = (payload) => {
+	if (!isDemo || pageUrl.searchParams.get('streamDemo') !== '1') return
+	const chainId = String(payload.chainId)
+	const network = demoNetworks.find((item) => item.chain_id === chainId)
+	if (network === undefined) return
+	demoLiveSequence++
+	const nextBlock = String(payload.blockNumber ?? BigInt(network.indexed_block) + 1n)
+	const nextHash = `0x${BigInt(demoLiveSequence).toString(16).padStart(64, '0')}`
+	const timestamp = new Date().toISOString()
+	network.indexed_block = nextBlock
+	network.indexed_hash = nextHash
+	network.indexed_timestamp = timestamp
+	network.observed_block = nextBlock
+	network.finalized_block = String(BigInt(nextBlock) - 64n)
+	network.last_poll_at = timestamp
+	network.last_success_at = timestamp
+	const template = demoLogs.find((item) => item.chain_id === chainId) ?? demoLogs[0]
+	demoLogs.unshift({
+		...template,
+		block_number: nextBlock,
+		block_hash: nextHash,
+		block_timestamp: timestamp,
+		transaction_index: 0,
+		log_index: demoLiveSequence,
+		tx_hash: `0x${(BigInt(demoLiveSequence) + 10_000n).toString(16).padStart(64, '0')}`,
+		event_name: demoLiveSequence % 2 === 0 ? 'PoolAccountingCheckpoint' : 'Transfer',
+		summary: demoLiveSequence % 2 === 0 ? 'New pool accounting checkpoint' : 'New canonical token transfer',
+	})
+	if (demoLogs.length > 120) demoLogs.length = 120
+	const account = demoRichList.find((item) => item.chain_id === chainId)
+	if (account !== undefined) {
+		account.transaction_count = String(Number(account.transaction_count) + 1)
+		account.interaction_count = String(Number(account.interaction_count) + 1)
+		account.native_balance = (BigInt(account.native_balance) + 10_000_000_000_000_000n).toString()
+		account.native_balance_detail = { balance: account.native_balance, blockNumber: nextBlock }
+		account.last_balance_refresh = timestamp
+	}
+	const pool = demoPools.find((item) => item.chain_id === chainId)
+	if (pool !== undefined) {
+		pool.snapshot_block = nextBlock
+		pool.settlement_collateral_atto_eth = (BigInt(pool.settlement_collateral_atto_eth) + 10_000_000_000_000_000n).toString()
+	}
+}
+
 const element = (tag, className, text) => {
 	const node = document.createElement(tag)
 	if (className) node.className = className
@@ -623,6 +762,10 @@ const api = async (path, { signal } = {}) => {
 			}
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
+			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
+				demoCanonicalRouteRefreshErrorConsumed = true
+				throw new Error('The canonical system projection could not be refreshed')
+			}
 			if (demoState === 'error' && !demoErrorConsumed) {
 				demoErrorConsumed = true
 				throw new Error('The state catalog could not be read from the database')
@@ -649,13 +792,31 @@ const api = async (path, { signal } = {}) => {
 			const chainId = request.searchParams.get('chainId')
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const cursor = request.searchParams.get('cursor')
+			demoTransactionRequests++
+			if (
+				pageUrl.searchParams.get('transactionRestoreErrorOnce') === '1' &&
+				cursor === null &&
+				demoTransactionRequests > 1 &&
+				!demoTransactionRestoreErrorConsumed
+			) {
+				demoTransactionRestoreErrorConsumed = true
+				throw new Error('The canonical account transactions could not be restored')
+			}
+			if (pageUrl.searchParams.get('transactionCursor409') === '1' && cursor !== null && !demoTransactionSnapshotInvalidated) {
+				demoTransactionSnapshotInvalidated = true
+				const error = new Error('The transaction snapshot is no longer canonical')
+				error.status = 409
+				throw error
+			}
+			if (pageUrl.searchParams.get('transactionRefreshError') === '1' && cursor === null && demoTransactionRequests > 1)
+				throw new Error('The newest account transactions could not be read')
 			const offset = cursor ? Number(JSON.parse(atob(cursor))) : 0
 			const limit = Number(request.searchParams.get('limit') ?? 50)
 			const owner = demoRichList.find((item) => item.chain_id === chainId && item.address.toLowerCase() === address)
-			const total = Number(owner?.transaction_count ?? 0)
+			const total = Math.max(0, Number(owner?.transaction_count ?? 0) - (demoTransactionSnapshotInvalidated ? 1 : 0))
 			const network = demoNetworks.find((item) => item.chain_id === chainId)
 			const items = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, itemIndex) => {
-				const index = offset + itemIndex
+				const index = offset + itemIndex + (demoTransactionSnapshotInvalidated ? 1 : 0)
 				const toAddress = index % 2 === 0 ? '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db' : '0x7777777777777777777777777777777777777777'
 				return {
 					chain_id: chainId,
@@ -753,12 +914,21 @@ const api = async (path, { signal } = {}) => {
 			}
 		}
 		if (path.startsWith('/api/v1/richlist')) {
+			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
+				demoCanonicalRouteRefreshErrorConsumed = true
+				throw new Error('The canonical account projection could not be refreshed')
+			}
 			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const offset = Number(request.searchParams.get('offset') ?? 0)
 			const limit = Number(request.searchParams.get('limit') ?? 50)
-			const filtered = demoRichList.filter((item) => (!chainId || item.chain_id === chainId) && (!address || item.address.toLowerCase() === address))
+			const filtered = demoRichList.filter(
+				(item) =>
+					(!chainId || item.chain_id === chainId) &&
+					(!address || item.address.toLowerCase() === address) &&
+					!(demoReorgObserved && pageUrl.searchParams.get('evictAccountOnReorg') === '1' && item.address.toLowerCase() === demoEvictedAddress),
+			)
 			return { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
 		}
 		if (path.startsWith('/api/v1/logs/') && path.split('/').length > 7) {
@@ -809,6 +979,11 @@ const api = async (path, { signal } = {}) => {
 			}
 		}
 		if (path.startsWith('/api/v1/logs')) {
+			demoLogRequests++
+			if (pageUrl.searchParams.get('reorgRefreshError') === '1' && demoLogRequests > 1 && !demoReorgRefreshErrorConsumed) {
+				demoReorgRefreshErrorConsumed = true
+				throw new Error('Canonical activity could not be refreshed')
+			}
 			if (demoState === 'error' && !demoErrorConsumed) {
 				demoErrorConsumed = true
 				throw new Error('RPC history is temporarily unavailable')
@@ -817,7 +992,20 @@ const api = async (path, { signal } = {}) => {
 			if (demoState === 'delayed-logs') await new Promise((resolve) => setTimeout(resolve, 800))
 			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
-			return { items: demoState === 'empty' ? [] : demoLogs.filter((item) => !chainId || item.chain_id === chainId) }
+			const event = request.searchParams.get('event')?.toLowerCase()
+			const address = request.searchParams.get('address')?.toLowerCase()
+			if (address && !/^0x[0-9a-f]{40}$/.test(address)) throw new Error('Address filter is invalid')
+			return {
+				items:
+					demoState === 'empty'
+						? []
+						: demoLogs.filter(
+								(item) =>
+									(!chainId || item.chain_id === chainId) &&
+									(!event || item.event_name?.toLowerCase().includes(event)) &&
+									(!address || [item.emitter_address, item.origin_address].some((candidate) => candidate?.toLowerCase() === address)),
+							),
+			}
 		}
 	}
 	const timeout = AbortSignal.timeout(15_000)
@@ -832,6 +1020,7 @@ const api = async (path, { signal } = {}) => {
 }
 
 const renderNetworks = (networks) => {
+	const previousCards = liveSnapshot(networkCards)
 	let selectedReorgAdvanced = false
 	for (const network of networks) {
 		const previous = latestNetworks.find((item) => String(item.chain_id) === String(network.chain_id))
@@ -854,7 +1043,14 @@ const renderNetworks = (networks) => {
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
 	for (const network of networks.filter((item) => String(item.chain_id) === selectedChainId())) {
-		const card = element('article', 'network-card')
+		const card = setLiveRecord(element('article', 'network-card'), String(network.chain_id), {
+			indexedBlock: network.indexed_block,
+			indexedHash: network.indexed_hash,
+			indexedTimestamp: network.indexed_timestamp,
+			observedBlock: network.observed_block,
+			phase: network.phase,
+			failures: network.consecutive_failures,
+		})
 		card.dataset.phase = network.phase
 		const title = element('div', 'network-title')
 		const badge = element('span', 'badge', network.phase)
@@ -894,6 +1090,7 @@ const renderNetworks = (networks) => {
 		if (network.last_error) card.append(element('p', 'network-error', network.last_error))
 		networkCards.append(card)
 	}
+	applyLiveChanges(networkCards, previousCards, { live: previousCards.size > 0 })
 	networkCards.setAttribute('aria-busy', 'false')
 }
 
@@ -1044,8 +1241,7 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 				$('#connection-label').textContent = 'Demo fixture'
 			}
 			if (isActivity && synchronizeActivity && previousNetwork !== selectedChainId()) {
-				if (validateAddressFilter()) await loadLogs()
-				else showInvalidAddressFilter()
+				await loadLogs()
 			}
 			if (isSystem && synchronizeActivity && previousNetwork !== selectedChainId()) await loadSystemState()
 			if (isRichList && synchronizeActivity && previousNetwork !== selectedChainId()) await loadRichList()
@@ -1075,7 +1271,13 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 }
 
 const rowFor = (log) => {
-	const row = element('article', 'log-row')
+	const key = `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`
+	const row = setLiveRecord(element('article', 'log-row'), key, {
+		contractLabel: log.contract_label,
+		eventName: log.event_name,
+		summary: log.summary,
+		origin: log.origin_address,
+	})
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
@@ -1107,9 +1309,9 @@ const rowFor = (log) => {
 const queryPath = (cursor) => {
 	const params = new URLSearchParams({ limit: '100' })
 	params.set('chainId', requiredChainId())
-	if ($('#event-filter').value.trim()) params.set('event', $('#event-filter').value.trim())
-	if ($('#address-filter').value.trim()) params.set('address', $('#address-filter').value.trim())
-	if ($('#decode-filter').value) params.set('decoded', $('#decode-filter').value)
+	if (appliedActivityFilters.event) params.set('event', appliedActivityFilters.event)
+	if (appliedActivityFilters.address) params.set('address', appliedActivityFilters.address)
+	if (appliedActivityFilters.decoded) params.set('decoded', appliedActivityFilters.decoded)
 	if (cursor) params.set('cursor', cursor)
 	return `/api/v1/logs?${params}`
 }
@@ -1122,7 +1324,7 @@ const activityFilterValues = () => ({
 
 const syncActivityFilterUrl = () => {
 	const url = new URL(location.href)
-	for (const [name, value] of Object.entries(activityFilterValues())) {
+	for (const [name, value] of Object.entries(appliedActivityFilters)) {
 		if (value) url.searchParams.set(name, value)
 		else url.searchParams.delete(name)
 	}
@@ -1152,11 +1354,11 @@ const showInvalidAddressFilter = () => {
 const hasActivityFilters = () => Object.values(activityFilterValues()).some(Boolean)
 
 const setLogControlsBusy = (busy) => {
-	for (const control of [$('#filters button[type="submit"]'), $('#more'), $('#new-logs')]) control.disabled = busy
+	for (const control of [$('#filters button[type="submit"]'), $('#more')]) control.disabled = busy
 	$('#clear-filters').disabled = busy || !hasActivityFilters()
 }
 
-const loadLogs = async ({ append = false } = {}) => {
+const loadLogs = async ({ append = false, live = false, preserveHistory = false } = {}) => {
 	if (!append) {
 		logsAbortController?.abort()
 		logsAbortController = new AbortController()
@@ -1165,6 +1367,12 @@ const loadLogs = async ({ append = false } = {}) => {
 	const requestVersion = ++logsRequestVersion
 	const moreButton = $('#more')
 	const hadRows = feed.querySelector('.log-row') !== null
+	const previousRows = liveSnapshot(feed, '.log-row[data-live-key]')
+	const previousRowNodes = [...feed.querySelectorAll('.log-row[data-live-key]')]
+	const anchor =
+		live && window.scrollY >= 420 ? [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.getBoundingClientRect().bottom > 0) : undefined
+	const anchorKey = anchor?.dataset.liveKey
+	const anchorTop = anchor?.getBoundingClientRect().top
 	feed.setAttribute('aria-busy', 'true')
 	setLogControlsBusy(true)
 	if (append) {
@@ -1179,15 +1387,25 @@ const loadLogs = async ({ append = false } = {}) => {
 		const payload = await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
 		if (requestVersion !== logsRequestVersion) return
 		if (!append) feed.replaceChildren()
-		for (const log of payload.items) feed.append(rowFor(log))
+		const refreshedKeys = new Set(append ? [...feed.querySelectorAll('.log-row[data-live-key]')].map((row) => row.dataset.liveKey) : [])
+		for (const log of payload.items) {
+			const row = rowFor(log)
+			if (refreshedKeys.has(row.dataset.liveKey)) continue
+			refreshedKeys.add(row.dataset.liveKey)
+			feed.append(row)
+		}
+		if (!append && preserveHistory) for (const row of previousRowNodes) if (!refreshedKeys.has(row.dataset.liveKey)) feed.append(row)
+		lastRouteLiveChanges = applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
+		if (anchorKey !== undefined && anchorTop !== undefined) {
+			const currentAnchor = [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.dataset.liveKey === anchorKey)
+			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
+		}
 		nextCursor = payload.nextCursor
 		$('#more').hidden = !nextCursor
 		feedState.hidden = feed.childElementCount > 0
 		if (feed.childElementCount === 0) feedState.textContent = 'No canonical project logs match these filters yet.'
 		$('#activity-summary').textContent =
 			feed.childElementCount === 0 ? 'No logs shown' : `${feed.childElementCount} canonical log${feed.childElementCount === 1 ? '' : 's'} shown`
-		newLogCount = 0
-		$('#new-logs').hidden = true
 		return true
 	} catch (error) {
 		if (error.name === 'AbortError') return false
@@ -1199,7 +1417,7 @@ const loadLogs = async ({ append = false } = {}) => {
 		$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : 'Activity unavailable'
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
-		retry.addEventListener('click', () => loadLogs())
+		retry.addEventListener('click', () => (canonicalRefreshRequired ? refreshAfterUpdates(1, true) : loadLogs()))
 		feedState.replaceChildren(message, retry)
 		return false
 	} finally {
@@ -1371,7 +1589,9 @@ const decodedArgumentsTable = (schema, rawArguments, displayArguments, chainId) 
 
 const openDetail = async (log) => {
 	const requestVersion = ++detailRequestVersion
+	pendingCanonicalAccount = undefined
 	activeAccount = undefined
+	activeAccountTransactions = undefined
 	if (!dialog.open) dialog.showModal()
 	$('#detail-eyebrow').textContent = 'Log evidence'
 	$('#detail-title').textContent = 'Event details'
@@ -1454,7 +1674,7 @@ const openDetail = async (log) => {
 	}
 }
 
-const openAccountTransactions = async (account) => {
+const openAccountTransactions = async (account, { live = false } = {}) => {
 	const requestVersion = ++detailRequestVersion
 	activeAccount = account
 	if (!dialog.open) dialog.showModal()
@@ -1465,22 +1685,31 @@ const openAccountTransactions = async (account) => {
 	if (isRichList) url.searchParams.set('account', `${account.chain_id}:${account.address}`)
 	else url.searchParams.delete('account')
 	history.replaceState(null, '', url)
-	let loaded = []
-	let total = 0
-	let nextPageCursor
-	let pageLoading = false
-	let pageError
-	const render = () => {
+	const stateKey = `${account.chain_id}:${account.address.toLowerCase()}`
+	const state =
+		live && activeAccountTransactions?.key === stateKey
+			? activeAccountTransactions
+			: { key: stateKey, account, loaded: [], total: 0, nextPageCursor: undefined, pageLoading: false, pageError: undefined }
+	state.account = account
+	state.pageLoading = false
+	activeAccountTransactions = state
+	const render = ({ previous = new Map(), highlight = false } = {}) => {
+		const openTransactionKeys = new Set(
+			[...detailContent.querySelectorAll('.account-transaction-action[open]')].map(
+				(action) => action.closest('.account-transaction[data-live-key]')?.dataset.liveKey,
+			),
+		)
 		const header = element('div', 'account-transactions-header')
 		header.append(
 			element('p', 'eyebrow', 'Canonical transactions'),
-			element('h3', '', account.label ?? short(account.address, 12, 8)),
-			element('code', '', account.address),
-			element('p', 'data-note', `${number(loaded.length)} of ${number(total)} sent transactions`),
+			element('h3', '', state.account.label ?? short(state.account.address, 12, 8)),
+			element('code', '', state.account.address),
+			element('p', 'data-note', `${number(state.loaded.length)} of ${number(state.total)} sent transactions`),
 		)
 		const list = element('div', 'account-transactions')
-		for (const transaction of loaded) {
-			const card = element('article', 'account-transaction')
+		for (const transaction of state.loaded) {
+			const transactionKey = `${transaction.chain_id}:${transaction.tx_hash}`
+			const card = setLiveRecord(element('article', 'account-transaction'), transactionKey, transaction)
 			const cardHeader = element('div', 'account-transaction-header')
 			cardHeader.append(
 				explorerLink(transaction.explorer_base_url, 'tx', transaction.tx_hash, short(transaction.tx_hash, 12, 8)),
@@ -1516,6 +1745,7 @@ const openAccountTransactions = async (account) => {
 			card.append(cardHeader, detailGrid)
 			if (transaction.action_display_arguments && Object.keys(transaction.action_display_arguments).length > 0) {
 				const action = element('details', 'account-transaction-action')
+				action.open = openTransactionKeys.has(transactionKey)
 				const argumentsContent = element('div', 'account-transaction-arguments')
 				argumentsContent.append(
 					decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id),
@@ -1525,73 +1755,120 @@ const openAccountTransactions = async (account) => {
 			}
 			list.append(card)
 		}
-		if (loaded.length === 0) list.append(element('p', 'state-placeholder', 'No canonical sent transactions were found.'))
-		const more = element('button', 'secondary account-transactions-more', pageLoading ? 'Loading more transactions…' : 'Show more transactions')
+		if (state.loaded.length === 0) list.append(element('p', 'state-placeholder', 'No canonical sent transactions were found.'))
+		const more = element('button', 'secondary account-transactions-more', state.pageLoading ? 'Loading more transactions…' : 'Show more transactions')
 		more.type = 'button'
-		more.hidden = nextPageCursor === undefined
-		more.disabled = pageLoading
+		more.hidden = state.nextPageCursor === undefined
+		more.disabled = state.pageLoading
 		more.addEventListener('click', () => loadPage(true))
-		const content = [header, list]
-		if (pageError) {
+		const content = [header]
+		if (state.pageError) {
 			const alert = element('div', 'detail-error account-transactions-error')
 			alert.setAttribute('role', 'alert')
-			alert.append(element('p', '', pageError))
+			alert.append(element('p', '', state.pageError))
 			const retry = element('button', 'state-retry', 'Retry loading transactions')
 			retry.type = 'button'
-			retry.addEventListener('click', () => loadPage(loaded.length > 0))
+			retry.addEventListener('click', () => loadPage(false, { liveRefresh: state.loaded.length > 0 }))
 			alert.append(retry)
 			content.push(alert)
 		}
-		content.push(more)
+		content.push(list, more)
 		detailContent.replaceChildren(...content)
+		const changes = applyLiveChanges(list, previous, { live: highlight, selector: '.account-transaction[data-live-key]' })
+		lastRouteLiveChanges.added += changes.added
+		lastRouteLiveChanges.changed += changes.changed
 	}
-	const loadPage = async (append = false) => {
-		if (pageLoading) return
-		pageLoading = true
-		pageError = undefined
+	const loadPage = async (append = false, { liveRefresh = false } = {}) => {
+		if (state.pageLoading) return
+		state.pageLoading = true
+		state.pageError = undefined
 		detailContent.setAttribute('aria-busy', 'true')
-		if (!append) {
+		const previous = liveSnapshot(detailContent, '.account-transaction[data-live-key]')
+		const previousLoaded = state.loaded
+		const previousCursor = state.nextPageCursor
+		if (!append && !liveRefresh && state.loaded.length === 0) {
 			const loading = element('p', 'detail-status', 'Loading sent transactions…')
 			loading.setAttribute('role', 'status')
 			detailContent.replaceChildren(loading, element('div', 'loading-line'))
-		} else render()
+		} else if (append) render()
 		try {
 			const query = new URLSearchParams({
-				chainId: String(account.chain_id),
-				address: account.address,
+				chainId: String(state.account.chain_id),
+				address: state.account.address,
 				limit: '50',
 			})
-			if (append && nextPageCursor) query.set('cursor', nextPageCursor)
+			if (append && state.nextPageCursor) query.set('cursor', state.nextPageCursor)
 			const result = await api(`/api/v1/address-transactions?${query}`)
-			if (requestVersion !== detailRequestVersion || String(account.chain_id) !== selectedChainId()) return
-			loaded = append ? [...loaded, ...result.items] : result.items
-			total = result.total
-			nextPageCursor = result.nextCursor
-			pageLoading = false
-			render()
+			if (requestVersion !== detailRequestVersion || String(state.account.chain_id) !== selectedChainId()) return false
+			const retained = append ? previousLoaded : liveRefresh ? previousLoaded : []
+			state.loaded = mergeUniqueRecords(
+				append ? retained : result.items,
+				append ? result.items : retained,
+				(transaction) => `${transaction.chain_id}:${transaction.tx_hash}`,
+			)
+			state.total = reconcilePaginatedTotal(state.total, result.total, append)
+			state.nextPageCursor = liveRefresh && previousCursor !== undefined ? previousCursor : result.nextCursor
+			if (state.loaded.length >= state.total) state.nextPageCursor = undefined
+			state.pageLoading = false
+			render({ previous, highlight: liveRefresh })
+			return true
 		} catch (error) {
-			if (requestVersion !== detailRequestVersion) return
+			if (requestVersion !== detailRequestVersion) return false
 			if (error.status === 409) {
-				pageLoading = false
-				loaded = []
-				total = 0
-				nextPageCursor = undefined
-				await loadPage()
-				return
+				state.pageLoading = false
+				state.loaded = []
+				state.total = 0
+				state.nextPageCursor = undefined
+				return await loadPage()
 			}
-			pageLoading = false
-			pageError = `Could not load sent transactions: ${error.message}`
+			state.pageLoading = false
+			state.pageError =
+				state.loaded.length > 0
+					? `Could not refresh sent transactions; showing the last known activity: ${error.message}`
+					: `Could not load sent transactions: ${error.message}`
 			render()
+			return false
 		} finally {
 			if (requestVersion === detailRequestVersion) detailContent.setAttribute('aria-busy', 'false')
 		}
 	}
-	await loadPage()
+	const loaded = await loadPage(false, { liveRefresh: live && state.loaded.length > 0 })
+	if (
+		loaded &&
+		pendingCanonicalAccount &&
+		String(pendingCanonicalAccount.chain_id) === String(state.account.chain_id) &&
+		pendingCanonicalAccount.address.toLowerCase() === state.account.address.toLowerCase()
+	)
+		pendingCanonicalAccount = undefined
+	return loaded
 }
 
-const closeDetail = () => {
+const restorePendingCanonicalAccount = async () => {
+	const pending = pendingCanonicalAccount
+	if (pending === undefined) return true
+	let restored = false
+	if (isRichList) {
+		const current = richListItems.find(
+			(item) => String(item.chain_id) === String(pending.chain_id) && item.address.toLowerCase() === pending.address.toLowerCase(),
+		)
+		restored = await openAccountTransactions(current ?? pending)
+	} else if (
+		isAddress &&
+		currentAddressProfile &&
+		String(currentAddressProfile.chain_id) === String(pending.chain_id) &&
+		currentAddressProfile.address.toLowerCase() === pending.address.toLowerCase()
+	)
+		restored = await openAccountTransactions(currentAddressProfile)
+	if (restored) pendingCanonicalAccount = undefined
+	return restored
+}
+
+const closeDetail = ({ preservePendingCanonicalAccount = false } = {}) => {
 	detailRequestVersion++
 	activeAccount = undefined
+	activeAccountTransactions = undefined
+	preservePendingOnDialogClose = preservePendingCanonicalAccount
+	if (!preservePendingCanonicalAccount) pendingCanonicalAccount = undefined
 	dialog.close()
 	clearDetailUrl()
 }
@@ -1760,15 +2037,16 @@ const stateHeader = (eyebrow, title, subtitle, kind) => {
 const richBalance = (value, symbol, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
 const richFieldLabel = (label) => element('span', 'sr-only rich-field-label', label)
 const nativeSymbol = (chainId = selectedChainId()) => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
-const renderRichList = () => {
+const renderRichList = ({ live = false } = {}) => {
 	const rows = $('#richlist-rows')
+	const previousRows = liveSnapshot(rows, '.rich-row[data-live-key]')
 	const isInitialRender = rows.childElementCount === 0
 	const openDetailKeys = new Set([...rows.querySelectorAll('details[open][data-detail-key]')].map((details) => details.dataset.detailKey))
 	const focusedDetailKey = document.activeElement?.closest?.('details[data-detail-key]')?.dataset.detailKey
 	rows.replaceChildren()
 	for (const item of richListItems) {
 		const itemKey = `${item.chain_id}:${item.address}`
-		const article = element('article', 'rich-row')
+		const article = setLiveRecord(element('article', 'rich-row'), itemKey, item)
 		const main = element('div', 'rich-row-main')
 		const identity = element('div', 'rich-identity')
 		const addressLink = protocolAddressLink(item.address, { knownLabel: item.label, chainId: item.chain_id, className: 'rich-address address-link' })
@@ -1935,12 +2213,13 @@ const renderRichList = () => {
 		const focusedDetails = [...rows.querySelectorAll('details[data-detail-key]')].find((details) => details.dataset.detailKey === focusedDetailKey)
 		focusedDetails?.querySelector('summary')?.focus({ preventScroll: true })
 	}
+	lastRouteLiveChanges = applyLiveChanges(rows, previousRows, { live, selector: '.rich-row[data-live-key]' })
 	rows.setAttribute('aria-busy', 'false')
 	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
 	$('#richlist-more').hidden = richListItems.length >= richListTotal
 }
 
-const loadRichList = async ({ append = false } = {}) => {
+const loadRichList = async ({ append = false, live = false } = {}) => {
 	const requestVersion = ++richListRequestVersion
 	const status = $('#richlist-status')
 	const more = $('#richlist-more')
@@ -1971,7 +2250,7 @@ const loadRichList = async ({ append = false } = {}) => {
 		if (append && result.total < richListItems.length) return await loadRichList()
 		richListItems = append ? [...richListItems, ...result.items] : result.items
 		richListTotal = result.total
-		renderRichList()
+		renderRichList({ live })
 		status.hidden = true
 		return true
 	} catch (error) {
@@ -1986,8 +2265,9 @@ const loadRichList = async ({ append = false } = {}) => {
 	}
 }
 
-const renderAddressProfile = (item, transactions, interactions) => {
+const renderAddressProfile = (item, transactions, interactions, { live = false } = {}) => {
 	const content = $('#address-profile-content')
+	const previousSections = liveSnapshot(content, '[data-live-key]')
 	const chainId = String(item.chain_id)
 	const itemNativeSymbol = nativeSymbol(chainId)
 	const header = element('header', 'address-profile-header')
@@ -2002,6 +2282,7 @@ const renderAddressProfile = (item, transactions, interactions) => {
 	relatedLogs.href = `/?${logParams}`
 	actions.append(copyButton(item.address, 'address'), relatedLogs, explorerLink(item.explorer_base_url, 'address', item.address, 'Open in Etherscan ↗'))
 	header.append(identity, actions)
+	setLiveRecord(header, 'identity', { label: item.label, kind: item.kind, address: item.address })
 	const metrics = element('div', 'state-stats address-profile-stats')
 	for (const [label, value] of [
 		['Sent transactions', number(item.transaction_count)],
@@ -2013,6 +2294,12 @@ const renderAddressProfile = (item, transactions, interactions) => {
 		card.append(element('span', '', label), element('strong', '', value))
 		metrics.append(card)
 	}
+	setLiveRecord(metrics, 'metrics', {
+		transactions: item.transaction_count,
+		interactions: item.interaction_count,
+		pools: item.pool_count,
+		vaults: item.vault_count,
+	})
 	const balances = element('section', 'address-profile-panel')
 	balances.append(element('p', 'eyebrow', 'Balances'), element('h3', '', 'Assets observed by augurScan'))
 	const balanceGrid = element('div', 'address-balance-grid')
@@ -2041,6 +2328,11 @@ const renderAddressProfile = (item, transactions, interactions) => {
 		balanceGrid.append(card)
 	}
 	balances.append(balanceGrid)
+	setLiveRecord(balances, 'balances', {
+		native: item.native_balance_detail,
+		weth: item.weth_balances,
+		rep: item.rep_balances,
+	})
 	const involvement = element('section', 'address-profile-panel')
 	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Pools and vaults'))
 	const involvementGrid = element('div', 'rich-position-grid')
@@ -2069,6 +2361,7 @@ const renderAddressProfile = (item, transactions, interactions) => {
 	}
 	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or vault involvement has been indexed.'))
 	involvement.append(involvementGrid)
+	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
 	const activity = element('section', 'address-profile-panel')
 	const activityHeader = element('div', 'address-section-heading')
 	const activityCopy = element('div')
@@ -2131,13 +2424,17 @@ const renderAddressProfile = (item, transactions, interactions) => {
 	}
 	if (interactions.length === 0) interactionList.append(element('p', 'data-note', 'No canonical protocol references have been indexed.'))
 	interactionPanel.append(interactionList)
+	setLiveRecord(interactionPanel, 'references', interactions)
+	setLiveRecord(activity, 'transactions', transactions)
 	content.replaceChildren(header, metrics, balances, involvement, interactionPanel, activity)
+	lastRouteLiveChanges = applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }
 
-const loadAddressProfile = async () => {
+const loadAddressProfile = async ({ live = false } = {}) => {
 	const requestVersion = ++addressProfileRequestVersion
 	const content = $('#address-profile-content')
+	const hadProfile = content.querySelector('[data-live-key]') !== null
 	const address = pageUrl.searchParams.get('address')?.toLowerCase()
 	const backParams = new URLSearchParams({ chainId: requiredChainId() })
 	if (isDemo) backParams.set('demo', '1')
@@ -2148,7 +2445,8 @@ const loadAddressProfile = async () => {
 		return false
 	}
 	content.setAttribute('aria-busy', 'true')
-	content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
+	content.querySelector('.address-refresh-error')?.remove()
+	if (!hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 	try {
 		const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '1' })
 		const [profile, identity, transactions, interactions] = await Promise.all([
@@ -2177,19 +2475,22 @@ const loadAddressProfile = async () => {
 					pool_associations: [],
 					vault_positions: [],
 				}
-		renderAddressProfile(item, transactions.items, interactions.items)
+		renderAddressProfile(item, transactions.items, interactions.items, { live })
 		currentAddressProfile = item
 		return true
 	} catch (error) {
 		if (requestVersion !== addressProfileRequestVersion) return false
-		const alert = element('div', 'detail-error')
+		const alert = element('div', `detail-error${hadProfile ? ' address-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
-		alert.append(element('p', '', `Could not load address: ${error.message}`))
+		alert.append(
+			element('p', '', hadProfile ? `Refresh failed; showing last known address state: ${error.message}` : `Could not load address: ${error.message}`),
+		)
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
-		retry.addEventListener('click', () => loadAddressProfile())
+		retry.addEventListener('click', () => retryCanonicalViewOr(loadAddressProfile))
 		alert.append(retry)
-		content.replaceChildren(alert)
+		if (hadProfile) content.prepend(alert)
+		else content.replaceChildren(alert)
 		content.setAttribute('aria-busy', 'false')
 		return false
 	}
@@ -2572,7 +2873,7 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 				failure.append(element('span', '', `State history unavailable: ${error.message}`))
 				const retry = element('button', '', 'Retry')
 				retry.type = 'button'
-				retry.addEventListener('click', () => selectEntity(item))
+				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item)))
 				failure.append(retry)
 				detail.replaceChildren(failure)
 			} else if (refreshStatus !== undefined) {
@@ -2580,7 +2881,7 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 				refreshStatus.replaceChildren(element('span', '', `Historical refresh failed; showing last known details: ${error.message}`))
 				const retry = element('button', '', 'Retry')
 				retry.type = 'button'
-				retry.addEventListener('click', () => selectEntity(item, { preserveDetail: true }))
+				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item, { preserveDetail: true })))
 				refreshStatus.append(retry)
 			}
 		}
@@ -2590,7 +2891,7 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 	}
 }
 
-const renderEntityList = async ({ refreshSelected = false } = {}) => {
+const renderEntityList = async ({ refreshSelected = false, live = false } = {}) => {
 	const query = $('#entity-search').value.trim().toLowerCase()
 	const catalogItems = stateData[activeStateType]
 	const items = catalogItems.filter((item) => !query || entityCopy(activeStateType, item).join(' ').toLowerCase().includes(query))
@@ -2598,10 +2899,11 @@ const renderEntityList = async ({ refreshSelected = false } = {}) => {
 	$('#entity-count').textContent = String(items.length)
 	$('#entity-search').placeholder = `Filter ${activeStateType}…`
 	const list = $('#entity-list')
+	const previousRows = liveSnapshot(list, '.entity-row[data-live-key]')
 	list.replaceChildren()
 	for (const item of items) {
 		const [title, meta] = entityCopy(activeStateType, item)
-		const row = element('button', 'entity-row')
+		const row = setLiveRecord(element('button', 'entity-row'), entityKey(activeStateType, item), item)
 		row.type = 'button'
 		row.dataset.key = entityKey(activeStateType, item)
 		row.setAttribute('role', 'option')
@@ -2610,6 +2912,9 @@ const renderEntityList = async ({ refreshSelected = false } = {}) => {
 		row.addEventListener('click', () => selectEntity(item))
 		list.append(row)
 	}
+	const listChanges = applyLiveChanges(list, previousRows, { live, selector: '.entity-row[data-live-key]' })
+	lastRouteLiveChanges.added += listChanges.added
+	lastRouteLiveChanges.changed += listChanges.changed
 	list.setAttribute('aria-busy', 'false')
 	const selected = items.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
 	if (selected !== undefined) {
@@ -2626,8 +2931,9 @@ const renderEntityList = async ({ refreshSelected = false } = {}) => {
 	return true
 }
 
-const renderStateStats = () => {
+const renderStateStats = ({ live = false } = {}) => {
 	const stats = $('#state-stats')
+	const previousStats = liveSnapshot(stats, '.state-stat[data-live-key]')
 	stats.replaceChildren()
 	for (const [label, items] of [
 		['Pools', stateData.pools],
@@ -2635,10 +2941,11 @@ const renderStateStats = () => {
 		['Vaults', stateData.vaults],
 		['Universes', stateData.universes],
 	]) {
-		const card = element('div', 'state-stat')
+		const card = setLiveRecord(element('div', 'state-stat'), label.toLowerCase(), String(items.length))
 		card.append(element('span', '', `Canonical ${label.toLowerCase()}`), element('strong', '', number(items.length)))
 		stats.append(card)
 	}
+	lastRouteLiveChanges = applyLiveChanges(stats, previousStats, { live, selector: '.state-stat[data-live-key]' })
 	stats.setAttribute('aria-busy', 'false')
 }
 
@@ -2648,11 +2955,12 @@ const setSystemControlsDisabled = (disabled) => {
 	for (const row of document.querySelectorAll('.entity-row')) row.disabled = disabled
 }
 
-const loadSystemState = async () => {
+const loadSystemState = async ({ live = false } = {}) => {
 	const requestVersion = ++catalogRequestVersion
 	const alert = $('#system-alert')
 	const status = $('#system-status')
 	const hadData = stateData !== undefined
+	const previousDetail = $('#state-detail').textContent
 	alert.hidden = true
 	alert.replaceChildren()
 	status.hidden = false
@@ -2674,9 +2982,13 @@ const loadSystemState = async () => {
 			)
 			if (poolItem !== undefined) Object.assign(poolItem.current_state, state.state)
 		}
-		renderStateStats()
-		const detailRefreshed = await renderEntityList({ refreshSelected: true })
+		renderStateStats({ live })
+		const detailRefreshed = await renderEntityList({ refreshSelected: true, live })
 		if (requestVersion !== catalogRequestVersion) return false
+		if (live && previousDetail !== $('#state-detail').textContent) {
+			lastRouteLiveChanges.changed++
+			animateLiveNode($('#state-detail'), 'live-changed')
+		}
 		status.hidden = true
 		const truncated = Object.entries(stateData.truncated ?? {})
 			.filter(([, value]) => value)
@@ -2696,7 +3008,7 @@ const loadSystemState = async () => {
 			alert.append(element('span', '', hadData ? `Refresh failed; showing last known state: ${error.message}` : `System state unavailable: ${error.message}`))
 			const retry = element('button', '', 'Retry')
 			retry.type = 'button'
-			retry.addEventListener('click', loadSystemState)
+			retry.addEventListener('click', () => retryCanonicalViewOr(loadSystemState))
 			alert.append(retry)
 			if (!hadData) {
 				$('#entity-list-title').textContent = 'Registry unavailable'
@@ -2732,6 +3044,7 @@ const setStateTab = (type) => {
 $('#filters').addEventListener('submit', (event) => {
 	event.preventDefault()
 	if (!validateAddressFilter(true)) return
+	appliedActivityFilters = activityFilterValues()
 	syncActivityFilterUrl()
 	loadLogs()
 })
@@ -2740,6 +3053,7 @@ $('#clear-filters').addEventListener('click', () => {
 	$('#address-filter').value = ''
 	$('#decode-filter').value = ''
 	validateAddressFilter()
+	appliedActivityFilters = activityFilterValues()
 	syncActivityFilterUrl()
 	loadLogs()
 })
@@ -2764,7 +3078,7 @@ $('#refresh-stale').addEventListener('click', async () => {
 			if (isSystem) await loadSystemState()
 			else if (isRichList) await loadRichList()
 			else if (isAddress) await loadAddressProfile()
-			else if (validateAddressFilter()) await loadLogs()
+			else await loadLogs()
 		}
 	} finally {
 		button.disabled = false
@@ -2787,12 +3101,20 @@ $('#copy-diagnostics').addEventListener('click', async (event) => {
 	}, 1200)
 })
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
-$('#new-logs').addEventListener('click', () => loadLogs())
 $('#close-detail').addEventListener('click', closeDetail)
 dialog.addEventListener('click', (event) => {
 	if (event.target === dialog) closeDetail()
 })
-dialog.addEventListener('close', clearDetailUrl)
+dialog.addEventListener('close', () => {
+	if (!preservePendingOnDialogClose && !canonicalRefreshRequired) {
+		pendingCanonicalAccount = undefined
+		activeAccount = undefined
+		activeAccountTransactions = undefined
+		detailRequestVersion++
+	}
+	preservePendingOnDialogClose = false
+	clearDetailUrl()
+})
 const stateTabs = [...document.querySelectorAll('[data-state-tab]')]
 for (const tab of stateTabs) {
 	tab.addEventListener('click', () => setStateTab(tab.dataset.stateTab))
@@ -2821,6 +3143,7 @@ $('#entity-search').addEventListener('keydown', (event) => {
 })
 globalNetworkFilter.addEventListener('change', async () => {
 	activeReorgRecovery = undefined
+	pendingCanonicalAccount = undefined
 	canonicalRefreshRequired = false
 	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
 	blockRefreshTimer = undefined
@@ -2831,10 +3154,8 @@ globalNetworkFilter.addEventListener('change', async () => {
 		logsRequestVersion++
 		feed.replaceChildren()
 		nextCursor = undefined
-		newLogCount = 0
-		$('#new-logs').hidden = true
 	}
-	if (dialog.open) closeDetail()
+	if (dialog.open) closeDetail({ preservePendingCanonicalAccount: true })
 	const url = new URL(location.href)
 	url.searchParams.delete('log')
 	url.searchParams.delete('entity')
@@ -2860,49 +3181,77 @@ globalNetworkFilter.addEventListener('change', async () => {
 		await loadRichList()
 	} else if (isAddress) {
 		await loadAddressProfile()
-	} else if (validateAddressFilter()) {
+	} else {
 		await loadLogs()
-	} else showInvalidAddressFilter()
+	}
 })
 $('#rich-sort').addEventListener('change', () => loadRichList())
 $('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
-const refreshAfterUpdates = async (count, forceContentRefresh = false, recovery) => {
+const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recovery) => {
 	if (activeReorgRecovery !== undefined && activeReorgRecovery !== recovery) return await activeReorgRecovery.promise
+	lastRouteLiveChanges = { added: 0, changed: 0 }
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState()])
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
 			canonicalRefreshRequired = false
 			updateFreshness()
 		}
+		if (contentRefreshed) announceLiveUpdate('System state', lastRouteLiveChanges, { added: 'new registry item', changed: 'updated state item' })
 		return contentRefreshed
 	}
 	if (isRichList) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList()])
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList({ live: true })])
+		if (contentRefreshed && activeAccount && dialog.open) {
+			const refreshedAccount = richListItems.find(
+				(item) => String(item.chain_id) === String(activeAccount.chain_id) && item.address.toLowerCase() === activeAccount.address.toLowerCase(),
+			)
+			await openAccountTransactions(refreshedAccount ?? activeAccount, { live: true })
+		}
+		if (contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined) await restorePendingCanonicalAccount()
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
 			canonicalRefreshRequired = false
 			updateFreshness()
 		}
+		if (contentRefreshed)
+			announceLiveUpdate('Rich list', lastRouteLiveChanges, {
+				added: 'new address',
+				addedPlural: 'new addresses',
+				changed: 'updated address',
+				changedPlural: 'updated addresses',
+			})
 		return contentRefreshed
 	}
 	if (isAddress) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile()])
-		return contentRefreshed
-	}
-	if (forceContentRefresh || window.scrollY < 420) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadLogs()])
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile({ live: true })])
+		if (
+			contentRefreshed &&
+			activeAccount &&
+			dialog.open &&
+			currentAddressProfile &&
+			String(currentAddressProfile.chain_id) === String(activeAccount.chain_id) &&
+			currentAddressProfile.address.toLowerCase() === activeAccount.address.toLowerCase()
+		)
+			await openAccountTransactions(currentAddressProfile, { live: true })
+		if (contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined) await restorePendingCanonicalAccount()
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
 			canonicalRefreshRequired = false
 			updateFreshness()
 		}
+		if (contentRefreshed) announceLiveUpdate('Address profile', lastRouteLiveChanges, { added: 'new section', changed: 'updated section' })
 		return contentRefreshed
 	}
-	await networkRefresh
-	newLogCount += count
-	$('#new-logs').textContent = `Show ${newLogCount} new update${newLogCount === 1 ? '' : 's'}`
-	$('#new-logs').hidden = false
-	return true
+	const [, contentRefreshed] = await Promise.all([
+		networkRefresh,
+		loadLogs({ live: true, preserveHistory: !_forceContentRefresh && !canonicalRefreshRequired }),
+	])
+	if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
+		canonicalRefreshRequired = false
+		updateFreshness()
+	}
+	if (contentRefreshed) announceLiveUpdate('Activity', lastRouteLiveChanges, { added: 'new log', changed: 'updated log' })
+	return contentRefreshed
 }
 
 const refreshCanonicalViews = (title, detail) => {
@@ -2918,9 +3267,21 @@ const refreshCanonicalViews = (title, detail) => {
 		pendingRefresh: false,
 		promise: undefined,
 	}
-	if (dialog.open) closeDetail()
+	if (recovery.accountToRefresh) pendingCanonicalAccount = recovery.accountToRefresh
 	activeReorgRecovery = recovery
 	canonicalRefreshRequired = true
+	if (isActivity) {
+		logsAbortController?.abort()
+		logsAbortController = undefined
+		logsRequestVersion++
+		feed.replaceChildren()
+		nextCursor = undefined
+		$('#more').hidden = true
+		feedState.hidden = false
+		feedState.textContent = 'Refreshing canonical activity after the chain changed…'
+		$('#activity-summary').textContent = 'Canonical activity is refreshing'
+	}
+	if (dialog.open) closeDetail({ preservePendingCanonicalAccount: true })
 	const banner = $('#freshness-banner')
 	banner.hidden = false
 	$('#freshness-title').textContent = title
@@ -2933,23 +3294,9 @@ const refreshCanonicalViews = (title, detail) => {
 				const refreshed = await refreshAfterUpdates(1, true, recovery)
 				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId || !refreshed) return false
 				if (recovery.pendingRefresh) continue
-				if (recovery.accountToRefresh && isRichList) {
-					const currentAccount = richListItems.find(
-						(item) =>
-							String(item.chain_id) === String(recovery.accountToRefresh.chain_id) &&
-							item.address.toLowerCase() === recovery.accountToRefresh.address.toLowerCase(),
-					)
-					if (currentAccount) await openAccountTransactions(currentAccount)
-				} else if (
-					recovery.accountToRefresh &&
-					isAddress &&
-					currentAddressProfile &&
-					String(currentAddressProfile.chain_id) === String(recovery.accountToRefresh.chain_id) &&
-					currentAddressProfile.address.toLowerCase() === recovery.accountToRefresh.address.toLowerCase()
-				)
-					await openAccountTransactions(currentAddressProfile)
+				if (recovery.accountToRefresh) await restorePendingCanonicalAccount()
 				if (recovery.pendingRefresh) {
-					if (dialog.open) closeDetail()
+					if (dialog.open) closeDetail({ preservePendingCanonicalAccount: true })
 					continue
 				}
 				canonicalRefreshRequired = false
@@ -2992,7 +3339,8 @@ const connectStream = () => {
 		return
 	}
 	if (stream !== undefined) return
-	const nextStream = new EventSource('/api/v1/stream')
+	const streamPath = isDemo && pageUrl.searchParams.get('reorgDemo') === '1' ? '/api/v1/stream?reorg=1' : '/api/v1/stream'
+	const nextStream = new EventSource(streamPath)
 	stream = nextStream
 	nextStream.addEventListener('open', () => {
 		lastStreamEventAt = new Date()
@@ -3026,6 +3374,7 @@ const connectStream = () => {
 	nextStream.addEventListener('block', (event) => {
 		const payload = eventPayload(event, 'Block update')
 		if (payload === undefined) return
+		applyDemoBlock(payload)
 		invalidateAddressIdentityCache(payload.chainId, true)
 		if (String(payload.chainId) === selectedChainId()) liveUpdate(event)
 	})
@@ -3034,6 +3383,10 @@ const connectStream = () => {
 		lastStreamEventAt = new Date()
 		const payload = eventPayload(event, 'Reorganization')
 		if (payload === undefined) return
+		if (isDemo) {
+			demoReorgObserved = true
+			demoEvictedAddress = activeAccount?.address.toLowerCase()
+		}
 		invalidateAddressIdentityCache(payload.chainId)
 		if (String(payload.chainId) !== selectedChainId()) return
 		const depth = payload.depth ?? 'unknown'
@@ -3070,8 +3423,7 @@ addEventListener('pageshow', async (event) => {
 	if (isSystem) await loadSystemState()
 	else if (isRichList) await loadRichList()
 	else if (isAddress) await loadAddressProfile()
-	else if (validateAddressFilter()) await loadLogs()
-	else showInvalidAddressFilter()
+	else await loadLogs()
 })
 
 setInterval(() => {
@@ -3080,21 +3432,16 @@ setInterval(() => {
 }, 1000)
 setInterval(() => {
 	if (document.hidden) return
-	loadNetworks()
-	if (!isDemo && (!lastStreamEventAt || Date.now() - lastStreamEventAt.getTime() > 30_000)) {
-		if (isSystem) loadSystemState()
-		else if (isRichList) loadRichList()
-		else if (isAddress) loadAddressProfile()
-		else if (window.scrollY < 420 && validateAddressFilter()) loadLogs()
-	}
+	if (isDemo) loadNetworks()
+	else void refreshAfterUpdates(1)
 }, 12_000)
 document.addEventListener('visibilitychange', () => {
-	if (!document.hidden) loadNetworks({ refreshAfterCurrent: true })
+	if (!document.hidden) void refreshAfterUpdates(1)
 })
 
 $('#event-filter').value = initialActivityFilters.event
 $('#address-filter').value = initialActivityFilters.address
-$('#decode-filter').value = ['true', 'false'].includes(initialActivityFilters.decoded) ? initialActivityFilters.decoded : ''
+$('#decode-filter').value = initialActivityFilters.decoded
 validateAddressFilter()
 $('#clear-filters').disabled = !hasActivityFilters()
 
