@@ -37,7 +37,7 @@
 
 		<main>
 			<div class="live-update-region">
-				<p id="live-update-status" class="live-update-status" role="status" aria-live="polite" hidden></p>
+				<p id="live-update-status" class="live-update-status" role="status" aria-live="polite" aria-atomic="true" hidden></p>
 			</div>
 			<div id="freshness-banner" class="freshness-banner" role="alert" hidden>
 				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
@@ -47,11 +47,11 @@
 				<div class="section-heading">
 					<p class="eyebrow">Indexer status</p>
 					<div class="status-actions">
-						<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
+						<p class="updated" id="last-updated">Waiting for status</p>
 						<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
 					</div>
 				</div>
-				<div id="network-cards" class="network-cards" aria-live="polite" aria-busy="true"></div>
+				<div id="network-cards" class="network-cards" aria-busy="true"></div>
 				<details class="diagnostics">
 					<summary>Operator diagnostics</summary>
 					<div class="diagnostics-bar"><span>Safe to include in a bug report; RPC URLs are never exposed.</span><button id="copy-diagnostics" class="secondary compact" type="button">Copy diagnostics</button></div>
@@ -80,12 +80,12 @@
 					<button class="primary" type="submit">Apply filters</button>
 					<button id="clear-filters" class="secondary" type="button" disabled>Clear filters</button>
 				</form>
-				<p id="activity-summary" class="activity-summary" role="status" aria-live="polite">Waiting for activity</p>
+				<p id="activity-summary" class="activity-summary">Waiting for activity</p>
 
 				<div class="feed-shell">
 					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>msg.origin</span></div>
 					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
-					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true" aria-live="polite"></div>
+					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
 				<button id="more" class="more" type="button" hidden>Show more</button>
 			</section>
@@ -99,7 +99,7 @@
 				</div>
 				<div id="system-alert" class="system-alert" role="alert" hidden></div>
 				<div id="system-status" class="system-status" role="status" aria-live="polite" hidden></div>
-				<div id="state-stats" class="state-stats" aria-live="polite" aria-busy="true"></div>
+				<div id="state-stats" class="state-stats" aria-busy="true"></div>
 				<div class="state-tabs" role="tablist" aria-label="System entities">
 					<button id="tab-pools" type="button" role="tab" aria-controls="state-detail" aria-selected="true" data-state-tab="pools">Pools</button>
 					<button id="tab-questions" type="button" role="tab" aria-controls="state-detail" aria-selected="false" data-state-tab="questions">Questions</button>
@@ -118,7 +118,7 @@
 						<label class="entity-search"><span class="sr-only">Filter current entities</span><input id="entity-search" type="search" placeholder="Filter pools…" /></label>
 						<div id="entity-list" class="entity-list" role="listbox" aria-labelledby="entity-list-title" aria-busy="true"></div>
 					</aside>
-					<article id="state-detail" class="state-detail" role="tabpanel" aria-labelledby="tab-pools" aria-live="polite" aria-busy="true">
+					<article id="state-detail" class="state-detail" role="tabpanel" aria-labelledby="tab-pools" aria-busy="true">
 						<div class="state-placeholder">
 							<p class="eyebrow">Historical projection</p>
 							<h3>Loading system state…</h3>
@@ -151,7 +151,7 @@
 
 			<section id="address-profile" class="address-profile" aria-labelledby="address-profile-heading" hidden>
 				<a id="address-back" class="back-link" href="/richlist">← Rich list</a>
-				<div id="address-profile-content" class="address-profile-content" aria-live="polite" aria-busy="true">
+				<div id="address-profile-content" class="address-profile-content" aria-busy="true">
 					<div class="state-placeholder">
 						<p class="eyebrow">Address</p>
 						<h2 id="address-profile-heading">Loading address…</h2>

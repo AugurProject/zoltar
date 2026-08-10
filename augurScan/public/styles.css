@@ -880,6 +880,11 @@ button[aria-busy="true"]:disabled {
 	font: 0.7rem / 1.45 var(--mono);
 }
 
+.live-marker-host,
+.live-added {
+	position: relative;
+}
+
 .live-added {
 	outline: 2px solid color-mix(in srgb, var(--cyan) 70%, var(--line));
 	outline-offset: -2px;
@@ -893,6 +898,10 @@ button[aria-busy="true"]:disabled {
 }
 
 .live-change-marker {
+	position: absolute;
+	top: 0.35rem;
+	right: 0.35rem;
+	z-index: 2;
 	display: inline-flex;
 	width: max-content;
 	padding: 0.18rem 0.34rem;
@@ -902,16 +911,6 @@ button[aria-busy="true"]:disabled {
 	font: 700 0.54rem / 1 var(--mono);
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
-}
-
-.entity-row > .live-change-marker,
-.address-profile-content > [data-live-key] > .live-change-marker {
-	margin-bottom: 0.45rem;
-}
-
-.state-stat > .live-change-marker {
-	display: flex;
-	margin-bottom: 0.45rem;
 }
 
 .live-toast-active {

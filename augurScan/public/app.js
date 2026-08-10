@@ -87,21 +87,14 @@ const retryCanonicalViewOr = (fallback) => (canonicalRefreshRequired ? refreshAf
 const animateLiveNode = (node, className) => {
 	node.classList.remove('live-added', 'live-changed', className)
 	if (className === 'live-added' || className === 'live-changed') {
-		node
-			.querySelector(
-				':scope > .live-change-marker, :scope > .rich-row-main .live-change-marker, :scope > .chain-block .live-change-marker, :scope > .state-stat .live-change-marker',
-			)
-			?.remove()
+		node.querySelector(':scope > .live-change-marker')?.remove()
 		const marker = element('span', 'live-change-marker', className === 'live-added' ? 'New' : 'Updated')
-		const markerTarget = node.matches('.log-row')
-			? node.querySelector('.chain-block')
-			: node.matches('.rich-row')
-				? node.querySelector('.rich-identity')
-				: node.matches('.address-profile-stats')
-					? node.querySelector('.state-stat')
-					: node
-		markerTarget?.prepend(marker)
-		window.setTimeout(() => marker.remove(), 4_500)
+		node.classList.add('live-marker-host')
+		node.append(marker)
+		window.setTimeout(() => {
+			marker.remove()
+			if (node.querySelector(':scope > .live-change-marker') === null) node.classList.remove('live-marker-host')
+		}, 4_500)
 	}
 	requestAnimationFrame(() => {
 		node.classList.add(className)
@@ -133,6 +126,7 @@ const applyLiveChanges = (container, previous, { live, selector = '[data-live-ke
 }
 
 const announceLiveUpdate = (label, changes = lastRouteLiveChanges, nouns = { added: 'new item', changed: 'updated item' }) => {
+	if (changes.added === 0 && changes.changed === 0) return
 	const status = $('#live-update-status')
 	const network = latestNetworks.find((item) => String(item.chain_id) === selectedChainId())
 	const block = network?.indexed_block ? ` at block #${number(network.indexed_block)}` : ''
@@ -333,6 +327,10 @@ const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		})),
 	}
 })
+const demoInitialTransactionCounts = new Map(demoRichList.map((item) => [`${item.chain_id}:${item.address.toLowerCase()}`, Number(item.transaction_count)]))
+const demoNetworkBaselines = new Map(
+	demoNetworks.map((network) => [network.chain_id, { blockNumber: BigInt(network.indexed_block), timestamp: new Date(network.indexed_timestamp).getTime() }]),
+)
 
 const demoAddress = (seed) => `0x${seed.repeat(40).slice(0, 40)}`
 const demoQuestions = [
@@ -817,40 +815,49 @@ const api = async (path, { signal } = {}) => {
 			const network = demoNetworks.find((item) => item.chain_id === chainId)
 			const items = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, itemIndex) => {
 				const index = offset + itemIndex + (demoTransactionSnapshotInvalidated ? 1 : 0)
-				const toAddress = index % 2 === 0 ? '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db' : '0x7777777777777777777777777777777777777777'
+				const initialTotal = demoInitialTransactionCounts.get(`${chainId}:${address}`) ?? total
+				const ordinal = Number(owner?.transaction_count ?? 0) - index - 1
+				const liveOrdinal = ordinal - initialTotal
+				const baseline = demoNetworkBaselines.get(chainId)
+				const blockNumber =
+					liveOrdinal >= 0
+						? (baseline?.blockNumber ?? 0n) + BigInt(liveOrdinal + 1)
+						: (baseline?.blockNumber ?? 0n) - BigInt(Math.max(0, initialTotal - ordinal - 1))
+				const blockTimestamp = new Date((baseline?.timestamp ?? Date.now()) + (liveOrdinal >= 0 ? liveOrdinal + 1 : -(initialTotal - ordinal - 1)) * 14_000)
+				const toAddress = ordinal % 2 === 0 ? '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db' : '0x7777777777777777777777777777777777777777'
 				return {
 					chain_id: chainId,
-					tx_hash: `${demoHash.slice(0, -4)}${index.toString(16).padStart(4, '0')}`,
-					block_hash: network?.indexed_hash,
-					block_number: String(BigInt(network?.indexed_block ?? '0') - BigInt(index)),
-					block_timestamp: new Date(new Date(network?.indexed_timestamp ?? Date.now()).getTime() - index * 14_000).toISOString(),
-					transaction_index: index % 12,
+					tx_hash: `${demoHash.slice(0, -8)}${ordinal.toString(16).padStart(8, '0')}`,
+					block_hash: `0x${blockNumber.toString(16).padStart(64, '0')}`,
+					block_number: String(blockNumber),
+					block_timestamp: blockTimestamp.toISOString(),
+					transaction_index: ordinal % 12,
 					from_address: owner?.address,
 					to_address: toAddress,
-					to_label: index % 2 === 0 ? 'OpenOracle' : 'Security Pool',
-					to_kind: index % 2 === 0 ? 'openOracle' : 'securityPool',
-					value: index % 4 === 0 ? '125000000000000000' : '0',
+					to_label: ordinal % 2 === 0 ? 'OpenOracle' : 'Security Pool',
+					to_kind: ordinal % 2 === 0 ? 'openOracle' : 'securityPool',
+					value: ordinal % 4 === 0 ? '125000000000000000' : '0',
 					status: 'success',
-					gas_used: String(94_000 + index * 117),
-					function_name: index % 2 === 0 ? 'report' : 'checkpointPoolAccounting',
-					function_signature: index % 2 === 0 ? 'report((...),bool,bool,(...))' : 'checkpointPoolAccounting(uint8)',
-					action_summary: index % 2 === 0 ? 'report · reportId=1842' : 'checkpointPoolAccounting · reason=Trade',
+					gas_used: String(94_000 + ordinal * 117),
+					function_name: ordinal % 2 === 0 ? 'report' : 'checkpointPoolAccounting',
+					function_signature: ordinal % 2 === 0 ? 'report((...),bool,bool,(...))' : 'checkpointPoolAccounting(uint8)',
+					action_summary: ordinal % 2 === 0 ? 'report · reportId=1842' : 'checkpointPoolAccounting · reason=Trade',
 					action_arguments:
-						index % 2 === 0
+						ordinal % 2 === 0
 							? {
 									reporter: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 									recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 								}
 							: { reason: '1' },
 					action_display_arguments:
-						index % 2 === 0
+						ordinal % 2 === 0
 							? {
 									reporter: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
 									recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 								}
 							: { reason: 'Trade' },
 					action_argument_schema:
-						index % 2 === 0
+						ordinal % 2 === 0
 							? [
 									{ index: 0, name: 'reporter', type: 'address' },
 									{ index: 1, name: 'recipients', type: 'address[]' },
@@ -1694,6 +1701,13 @@ const openAccountTransactions = async (account, { live = false } = {}) => {
 	state.pageLoading = false
 	activeAccountTransactions = state
 	const render = ({ previous = new Map(), highlight = false } = {}) => {
+		const focusedCard = document.activeElement?.closest('.account-transaction[data-live-key]')
+		const focusedTransactionKey = focusedCard?.dataset.liveKey
+		const focusedControlKey = document.activeElement?.dataset.liveFocus
+		const visibleCards = [...detailContent.querySelectorAll('.account-transaction[data-live-key]')]
+		const anchorCard = focusedCard ?? visibleCards.find((card) => card.getBoundingClientRect().bottom > dialog.getBoundingClientRect().top)
+		const anchorKey = anchorCard?.dataset.liveKey
+		const anchorTop = anchorCard?.getBoundingClientRect().top
 		const openTransactionKeys = new Set(
 			[...detailContent.querySelectorAll('.account-transaction-action[open]')].map(
 				(action) => action.closest('.account-transaction[data-live-key]')?.dataset.liveKey,
@@ -1750,7 +1764,9 @@ const openAccountTransactions = async (account, { live = false } = {}) => {
 				argumentsContent.append(
 					decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id),
 				)
-				action.append(element('summary', '', 'Decoded arguments'), argumentsContent)
+				const summary = element('summary', '', 'Decoded arguments')
+				summary.dataset.liveFocus = 'decoded-arguments'
+				action.append(summary, argumentsContent)
 				card.append(action)
 			}
 			list.append(card)
@@ -1758,6 +1774,7 @@ const openAccountTransactions = async (account, { live = false } = {}) => {
 		if (state.loaded.length === 0) list.append(element('p', 'state-placeholder', 'No canonical sent transactions were found.'))
 		const more = element('button', 'secondary account-transactions-more', state.pageLoading ? 'Loading more transactions…' : 'Show more transactions')
 		more.type = 'button'
+		more.dataset.liveFocus = 'show-more-transactions'
 		more.hidden = state.nextPageCursor === undefined
 		more.disabled = state.pageLoading
 		more.addEventListener('click', () => loadPage(true))
@@ -1774,6 +1791,14 @@ const openAccountTransactions = async (account, { live = false } = {}) => {
 		}
 		content.push(list, more)
 		detailContent.replaceChildren(...content)
+		const nextAnchor = anchorKey ? detailContent.querySelector(`[data-live-key="${CSS.escape(anchorKey)}"]`) : undefined
+		if (nextAnchor && anchorTop !== undefined) dialog.scrollTop += nextAnchor.getBoundingClientRect().top - anchorTop
+		if (focusedTransactionKey && focusedControlKey) {
+			const nextFocusedCard = detailContent.querySelector(`[data-live-key="${CSS.escape(focusedTransactionKey)}"]`)
+			nextFocusedCard?.querySelector(`[data-live-focus="${CSS.escape(focusedControlKey)}"]`)?.focus({ preventScroll: true })
+		} else if (focusedControlKey === 'show-more-transactions') {
+			detailContent.querySelector('[data-live-focus="show-more-transactions"]')?.focus({ preventScroll: true })
+		}
 		const changes = applyLiveChanges(list, previous, { live: highlight, selector: '.account-transaction[data-live-key]' })
 		lastRouteLiveChanges.added += changes.added
 		lastRouteLiveChanges.changed += changes.changed
