@@ -57,7 +57,7 @@
 		"check:mainnet-deployment": "bun run generate && bun run refresh:shared-dependencies && cd ui && bun x tsc --project tsconfig.json && cd .. && bun ./scripts/check-mainnet-deployment.mts",
 		"check:mainnet-deployment:generated": "bun run generate && bun run refresh:shared-dependencies && bun ./scripts/check-mainnet-deployment.mts",
 		"check:mainnet-deployment:current": "bun ./scripts/check-mainnet-deployment.mts",
-		"tsc:app": "bun x tsc --noEmit",
+		"tsc:app": "bun ./scripts/run-app-typescript.mts",
 		"tsc:docs": "bun x tsc --project docs/tsconfig.json --noEmit",
 		"tsc:scripts": "bun x tsc --project tsconfig.scripts.json --noEmit",
 		"tsc:solidity": "cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && bun x tsc --project tsconfig.typecheck.json",
