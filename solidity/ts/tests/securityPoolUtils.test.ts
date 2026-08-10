@@ -334,6 +334,33 @@ describe('SecurityPoolUtils', () => {
 		).rejects.toThrow('Liquidation distance too low')
 	})
 
+	test('liquidation execution assigns debt against total capacity before auction ownership is claimed', async () => {
+		const targetVault = addressString(TEST_ADDRESSES[0])
+		const receiverVault = addressString(TEST_ADDRESSES[1])
+		const linkedHarnessBytecode = test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.evm.bytecode.object.replace(/__\$[0-9a-f]{34}\$__/g, securityPoolUtilsAddress.slice(2))
+		const deploymentHash = await client.sendTransaction({ data: `0x${linkedHarnessBytecode}` })
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		if (deploymentReceipt.contractAddress === undefined || deploymentReceipt.contractAddress === null) throw new Error('Unclaimed capacity harness deployment address missing')
+		const harnessAddress = deploymentReceipt.contractAddress
+		const configureHash = await client.writeContract({
+			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
+			address: harnessAddress,
+			functionName: 'configureUnclaimedCapacity',
+			args: [targetVault, receiverVault],
+		})
+		await client.waitForTransactionReceipt({ hash: configureHash })
+
+		const liquidation = await client.simulateContract({
+			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
+			address: harnessAddress,
+			functionName: 'performBundledLiquidation',
+			args: [receiverVault, targetVault, 4n, 7n, 2n, PRICE_PRECISION, 10_000n, 0n],
+		})
+		strictEqualTypeSafe(liquidation.result[0], 4n, 'receiver accepts the target debt assigned by total capacity')
+		strictEqualTypeSafe(liquidation.result[1], 2n, 'receiver receives the target capacity ownership')
+		strictEqualTypeSafe(liquidation.result[2], 0n, 'fully backed debt does not become bad debt')
+	})
+
 	test('full-target liquidation records exact positive allocation residue after settling less than the nominal quote', async () => {
 		const targetVault = addressString(TEST_ADDRESSES[0])
 		const receiverVault = addressString(TEST_ADDRESSES[1])

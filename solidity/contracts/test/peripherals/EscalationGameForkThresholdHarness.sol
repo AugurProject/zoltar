@@ -44,10 +44,7 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		return address(0x0);
 	}
 
-	constructor(
-		ISecurityPool _securityPool,
-		EscalationGameProofVerifier _proofVerifier
-	)
+	constructor(ISecurityPool _securityPool, EscalationGameProofVerifier _proofVerifier)
 		EscalationGameState(
 			_securityPool,
 			ReputationToken(address(0)),
@@ -56,21 +53,14 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		)
 	{}
 
-	function configureBoundary(
-		uint256 gameEndDate,
-		uint256 _nonDecisionThresholdAttoRep,
-		uint256 winningBalanceAttoRep
-	) external {
+	function configureBoundary(uint256 gameEndDate, uint256 _nonDecisionThresholdAttoRep, uint256 winningBalanceAttoRep) external {
 		activationTime = gameEndDate;
 		startBondAttoRep = 1e18;
 		nonDecisionThresholdAttoRep = _nonDecisionThresholdAttoRep;
 		outcomeState[1].balanceAttoRep = winningBalanceAttoRep;
 	}
 
-	function computeWinningWithdrawal(
-		uint256 depositAmountAttoRep,
-		uint256 cumulativeAmountAttoRep
-	) external view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) external view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		return _computeWinningWithdrawal(1, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}
 }

@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x2C7113cA45f1c54E65a2b2F602f4bA5908CC1dd1"
+			"address": "0x3e75490021cA6E477f52d1B5641Bf477Ed86a870"
 		},
 		{
 			"id": "weth",
@@ -58,7 +58,7 @@
 		{
 			"id": "openOracle",
 			"label": "OpenOracle",
-			"address": "0x67C8B7D2488B8A1019D80426f03e3da8d6d12f4f"
+			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "zoltarQuestionData",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xD1b76e6658E560fdEe804e217D4239E6B2E4c9ce"
+			"address": "0xce84c93D9D676529d3355F9FDd6dB0BCcfeF9E34"
 		}
 	],
 	"derivedContracts": [

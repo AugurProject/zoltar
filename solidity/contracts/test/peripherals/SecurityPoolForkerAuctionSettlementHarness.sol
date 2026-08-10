@@ -28,15 +28,7 @@ contract AuctionSettlementPoolHarness {
 
 	function updateVaultFees(address) external {}
 
-	function configureVault(
-		address vault,
-		uint256 repBackingUnits,
-		uint256 capacityOwnershipAttoRep,
-		uint256 feeIndex,
-		uint256,
-		uint256 newVaultBadDebtAttoEth,
-		uint256 newTotalBadDebtAttoEth
-	) external {
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 feeIndex, uint256, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external {
 		Vault storage current = securityVaults[vault];
 		current.repBackingUnits = repBackingUnits;
 		current.capacityOwnershipAttoRep = capacityOwnershipAttoRep;
@@ -53,18 +45,9 @@ contract AuctionSettlementPoolHarness {
 contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuctionSettlementBase {
 	constructor(Zoltar zoltar) SecurityPoolForkerAuctionSettlementBase(zoltar) {}
 
-	function _assignAuctionBadDebt(
-		ISecurityPool securityPool,
-		uint256 nextClaimedCapacityOwnershipAttoRep,
-		uint256 auctionedCapacityOwnershipAttoRep
-	) internal override returns (uint256 badDebtToAssignAttoEth) {
+	function _assignAuctionBadDebt(ISecurityPool securityPool, uint256 nextClaimedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep) internal override returns (uint256 badDebtToAssignAttoEth) {
 		uint256 nextClaimedBadDebtAttoEth;
-		(badDebtToAssignAttoEth, nextClaimedBadDebtAttoEth) = SecurityPoolUtils.calculateCumulativeAuctionBadDebt(
-			auctionedBadDebtByPool[securityPool],
-			nextClaimedCapacityOwnershipAttoRep,
-			auctionedCapacityOwnershipAttoRep,
-			claimedAuctionedBadDebtByPool[securityPool]
-		);
+		(badDebtToAssignAttoEth, nextClaimedBadDebtAttoEth) = SecurityPoolUtils.calculateCumulativeAuctionBadDebt(auctionedBadDebtByPool[securityPool], nextClaimedCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool]);
 		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedBadDebtAttoEth;
 	}
 
@@ -72,12 +55,7 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 		auctionedBadDebtByPool[securityPool] = badDebtAttoEth;
 	}
 
-	function creditAuctionProceeds(
-		ISecurityPool securityPool,
-		address vault,
-		uint256 amount,
-		uint256 newCapacityOwnershipAttoRep
-	) external {
+	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.auctionRepBackingUnitsPerAttoRep = 10;
 		data.auctionedCapacityOwnershipAttoRep = 3;

@@ -75,58 +75,17 @@ enum QuestionOutcome {
 
 interface ISecurityPool {
 	/// @notice Authoritative resulting accounting state after a mutation. `vault` is zero for pool-wide causes.
-	event PoolAccountingCheckpoint(
-		AccountingReason reason,
-		address indexed vault,
-		uint256 settlementCollateralAttoEth,
-		uint256 totalCapacityOwnershipAttoRep,
-		uint256 feeEligibleCapacityOwnershipAttoRep,
-		uint256 totalClaimableVaultFeesAttoEth,
-		uint256 unallocatedAccruedFeesAttoEth,
-		uint256 feeIndex,
-		uint256 feeIndexRemainder,
-		uint256 totalFeesOwedRemainder,
-		uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
-		uint256 lastUpdatedFeeAccumulator,
-		uint256 currentRetentionRate
-	);
+	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalCapacityOwnershipAttoRep, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
 	/// @notice Authoritative resulting vault state and the affected global denominators. REP attribution uses
 	/// REP backing units and capacity ownership use attoREP, fees use attoETH, and `feeIndex` and
 	/// `vaultFeeRemainder` use 1e18 fixed-point precision.
-	event VaultAccountingCheckpoint(
-		address indexed vault,
-		uint256 repBackingUnits,
-		uint256 capacityOwnershipAttoRep,
-		uint256 claimableFeesAttoEth,
-		uint256 feeIndex,
-		uint256 vaultFeeRemainder,
-		uint256 resultingTotalRepBackingUnits,
-		uint256 resultingFeeEligibleCapacityOwnershipAttoRep
-	);
+	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleCapacityOwnershipAttoRep);
 	/// @notice Complete sets minted for `creator`. ETH fields use attoETH; share fields use attoShares.
-	event CompleteSetCreated(
-		address indexed creator,
-		uint256 settlementCollateralProvidedAttoEth,
-		uint256 completeSetsMintedAttoShares,
-		uint256 resultingShareTokenSupplyAttoShares,
-		uint256 resultingSettlementCollateralAttoEth
-	);
+	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	/// @notice Complete sets burned and net ETH paid to `redeemer`.
-	event CompleteSetRedeemed(
-		address indexed redeemer,
-		uint256 completeSetsBurnedAttoShares,
-		uint256 settlementCollateralRedeemedAttoEth,
-		uint256 resultingShareTokenSupplyAttoShares,
-		uint256 resultingSettlementCollateralAttoEth
-	);
+	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	/// @notice Winning shares burned and net ETH paid to `redeemer`.
-	event SharesRedeemed(
-		address indexed redeemer,
-		uint256 winningSharesBurnedAttoShares,
-		uint256 settlementCollateralRedeemedAttoEth,
-		uint256 resultingShareTokenSupplyAttoShares,
-		uint256 resultingSettlementCollateralAttoEth
-	);
+	event SharesRedeemed(address indexed redeemer, uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 
 	// -------- View Functions --------
 	function questionId() external view returns (uint256);
@@ -147,9 +106,7 @@ interface ISecurityPool {
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);
-	function securityVaults(
-		address vault
-	)
+	function securityVaults(address vault)
 		external
 		view
 		returns (
@@ -195,63 +152,25 @@ interface ISecurityPool {
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
 	function redeemRepFromVault(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
-	function performLiquidation(
-		uint256 operationId,
-		address operator,
-		address receiverVault,
-		address targetVaultAddress,
-		uint256 requestedDebtAttoEth,
-		uint256 snapshotTargetBackingUnits,
-		uint256 snapshotTargetCapacityOwnershipAttoRep,
-		uint256 snapshotTotalPoolHeldAttoRep,
-		uint256 snapshotTotalRepBackingUnits,
-		uint256 minimumReceiverHealthFactorBps,
-		uint256 minLiquidationPriceDistanceBps
-	) external returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
+	function performLiquidation(uint256 operationId, address operator, address receiverVault, address targetVaultAddress, uint256 requestedDebtAttoEth, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, uint256 minimumReceiverHealthFactorBps, uint256 minLiquidationPriceDistanceBps) external returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amountAttoShares) external;
 
 	function escalationGame() external view returns (EscalationGame);
-	function initializeForkedEscalationGame(
-		uint256 startBondAttoRep,
-		uint256 nonDecisionThresholdAttoRep,
-		uint256 elapsedAtFork,
-		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
-	) external;
-	function initializeForkCarrySnapshotWithResolutionBalances(
-		address sourceGame,
-		bytes32 snapshotId,
-		bytes32[64][3] memory inheritedCarryPeaks,
-		uint256[3] memory inheritedCarryLeafCounts,
-		uint256[3] memory inheritedCarryTotals,
-		uint256[3] memory inheritedResolutionBalances,
-		bytes32[3] memory inheritedNullifierRoots
-	) external;
+	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external;
+	function initializeForkCarrySnapshotWithResolutionBalances(address sourceGame, bytes32 snapshotId, bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function configureVault(
-		address vault,
-		uint256 repBackingUnits,
-		uint256 capacityOwnershipAttoRep,
-		uint256 vaultFeeIndex,
-		uint256 targetHealthFactorBps,
-		uint256 newVaultBadDebtAttoEth,
-		uint256 newTotalBadDebtAttoEth
-	) external;
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function addFeeEligibleCapacityOwnershipAttoRep(address vault, uint256 amountAttoRep) external;
 	function setTotalRepBackingUnits(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function vaultBadDebtAttoEth(address vault) external view returns (uint256);
 	function totalBadDebtAttoEth() external view returns (uint256);
 	function setTotalSharesAttoShares(uint256 newTotalSharesAttoShares) external;
-	function setPoolFinancials(
-		uint256 newSettlementCollateralAttoEth,
-		uint256 newTotalCapacityOwnershipAttoRep,
-		uint256 newFeeEligibleCapacityOwnershipAttoRep,
-		uint256 newTotalBadDebtAttoEth
-	) external;
+	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalCapacityOwnershipAttoRep, uint256 newFeeEligibleCapacityOwnershipAttoRep, uint256 newTotalBadDebtAttoEth) external;
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
 	function transferEth(address payable receiver, uint256 amountAttoEth) external;
@@ -280,34 +199,13 @@ interface ISecurityPoolFactory {
 		uint256 settlementCollateralAttoEth;
 	}
 
-	function deployChildSecurityPool(
-		ISecurityPool parent,
-		IShareToken shareToken,
-		uint248 universeId,
-		uint256 questionId,
-		uint256 statoblastSecurityMultiplierBps,
-		uint256 currentRetentionRate,
-		uint256 settlementCollateralAttoEth
-	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
-	function deployOriginSecurityPool(
-		uint248 universeId,
-		uint256 questionId,
-		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialReportPriorityFeeAttoEthPerGas
-	) external returns (ISecurityPool securityPool);
-	function getOriginId(
-		uint248 originUniverseId,
-		uint256 questionId,
-		uint256 statoblastSecurityMultiplierBps,
-		uint256 initialReportPriorityFeeAttoEthPerGas
-	) external pure returns (bytes32 originId);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
+	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
+	function getOriginId(uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function getPoolId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool securityPool);
 	function getSecurityPoolOriginId(ISecurityPool securityPool) external view returns (bytes32 originId);
 	function getSecurityPoolHasInheritedForkOutcome(ISecurityPool securityPool) external view returns (bool);
 	function securityPoolDeploymentCount() external view returns (uint256);
-	function securityPoolDeploymentsRange(
-		uint256 startIndex,
-		uint256 count
-	) external view returns (SecurityPoolDeployment[] memory deployments);
+	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments);
 }

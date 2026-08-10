@@ -39,12 +39,8 @@ contract LiquidationApprovalRegistry {
 	using SignatureValidation for address;
 
 	address public coordinator;
-	bytes32 public constant LIQUIDATION_APPROVAL_TYPEHASH = keccak256(
-		'LiquidationApproval(address securityPool,address receiverVault,address operator,address targetVault,uint256 maxCumulativeDebtAttoEth,uint256 maxDebtPerLiquidationAttoEth,uint256 minPostLiquidationHealthFactorBps,uint256 validAfter,uint256 validUntil,uint256 nonce)'
-	);
-	bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
-		'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'
-	);
+	bytes32 public constant LIQUIDATION_APPROVAL_TYPEHASH = keccak256('LiquidationApproval(address securityPool,address receiverVault,address operator,address targetVault,uint256 maxCumulativeDebtAttoEth,uint256 maxDebtPerLiquidationAttoEth,uint256 minPostLiquidationHealthFactorBps,uint256 validAfter,uint256 validUntil,uint256 nonce)');
+	bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
 	bytes32 private constant EIP712_NAME_HASH = keccak256('Statoblast Liquidation Approvals');
 	bytes32 private constant EIP712_VERSION_HASH = keccak256('1');
 
@@ -53,50 +49,12 @@ contract LiquidationApprovalRegistry {
 	mapping(address => uint256) public minimumLiquidationApprovalNonce;
 	mapping(uint256 => LiquidationReservation) public liquidationReservations;
 
-	event LiquidationApprovalSet(
-		bytes32 indexed approvalId,
-		address indexed receiverVault,
-		address indexed operator,
-		address securityPool,
-		address targetVault,
-		uint256 maxCumulativeDebtAttoEth,
-		uint256 maxDebtPerLiquidationAttoEth,
-		uint256 minPostLiquidationHealthFactorBps,
-		uint256 validAfter,
-		uint256 validUntil,
-		uint256 nonce
-	);
-	event LiquidationApprovalRevoked(
-		bytes32 indexed approvalId,
-		address indexed receiverVault,
-		uint256 availableDebtAttoEth,
-		uint256 reservedDebtAttoEth,
-		uint256 consumedDebtAttoEth
-	);
+	event LiquidationApprovalSet(bytes32 indexed approvalId, address indexed receiverVault, address indexed operator, address securityPool, address targetVault, uint256 maxCumulativeDebtAttoEth, uint256 maxDebtPerLiquidationAttoEth, uint256 minPostLiquidationHealthFactorBps, uint256 validAfter, uint256 validUntil, uint256 nonce);
+	event LiquidationApprovalRevoked(bytes32 indexed approvalId, address indexed receiverVault, uint256 availableDebtAttoEth, uint256 reservedDebtAttoEth, uint256 consumedDebtAttoEth);
 	event LiquidationApprovalNonceInvalidated(address indexed receiverVault, uint256 previousNonce, uint256 newNonce);
-	event LiquidationApprovalReserved(
-		bytes32 indexed approvalId,
-		uint256 indexed operationId,
-		uint256 reservedDebtAttoEth,
-		uint256 resultingAvailableDebtAttoEth,
-		uint256 resultingReservedDebtAttoEth
-	);
-	event LiquidationApprovalReleased(
-		bytes32 indexed approvalId,
-		uint256 indexed operationId,
-		uint256 releasedDebtAttoEth,
-		uint256 resultingAvailableDebtAttoEth,
-		uint256 resultingReservedDebtAttoEth
-	);
-	event LiquidationApprovalConsumed(
-		bytes32 indexed approvalId,
-		uint256 indexed operationId,
-		uint256 consumedDebtAttoEth,
-		uint256 releasedDebtAttoEth,
-		uint256 resultingAvailableDebtAttoEth,
-		uint256 resultingReservedDebtAttoEth,
-		uint256 resultingConsumedDebtAttoEth
-	);
+	event LiquidationApprovalReserved(bytes32 indexed approvalId, uint256 indexed operationId, uint256 reservedDebtAttoEth, uint256 resultingAvailableDebtAttoEth, uint256 resultingReservedDebtAttoEth);
+	event LiquidationApprovalReleased(bytes32 indexed approvalId, uint256 indexed operationId, uint256 releasedDebtAttoEth, uint256 resultingAvailableDebtAttoEth, uint256 resultingReservedDebtAttoEth);
+	event LiquidationApprovalConsumed(bytes32 indexed approvalId, uint256 indexed operationId, uint256 consumedDebtAttoEth, uint256 releasedDebtAttoEth, uint256 resultingAvailableDebtAttoEth, uint256 resultingReservedDebtAttoEth, uint256 resultingConsumedDebtAttoEth);
 
 	modifier onlyCoordinator() {
 		require(msg.sender == coordinator, 'Only coordinator');
@@ -110,9 +68,7 @@ contract LiquidationApprovalRegistry {
 
 	function DOMAIN_SEPARATOR() public view returns (bytes32) {
 		return
-			keccak256(
-				abi.encode(EIP712_DOMAIN_TYPEHASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, block.chainid, address(this))
-			);
+			keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, block.chainid, address(this)));
 	}
 
 	function liquidationApprovalDigest(LiquidationApprovalParams calldata params) public view returns (bytes32) {
@@ -128,14 +84,8 @@ contract LiquidationApprovalRegistry {
 		return _install(params);
 	}
 
-	function permitLiquidationApproval(
-		LiquidationApprovalParams calldata params,
-		bytes calldata signature
-	) external returns (bytes32 approvalId) {
-		require(
-			params.receiverVault.isValidSignatureNow(liquidationApprovalDigest(params), signature),
-			'Invalid signature'
-		);
+	function permitLiquidationApproval(LiquidationApprovalParams calldata params, bytes calldata signature) external returns (bytes32 approvalId) {
+		require(params.receiverVault.isValidSignatureNow(liquidationApprovalDigest(params), signature), 'Invalid signature');
 		return _install(params);
 	}
 
@@ -144,13 +94,7 @@ contract LiquidationApprovalRegistry {
 		require(approval.params.receiverVault == msg.sender, 'Only receiver vault');
 		require(!approval.revoked, 'Approval revoked');
 		approval.revoked = true;
-		emit LiquidationApprovalRevoked(
-			approvalId,
-			msg.sender,
-			approval.availableDebtAttoEth,
-			approval.reservedDebtAttoEth,
-			approval.consumedDebtAttoEth
-		);
+		emit LiquidationApprovalRevoked(approvalId, msg.sender, approval.availableDebtAttoEth, approval.reservedDebtAttoEth, approval.consumedDebtAttoEth);
 	}
 
 	function invalidateLiquidationApprovalNonce(uint256 newNonce) external {
@@ -160,16 +104,7 @@ contract LiquidationApprovalRegistry {
 		emit LiquidationApprovalNonceInvalidated(msg.sender, previousNonce, newNonce);
 	}
 
-	function reserve(
-		uint256 operationId,
-		bytes32 approvalId,
-		address receiverVault,
-		address targetVault,
-		address operator,
-		uint256 requestedDebtAttoEth,
-		uint256 snapshotTargetDebtAttoEth,
-		uint256 latestExecutionTimestamp
-	) external onlyCoordinator returns (uint256 reservedDebtAttoEth) {
+	function reserve(uint256 operationId, bytes32 approvalId, address receiverVault, address targetVault, address operator, uint256 requestedDebtAttoEth, uint256 snapshotTargetDebtAttoEth, uint256 latestExecutionTimestamp) external onlyCoordinator returns (uint256 reservedDebtAttoEth) {
 		LiquidationApprovalState storage approval = liquidationApprovals[approvalId];
 		LiquidationApprovalParams storage params = approval.params;
 		require(params.receiverVault == receiverVault, 'Wrong receiver');
@@ -189,13 +124,7 @@ contract LiquidationApprovalRegistry {
 		approval.availableDebtAttoEth -= reservedDebtAttoEth;
 		approval.reservedDebtAttoEth += reservedDebtAttoEth;
 		liquidationReservations[operationId] = LiquidationReservation(approvalId, reservedDebtAttoEth, false);
-		emit LiquidationApprovalReserved(
-			approvalId,
-			operationId,
-			reservedDebtAttoEth,
-			approval.availableDebtAttoEth,
-			approval.reservedDebtAttoEth
-		);
+		emit LiquidationApprovalReserved(approvalId, operationId, reservedDebtAttoEth, approval.availableDebtAttoEth, approval.reservedDebtAttoEth);
 	}
 
 	function release(uint256 operationId) external onlyCoordinator {
@@ -205,13 +134,7 @@ contract LiquidationApprovalRegistry {
 		LiquidationApprovalState storage approval = liquidationApprovals[reservation.approvalId];
 		approval.reservedDebtAttoEth -= reservation.reservedDebtAttoEth;
 		approval.availableDebtAttoEth += reservation.reservedDebtAttoEth;
-		emit LiquidationApprovalReleased(
-			reservation.approvalId,
-			operationId,
-			reservation.reservedDebtAttoEth,
-			approval.availableDebtAttoEth,
-			approval.reservedDebtAttoEth
-		);
+		emit LiquidationApprovalReleased(reservation.approvalId, operationId, reservation.reservedDebtAttoEth, approval.availableDebtAttoEth, approval.reservedDebtAttoEth);
 	}
 
 	function consume(uint256 operationId, uint256 debtMovedAttoEth) external onlyCoordinator {
@@ -224,15 +147,7 @@ contract LiquidationApprovalRegistry {
 		approval.reservedDebtAttoEth -= reservation.reservedDebtAttoEth;
 		approval.consumedDebtAttoEth += debtMovedAttoEth;
 		approval.availableDebtAttoEth += releasedDebtAttoEth;
-		emit LiquidationApprovalConsumed(
-			reservation.approvalId,
-			operationId,
-			debtMovedAttoEth,
-			releasedDebtAttoEth,
-			approval.availableDebtAttoEth,
-			approval.reservedDebtAttoEth,
-			approval.consumedDebtAttoEth
-		);
+		emit LiquidationApprovalConsumed(reservation.approvalId, operationId, debtMovedAttoEth, releasedDebtAttoEth, approval.availableDebtAttoEth, approval.reservedDebtAttoEth, approval.consumedDebtAttoEth);
 	}
 
 	function minimumHealthFactorBps(uint256 operationId) external view returns (uint256) {
@@ -259,37 +174,11 @@ contract LiquidationApprovalRegistry {
 		LiquidationApprovalState storage approval = liquidationApprovals[approvalId];
 		approval.params = params;
 		approval.availableDebtAttoEth = params.maxCumulativeDebtAttoEth;
-		emit LiquidationApprovalSet(
-			approvalId,
-			params.receiverVault,
-			params.operator,
-			params.securityPool,
-			params.targetVault,
-			params.maxCumulativeDebtAttoEth,
-			params.maxDebtPerLiquidationAttoEth,
-			params.minPostLiquidationHealthFactorBps,
-			params.validAfter,
-			params.validUntil,
-			params.nonce
-		);
+		emit LiquidationApprovalSet(approvalId, params.receiverVault, params.operator, params.securityPool, params.targetVault, params.maxCumulativeDebtAttoEth, params.maxDebtPerLiquidationAttoEth, params.minPostLiquidationHealthFactorBps, params.validAfter, params.validUntil, params.nonce);
 	}
 
 	function _structHash(LiquidationApprovalParams calldata params) private pure returns (bytes32) {
 		return
-			keccak256(
-				abi.encode(
-					LIQUIDATION_APPROVAL_TYPEHASH,
-					params.securityPool,
-					params.receiverVault,
-					params.operator,
-					params.targetVault,
-					params.maxCumulativeDebtAttoEth,
-					params.maxDebtPerLiquidationAttoEth,
-					params.minPostLiquidationHealthFactorBps,
-					params.validAfter,
-					params.validUntil,
-					params.nonce
-				)
-			);
+			keccak256(abi.encode(LIQUIDATION_APPROVAL_TYPEHASH, params.securityPool, params.receiverVault, params.operator, params.targetVault, params.maxCumulativeDebtAttoEth, params.maxDebtPerLiquidationAttoEth, params.minPostLiquidationHealthFactorBps, params.validAfter, params.validUntil, params.nonce));
 	}
 }

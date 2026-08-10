@@ -22,33 +22,19 @@ contract ZoltarQuestionData {
 	mapping(uint256 => QuestionData) public questions;
 	uint256[] public questionIds;
 
-	event QuestionCreated(
-		uint256 indexed questionId,
-		uint256 createdTimestamp,
-		QuestionData questionData,
-		string[] outcomeOptions
-	);
+	event QuestionCreated(uint256 indexed questionId, uint256 createdTimestamp, QuestionData questionData, string[] outcomeOptions);
 
-	function getQuestionId(
-		QuestionData memory questionData,
-		string[] calldata outcomeOptions
-	) public pure returns (uint256) {
+	function getQuestionId(QuestionData memory questionData, string[] calldata outcomeOptions) public pure returns (uint256) {
 		return uint256(keccak256(abi.encode(questionData, outcomeOptions)));
 	}
 
-	function createQuestion(
-		QuestionData memory questionData,
-		string[] calldata outcomeOptions
-	) external returns (uint256) {
+	function createQuestion(QuestionData memory questionData, string[] calldata outcomeOptions) external returns (uint256) {
 		uint256 questionId = getQuestionId(questionData, outcomeOptions);
 		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists and cannot be created twice');
 		require(questionData.endTime >= questionData.startTime, 'Question end time must be on or after the start time');
 		if (outcomeOptions.length == 0) {
 			// scalar
-			require(
-				questionData.displayValueMax > questionData.displayValueMin,
-				'Scalar question display max must be greater than display min'
-			);
+			require(questionData.displayValueMax > questionData.displayValueMin, 'Scalar question display max must be greater than display min');
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
 			// Check that all strings are non-empty
@@ -73,10 +59,7 @@ contract ZoltarQuestionData {
 		return questionIds.length;
 	}
 
-	function getQuestions(
-		uint256 startIndex,
-		uint256 numberOfEntries
-	) external view returns (uint256[] memory returnQuestionIds) {
+	function getQuestions(uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory returnQuestionIds) {
 		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, questionIds.length);
 		if (iterateUntil <= startIndex) return new uint256[](0);
 		returnQuestionIds = new uint256[](iterateUntil - startIndex);
@@ -89,9 +72,7 @@ contract ZoltarQuestionData {
 		return questions[questionId].endTime;
 	}
 
-	function splitUint256IntoTwoWithInvalid(
-		uint256 value
-	) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
+	function splitUint256IntoTwoWithInvalid(uint256 value) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
 		// Highest bit (bit 255)
 		invalid = (value >> 255) == 0;
 		// Middle 120 bits
@@ -104,11 +85,7 @@ contract ZoltarQuestionData {
 		return answer & SCALAR_RESERVED_BITS_MASK != 0;
 	}
 
-	function getOutcomeLabels(
-		uint256 questionId,
-		uint256 startIndex,
-		uint256 numberOfEntries
-	) external view returns (string[] memory returnOutcomeLabels) {
+	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
 		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeLabels[questionId].length);
 		if (iterateUntil <= startIndex) return new string[](0);
 		returnOutcomeLabels = new string[](iterateUntil - startIndex);
@@ -157,13 +134,7 @@ contract ZoltarQuestionData {
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
 			if (sum == questions[questionId].numTicks) {
 				return
-					ScalarOutcomes.getScalarOutcomeName(
-						[firstPart, secondPart],
-						questions[questionId].answerUnit,
-						questions[questionId].numTicks,
-						questions[questionId].displayValueMin,
-						questions[questionId].displayValueMax
-					);
+					ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}
 		} else if (answer == 0) return 'Invalid';
 		else if (answer < outcomeLabels[questionId].length + 1) {

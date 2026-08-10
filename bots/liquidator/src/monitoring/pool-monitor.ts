@@ -247,6 +247,7 @@ async function loadPool(
 		price: candidateScreeningPrice(lastPrice, settings.strategy.fallbackRepPerEthPrice),
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		totalAttoRep,
+		totalCapacityOwnershipAttoRep,
 	}
 	const candidates = !isPoolExecutionEligible({ approvedUniverse, selected, systemState })
 		? []

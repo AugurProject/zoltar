@@ -32,6 +32,7 @@ export type PoolRiskContext = {
 	price: bigint
 	settlementCollateralAttoEth: bigint
 	totalAttoRep: bigint
+	totalCapacityOwnershipAttoRep: bigint
 }
 
 export type LiquidationCandidate = {
@@ -156,7 +157,7 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		snapshotTargetOpenInterestAttoEth: target.openInterestAttoEth,
 	})
 	const resultingCapacityOwnershipAttoRep = caller.capacityOwnershipAttoRep + transfer.capacityOwnershipToMoveAttoRep
-	const grossResultingOpenInterestAttoEth = resultingCapacityOwnershipAttoRep === 0n || pool.feeEligibleCapacityOwnershipAttoRep === 0n ? 0n : mulDivUp(pool.settlementCollateralAttoEth, resultingCapacityOwnershipAttoRep, pool.feeEligibleCapacityOwnershipAttoRep)
+	const grossResultingOpenInterestAttoEth = resultingCapacityOwnershipAttoRep === 0n || pool.totalCapacityOwnershipAttoRep === 0n ? 0n : mulDivUp(pool.settlementCollateralAttoEth, resultingCapacityOwnershipAttoRep, pool.totalCapacityOwnershipAttoRep)
 	const resultingOpenInterestAttoEth = grossResultingOpenInterestAttoEth > caller.badDebtAttoEth ? grossResultingOpenInterestAttoEth - caller.badDebtAttoEth : 0n
 	if (resultingOpenInterestAttoEth < caller.openInterestAttoEth) return undefined
 	const debtToMoveAttoEth = resultingOpenInterestAttoEth - caller.openInterestAttoEth

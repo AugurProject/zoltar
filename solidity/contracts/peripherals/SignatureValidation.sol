@@ -9,15 +9,9 @@ library SignatureValidation {
 	bytes4 internal constant ERC1271_MAGIC_VALUE = IERC1271.isValidSignature.selector;
 	uint256 private constant SECP256K1_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
-	function isValidSignatureNow(
-		address signer,
-		bytes32 digest,
-		bytes calldata signature
-	) internal view returns (bool) {
+	function isValidSignatureNow(address signer, bytes32 digest, bytes calldata signature) internal view returns (bool) {
 		if (signer.code.length != 0) {
-			(bool success, bytes memory result) = signer.staticcall(
-				abi.encodeCall(IERC1271.isValidSignature, (digest, signature))
-			);
+			(bool success, bytes memory result) = signer.staticcall(abi.encodeCall(IERC1271.isValidSignature, (digest, signature)));
 			return success && result.length >= 32 && bytes4(result) == ERC1271_MAGIC_VALUE;
 		}
 		if (signature.length != 65) return false;

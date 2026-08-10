@@ -18,27 +18,9 @@ contract LiquidationApprovalCoordinatorMock {
 		registry = approvalRegistry;
 	}
 
-	function reserve(
-		uint256 operationId,
-		bytes32 approvalId,
-		address receiverVault,
-		address targetVault,
-		address operator,
-		uint256 requestedDebtAttoEth,
-		uint256 snapshotTargetDebtAttoEth,
-		uint256 latestExecutionTimestamp
-	) external returns (uint256) {
+	function reserve(uint256 operationId, bytes32 approvalId, address receiverVault, address targetVault, address operator, uint256 requestedDebtAttoEth, uint256 snapshotTargetDebtAttoEth, uint256 latestExecutionTimestamp) external returns (uint256) {
 		return
-			registry.reserve(
-				operationId,
-				approvalId,
-				receiverVault,
-				targetVault,
-				operator,
-				requestedDebtAttoEth,
-				snapshotTargetDebtAttoEth,
-				latestExecutionTimestamp
-			);
+			registry.reserve(operationId, approvalId, receiverVault, targetVault, operator, requestedDebtAttoEth, snapshotTargetDebtAttoEth, latestExecutionTimestamp);
 	}
 
 	function release(uint256 operationId) external {
@@ -104,6 +86,18 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
 		securityVaults[receiverVault].repBackingUnits = 100;
 	}
 
+	function configureUnclaimedCapacity(address targetVault, address receiverVault) external {
+		settlementCollateralAttoEth = 8;
+		feeEligibleCapacityOwnershipAttoRep = 2;
+		totalCapacityOwnershipAttoRep = 4;
+		totalRepBackingUnits = 107;
+		statoblastSecurityMultiplierBps = 20_000;
+		securityVaults[targetVault].repBackingUnits = 7;
+		securityVaults[targetVault].capacityOwnershipAttoRep = 2;
+		securityVaults[receiverVault].repBackingUnits = 100;
+		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+	}
+
 	function setSettlementCollateralAttoEth(uint256 nextSettlementCollateralAttoEth) external {
 		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
 	}
@@ -117,20 +111,14 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256) {
-		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(
-			settlementCollateralAttoEth,
-			securityVaults[vault].capacityOwnershipAttoRep,
-			totalCapacityOwnershipAttoRep
-		);
+		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].capacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
 		return
 			grossOpenInterestAttoEth > vaultBadDebtAttoEth[vault]
 				? grossOpenInterestAttoEth - vaultBadDebtAttoEth[vault]
 				: 0;
 	}
 
-	function vaultState(
-		address vault
-	) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) {
+	function vaultState(address vault) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) {
 		return (
 			securityVaults[vault].repBackingUnits,
 			securityVaults[vault].capacityOwnershipAttoRep,

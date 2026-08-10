@@ -16,23 +16,12 @@ contract TruthAuctionAliasAttackFactoryMock {
 	ISecurityPool private childPool;
 	UniformPriceDualCapBatchAuction private childTruthAuction;
 
-	function configureChild(
-		ISecurityPool configuredChildPool,
-		UniformPriceDualCapBatchAuction configuredChildTruthAuction
-	) external {
+	function configureChild(ISecurityPool configuredChildPool, UniformPriceDualCapBatchAuction configuredChildTruthAuction) external {
 		childPool = configuredChildPool;
 		childTruthAuction = configuredChildTruthAuction;
 	}
 
-	function deployChildSecurityPool(
-		ISecurityPool,
-		IShareToken,
-		uint248,
-		uint256,
-		uint256,
-		uint256,
-		uint256
-	) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
+	function deployChildSecurityPool(ISecurityPool, IShareToken, uint248, uint256, uint256, uint256, uint256) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		return (childPool, childTruthAuction);
 	}
 }
@@ -47,15 +36,7 @@ contract TruthAuctionAliasAttackParentMock {
 	uint256 private immutable configuredMultiplier;
 	uint256 private immutable configuredCollateral;
 
-	constructor(
-		ReputationToken repTokenAddress,
-		ISecurityPoolFactory factory,
-		IShareToken shareTokenAddress,
-		uint248 universe,
-		uint256 question,
-		uint256 multiplier,
-		uint256 collateral
-	) {
+	constructor(ReputationToken repTokenAddress, ISecurityPoolFactory factory, IShareToken shareTokenAddress, uint248 universe, uint256 question, uint256 multiplier, uint256 collateral) {
 		configuredRepToken = repTokenAddress;
 		configuredFactory = factory;
 		configuredShareToken = shareTokenAddress;
@@ -141,15 +122,7 @@ contract TruthAuctionAliasAttackChildMock {
 
 	uint256 public stolenEth;
 
-	constructor(
-		ISecurityPool parentPool,
-		ISecurityPoolFactory factory,
-		ReputationToken repTokenAddress,
-		address forker,
-		address truthAuctionAddress,
-		address payable receiver,
-		uint248 universe
-	) {
+	constructor(ISecurityPool parentPool, ISecurityPoolFactory factory, ReputationToken repTokenAddress, address forker, address truthAuctionAddress, address payable receiver, uint248 universe) {
 		configuredParent = parentPool;
 		configuredFactory = factory;
 		configuredRepToken = repTokenAddress;
@@ -211,7 +184,7 @@ contract TruthAuctionAliasAttackChildMock {
 
 	receive() external payable {
 		stolenEth += msg.value;
-		(bool sent, ) = attackReceiver.call{ value: msg.value }('');
+		(bool sent, ) = attackReceiver.call{value: msg.value}('');
 		require(sent, 'Forward');
 	}
 }

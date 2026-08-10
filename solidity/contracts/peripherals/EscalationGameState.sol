@@ -27,64 +27,16 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event GameStarted(uint256 activationTime, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep);
 	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork);
 	event ForkContinuationResumed(uint256 resumedAt);
-	event ClaimDeposit(
-		address indexed depositor,
-		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 indexed parentDepositIndex,
-		uint256 originalDepositAmountAttoRep,
-		uint256 amountToWithdrawAttoRep,
-		uint256 burnAmountAttoRep,
-		bool transferredRep
-	);
-	event VaultUnresolvedTotalsExported(
-		address indexed vault,
-		address repReceiver,
-		uint256[3] principalByOutcomeAttoRep,
-		uint256 principalToTransferAttoRep,
-		bool transferredRep
-	);
-	event ForkedEscrowRecorded(
-		address indexed depositor,
-		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 sourcePrincipalTotalAttoRep,
-		uint256 childRepTotalAttoRep,
-		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedAttoRep,
-		uint256 outcomeBalanceAttoRep
-	);
-	event VaultEscrowUpdated(
-		address indexed vault,
-		uint256 disputeStakedRepByVaultAttoRep,
-		uint256 totalDisputeStakedAttoRep
-	);
-	event ForkedEscrowClaimed(
-		address indexed depositor,
-		BinaryOutcomes.BinaryOutcome indexed outcome,
-		uint256 sourcePrincipalClaimedAttoRep,
-		uint256 childRepClaimedAttoRep
-	);
-	event ForkedEscrowExported(
-		address indexed vault,
-		address repReceiver,
-		uint256[3] sourcePrincipalByOutcomeAttoRep,
-		uint256[3] childRepByOutcomeAttoRep,
-		uint256 totalChildRepToTransferAttoRep,
-		bool transferredRep
-	);
+	event ClaimDeposit(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep);
+	event VaultUnresolvedTotalsExported(address indexed vault, address repReceiver, uint256[3] principalByOutcomeAttoRep, uint256 principalToTransferAttoRep, bool transferredRep);
+	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
+	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
+	event ForkedEscrowClaimed(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalClaimedAttoRep, uint256 childRepClaimedAttoRep);
+	event ForkedEscrowExported(address indexed vault, address repReceiver, uint256[3] sourcePrincipalByOutcomeAttoRep, uint256[3] childRepByOutcomeAttoRep, uint256 totalChildRepToTransferAttoRep, bool transferredRep);
 	event ResidualRepSweptToSecurityPool(uint256 amountAttoRep);
-	event TruthAuctionHaircutApplied(
-		uint256 repBeforeAttoRep,
-		uint256 repRemovedAttoRep,
-		uint256 repRemainingAttoRep,
-		uint256 rebasedElapsed
-	);
+	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 
-	constructor(
-		ISecurityPool _securityPool,
-		ReputationToken _repToken,
-		EscalationGameProofVerifier _proofVerifier,
-		EscalationGameClaimDelegate _claimDelegate
-	) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) {
 		securityPool = _securityPool;
 		repToken = _repToken;
 		proofVerifier = _proofVerifier;
@@ -95,10 +47,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _readEmptyNullifierRoot(EscalationGameProofVerifier _proofVerifier) private view returns (bytes32) {
 		require(address(_proofVerifier).code.length != 0, 'Proof verifier has no code');
-		require(
-			address(_proofVerifier).codehash == keccak256(type(EscalationGameProofVerifier).runtimeCode),
-			'Proof verifier invalid'
-		);
+		require(address(_proofVerifier).codehash == keccak256(type(EscalationGameProofVerifier).runtimeCode), 'Proof verifier invalid');
 		return _proofVerifier.computeEmptyNullifierRoot();
 	}
 
@@ -133,15 +82,11 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function _consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) internal {
-		_delegateDepositCall(
-			abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amountAttoRep))
-		);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeEscrowedRepForOwner, (ownerAddress, amountAttoRep)));
 	}
 
 	function _creditClaimOwners(address bundleId, uint256 amountAttoRep) internal {
-		_delegateDepositCall(
-			abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amountAttoRep))
-		);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amountAttoRep)));
 	}
 
 	function _delegateDepositCall(bytes memory callData) internal returns (bytes memory returnData) {
@@ -177,12 +122,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) internal {
-		_delegateDepositCall(
-			abi.encodeCall(
-				EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners,
-				(bundleId, outcomeIndex, amountAttoRep)
-			)
-		);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep)));
 	}
 
 	function _safeTransferRep(address receiver, uint256 amountAttoRep) internal {

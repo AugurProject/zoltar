@@ -136,7 +136,7 @@ contract OpenOracleRejectingETHReceiver is IERC1155Receiver {
 	}
 
 	function execute(address target, bytes calldata data) external payable returns (bytes memory result) {
-		(bool success, bytes memory returnData) = target.call{ value: msg.value }(data);
+		(bool success, bytes memory returnData) = target.call{value: msg.value}(data);
 		if (!success) {
 			assembly {
 				revert(add(returnData, 32), mload(returnData))
@@ -157,13 +157,7 @@ contract OpenOracleRejectingETHReceiver is IERC1155Receiver {
 		return IERC1155Receiver.onERC1155Received.selector;
 	}
 
-	function onERC1155BatchReceived(
-		address,
-		address,
-		uint256[] calldata,
-		uint256[] calldata,
-		bytes calldata
-	) external pure returns (bytes4) {
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 
