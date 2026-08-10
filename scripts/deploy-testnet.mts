@@ -19,6 +19,7 @@ const CANCUN_CAPABILITY_PROBE = '0x6000600060005e600160005d60005c60005260206000f
 const CANCUN_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const MAX_SIGNABLE_TRANSACTION_GAS = 30_000_000n
 // These per-step ceilings are based on fresh Osaka Anvil deployments, increased
 // by roughly 50%, rounded upward, and capped only where the signer itself caps a
@@ -389,6 +390,11 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 		if (!hasCode(code)) throw new Error(`${step.label} deployment transaction ${transactionHash} succeeded without installing code at ${step.address}`)
 		await assertDeploymentPlanStepRuntimeCode(step, client, code)
 		completed.add(step.id)
+		if (transactionHash === ZERO_HASH) {
+			results.push({ address: step.address, id: step.id, label: step.label, status: 'skipped', transactionHash: undefined })
+			log(`skip ${step.id} ${step.address} installed without a submitted transaction`)
+			continue
+		}
 		results.push({ address: step.address, id: step.id, label: step.label, status: 'deployed', transactionHash })
 		log(`deployed ${step.id} ${transactionHash}`)
 	}
@@ -508,13 +514,11 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	return { account: client.account.address, proofVerifier: bootstrapDescendants.escalationGameProofVerifier, results }
 }
 
-function printHelp() {
-	console.log(`Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
+export function getDeploymentHelp() {
+	return `Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
 
-PRIVATE_KEY=0x... RPC_URL=https://... bun run deploy:testnet -- [options]
-
-PRIVATE_KEY must be set in the environment. RPC and cost limits can be passed as
-uppercase assignments after --, for example:
+Load PRIVATE_KEY into the environment from a secret manager or hidden prompt.
+Pass RPC and cost limits as uppercase assignments after --, for example:
   bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
 
   --rpc-url=https://...   Required unless RPC_URL is set
@@ -525,7 +529,11 @@ uppercase assignments after --, for example:
 Custom testnets receive the same deterministic WETH and genesis REP deployment
 used by Sepolia. The RPC must support Cancun, EIP-1559, and the canonical
 unprotected legacy deployer transactions. Ethereum mainnet chain ID 1 is
-intentionally rejected.`)
+intentionally rejected.`
+}
+
+function printHelp() {
+	console.log(getDeploymentHelp())
 }
 
 async function main() {

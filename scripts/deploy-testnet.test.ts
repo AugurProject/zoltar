@@ -13,6 +13,7 @@ import {
 	createCompleteDeploymentPlan,
 	createDeploymentBudget,
 	deployTestnet,
+	getDeploymentHelp,
 	parseDeploymentCommandLine,
 	parseChainId,
 	parseMaxFeePerGas,
@@ -28,6 +29,7 @@ const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 const FIRST_HASH: Hex = '0x0101010101010101010101010101010101010101010101010101010101010101'
 const SECOND_HASH: Hex = '0x0202020202020202020202020202020202020202020202020202020202020202'
+const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 describe('testnet deployment inputs', () => {
 	test('defaults the chain ID to Sepolia and requires an explicitly selected RPC', () => {
@@ -83,6 +85,10 @@ describe('testnet deployment inputs', () => {
 			privateKey,
 			rpcUrl: 'https://rpc.example.test/',
 		})
+	})
+
+	test('never suggests placing the private key in a shell command', () => {
+		expect(getDeploymentHelp()).not.toContain('PRIVATE_KEY=0x')
 	})
 
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
@@ -431,6 +437,32 @@ describe('testnet deployment plan', () => {
 			{ address: FIRST_ADDRESS, id: 'first', label: 'First', status: 'skipped', transactionHash: undefined },
 			{ address: SECOND_ADDRESS, id: 'second', label: 'Second', status: 'deployed', transactionHash: SECOND_HASH },
 		])
+	})
+
+	test('reports code installed without a submitted transaction as skipped', async () => {
+		let code: Hex | undefined
+		const logs: string[] = []
+		const results = await runDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => {
+						code = '0x01'
+						return ZERO_HASH
+					},
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'proxyDeployer',
+					label: 'Proxy Deployer',
+				},
+			],
+			{ getCode: async () => code },
+			message => logs.push(message),
+		)
+
+		expect(results).toEqual([{ address: FIRST_ADDRESS, id: 'proxyDeployer', label: 'Proxy Deployer', status: 'skipped', transactionHash: undefined }])
+		expect(logs).toEqual([`deploy proxyDeployer ${FIRST_ADDRESS}`, `skip proxyDeployer ${FIRST_ADDRESS} installed without a submitted transaction`])
+		expect(logs.join('\n')).not.toContain(ZERO_HASH)
 	})
 
 	test('fails when ordering omits a dependency or a successful transaction installs no code', async () => {
