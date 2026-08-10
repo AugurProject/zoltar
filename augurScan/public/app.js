@@ -820,7 +820,8 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			if (isSystem && previousSystemNetwork !== $('#system-network-filter').value) await loadSystemState()
 			if (isRichList && previousRichNetwork !== $('#rich-network-filter').value) await loadRichList()
 			return true
-		} catch {
+		} catch (error) {
+			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
 			lastNetworkRequestFailed = true
 			$('#last-updated').classList.add('error')
 			$('#last-updated').textContent = lastNetworkSuccessAt ? `Last checked ${time(lastNetworkSuccessAt)} UTC` : 'Status unavailable'
@@ -2100,7 +2101,8 @@ $('#copy-diagnostics').addEventListener('click', async (event) => {
 	try {
 		await navigator.clipboard.writeText($('#diagnostics-output').textContent)
 		button.textContent = 'Copied'
-	} catch {
+	} catch (error) {
+		console.error(`Clipboard write failed (${error instanceof Error ? error.name : typeof error})`)
 		button.textContent = 'Copy failed'
 	}
 	setTimeout(() => {
@@ -2241,7 +2243,8 @@ const connectStream = () => {
 		let depth = 'unknown'
 		try {
 			depth = JSON.parse(event.data).depth ?? depth
-		} catch {
+		} catch (error) {
+			console.error(`Reorganization notification could not be decoded (${error instanceof Error ? error.name : typeof error})`)
 			// A malformed notification still triggers a canonical refresh.
 		}
 		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; canonical views are refreshing.`)

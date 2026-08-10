@@ -308,7 +308,8 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				await seed(lease)
 				await runOwned(lease)
 			}
-		} catch {
+		} catch (error) {
+			console.error(`Indexer ownership operation failed (${error instanceof Error ? error.name : typeof error})`)
 			try {
 				await failure(databaseFailureMessage, lease)
 			} catch (error) {

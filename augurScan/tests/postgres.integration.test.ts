@@ -62,12 +62,12 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 		arguments: {
 			vault: address,
 			repBackingUnits: '120000000000000000000',
-			capacityOwnershipAttoRep: '85000000000000000000',
-			claimableFeesAttoEth: '30000000000000000',
+			capacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
+			claimableFeesAttoEth: (30_000_000_000_000_000n).toString(),
 			feeIndex: '1',
 			vaultFeeRemainder: '0',
 			resultingTotalRepBackingUnits: '120000000000000000000',
-			resultingFeeEligibleCapacityOwnershipAttoRep: '85000000000000000000',
+			resultingFeeEligibleCapacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
 		},
 	},
 })
@@ -469,8 +469,8 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			expect.objectContaining({
 				poolAddress: discoveredAddress.toLowerCase(),
 				repBackingUnits: '120000000000000000000',
-				capacityOwnershipAttoRep: '85000000000000000000',
-				claimableFeesAttoEth: '30000000000000000',
+				capacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
+				claimableFeesAttoEth: (30_000_000_000_000_000n).toString(),
 				blockNumber: '2',
 			}),
 		])
