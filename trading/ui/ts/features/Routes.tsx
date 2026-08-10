@@ -36,7 +36,6 @@ export function MarketList({ market }: { market: DemoMarket }) {
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Canonical SecurityPools</span>
 					<h1>Markets</h1>
 				</div>
 				<span class='muted'>Demo discovery snapshot</span>
@@ -159,7 +158,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Separate insurance accounting</span>
+					<span class='eyebrow'>Separate INVALID accounting</span>
 					<h1>Liquidity</h1>
 					<p>LP tokens represent only YES and NO reserves.</p>
 				</div>
@@ -229,7 +228,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 							</dl>
 						)}
 						<div class='warning'>
-							<strong>LP tokens do not carry insurance.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
+							<strong>LP tokens do not include wallet INVALID.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
 						</div>
 						<button class='primary-action' disabled>
 							Demo preview only · Create pair + initialize
@@ -414,7 +413,6 @@ export function Help() {
 				<div>
 					<span class='eyebrow'>Project guide</span>
 					<h1>How the two-way market works</h1>
-					<p>A compact guide to conditional pricing, insurance, and early exits.</p>
 				</div>
 			</header>
 			<section class='explanation-flow'>
@@ -430,8 +428,8 @@ export function Help() {
 				</article>
 				<article>
 					<span>03</span>
-					<h2>Keep INVALID</h2>
-					<p>Matching INVALID stays in your wallet as insurance. It is never deposited in the pair or represented by LP tokens.</p>
+					<h2>Retain INVALID</h2>
+					<p>Matching INVALID stays in your wallet and is required alongside YES and NO to redeem a complete set.</p>
 				</article>
 				<article>
 					<span>04</span>

@@ -19,7 +19,7 @@ export type DemoMarket = Readonly<{
 		questionOutcome: 'Unresolved' | 'INVALID' | 'YES' | 'NO'
 		awaitingForkContinuation: boolean
 		statoblastSecurityMultiplierBps: bigint
-		initialReportPriorityFeeGwei: bigint
+		initialReportPriorityFeeAttoEthPerGas: bigint
 		totalCapacityOwnershipAttoRep: bigint
 		feeEligibleCapacityOwnershipAttoRep: bigint
 		mintingCapacityCeilingAttoEth: bigint
@@ -94,7 +94,7 @@ export function demoMarket(scenario: string): DemoMarket {
 			questionOutcome: scenario === 'resolved-invalid' ? ('INVALID' as const) : ('Unresolved' as const),
 			awaitingForkContinuation: false,
 			statoblastSecurityMultiplierBps: 20_000n,
-			initialReportPriorityFeeGwei: 2n,
+			initialReportPriorityFeeAttoEthPerGas: 2n * 10n ** 9n,
 			totalCapacityOwnershipAttoRep: 10_000n * 10n ** 18n,
 			feeEligibleCapacityOwnershipAttoRep: 9_500n * 10n ** 18n,
 			mintingCapacityCeilingAttoEth: 10_000_000_000_000_000_000_000n,

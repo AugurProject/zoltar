@@ -21,11 +21,11 @@ function initialTransactionState(scenario: string): TransactionState {
 
 export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closedReason, inputValid, capacityAvailable }: { scenario: string; hasQuote: boolean; pairExists: boolean; closedReason: string | undefined; inputValid: boolean; capacityAvailable: boolean }): {
 	tone: 'good' | 'warn' | 'neutral'
-	label: string
+	label: string | undefined
 	message: string | undefined
 } {
 	if (scenario === 'stale') return { tone: 'warn', label: 'Demo preview stale', message: 'Refresh the preview before relying on the displayed values.' }
-	if (hasQuote) return { tone: 'good', label: 'Illustrative demo math', message: undefined }
+	if (hasQuote) return { tone: 'neutral', label: undefined, message: undefined }
 	if (closedReason !== undefined)
 		return pairExists ? { tone: 'warn', label: 'Trading closed', message: `Trading and added liquidity are unavailable: ${closedReason}. Raw LP removal remains available.` } : { tone: 'warn', label: 'Trading closed', message: `Trading and pair initialization are unavailable: ${closedReason}.` }
 	if (!pairExists) return { tone: 'warn', label: 'Pair initialization required', message: 'Create and initialize the pair before previewing a trade.' }
@@ -72,7 +72,7 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 					<dd>{formatShareAmount(quote.totalLongShares)}</dd>
 				</div>
 				<div>
-					<dt>INVALID insurance</dt>
+					<dt>INVALID received</dt>
 					<dd>{formatShareAmount(quote.invalidInsurance)}</dd>
 				</div>
 				<div>
@@ -196,7 +196,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						← Markets
 					</a>
 					<h1>{market.question}</h1>
-					<p>Binary shares for one exact SecurityPool and universe branch.</p>
 				</div>
 				<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>
 			</header>
@@ -256,11 +255,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								</button>
 							</div>
 						</div>
-						{mode === 'enter' ? (
-							<p class='pool-mint-note'>
-								In a live transaction, submitted ETH would go to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. This demo applies that pool’s illustrative collateral rate locally.
-							</p>
-						) : null}
 						<div class='side-picker' aria-label='Outcome'>
 							<button
 								type='button'
@@ -296,7 +290,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 									value={amount}
 									inputMode='decimal'
 									disabled={closedReason !== undefined || workflowLocked}
-									aria-describedby={parsed.error === undefined ? 'amount-help' : 'amount-error'}
+									aria-describedby={parsed.error === undefined ? undefined : 'amount-error'}
 									aria-invalid={parsed.error !== undefined}
 									onInput={event => {
 										if (workflow.isActive()) return
@@ -306,9 +300,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								/>
 								<span>{mode === 'enter' ? 'ETH' : 'shares'}</span>
 							</div>
-							{parsed.error === undefined ? (
-								<small id='amount-help'>Values below are illustrative local math, not a router simulation.</small>
-							) : (
+							{parsed.error === undefined ? null : (
 								<small id='amount-error' class='error'>
 									{parsed.error}
 								</small>
@@ -333,7 +325,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						<div class='quote' aria-live='polite'>
 							<div class='quote__title'>
 								<span>{quote === undefined ? 'Preview unavailable' : 'Trade breakdown'}</span>
-								<Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>
+								{displayedQuoteStatus.label === undefined ? null : <Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>}
 							</div>
 							{quoteContent}
 						</div>
@@ -343,7 +335,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						</div>
 						<details>
 							<summary>Advanced · Raw share swap</summary>
-							<p>An uninsured share swap does not create new INVALID insurance. Use only when you intend to manage raw YES and NO balances.</p>
+							<p>An uninsured share swap does not create matching INVALID shares. Use only when you intend to manage raw YES and NO balances.</p>
 						</details>
 					</section>
 				)}
@@ -352,7 +344,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 					<section class='section'>
 						<div class='section-heading'>
 							<div>
-								<span class='section-kicker'>Market signal</span>
 								<h2>Conditional YES price</h2>
 							</div>
 						</div>
@@ -379,7 +370,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 					<section class='section'>
 						<div class='section-heading'>
 							<div>
-								<span class='section-kicker'>Exact identity</span>
 								<h2>Protocol references</h2>
 							</div>
 						</div>
@@ -412,7 +402,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 							</div>
 							<div>
 								<dt>Initial report priority fee</dt>
-								<dd>{market.securityPool.initialReportPriorityFeeGwei.toString()} gwei</dd>
+								<dd>{formatUnits(market.securityPool.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
 							</div>
 							<div>
 								<dt>Active vaults</dt>

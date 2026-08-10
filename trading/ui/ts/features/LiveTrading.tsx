@@ -843,7 +843,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							Refresh
 						</button>
 					</div>
-					{discoveryState === 'loading' && markets.length === 0 ? <p role='status'>Discovering every canonical SecurityPool…</p> : null}
+					{discoveryState === 'loading' && markets.length === 0 ? <p role='status'>Discovering SecurityPools…</p> : null}
 					{discoveryState === 'error' ? (
 						<p class='error' role='alert'>
 							SecurityPool discovery failed: {discoveryError}
@@ -858,7 +858,6 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Canonical SecurityPools · live RPC</span>
 					<h1>Two-way markets</h1>
 					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
@@ -976,7 +975,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								</div>
 								<div>
 									<dt>Initial report priority fee</dt>
-									<dd>{formatUnits(selected.initialReportPriorityFeeAttoEthPerGas, 9)} gwei / gas</dd>
+									<dd>{formatUnits(selected.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
 								</div>
 								<div>
 									<dt>Active vaults</dt>
@@ -1410,7 +1409,7 @@ function LiveLiquidityControls({
 					Enter a Conditional YES price above 0% and below 100%, with at most two decimal places.
 				</p>
 			) : null}
-			{operation === 'remove' ? <p>Removal returns raw YES and NO. It never consumes wallet INVALID.</p> : <p>All INVALID and unused directional shares return to the wallet; LP tokens do not carry insurance.</p>}
+			{operation === 'remove' ? <p>Removal returns raw YES and NO. It never consumes wallet INVALID.</p> : <p>All INVALID and unused directional shares return to the wallet; LP tokens do not include wallet INVALID.</p>}
 			{quote === undefined ? null : (
 				<>
 					<p class='quote'>Authoritative router simulation at block {quote.blockNumber.toString()}.</p>
@@ -2127,7 +2126,7 @@ function LivePositionControls({
 						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance)}</dd>
 					</div>
 					<div>
-						<dt>{quote.kind === 'entry' ? 'INVALID insurance' : 'Estimated ETH out'}</dt>
+						<dt>{quote.kind === 'entry' ? 'INVALID received' : 'Estimated ETH out'}</dt>
 						<dd>{quote.kind === 'entry' ? formatShareAmount(quote.value.result.invalidInsurance) : `${formatUnits(quote.value.result.ethOut)} ETH`}</dd>
 					</div>
 					<div>

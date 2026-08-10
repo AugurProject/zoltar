@@ -127,7 +127,6 @@ export function App() {
 			<main class='route' id='main-content'>
 				<header class='route-header'>
 					<div>
-						<span class='eyebrow'>Canonical SecurityPools</span>
 						<h1>Loading markets</h1>
 						<p>Reading the current factory index, lifecycle state, and pair reserves…</p>
 					</div>

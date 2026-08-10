@@ -73,6 +73,7 @@ await command('Page.enable')
 await command('Runtime.enable')
 await command('Log.enable')
 const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity ceiling') === true && document.body.textContent?.includes('Available minting capacity') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); return !['binary shares for', 'invalid is insurance', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei'].some(phrase => text.includes(phrase)); })()`
 const scenarios = [
 	{
 		name: 'disconnected-market-list',
@@ -83,7 +84,7 @@ const scenarios = [
 	},
 	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },
-	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: capacityFactsAssertion },
+	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion})` },
 	{
 		name: 'market-list-mobile',
 		width: 390,
@@ -93,8 +94,8 @@ const scenarios = [
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
-	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets' },
-	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: capacityFactsAssertion },
+	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets', assertExpression: removedCopyAssertion },
+	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion})` },
 	{
 		name: 'market-mobile',
 		width: 390,
@@ -102,7 +103,7 @@ const scenarios = [
 		path: '/?demo=1&scenario=baseline#/market',
 		assertExpression: `(${capacityFactsAssertion}) && [...document.querySelectorAll('.segmented button, .brand, .eyebrow[href], details summary')].every(control => control.getBoundingClientRect().height >= 44)`,
 	},
-	{ name: 'help-mobile', width: 390, height: 844, path: '/#/help' },
+	{ name: 'help-mobile', width: 390, height: 844, path: '/#/help', assertExpression: removedCopyAssertion },
 	{ name: 'developer-live', width: 1440, height: 900, path: '/#/developer' },
 	{ name: 'no-entry', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&side=no#/market' },
 	{ name: 'insured-exit', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&mode=exit#/market' },

@@ -17,6 +17,7 @@ const factory = `0x${'55'.repeat(20)}` as Address
 const router = `0x${'66'.repeat(20)}` as Address
 const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
+const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready', 'Gwei']
 
 function deferred<T>() {
 	let resolvePromise: (value: T) => void = () => undefined
@@ -90,7 +91,7 @@ describe('live workflow safety boundary', () => {
 			description: 'Receipt uncertainty fixture',
 			endTime: discoveredEndTime,
 			statoblastSecurityMultiplierBps: 20_000n,
-			initialReportPriorityFeeAttoEthPerGas: 1n,
+			initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n,
 			systemState: 0,
 			awaitingForkContinuation: false,
 			universeForkTime: 0n,
@@ -171,6 +172,8 @@ describe('live workflow safety boundary', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
+		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
+		expect(document.body.textContent).toContain('2 nETH / gas')
 		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
 		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
 		discoveredLoadError = 'market RPC unavailable'
