@@ -561,7 +561,7 @@ function formatMetric(value: CoverageMetric) {
 	return `${value.percentage.toFixed(2)}% (${value.covered}/${value.total})`
 }
 
-function renderMarkdown(report: CompleteCoverage, testFileCount: number, policyResult: ReturnType<typeof evaluateCoveragePolicy>) {
+export function renderMarkdown(report: CompleteCoverage, testFileCount: number, policyResult: ReturnType<typeof evaluateCoveragePolicy>) {
 	const lines = ['# Coverage summary', '', `Canonical test files: ${testFileCount}`, '', '| TypeScript surface | Lines | Functions | Branches | Loaded source | Unloaded executable source |', '| --- | ---: | ---: | ---: | ---: | ---: |']
 	for (const surfaceName of ['ui', 'shared', 'tooling'] as const) {
 		const surface = report.typescript.surfaces[surfaceName]
@@ -581,6 +581,9 @@ function renderMarkdown(report: CompleteCoverage, testFileCount: number, policyR
 	}
 	if (report.solidity !== undefined && report.solidity.uncoveredFirstPartyLines.length > 0) {
 		lines.push('', '## Uncovered first-party Solidity lines', '', ...report.solidity.uncoveredFirstPartyLines.map(line => `- \`${line}\``))
+	}
+	if (report.solidity !== undefined && report.solidity.uncoveredImportedLines.length > 0) {
+		lines.push('', '## Uncovered imported Solidity lines', '', ...report.solidity.uncoveredImportedLines.map(line => `- \`${line}\``))
 	}
 	lines.push('', `Policy: ${policyResult.passed ? 'passed' : 'failed'}`)
 	if (!policyResult.passed) lines.push('', ...policyResult.failures.map(failure => `- ${failure}`))
