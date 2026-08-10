@@ -5,7 +5,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
-import { getChromiumPath } from './chromiumPath.js'
+import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
@@ -533,7 +533,7 @@ type ProductionBrowserDriver = {
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
-async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-production-browser-'))
 	const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stderr: 'pipe', stdout: 'ignore' })
@@ -666,6 +666,10 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 		await browserStderr
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
+}
+
+async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact))
 }
 
 const productionBrowserScenarios = [

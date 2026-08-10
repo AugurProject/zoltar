@@ -3,11 +3,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '../../testUtils/queries'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
-import { getChromiumPath } from '../../../../build/chromiumPath.js'
+import { getChromiumPath, withChromiumTestLock } from '../../../../build/chromiumPath.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
@@ -112,16 +112,19 @@ describe('CollateralizationCircle', () => {
 		expect(gaugeValue.parentElement?.className).toContain('collateralization-gauge')
 	})
 
-	browserFitTest('renders the largest displayed collateralization label without clipping in the smallest ring', () => {
-		if (chromiumPath === undefined) throw new Error('Chromium is required for the browser fit test')
-		const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar-collateralization-circle-'))
-		try {
-			const tokensSource = readFileSync('ui/css/tokens.css', 'utf8')
-			const cssSource = readFileSync('ui/css/index.css', 'utf8')
-			const htmlPath = join(temporaryDirectory, 'gauge-fit.html')
-			writeFileSync(
-				htmlPath,
-				`<!doctype html>
+	browserFitTest(
+		'renders the largest displayed collateralization label without clipping in the smallest ring',
+		async () =>
+			await withChromiumTestLock(async () => {
+				if (chromiumPath === undefined) throw new Error('Chromium is required for the browser fit test')
+				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar-collateralization-circle-'))
+				try {
+					const tokensSource = readFileSync('ui/css/tokens.css', 'utf8')
+					const cssSource = readFileSync('ui/css/index.css', 'utf8')
+					const htmlPath = join(temporaryDirectory, 'gauge-fit.html')
+					writeFileSync(
+						htmlPath,
+						`<!doctype html>
 <html>
 <head>
 	<meta charset='utf-8'>
@@ -156,25 +159,27 @@ describe('CollateralizationCircle', () => {
 	</script>
 </body>
 </html>`,
-			)
+					)
 
-			const browserResult = spawnSync(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--dump-dom', `file://${htmlPath}`], { encoding: 'utf8' })
-			expect(browserResult.status).toBe(0)
-			const resultMatch = browserResult.stdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
-			expect(resultMatch).not.toBeNull()
-			const resultText = resultMatch?.[1]
-			if (resultText === undefined) throw new Error('Chromium did not return gauge fit measurements')
-			const parsedResult: unknown = JSON.parse(resultText)
-			if (!isGaugeFitResult(parsedResult)) throw new Error(`Unexpected gauge fit result: ${resultText}`)
+					const browserResult = spawnSync(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', `file://${htmlPath}`], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
+					if (browserResult.error !== undefined) throw browserResult.error
+					if (browserResult.status !== 0) throw new Error(`Chromium gauge fit process exited with status ${browserResult.status?.toString() ?? 'unknown'}: ${browserResult.stderr}`)
+					const resultMatch = browserResult.stdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
+					expect(resultMatch).not.toBeNull()
+					const resultText = resultMatch?.[1]
+					if (resultText === undefined) throw new Error('Chromium did not return gauge fit measurements')
+					const parsedResult: unknown = JSON.parse(resultText)
+					if (!isGaugeFitResult(parsedResult)) throw new Error(`Unexpected gauge fit result: ${resultText}`)
 
-			expect(parsedResult.text).toBe('&gt;999%')
-			expect(parsedResult.scrollWidth).toBeLessThanOrEqual(parsedResult.clientWidth)
-			expect(parsedResult.valueLeft).toBeGreaterThanOrEqual(parsedResult.ringLeft)
-			expect(parsedResult.valueRight).toBeLessThanOrEqual(parsedResult.ringRight)
-		} finally {
-			rmSync(temporaryDirectory, { recursive: true, force: true })
-		}
-	})
+					expect(parsedResult.text).toBe('&gt;999%')
+					expect(parsedResult.scrollWidth).toBeLessThanOrEqual(parsedResult.clientWidth)
+					expect(parsedResult.valueLeft).toBeGreaterThanOrEqual(parsedResult.ringLeft)
+					expect(parsedResult.valueRight).toBeLessThanOrEqual(parsedResult.ringRight)
+				} finally {
+					rmSync(temporaryDirectory, { recursive: true, force: true })
+				}
+			}),
+	)
 
 	test('applies tone-derived success coloring classes', async () => {
 		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={150n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
