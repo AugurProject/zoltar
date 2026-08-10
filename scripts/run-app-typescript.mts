@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
 const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url))
-const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size(?:=([0-9]+))?$/
+const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
 
 type NodeOptionToken = {
 	readonly isValid: boolean
@@ -58,12 +58,8 @@ const getExplicitHeapLimitMb = (nodeOptions: string | undefined): string | undef
 		if (token === undefined || !token.isValid) continue
 		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) continue
-		const inlineValue = match[1]
-		if (inlineValue !== undefined) explicitHeapLimitMb = inlineValue
-		else if (tokens[index + 1]?.isValid === true && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
-			explicitHeapLimitMb = tokens[index + 1]?.value
-			index += 1
-		}
+		const explicitValue = match[1]
+		if (explicitValue !== undefined) explicitHeapLimitMb = explicitValue
 	}
 	return explicitHeapLimitMb
 }
@@ -84,12 +80,6 @@ export const getApplicationTypeScriptNodeOptions = (existingNodeOptions: string 
 			retainedTokens.push(token.raw)
 			continue
 		}
-		if (match[1] !== undefined) continue
-		if (tokens[index + 1]?.isValid === true && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
-			index += 1
-			continue
-		}
-		retainedTokens.push(token.raw)
 	}
 	if (retainedTokens.length === 0) return undefined
 	return retainedTokens.join(' ')

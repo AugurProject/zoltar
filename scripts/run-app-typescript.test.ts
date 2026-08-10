@@ -9,7 +9,8 @@ describe('application TypeScript process arguments', () => {
 
 	test('passes an explicit V8 heap limit directly to Node', () => {
 		expect(getApplicationTypeScriptHeapOption('--max-old-space-size=8192')).toBe('--max-old-space-size=8192')
-		expect(getApplicationTypeScriptHeapOption('--trace-warnings --max_old_space_size 7168')).toBe('--max-old-space-size=7168')
+		expect(getApplicationTypeScriptHeapOption('--trace-warnings --max_old_space_size 7168')).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
+		expect(getApplicationTypeScriptHeapOption('--max_old_space_size=+7168')).toBe('--max-old-space-size=+7168')
 		expect(getApplicationTypeScriptHeapOption('--max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--max-old-space-size=8192')
 		expect(getApplicationTypeScriptCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--trace-warnings')).toEqual(['C:\\Program Files\\nodejs\\node.exe', '--max-old-space-size=6144', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--noEmit'])
 	})
@@ -31,7 +32,7 @@ describe('application TypeScript process arguments', () => {
 
 	test('removes heap flags from inherited NODE_OPTIONS while preserving other options', () => {
 		expect(getApplicationTypeScriptNodeOptions('--trace-warnings --max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--trace-warnings')
-		expect(getApplicationTypeScriptNodeOptions('--max-old-space-size 7168')).toBeUndefined()
+		expect(getApplicationTypeScriptNodeOptions('--max-old-space-size 7168')).toBe('--max-old-space-size 7168')
 	})
 
 	test('preserves escaped quotes in non-heap NODE_OPTIONS', () => {
@@ -107,7 +108,7 @@ describe('application TypeScript process arguments', () => {
 	test('preserves malformed heap options so Node reports them', () => {
 		const nodeExecutablePath = Bun.which('node')
 		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript malformed-option regression test')
-		for (const nodeOptions of ['--max-old-space-size="7168', '--max-old-space-size']) {
+		for (const nodeOptions of ['--max-old-space-size="7168', '--max-old-space-size', '--max-old-space-size 7168']) {
 			const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 			expect(childNodeOptions).toBe(nodeOptions)
 			expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
@@ -118,5 +119,21 @@ describe('application TypeScript process arguments', () => {
 			})
 			expect(result.exitCode).not.toBe(0)
 		}
+	})
+
+	test('honors a leading plus in an inline heap value', () => {
+		const nodeExecutablePath = Bun.which('node')
+		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript signed-value regression test')
+		const nodeOptions = '--max-old-space-size=+7168'
+		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
+		expect(childNodeOptions).toBeUndefined()
+		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(getHeapStatistics().heap_size_limit)"], {
+			env: { ...process.env },
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+		const heapLimitBytes = Number(new TextDecoder().decode(result.stdout).trim())
+		expect(heapLimitBytes).toBeGreaterThanOrEqual(7168 * 1024 * 1024)
 	})
 })
