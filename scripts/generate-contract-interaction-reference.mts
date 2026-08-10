@@ -525,7 +525,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
 		readAbiFingerprint: '5359875c236b41ea3d1b7af175b02ce8c7f00b5d5bf655869b7103ce363168df',
 		readSurface:
-			'Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers.',
+			'Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
 		readDeclarations: [
 			{ name: 'getQuestionId' },
 			{ name: 'getQuestionCount' },
@@ -967,7 +967,7 @@ const contractReferences: ContractReference[] = [
 				call: '`configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureVault' }],
-				effect: 'Tracks the vault, replaces its REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.',
+				effect: 'Replaces the vault REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.',
 				preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},

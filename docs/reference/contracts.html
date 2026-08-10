@@ -33,7 +33,7 @@
 				</header>
 				<h2 id="zoltarquestiondata">ZoltarQuestionData</h2>
 				<p>Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata. <a href="../../solidity/contracts/ZoltarQuestionData.sol">Source</a></p>
-				<p>Read surface: Use <code>getQuestionId</code> before submission; <code>questionCreatedTimestamp</code>, <code>questions</code>, and <code>outcomeLabels</code> for direct lookup; <code>questionIds</code>, <code>getQuestionCount</code>, and <code>getQuestions</code> for indexed or paged discovery; and <code>getQuestionEndDate</code>, <code>getOutcomeLabels</code>, <code>splitUint256IntoTwoWithInvalid</code>, <code>hasNonZeroScalarReservedBits</code>, <code>isMalformedAnswerOption</code>, and <code>getAnswerOptionName</code> when validating or displaying answers.</p>
+				<p>Read surface: Use <code>getQuestionId</code> before submission; <code>questionCreatedTimestamp</code>, <code>questions</code>, and <code>outcomeLabels</code> for direct lookup; <code>questionIds</code>, <code>getQuestionCount</code>, and <code>getQuestions</code> for indexed or paged discovery; and <code>getQuestionEndDate</code>, <code>getOutcomeLabels</code>, <code>splitUint256IntoTwoWithInvalid</code>, <code>hasNonZeroScalarReservedBits</code>, <code>isMalformedAnswerOption</code>, and <code>getAnswerOptionName</code> when validating or displaying answers. In the <code>QuestionData</code> tuple, <code>startTime</code> and <code>endTime</code> are <code>uint48</code>, while <code>numTicks</code> is <code>uint120</code>; clients must use these exact widths because they determine the <code>getQuestionId</code> and <code>createQuestion</code> selectors.</p>
 
 				<!-- Validated read ABI fingerprint: 5359875c236b41ea3d1b7af175b02ce8c7f00b5d5bf655869b7103ce363168df -->
 				<!-- Validated complete compiled ABI fingerprint: 454ba49fe7c031af00f7eeebd910a19ab2b968a6457cfb90bdda82ef7b63ba7f -->
@@ -382,7 +382,7 @@
 							<td><code>configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)</code></td>
 							<td><code>SecurityPoolForker</code> only</td>
 							<td><code>vault</code> is nonzero; no lifecycle or value-change guard.</td>
-							<td>Tracks the vault, replaces its REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.</td>
+							<td>Replaces the vault REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.</td>
 							<td>Always <code>VaultAccountingCheckpoint</code> and <code>PoolAccountingCheckpoint</code>, including when all supplied values repeat current state</td>
 						</tr>
 						<tr>

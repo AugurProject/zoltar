@@ -1085,8 +1085,8 @@
 						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The historical vault registry is append-only and unique. Its active index is a unique subset of that history. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, capacity ownership, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
-							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in both active and historical pagination until optional vault cleanup synchronizes and prunes it.</p>
+							<div class="invariant-property">The active vault list is unique and newest-first. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, capacity ownership, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
+							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in active pagination until optional vault cleanup synchronizes and prunes it.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1099,9 +1099,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_trackVault</code> and <code>_syncActiveVault</code></a
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_syncActiveVault</code></a
 										>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">active/history and direct-claim boundary tests</a>
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">active-list and direct-claim boundary tests</a>
 									</dd>
 								</div>
 							</dl>
