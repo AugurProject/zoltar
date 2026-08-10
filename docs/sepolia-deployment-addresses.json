@@ -2,7 +2,7 @@
 	"network": {
 		"chainId": 11155111,
 		"chainIdHex": "0xaa36a7",
-		"genesisRepTokenAddress": "0x754bc4Ca2539560f1B48a9c3D2DEF5b9718F2C82",
+		"genesisRepTokenAddress": "0xDAbF9B101c76489d3CE3D5fDB8361f426eD1Db68",
 		"id": "sepolia",
 		"name": "Sepolia",
 		"wethAddress": "0x65156FD21726b8efcB627fa38c506E3f3542F601"
@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xa1b8d4652a20bCD7E65bb98da08CF6DA43c43603"
+			"address": "0x508248aaE01D24B35E0001a09a417Bad6F47b096"
 		},
 		{
 			"id": "weth",
@@ -33,7 +33,7 @@
 		{
 			"id": "reputationToken",
 			"label": "Genesis Reputation Token",
-			"address": "0x754bc4Ca2539560f1B48a9c3D2DEF5b9718F2C82"
+			"address": "0xDAbF9B101c76489d3CE3D5fDB8361f426eD1Db68"
 		},
 		{
 			"id": "multicall3",
@@ -68,12 +68,12 @@
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x9886E8E6465622510933b5A7ABad8f2997624cfa"
+			"address": "0xEA791fB533a03e2Fe371A139a9e15fc512987Cd1"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x7dfE91f113610e47F8c0f77802ddeAC2CCA473B5"
+			"address": "0x3F4b11281AF3757aF33773144E3aB2c13e0E5c17"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
@@ -83,7 +83,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x5eaadC0C3847eEdb193601dc37280dE14146e33b"
+			"address": "0x8Aa45F0D0a93b82e1fC9AcE032aFc3DF5Af025e5"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x783000515b2cE8A1a685d22Fc34D18f84df6C18C"
+			"address": "0x233D8Bf48280490Ee8d0960B81D9a79E2F893949"
 		}
 	],
 	"derivedContracts": [
