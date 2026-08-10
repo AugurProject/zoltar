@@ -19,18 +19,22 @@ const CANCUN_CAPABILITY_PROBE = '0x6000600060005e600160005d60005c60005260206000f
 const CANCUN_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
+const MAX_SIGNABLE_TRANSACTION_GAS = 30_000_000n
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
 	escalationGameCreationCodePartOne: '0xbe6a6916d55eeba0175b3a5fde1eb80459724eba114bde0cf7cab81718f3b62f',
 	escalationGameCreationCodePartTwo: '0x54a83092515c9171019202e4c5033f73aa6ae6e8ca653ccee918445339ce64dd',
 	escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-	securityPoolDeployer: '0x8aaa25b23a58d17bfc66cd4aa0e2481e11da3cd8f6cb998ef770e693d50c971d',
-	securityPoolDeploymentWorker: '0x479cb8ee68610b3a30e5c2b4da3c8a59ee396ca0bc9e64e9d00b1a5dff0b51dd',
+	liquidationApprovalRegistryDeployer: '0xa8f7b2738683cd84126b088d894cefec66fdcc5db345220bcc89255e1f2b6641',
+	liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+	priceCoordinatorDeploymentWorker: '0x80ec360d09188ba1bd2ef3fa1f0589d93b53e4fe472ff942276b8c5dc866fd1a',
+	securityPoolDeployer: '0xdb562c6d23a333297cd8cd25d078f393198dad9ce415948f04d1cbaea0f3d176',
+	securityPoolDeploymentWorker: '0xe73f537f25efc59fe9a2a1ef42d777cb0a6bfcdf5908c38ce8ded42fd3a5e083',
 	securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-	securityPoolForkerEscalationGameForkerDelegate: '0x73011b8340064a7c9d7a2eb27160bf31c1cecbf0ca443a0891db13d7ed7547ea',
+	securityPoolForkerEscalationGameForkerDelegate: '0x1b4de4c4da4bd73a4543af9b1a12f39040149f46cc20ce69fae2f56c927b32f1',
 	securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-	securityPoolForkerVaultMigrationDelegate: '0x6f64c4c55806ef325a4274d1abefc42ae08ac6f909545c28e2233c2df1631ca8',
+	securityPoolForkerVaultMigrationDelegate: '0x878d3600da6521e7fa9cb4c20b8e4d90c25c721bccaa9b5521847c26493bbf46',
 	uniswapV3Factory: '0x6377aa1b105d3ee2a54d73d3652812d6209ca56871954f61ad6e87d9c184fa5e',
 	uniswapV3Quoter: '0x8410f80f6ddf60c46fe39dc3394f3b245c16d62d1c401f4ebc2d030afbb1a264',
 	uniswapV3SwapRouter: '0xf552d94a11865ed5100a536873ca827262cd361e489af067f4759a899833b5f5',
@@ -145,7 +149,9 @@ function createDeploymentProfile(chainId: number, rpcUrl: string, uniswapAddress
 }
 
 function paddedGas(gasEstimate: bigint) {
-	return gasEstimate + gasEstimate / 5n + 10_000n
+	if (gasEstimate > MAX_SIGNABLE_TRANSACTION_GAS) throw new Error(`Estimated deployment gas ${gasEstimate.toString()} exceeds the transaction signer limit ${MAX_SIGNABLE_TRANSACTION_GAS.toString()}`)
+	const padded = gasEstimate + gasEstimate / 5n + 10_000n
+	return padded > MAX_SIGNABLE_TRANSACTION_GAS ? MAX_SIGNABLE_TRANSACTION_GAS : padded
 }
 
 type BudgetedWallet = Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>

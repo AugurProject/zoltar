@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
@@ -164,6 +164,24 @@ describe('testnet deployment transaction authorization', () => {
 		expect(submitted).toMatchObject({ gas: 130_000n, gasPrice: undefined, maxFeePerGas: 30n, maxPriorityFeePerGas: 10n, nonce: 7n, to: FIRST_ADDRESS, value: 1n })
 	})
 
+	test('caps padding at the transaction signer gas limit', async () => {
+		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
+		const send = createBudgetedTransactionSender(
+			wallet({
+				estimateGas: async () => 26_800_000n,
+				sendTransaction: async request => {
+					submitted = request
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
+		)
+
+		expect(await send({ to: FIRST_ADDRESS })).toBe(FIRST_HASH)
+		expect(submitted?.gas).toBe(30_000_000n)
+	})
+
 	test('rejects an RPC gas-price suggestion above the authorized maximum before signing', async () => {
 		let estimateCalled = false
 		let sendCalled = false
@@ -256,10 +274,13 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(9)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(9)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(12)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(12)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
+		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n }))
+		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
+		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
 		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
@@ -368,6 +389,7 @@ describe('testnet deployment plan', () => {
 			),
 		).rejects.toThrow('Unexpected runtime code for first')
 
-		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for escalationGameCreationCodePartOne')
+		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
+		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')
 	})
 })

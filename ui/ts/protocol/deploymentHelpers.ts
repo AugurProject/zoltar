@@ -220,12 +220,19 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 type BootstrapDescendantAddresses = {
 	[id: string]: Address
 	escalationGameProofVerifier: Address
+	liquidationApprovalRegistryDeployer: Address
+	liquidationApprovalRegistryImplementation: Address
+	priceCoordinatorDeploymentWorker: Address
 }
 
 export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
 	const infrastructure = getInfraContractAddresses(profile)
+	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
 	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
 	return {
+		liquidationApprovalRegistryDeployer,
+		liquidationApprovalRegistryImplementation: getCreateAddress({ from: liquidationApprovalRegistryDeployer, nonce: 1n }),
+		priceCoordinatorDeploymentWorker: getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }),
 		escalationGameCreationCodePartOne: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 2n }),
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,

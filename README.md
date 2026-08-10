@@ -124,7 +124,7 @@ Uniswap V4 PoolManager and Quoter. It does not create pools or add liquidity. Th
 protocol factories create per-market security pools, share tokens, oracle
 coordinators, auctions, escalation games, delegates, and child-universe
 contracts when those features are used. Constructor-created support contracts
-are not separate bootstrap steps; the command verifies all nine bootstrap
+are not separate bootstrap steps; the command verifies all twelve bootstrap
 descendants after their parent factories are deployed.
 
 The ready-to-install GitHub Actions template is
