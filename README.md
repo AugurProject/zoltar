@@ -106,6 +106,8 @@ testnet that supports the protocol's required Cancun opcodes and Osaka `CLZ`
 opcode; chain ID `1` is intentionally rejected. Older pre-Cancun or pre-Osaka
 chains cannot execute the pinned protocol and Uniswap V4 bytecode. The fee ceiling
 defaults to 100 gwei and the total-cost authorization defaults to 20 testnet ETH.
+That default leaves headroom above the current conservative full-plan bound at
+100 gwei; it is an authorization cap, not a spend forecast or required balance.
 `RPC_URL`, `MAX_FEE_PER_GAS_GWEI`, and `MAX_TOTAL_COST_ETH` can be passed as the
 uppercase command arguments shown above, as lowercase `--rpc-url=...` style
 options, or as environment variables. `PRIVATE_KEY` remains environment-only so
