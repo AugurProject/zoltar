@@ -139,11 +139,9 @@ contracts when those features are used. Constructor-created support contracts
 are not separate bootstrap steps; the command verifies all twelve bootstrap
 descendants after their parent factories are deployed.
 
-The ready-to-install GitHub Actions template is
-[`scripts/github-actions/deploy-testnet.yml`](./scripts/github-actions/deploy-testnet.yml).
-GitHub only discovers workflows under `.github/workflows`, so copy the template
-there on a trusted branch when using a credential authorized to manage Actions.
-Then create and protect the `testnet-deployment` environment, add its
+The deployment workflow is
+[`deploy-testnet.yml`](./.github/workflows/deploy-testnet.yml). Create and protect
+the `testnet-deployment` environment, add its
 `TESTNET_DEPLOYER_PRIVATE_KEY` secret, and dispatch **Deploy Testnet Contracts**
 from `main`. Supply the public HTTPS RPC URL, chain ID, fee ceiling, and total
 budget, then enter `DEPLOY` in the confirmation input. Workflow inputs are

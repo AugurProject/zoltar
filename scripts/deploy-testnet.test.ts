@@ -92,7 +92,7 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
-		const workflow = await Bun.file(new URL('./github-actions/deploy-testnet.yml', import.meta.url)).text()
+		const workflow = await Bun.file(new URL('../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).toContain('group: testnet-contract-deployment-${{ inputs.chain_id }}')
 		expect(workflow).toContain('CHAIN_ID: ${{ inputs.chain_id }}')
 		expect(workflow).toContain('MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}')
