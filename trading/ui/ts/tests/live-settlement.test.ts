@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, decodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { tradingContracts } from '../generated/contractArtifact.ts'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../features/LiveTrading.tsx'
 import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../protocol/live.ts'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -10,6 +11,7 @@ const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
+const routerAbi = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
 const migrateAbi = [
 	{
 		type: 'function',
@@ -62,6 +64,13 @@ function requireTransactionData(params: unknown) {
 	return data
 }
 
+function requireTransactionTarget(params: unknown) {
+	if (!Array.isArray(params)) throw new Error('RPC parameters must be an array')
+	const transaction: unknown = params[0]
+	if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || typeof transaction.to !== 'string') throw new Error('RPC transaction must contain a target')
+	return transaction.to.toLowerCase()
+}
+
 function isHexValue(value: unknown): value is Hex {
 	return typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value)
 }
@@ -103,5 +112,73 @@ describe('live settlement contract encoding', () => {
 		for (const data of transactionData) {
 			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n]] })
 		}
+	})
+
+	test('pins bounded complete-set redemption to the router and preserves the approved minimum', async () => {
+		const transactionData: Hex[] = []
+		const transactionTargets: string[] = []
+		const simulatedOutputs = [1_000n, 1_000n]
+		const client = createWalletClient({
+			account,
+			transport: custom({
+				async request({ method, params }) {
+					if (method === 'eth_blockNumber') return '0x2'
+					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+					if (method === 'eth_call') {
+						transactionData.push(requireTransactionData(params))
+						transactionTargets.push(requireTransactionTarget(params))
+						const output = simulatedOutputs.shift()
+						if (output === undefined) throw new Error('Unexpected redemption simulation')
+						return encodeAbiParameters([{ type: 'uint256' }], [output])
+					}
+					if (method === 'eth_sendTransaction') {
+						transactionData.push(requireTransactionData(params))
+						transactionTargets.push(requireTransactionTarget(params))
+						return transactionHash
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const amount = 5n * 10n ** 18n
+		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		expect(quote.expectedAttoEth).toBe(1_000n)
+		expect(quote.minimumAttoEth).toBe(995n)
+		expect(await submitFreshSettlement(client, configuration, account, quote)).toBe(transactionHash)
+		expect(transactionTargets).toEqual([configuration.router, configuration.router, configuration.router])
+		expect(transactionData).toHaveLength(3)
+		const calls = transactionData.map(data => decodeFunctionData({ abi: routerAbi, data }))
+		expect(calls[0]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
+		expect(calls[1]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
+		expect(calls[2]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, quote.minimumAttoEth, account, quote.deadline] })
+	})
+
+	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
+		const simulatedOutputs = [1_000n, 994n]
+		let sends = 0
+		const client = createWalletClient({
+			account,
+			transport: custom({
+				async request({ method }) {
+					if (method === 'eth_blockNumber') return '0x2'
+					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+					if (method === 'eth_call') {
+						const output = simulatedOutputs.shift()
+						if (output === undefined) throw new Error('Unexpected redemption simulation')
+						return encodeAbiParameters([{ type: 'uint256' }], [output])
+					}
+					if (method === 'eth_sendTransaction') {
+						sends++
+						return transactionHash
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount: 10n ** 18n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		await expect(submitFreshSettlement(client, configuration, account, quote)).rejects.toThrow('approved minimum ETH output')
+		expect(sends).toBe(0)
 	})
 })

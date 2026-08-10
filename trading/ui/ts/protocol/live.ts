@@ -601,11 +601,11 @@ export async function approveLpRouter(client: WalletClient, configuration: Deplo
 	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
 }
 
-export async function simulateSettlement(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: SettlementOperation, parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}) {
+export async function simulateSettlement(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: SettlementOperation, parameters: Readonly<{ amount?: bigint; deadline?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}) {
 	if (operation === 'redeem-complete-set') {
 		const amount = parameters.amount
 		if (amount === undefined || amount <= 0n) throw new Error('Enter a positive complete-set share amount')
-		const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+		const deadline = parameters.deadline ?? BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 		const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash }))
 		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
 		return { blockNumber, blockHash, operation, market, amount, deadline, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result) }
@@ -624,8 +624,8 @@ export async function simulateSettlement(client: WalletClient, configuration: De
 
 export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
-	let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
-	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount }
+	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
+	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline }
 	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndex: quote.targetOutcomeIndex }
 	const refreshed = await simulateSettlement(client, configuration, quote.market, account, quote.operation, parameters)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
