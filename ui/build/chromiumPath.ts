@@ -1,15 +1,14 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { createConnection, createServer, type Server } from 'node:net'
+import { win32 } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const CHROMIUM_COMMAND_NAMES = ['chromium', 'chromium-browser', 'google-chrome', 'chrome', 'msedge'] as const
-const CHROMIUM_TEST_LOCK_DIRECTORY = join(tmpdir(), 'zoltar-chromium-test.lock')
-const CHROMIUM_TEST_LOCK_OWNER_PATH = join(CHROMIUM_TEST_LOCK_DIRECTORY, 'owner-pid')
+const CHROMIUM_TEST_LOCK_HOST = '127.0.0.1'
+const CHROMIUM_TEST_LOCK_PORT = 43871
+const CHROMIUM_TEST_LOCK_SIGNATURE = 'zoltar-chromium-test-lock-v1'
 const CHROMIUM_TEST_LOCK_TIMEOUT_MS = 10 * 60 * 1000
-const CHROMIUM_TEST_LOCK_STALE_MS = 15 * 60 * 1000
-const CHROMIUM_TEST_LOCK_INITIALIZATION_GRACE_MS = 5_000
+const CHROMIUM_TEST_LOCK_PROBE_TIMEOUT_MS = 2_000
 
 const getWindowsChromiumPaths = (environment: Readonly<Record<string, string | undefined>>): string[] => {
 	const localAppData = environment['LOCALAPPDATA']
@@ -48,67 +47,58 @@ export const getChromiumPath = ({
 
 const hasErrorCode = (error: unknown, code: string): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === code
 
-const isProcessRunning = (pid: number): boolean => {
-	try {
-		process.kill(pid, 0)
-		return true
-	} catch (error) {
-		return !hasErrorCode(error, 'ESRCH')
-	}
+const listenForChromiumTestLock = async (port: number): Promise<Server | undefined> => {
+	const server = createServer(socket => socket.end(CHROMIUM_TEST_LOCK_SIGNATURE))
+	const outcome = await new Promise<'listening' | 'occupied'>((resolve, reject) => {
+		server.once('error', error => {
+			if (hasErrorCode(error, 'EADDRINUSE')) resolve('occupied')
+			else reject(error)
+		})
+		server.listen(port, CHROMIUM_TEST_LOCK_HOST, () => resolve('listening'))
+	})
+	if (outcome === 'listening') return server
+	return undefined
 }
 
-const removeAbandonedChromiumTestLock = async (): Promise<boolean> => {
-	try {
-		const ownerText = await readFile(CHROMIUM_TEST_LOCK_OWNER_PATH, 'utf8')
-		const ownerPid = Number(ownerText)
-		if (Number.isSafeInteger(ownerPid) && ownerPid > 0 && isProcessRunning(ownerPid)) return false
-		await rm(CHROMIUM_TEST_LOCK_DIRECTORY, { force: true, recursive: true })
-		return true
-	} catch (error) {
-		if (!hasErrorCode(error, 'ENOENT')) throw error
-		try {
-			const lockStats = await stat(CHROMIUM_TEST_LOCK_DIRECTORY)
-			if (Date.now() - lockStats.mtimeMs < CHROMIUM_TEST_LOCK_INITIALIZATION_GRACE_MS) return false
-			await rm(CHROMIUM_TEST_LOCK_DIRECTORY, { force: true, recursive: true })
-			return true
-		} catch (statError) {
-			if (hasErrorCode(statError, 'ENOENT')) return true
-			throw statError
-		}
-	}
-}
+const probeChromiumTestLock = async (port: number): Promise<'released' | 'zoltar-lock'> =>
+	await new Promise((resolve, reject) => {
+		const socket = createConnection({ host: CHROMIUM_TEST_LOCK_HOST, port })
+		let response = ''
+		const timeoutId = setTimeout(() => socket.destroy(new Error(`Timed out probing port ${port.toString()} for the Chromium test lock.`)), CHROMIUM_TEST_LOCK_PROBE_TIMEOUT_MS)
+		socket.setEncoding('utf8')
+		socket.on('data', chunk => {
+			response += chunk
+		})
+		socket.once('end', () => {
+			clearTimeout(timeoutId)
+			if (response === CHROMIUM_TEST_LOCK_SIGNATURE) resolve('zoltar-lock')
+			else reject(new Error(`Port ${port.toString()} is occupied by a process other than the Zoltar Chromium test lock.`))
+		})
+		socket.once('error', error => {
+			clearTimeout(timeoutId)
+			if (hasErrorCode(error, 'ECONNREFUSED') || hasErrorCode(error, 'ECONNRESET')) resolve('released')
+			else reject(error)
+		})
+	})
 
-const acquireChromiumTestLock = async (): Promise<void> => {
+const acquireChromiumTestLock = async (port: number): Promise<Server> => {
 	const deadline = Date.now() + CHROMIUM_TEST_LOCK_TIMEOUT_MS
 	while (Date.now() < deadline) {
-		try {
-			await mkdir(CHROMIUM_TEST_LOCK_DIRECTORY)
-			try {
-				await writeFile(CHROMIUM_TEST_LOCK_OWNER_PATH, process.pid.toString())
-				return
-			} catch (error) {
-				await rm(CHROMIUM_TEST_LOCK_DIRECTORY, { force: true, recursive: true })
-				throw error
-			}
-		} catch (error) {
-			if (!hasErrorCode(error, 'EEXIST')) throw error
-			if (await removeAbandonedChromiumTestLock()) continue
-			const lockStats = await stat(CHROMIUM_TEST_LOCK_DIRECTORY)
-			if (Date.now() - lockStats.mtimeMs >= CHROMIUM_TEST_LOCK_STALE_MS) {
-				await rm(CHROMIUM_TEST_LOCK_DIRECTORY, { force: true, recursive: true })
-				continue
-			}
-			await sleep(100)
-		}
+		const server = await listenForChromiumTestLock(port)
+		if (server !== undefined) return server
+		if ((await probeChromiumTestLock(port)) === 'released') continue
+		await sleep(100)
 	}
 	throw new Error(`Timed out waiting ${CHROMIUM_TEST_LOCK_TIMEOUT_MS.toString()}ms for the shared Chromium test lock.`)
 }
 
-export const withChromiumTestLock = async <TValue>(run: () => Promise<TValue>): Promise<TValue> => {
-	await acquireChromiumTestLock()
+const closeServer = async (server: Server): Promise<void> => await new Promise((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
+
+export const withChromiumTestLock = async <TValue>(run: () => Promise<TValue>, { port = CHROMIUM_TEST_LOCK_PORT }: { readonly port?: number } = {}): Promise<TValue> => {
+	const server = await acquireChromiumTestLock(port)
 	try {
 		return await run()
 	} finally {
-		await rm(CHROMIUM_TEST_LOCK_DIRECTORY, { force: true, recursive: true })
+		await closeServer(server)
 	}
 }
