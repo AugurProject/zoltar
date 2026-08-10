@@ -210,16 +210,26 @@ function runPrettier(filePaths: string[]): void {
 	})
 }
 
-async function checkFiles(files: string[]): Promise<string[]> {
+function canonicalFileSource(filePath: string, source: string): string {
+	const prettierSource = execFileSync('bunx', ['prettier', '--config', path.join(projectRoot, '.prettierrc.json'), '--stdin-filepath', filePath], {
+		cwd: projectRoot,
+		encoding: 'utf8',
+		input: source,
+		stdio: ['pipe', 'pipe', 'pipe'],
+	})
+	return canonicalSoliditySource(prettierSource)
+}
+
+export async function checkSolidityFiles(files: string[]): Promise<string[]> {
 	const changedFiles: string[] = []
 	for (const filePath of files) {
 		const source = await fs.readFile(filePath, 'utf8')
-		if (source !== canonicalSoliditySource(source)) changedFiles.push(projectPath(filePath))
+		if (source !== canonicalFileSource(filePath, source)) changedFiles.push(projectPath(filePath))
 	}
-	return changedFiles
+	return changedFiles.toSorted()
 }
 
-async function writeFiles(files: string[]): Promise<string[]> {
+export async function writeSolidityFiles(files: string[]): Promise<string[]> {
 	const originalSources = new Map<string, string>()
 	for (const filePath of files) originalSources.set(filePath, await fs.readFile(filePath, 'utf8'))
 	runPrettier(files)
@@ -237,13 +247,13 @@ async function main(): Promise<void> {
 	const mode = process.argv[2]
 	if (mode !== '--check' && mode !== '--write') throw new Error('Usage: bun scripts/format-solidity-one-line.mts --check|--write')
 	const files = await collectSolidityFiles(contractsRoot)
-	const changedFiles = mode === '--write' ? await writeFiles(files) : await checkFiles(files)
+	const changedFiles = mode === '--write' ? await writeSolidityFiles(files) : await checkSolidityFiles(files)
 	if (mode === '--write') {
 		console.log(`Formatted ${changedFiles.length.toString()} Solidity file(s) with one-line declarations and calls.`)
 		return
 	}
 	if (changedFiles.length === 0) {
-		console.log(`Checked ${files.length.toString()} Solidity file(s); all declarations and calls are canonical.`)
+		console.log(`Checked ${files.length.toString()} Solidity file(s); all Prettier formatting, declarations, and calls are canonical.`)
 		return
 	}
 	console.error('Solidity formatting differs in:')
