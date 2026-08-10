@@ -1129,13 +1129,10 @@ describe('shared ethereum compatibility layer', () => {
 			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
 			expect(getArrayEntry(params, 1, 'simulate block tag')).toBe('0x2a')
 			const transaction = getArrayEntry(params, 0, 'simulate params')
-			const blockSelector = getArrayEntry(params, 1, 'simulate params')
 			expect(getObjectEntry(transaction, 'from', 'simulate transaction')).toBe(getAddress(OWNER_ADDRESS))
 			expect(getObjectEntry(transaction, 'data', 'simulate transaction')).toBe(expectedData)
 			expect(getObjectEntry(transaction, 'gas', 'simulate transaction')).toBe('0x5208')
 			expect(getObjectEntry(transaction, 'value', 'simulate transaction')).toBe('0x7')
-			expect(getObjectEntry(blockSelector, 'blockHash', 'simulate block selector')).toBe(BLOCK_HASH)
-			expect(getObjectEntry(blockSelector, 'requireCanonical', 'simulate block selector')).toBe(true)
 			return encodeAbiParameters([{ type: 'uint256' }], [1n])
 		}, calls)
 		const client = createPublicClient({
@@ -1154,10 +1151,26 @@ describe('shared ethereum compatibility layer', () => {
 					functionName: 'ownerCheck',
 					gas: 21_000n,
 					value: 7n,
-					blockHash: BLOCK_HASH,
 				})
 			).result,
 		).toBe(1n)
+		expect(calls).toHaveLength(1)
+	})
+
+	test('simulateContract supports canonical block-hash selectors', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			const blockSelector = getArrayEntry(params, 1, 'simulate params')
+			expect(getObjectEntry(blockSelector, 'blockHash', 'simulate block selector')).toBe(BLOCK_HASH)
+			expect(getObjectEntry(blockSelector, 'requireCanonical', 'simulate block selector')).toBe(true)
+			return encodeAbiParameters([{ type: 'uint256' }], [1n])
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const simulation = await client.simulateContract({ abi: OWNER_CHECK_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'ownerCheck', blockHash: BLOCK_HASH })
+
+		expect(simulation.result).toBe(1n)
 		expect(calls).toHaveLength(1)
 	})
 

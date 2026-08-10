@@ -26,7 +26,7 @@ const market: LiveMarket = {
 	systemState: 0,
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
-	activeVaultCount: 1n,
+	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 0n,
 	settlementCollateralAttoEth: 0n,
 	currentRetentionRate: 10n ** 18n,

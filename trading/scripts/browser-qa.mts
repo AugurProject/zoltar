@@ -72,7 +72,7 @@ function command(method: string, params: Record<string, unknown> = {}) {
 await command('Page.enable')
 await command('Runtime.enable')
 await command('Log.enable')
-const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity ceiling') === true && document.body.textContent?.includes('Available minting capacity') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity') === true && document.body.textContent?.includes('2,468.5 / 10,000 ETH') === true && document.body.textContent?.includes('Available minting capacity') === false && document.body.textContent?.includes('Fork continuation') === false && document.body.textContent?.includes('Demo discovery snapshot') === false && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); return !['binary shares for', 'invalid is insurance', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei'].some(phrase => text.includes(phrase)); })()`
 const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Universe'`
 const scenarios = [
@@ -225,7 +225,7 @@ const scenarios = [
 		path: '/?demo=1&scenario=baseline&mode=exit#/market',
 		clickSelector: '.primary-action',
 		clickWaitMs: 150,
-		assertExpression: `document.querySelector('.transaction-message')?.textContent?.includes('share approval is pending') === true && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled)`,
+		assertExpression: `document.querySelector('.transaction-message')?.textContent?.toLowerCase().includes('share approval is pending') === true && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled)`,
 		scrollY: 900,
 	},
 	{ name: 'clicked-confirmed', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 1_500, scrollY: 900 },

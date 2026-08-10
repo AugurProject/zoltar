@@ -220,7 +220,6 @@ export function App() {
 						<span class='brand__mark'>Z</span>
 						<span>
 							<strong>Zoltar</strong>
-							<small>Two-way trading</small>
 						</span>
 					</a>
 					<nav aria-label='Primary'>

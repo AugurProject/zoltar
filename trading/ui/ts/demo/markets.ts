@@ -26,7 +26,7 @@ export type DemoMarket = Readonly<{
 		availableMintingCapacityAttoEth: bigint
 		settlementCollateralAttoEth: bigint
 		shareTokenSupplyAttoShares: bigint
-		activeVaultCount: bigint
+		vaultCount: bigint
 	}>
 }>
 
@@ -102,7 +102,7 @@ export function demoMarket(scenario: string): DemoMarket {
 			availableMintingCapacityAttoEth: 7_531_500_000_000_000_000_000n,
 			settlementCollateralAttoEth: 2_468_500_000_000_000_000_000n,
 			shareTokenSupplyAttoShares: 2_500_000_000_000_000_000_000n,
-			activeVaultCount: 3n,
+			vaultCount: 3n,
 		},
 	}
 	if (scenario === 'missing-pair' || scenario === 'ended-missing-pair') return { ...common, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }

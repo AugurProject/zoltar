@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
@@ -988,10 +988,6 @@ export function LiveTrading({
 									<dd>{systemStateLabel(selected.systemState)}</dd>
 								</div>
 								<div>
-									<dt>Fork continuation</dt>
-									<dd>{selected.awaitingForkContinuation ? 'Awaiting' : 'Not awaiting'}</dd>
-								</div>
-								<div>
 									<dt>Universe fork</dt>
 									<dd>{selected.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(selected.universeForkTime)}`}</dd>
 								</div>
@@ -1008,8 +1004,8 @@ export function LiveTrading({
 									<dd>{formatUnits(selected.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
 								</div>
 								<div>
-									<dt>Active vaults</dt>
-									<dd>{selected.activeVaultCount.toString()}</dd>
+									<dt>Registered vaults</dt>
+									<dd>{selected.vaultCount.toString()}</dd>
 								</div>
 								<div>
 									<dt>Per-second retention multiplier</dt>
@@ -1020,12 +1016,8 @@ export function LiveTrading({
 									<dd>{formatCapacityOwnership(selected.totalCapacityOwnershipAttoRep, selected.feeEligibleCapacityOwnershipAttoRep)}</dd>
 								</div>
 								<div>
-									<dt>Complete-set minting capacity ceiling</dt>
-									<dd>{formatUnits(selected.mintingCapacityCeilingAttoEth)} ETH</dd>
-								</div>
-								<div>
-									<dt>Available complete-set minting capacity</dt>
-									<dd>{formatUnits(selected.availableMintingCapacityAttoEth)} ETH</dd>
+									<dt>Minting capacity</dt>
+									<dd>{formatMintingCapacity(selected.settlementCollateralAttoEth, selected.mintingCapacityCeilingAttoEth)}</dd>
 								</div>
 								<div>
 									<dt>Checkpointed collateral / share ratio</dt>

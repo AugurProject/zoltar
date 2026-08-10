@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { loadAllSecurityPools, loadSecurityPoolMintCapacity, loadSecurityPoolPage } from '../../protocol/index.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from './testSupport.js'
 
@@ -474,7 +474,7 @@ describe('securityPools protocol client', () => {
 					const [startIndex, count] = request.args ?? []
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
 					getVaultsCalls.push([startIndex, count])
-					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+					return knownVaultAddresses.slice(bigintToSafeNumber(startIndex, 'Vault start index'), bigintToSafeNumber(startIndex + count, 'Vault end index'))
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
@@ -540,7 +540,7 @@ describe('securityPools protocol client', () => {
 					const [startIndex, count] = request.args ?? []
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
 					getVaultsCalls.push([startIndex, count])
-					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+					return knownVaultAddresses.slice(bigintToSafeNumber(startIndex, 'Vault start index'), bigintToSafeNumber(startIndex + count, 'Vault end index'))
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
@@ -621,7 +621,7 @@ describe('securityPools protocol client', () => {
 					const [startIndex, count] = request.args ?? []
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
 					getVaultsCalls.push([startIndex, count])
-					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+					return knownVaultAddresses.slice(bigintToSafeNumber(startIndex, 'Vault start index'), bigintToSafeNumber(startIndex + count, 'Vault end index'))
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress

@@ -34,6 +34,10 @@ export function formatCapacityOwnership(totalAttoRep: bigint, feeEligibleAttoRep
 	return `${formatUnits(totalAttoRep)} / ${formatUnits(feeEligibleAttoRep)} REP`
 }
 
+export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: bigint) {
+	return `${formatUnits(mintedAttoEth)} / ${formatUnits(maximumAttoEth)} ETH`
+}
+
 export function bigintToSafeNumber(value: bigint, label = 'Value') {
 	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
 	return Number.parseInt(value.toString(), 10)

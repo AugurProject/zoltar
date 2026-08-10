@@ -3,7 +3,7 @@ import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPo
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { insuredExitLimitMessage } from './LiveTrading.tsx'
@@ -24,7 +24,7 @@ export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closed
 	label: string | undefined
 	message: string | undefined
 } {
-	if (scenario === 'stale') return { tone: 'warn', label: 'Demo preview stale', message: 'Refresh the preview before relying on the displayed values.' }
+	if (scenario === 'stale') return { tone: 'warn', label: 'Preview stale', message: 'Refresh the preview before relying on the displayed values.' }
 	if (hasQuote) return { tone: 'neutral', label: undefined, message: undefined }
 	if (closedReason !== undefined)
 		return pairExists ? { tone: 'warn', label: 'Trading closed', message: `Trading and added liquidity are unavailable: ${closedReason}. Raw LP removal remains available.` } : { tone: 'warn', label: 'Trading closed', message: `Trading and pair initialization are unavailable: ${closedReason}.` }
@@ -37,16 +37,16 @@ export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closed
 function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
 	if (!pairExists) return 'Create pair before trading'
 	if (closedReason !== undefined) return closedReason
-	if (transactionState === 'approval') return 'Simulated share approval…'
-	if (transactionState === 'pending') return 'Simulated workflow pending…'
-	return mode === 'enter' ? `Simulate enter ${side} workflow` : `Simulate insured ${side} exit`
+	if (transactionState === 'approval') return 'Share approval…'
+	if (transactionState === 'pending') return 'Workflow pending…'
+	return mode === 'enter' ? `Enter ${side}` : `Exit insured ${side}`
 }
 
 export function transactionMessage(transactionState: TransactionState) {
-	if (transactionState === 'approval') return 'Simulated share approval is pending in the wallet.'
-	if (transactionState === 'pending') return 'Simulated transaction is pending confirmation.'
-	if (transactionState === 'confirmed') return 'Simulated confirmation shown. Demo balances and reserves do not change.'
-	if (transactionState === 'reverted') return 'Simulated failure shown. Change the amount or outcome and try again.'
+	if (transactionState === 'approval') return 'Share approval is pending in the wallet.'
+	if (transactionState === 'pending') return 'Transaction is pending confirmation.'
+	if (transactionState === 'confirmed') return 'Confirmation shown. Balances and reserves remain unchanged.'
+	if (transactionState === 'reverted') return 'Failure shown. Change the amount or outcome and try again.'
 	return undefined
 }
 
@@ -401,20 +401,16 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								<dd>{formatUnits(market.securityPool.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
 							</div>
 							<div>
-								<dt>Active vaults</dt>
-								<dd>{market.securityPool.activeVaultCount.toString()}</dd>
+								<dt>Registered vaults</dt>
+								<dd>{market.securityPool.vaultCount.toString()}</dd>
 							</div>
 							<div>
 								<dt>Total / fee-eligible capacity ownership</dt>
 								<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
 							</div>
 							<div>
-								<dt>Minting capacity ceiling</dt>
-								<dd>{formatUnits(market.securityPool.mintingCapacityCeilingAttoEth)} ETH</dd>
-							</div>
-							<div>
-								<dt>Available minting capacity</dt>
-								<dd>{formatUnits(market.securityPool.availableMintingCapacityAttoEth)} ETH</dd>
+								<dt>Minting capacity</dt>
+								<dd>{formatMintingCapacity(market.securityPool.settlementCollateralAttoEth, market.securityPool.mintingCapacityCeilingAttoEth)}</dd>
 							</div>
 							<div>
 								<dt>Pair</dt>

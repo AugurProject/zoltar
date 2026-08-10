@@ -102,7 +102,7 @@ describe('live workflow safety boundary', () => {
 			systemState: 0,
 			awaitingForkContinuation: false,
 			universeForkTime: 0n,
-			activeVaultCount: 1n,
+			vaultCount: 1n,
 			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 			settlementCollateralAttoEth: 10n * 10n ** 18n,
 			currentRetentionRate: 10n ** 18n,

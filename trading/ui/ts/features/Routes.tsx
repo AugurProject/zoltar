@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
@@ -38,7 +38,6 @@ export function MarketList({ market }: { market: DemoMarket }) {
 				<div>
 					<h1>Markets</h1>
 				</div>
-				<span class='muted'>Demo discovery snapshot</span>
 			</header>
 			<section class='market-list'>
 				<article class='market-row'>
@@ -86,20 +85,8 @@ export function MarketList({ market }: { market: DemoMarket }) {
 								<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
 							</div>
 							<div>
-								<dt>Minting capacity ceiling</dt>
-								<dd>{formatUnits(market.securityPool.mintingCapacityCeilingAttoEth)} ETH</dd>
-							</div>
-							<div>
-								<dt>Available minting capacity</dt>
-								<dd>{formatUnits(market.securityPool.availableMintingCapacityAttoEth)} ETH</dd>
-							</div>
-							<div>
-								<dt>Collateral</dt>
-								<dd>{formatUnits(market.securityPool.settlementCollateralAttoEth)} ETH</dd>
-							</div>
-							<div>
-								<dt>Fork continuation</dt>
-								<dd>{market.securityPool.awaitingForkContinuation ? 'Awaiting' : 'Not awaiting'}</dd>
+								<dt>Minting capacity</dt>
+								<dd>{formatMintingCapacity(market.securityPool.settlementCollateralAttoEth, market.securityPool.mintingCapacityCeilingAttoEth)}</dd>
 							</div>
 						</dl>
 					</div>
@@ -230,7 +217,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 							<strong>LP tokens do not include wallet INVALID.</strong> Transferring LP tokens does not transfer the INVALID retained during this deposit.
 						</div>
 						<button class='primary-action' disabled>
-							Demo preview only · Create pair + initialize
+							Create pair + initialize
 						</button>
 					</section>
 				) : null}
@@ -264,7 +251,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 									</div>
 								</dl>
 								<button class='secondary-action' disabled>
-									Demo preview only · Add proportional liquidity
+									Add proportional liquidity
 								</button>
 							</div>
 						)}
@@ -283,7 +270,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 								</dl>
 								<p>No INVALID is consumed and no complete set is redeemed.</p>
 								<button class='secondary-action' disabled>
-									Demo preview only · Remove into raw shares
+									Remove into raw shares
 								</button>
 							</div>
 						)}
@@ -385,7 +372,6 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 					<span class='eyebrow'>Positions grouped by SecurityPool</span>
 					<h1>Portfolio</h1>
 				</div>
-				<Status tone='neutral'>Simulated account</Status>
 			</header>
 			<div class='portfolio-groups'>
 				<DemoPortfolioGroup market={market} balances={demoWalletBalances} />
@@ -464,7 +450,7 @@ export function Developer({ demo = true, deploymentStatus = 'loading' }: { demo?
 					<h1>Deployment</h1>
 					<p>Addresses are loaded from a project-local manifest. This build never invents public-network deployments.</p>
 				</div>
-				<Status tone={demo ? 'warn' : liveTone}>{demo ? 'Demo configuration' : liveStatus}</Status>
+				<Status tone={demo ? 'neutral' : liveTone}>{demo ? 'Local runtime' : liveStatus}</Status>
 			</header>
 			<section class='section'>
 				<dl class='fact-list'>
@@ -489,7 +475,7 @@ export function Developer({ demo = true, deploymentStatus = 'loading' }: { demo?
 						<dd>Factory mapping by exact SecurityPool</dd>
 					</div>
 				</dl>
-				<div class='warning'>{demo ? 'Demo data is simulated and is not evidence of live chain state.' : liveNotice}</div>
+				{demo ? null : <div class='warning'>{liveNotice}</div>}
 			</section>
 		</main>
 	)

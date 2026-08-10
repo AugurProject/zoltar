@@ -166,7 +166,7 @@ type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 
 type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? TupleValue<TEvent['inputs'], 'output'> : TupleValue<readonly AbiParameter[], 'output'>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
 
-	type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
+type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
 	blockHash?: Hash | undefined
 	blockNumber?: bigint | undefined
