@@ -16,13 +16,15 @@ type SecurityPoolVaultDirectoryProps = {
 }
 
 export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, renderBadge, renderTitle, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
-	if (pool === undefined || pool.vaults.length === 0) return <>{emptyState}</>
+	if (pool === undefined) return <>{emptyState}</>
 	const loadedVaultCount = BigInt(pool.vaults.length)
 	const showingPartialDirectory = loadedVaultCount < pool.vaultCount
 
 	return (
 		<div className='vault-position-list'>
-			{showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
+			{pool.vaultScanCapped === true ? <p className='status warning'>{securityPoolCopy.vaultRegistryScanCapped}</p> : null}
+			{loadedVaultCount > 0n && showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
+			{pool.vaults.length === 0 ? emptyState : null}
 			{pool.vaults.map(vault => (
 				<div className='vault-position-strip' key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
 					<div className='vault-position-strip-head'>

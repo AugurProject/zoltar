@@ -898,6 +898,9 @@ export function SecurityPoolWorkflowSection({
 
 															return <StateHint presentation={selectedPoolBrowsePresentation} />
 														}
+														let emptyVaultDirectoryDetail = securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount)
+														if (selectedPool.vaultCount === 0n) emptyVaultDirectoryDetail = securityPoolCopy.poolVaultsEmpty
+														if (selectedPool.vaultScanCapped === true) emptyVaultDirectoryDetail = securityPoolCopy.vaultRegistryScanEmpty
 
 														return (
 															<StateHint
@@ -905,7 +908,7 @@ export function SecurityPoolWorkflowSection({
 																	key: 'empty',
 																	badgeLabel: commonCopy.none,
 																	badgeTone: 'muted',
-																	detail: selectedPool.vaultCount === 0n ? securityPoolCopy.poolVaultsEmpty : securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount),
+																	detail: emptyVaultDirectoryDetail,
 																}}
 															/>
 														)

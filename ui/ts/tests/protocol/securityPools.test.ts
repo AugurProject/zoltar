@@ -397,7 +397,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'getVaultCount') return 5n
 				if (request.functionName === 'getVaults') {
 					getVaultsCallCount += 1
-					expect(request.args).toEqual([0n, 3n])
+					expect(request.args).toEqual([0n, 5n])
 					return previewVaultAddresses
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
@@ -489,12 +489,77 @@ describe('securityPools protocol client', () => {
 		const [pool] = page.pools
 		if (pool === undefined) throw new Error('Expected one paged security pool')
 
-		expect(getVaultsCalls).toEqual([
-			[0n, 3n],
-			[3n, 1n],
-		])
+		expect(getVaultsCalls).toEqual([[0n, 4n]])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([currentVaultAddress])
 		expect(pool.vaultCount).toBe(4n)
+	})
+
+	test('loadSecurityPoolPage caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
+			getAddress(
+				`0x${BigInt(index + 1)
+					.toString(16)
+					.padStart(40, '0')}`,
+			),
+		)
+		const getVaultsCalls: [bigint, bigint][] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'settlementCollateralAttoEth') {
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+				}
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'securityVaults') return contracts.map(() => [0n, 0n, 0n, 0n, 0n])
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							statoblastSecurityMultiplierBps: 20_000n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') return BigInt(knownVaultAddresses.length)
+				if (request.functionName === 'getVaults') {
+					const [startIndex, count] = request.args ?? []
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
+					getVaultsCalls.push([startIndex, count])
+					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 1)
+		const [pool] = page.pools
+		if (pool === undefined) throw new Error('Expected one paged security pool')
+
+		expect(getVaultsCalls).toHaveLength(10)
+		expect(getVaultsCalls[0]).toEqual([0n, 50n])
+		expect(getVaultsCalls[9]).toEqual([450n, 50n])
+		expect(pool.vaults).toEqual([])
+		expect(pool.vaultScanCapped).toBe(true)
 	})
 
 	test('loadSecurityPoolPage keeps the connected account after later positions fill the preview cap', async () => {
@@ -571,10 +636,7 @@ describe('securityPools protocol client', () => {
 		const [pool] = page.pools
 		if (pool === undefined) throw new Error('Expected one paged security pool')
 
-		expect(getVaultsCalls).toEqual([
-			[0n, 3n],
-			[3n, 3n],
-		])
+		expect(getVaultsCalls).toEqual([[0n, 6n]])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
 	})
 

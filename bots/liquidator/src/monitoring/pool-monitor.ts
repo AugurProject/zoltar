@@ -8,6 +8,11 @@ import type { PoolObservation, StagedOperationObservation, UniverseObservation }
 
 type ReadClient = PublicClient<Transport, Chain>
 const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
+export const MAX_VAULT_REGISTRY_ENTRIES_SCANNED = 1_000n
+
+export function getVaultRegistryScanCount(knownVaultCount: bigint) {
+	return knownVaultCount < MAX_VAULT_REGISTRY_ENTRIES_SCANNED ? knownVaultCount : MAX_VAULT_REGISTRY_ENTRIES_SCANNED
+}
 
 function sameAddress(left: Address, right: Address) {
 	return left.toLowerCase() === right.toLowerCase()
@@ -159,8 +164,9 @@ export function hasCurrentVaultState(vault: VaultPosition) {
 async function loadCurrentVaults(client: ReadClient, pool: Address, escalationGame: Address, knownVaultCount: bigint, maxVaults: number, totalAttoRep: bigint, denominator: bigint, blockNumber: bigint) {
 	const vaults: VaultPosition[] = []
 	const pageSize = 100n
-	for (let start = 0n; start < knownVaultCount; start += pageSize) {
-		const count = knownVaultCount - start < pageSize ? knownVaultCount - start : pageSize
+	const scanCount = getVaultRegistryScanCount(knownVaultCount)
+	for (let start = 0n; start < scanCount; start += pageSize) {
+		const count = scanCount - start < pageSize ? scanCount - start : pageSize
 		const page = await client.readContract({
 			abi: securityPoolAbi,
 			address: pool,
@@ -183,7 +189,7 @@ async function loadCurrentVaults(client: ReadClient, pool: Address, escalationGa
 			if (vaults.length > maxVaults) return { truncated: true, vaults: vaults.slice(0, maxVaults) }
 		}
 	}
-	return { truncated: false, vaults }
+	return { truncated: scanCount < knownVaultCount, vaults }
 }
 
 async function loadPool(

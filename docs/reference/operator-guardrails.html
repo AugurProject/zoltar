@@ -202,7 +202,7 @@
 						</tr>
 						<tr>
 							<td>Vault enumeration</td>
-							<td><code>getVaults(startIndex, count)</code> pages the append-only vault registry in newest-created-first order. A vault remains registered after full exit, so consumers must read its current REP backing, capacity ownership, claimable fees, escalation stake, and bad debt when deciding whether to display it. The call returns an empty array when <code>count == 0</code> or the start index is out of range; <code>getVaultCount()</code> reports the registry length.</td>
+							<td><code>getVaults(startIndex, count)</code> pages the append-only vault registry in newest-registered-first order. Registration requires only a nonzero address and can occur without economic state. Consumers must read current REP backing, capacity ownership, claimable fees, escalation stake, and bad debt when deciding whether to display an entry. The call returns an empty array when <code>count == 0</code> or the start index is out of range; <code>getVaultCount()</code> reports the registry length.</td>
 							<td>
 								<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.getVaults</code></a>
 							</td>

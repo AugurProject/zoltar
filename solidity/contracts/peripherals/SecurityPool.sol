@@ -779,13 +779,6 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function _registerVault(address vault) private {
 		if (vault == address(0x0) || isKnownVault[vault]) return;
-		bool hasVaultState =
-			securityVaults[vault].repBackingUnits > 0 ||
-				securityVaults[vault].capacityOwnershipAttoRep > 0 ||
-				securityVaults[vault].claimableFeesAttoEth > 0 ||
-				vaultBadDebtAttoEth[vault] > 0 ||
-				(address(escalationGame) != address(0x0) && escalationGame.disputeStakedRepByVaultAttoRep(vault) > 0);
-		if (!hasVaultState) return;
 		isKnownVault[vault] = true;
 		vaultAddresses.push(vault);
 	}

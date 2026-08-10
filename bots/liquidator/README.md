@@ -104,10 +104,12 @@ Pool-selection inheritance is a configuration reconciliation and remains active
 in dry-run mode and when automatic vault migrations are disabled. Only the
 on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
-The current-position scan is capped by `runtime.maxVaultsPerPool`. Known vaults
-with no current economic state are skipped and do not consume the cap. A capped
-scan is marked in the dashboard and must not be treated as a complete
-opportunity view.
+Current-position results are capped by `runtime.maxVaultsPerPool`. Anyone can
+register a nonzero address, and the bot scans the 1,000 newest-registered
+addresses first. Empty registrations consume scan capacity without consuming
+the result cap, so older current positions may be omitted. Either limit marks
+the scan as capped in the dashboard; a capped scan is not a complete opportunity
+view.
 
 ## Independent market consensus
 

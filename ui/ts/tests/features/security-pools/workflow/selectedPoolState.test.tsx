@@ -340,6 +340,21 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(document.body).queryByText('No known vaults in this pool.')).toBeNull()
 	})
 
+	test('warns when the current-position directory reaches its registry scan limit', async () => {
+		await renderLoadedPool({
+			securityPools: [createSelectedPool({ vaultCount: 600n, vaultScanCapped: true, vaults: [] })],
+		})
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+		})
+
+		expect(within(document.body).getByText('Registry scan limit reached. Some current positions may not be shown.')).not.toBeNull()
+		expect(within(document.body).getByText('No current positions found within the scan limit.')).not.toBeNull()
+		expect(within(document.body).queryByText('Showing 0 current positions from 600 known vaults, newest-registered first.')).toBeNull()
+		expect(within(document.body).queryByText('No current positions among 600 known vaults.')).toBeNull()
+	})
+
 	test('renders a selected bad-debt-only known vault as an existing position', async () => {
 		await renderLoadedPool({
 			securityVault: createSecurityVaultProps({

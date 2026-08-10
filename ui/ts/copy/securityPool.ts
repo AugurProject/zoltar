@@ -51,7 +51,9 @@ export const formatPoolPageSummary = (matchingPoolCount: CopyTemplateValue, load
 export const noSecurityPools = 'No security pools'
 export const poolFiltersEmpty = 'No pools match the current search and filter settings.'
 export const managerAddress = 'Manager Address'
-export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} current positions from ${totalVaultCount} known vaults, newest-created first. Enter a vault owner address above to inspect any specific vault.`
+export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} current positions from ${totalVaultCount} known vaults, newest-registered first.`
+export const vaultRegistryScanCapped = 'Registry scan limit reached. Some current positions may not be shown.'
+export const vaultRegistryScanEmpty = 'No current positions found within the scan limit.'
 export const formatNoCurrentVaultPositions = (knownVaultCount: bigint) => `No current positions among ${knownVaultCount.toString()} known ${knownVaultCount === 1n ? 'vault' : 'vaults'}.`
 export const poolVaultsEmpty = 'No known vaults in this pool.'
 export const autoExecPending = 'Auto-exec pending'

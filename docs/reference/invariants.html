@@ -1085,8 +1085,8 @@
 						<summary><code>VAULT-03</code><span class="invariant-title">Vault registry coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The vault registry is append-only and contains each address at most once. A vault enters when it first has REP backing units, capacity ownership, unpaid fees, escalation escrow, or bad debt. Pagination is newest-created first; later activity and full exit do not reorder or remove an entry. Consumers read current vault and escalation state to decide which registered vaults to display.</div>
-							<p class="invariant-example"><strong>Example:</strong> A final REP withdrawal leaves the vault address in registry pagination with zero current position, allowing a UI to filter it without losing historical discovery.</p>
+							<div class="invariant-property">The vault registry is append-only and contains each nonzero address at most once. Registration does not require economic state: any vault path that calls <code>_registerVault</code>, including a public fee checkpoint for an empty address, can append it. Pagination is newest-registered first; later activity and full exit do not reorder or remove an entry. Consumers read current vault and escalation state to decide which registered vaults to display.</div>
+							<p class="invariant-example"><strong>Example:</strong> After a vault has fully exited and its REP backing, capacity ownership, claimable fees, escalation stake, bad debt, and open interest are all zero, its address remains in registry pagination. A UI can filter the empty position without losing historical discovery.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

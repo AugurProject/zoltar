@@ -159,6 +159,19 @@ async function dashboard() {
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('surfaces an incomplete vault registry scan', async () => {
+		const page = await dashboard()
+		const snapshot = state()
+		const [pool] = snapshot.pools
+		if (pool === undefined) throw new Error('Expected pool snapshot')
+		pool.truncatedVaults = true
+		page.setSnapshot(snapshot)
+
+		await page.refresh()
+
+		expect(page.window.document.body.textContent).toContain('Vault scan capped')
+	})
+
 	test('serializes overlapping polling refreshes and preserves one trailing request', async () => {
 		const page = await dashboard()
 		const before = page.stateRequestCount()

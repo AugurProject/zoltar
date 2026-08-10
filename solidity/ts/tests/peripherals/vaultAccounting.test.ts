@@ -290,7 +290,7 @@ describe('Peripherals: vault accounting', () => {
 		const vaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, vaultCount)
 
 		strictEqualTypeSafe(vaultCount, 2n, 'vault count should retain every economically initialized vault')
-		assert.deepStrictEqual(vaults, [attackerClient.account.address, client.account.address], 'vault paging should retain the fully exited vault in newest-created-first order')
+		assert.deepStrictEqual(vaults, [attackerClient.account.address, client.account.address], 'vault paging should retain the fully exited vault in newest-registered-first order')
 	})
 
 	test('vault registry order remains stable after exits and later updates', async () => {
@@ -314,13 +314,19 @@ describe('Peripherals: vault accounting', () => {
 		assert.deepStrictEqual(newestFirstVaultsAfterTouch, newestFirstVaultsBeforeRemoval, 'updating a known vault should not reorder the append-only registry')
 	})
 
-	test('updateVaultFees emits no accounting checkpoints for an empty vault after accrual is capped', async () => {
+	test('updateVaultFees registers an empty vault once without emitting no-op accounting checkpoints', async () => {
 		const emptyVaultPrivateKey = TEST_ADDRESSES[4]
 		if (emptyVaultPrivateKey === undefined) throw new Error('empty vault test address missing')
 		const emptyVault = addressString(emptyVaultPrivateKey)
+		const vaultCountBeforeCheckpoint = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 1n)
 		await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+		const vaultCountAfterCheckpoint = await getVaultCount(client, securityPoolAddresses.securityPool)
+		const registeredVaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, vaultCountAfterCheckpoint)
+
+		strictEqualTypeSafe(vaultCountAfterCheckpoint, vaultCountBeforeCheckpoint + 1n, 'checkpointing a new address should register it without inspecting vault state')
+		assert.strictEqual(registeredVaults[0], emptyVault, 'the newly checkpointed vault should be the newest registry entry')
 
 		const noOpHash = await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
 		const noOpReceipt = await client.getTransactionReceipt({ hash: noOpHash })

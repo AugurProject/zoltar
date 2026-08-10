@@ -31,6 +31,8 @@ const QUESTION_OUTCOME_ABI = [
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
+const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
+const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
 
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
@@ -163,6 +165,7 @@ async function loadSecurityPoolVaultSummaries(
 	} = {},
 ): Promise<{
 	hasLoadedVaults: boolean
+	vaultScanCapped: boolean
 	vaultCount: bigint
 	vaults: ListedSecurityPool['vaults']
 }> {
@@ -172,6 +175,7 @@ async function loadSecurityPoolVaultSummaries(
 	if (vaultCount === 0n && options.accountAddress === undefined) {
 		return {
 			hasLoadedVaults: true,
+			vaultScanCapped: false,
 			vaultCount,
 			vaults: [],
 		}
@@ -254,9 +258,12 @@ async function loadSecurityPoolVaultSummaries(
 	const scannedVaultAddresses: Address[] = []
 	let separatelyLoadedAccountVaults: ListedSecurityPool['vaults'] | undefined
 	let registryOffset = 0n
-	while (registryOffset < vaultCount && BigInt(vaults.length) < previewLimit) {
+	while (registryOffset < vaultCount && registryOffset < SECURITY_POOL_VAULT_SCAN_LIMIT && BigInt(vaults.length) < previewLimit) {
 		const remainingVaultCount = vaultCount - registryOffset
-		const pageSize = remainingVaultCount < previewLimit ? remainingVaultCount : previewLimit
+		const remainingScanCount = SECURITY_POOL_VAULT_SCAN_LIMIT - registryOffset
+		let pageSize = SECURITY_POOL_VAULT_SCAN_PAGE_SIZE
+		if (remainingVaultCount < pageSize) pageSize = remainingVaultCount
+		if (remainingScanCount < pageSize) pageSize = remainingScanCount
 		const pageVaultAddresses = await getSecurityPoolVaults(client, securityPoolAddress, registryOffset, pageSize, blockNumber)
 		scannedVaultAddresses.push(...pageVaultAddresses)
 		const summaryVaultAddresses = [...pageVaultAddresses]
@@ -281,6 +288,7 @@ async function loadSecurityPoolVaultSummaries(
 	}
 	return {
 		hasLoadedVaults: true,
+		vaultScanCapped: registryOffset < vaultCount && BigInt(vaults.length) < previewLimit,
 		vaultCount,
 		vaults,
 	}
@@ -319,6 +327,7 @@ function shouldLoadSecurityPoolVaults(
 function createDeferredSecurityPoolVaultSummary(vaultCount: bigint) {
 	return {
 		hasLoadedVaults: vaultCount === 0n,
+		vaultScanCapped: false,
 		vaultCount,
 		vaults: [] as ListedSecurityPool['vaults'],
 	}
@@ -466,6 +475,7 @@ async function loadSecurityPoolDetails(
 		universeHasForked: universeForkTime > 0n,
 		universeId,
 		hasLoadedVaults: vaultSummaries.hasLoadedVaults,
+		vaultScanCapped: vaultSummaries.vaultScanCapped,
 		vaultCount: vaultSummaries.vaultCount,
 		vaults: vaultSummaries.vaults,
 	}

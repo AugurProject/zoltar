@@ -1499,7 +1499,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(vaultCount, 4n, 'a fully exited vault should remain in the append-only registry')
 		assert.deepStrictEqual([...firstPage, ...secondPage], vaults, 'paged vault results should concatenate to the full registry')
 		assert.deepStrictEqual(emptyPage, [], 'pagination past the vault registry should be empty')
-		assert.deepStrictEqual(vaults, [vaultC.account.address, vaultB.account.address, vaultA.account.address, client.account.address], 'vault registry ordering should remain newest-created first regardless of later activity')
+		assert.deepStrictEqual(vaults, [vaultC.account.address, vaultB.account.address, vaultA.account.address, client.account.address], 'vault registry ordering should remain newest-registered first regardless of later activity')
 		assert.strictEqual(new Set(vaults).size, vaults.length, 'vault pagination should not duplicate entries')
 		assert.strictEqual(vaults.includes(vaultB.account.address), true, 'fully exited vaults should remain discoverable for off-chain filtering')
 	})
