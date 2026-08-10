@@ -6,6 +6,7 @@ import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput, parseRepAmountInput } from '../../../features/markets/lib/marketForm.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
+	doesSecurityVaultExistOnchain,
 	getOracleManagerPriceValidUntilTimestamp,
 	getSecurityVaultMaxCapacityOwnershipAttoRepAmount,
 	getSecurityVaultWithdrawableRepAmount,
@@ -43,6 +44,7 @@ void describe('security vault helpers', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 		const details = {
+			badDebtAttoEth: 0n,
 			currentRetentionRate: 10n,
 			disputeStakedAttoRep: 0n,
 			managerAddress: zeroAddress,
@@ -101,6 +103,26 @@ void describe('security vault helpers', () => {
 				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(false)
+	})
+
+	void test('treats bad-debt-only vault details as an existing onchain vault', () => {
+		const details = {
+			badDebtAttoEth: 1n,
+			currentRetentionRate: 0n,
+			disputeStakedAttoRep: 0n,
+			managerAddress: zeroAddress,
+			totalRepBackingUnits: 0n,
+			vaultAttoRepBacking: 0n,
+			repToken: zeroAddress,
+			capacityOwnershipAttoRep: 0n,
+			securityPoolAddress: zeroAddress,
+			totalCapacityOwnershipAttoRep: 0n,
+			claimableFeesAttoEth: 0n,
+			universeId: 0n,
+			vaultAddress: zeroAddress,
+		}
+
+		expect(doesSecurityVaultExistOnchain(details)).toBe(true)
 	})
 
 	void test('parses security vault REP inputs as 18-decimal token amounts', () => {

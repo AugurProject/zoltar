@@ -52,7 +52,7 @@ export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
 	if (securityVaultDetails === undefined) return false
-	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n
+	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
 }
 
 function divideBigintRoundUp(value: bigint, divisor: bigint) {

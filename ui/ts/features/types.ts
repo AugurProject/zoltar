@@ -104,6 +104,7 @@ export type OutcomeSelectionListProps = {
 }
 
 export type VaultMetricGridProps = {
+	badDebtAttoEth?: bigint | undefined
 	className?: string
 	layout?: 'grid' | 'preview'
 	disputeStakedAttoRep?: bigint | undefined

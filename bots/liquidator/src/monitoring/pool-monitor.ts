@@ -7,6 +7,12 @@ import { hasStagedLiquidation } from '#core/staged-operations'
 import type { PoolObservation, StagedOperationObservation, UniverseObservation } from '#state/operator-state'
 
 type ReadClient = PublicClient<Transport, Chain>
+const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
+export const MAX_VAULT_REGISTRY_ENTRIES_SCANNED = 1_000n
+
+export function getVaultRegistryScanCount(knownVaultCount: bigint) {
+	return knownVaultCount < MAX_VAULT_REGISTRY_ENTRIES_SCANNED ? knownVaultCount : MAX_VAULT_REGISTRY_ENTRIES_SCANNED
+}
 
 function sameAddress(left: Address, right: Address) {
 	return left.toLowerCase() === right.toLowerCase()
@@ -92,12 +98,12 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
 	return universes
 }
 
-async function loadVault(client: ReadClient, pool: Address, escalationGame: Address, vault: Address, totalAttoRep: bigint, denominator: bigint): Promise<VaultPosition> {
+async function loadVault(client: ReadClient, pool: Address, escalationGame: Address, vault: Address, totalAttoRep: bigint, denominator: bigint, blockNumber?: bigint): Promise<VaultPosition> {
 	const [raw, openInterestAttoEth, badDebtAttoEth, disputeStakedAttoRep] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'getVaultOpenInterestAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' }),
-		escalationGame === zeroAddress ? 0n : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'securityVaults' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'getVaultOpenInterestAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'vaultBadDebtAttoEth' }),
+		escalationGame === zeroAddress ? 0n : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], blockNumber, functionName: 'disputeStakedRepByVaultAttoRep' }),
 	])
 	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = raw
 	return {
@@ -112,21 +118,78 @@ async function loadVault(client: ReadClient, pool: Address, escalationGame: Addr
 	}
 }
 
-async function loadVaultAddresses(client: ReadClient, pool: Address, activeVaultCount: bigint, maxVaults: number) {
-	const limit = activeVaultCount < BigInt(maxVaults) ? activeVaultCount : BigInt(maxVaults)
-	const addresses: Address[] = []
+function requireBigint(value: unknown, label: string) {
+	if (typeof value !== 'bigint') throw new Error(`Security pool returned invalid ${label}`)
+	return value
+}
+
+function requireVaultPositionTuple(value: unknown) {
+	if (!Array.isArray(value)) throw new Error('Security pool returned invalid vault state')
+	return [requireBigint(value[0], 'vault backing units'), requireBigint(value[1], 'vault capacity ownership'), requireBigint(value[2], 'vault claimable fees')] as const
+}
+
+async function loadVaultPage(client: ReadClient, pool: Address, escalationGame: Address, vaultAddresses: readonly Address[], totalAttoRep: bigint, denominator: bigint, blockNumber: bigint) {
+	const [rawVaults, openInterest, badDebt, disputeStake] = await Promise.all([
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'getVaultOpenInterestAttoEth' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+		escalationGame === zeroAddress
+			? vaultAddresses.map(() => 0n)
+			: client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+	])
+	return vaultAddresses.map((address, index) => {
+		const raw = rawVaults[index]
+		const openInterestAttoEth = openInterest[index]
+		const badDebtAttoEth = badDebt[index]
+		const disputeStakedAttoRep = disputeStake[index]
+		if (raw === undefined || openInterestAttoEth === undefined || badDebtAttoEth === undefined || disputeStakedAttoRep === undefined) throw new Error('Security pool returned incomplete vault state')
+		const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = requireVaultPositionTuple(raw)
+		return {
+			address,
+			badDebtAttoEth: requireBigint(badDebtAttoEth, 'vault bad debt'),
+			capacityOwnershipAttoRep,
+			openInterestAttoEth: requireBigint(openInterestAttoEth, 'vault open interest'),
+			backingUnits: repBackingUnits,
+			vaultAttoRepBacking: repForBackingUnits(repBackingUnits, totalAttoRep, denominator),
+			claimableFeesAttoEth,
+			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute stake'),
+		}
+	})
+}
+
+export function hasCurrentVaultState(vault: VaultPosition) {
+	return vault.backingUnits > 0n || vault.capacityOwnershipAttoRep > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n || vault.badDebtAttoEth > 0n || vault.openInterestAttoEth > 0n
+}
+
+async function loadCurrentVaults(client: ReadClient, pool: Address, escalationGame: Address, knownVaultCount: bigint, maxVaults: number, totalAttoRep: bigint, denominator: bigint, blockNumber: bigint) {
+	const vaults: VaultPosition[] = []
 	const pageSize = 100n
-	for (let start = 0n; start < limit; start += pageSize) {
-		const count = limit - start < pageSize ? limit - start : pageSize
+	const scanCount = getVaultRegistryScanCount(knownVaultCount)
+	for (let start = 0n; start < scanCount; start += pageSize) {
+		const count = scanCount - start < pageSize ? scanCount - start : pageSize
 		const page = await client.readContract({
 			abi: securityPoolAbi,
 			address: pool,
 			args: [start, count],
-			functionName: 'getActiveVaults',
+			blockNumber,
+			functionName: 'getVaults',
 		})
-		addresses.push(...page.map(getAddress))
+		const positions = await loadVaultPage(
+			client,
+			pool,
+			escalationGame,
+			page.map(address => getAddress(address)),
+			totalAttoRep,
+			denominator,
+			blockNumber,
+		)
+		for (const position of positions) {
+			if (!hasCurrentVaultState(position)) continue
+			vaults.push(position)
+			if (vaults.length > maxVaults) return { truncated: true, vaults: vaults.slice(0, maxVaults) }
+		}
 	}
-	return { addresses, truncated: limit < activeVaultCount }
+	return { truncated: scanCount < knownVaultCount, vaults }
 }
 
 async function loadPool(
@@ -145,10 +208,11 @@ async function loadPool(
 	},
 	wallet: Address | undefined,
 ) {
+	const blockNumber = await client.getBlockNumber()
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.priceOracleManagerAndOperatorQueuer)
 	const [
-		activeVaultCount,
+		knownVaultCount,
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		denominator,
@@ -170,11 +234,11 @@ async function loadPool(
 		totalCapacityOwnershipAttoRep,
 		totalAttoRep,
 	] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getActiveVaultCount' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'settlementCollateralAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'currentRetentionRate' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalRepBackingUnits' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'escalationGame' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'totalRepBackingUnits' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'escalationGame' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'isPriceValid' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastPrice' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastSettlementTimestamp' }),
@@ -190,14 +254,15 @@ async function loadPool(
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'totalCapacityOwnershipAttoRep' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'getTotalPoolHeldAttoRep' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 	])
 	const [forkData, forkActivationTime] = await Promise.all([
 		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'forkData' }),
 		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'getForkActivationTime' }),
 	])
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
-	const { addresses, truncated } = await loadVaultAddresses(client, address, activeVaultCount, settings.runtime.maxVaultsPerPool)
+	const normalizedEscalationGame = getAddress(escalationGame)
+	const { vaults, truncated } = await loadCurrentVaults(client, address, normalizedEscalationGame, knownVaultCount, settings.runtime.maxVaultsPerPool, totalAttoRep, denominator, blockNumber)
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getActiveStagedOperationCount' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getPendingSettlementOperationIds' }),
@@ -230,9 +295,7 @@ async function loadPool(
 			})
 		}
 	}
-	const normalizedEscalationGame = getAddress(escalationGame)
-	const vaults = await Promise.all(addresses.map(async vault => await loadVault(client, address, normalizedEscalationGame, vault, totalAttoRep, denominator)))
-	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, normalizedEscalationGame, wallet, totalAttoRep, denominator)))
+	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, normalizedEscalationGame, wallet, totalAttoRep, denominator, blockNumber)))
 	const selected = settings.selectedPools.some(pool => sameAddress(pool, address))
 	const approvedUniverse = settings.approvedUniverses.includes(deployment.universeId)
 	const riskContext = {
@@ -261,7 +324,7 @@ async function loadPool(
 				settings.strategy.candidatePriority,
 			)
 	return {
-		activeVaultCount,
+		knownVaultCount,
 		address,
 		approvedUniverse,
 		botVault,

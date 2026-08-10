@@ -1121,6 +1121,7 @@ describe('shared ethereum compatibility layer', () => {
 		})
 		const provider = createProvider(({ method, params }) => {
 			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			expect(getArrayEntry(params, 1, 'simulate block tag')).toBe('0x2a')
 			const transaction = getArrayEntry(params, 0, 'simulate params')
 			expect(getObjectEntry(transaction, 'from', 'simulate transaction')).toBe(getAddress(OWNER_ADDRESS))
 			expect(getObjectEntry(transaction, 'data', 'simulate transaction')).toBe(expectedData)
@@ -1140,6 +1141,7 @@ describe('shared ethereum compatibility layer', () => {
 					account: OWNER_ADDRESS,
 					address: TOKEN_ADDRESS,
 					args: [RECIPIENT_ADDRESS],
+					blockNumber: 42n,
 					functionName: 'ownerCheck',
 					gas: 21_000n,
 					value: 7n,
@@ -1182,6 +1184,7 @@ describe('shared ethereum compatibility layer', () => {
 		const provider = createProvider(({ method, params }) => {
 			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
 			const tx = getArrayEntry(params, 0, 'multicall params')
+			expect(getArrayEntry(params, 1, 'multicall block tag')).toBe('0x2a')
 			const data = getObjectEntry(tx, 'data', 'multicall transaction')
 			expect(data).toBe(aggregateData)
 			return encodeAbiParameters(
@@ -1209,6 +1212,7 @@ describe('shared ethereum compatibility layer', () => {
 
 		const result = await client.multicall({
 			allowFailure: true,
+			blockNumber: 42n,
 			contracts: [
 				{
 					abi: BALANCE_OF_ABI,

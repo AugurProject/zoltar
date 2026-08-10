@@ -66,8 +66,8 @@ contract SecurityPool is SecurityPoolStorage {
 	// materialize in this branch.
 	// This carry is always below PRICE_PRECISION, so any residual value left here at the
 	// end of accrual is strictly sub-attoETH and cannot strand whole ETH.
-	// Active-vault paging is newest-first so UI previews remain stable after removals
-	// and can intentionally surface the most recently touched active vaults.
+	// Vault discovery is append-only. Paging reverses creation order so clients see
+	// the newest registered addresses first and filter their current state offchain.
 
 	event RepWithdrawnFromVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
@@ -141,38 +141,18 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getVaultCount() external view returns (uint256) {
-		return activeVaultCount;
-	}
-
-	function securityPoolEventEmitter() external view returns (address) {
-		return address(eventEmitter);
-	}
-
-	function getActiveVaultCount() external view returns (uint256) {
-		return activeVaultCount;
+		return vaultAddresses.length;
 	}
 
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
-		return _sliceActiveVaults(startIndex, count);
-	}
+		uint256 vaultCount = vaultAddresses.length;
+		if (count == 0 || startIndex >= vaultCount) return new address[](0);
 
-	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
-		return _sliceActiveVaults(startIndex, count);
-	}
-
-	function _sliceActiveVaults(uint256 startIndex, uint256 count) private view returns (address[] memory vaultRange) {
-		if (count == 0 || startIndex >= activeVaultCount) return new address[](0);
-
-		uint256 availableCount = activeVaultCount - startIndex;
+		uint256 availableCount = vaultCount - startIndex;
 		uint256 resultCount = count < availableCount ? count : availableCount;
 		vaultRange = new address[](resultCount);
-		address currentVault = latestActiveVault;
-		for (uint256 skipped = 0; skipped < startIndex && currentVault != address(0x0); skipped++) {
-			currentVault = olderActiveVaults[currentVault];
-		}
-		for (uint256 index = 0; index < resultCount && currentVault != address(0x0); index++) {
-			vaultRange[index] = currentVault;
-			currentVault = olderActiveVaults[currentVault];
+		for (uint256 index = 0; index < resultCount; index++) {
+			vaultRange[index] = vaultAddresses[vaultCount - startIndex - index - 1];
 		}
 	}
 
@@ -304,7 +284,7 @@ contract SecurityPool is SecurityPoolStorage {
 			settlementCollateralAttoEth += unallocatedAccruedFeesAttoEth;
 			unallocatedAccruedFeesAttoEth = 0;
 		}
-		_syncActiveVault(vault);
+		_registerVault(vault);
 		if (vaultAccountingChanged) _emitVaultAccountingCheckpoint(vault);
 		if (poolAccountingChanged) _emitPoolAccountingCheckpoint(AccountingReason.VaultCheckpoint, vault);
 	}
@@ -315,7 +295,7 @@ contract SecurityPool is SecurityPoolStorage {
 		if (fees == 0) return;
 		securityVaults[vault].claimableFeesAttoEth = 0;
 		totalClaimableVaultFeesAttoEth -= fees;
-		_syncActiveVault(vault);
+		_registerVault(vault);
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.FeeRedemption, vault);
 		_sendEth(payable(vault), fees);
@@ -361,7 +341,7 @@ contract SecurityPool is SecurityPoolStorage {
 		updateRetentionRate();
 		_requireVaultCoverage(previousVaultRepBackingAttoRep - withdrawRepAmountAttoRep, vaultDisputeStakedAttoRep, getVaultOpenInterestAttoEth(vault), repEthPrice);
 		_requirePoolCoverage(totalPoolHeldRepBalanceAttoRep - withdrawRepAmountAttoRep, _getTotalDisputeStakedRep(), _getActiveOpenInterestAttoEth(), repEthPrice);
-		_syncActiveVault(vault);
+		_registerVault(vault);
 		IERC20(address(repToken)).safeTransfer(vault, withdrawRepAmountAttoRep);
 		emit RepWithdrawnFromVault(vault, withdrawRepAmountAttoRep, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
@@ -464,7 +444,7 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, SecurityPoolUtils.BPS_DENOMINATOR, targetHealthFactorBps);
 		_setVaultCapacity(msg.sender, securityVaults[msg.sender].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep, targetHealthFactorBps);
 		updateRetentionRate();
-		_syncActiveVault(msg.sender);
+		_registerVault(msg.sender);
 		emit RepDepositedToVault(msg.sender, attoRepAmount, securityVaults[msg.sender].repBackingUnits, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(msg.sender);
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, msg.sender);
@@ -535,8 +515,8 @@ contract SecurityPool is SecurityPoolStorage {
 			badDebtAttoEth := mload(add(pointer, 0x40))
 		}
 
-		_syncActiveVault(targetVaultAddress);
-		if (debtMovedAttoEth != 0) _syncActiveVault(receiverVault);
+		_registerVault(targetVaultAddress);
+		if (debtMovedAttoEth != 0) _registerVault(receiverVault);
 
 		if (debtMovedAttoEth != 0 || badDebtAttoEth != 0)
 			emit VaultLiquidated(operationId, operator, receiverVault, targetVaultAddress, debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth);
@@ -615,7 +595,7 @@ contract SecurityPool is SecurityPoolStorage {
 		require(attoRepAmount > 0, 'No redeemable REP');
 		securityVaults[vault].repBackingUnits = 0;
 		totalRepBackingUnits -= backingUnitsToRedeem;
-		_syncActiveVault(vault);
+		_registerVault(vault);
 		IERC20(address(repToken)).safeTransfer(vault, attoRepAmount);
 		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
@@ -639,7 +619,7 @@ contract SecurityPool is SecurityPoolStorage {
 			}
 			require(depositor == beneficiaryVault, 'One vault');
 		}
-		_syncActiveVault(beneficiaryVault);
+		_registerVault(beneficiaryVault);
 	}
 
 	////////////////////////////////////////
@@ -686,7 +666,7 @@ contract SecurityPool is SecurityPoolStorage {
 		totalRepBackingUnits = postTransferTotalRepBackingUnits;
 		IERC20(address(repToken)).safeTransfer(address(escalationGame), depositedAttoRep);
 		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
-		_syncActiveVault(msg.sender);
+		_registerVault(msg.sender);
 		emit DepositToEscalationGame(msg.sender, outcome, depositedAttoRep, backingUnitsToEscrow, securityVaults[msg.sender].repBackingUnits, totalRepBackingUnits, escalationGame);
 		_emitVaultAccountingCheckpoint(msg.sender);
 	}
@@ -714,7 +694,7 @@ contract SecurityPool is SecurityPoolStorage {
 			}
 			require(depositor == beneficiaryVault, 'One vault');
 		}
-		_syncActiveVault(beneficiaryVault);
+		_registerVault(beneficiaryVault);
 	}
 
 	function activateForkMode() external onlyForker {
@@ -783,7 +763,7 @@ contract SecurityPool is SecurityPoolStorage {
 		vaultTargetHealthFactorBps[vault] = targetHealthFactorBps;
 		vaultBadDebtAttoEth[vault] = newVaultBadDebtAttoEth;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
-		_syncActiveVault(vault);
+		_registerVault(vault);
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, vault);
 	}
@@ -797,52 +777,10 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
 	}
 
-	function _syncActiveVault(address vault) private {
-		if (vault == address(0x0)) return;
-		bool shouldBeActive =
-			securityVaults[vault].repBackingUnits > 0 ||
-				securityVaults[vault].capacityOwnershipAttoRep > 0 ||
-				securityVaults[vault].claimableFeesAttoEth > 0 ||
-				(address(escalationGame) != address(0x0) && escalationGame.disputeStakedRepByVaultAttoRep(vault) > 0);
-		if (shouldBeActive) {
-			if (isActiveVault[vault]) {
-				if (latestActiveVault == vault) return;
-				_detachActiveVault(vault);
-				_appendActiveVault(vault);
-				return;
-			}
-			isActiveVault[vault] = true;
-			activeVaultCount++;
-			_appendActiveVault(vault);
-			return;
-		}
-		if (!isActiveVault[vault]) return;
-		_detachActiveVault(vault);
-		delete isActiveVault[vault];
-		activeVaultCount--;
-	}
-
-	function _appendActiveVault(address vault) private {
-		if (latestActiveVault != address(0x0)) {
-			olderActiveVaults[vault] = latestActiveVault;
-			newerActiveVaults[latestActiveVault] = vault;
-		}
-		latestActiveVault = vault;
-	}
-
-	function _detachActiveVault(address vault) private {
-		address olderVault = olderActiveVaults[vault];
-		address newerVault = newerActiveVaults[vault];
-		if (newerVault != address(0x0)) {
-			olderActiveVaults[newerVault] = olderVault;
-		} else {
-			latestActiveVault = olderVault;
-		}
-		if (olderVault != address(0x0)) {
-			newerActiveVaults[olderVault] = newerVault;
-		}
-		delete olderActiveVaults[vault];
-		delete newerActiveVaults[vault];
+	function _registerVault(address vault) private {
+		if (vault == address(0x0) || isKnownVault[vault]) return;
+		isKnownVault[vault] = true;
+		vaultAddresses.push(vault);
 	}
 
 	function setTotalRepBackingUnits(uint256 newDenominator) external onlyForker {
