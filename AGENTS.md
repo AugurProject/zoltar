@@ -108,10 +108,12 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs listed
-below. They are tracked because the static documentation site loads them directly;
+Generated outputs are intentionally untracked, except for the documentation outputs and
+vendored deployment input listed below. The documentation outputs are tracked because the
+static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-contract-reference`, and
-`bun run docs:check-index` enforce freshness.
+`bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
+pins the deployment input and prevents its large upstream packages from entering the lockfile.
 
 | Output | Source or command |
 | --- | --- |
@@ -125,8 +127,9 @@ below. They are tracked because the static documentation site loads them directl
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
+| `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
-Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
+Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
 
 ### 7. UI manual QA
 

@@ -188,6 +188,16 @@ type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends strin
 	value?: bigint | undefined
 }
 
+export type EstimateGasParameters = {
+	account?: Account | Address | undefined
+	data?: Hex | undefined
+	gasPrice?: bigint | undefined
+	maxFeePerGas?: bigint | undefined
+	maxPriorityFeePerGas?: bigint | undefined
+	to?: Address | undefined
+	value?: bigint | undefined
+}
+
 type MulticallContractResult<TContract> = TContract extends ContractFunctionParameters<infer TAbi, infer TFunctionName> ? ContractFunctionResult<TAbi, TFunctionName> : unknown
 
 export type ContractFunctionParameters<TAbi extends Abi = Abi, TFunctionName extends string = string> = {
@@ -388,11 +398,14 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	chain: TChain
 	extend: <TExtension extends object>(extension: (client: PublicClientShape<TTransport, TChain>) => TExtension) => PublicClientShape<TTransport, TChain> & TExtension
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
+	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
+	getGasPrice: () => Promise<bigint>
+	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
@@ -1268,6 +1281,13 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					],
 				}),
 			),
+		estimateGas: async parameters =>
+			normalizeRpcBigInt(
+				await requestTransport<string>(transport, {
+					method: 'eth_estimateGas',
+					params: [buildRpcTransactionRequest(parameters)],
+				}),
+			),
 		getBalance: async parameters =>
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {
@@ -1295,6 +1315,14 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			)
 			return result === '0x' ? undefined : result
 		},
+		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
+		getTransactionCount: async parameters =>
+			normalizeRpcBigInt(
+				await requestTransport<string>(transport, {
+					method: 'eth_getTransactionCount',
+					params: [getAddress(parameters.address), parameters.blockTag ?? 'latest'],
+				}),
+			),
 		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
 			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')

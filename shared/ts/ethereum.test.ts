@@ -1353,6 +1353,35 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_estimateGas'])
 	})
 
+	test('public client exposes raw gas estimation, gas price, and pending nonce RPCs', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method, params }) => {
+					if (method === 'eth_estimateGas') {
+						const transaction = getArrayEntry(params, 0, 'estimate gas params')
+						expect(getObjectEntry(transaction, 'from', 'estimate gas transaction')).toBe(getAddress(OWNER_ADDRESS))
+						expect(getObjectEntry(transaction, 'to', 'estimate gas transaction')).toBe(RECIPIENT_ADDRESS)
+						expect(getObjectEntry(transaction, 'value', 'estimate gas transaction')).toBe('0x5')
+						return '0x10000'
+					}
+					if (method === 'eth_gasPrice') return '0x3b9aca00'
+					if (method === 'eth_getTransactionCount') {
+						expect(getArrayEntry(params, 0, 'transaction count params')).toBe(getAddress(OWNER_ADDRESS))
+						expect(getArrayEntry(params, 1, 'transaction count params')).toBe('pending')
+						return '0x7'
+					}
+					throw new Error(`Unexpected rpc method: ${method}`)
+				}, calls),
+			),
+		})
+
+		expect(await client.estimateGas({ account: OWNER_ADDRESS, to: RECIPIENT_ADDRESS, value: 5n })).toBe(65_536n)
+		expect(await client.getGasPrice()).toBe(1_000_000_000n)
+		expect(await client.getTransactionCount({ address: OWNER_ADDRESS, blockTag: 'pending' })).toBe(7n)
+		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
+	})
+
 	test('publicActions extension preserves wallet default account behavior', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const walletClient = createWalletClient({
