@@ -21,6 +21,8 @@ export const isCurrentLiveRequest = (requestVersion, currentVersion, responseCha
 
 export const isNoncanonicalDetailFailure = (canonicalRecovery, status) => canonicalRecovery && status === 404
 
+export const shouldClearPendingDetailState = (preservePendingOnClose) => !preservePendingOnClose
+
 export const shouldContinueTransactionRestore = (loaded, loadedCount, targetLoadedCount, nextPageCursor) =>
 	loaded && loadedCount < targetLoadedCount && nextPageCursor !== undefined
 

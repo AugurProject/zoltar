@@ -8,6 +8,7 @@ import {
 	mergeUniqueRecords,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
+	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 } from '../public/live-update.js'
 
@@ -162,4 +163,9 @@ test('restores transaction depth and keeps context only for canonical cards', ()
 		focusKey: undefined,
 		focusIndex: -1,
 	})
+})
+
+test('clears pending detail state for native dismissal unless a programmatic recovery close preserves it', () => {
+	expect(shouldClearPendingDetailState(false)).toBe(true)
+	expect(shouldClearPendingDetailState(true)).toBe(false)
 })

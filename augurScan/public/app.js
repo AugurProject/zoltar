@@ -6,6 +6,7 @@ import {
 	mergeUniqueRecords,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
+	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 } from './live-update.js'
 
@@ -806,6 +807,8 @@ const api = async (path, { signal } = {}) => {
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const cursor = request.searchParams.get('cursor')
 			demoTransactionRequests++
+			if (pageUrl.searchParams.get('transactionRestoreDelay') === '1' && demoReorgObserved && cursor === null && demoTransactionRequests > 1)
+				await new Promise((resolve) => setTimeout(resolve, 800))
 			if (
 				pageUrl.searchParams.get('transactionRestoreErrorOnce') === '1' &&
 				cursor === null &&
@@ -3269,8 +3272,12 @@ $('#close-detail').addEventListener('click', closeDetail)
 dialog.addEventListener('click', (event) => {
 	if (event.target === dialog) closeDetail()
 })
+dialog.addEventListener('cancel', (event) => {
+	event.preventDefault()
+	closeDetail()
+})
 dialog.addEventListener('close', () => {
-	if (!preservePendingOnDialogClose && !canonicalRefreshRequired) {
+	if (shouldClearPendingDetailState(preservePendingOnDialogClose)) {
 		activeLog = undefined
 		pendingCanonicalLog = undefined
 		pendingCanonicalAccount = undefined
