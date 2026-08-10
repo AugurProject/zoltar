@@ -30,14 +30,15 @@ Before extending a chain, the indexer verifies parent hashes. A mismatch searche
 
 ## Current-state model
 
-Canonical decoded events populate registries for every observed pool, question, vault, and Zoltar universe. Immutable identity/configuration is stored separately from block-stamped temporal measurements. The UI plots pool collateral and coverage, vault REP backing and coverage, and universe theoretical REP supply; it also renders complete universe parent/child lineage. [STATE_MODEL.md](STATE_MODEL.md) is the field and event reference.
+Canonical decoded events populate registries for every observed pool, question, vault, and Zoltar universe. Immutable identity/configuration is stored separately from block-stamped temporal measurements. The UI plots pool collateral and REP capacity ownership, vault REP backing and capacity ownership, and universe theoretical REP supply; it also renders the bounded returned universe parent/child lineage. [STATE_MODEL.md](STATE_MODEL.md) is the field and event reference.
 
 The browser provides:
 
 - network indexed block, timestamp, live age, observed head, lag, phase, and errors;
 - a filtered, paginated, one-line activity ledger across networks;
 - deep-linked evidence with contract provenance, complete receipt, related logs, decoded action/event schemas, exact raw values, copy controls, and explorer links;
-- searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts.
+- searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts;
+- a network-filtered rich list ranked by REP, ETH, WETH, or sent transactions with pool/vault participation and explicit pending or partial balance state.
 
 ## Delivery and validation
 

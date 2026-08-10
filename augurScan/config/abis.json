@@ -1,5 +1,5 @@
 {
-  "sourceHash": "a81519bdee43bfab336ecd85d76abbe6b74f65f581cc50aed201e087ae2c6f61",
+  "sourceHash": "1ee7813251827ab947ff821f7fd00916e865468b106362d39ac70804da37dfc1",
   "contracts": {
     "IERC1363": {
       "source": "contracts/peripherals/openOracle/openzeppelin/contracts/interfaces/IERC1363.sol",
@@ -10079,6 +10079,67 @@
             {
               "indexed": true,
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
               "name": "parent",
               "type": "address"
             },
@@ -10404,6 +10465,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -10428,7 +10532,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -10440,7 +10544,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -10458,13 +10562,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -13828,6 +13932,833 @@
         }
       ]
     },
+    "ILiquidationApprovalCoordinator": {
+      "source": "contracts/peripherals/LiquidationApprovalRegistry.sol",
+      "abi": [
+        {
+          "inputs": [],
+          "name": "securityPool",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ]
+    },
+    "LiquidationApprovalRegistry": {
+      "source": "contracts/peripherals/LiquidationApprovalRegistry.sol",
+      "abi": [
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "consumedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "releasedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingAvailableDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingReservedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingConsumedDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalConsumed",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "previousNonce",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "newNonce",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalNonceInvalidated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "releasedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingAvailableDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingReservedDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalReleased",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "reservedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingAvailableDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingReservedDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalReserved",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "availableDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "reservedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "consumedDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalRevoked",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "targetVault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "maxCumulativeDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "maxDebtPerLiquidationAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "minPostLiquidationHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "validAfter",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "validUntil",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "nonce",
+              "type": "uint256"
+            }
+          ],
+          "name": "LiquidationApprovalSet",
+          "type": "event"
+        },
+        {
+          "inputs": [],
+          "name": "DOMAIN_SEPARATOR",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "LIQUIDATION_APPROVAL_TYPEHASH",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "debtMovedAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "consume",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "coordinator",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            }
+          ],
+          "name": "getLiquidationApproval",
+          "outputs": [
+            {
+              "components": [
+                {
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "securityPool",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "address",
+                      "name": "receiverVault",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "address",
+                      "name": "operator",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "address",
+                      "name": "targetVault",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "maxCumulativeDebtAttoEth",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "maxDebtPerLiquidationAttoEth",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "minPostLiquidationHealthFactorBps",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "validAfter",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "validUntil",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "nonce",
+                      "type": "uint256"
+                    }
+                  ],
+                  "internalType": "struct LiquidationApprovalParams",
+                  "name": "params",
+                  "type": "tuple"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "availableDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "reservedDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "consumedDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "bool",
+                  "name": "revoked",
+                  "type": "bool"
+                }
+              ],
+              "internalType": "struct LiquidationApprovalState",
+              "name": "",
+              "type": "tuple"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "_coordinator",
+              "type": "address"
+            }
+          ],
+          "name": "initialize",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "newNonce",
+              "type": "uint256"
+            }
+          ],
+          "name": "invalidateLiquidationApprovalNonce",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "securityPool",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "receiverVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "operator",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "targetVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxCumulativeDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxDebtPerLiquidationAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "minPostLiquidationHealthFactorBps",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validAfter",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validUntil",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "nonce",
+                  "type": "uint256"
+                }
+              ],
+              "internalType": "struct LiquidationApprovalParams",
+              "name": "params",
+              "type": "tuple"
+            }
+          ],
+          "name": "liquidationApprovalDigest",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "name": "liquidationReservations",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint256",
+              "name": "reservedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "settled",
+              "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            }
+          ],
+          "name": "minimumHealthFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "minimumLiquidationApprovalNonce",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "securityPool",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "receiverVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "operator",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "targetVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxCumulativeDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxDebtPerLiquidationAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "minPostLiquidationHealthFactorBps",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validAfter",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validUntil",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "nonce",
+                  "type": "uint256"
+                }
+              ],
+              "internalType": "struct LiquidationApprovalParams",
+              "name": "params",
+              "type": "tuple"
+            },
+            {
+              "internalType": "bytes",
+              "name": "signature",
+              "type": "bytes"
+            }
+          ],
+          "name": "permitLiquidationApproval",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            }
+          ],
+          "name": "release",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "targetVault",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "requestedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "snapshotTargetDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "latestExecutionTimestamp",
+              "type": "uint256"
+            }
+          ],
+          "name": "reserve",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "reservedDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            }
+          ],
+          "name": "revokeLiquidationApproval",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "securityPool",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "receiverVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "operator",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "targetVault",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxCumulativeDebtAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "maxDebtPerLiquidationAttoEth",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "minPostLiquidationHealthFactorBps",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validAfter",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "validUntil",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "nonce",
+                  "type": "uint256"
+                }
+              ],
+              "internalType": "struct LiquidationApprovalParams",
+              "name": "params",
+              "type": "tuple"
+            }
+          ],
+          "name": "setLiquidationApproval",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ]
+    },
     "Multicall3": {
       "source": "contracts/peripherals/Multicall3.sol",
       "abi": [
@@ -14544,13 +15475,43 @@
               "type": "uint256"
             },
             {
+              "indexed": true,
+              "internalType": "address",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
               "indexed": false,
-              "internalType": "enum OperationType",
-              "name": "operation",
-              "type": "uint8"
+              "internalType": "address",
+              "name": "targetVault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "requestedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "reservedDebtAttoEth",
+              "type": "uint256"
             }
           ],
-          "name": "PendingOperationRecoveryConsumed",
+          "name": "LiquidationRouteStaged",
           "type": "event"
         },
         {
@@ -14720,25 +15681,6 @@
             },
             {
               "indexed": false,
-              "internalType": "uint256",
-              "name": "snapshotTargetDisputeStakedAttoRep",
-              "type": "uint256"
-            }
-          ],
-          "name": "StagedOperationDisputeStakedRepSnapshotted",
-          "type": "event"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": true,
-              "internalType": "uint256",
-              "name": "operationId",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
               "internalType": "enum OperationType",
               "name": "operation",
               "type": "uint8"
@@ -14746,7 +15688,7 @@
             {
               "indexed": true,
               "internalType": "address",
-              "name": "initiatorVault",
+              "name": "operator",
               "type": "address"
             },
             {
@@ -14782,7 +15724,19 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "snapshotTargetCoverageCommitmentAttoEth",
+              "name": "snapshotTargetCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "snapshotTargetOpenInterestAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "snapshotTargetDisputeStakedAttoRep",
               "type": "uint256"
             },
             {
@@ -14868,6 +15822,19 @@
             }
           ],
           "name": "executeStagedOperation",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            }
+          ],
+          "name": "expireStagedOperation",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -14966,7 +15933,12 @@
                 },
                 {
                   "internalType": "address",
-                  "name": "initiatorVault",
+                  "name": "operator",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "receiverVault",
                   "type": "address"
                 },
                 {
@@ -14996,7 +15968,12 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "snapshotTargetCoverageCommitmentAttoEth",
+                  "name": "snapshotTargetCapacityOwnershipAttoRep",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "snapshotTargetOpenInterestAttoEth",
                   "type": "uint256"
                 },
                 {
@@ -15012,6 +15989,16 @@
                 {
                   "internalType": "uint256",
                   "name": "snapshotTotalRepBackingUnits",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "bytes32",
+                  "name": "liquidationApprovalId",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "reservedLiquidationDebtAttoEth",
                   "type": "uint256"
                 }
               ],
@@ -15036,7 +16023,12 @@
                 },
                 {
                   "internalType": "address",
-                  "name": "initiatorVault",
+                  "name": "operator",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "receiverVault",
                   "type": "address"
                 },
                 {
@@ -15066,7 +16058,12 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "snapshotTargetCoverageCommitmentAttoEth",
+                  "name": "snapshotTargetCapacityOwnershipAttoRep",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "snapshotTargetOpenInterestAttoEth",
                   "type": "uint256"
                 },
                 {
@@ -15082,6 +16079,16 @@
                 {
                   "internalType": "uint256",
                   "name": "snapshotTotalRepBackingUnits",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "bytes32",
+                  "name": "liquidationApprovalId",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "reservedLiquidationDebtAttoEth",
                   "type": "uint256"
                 }
               ],
@@ -15205,6 +16212,19 @@
               "internalType": "uint256",
               "name": "",
               "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "liquidationApprovalRegistry",
+          "outputs": [
+            {
+              "internalType": "contract LiquidationApprovalRegistry",
+              "name": "",
+              "type": "address"
             }
           ],
           "stateMutability": "view",
@@ -15445,6 +16465,49 @@
         {
           "inputs": [
             {
+              "internalType": "address",
+              "name": "targetVault",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "receiverVault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "requestedDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "approvalId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint256",
+              "name": "validForSeconds",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "proposedRepPerEthPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "requestedInitialAttoWeth",
+              "type": "uint256"
+            }
+          ],
+          "name": "requestPriceIfNeededAndStageLiquidation",
+          "outputs": [],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "enum OperationType",
               "name": "operation",
               "type": "uint8"
@@ -15491,6 +16554,19 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract LiquidationApprovalRegistry",
+              "name": "registry",
+              "type": "address"
+            }
+          ],
+          "name": "setLiquidationApprovalRegistry",
+          "outputs": [],
+          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
@@ -15562,7 +16638,12 @@
             },
             {
               "internalType": "address",
-              "name": "initiatorVault",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "receiverVault",
               "type": "address"
             },
             {
@@ -15592,7 +16673,12 @@
             },
             {
               "internalType": "uint256",
-              "name": "snapshotTargetCoverageCommitmentAttoEth",
+              "name": "snapshotTargetCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "snapshotTargetOpenInterestAttoEth",
               "type": "uint256"
             },
             {
@@ -15608,6 +16694,16 @@
             {
               "internalType": "uint256",
               "name": "snapshotTotalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "liquidationApprovalId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint256",
+              "name": "reservedLiquidationDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -15761,7 +16857,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "_initialEscalationGameDepositAttoRep",
+              "name": "",
               "type": "uint256"
             },
             {
@@ -15946,13 +17042,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "totalCoverageCommitmentAttoEth",
+              "name": "totalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "feeEligibleCoverageCommitmentAttoEth",
+              "name": "feeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -15988,7 +17084,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "uncheckpointedFeeEligibleCoverageCommitmentAttoEth",
+              "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -16225,7 +17321,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -16255,7 +17351,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingFeeEligibleCoverageCommitmentAttoEth",
+              "name": "resultingFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             }
           ],
@@ -16298,8 +17394,20 @@
           "inputs": [
             {
               "indexed": true,
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
               "internalType": "address",
-              "name": "callerVault",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "receiverVault",
               "type": "address"
             },
             {
@@ -16311,17 +17419,54 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "coverageCommitmentTransferredAttoEth",
+              "name": "securityBondDebtMovedAttoEth",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "vaultRepBackingTransferredAttoRep",
+              "name": "capacityOwnershipMovedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "badDebtAttoEth",
               "type": "uint256"
             }
           ],
           "name": "VaultLiquidated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingTotalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultTargetHealthFactorSet",
           "type": "event"
         },
         {
@@ -16340,11 +17485,11 @@
             },
             {
               "internalType": "uint256",
-              "name": "amountAttoEth",
+              "name": "amountAttoRep",
               "type": "uint256"
             }
           ],
-          "name": "addFeeEligibleCoverageCommitmentAttoEth",
+          "name": "addFeeEligibleCapacityOwnershipAttoRep",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -16377,25 +17522,6 @@
             }
           ],
           "name": "attoRepToBackingUnits",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
-              "name": "attoRepAmount",
-              "type": "uint256"
-            }
-          ],
-          "name": "attoRepToBackingUnitsRoundUp",
           "outputs": [
             {
               "internalType": "uint256",
@@ -16497,12 +17623,27 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
               "name": "vaultFeeIndex",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newVaultBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -16536,6 +17677,11 @@
             {
               "internalType": "uint256",
               "name": "attoRepAmount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
               "type": "uint256"
             }
           ],
@@ -16586,24 +17732,6 @@
             }
           ],
           "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "callerVault",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amountAttoEth",
-              "type": "uint256"
-            }
-          ],
-          "name": "executeCoverageCommitmentUpdate",
-          "outputs": [],
-          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
@@ -16658,6 +17786,19 @@
         },
         {
           "inputs": [],
+          "name": "getCurrentMintingCapacityAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "getPoolAccountingSnapshot",
           "outputs": [
             {
@@ -16669,12 +17810,12 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "totalCoverageCommitmentAttoEth",
+                  "name": "totalCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
                   "internalType": "uint256",
-                  "name": "feeEligibleCoverageCommitmentAttoEth",
+                  "name": "feeEligibleCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
@@ -16704,7 +17845,7 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "uncheckpointedFeeEligibleCoverageCommitmentAttoEth",
+                  "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
@@ -16761,6 +17902,25 @@
             }
           ],
           "name": "getVaultFeeRemainder",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultOpenInterestAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -16907,6 +18067,32 @@
         },
         {
           "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "openOracle",
           "outputs": [
             {
@@ -16934,8 +18120,18 @@
         {
           "inputs": [
             {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
               "internalType": "address",
-              "name": "callerVault",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "receiverVault",
               "type": "address"
             },
             {
@@ -16945,7 +18141,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "requestedCommitmentTransferAttoEth",
+              "name": "requestedDebtAttoEth",
               "type": "uint256"
             },
             {
@@ -16955,7 +18151,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "snapshotTargetCoverageCommitmentAttoEth",
+              "name": "snapshotTargetCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -16967,10 +18163,36 @@
               "internalType": "uint256",
               "name": "snapshotTotalRepBackingUnits",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minimumReceiverHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minLiquidationPriceDistanceBps",
+              "type": "uint256"
             }
           ],
           "name": "performLiquidation",
-          "outputs": [],
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "debtMovedAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipMovedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
           "stateMutability": "nonpayable",
           "type": "function"
         },
@@ -17135,7 +18357,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -17174,12 +18396,17 @@
             },
             {
               "internalType": "uint256",
-              "name": "newTotalCoverageCommitmentAttoEth",
+              "name": "newTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "newFeeEligibleCoverageCommitmentAttoEth",
+              "name": "newFeeEligibleCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -17338,7 +18565,7 @@
         },
         {
           "inputs": [],
-          "name": "totalClaimableVaultFeesAttoEth",
+          "name": "totalCapacityOwnershipAttoRep",
           "outputs": [
             {
               "internalType": "uint256",
@@ -17351,7 +18578,7 @@
         },
         {
           "inputs": [],
-          "name": "totalCoverageCommitmentAttoEth",
+          "name": "totalClaimableVaultFeesAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -17455,6 +18682,25 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -17637,6 +18883,67 @@
             {
               "indexed": true,
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
               "name": "parentPool",
               "type": "address"
             },
@@ -17717,13 +19024,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "totalCoverageCommitmentAttoEth",
+              "name": "totalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "feeEligibleCoverageCommitmentAttoEth",
+              "name": "feeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -17759,7 +19066,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "uncheckpointedFeeEligibleCoverageCommitmentAttoEth",
+              "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -17918,7 +19225,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -17948,11 +19255,54 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingFeeEligibleCoverageCommitmentAttoEth",
+              "name": "resultingFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             }
           ],
           "name": "VaultAccountingCheckpoint",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
           "type": "event"
         },
         {
@@ -18003,7 +19353,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18015,7 +19365,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18033,13 +19383,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18290,7 +19640,19 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "claimedAuctionedCoverageCommitmentAttoEth",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -18598,6 +19960,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -18622,7 +20027,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18634,7 +20039,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18652,13 +20057,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -18851,7 +20256,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "auctionedCoverageCommitmentAttoEth",
+              "name": "auctionedCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -19453,7 +20858,19 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "claimedAuctionedCoverageCommitmentAttoEth",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -19668,6 +21085,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -19692,7 +21152,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -19704,7 +21164,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -19722,13 +21182,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -19854,6 +21314,67 @@
             }
           ],
           "name": "ChildDisputeStakedRepMaterialized",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
           "type": "event"
         },
         {
@@ -20064,6 +21585,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -20088,7 +21652,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20100,7 +21664,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20118,13 +21682,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20312,6 +21876,67 @@
             }
           ],
           "name": "ChildRepSplit",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
           "type": "event"
         },
         {
@@ -20571,6 +22196,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -20595,7 +22263,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20607,7 +22275,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20625,13 +22293,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -20838,6 +22506,67 @@
             {
               "indexed": true,
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
               "name": "parent",
               "type": "address"
             },
@@ -21089,6 +22818,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -21113,7 +22885,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -21125,7 +22897,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -21143,13 +22915,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -21230,6 +23002,39 @@
             }
           ],
           "name": "createChildUniverse",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalAttoRepPurchased",
+              "type": "uint256"
+            }
+          ],
+          "name": "creditAuctionProceeds",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -21372,6 +23177,37 @@
           "type": "event"
         },
         {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingTotalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultTargetHealthFactorSet",
+          "type": "event"
+        },
+        {
           "inputs": [],
           "name": "awaitingForkContinuation",
           "outputs": [
@@ -21437,10 +23273,36 @@
           "type": "function"
         },
         {
+          "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [
             {
               "internalType": "address",
-              "name": "callerVault",
+              "name": "receiverVault",
               "type": "address"
             },
             {
@@ -21450,7 +23312,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "requestedCommitmentTransferAttoEth",
+              "name": "requestedDebtAttoEth",
               "type": "uint256"
             },
             {
@@ -21460,12 +23322,22 @@
             },
             {
               "internalType": "uint256",
-              "name": "snapshotTargetCoverageCommitmentAttoEth",
+              "name": "snapshotTargetCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
               "name": "repEthPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minimumReceiverHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minLiquidationPriceDistanceBps",
               "type": "uint256"
             }
           ],
@@ -21473,12 +23345,12 @@
           "outputs": [
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentToTransferAttoEth",
+              "name": "debtToMoveAttoEth",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "vaultAttoRepBackingToTransfer",
+              "name": "capacityOwnershipToMoveAttoRep",
               "type": "uint256"
             },
             {
@@ -21514,7 +23386,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -21529,6 +23401,29 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "nextCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "setVaultCapacity",
+          "outputs": [],
+          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
@@ -21598,7 +23493,7 @@
         },
         {
           "inputs": [],
-          "name": "totalClaimableVaultFeesAttoEth",
+          "name": "totalCapacityOwnershipAttoRep",
           "outputs": [
             {
               "internalType": "uint256",
@@ -21611,7 +23506,7 @@
         },
         {
           "inputs": [],
-          "name": "totalCoverageCommitmentAttoEth",
+          "name": "totalClaimableVaultFeesAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -21644,6 +23539,25 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -21875,6 +23789,32 @@
           "type": "function"
         },
         {
+          "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [
             {
               "internalType": "address",
@@ -21891,7 +23831,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -21975,7 +23915,7 @@
         },
         {
           "inputs": [],
-          "name": "totalClaimableVaultFeesAttoEth",
+          "name": "totalCapacityOwnershipAttoRep",
           "outputs": [
             {
               "internalType": "uint256",
@@ -21988,7 +23928,7 @@
         },
         {
           "inputs": [],
-          "name": "totalCoverageCommitmentAttoEth",
+          "name": "totalClaimableVaultFeesAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -22030,12 +23970,74 @@
           ],
           "stateMutability": "view",
           "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetHealthFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
         }
       ]
     },
     "SecurityPoolUtils": {
       "source": "contracts/peripherals/SecurityPoolUtils.sol",
       "abi": [
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
         {
           "inputs": [
             {
@@ -22045,12 +24047,17 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetCoverageCommitmentAttoEth",
+              "name": "targetCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "requestedCommitmentTransferAttoEth",
+              "name": "targetOpenInterestAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "requestedDebtAttoEth",
               "type": "uint256"
             },
             {
@@ -22067,13 +24074,23 @@
               "internalType": "uint256",
               "name": "currentTotalRepBackingUnits",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minimumRemainingAttoRep",
+              "type": "uint256"
             }
           ],
           "name": "calculateBundledLiquidationTransfer",
           "outputs": [
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentToTransferAttoEth",
+              "name": "debtToMoveAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipToMoveAttoRep",
               "type": "uint256"
             },
             {
@@ -22084,6 +24101,45 @@
             {
               "internalType": "uint256",
               "name": "backingUnitsToTransfer",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "nextClaimedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "auctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "previouslyClaimedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateCumulativeAuctionBadDebt",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "badDebtToAssignAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "nextClaimedBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -22114,7 +24170,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "feeEligibleCoverageCommitmentAttoEth",
+              "name": "feeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -22153,12 +24209,118 @@
           "inputs": [
             {
               "internalType": "uint256",
+              "name": "theoreticalSupplyAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateInitialEscalationDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "debtToMoveAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "repEthPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "currentPoolHeldAttoRepBalance",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "currentTotalRepBackingUnits",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateLiquidationBackingUnitsAward",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "backingUnitsToTransfer",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "theoreticalSupplyAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "configuredMinimumAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateMinimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "repEthPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "securityMultiplierBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateMintingCapacityAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
               "name": "settlementCollateralAttoEth",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "mintingCapacityAttoEth",
               "type": "uint256"
             }
           ],
@@ -22177,7 +24339,7 @@
           "inputs": [
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -22211,6 +24373,35 @@
           "inputs": [
             {
               "internalType": "uint256",
+              "name": "activeOpenInterestAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "vaultCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "calculateVaultOpenInterestAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
               "name": "poolHeldVaultRepBackingAttoRep",
               "type": "uint256"
             },
@@ -22221,7 +24412,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "openInterestAttoEth",
               "type": "uint256"
             },
             {
@@ -22265,7 +24456,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "openInterestAttoEth",
               "type": "uint256"
             },
             {
@@ -22288,6 +24479,79 @@
             }
           ],
           "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "poolHeldVaultRepBackingAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "disputeStakedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "openInterestAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "repEthPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "poolSecurityMultiplierBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "healthFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "isVaultHealthyAtFactor",
+          "outputs": [
+            {
+              "internalType": "bool",
+              "name": "",
+              "type": "bool"
+            }
+          ],
+          "stateMutability": "pure",
+          "type": "function"
+        }
+      ]
+    },
+    "IERC1271": {
+      "source": "contracts/peripherals/SignatureValidation.sol",
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "hash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes",
+              "name": "signature",
+              "type": "bytes"
+            }
+          ],
+          "name": "isValidSignature",
+          "outputs": [
+            {
+              "internalType": "bytes4",
+              "name": "magicValue",
+              "type": "bytes4"
+            }
+          ],
+          "stateMutability": "view",
           "type": "function"
         }
       ]
@@ -23665,6 +25929,92 @@
         }
       ]
     },
+    "LiquidationApprovalRegistryDeployer": {
+      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "abi": [
+        {
+          "inputs": [],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "coordinator",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "salt",
+              "type": "bytes32"
+            }
+          ],
+          "name": "deploy",
+          "outputs": [
+            {
+              "internalType": "contract LiquidationApprovalRegistry",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ]
+    },
+    "PriceCoordinatorDeploymentWorker": {
+      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "abi": [
+        {
+          "inputs": [],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract OpenOraclePriceCoordinator",
+              "name": "coordinator",
+              "type": "address"
+            },
+            {
+              "internalType": "contract LiquidationApprovalRegistry",
+              "name": "registry",
+              "type": "address"
+            }
+          ],
+          "name": "configureLiquidationApprovalRegistry",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes",
+              "name": "constructorArguments",
+              "type": "bytes"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "salt",
+              "type": "bytes32"
+            }
+          ],
+          "name": "deploy",
+          "outputs": [
+            {
+              "internalType": "contract OpenOraclePriceCoordinator",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ]
+    },
     "PriceOracleManagerAndOperatorQueuerFactory": {
       "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
       "abi": [
@@ -24280,6 +26630,16 @@
               "internalType": "uint256",
               "name": "_initialEscalationGameDepositAttoRep",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_minimumSecurityBondDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_minimumVaultRepDepositAttoRep",
+              "type": "uint256"
             }
           ],
           "stateMutability": "nonpayable",
@@ -24600,6 +26960,32 @@
         {
           "inputs": [],
           "name": "initialEscalationGameDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
           "outputs": [
             {
               "internalType": "uint256",
@@ -28479,13 +30865,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "totalCoverageCommitmentAttoEth",
+              "name": "totalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "feeEligibleCoverageCommitmentAttoEth",
+              "name": "feeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -28521,7 +30907,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "uncheckpointedFeeEligibleCoverageCommitmentAttoEth",
+              "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -28595,7 +30981,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -28625,7 +31011,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingFeeEligibleCoverageCommitmentAttoEth",
+              "name": "resultingFeeEligibleCapacityOwnershipAttoRep",
               "type": "uint256"
             }
           ],
@@ -28648,11 +31034,11 @@
             },
             {
               "internalType": "uint256",
-              "name": "amountAttoEth",
+              "name": "amountAttoRep",
               "type": "uint256"
             }
           ],
-          "name": "addFeeEligibleCoverageCommitmentAttoEth",
+          "name": "addFeeEligibleCapacityOwnershipAttoRep",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -28786,12 +31172,27 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
               "name": "vaultFeeIndex",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newVaultBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -28826,6 +31227,11 @@
               "internalType": "uint256",
               "name": "attoRepAmount",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetHealthFactorBps",
+              "type": "uint256"
             }
           ],
           "name": "depositRepToVault",
@@ -28844,24 +31250,6 @@
             }
           ],
           "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "callerVault",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amountAttoEth",
-              "type": "uint256"
-            }
-          ],
-          "name": "executeCoverageCommitmentUpdate",
-          "outputs": [],
-          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
@@ -28916,6 +31304,19 @@
         },
         {
           "inputs": [],
+          "name": "getCurrentMintingCapacityAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "getPoolAccountingSnapshot",
           "outputs": [
             {
@@ -28927,12 +31328,12 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "totalCoverageCommitmentAttoEth",
+                  "name": "totalCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
                   "internalType": "uint256",
-                  "name": "feeEligibleCoverageCommitmentAttoEth",
+                  "name": "feeEligibleCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
@@ -28962,7 +31363,7 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "uncheckpointedFeeEligibleCoverageCommitmentAttoEth",
+                  "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
                   "type": "uint256"
                 },
                 {
@@ -29019,6 +31420,25 @@
             }
           ],
           "name": "getVaultFeeRemainder",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultOpenInterestAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -29165,6 +31585,32 @@
         },
         {
           "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "openOracle",
           "outputs": [
             {
@@ -29192,8 +31638,18 @@
         {
           "inputs": [
             {
+              "internalType": "uint256",
+              "name": "operationId",
+              "type": "uint256"
+            },
+            {
               "internalType": "address",
-              "name": "callerVault",
+              "name": "operator",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "receiverVault",
               "type": "address"
             },
             {
@@ -29203,7 +31659,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "requestedCommitmentTransferAttoEth",
+              "name": "requestedDebtAttoEth",
               "type": "uint256"
             },
             {
@@ -29213,7 +31669,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "snapshotTargetCoverageCommitmentAttoEth",
+              "name": "snapshotTargetCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -29225,10 +31681,36 @@
               "internalType": "uint256",
               "name": "snapshotTotalRepBackingUnits",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minimumReceiverHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minLiquidationPriceDistanceBps",
+              "type": "uint256"
             }
           ],
           "name": "performLiquidation",
-          "outputs": [],
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "debtMovedAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipMovedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
           "stateMutability": "nonpayable",
           "type": "function"
         },
@@ -29386,7 +31868,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "coverageCommitmentAttoEth",
+              "name": "capacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -29425,12 +31907,17 @@
             },
             {
               "internalType": "uint256",
-              "name": "newTotalCoverageCommitmentAttoEth",
+              "name": "newTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "newFeeEligibleCoverageCommitmentAttoEth",
+              "name": "newFeeEligibleCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -29576,7 +32063,7 @@
         },
         {
           "inputs": [],
-          "name": "totalClaimableVaultFeesAttoEth",
+          "name": "totalBadDebtAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -29589,7 +32076,20 @@
         },
         {
           "inputs": [],
-          "name": "totalCoverageCommitmentAttoEth",
+          "name": "totalCapacityOwnershipAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalClaimableVaultFeesAttoEth",
           "outputs": [
             {
               "internalType": "uint256",
@@ -29682,6 +32182,44 @@
           "name": "updateVaultFees",
           "outputs": [],
           "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "vaultBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetHealthFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
           "type": "function"
         },
         {
@@ -29999,6 +32537,32 @@
         },
         {
           "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "securityPoolDeploymentCount",
           "outputs": [
             {
@@ -30137,6 +32701,67 @@
             }
           ],
           "name": "ChildDisputeStakedRepMaterialized",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
           "type": "event"
         },
         {
@@ -30347,6 +32972,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -30371,7 +33039,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -30383,7 +33051,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -30401,13 +33069,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -30965,6 +33633,67 @@
             {
               "indexed": true,
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionRepPurchasedAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimedAuctionedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "auctionedBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "ClaimAuctionProceeds",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
               "name": "parentPool",
               "type": "address"
             },
@@ -31167,6 +33896,49 @@
             {
               "indexed": false,
               "internalType": "uint256",
+              "name": "migratedBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingParentTotalBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingChildTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBadDebtMigrated",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "parentPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "contract ISecurityPool",
+              "name": "childPool",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
               "name": "outcomeIndex",
               "type": "uint256"
             },
@@ -31191,7 +33963,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentCoverageCommitmentAttoEth",
+              "name": "resultingParentCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -31203,7 +33975,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildCoverageCommitmentAttoEth",
+              "name": "resultingChildCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
@@ -31221,13 +33993,13 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingParentTotalCoverageCommitmentAttoEth",
+              "name": "resultingParentTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "resultingChildTotalCoverageCommitmentAttoEth",
+              "name": "resultingChildTotalCapacityOwnershipAttoRep",
               "type": "uint256"
             },
             {

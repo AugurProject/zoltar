@@ -5,7 +5,7 @@ const server = Bun.serve({
 	port: Number(process.env['PORT'] ?? '3001'),
 	async fetch(request) {
 		const url = new URL(request.url)
-		const name = url.pathname === '/' || url.pathname === '/system' ? 'index.html' : url.pathname.slice(1)
+		const name = url.pathname === '/' || url.pathname === '/system' || url.pathname === '/richlist' ? 'index.html' : url.pathname.slice(1)
 		const file = Bun.file(path.join(root, name))
 		if (!(await file.exists())) return new Response('Not found', { status: 404 })
 		const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'

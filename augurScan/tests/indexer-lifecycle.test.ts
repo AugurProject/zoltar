@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import type { StoredTransaction } from '../src/database.ts'
 import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, toHex } from '../src/ethereum.ts'
 import {
+	addressActivityFrom,
+	commitCanonicalRead,
 	confirmCanonicalBlock,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
@@ -14,7 +17,7 @@ import {
 	tokenMetadataNeedsRead,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
-import type { ContractMetadata, TokenMetadata } from '../src/types.ts'
+import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 
 const tokenMetadata: TokenMetadata = {
 	address: '0x1000000000000000000000000000000000000001',
@@ -42,6 +45,49 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('attributes senders and referenced vaults to every security pool touched by a transaction', () => {
+		const sender = '0x2000000000000000000000000000000000000002'
+		const pool = '0x3000000000000000000000000000000000000003'
+		const vault = '0x4000000000000000000000000000000000000004'
+		const addressShapedTitle = '0x5000000000000000000000000000000000000005'
+		const hash = `0x${'11'.repeat(32)}` as const
+		const blockHash = `0x${'22'.repeat(32)}` as const
+		const transaction: StoredTransaction = {
+			hash,
+			transactionIndex: 0,
+			from: sender,
+			to: pool,
+			value: 0n,
+			input: '0x',
+			status: 'success',
+			gasUsed: 1n,
+			receipt: {},
+			decoded: {
+				status: 'decoded',
+				name: 'depositRepToVault',
+				arguments: { nested: { vault }, title: addressShapedTitle },
+				referencedAddresses: [vault],
+				summary: 'deposit',
+			},
+		}
+		const log: StoredLog = {
+			transactionHash: hash,
+			blockHash,
+			blockNumber: 1n,
+			transactionIndex: 0,
+			logIndex: 0,
+			address: pool,
+			topics: [],
+			data: '0x',
+			decoded: { status: 'decoded', name: 'VaultAccountingCheckpoint', arguments: { vault }, referencedAddresses: [vault], summary: 'checkpoint' },
+		}
+		const contracts = new Map<string, ContractMetadata>([[pool.toLowerCase(), { address: pool, label: 'Pool', kind: 'securityPool', provenance: 'test' }]])
+		expect(addressActivityFrom([transaction], [log], contracts)).toEqual([
+			{ transactionHash: hash, address: sender, poolAddress: pool, role: 'sender' },
+			{ transactionHash: hash, address: vault, poolAddress: pool, role: 'referenced' },
+		])
+	})
+
 	test('backs off exponentially with bounded jitter and a five-minute ceiling', () => {
 		expect(retryDelayMs(1, 12_000, () => 0.5)).toBe(12_000)
 		expect(retryDelayMs(4, 12_000, () => 0.5)).toBe(96_000)
@@ -244,6 +290,24 @@ describe('network indexer lifecycle', () => {
 			'The remote canonical chain changed while indexing; retrying',
 		)
 		await expect(confirmCanonicalBlock(100n, indexedHash, async () => indexedHash)).resolves.toBeUndefined()
+	})
+
+	test('does not commit balance evidence when the anchor changes after the read', async () => {
+		const indexedHash = `0x${'1'.repeat(64)}` as const
+		const replacementHash = `0x${'2'.repeat(64)}` as const
+		let committed = false
+		await expect(
+			commitCanonicalRead(
+				100n,
+				indexedHash,
+				async () => ['balance evidence'],
+				async () => replacementHash,
+				async () => {
+					committed = true
+				},
+			),
+		).rejects.toThrow('Block 100 changed while it was being indexed')
+		expect(committed).toBe(false)
 	})
 
 	test('retries lock acquisition and seeding before running as owner', async () => {

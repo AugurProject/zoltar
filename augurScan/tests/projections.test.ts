@@ -69,14 +69,14 @@ describe('state projections', () => {
 				reason: '5',
 				vault,
 				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
-				totalCoverageCommitmentAttoEth: atomic(9_000_000_000_000_000_000n),
-				feeEligibleCoverageCommitmentAttoEth: atomic(8_000_000_000_000_000_000n),
+				totalCapacityOwnershipAttoRep: atomic(9_000_000_000_000_000_000n),
+				feeEligibleCapacityOwnershipAttoRep: atomic(8_000_000_000_000_000_000n),
 				totalClaimableVaultFeesAttoEth: atomic(40n),
 				unallocatedAccruedFeesAttoEth: atomic(3n),
 				feeIndex: '10',
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleCoverageCommitmentAttoEth: atomic(4n),
+				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: atomic(4n),
 				lastUpdatedFeeAccumulator: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
@@ -84,22 +84,25 @@ describe('state projections', () => {
 		expect(poolProjection?.type).toBe('poolSnapshot')
 		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
 		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
+		expect(poolProjection.totalCapacityOwnershipAttoRep).toBe('9000000000000000000')
+		expect(poolProjection.feeEligibleCapacityOwnershipAttoRep).toBe('8000000000000000000')
 
 		const [vaultProjection, resultingPoolState] = projectionsFrom(
 			log('VaultAccountingCheckpoint', {
 				vault,
 				repBackingUnits: '50',
-				coverageCommitmentAttoEth: atomic(60n),
+				capacityOwnershipAttoRep: atomic(60n),
 				claimableFeesAttoEth: atomic(70n),
 				feeIndex: '80',
 				vaultFeeRemainder: '90',
 				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleCoverageCommitmentAttoEth: atomic(110n),
+				resultingFeeEligibleCapacityOwnershipAttoRep: atomic(110n),
 			}),
 		)
 		expect(vaultProjection?.type).toBe('vaultSnapshot')
 		if (vaultProjection?.type !== 'vaultSnapshot') throw new Error('vault projection missing')
 		expect(vaultProjection.vaultAddress).toBe(vault.toLowerCase())
+		expect(vaultProjection.capacityOwnershipAttoRep).toBe('60')
 		expect(resultingPoolState).toMatchObject({ type: 'poolState', state: { totalRepBackingUnits: '100' } })
 	})
 

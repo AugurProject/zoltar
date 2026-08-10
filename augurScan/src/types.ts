@@ -51,6 +51,7 @@ export type DecodedRecord = {
 	readonly arguments?: SerializedArguments
 	readonly displayArguments?: SerializedArguments
 	readonly argumentSchema?: readonly ArgumentSchema[]
+	readonly referencedAddresses?: readonly Address[]
 	readonly status: 'decoded' | 'unknown' | 'failed'
 	readonly error?: string
 	readonly summary: string

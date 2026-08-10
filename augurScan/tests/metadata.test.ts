@@ -11,7 +11,7 @@ import {
 	toHex,
 	zeroAddress,
 } from '../src/ethereum.ts'
-import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../src/metadata.ts'
+import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, referencedAddressesFrom, tokenAddressesFrom } from '../src/metadata.ts'
 import { projectionsFrom } from '../src/projections.ts'
 import type { StoredLog, TokenMetadata } from '../src/types.ts'
 
@@ -24,6 +24,10 @@ const requireTopics = (topics: readonly (Hex | readonly Hex[] | null)[]): readon
 	})
 
 describe('ABI metadata', () => {
+	test('includes the merged liquidation approval registry contract', () => {
+		expect(abiForKind('liquidationApprovalRegistry')).toBeDefined()
+	})
+
 	test('formats semantic REP amounts exactly and labels addresses', () => {
 		const abi = parseAbi(['event RepBurned(address indexed burner,uint248 indexed universeId,uint256 amountAttoRep,uint256 universeTheoreticalSupplyAttoRep)'])
 		const topics = encodeEventTopics({ abi, eventName: 'RepBurned', args: { burner: account, universeId: 4n } })
@@ -279,7 +283,7 @@ describe('ABI metadata', () => {
 		expect(decodeLogRecord('reputationToken', transferTopics, '0x', new Map()).status).toBe('failed')
 
 		const checkpointAbi = parseAbi([
-			'event PoolAccountingCheckpoint(uint8 reason,address indexed vault,uint256 settlementCollateralAttoEth,uint256 totalCoverageCommitmentAttoEth,uint256 feeEligibleCoverageCommitmentAttoEth,uint256 totalClaimableVaultFeesAttoEth,uint256 unallocatedAccruedFeesAttoEth,uint256 feeIndex,uint256 feeIndexRemainder,uint256 totalFeesOwedRemainder,uint256 uncheckpointedFeeEligibleCoverageCommitmentAttoEth,uint256 lastUpdatedFeeAccumulator,uint256 currentRetentionRate)',
+			'event PoolAccountingCheckpoint(uint8 reason,address indexed vault,uint256 settlementCollateralAttoEth,uint256 totalCapacityOwnershipAttoRep,uint256 feeEligibleCapacityOwnershipAttoRep,uint256 totalClaimableVaultFeesAttoEth,uint256 unallocatedAccruedFeesAttoEth,uint256 feeIndex,uint256 feeIndexRemainder,uint256 totalFeesOwedRemainder,uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep,uint256 lastUpdatedFeeAccumulator,uint256 currentRetentionRate)',
 		])
 		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'PoolAccountingCheckpoint', args: { vault: childToken } }))
 		const decoded = decodeLogRecord('securityPool', checkpointTopics, '0x', new Map())
@@ -327,6 +331,19 @@ describe('ABI metadata', () => {
 				summary: 'deployment',
 			}),
 		).toEqual([])
+	})
+
+	test('extracts only ABI-typed addresses from decoded evidence', () => {
+		const nestedOwner = getAddress('0x3333333333333333333333333333333333333333')
+		const [event] = parseAbi(['event Evidence(string title,address vault,(string note,address owner) nested)'])
+		if (event?.type !== 'event') throw new Error('Evidence event ABI missing')
+		expect(
+			referencedAddressesFrom(event.inputs, {
+				title: account,
+				vault: childToken,
+				nested: { note: account, owner: nestedOwner },
+			}),
+		).toEqual([childToken, nestedOwner])
 	})
 
 	test('maps all supported manifest contract kinds to ABIs', () => {

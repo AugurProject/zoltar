@@ -1,5 +1,5 @@
 import { runtimeConfig } from './config.ts'
-import type { IndexedBlock, IndexerLease, ScannerDatabase, StoredTransaction } from './database.ts'
+import type { AddressActivity, IndexedBlock, IndexerLease, RichListBalance, ScannerDatabase, StoredTransaction } from './database.ts'
 import {
 	type Address,
 	createPublicClient,
@@ -11,6 +11,7 @@ import {
 	parseAbi,
 	type Transaction,
 	type TransactionReceipt,
+	zeroAddress,
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
@@ -20,6 +21,8 @@ const erc20MetadataAbi = parseAbi([
 	'function name() view returns (string)',
 	'function symbol() view returns (string)',
 ])
+const erc20BalanceAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
+const priceCoordinatorDependenciesAbi = parseAbi(['function liquidationApprovalRegistry() view returns (address)'])
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
 	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)
@@ -127,6 +130,42 @@ const jsonEvidence = (value: unknown): unknown => {
 	return value
 }
 
+export const addressActivityFrom = (
+	transactions: readonly StoredTransaction[],
+	logs: readonly StoredLog[],
+	contracts: ReadonlyMap<string, ContractMetadata>,
+): readonly AddressActivity[] => {
+	const result = new Map<string, AddressActivity>()
+	for (const transaction of transactions) {
+		const transactionLogs = logs.filter((log) => log.transactionHash === transaction.hash)
+		const referencedAddresses = [...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap((log) => log.decoded.referencedAddresses ?? [])]
+		const pools = new Set<Address>()
+		if (transaction.to !== null && contracts.get(transaction.to.toLowerCase())?.kind === 'securityPool') pools.add(transaction.to)
+		for (const log of transactionLogs) if (contracts.get(log.address.toLowerCase())?.kind === 'securityPool') pools.add(log.address)
+		for (const candidate of referencedAddresses) {
+			if (contracts.get(candidate.toLowerCase())?.kind === 'securityPool') pools.add(candidate)
+		}
+		const participants = new Map<string, { address: Address; role: 'sender' | 'referenced' }>()
+		participants.set(transaction.from.toLowerCase(), { address: transaction.from, role: 'sender' })
+		for (const candidate of referencedAddresses) {
+			if (!participants.has(candidate.toLowerCase())) participants.set(candidate.toLowerCase(), { address: candidate, role: 'referenced' })
+		}
+		const associatedPools: readonly (Address | undefined)[] = pools.size === 0 ? [undefined] : [...pools]
+		for (const participant of participants.values()) {
+			for (const poolAddress of associatedPools) {
+				const key = `${transaction.hash}:${participant.address.toLowerCase()}:${poolAddress?.toLowerCase() ?? zeroAddress}`
+				result.set(key, {
+					transactionHash: transaction.hash,
+					address: participant.address,
+					role: participant.role,
+					...(poolAddress === undefined ? {} : { poolAddress }),
+				})
+			}
+		}
+	}
+	return [...result.values()]
+}
+
 const requireLogPosition = (log: Log): { transactionHash: Hash; transactionIndex: number; logIndex: number; blockHash: Hash; blockNumber: bigint } => {
 	if (log.transactionHash === null || log.transactionIndex === null || log.logIndex === null || log.blockHash === null || log.blockNumber === null) {
 		throw new Error('RPC returned a pending log while indexing a confirmed block')
@@ -169,6 +208,18 @@ export const withVerifiedProvider = async <TProvider extends ChainProvider, TRes
 export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, lookup: (blockNumber: bigint) => Promise<Hash>): Promise<void> => {
 	const observedHash = await lookup(number)
 	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
+}
+
+export const commitCanonicalRead = async <T>(
+	number: bigint,
+	expectedHash: Hash,
+	read: () => Promise<T>,
+	lookup: (blockNumber: bigint) => Promise<Hash>,
+	commit: (value: T) => Promise<void>,
+): Promise<void> => {
+	const value = await read()
+	await confirmCanonicalBlock(number, expectedHash, lookup)
+	await commit(value)
 }
 
 const databaseFailureMessage = 'Database request failed; retrying'
@@ -413,6 +464,7 @@ class NetworkIndexer {
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId)
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
+			if (checkpoint !== undefined) await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
 			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
@@ -524,6 +576,28 @@ class NetworkIndexer {
 					}
 				}
 			}
+			for (const coordinator of discovered.filter((contract) => contract.kind === 'priceCoordinator')) {
+				const registryAddress = await this.#client.readContract({
+					address: coordinator.address,
+					abi: priceCoordinatorDependenciesAbi,
+					functionName: 'liquidationApprovalRegistry',
+					blockNumber: number,
+				})
+				const registry = getAddress(registryAddress)
+				if (!contracts.has(registry.toLowerCase())) {
+					const metadata: ContractMetadata = {
+						address: registry,
+						kind: 'liquidationApprovalRegistry',
+						label: 'Liquidation Approval Registry',
+						provenance: `${coordinator.label}.liquidationApprovalRegistry`,
+						discoveryBlock: number,
+						discoveryTxHash: coordinator.discoveryTxHash,
+					}
+					contracts.set(registry.toLowerCase(), metadata)
+					discovered.push(metadata)
+					discoveredAddresses.push(registry)
+				}
+			}
 			if (discoveredAddresses.length === 0) break
 			const activityAddresses = discoveredAddresses.filter((address) => isProtocolActivitySource(contracts.get(address.toLowerCase())))
 			for (const log of activityAddresses.length === 0 ? [] : await this.#getKnownLogs(number, activityAddresses, block.hash)) {
@@ -622,8 +696,49 @@ class NetworkIndexer {
 				tokenMetadata: readTokenMetadata,
 				transactions: storedTransactions,
 				logs: storedLogs,
+				addressActivity: addressActivityFrom(storedTransactions, storedLogs, contracts),
 			},
 		}
+	}
+
+	async #refreshRichListBalances(blockNumber: bigint, blockHash: Hash): Promise<void> {
+		const targets = await this.#database.richListBalanceTargets(this.#network.chainId)
+		if (targets.addresses.length === 0) return
+		await commitCanonicalRead(
+			blockNumber,
+			blockHash,
+			async () => {
+				const balances: RichListBalance[] = []
+				const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) => ({
+					owner,
+					assetAddress: zeroAddress,
+					assetKind: 'native' as const,
+					balance: await this.#client.getBalance({ address: owner, blockNumber }),
+				}))
+				balances.push(...nativeBalances)
+				const tokenRequests = targets.addresses.flatMap((owner) => targets.assets.map((asset) => ({ owner, asset })))
+				balances.push(
+					...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) => ({
+						owner,
+						assetAddress: asset.address,
+						assetKind: asset.kind,
+						balance: await this.#client.readContract({
+							address: asset.address,
+							abi: erc20BalanceAbi,
+							functionName: 'balanceOf',
+							args: [owner],
+							blockNumber,
+						}),
+					}))),
+				)
+				return balances
+			},
+			async (number) => (await this.#client.getBlock({ blockNumber: number })).hash,
+			async (balances) => {
+				await this.#assertLease()
+				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease())
+			},
+		)
 	}
 
 	async #readTokenMetadata(address: Address, blockNumber: bigint): Promise<TokenMetadata> {

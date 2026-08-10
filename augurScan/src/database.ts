@@ -27,6 +27,31 @@ export type IndexedBlock = {
 	readonly tokenMetadata: readonly TokenMetadata[]
 	readonly transactions: readonly StoredTransaction[]
 	readonly logs: readonly StoredLog[]
+	readonly addressActivity: readonly AddressActivity[]
+}
+
+export type AddressActivity = {
+	readonly transactionHash: Hash
+	readonly address: Address
+	readonly poolAddress?: Address
+	readonly role: 'sender' | 'referenced'
+}
+
+type RichListAsset = {
+	readonly address: Address
+	readonly kind: 'rep' | 'weth'
+}
+
+export type RichListBalance = {
+	readonly owner: Address
+	readonly assetAddress: Address
+	readonly assetKind: 'native' | 'rep' | 'weth'
+	readonly balance: bigint
+}
+
+export type RichListBalanceTargets = {
+	readonly addresses: readonly Address[]
+	readonly assets: readonly RichListAsset[]
 }
 
 export type LiveEvent = {
@@ -326,6 +351,60 @@ export class ScannerDatabase {
 		)
 	}
 
+	async richListBalanceTargets(chainId: number, limit = 10): Promise<RichListBalanceTargets> {
+		const [addressRows, assetRows] = await Promise.all([
+			this.sql`
+				WITH assets AS (
+					SELECT address FROM contracts WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
+				)
+				SELECT activity.address
+				FROM (SELECT DISTINCT address FROM address_activity WHERE chain_id = ${chainId} AND canonical) activity
+				LEFT JOIN LATERAL (
+					SELECT max(block_number) AS block_number,
+						count(DISTINCT asset_address) FILTER (
+							WHERE asset_kind = 'native' OR asset_address IN (SELECT address FROM assets)
+						) AS sampled_assets
+					FROM address_balance_snapshots snapshot
+					WHERE snapshot.chain_id = ${chainId} AND snapshot.address = activity.address AND snapshot.canonical
+				) latest ON true
+				ORDER BY ((SELECT count(*) FROM assets) + 1 - COALESCE(latest.sampled_assets, 0)) DESC,
+					latest.block_number ASC NULLS FIRST, activity.address
+				LIMIT ${limit}
+			`,
+			this.sql`
+				SELECT address, kind FROM contracts
+				WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
+				ORDER BY kind, address
+			`,
+		])
+		return {
+			addresses: addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address),
+			assets: assetRows.map((row: Record<string, unknown>) => ({
+				address: String(row['address']) as Address,
+				kind: row['kind'] === 'weth' ? 'weth' : 'rep',
+			})),
+		}
+	}
+
+	async storeRichListBalances(chainId: number, blockNumber: bigint, blockHash: Hash, balances: readonly RichListBalance[], lease: IndexerLease): Promise<void> {
+		if (balances.length === 0) return
+		await lease.assertHeld()
+		await lease.connection.begin(async (transaction) => {
+			const canonicalRows = await transaction`
+				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${blockNumber.toString()} AND hash = ${blockHash} AND canonical
+			`
+			if (canonicalRows.length !== 1) throw new DatabaseConsistencyError('Cannot store rich-list balances for a noncanonical block')
+			for (const balance of balances) {
+				await transaction`
+					INSERT INTO address_balance_snapshots (chain_id, block_hash, block_number, address, asset_address, asset_kind, balance, canonical, observed_at)
+					VALUES (${chainId}, ${blockHash}, ${blockNumber.toString()}, ${balance.owner.toLowerCase()}, ${balance.assetAddress.toLowerCase()}, ${balance.assetKind}, ${balance.balance.toString()}, true, now())
+					ON CONFLICT (chain_id, block_hash, address, asset_address) DO UPDATE SET
+						asset_kind = EXCLUDED.asset_kind, balance = EXCLUDED.balance, canonical = true, observed_at = now()
+				`
+			}
+		})
+	}
+
 	async checkpoint(chainId: number): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
 		const rows = await this.sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId}`
 		const row = rows[0]
@@ -368,6 +447,8 @@ export class ScannerDatabase {
 			await transaction`UPDATE pool_state_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE vault_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE universe_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND provenance <> 'manifest' AND discovery_block > ${ancestor.toString()}`
 			await transaction`
@@ -474,6 +555,13 @@ export class ScannerDatabase {
 					ON CONFLICT (chain_id, block_hash, tx_hash) DO UPDATE SET function_name = EXCLUDED.function_name, function_signature = EXCLUDED.function_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
 			}
+			for (const activity of block.addressActivity) {
+				await transaction`
+					INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)
+					VALUES (${chainId}, ${block.hash}, ${block.number.toString()}, ${activity.transactionHash}, ${activity.address.toLowerCase()}, ${activity.poolAddress?.toLowerCase() ?? '0x0000000000000000000000000000000000000000'}, ${activity.role}, true)
+					ON CONFLICT (chain_id, block_hash, tx_hash, address, pool_address) DO UPDATE SET role = CASE WHEN EXCLUDED.role = 'sender' THEN 'sender' ELSE address_activity.role END, canonical = true
+				`
+			}
 			for (const item of block.logs) {
 				await transaction`
 					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
@@ -500,16 +588,16 @@ export class ScannerDatabase {
 					}
 					if (projection.type === 'poolSnapshot') {
 						await transaction`
-							INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_coverage_commitment_atto_eth, fee_eligible_coverage_commitment_atto_eth, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_coverage_atto_eth, last_updated_fee_accumulator, current_retention_rate, canonical)
-							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalCoverageCommitmentAttoEth}, ${projection.feeEligibleCoverageCommitmentAttoEth}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleCoverageAttoEth}, ${projection.lastUpdatedFeeAccumulator}, ${projection.currentRetentionRate}, true)
+							INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_capacity_ownership_atto_rep, fee_eligible_capacity_ownership_atto_rep, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_capacity_ownership_atto_rep, last_updated_fee_accumulator, current_retention_rate, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalCapacityOwnershipAttoRep}, ${projection.feeEligibleCapacityOwnershipAttoRep}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleCapacityOwnershipAttoRep}, ${projection.lastUpdatedFeeAccumulator}, ${projection.currentRetentionRate}, true)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 						`
 						continue
 					}
 					if (projection.type === 'vaultSnapshot') {
 						await transaction`
-							INSERT INTO vault_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address, rep_backing_units, coverage_commitment_atto_eth, claimable_fees_atto_eth, fee_index, vault_fee_remainder, resulting_total_rep_backing_units, resulting_fee_eligible_coverage_atto_eth, canonical)
-							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.vaultAddress}, ${projection.repBackingUnits}, ${projection.coverageCommitmentAttoEth}, ${projection.claimableFeesAttoEth}, ${projection.feeIndex}, ${projection.vaultFeeRemainder}, ${projection.resultingTotalRepBackingUnits}, ${projection.resultingFeeEligibleCoverageAttoEth}, true)
+							INSERT INTO vault_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address, rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index, vault_fee_remainder, resulting_total_rep_backing_units, resulting_fee_eligible_capacity_ownership_atto_rep, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.vaultAddress}, ${projection.repBackingUnits}, ${projection.capacityOwnershipAttoRep}, ${projection.claimableFeesAttoEth}, ${projection.feeIndex}, ${projection.vaultFeeRemainder}, ${projection.resultingTotalRepBackingUnits}, ${projection.resultingFeeEligibleCapacityOwnershipAttoRep}, true)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address, vault_address) DO UPDATE SET canonical = true
 						`
 						continue

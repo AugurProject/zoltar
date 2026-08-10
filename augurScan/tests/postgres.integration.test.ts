@@ -22,6 +22,8 @@ const discoveredAddress = getAddress('0x2000000000000000000000000000000000000002
 const promotedAddress = getAddress('0x3000000000000000000000000000000000000003')
 const rediscoveredAddress = getAddress('0x4000000000000000000000000000000000000004')
 const orphanOnlyAddress = getAddress('0x5000000000000000000000000000000000000005')
+const wethAddress = getAddress('0x6000000000000000000000000000000000000006')
+const secondWethAddress = getAddress('0x6000000000000000000000000000000000000007')
 const transactionHash = keccak256(stringToHex('augurScan integration transaction'))
 const blockHash = (name: string) => keccak256(stringToHex(name))
 
@@ -50,6 +52,26 @@ const log = (hash: ReturnType<typeof blockHash>, summary: string): StoredLog => 
 	decoded: { status: 'unknown', summary },
 })
 
+const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
+	...log(hash, 'replacement vault checkpoint'),
+	logIndex: 1,
+	decoded: {
+		status: 'decoded',
+		name: 'VaultAccountingCheckpoint',
+		summary: 'replacement vault checkpoint',
+		arguments: {
+			vault: address,
+			repBackingUnits: '120000000000000000000',
+			capacityOwnershipAttoRep: '85000000000000000000',
+			claimableFeesAttoEth: '30000000000000000',
+			feeIndex: '1',
+			vaultFeeRemainder: '0',
+			resultingTotalRepBackingUnits: '120000000000000000000',
+			resultingFeeEligibleCapacityOwnershipAttoRep: '85000000000000000000',
+		},
+	},
+})
+
 const indexedBlock = (
 	name: string,
 	parentHash: ReturnType<typeof blockHash>,
@@ -68,6 +90,7 @@ const indexedBlock = (
 		finalizedThrough: 0n,
 		contracts,
 		tokenMetadata,
+		addressActivity: [],
 		transactions:
 			summary === undefined
 				? []
@@ -223,8 +246,23 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			discoveryBlock: 1n,
 			discoveryTxHash: transactionHash,
 		}
-		const first = indexedBlock('block-one', genesisHash, [initialDiscovery], undefined, [
+		const wethDiscovery: ContractMetadata = {
+			address: wethAddress,
+			label: 'Wrapped Ether',
+			kind: 'weth',
+			provenance: 'test',
+			discoveryBlock: 1n,
+			discoveryTxHash: transactionHash,
+		}
+		const secondWethDiscovery: ContractMetadata = {
+			...wethDiscovery,
+			address: secondWethAddress,
+			label: 'Wrapped Ether v2',
+		}
+		const first = indexedBlock('block-one', genesisHash, [initialDiscovery, wethDiscovery, secondWethDiscovery], undefined, [
 			{ address: rediscoveredAddress, name: 'Original token', symbol: 'OLD', decimals: 18, readBlock: 1n },
+			{ address: wethAddress, name: 'Wrapped Ether', symbol: 'WETH', decimals: 18, readBlock: 1n },
+			{ address: secondWethAddress, name: 'Wrapped Ether v2', symbol: 'WETH2', decimals: 18, readBlock: 1n },
 		])
 		await database.storeBlock(chainId, first, writeLease)
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
@@ -309,10 +347,27 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		const orphanContractResponse = await handleApi(new Request(`http://localhost/api/v1/contracts/${chainId}/${orphanOnlyAddress}`), database.sql)
 		expect(orphanContractResponse?.status).toBe(404)
 
-		const replacement = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [
-			{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 6, readBlock: 2n },
+		const replacementBase = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [
+			{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 18, readBlock: 2n },
 		])
+		const replacement: IndexedBlock = {
+			...replacementBase,
+			logs: [...replacementBase.logs, vaultCheckpoint(replacementBase.hash)],
+			addressActivity: [{ transactionHash, address, poolAddress: discoveredAddress, role: 'sender' }],
+		}
 		await database.storeBlock(chainId, replacement, writeLease)
+		await database.storeRichListBalances(
+			chainId,
+			2n,
+			replacement.hash,
+			[
+				{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native', balance: 2_000_000_000_456_789_123n },
+				{ owner: address, assetAddress: rediscoveredAddress, assetKind: 'rep', balance: 3_000_000_000_000_000_000n },
+				{ owner: address, assetAddress: wethAddress, assetKind: 'weth', balance: 1_234_567_890_123_456_789n },
+				{ owner: address, assetAddress: secondWethAddress, assetKind: 'weth', balance: 222_222_222_222_222_222n },
+			],
+			writeLease,
+		)
 		await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Temporarily promoted pool', 'securityPool']] }, writeLease)
 		await database.seedNetwork({ ...network, contracts: [] }, writeLease)
 		const reconciledContracts = await database.contracts(chainId)
@@ -334,7 +389,7 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			await database.sql`SELECT block_hash, decimals, canonical FROM token_metadata WHERE chain_id = ${chainId} AND address = ${discoveredAddress.toLowerCase()} ORDER BY block_hash`
 		expect(metadataRows).toHaveLength(2)
 		expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === orphan.hash)?.['canonical']).toBe(false)
-		expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === replacement.hash)).toMatchObject({ canonical: true, decimals: 6 })
+		expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === replacement.hash)).toMatchObject({ canonical: true, decimals: 18 })
 
 		const third: IndexedBlock = {
 			...indexedBlock('block-three', replacement.hash),
@@ -361,17 +416,130 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		} finally {
 			await failover.close()
 		}
+		await database.seedNetwork({ ...network, contracts: [[orphanOnlyAddress, 'New child REP', 'reputationToken']] })
 
 		const response = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}`), database.sql)
 		if (response === undefined) throw new Error('logs API did not return a response')
 		const payload = (await response.json()) as { items: Array<{ summary: string; block_hash: string }> }
-		expect(payload.items).toHaveLength(1)
-		expect(payload.items[0]).toMatchObject({ summary: 'replacement event', block_hash: replacement.hash })
+		expect(payload.items).toHaveLength(2)
+		expect(payload.items).toContainEqual(expect.objectContaining({ summary: 'replacement event', block_hash: replacement.hash }))
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 		if (detailResponse === undefined) throw new Error('log detail API did not return a response')
 		const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[] }
 		expect(detail.receipt.logs).toHaveLength(1)
 		expect(detail.argument_schema).toEqual([])
+		const richListResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
+		if (richListResponse === undefined) throw new Error('rich-list API did not return a response')
+		const richList = (await richListResponse.json()) as {
+			items: Array<
+				Record<string, unknown> & {
+					rep_balances: Array<Record<string, unknown>>
+					pool_associations: Array<Record<string, unknown>>
+					vault_positions: Array<Record<string, unknown>>
+					weth_balances: Array<Record<string, unknown>>
+					native_balance_detail: Record<string, unknown>
+				}
+			>
+			total: number
+		}
+		expect(richList.total).toBe(1)
+		expect(richList.items[0]).toMatchObject({
+			address: address.toLowerCase(),
+			transaction_count: '1',
+			interaction_count: '1',
+			pool_count: '1',
+			native_balance: '2000000000456789123',
+			weth_balance: '1456790112345679011',
+			weth_token_count: '2',
+			sampled_weth_token_count: '2',
+			rep_balance: '3000000000000000000',
+			rep_token_count: '2',
+			sampled_rep_token_count: '1',
+		})
+		expect(richList.items[0]?.rep_balances).toEqual([
+			expect.objectContaining({ address: rediscoveredAddress.toLowerCase(), balance: '3000000000000000000', symbol: 'OLD' }),
+		])
+		expect(richList.items[0]?.weth_balances).toEqual([
+			expect.objectContaining({ address: wethAddress.toLowerCase(), balance: '1234567890123456789', symbol: 'WETH' }),
+			expect.objectContaining({ address: secondWethAddress.toLowerCase(), balance: '222222222222222222', symbol: 'WETH2' }),
+		])
+		expect(richList.items[0]?.native_balance_detail).toEqual({ balance: '2000000000456789123', blockNumber: '2' })
+		expect(richList.items[0]?.pool_associations).toEqual([expect.objectContaining({ address: discoveredAddress.toLowerCase() })])
+		expect(richList.items[0]?.vault_positions).toEqual([
+			expect.objectContaining({
+				poolAddress: discoveredAddress.toLowerCase(),
+				repBackingUnits: '120000000000000000000',
+				capacityOwnershipAttoRep: '85000000000000000000',
+				claimableFeesAttoEth: '30000000000000000',
+				blockNumber: '2',
+			}),
+		])
+		const beyondEndResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&offset=1`), database.sql)
+		if (beyondEndResponse === undefined) throw new Error('offset rich-list API did not return a response')
+		const beyondEnd = (await beyondEndResponse.json()) as { items: unknown[]; total: number }
+		expect(beyondEnd).toMatchObject({ items: [], total: 1 })
+		const balanceLease = await database.tryAcquireIndexerLock(chainId)
+		if (balanceLease === undefined) throw new Error('balance refresher did not acquire its lock')
+		await database.storeRichListBalances(
+			chainId,
+			3n,
+			third.hash,
+			[
+				{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native', balance: 2_000_000_000_000_000_000n },
+				{ owner: address, assetAddress: rediscoveredAddress, assetKind: 'rep', balance: 3_000_000_000_000_000_000n },
+				{ owner: address, assetAddress: orphanOnlyAddress, assetKind: 'rep', balance: 4_000_000_000_000_000_000n },
+			],
+			balanceLease,
+		)
+		await balanceLease.release()
+		const refreshedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
+		if (refreshedResponse === undefined) throw new Error('refreshed rich-list API did not return a response')
+		const refreshed = (await refreshedResponse.json()) as { items: Array<Record<string, unknown>> }
+		expect(refreshed.items[0]).toMatchObject({ rep_balance: '7000000000000000000', rep_token_count: '2', sampled_rep_token_count: '2' })
+
+		const extraRepTokens = Array.from({ length: 101 }, (_, index) =>
+			getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`),
+		)
+		await database.seedNetwork({
+			...network,
+			contracts: extraRepTokens.map((token, index) => [token, `Extra REP ${index + 1}`, 'reputationToken']),
+		})
+		const assetLimitLease = await database.tryAcquireIndexerLock(chainId)
+		if (assetLimitLease === undefined) throw new Error('asset-limit writer did not acquire its lock')
+		await database.storeRichListBalances(
+			chainId,
+			3n,
+			third.hash,
+			extraRepTokens.map((token, index) => ({ owner: address, assetAddress: token, assetKind: 'rep' as const, balance: BigInt(index + 1) })),
+			assetLimitLease,
+		)
+		await assetLimitLease.release()
+		const cappedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
+		if (cappedResponse === undefined) throw new Error('capped rich-list API did not return a response')
+		const capped = (await cappedResponse.json()) as { items: Array<Record<string, unknown> & { rep_balances: unknown[] }> }
+		expect(capped.items[0]).toMatchObject({ sampled_rep_token_count: '103', returned_rep_token_count: '100', rep_balances_truncated: true })
+		expect(capped.items[0]?.rep_balances).toHaveLength(100)
+
+		await database.sql`
+			INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)
+			SELECT ${chainId}, ${replacement.hash}, 2, ${transactionHash},
+				'0x' || lpad(to_hex(participant), 40, '0'),
+				'0x0000000000000000000000000000000000000000', 'referenced', true
+			FROM generate_series(1, 5000) participant
+			ON CONFLICT DO NOTHING
+		`
+		const largePageResponse = await database.read((sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
+		if (largePageResponse === undefined) throw new Error('large rich-list page did not return a response')
+		const largePage = (await largePageResponse.json()) as { items: unknown[]; total: number }
+		expect(largePage).toMatchObject({ total: 5001 })
+		expect(largePage.items).toHaveLength(10)
+		const largeBeyondEndResponse = await database.read(
+			(sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=100000`), sql),
+			8_000,
+		)
+		if (largeBeyondEndResponse === undefined) throw new Error('large beyond-end rich-list page did not return a response')
+		const largeBeyondEnd = (await largeBeyondEndResponse.json()) as { items: unknown[]; total: number }
+		expect(largeBeyondEnd).toMatchObject({ items: [], total: 5001 })
 	} finally {
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()

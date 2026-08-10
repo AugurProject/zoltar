@@ -12,6 +12,8 @@ const demoState = pageUrl.searchParams.get('state')
 const detailState = pageUrl.searchParams.get('detailState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
+const isRichList = location.pathname === '/richlist'
+const isActivity = !isSystem && !isRichList
 const initialActivityFilters = {
 	network: pageUrl.searchParams.get('chainId') ?? '',
 	event: pageUrl.searchParams.get('event') ?? '',
@@ -46,6 +48,9 @@ let networkFreshnessThresholdMs = 48_000
 let lastNetworkRequestFailed = false
 let activeReorgRecovery
 let canonicalRefreshRequired = false
+let richListItems = []
+let richListTotal = 0
+let richListRequestVersion = 0
 
 const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 const demoNetworks = [
@@ -121,6 +126,76 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		],
 	}
 })
+const demoRichList = Array.from({ length: 64 }, (_, index) => {
+	const network = demoNetworks[index % 3 === 0 ? 1 : 0]
+	const address = `0x${(BigInt(index + 1) * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
+	const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n)
+	const poolCount = 1 + (index % 4)
+	const vaultCount = (index + 1) % 3
+	return {
+		chain_id: network.chain_id,
+		network_id: network.id,
+		explorer_base_url: network.explorer_base_url,
+		address,
+		label: index === 2 ? 'Price Coordinator' : null,
+		kind: index === 2 ? 'priceCoordinator' : null,
+		rep_balance: repBalance.toString(),
+		weth_balance: (BigInt(18 + index) * 10n ** 17n + (index === 0 ? 987_654_321n : 0n)).toString(),
+		native_balance: (BigInt(4 + (index % 5)) * 10n ** 17n + (index === 0 ? 456_789_123n : 0n)).toString(),
+		rep_token_count: index === 1 ? '2' : '1',
+		sampled_rep_token_count: '1',
+		weth_token_count: '1',
+		sampled_weth_token_count: '1',
+		sampled_native_count: '1',
+		returned_rep_token_count: '1',
+		returned_weth_token_count: '1',
+		rep_balances_truncated: false,
+		weth_balances_truncated: false,
+		transaction_count: String(84 - index),
+		interaction_count: String(102 - index),
+		pool_count: String(poolCount),
+		vault_count: String(vaultCount),
+		active_vault_count: String(index % 2),
+		oldest_balance_block: String(BigInt(network.indexed_block) - BigInt(index % 4)),
+		last_balance_refresh: new Date(Date.now() - index * 17_000).toISOString(),
+		rep_balances: [
+			{
+				address: demoNetworks[0].chain_id === network.chain_id ? '0x221657776846890989a759ba2973e427dff5c9bb' : '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
+				balance: repBalance.toString(),
+				symbol: 'REP',
+				decimals: 18,
+				blockNumber: network.indexed_block,
+			},
+		],
+		weth_balances: [
+			{
+				address: '0x0000000000000000000000000000000000000007',
+				balance: (BigInt(18 + index) * 10n ** 17n + (index === 0 ? 987_654_321n : 0n)).toString(),
+				name: 'Wrapped Ether',
+				symbol: 'WETH',
+				decimals: 18,
+				blockNumber: network.indexed_block,
+			},
+		],
+		native_balance_detail: {
+			balance: (BigInt(4 + (index % 5)) * 10n ** 17n + (index === 0 ? 456_789_123n : 0n)).toString(),
+			blockNumber: network.indexed_block,
+		},
+		pool_associations: Array.from({ length: poolCount }, (_, poolIndex) => ({
+			address: `0x${(BigInt(index + 1) * 100n + BigInt(poolIndex + 1)).toString(16).padStart(40, 'a')}`,
+			label: poolIndex === 0 ? 'Security Pool' : null,
+			questionTitle: poolIndex === 0 ? 'Will the 2030 global mean temperature anomaly exceed 1.5°C?' : null,
+		})),
+		vault_positions: Array.from({ length: vaultCount }, (_, vaultIndex) => ({
+			poolAddress: `0x${(BigInt(index + 1) * 100n + BigInt(vaultIndex + 1)).toString(16).padStart(40, 'a')}`,
+			questionTitle: 'Will the 2030 global mean temperature anomaly exceed 1.5°C?',
+			repBackingUnits: String(BigInt(120 + vaultIndex) * 10n ** 18n),
+			capacityOwnershipAttoRep: String(BigInt(85 + vaultIndex) * 10n ** 18n),
+			claimableFeesAttoEth: String(BigInt(3 + vaultIndex) * 10n ** 16n),
+			blockNumber: network.indexed_block,
+		})),
+	}
+})
 
 const demoAddress = (seed) => `0x${seed.repeat(40).slice(0, 40)}`
 const demoQuestions = [
@@ -193,8 +268,8 @@ const demoPools = [
 		initial_retention_rate: '999999800000000000',
 		initial_settlement_collateral_atto_eth: '182500000000000000000',
 		settlement_collateral_atto_eth: '241820000000000000000',
-		total_coverage_commitment_atto_eth: '168400000000000000000',
-		fee_eligible_coverage_commitment_atto_eth: '154200000000000000000',
+		total_capacity_ownership_atto_rep: '168400000000000000000',
+		fee_eligible_capacity_ownership_atto_rep: '154200000000000000000',
 		total_claimable_vault_fees_atto_eth: '1280000000000000000',
 		unallocated_accrued_fees_atto_eth: '210000000000000000',
 		current_retention_rate: '999999700000000000',
@@ -218,8 +293,8 @@ const demoPools = [
 		initial_retention_rate: '999999800000000000',
 		initial_settlement_collateral_atto_eth: '92000000000000000000',
 		settlement_collateral_atto_eth: '117400000000000000000',
-		total_coverage_commitment_atto_eth: '78200000000000000000',
-		fee_eligible_coverage_commitment_atto_eth: '73900000000000000000',
+		total_capacity_ownership_atto_rep: '78200000000000000000',
+		fee_eligible_capacity_ownership_atto_rep: '73900000000000000000',
 		total_claimable_vault_fees_atto_eth: '430000000000000000',
 		unallocated_accrued_fees_atto_eth: '80000000000000000',
 		current_retention_rate: '999999700000000000',
@@ -243,8 +318,8 @@ const demoPools = [
 		initial_retention_rate: '999999500000000000',
 		initial_settlement_collateral_atto_eth: '44000000000000000000',
 		settlement_collateral_atto_eth: '68900000000000000000',
-		total_coverage_commitment_atto_eth: '35500000000000000000',
-		fee_eligible_coverage_commitment_atto_eth: '32100000000000000000',
+		total_capacity_ownership_atto_rep: '35500000000000000000',
+		fee_eligible_capacity_ownership_atto_rep: '32100000000000000000',
 		total_claimable_vault_fees_atto_eth: '190000000000000000',
 		unallocated_accrued_fees_atto_eth: '40000000000000000',
 		current_retention_rate: '999999400000000000',
@@ -268,8 +343,8 @@ const demoPools = [
 		initial_retention_rate: '999999800000000000',
 		initial_settlement_collateral_atto_eth: '12000000000000000000',
 		settlement_collateral_atto_eth: '18400000000000000000',
-		total_coverage_commitment_atto_eth: '9700000000000000000',
-		fee_eligible_coverage_commitment_atto_eth: '8800000000000000000',
+		total_capacity_ownership_atto_rep: '9700000000000000000',
+		fee_eligible_capacity_ownership_atto_rep: '8800000000000000000',
 		total_claimable_vault_fees_atto_eth: '70000000000000000',
 		unallocated_accrued_fees_atto_eth: '9000000000000000',
 		current_retention_rate: '999999700000000000',
@@ -287,12 +362,12 @@ const demoVaults = Array.from({ length: 9 }, (_, index) => {
 		vault_address: demoAddress(`${(index + 2).toString(16)}f`),
 		question_title: poolItem.question_title,
 		rep_backing_units: String((920_000 + index * 143_000) * 1e12),
-		coverage_commitment_atto_eth: String(BigInt(18 + index * 4) * 10n ** 18n),
+		capacity_ownership_atto_rep: String(BigInt(18 + index * 4) * 10n ** 18n),
 		claimable_fees_atto_eth: String(BigInt(4 + index) * 10n ** 16n),
 		fee_index: String(BigInt(1200 + index * 170) * 10n ** 15n),
 		vault_fee_remainder: String(index * 13),
 		resulting_total_rep_backing_units: '6410000000000000000',
-		resulting_fee_eligible_coverage_atto_eth: poolItem.fee_eligible_coverage_commitment_atto_eth,
+		resulting_fee_eligible_capacity_ownership_atto_rep: poolItem.fee_eligible_capacity_ownership_atto_rep,
 		block_number: String(23184700 - index),
 	}
 })
@@ -413,13 +488,13 @@ const demoHistory = (path) => {
 	if (type === 'pools') {
 		const poolItem = demoPools.find((item) => item.pool_address === parts[6]) ?? demoPools[0]
 		const collateral = demoSeries(poolItem.settlement_collateral_atto_eth)
-		const coverage = demoSeries(poolItem.total_coverage_commitment_atto_eth, 12, 0.4)
+		const capacity = demoSeries(poolItem.total_capacity_ownership_atto_rep, 12, 0.4)
 		return {
 			snapshots: collateral.map((value, index) => ({
 				timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
 				block_number: String(23100000 + index * 7700),
 				settlement_collateral_atto_eth: value,
-				total_coverage_commitment_atto_eth: coverage[index],
+				total_capacity_ownership_atto_rep: capacity[index],
 				total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
 				current_retention_rate: poolItem.current_retention_rate,
 			})),
@@ -429,13 +504,13 @@ const demoHistory = (path) => {
 	if (type === 'vaults') {
 		const vaultItem = demoVaults.find((item) => item.pool_address === parts[6] && item.vault_address === parts[7]) ?? demoVaults[0]
 		const rep = demoSeries(vaultItem.rep_backing_units, 10, 0.45)
-		const coverage = demoSeries(vaultItem.coverage_commitment_atto_eth, 10, 0.5)
+		const capacity = demoSeries(vaultItem.capacity_ownership_atto_rep, 10, 0.5)
 		return {
 			snapshots: rep.map((value, index) => ({
 				timestamp: new Date(Date.now() - (9 - index) * 8 * 86_400_000).toISOString(),
 				block_number: String(23110000 + index * 6800),
 				rep_backing_units: value,
-				coverage_commitment_atto_eth: coverage[index],
+				capacity_ownership_atto_rep: capacity[index],
 				claimable_fees_atto_eth: String(BigInt(1 + index) * 10n ** 16n),
 			})),
 		}
@@ -469,6 +544,7 @@ const element = (tag, className, text) => {
 
 const short = (value, front = 6, back = 4) => (value ? `${value.slice(0, front)}…${value.slice(-back)}` : '—')
 const number = (value) => (value === null || value === undefined ? '—' : new Intl.NumberFormat('en-US').format(Number(value)))
+const counted = (value, singular, plural = `${singular}s`) => `${number(value)} ${Number(value) === 1 ? singular : plural}`
 const time = (value) =>
 	value
 		? new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', hour12: false }).format(new Date(value))
@@ -512,6 +588,14 @@ const api = async (path, { signal } = {}) => {
 			if (detailState === 'refresh-error' && demoStateDetailRequests === 2) throw new Error('The newest checkpoint could not be read')
 			if (detailState === 'loading') return await new Promise(() => {})
 			return demoHistory(path)
+		}
+		if (path.startsWith('/api/v1/richlist')) {
+			const request = new URL(path, location.origin)
+			const chainId = request.searchParams.get('chainId')
+			const offset = Number(request.searchParams.get('offset') ?? 0)
+			const limit = Number(request.searchParams.get('limit') ?? 50)
+			const filtered = demoRichList.filter((item) => !chainId || item.chain_id === chainId)
+			return { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
 		}
 		if (path.startsWith('/api/v1/logs/') && path.split('/').length > 7) {
 			if (detailState === 'error' && !demoDetailErrorConsumed) {
@@ -598,7 +682,7 @@ const renderNetworks = (networks) => {
 		const lag =
 			network.indexed_block === null || network.observed_block === null
 				? 'head unknown'
-				: `${Math.max(0, Number(network.observed_block) - Number(network.indexed_block))} blocks behind`
+				: `${counted(Math.max(0, Number(network.observed_block) - Number(network.indexed_block)), 'block')} behind`
 		meta.append(indexedTime, ageNode, element('span', '', lag))
 		card.append(title, block, meta)
 		if (Number(network.consecutive_failures) > 0) {
@@ -712,12 +796,14 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			if (Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousActivityNetwork = networkFilter.value
 			const previousSystemNetwork = $('#system-network-filter').value
+			const previousRichNetwork = $('#rich-network-filter').value
 			renderNetworks(items)
 			lastNetworkRequestFailed = false
 			updateFreshness()
 			updateDiagnostics()
 			reconcileNetworkOptions(networkFilter, items, initialActivityFilters.network)
 			reconcileNetworkOptions($('#system-network-filter'), items)
+			reconcileNetworkOptions($('#rich-network-filter'), items)
 			lastNetworkSuccessAt = new Date()
 			$('#last-updated').classList.remove('error')
 			$('#last-updated').textContent = `Status checked ${time(lastNetworkSuccessAt)} UTC`
@@ -726,12 +812,13 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 				connection.className = 'connection live'
 				$('#connection-label').textContent = 'Demo fixture'
 			}
-			if (!isSystem && synchronizeActivity && previousActivityNetwork !== networkFilter.value) {
+			if (isActivity && synchronizeActivity && previousActivityNetwork !== networkFilter.value) {
 				syncActivityFilterUrl()
 				if (validateAddressFilter()) await loadLogs()
 				else showInvalidAddressFilter()
 			}
 			if (isSystem && previousSystemNetwork !== $('#system-network-filter').value) await loadSystemState()
+			if (isRichList && previousRichNetwork !== $('#rich-network-filter').value) await loadRichList()
 			return true
 		} catch {
 			lastNetworkRequestFailed = true
@@ -1204,6 +1291,220 @@ const stateHeader = (eyebrow, title, subtitle, kind) => {
 	return header
 }
 
+const richBalance = (value, symbol, digits = 3) => exactUnit(value ?? '0', 18, symbol, digits)
+const richFieldLabel = (label) => element('span', 'sr-only rich-field-label', label)
+
+const renderRichList = () => {
+	const rows = $('#richlist-rows')
+	const isInitialRender = rows.childElementCount === 0
+	const openDetailKeys = new Set([...rows.querySelectorAll('details[open][data-detail-key]')].map((details) => details.dataset.detailKey))
+	const focusedDetailKey = document.activeElement?.closest?.('details[data-detail-key]')?.dataset.detailKey
+	rows.replaceChildren()
+	for (const item of richListItems) {
+		const itemKey = `${item.chain_id}:${item.address}`
+		const article = element('article', 'rich-row')
+		const main = element('div', 'rich-row-main')
+		const identity = element('div', 'rich-identity')
+		const addressLink = element('a', 'rich-address', item.label ?? short(item.address, 12, 8))
+		addressLink.href = `${item.explorer_base_url}/address/${item.address}`
+		addressLink.target = '_blank'
+		addressLink.rel = 'noreferrer'
+		identity.append(
+			richFieldLabel('Address'),
+			addressLink,
+			element('span', '', `${item.label ? `${short(item.address, 12, 8)} · ` : ''}${item.network_id}${item.kind ? ` · ${item.kind}` : ''}`),
+		)
+		const hasNative = Number(item.sampled_native_count) > 0
+		const repComplete = Number(item.sampled_rep_token_count) >= Number(item.rep_token_count)
+		const wethComplete = Number(item.sampled_weth_token_count) >= Number(item.weth_token_count)
+		const wallet = element('div', 'rich-wallet')
+		wallet.append(
+			richFieldLabel('ETH / WETH'),
+			element('strong', '', hasNative ? richBalance(item.native_balance, 'ETH') : 'ETH pending'),
+			element('span', '', wethComplete ? richBalance(item.weth_balance, 'WETH') : `${richBalance(item.weth_balance, 'WETH')} · partial`),
+		)
+		const transactions = element('div', 'rich-count')
+		transactions.append(
+			richFieldLabel('Sent transactions'),
+			element('strong', '', number(item.transaction_count)),
+			element('span', '', counted(item.interaction_count, 'observed interaction')),
+		)
+		const positions = element('div', 'rich-count')
+		positions.append(
+			richFieldLabel('Protocol involvement'),
+			element('strong', '', counted(item.pool_count, 'pool')),
+			element('span', '', `${counted(item.active_vault_count, 'active vault')} / ${counted(item.vault_count, 'known vault')}`),
+		)
+		const balanceState = element('div', 'rich-count')
+		balanceState.append(
+			richFieldLabel('Balance state'),
+			element('strong', '', item.oldest_balance_block ? `#${number(item.oldest_balance_block)}` : 'Pending'),
+			element(
+				'span',
+				'',
+				item.last_balance_refresh
+					? repComplete && wethComplete && hasNative
+						? age(item.last_balance_refresh)
+						: `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`
+					: 'Balance refresh queued',
+			),
+		)
+		const rep = element(
+			'strong',
+			'rich-rep',
+			item.oldest_balance_block ? `${richBalance(item.rep_balance, 'REP')}${repComplete ? '' : ' · partial'}` : 'REP pending',
+		)
+		rep.prepend(richFieldLabel('All REP'))
+		main.append(identity, rep, wallet, transactions, positions, balanceState)
+		article.append(main)
+		const repTokens = Array.isArray(item.rep_balances) ? item.rep_balances : []
+		const wethTokens = Array.isArray(item.weth_balances) ? item.weth_balances : []
+		const nativeBalance = item.native_balance_detail
+		const details = element('details', 'rich-assets')
+		details.dataset.detailKey = `${itemKey}:assets`
+		details.open =
+			openDetailKeys.has(details.dataset.detailKey) ||
+			(isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
+		const summary = element(
+			'summary',
+			'',
+			`Exact balances · ${nativeBalance ? 'ETH' : 'ETH pending'} · ${wethTokens.length} WETH · ${repTokens.length} of ${number(item.sampled_rep_token_count)} sampled REP`,
+		)
+		details.append(summary)
+		const tokenGrid = element('div', 'rich-token-grid')
+		if (!nativeBalance && repTokens.length === 0 && wethTokens.length === 0)
+			tokenGrid.append(element('span', 'data-note', 'Balances have not been refreshed yet.'))
+		if (nativeBalance) {
+			const nativeCard = element('div', 'rich-token')
+			nativeCard.append(
+				element('strong', '', exactUnit(nativeBalance.balance, 18, 'ETH', 18)),
+				element('span', '', `Native ETH · block #${number(nativeBalance.blockNumber)}`),
+				element('code', 'rich-token-raw', `${nativeBalance.balance} base units`),
+			)
+			tokenGrid.append(nativeCard)
+		}
+		for (const [token, fallbackSymbol] of [...wethTokens.map((token) => [token, 'WETH']), ...repTokens.map((token) => [token, 'REP'])]) {
+			const tokenCard = element('div', 'rich-token')
+			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
+			const tokenAddress = element('a', 'rich-token-address', token.address)
+			tokenAddress.href = `${item.explorer_base_url}/address/${token.address}`
+			tokenAddress.target = '_blank'
+			tokenAddress.rel = 'noreferrer'
+			tokenCard.append(
+				element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? fallbackSymbol, decimals)),
+				element('span', '', `${token.name ?? token.symbol ?? `${fallbackSymbol} token`} · block #${number(token.blockNumber)}`),
+				tokenAddress,
+				element('code', 'rich-token-raw', `${token.balance} base units`),
+			)
+			tokenGrid.append(tokenCard)
+		}
+		if (item.rep_balances_truncated)
+			tokenGrid.append(element('span', 'data-note', `Showing 100 of ${number(item.sampled_rep_token_count)} sampled REP token balances.`))
+		if (item.weth_balances_truncated)
+			tokenGrid.append(element('span', 'data-note', `Showing 100 of ${number(item.sampled_weth_token_count)} sampled WETH token balances.`))
+		details.append(tokenGrid)
+		article.append(details)
+		const poolAssociations = Array.isArray(item.pool_associations) ? item.pool_associations : []
+		const vaultPositions = Array.isArray(item.vault_positions) ? item.vault_positions : []
+		const involvement = element('details', 'rich-assets rich-involvement')
+		involvement.dataset.detailKey = `${itemKey}:involvement`
+		involvement.open =
+			openDetailKeys.has(involvement.dataset.detailKey) ||
+			(isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
+		involvement.append(element('summary', '', `${counted(item.pool_count, 'pool association')} · ${counted(item.vault_count, 'vault position')}`))
+		const involvementGrid = element('div', 'rich-position-grid')
+		for (const pool of poolAssociations) {
+			const card = element('div', 'rich-position')
+			const link = element('a', 'rich-token-address', pool.address)
+			link.href = `${item.explorer_base_url}/address/${pool.address}`
+			link.target = '_blank'
+			link.rel = 'noreferrer'
+			card.append(
+				element('span', 'rich-position-kind', 'Pool association'),
+				element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated security pool'),
+				element('span', '', pool.label ?? 'Observed in the same protocol transaction'),
+				link,
+			)
+			involvementGrid.append(card)
+		}
+		for (const position of vaultPositions) {
+			const card = element('div', 'rich-position')
+			const link = element('a', 'rich-token-address', position.poolAddress)
+			link.href = `${item.explorer_base_url}/address/${position.poolAddress}`
+			link.target = '_blank'
+			link.rel = 'noreferrer'
+			card.append(
+				element('span', 'rich-position-kind', 'Vault position'),
+				element('strong', '', position.questionTitle ?? 'Vault position'),
+				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '', 18)}`),
+				element('span', '', `Capacity ownership ${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP', 18)}`),
+				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, 'ETH', 18)} · block #${number(position.blockNumber)}`),
+				link,
+			)
+			involvementGrid.append(card)
+		}
+		if (poolAssociations.length < Number(item.pool_count) || vaultPositions.length < Number(item.vault_count))
+			involvementGrid.append(element('span', 'data-note', 'Showing the first 100 canonical associations or positions.'))
+		involvement.append(involvementGrid)
+		article.append(involvement)
+		rows.append(article)
+	}
+	if (focusedDetailKey) {
+		const focusedDetails = [...rows.querySelectorAll('details[data-detail-key]')].find((details) => details.dataset.detailKey === focusedDetailKey)
+		focusedDetails?.querySelector('summary')?.focus({ preventScroll: true })
+	}
+	rows.setAttribute('aria-busy', 'false')
+	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
+	$('#richlist-more').hidden = richListItems.length >= richListTotal
+}
+
+const loadRichList = async ({ append = false } = {}) => {
+	const requestVersion = ++richListRequestVersion
+	const status = $('#richlist-status')
+	const more = $('#richlist-more')
+	const nextOffset = append ? richListItems.length : 0
+	status.hidden = false
+	status.textContent = append ? 'Loading more known addresses…' : richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
+	more.disabled = true
+	$('#richlist-rows').setAttribute('aria-busy', 'true')
+	try {
+		const fetchPage = async (offset, limit) => {
+			const query = new URLSearchParams({ sort: $('#rich-sort').value, offset: String(offset), limit: String(limit) })
+			const chainId = $('#rich-network-filter').value
+			if (chainId) query.set('chainId', chainId)
+			return await api(`/api/v1/richlist?${query}`)
+		}
+		let result
+		if (append) result = await fetchPage(nextOffset, 50)
+		else {
+			const requestedCount = Math.max(50, richListItems.length)
+			const firstLimit = Math.min(100, requestedCount)
+			const firstPage = await fetchPage(0, firstLimit)
+			const targetCount = Math.min(requestedCount, firstPage.total)
+			const remainingOffsets = []
+			for (let offset = firstLimit; offset < targetCount; offset += 100) remainingOffsets.push(offset)
+			const remainingPages = await Promise.all(remainingOffsets.map((offset) => fetchPage(offset, Math.min(100, targetCount - offset))))
+			result = { ...firstPage, items: [firstPage, ...remainingPages].flatMap((page) => page.items).slice(0, targetCount) }
+		}
+		if (requestVersion !== richListRequestVersion) return false
+		if (append && result.total < richListItems.length) return await loadRichList()
+		richListItems = append ? [...richListItems, ...result.items] : result.items
+		richListTotal = result.total
+		renderRichList()
+		status.hidden = true
+		return true
+	} catch (error) {
+		if (requestVersion !== richListRequestVersion) return false
+		$('#richlist-rows').setAttribute('aria-busy', 'false')
+		status.hidden = false
+		status.textContent =
+			richListItems.length === 0 ? `Rich list unavailable: ${error.message}` : `Refresh failed; showing last known rankings: ${error.message}`
+		return false
+	} finally {
+		if (requestVersion === richListRequestVersion) more.disabled = false
+	}
+}
+
 const renderPoolDetail = async (poolItem, requestVersion) => {
 	const history = await api(`/api/v1/state/pools/${poolItem.chain_id}/${poolItem.pool_address}`)
 	if (requestVersion !== stateDetailRequestVersion) return
@@ -1219,7 +1520,7 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, 18, 'ETH', 2)),
-		metricCard('Coverage commitment', exactUnit(poolItem.total_coverage_commitment_atto_eth, 18, 'ETH', 2)),
+		metricCard('Capacity ownership', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'REP', 2)),
 		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, 'ETH', 3)),
 		metricCard('Indexed vaults', number(poolItem.vault_count)),
 	)
@@ -1230,10 +1531,10 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 			history.snapshots,
 			[
 				{ key: 'settlement_collateral_atto_eth', label: 'Collateral', unit: 'ETH' },
-				{ key: 'total_coverage_commitment_atto_eth', label: 'Coverage', unit: 'ETH', className: 'secondary' },
+				{ key: 'total_capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
 				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: 'ETH', className: 'tertiary' },
 			],
-			'Authoritative PoolAccountingCheckpoint results. Values are exact attoETH in storage and displayed here in ETH.',
+			'Authoritative PoolAccountingCheckpoint results. Collateral and fees use attoETH; capacity ownership uses attoREP.',
 		),
 	)
 	const currentCard = element('section', 'static-card')
@@ -1260,7 +1561,7 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 			'Share-token supply',
 			currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(currentState.shareTokenSupplyAttoShares, 18, 'shares', 3),
 		),
-		staticField('Fee-eligible coverage', exactUnit(poolItem.fee_eligible_coverage_commitment_atto_eth, 18, 'ETH', 3)),
+		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, 'ETH', 5)),
 		staticField('Current retention rate', exactUnit(poolItem.current_retention_rate, 18, '', 9)),
 		staticField('Escalation game', currentState.escalationGame ?? 'Not set'),
@@ -1300,7 +1601,7 @@ const renderVaultDetail = async (vaultItem, requestVersion) => {
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '', 2)),
-		metricCard('Coverage commitment', exactUnit(vaultItem.coverage_commitment_atto_eth, 18, 'ETH', 2)),
+		metricCard('Capacity ownership', exactUnit(vaultItem.capacity_ownership_atto_rep, 18, 'REP', 2)),
 		metricCard('Claimable fees', exactUnit(vaultItem.claimable_fees_atto_eth, 18, 'ETH', 4)),
 		metricCard('Fee index', exactUnit(vaultItem.fee_index, 18, '', 5)),
 	)
@@ -1311,10 +1612,10 @@ const renderVaultDetail = async (vaultItem, requestVersion) => {
 			history.snapshots,
 			[
 				{ key: 'rep_backing_units', label: 'REP backing units', unit: 'units' },
-				{ key: 'coverage_commitment_atto_eth', label: 'Coverage', unit: 'ETH', className: 'secondary' },
+				{ key: 'capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
 				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: 'ETH', className: 'tertiary' },
 			],
-			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; ETH-denominated series use attoETH.',
+			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; capacity ownership uses attoREP and fees use attoETH.',
 		),
 	)
 	const staticCard = element('section', 'static-card')
@@ -1327,7 +1628,7 @@ const renderVaultDetail = async (vaultItem, requestVersion) => {
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
 		staticField('Resulting pool REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '', 3)),
-		staticField('Resulting fee-eligible coverage', exactUnit(vaultItem.resulting_fee_eligible_coverage_atto_eth, 18, 'ETH', 3)),
+		staticField('Resulting fee-eligible capacity', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
 		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '', 8)),
 	)
 	staticCard.append(grid)
@@ -1437,7 +1738,7 @@ const renderLineage = (universes, selected) => {
 	svg.setAttribute('width', String(renderedWidth))
 	svg.setAttribute('height', String(renderedHeight))
 	svg.setAttribute('role', 'img')
-	svg.setAttribute('aria-label', 'All indexed Zoltar universe parent and child relationships')
+	svg.setAttribute('aria-label', 'Returned Zoltar universe parent and child relationships')
 	for (const [level, members] of levels)
 		members.forEach((universe, index) => {
 			positions.set(`${universe.chain_id}:${universe.universe_id}`, { x: 30 + level * columnGap, y: 20 + index * rowGap })
@@ -1473,7 +1774,7 @@ const renderLineage = (universes, selected) => {
 		meta.setAttribute('class', 'node-meta')
 		meta.setAttribute('x', '10')
 		meta.setAttribute('y', '37')
-		meta.textContent = `${number(universe.pool_count)} pools · outcome ${universe.forking_outcome_index}`
+		meta.textContent = `${counted(universe.pool_count, 'pool')} · outcome ${universe.forking_outcome_index}`
 		group.append(rect, label, meta)
 		svg.append(group)
 	}
@@ -1511,7 +1812,7 @@ const renderUniverseDetail = async (universe, requestVersion) => {
 	)
 	const lineage = element('section', 'lineage-card')
 	const heading = element('div', 'chart-heading')
-	heading.append(element('h4', '', 'All Zoltar universes'), element('span', 'data-note', `${stateData.universes.length} canonical universes`))
+	heading.append(element('h4', '', 'Returned Zoltar universes'), element('span', 'data-note', `${stateData.universes.length} returned records`))
 	const scroll = element('div', 'lineage-scroll')
 	scroll.append(renderLineage(stateData.universes, universe))
 	lineage.append(heading, scroll, element('p', 'data-note', 'Each edge links a child universe to the parent fork and outcome that created it.'))
@@ -1546,14 +1847,13 @@ const entityCopy = (type, item) => {
 	if (type === 'pools')
 		return [
 			item.question_title ?? short(item.pool_address),
-			`${item.network_id} · ${number(item.vault_count)} vaults · ${exactUnit(item.settlement_collateral_atto_eth, 18, 'ETH', 1)}`,
+			`${item.network_id} · ${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, 'ETH', 1)}`,
 		]
-	if (type === 'vaults')
-		return [short(item.vault_address, 10, 6), `${item.network_id} · ${exactUnit(item.coverage_commitment_atto_eth, 18, 'ETH', 1)} coverage`]
-	if (type === 'questions') return [item.title, `${item.network_id} · ${questionStatus(item)} · ${number(item.pool_count)} pools`]
+	if (type === 'vaults') return [short(item.vault_address, 10, 6), `${item.network_id} · ${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP', 1)} capacity`]
+	if (type === 'questions') return [item.title, `${item.network_id} · ${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
 	return [
 		item.universe_id === '0' ? `${item.network_id} genesis universe` : `Universe ${short(item.universe_id, 9, 6)}`,
-		`${item.network_id} · ${number(item.child_count)} children · ${number(item.pool_count)} pools`,
+		`${item.network_id} · ${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`,
 	]
 }
 
@@ -1785,6 +2085,7 @@ $('#refresh-stale').addEventListener('click', async () => {
 		} else {
 			await loadNetworks({ manual: true, refreshAfterCurrent: true })
 			if (isSystem) await loadSystemState()
+			else if (isRichList) await loadRichList()
 			else if (validateAddressFilter()) await loadLogs()
 		}
 	} finally {
@@ -1840,11 +2141,22 @@ $('#entity-search').addEventListener('keydown', (event) => {
 	if (stateData !== undefined) renderEntityList()
 })
 $('#system-network-filter').addEventListener('change', loadSystemState)
+$('#rich-network-filter').addEventListener('change', () => loadRichList())
+$('#rich-sort').addEventListener('change', () => loadRichList())
+$('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
 const refreshAfterUpdates = async (count, forceContentRefresh = false) => {
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState()])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
+			canonicalRefreshRequired = false
+			updateFreshness()
+		}
+		return contentRefreshed
+	}
+	if (isRichList) {
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList()])
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
 			canonicalRefreshRequired = false
 			updateFreshness()
@@ -1954,6 +2266,7 @@ addEventListener('pageshow', async (event) => {
 	connectStream()
 	await loadNetworks({ refreshAfterCurrent: true })
 	if (isSystem) await loadSystemState()
+	else if (isRichList) await loadRichList()
 	else if (validateAddressFilter()) await loadLogs()
 	else showInvalidAddressFilter()
 })
@@ -1967,6 +2280,7 @@ setInterval(() => {
 	loadNetworks()
 	if (!isDemo && (!lastStreamEventAt || Date.now() - lastStreamEventAt.getTime() > 30_000)) {
 		if (isSystem) loadSystemState()
+		else if (isRichList) loadRichList()
 		else if (window.scrollY < 420 && validateAddressFilter()) loadLogs()
 	}
 }, 12_000)
@@ -1986,9 +2300,10 @@ validateAddressFilter()
 $('#clear-filters').disabled = !hasActivityFilters()
 
 const deepLink = pageUrl.searchParams.get('log')
-$('#activity').hidden = isSystem
+$('#activity').hidden = !isActivity
 $('#system').hidden = !isSystem
-$('.skip-link').href = isSystem ? '#system' : '#activity'
+$('#richlist').hidden = !isRichList
+$('.skip-link').href = isSystem ? '#system' : isRichList ? '#richlist' : '#activity'
 for (const link of document.querySelectorAll('.product-nav a')) if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
 const requestedTab = pageUrl.searchParams.get('tab')
@@ -1997,13 +2312,15 @@ if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefine
 
 const initialDashboardLoad = isSystem
 	? Promise.all([loadNetworks(), loadSystemState()])
-	: (async () => {
-			await loadNetworks({ synchronizeActivity: false })
-			syncActivityFilterUrl()
-			if (validateAddressFilter()) await loadLogs()
-			else showInvalidAddressFilter()
-		})()
-if (!isSystem && deepLink !== null) {
+	: isRichList
+		? Promise.all([loadNetworks(), loadRichList()])
+		: (async () => {
+				await loadNetworks({ synchronizeActivity: false })
+				syncActivityFilterUrl()
+				if (validateAddressFilter()) await loadLogs()
+				else showInvalidAddressFilter()
+			})()
+if (isActivity && deepLink !== null) {
 	const [chainId, blockHash, transactionHash, logIndex] = deepLink.split(':')
 	if (chainId && blockHash && transactionHash && logIndex)
 		openDetail({ chain_id: chainId, block_hash: blockHash, tx_hash: transactionHash, log_index: Number(logIndex) })

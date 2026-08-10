@@ -82,10 +82,20 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 		'state/catalog?limit=-1',
 		'state/universes/1/0?limit=unbounded',
 		'actions?chainId=1e2',
+		'richlist?offset=-1',
+		'richlist?chainId=0x10',
 	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
+})
+
+test('rejects unsupported rich-list ordering before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const response = await handleApi(new Request('http://localhost/api/v1/richlist?sort=private-key'), database)
+	expect(response?.status).toBe(400)
+	expect(await response?.json()).toEqual({ error: 'sort must be rep, eth, weth, or transactions' })
 })
 
 test('rejects empty state chain identifiers before querying', async () => {

@@ -24,6 +24,7 @@
 				<nav class="product-nav" aria-label="Primary navigation">
 					<a href="/">Activity</a>
 					<a href="/system">System state</a>
+					<a href="/richlist">Rich list</a>
 				</nav>
 				<div class="connection" role="status" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="connection-label">Connecting</span></div>
 			</div>
@@ -132,6 +133,39 @@
 						</div>
 					</article>
 				</div>
+			</section>
+
+			<section id="richlist" class="richlist" aria-labelledby="richlist-heading" hidden>
+				<div class="section-heading richlist-heading">
+					<div>
+						<p class="eyebrow">Known protocol participants</p>
+						<h2 id="richlist-heading">Address rich list</h2>
+					</div>
+					<div class="richlist-controls">
+						<label
+							><span>Network</span
+							><select id="rich-network-filter">
+								<option value="">All networks</option>
+							</select></label
+						>
+						<label
+							><span>Rank by</span
+							><select id="rich-sort">
+								<option value="rep">All REP</option>
+								<option value="eth">ETH</option>
+								<option value="weth">WETH</option>
+								<option value="transactions">Transactions</option>
+							</select></label
+						>
+					</div>
+				</div>
+				<p class="richlist-note">Balances are read at canonical indexed blocks. “All REP” sums the latest available snapshots for genesis and child REP tokens known on that network; rows stay marked pending or partial until every known token is sampled.</p>
+				<div id="richlist-status" class="system-status" role="status" aria-live="polite">Loading known addresses…</div>
+				<div class="richlist-shell">
+					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>All REP</span><span>ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
+					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
+				</div>
+				<div class="richlist-footer"><span id="richlist-summary"></span><button id="richlist-more" class="secondary" type="button" hidden>Show more</button></div>
 			</section>
 		</main>
 

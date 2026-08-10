@@ -2,7 +2,7 @@
 
 augurScan is a read-only, multi-network activity explorer for the Zoltar/Augur protocol. It indexes canonical project logs and top-level protocol actions from Ethereum JSON-RPC into PostgreSQL, decodes them with a self-contained ABI catalog, retains raw evidence and orphaned reorg history, and streams committed updates to a compact web UI.
 
-The **System state** view derives canonical registries for every indexed security pool, question, vault, and Zoltar universe. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the complete universe parent/child graph. See [STATE_MODEL.md](STATE_MODEL.md) for the event and field model.
+The **System state** view derives bounded canonical registries for indexed security pools, questions, vaults, and Zoltar universes. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the returned universe parent/child graph. Large registries show a truncation warning and can be narrowed by network. The **Rich list** ranks every observed sender and decoded participant by REP, ETH, WETH, or sent transactions and displays their pool associations and vault positions. Pending and partial labels distinguish incomplete balance sampling from a known zero balance. See [STATE_MODEL.md](STATE_MODEL.md) for the event, balance, and field model.
 
 ## Start with Docker
 
@@ -32,7 +32,7 @@ bun test
 bun run dev
 ```
 
-Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving.
+Local development expects PostgreSQL at `POSTGRES_URL`. The server applies compatible SQL migrations under a PostgreSQL advisory lock before serving. Migration 003 cannot safely reinterpret populated legacy ETH coverage projections as the new REP capacity model, nor can it reconstruct rich-list activity that predates the feature. When upgrading a populated pre-003 database, rebuild PostgreSQL from each network's verified start block; the scanner will then restore complete canonical history. Empty pre-003 databases upgrade in place.
 
 The standalone package centralizes its `viem` runtime dependency in `src/viem-runtime.js`; application and test code import Ethereum primitives through `src/ethereum.ts`. `bun run check:ethereum-imports` enforces that boundary across TypeScript and JavaScript sources without requiring parent-repository files in the Docker build context.
 
@@ -44,7 +44,7 @@ docker run --detach --rm --name augurscan-test-postgres \
   --env POSTGRES_USER=augurscan \
   --env POSTGRES_PASSWORD=augurscan \
   --env POSTGRES_DB=augurscan_test \
-  postgres:17-alpine
+  postgres:17.6-alpine
 
 POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test bun run test:integration
 docker stop augurscan-test-postgres
@@ -58,7 +58,7 @@ Regenerate the committed ABI snapshot after contract event/function changes:
 bun run metadata:snapshot
 ```
 
-The script reads Solidity sources from the parent repository but only writes `config/abis.json`. The production image does not depend on parent files.
+The script reads Solidity and deployment-address sources from the parent repository, then refreshes `config/abis.json` and the mainnet/Sepolia manifests. It only writes inside `augurScan/config`; the production image does not depend on parent files.
 
 ## Indexing model
 
@@ -73,6 +73,7 @@ The script reads Solidity sources from the parent repository but only writes `co
 - A connection-scoped PostgreSQL advisory lock elects one active indexer per chain. Additional app replicas serve the UI and wait in standby until that chain's lock is released.
 - A parent-hash mismatch searches the configured 64-block safety window for a common ancestor. Orphaned rows remain stored as noncanonical debugging evidence, and canonical indexing resumes from the ancestor. If no retained ancestor matches, that network safely rewinds to its configured start boundary and rebuilds canonical state.
 - Unknown and failed ABI decodes retain topics, data, and the decoder error. Updating the ABI catalog never removes raw evidence.
+- At the live head, each network refreshes the least-recently measured known addresses in bounded batches. Native ETH and every known WETH/genesis-or-child-REP balance are read at one canonical block and stored historically; the rich list exposes the oldest balance block behind each aggregate.
 
 Version 0.1 indexes top-level actions sent to protocol activity sources and every known-contract log in the receipts selected by those actions or protocol-emitter logs. Known shared dependencies do not select unrelated receipts. Internal calls that emit no protocol log require provider-specific trace APIs and are intentionally not claimed as actions.
 
@@ -87,6 +88,7 @@ Version 0.1 indexes top-level actions sent to protocol activity sources and ever
 - Top-level protocol actions: `GET /api/v1/actions`
 - Contract identity: `GET /api/v1/contracts/:chainId/:address`
 - Durable live commit/reorg/status notifications with seven-day `Last-Event-ID` replay: `GET /api/v1/stream`. A cursor older than that window receives a reset event so the UI reloads current canonical state.
+- Bounded address rankings with exact native ETH and bounded per-token REP/WETH breakdowns: `GET /api/v1/richlist`
 - Pools, questions, vaults, and universes: `GET /api/v1/state/catalog`
 - Pool history: `GET /api/v1/state/pools/:chainId/:poolAddress`
 - Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { formatAbiItem, formatAbiParameter } from 'abitype'
+import { type AbiParameter, formatAbiItem, formatAbiParameter } from 'abitype'
 import {
 	type Abi,
 	type AbiEvent,
@@ -29,9 +29,11 @@ const catalogFile = (await Bun.file(path.resolve(import.meta.dir, '../config/abi
 const kindToContractName: Readonly<Record<string, string>> = {
 	deploymentStatusOracle: 'DeploymentStatusOracle',
 	escalationGame: 'EscalationGame',
+	escalationGameClaimDelegate: 'EscalationGameClaimDelegate',
 	escalationGameFactory: 'EscalationGameFactory',
 	escalationProofVerifier: 'EscalationGameProofVerifier',
 	multicall3: 'Multicall3',
+	liquidationApprovalRegistry: 'LiquidationApprovalRegistry',
 	openOracle: 'OpenOracle',
 	priceCoordinator: 'OpenOraclePriceCoordinator',
 	priceCoordinatorFactory: 'PriceOracleManagerAndOperatorQueuerFactory',
@@ -174,6 +176,33 @@ const displayValue = (name: string, value: unknown, labels: ReadonlyMap<string, 
 	return value
 }
 
+const addressValues = (value: unknown): Address[] => {
+	if (typeof value === 'string') return isAddress(value) && value.toLowerCase() !== zeroAddress ? [getAddress(value)] : []
+	if (Array.isArray(value)) return value.flatMap(addressValues)
+	return []
+}
+
+const addressesFromParameter = (parameter: AbiParameter, value: unknown): Address[] => {
+	if (parameter.type === 'address' || parameter.type.startsWith('address[')) return addressValues(value)
+	if (!('components' in parameter)) return []
+	const tuples = parameter.type === 'tuple' ? [value] : Array.isArray(value) ? value : []
+	return tuples.flatMap((tuple) => {
+		if (typeof tuple !== 'object' || tuple === null) return []
+		return parameter.components.flatMap((component, index) => {
+			const componentValue = Array.isArray(tuple) ? tuple[index] : Object.entries(tuple).find(([key]) => key === (component.name || String(index)))?.[1]
+			return addressesFromParameter(component, componentValue)
+		})
+	})
+}
+
+export const referencedAddressesFrom = (parameters: readonly AbiParameter[], values: SerializedArguments): readonly Address[] => [
+	...new Map(
+		parameters
+			.flatMap((parameter, index) => addressesFromParameter(parameter, values[parameter.name || String(index)]))
+			.map((address) => [address.toLowerCase(), address]),
+	).values(),
+]
+
 const valueAtPath = (value: unknown, path: string): unknown => {
 	let current = value
 	for (const segment of path.split('.')) {
@@ -289,6 +318,7 @@ const decodeWithEvents = (
 					type: formatAbiParameter(input),
 					...(input.indexed ? { indexed: true } : {}),
 				})),
+				referencedAddresses: referencedAddressesFrom(event.inputs, argumentsValue ?? {}),
 				status: 'decoded',
 				summary: summaryFrom(result.eventName, displayArguments),
 			}
@@ -375,6 +405,7 @@ const decodePackedReport = (
 			{ index: 0, name: 'reportId', type: 'uint256', indexed: true },
 			...packedFields.map(([field, width, type], index) => ({ index: index + 1, name: field, type: type === 'address' ? 'address' : `uint${width * 8}` })),
 		],
+		referencedAddresses: packedFields.flatMap(([field, , type]) => (type === 'address' ? addressValues(argumentsValue[field]) : [])),
 		status: 'decoded',
 		summary: summaryFrom(name, displayArguments),
 	}
@@ -432,6 +463,7 @@ export const decodeAction = (
 				name: parameter.name || String(index),
 				type: formatAbiParameter(parameter),
 			})),
+			referencedAddresses: referencedAddressesFrom(functionItem.inputs, argumentsValue),
 			status: 'decoded',
 			summary: summaryFrom(result.functionName, displayArguments),
 		}
