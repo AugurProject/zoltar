@@ -1,5 +1,15 @@
 import { expect, test } from 'bun:test'
-import { classifyLiveRecords, createLatestRefreshCoordinator, mergeUniqueRecords, reconcilePaginatedTotal } from '../public/live-update.js'
+import {
+	classifyLiveRecords,
+	createLatestRefreshCoordinator,
+	createLiveRouteRefreshCoordinator,
+	isCurrentLiveRequest,
+	isNoncanonicalDetailFailure,
+	mergeUniqueRecords,
+	reconcilePaginatedTotal,
+	reconcileTransactionDialogSnapshot,
+	shouldContinueTransactionRestore,
+} from '../public/live-update.js'
 
 test('classifies appended, changed, and stable live records by canonical key', () => {
 	const previous = new Map([
@@ -61,4 +71,95 @@ test('coalesces refresh bursts into one active request and one latest-state foll
 	])
 	releases.shift()(true)
 	expect(await first).toBe(true)
+})
+
+test('continues with the newest queued refresh when an in-flight refresh fails', async () => {
+	const releases = []
+	const calls = []
+	const requestRefresh = createLatestRefreshCoordinator(
+		(count, force) =>
+			new Promise((resolve, reject) => {
+				calls.push({ count, force })
+				releases.push({ resolve, reject })
+			}),
+	)
+	const recovery = requestRefresh(1)
+	requestRefresh(1, true)
+	releases.shift().reject(new Error('stale route failed'))
+	await Promise.resolve()
+	expect(calls).toEqual([
+		{ count: 1, force: false },
+		{ count: 1, force: true },
+	])
+	releases.shift().resolve(true)
+	expect(await recovery).toBe(true)
+})
+
+test('serializes a reorg behind an in-flight refresh and uses current recovery state', async () => {
+	const releases = []
+	const calls = []
+	let active = 0
+	let maximumActive = 0
+	let recovery
+	const requestRefresh = createLiveRouteRefreshCoordinator(
+		(count, force, currentRecovery) =>
+			new Promise((resolve) => {
+				active++
+				maximumActive = Math.max(maximumActive, active)
+				calls.push({ count, force, recovery: currentRecovery?.id })
+				releases.push((result) => {
+					active--
+					resolve(result)
+				})
+			}),
+		() => recovery,
+	)
+	const refresh = requestRefresh(1)
+	recovery = { id: 'canonical-reorg' }
+	requestRefresh(1, true)
+	expect(maximumActive).toBe(1)
+	releases.shift()(true)
+	await Promise.resolve()
+	expect(calls).toEqual([
+		{ count: 1, force: false, recovery: undefined },
+		{ count: 1, force: true, recovery: 'canonical-reorg' },
+	])
+	expect(maximumActive).toBe(1)
+	releases.shift()(true)
+	expect(await refresh).toBe(true)
+})
+
+test('rejects stale live responses by request version and selected network', () => {
+	expect(isCurrentLiveRequest(4, 4, '1', '1')).toBe(true)
+	expect(isCurrentLiveRequest(3, 4, '1', '1')).toBe(false)
+	expect(isCurrentLiveRequest(4, 4, '11155111', '1')).toBe(false)
+})
+
+test('only treats a missing log as noncanonical during canonical recovery', () => {
+	expect(isNoncanonicalDetailFailure(true, 404)).toBe(true)
+	expect(isNoncanonicalDetailFailure(false, 404)).toBe(false)
+	expect(isNoncanonicalDetailFailure(true, 503)).toBe(false)
+})
+
+test('restores transaction depth and keeps context only for canonical cards', () => {
+	const snapshot = {
+		loadedCount: 83,
+		expandedKeys: ['kept', 'orphaned'],
+		anchorKey: 'kept',
+		anchorTop: 240,
+		focusKey: 'orphaned',
+		focusIndex: 2,
+		outsideFocus: undefined,
+		scrollTop: 700,
+	}
+	expect(shouldContinueTransactionRestore(true, 50, snapshot.loadedCount, 'next-page')).toBe(true)
+	expect(shouldContinueTransactionRestore(true, 83, snapshot.loadedCount, 'next-page')).toBe(false)
+	expect(shouldContinueTransactionRestore(false, 50, snapshot.loadedCount, 'next-page')).toBe(false)
+	expect(shouldContinueTransactionRestore(true, 50, snapshot.loadedCount, undefined)).toBe(false)
+	expect(reconcileTransactionDialogSnapshot(snapshot, new Set(['kept']))).toEqual({
+		...snapshot,
+		expandedKeys: ['kept'],
+		focusKey: undefined,
+		focusIndex: -1,
+	})
 })

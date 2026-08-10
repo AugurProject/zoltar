@@ -1,4 +1,13 @@
-import { classifyLiveRecords, createLatestRefreshCoordinator, mergeUniqueRecords, reconcilePaginatedTotal } from './live-update.js'
+import {
+	classifyLiveRecords,
+	createLiveRouteRefreshCoordinator,
+	isCurrentLiveRequest,
+	isNoncanonicalDetailFailure,
+	mergeUniqueRecords,
+	reconcilePaginatedTotal,
+	reconcileTransactionDialogSnapshot,
+	shouldContinueTransactionRestore,
+} from './live-update.js'
 
 const $ = (selector) => document.querySelector(selector)
 const feed = $('#feed')
@@ -1720,7 +1729,7 @@ const openDetail = async (log, { live = false, canonicalRecovery = false } = {})
 		return true
 	} catch (error) {
 		if (requestVersion !== detailRequestVersion) return false
-		const noncanonical = canonicalRecovery && error.status === 404
+		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error.status)
 		const alert = element('div', `detail-error${live ? ' detail-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
 		alert.append(element('p', '', noncanonical ? 'This log is no longer canonical after the chain changed.' : `Could not open log: ${error.message}`))
@@ -1766,23 +1775,25 @@ const captureAccountDialogSnapshot = () => {
 }
 
 const restoreAccountDialogSnapshot = (snapshot) => {
-	for (const key of snapshot.expandedKeys) {
+	const availableKeys = new Set([...detailContent.querySelectorAll('.account-transaction[data-live-key]')].map((card) => card.dataset.liveKey))
+	const reconciled = reconcileTransactionDialogSnapshot(snapshot, availableKeys)
+	for (const key of reconciled.expandedKeys) {
 		if (key === undefined) continue
 		const card = detailContent.querySelector(`[data-live-key="${CSS.escape(key)}"]`)
 		const action = card?.querySelector('.account-transaction-action')
 		if (action) action.open = true
 	}
-	dialog.scrollTop = snapshot.scrollTop
-	if (snapshot.anchorKey && snapshot.anchorTop !== undefined) {
-		const anchor = detailContent.querySelector(`[data-live-key="${CSS.escape(snapshot.anchorKey)}"]`)
-		if (anchor) dialog.scrollTop += anchor.getBoundingClientRect().top - snapshot.anchorTop
+	dialog.scrollTop = reconciled.scrollTop
+	if (reconciled.anchorKey && reconciled.anchorTop !== undefined) {
+		const anchor = detailContent.querySelector(`[data-live-key="${CSS.escape(reconciled.anchorKey)}"]`)
+		if (anchor) dialog.scrollTop += anchor.getBoundingClientRect().top - reconciled.anchorTop
 	}
-	if (snapshot.focusKey && snapshot.focusIndex >= 0) {
-		const focusedCard = detailContent.querySelector(`[data-live-key="${CSS.escape(snapshot.focusKey)}"]`)
+	if (reconciled.focusKey && reconciled.focusIndex >= 0) {
+		const focusedCard = detailContent.querySelector(`[data-live-key="${CSS.escape(reconciled.focusKey)}"]`)
 		const focusable = focusedCard ? [...focusedCard.querySelectorAll('a, button, summary')] : []
-		focusable[snapshot.focusIndex]?.focus({ preventScroll: true })
-	} else if (snapshot.outsideFocus) {
-		detailContent.querySelector(`[data-live-focus="${CSS.escape(snapshot.outsideFocus)}"]`)?.focus({ preventScroll: true })
+		focusable[reconciled.focusIndex]?.focus({ preventScroll: true })
+	} else if (reconciled.outsideFocus) {
+		detailContent.querySelector(`[data-live-focus="${CSS.escape(reconciled.outsideFocus)}"]`)?.focus({ preventScroll: true })
 	}
 }
 
@@ -1940,7 +1951,7 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 			})
 			if (append && state.nextPageCursor) query.set('cursor', state.nextPageCursor)
 			const result = await api(`/api/v1/address-transactions?${query}`)
-			if (requestVersion !== detailRequestVersion || String(state.account.chain_id) !== selectedChainId()) return false
+			if (!isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId())) return false
 			const retained = append ? previousLoaded : liveRefresh ? previousLoaded : []
 			state.loaded = mergeUniqueRecords(
 				append ? retained : result.items,
@@ -1974,7 +1985,8 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 		}
 	}
 	let loaded = await loadPage(false, { liveRefresh: live && state.loaded.length > 0 })
-	while (loaded && restoreSnapshot && state.loaded.length < restoreSnapshot.loadedCount && state.nextPageCursor !== undefined) loaded = await loadPage(true)
+	while (restoreSnapshot && shouldContinueTransactionRestore(loaded, state.loaded.length, restoreSnapshot.loadedCount, state.nextPageCursor))
+		loaded = await loadPage(true)
 	if (loaded && restoreSnapshot) restoreAccountDialogSnapshot(restoreSnapshot)
 	if (
 		loaded &&
@@ -3413,7 +3425,7 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 	if (contentRefreshed) announceLiveUpdate('Activity', lastRouteLiveChanges, { added: 'new log', changed: 'updated log' })
 	return contentRefreshed
 }
-requestRouteRefresh = createLatestRefreshCoordinator((count, force) => refreshAfterUpdates(count, force))
+requestRouteRefresh = createLiveRouteRefreshCoordinator(refreshAfterUpdates, () => activeReorgRecovery)
 
 const refreshCanonicalViews = (title, detail) => {
 	if (activeReorgRecovery !== undefined) {
@@ -3459,7 +3471,7 @@ const refreshCanonicalViews = (title, detail) => {
 		try {
 			while (true) {
 				recovery.pendingRefresh = false
-				const refreshed = await refreshAfterUpdates(1, true, recovery)
+				const refreshed = await requestRouteRefresh(1, true)
 				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId || !refreshed) return false
 				if (recovery.pendingRefresh) continue
 				if (recovery.logToRefresh) await restorePendingCanonicalLog()
