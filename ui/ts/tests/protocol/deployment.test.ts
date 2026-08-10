@@ -16,7 +16,7 @@ import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOut
 import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
 
 const require = createRequire(new URL('../../../../package.json', import.meta.url))
-const solc: { compile: (input: string) => string; version: () => string } = require('solc')
+const solc: { compile: (input: string) => string; version: () => string } = require('solc-0-8-17')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)

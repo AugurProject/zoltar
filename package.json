@@ -23,6 +23,7 @@
 		"@preact/signals": "2.0.1",
 		"@zoltar/shared": "file:shared",
 		"solc": "0.8.17",
+		"solc-0-8-17": "npm:solc@0.8.17",
 		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {

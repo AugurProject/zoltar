@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl } from '../testSupport/simulator/anvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl, resolveAnvilBinary } from '../testSupport/simulator/anvilNode'
 
 test('getAnvilConnectionMode spawns an isolated node on Windows when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
@@ -87,7 +87,18 @@ test('isolated Anvil nodes atomically select a port and limit their runtime thre
 
 test('isolated Anvil startup reads the OS-assigned listening port', () => {
 	expect(parseAnvilListeningRpcUrl('Available Accounts\nListening on 127.0.0.1:43127\n')).toBe('http://127.0.0.1:43127')
+	expect(parseAnvilListeningRpcUrl('Listening on 0.0.0.0:43128')).toBe('http://127.0.0.1:43128')
 	expect(parseAnvilListeningRpcUrl('Listening on 127.0.0.1:')).toBeUndefined()
+})
+
+test('Anvil executable resolution supports standard and quoted Windows installations', () => {
+	expect(resolveAnvilBinary({ environment: { USERPROFILE: 'C:\\Users\\tester' }, pathExists: path => path === 'C:\\Users\\tester\\.foundry\\bin\\anvil.exe', platform: 'win32', which: () => null })).toBe('C:\\Users\\tester\\.foundry\\bin\\anvil.exe')
+	expect(resolveAnvilBinary({ environment: { ANVIL_BIN: '"C:\\Program Files\\Foundry\\anvil.exe"' }, pathExists: () => false, platform: 'win32', which: () => null })).toBe('C:\\Program Files\\Foundry\\anvil.exe')
+})
+
+test('Anvil executable resolution uses the absolute PATH match before a command-name fallback', () => {
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', which: () => 'C:\\Foundry\\anvil.exe' })).toBe('C:\\Foundry\\anvil.exe')
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', which: () => null })).toBe('anvil')
 })
 
 test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {

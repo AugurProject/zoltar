@@ -44,6 +44,23 @@ const getExplicitHeapLimitMb = (nodeOptions: string | undefined): string | undef
 	return explicitHeapLimitMb
 }
 
+export const getApplicationTypeScriptNodeOptions = (existingNodeOptions: string | undefined): string | undefined => {
+	if (existingNodeOptions === undefined) return undefined
+	const tokens = tokenizeNodeOptions(existingNodeOptions)
+	const retainedTokens: string[] = []
+	for (let index = 0; index < tokens.length; index += 1) {
+		const token = tokens[index] ?? ''
+		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token)
+		if (match === null) {
+			retainedTokens.push(token)
+			continue
+		}
+		if (match[1] === undefined && /^[0-9]+$/.test(tokens[index + 1] ?? '')) index += 1
+	}
+	if (retainedTokens.length === 0) return undefined
+	return retainedTokens.map(token => (/[\s"']/.test(token) ? JSON.stringify(token) : token)).join(' ')
+}
+
 export function getApplicationTypeScriptHeapOption(existingNodeOptions: string | undefined) {
 	const explicitHeapLimitMb = getExplicitHeapLimitMb(existingNodeOptions)
 	return `--max-old-space-size=${explicitHeapLimitMb ?? APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`
@@ -55,8 +72,14 @@ export async function runApplicationTypeScript() {
 	const nodeExecutablePath = Bun.which('node')
 	if (nodeExecutablePath === null) throw new Error('Node.js is required to run the application TypeScript check with its configured heap limit.')
 
+	const childEnvironment = { ...process.env }
+	const retainedNodeOptions = getApplicationTypeScriptNodeOptions(process.env['NODE_OPTIONS'])
+	if (retainedNodeOptions === undefined) delete childEnvironment['NODE_OPTIONS']
+	else childEnvironment['NODE_OPTIONS'] = retainedNodeOptions
+
 	const child = Bun.spawn({
 		cmd: getApplicationTypeScriptCommand(nodeExecutablePath, TYPESCRIPT_CLI_PATH, process.env['NODE_OPTIONS']),
+		env: childEnvironment,
 		stderr: 'inherit',
 		stdin: 'inherit',
 		stdout: 'inherit',

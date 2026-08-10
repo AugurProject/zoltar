@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { join, win32 } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { getMockedEthSimulateWindowEthereum, validateLocalAnvilRpcUrl } from './AnvilWindowEthereum'
@@ -28,7 +29,7 @@ const getErrorMessage = (error: unknown): string => (error instanceof Error ? er
 const appendOutputTail = (current: string, chunk: unknown): string => `${current}${String(chunk)}`.slice(-ANVIL_OUTPUT_TAIL_LENGTH)
 
 export const parseAnvilListeningRpcUrl = (output: string): string | undefined => {
-	const match = /Listening on 127\.0\.0\.1:([1-9][0-9]*)/.exec(output)
+	const match = /Listening on (?:127\.0\.0\.1|0\.0\.0\.0):([1-9][0-9]*)/.exec(output)
 	const port = match?.[1]
 	return port === undefined ? undefined : `http://${DEFAULT_ANVIL_HOST}:${port}`
 }
@@ -38,23 +39,39 @@ const getAnvilProcessFailureMessage = (child: AnvilProcess): string => {
 	return `Anvil stopped before it became ready (${status}).`
 }
 
-const resolveAnvilBinary = (): string => {
-	const explicitAnvilBin = process.env['ANVIL_BIN']?.trim()
-	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') return explicitAnvilBin
+const stripWrappingQuotes = (value: string): string => {
+	if (value.length < 2) return value
+	const firstCharacter = value[0]
+	const lastCharacter = value.at(-1)
+	if ((firstCharacter === '"' || firstCharacter === "'") && lastCharacter === firstCharacter) return value.slice(1, -1)
+	return value
+}
 
-	const homeDirectory = process.env['USERPROFILE'] ?? process.env['HOME']
+export const resolveAnvilBinary = ({
+	environment = process.env,
+	pathExists = existsSync,
+	platform = process.platform,
+	which = Bun.which,
+}: {
+	readonly environment?: Record<string, string | undefined>
+	readonly pathExists?: (path: string) => boolean
+	readonly platform?: string
+	readonly which?: (command: string) => string | null
+} = {}): string => {
+	const explicitAnvilBin = environment['ANVIL_BIN']?.trim()
+	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') return stripWrappingQuotes(explicitAnvilBin)
+
+	const homeDirectory = environment['USERPROFILE'] ?? environment['HOME']
 	if (homeDirectory !== undefined) {
-		const candidates = process.platform === 'win32' ? [`${homeDirectory}\\.foundry\\bin\\anvil.exe`, `${homeDirectory}\\.foundry\\bin\\anvil.cmd`, `${homeDirectory}\\.foundry\\bin\\anvil.bat`] : [`${homeDirectory}/.foundry/bin/anvil`]
+		const candidates = platform === 'win32' ? [win32.join(homeDirectory, '.foundry', 'bin', 'anvil.exe')] : [join(homeDirectory, '.foundry', 'bin', 'anvil')]
 
 		for (const candidate of candidates) {
-			if (existsSync(candidate)) return candidate
+			if (pathExists(candidate)) return candidate
 		}
 	}
 
-	return 'anvil'
+	return which('anvil') ?? 'anvil'
 }
-
-const DEFAULT_ANVIL_BIN = resolveAnvilBinary()
 
 const getConfiguredAnvilRpc = (): string | undefined => {
 	const anvilRpc = process.env['ANVIL_RPC']?.trim()
@@ -185,8 +202,9 @@ export const getIsolatedAnvilArgs = ({ printTraces = false }: { printTraces?: bo
 
 const createIsolatedAnvilNode = async ({ context, printTraces = false, startTimestamp }: { context: string; printTraces?: boolean; startTimestamp?: bigint }): Promise<AnvilNode> => {
 	const anvilArgs = getIsolatedAnvilArgs({ printTraces })
+	const anvilBinary = resolveAnvilBinary()
 
-	const childProcess = spawn(DEFAULT_ANVIL_BIN, anvilArgs, {
+	const childProcess = spawn(anvilBinary, anvilArgs, {
 		windowsHide: true,
 		stdio: ['ignore', 'pipe', 'pipe'],
 	})
@@ -207,7 +225,7 @@ const createIsolatedAnvilNode = async ({ context, printTraces = false, startTime
 	const processFailurePromise = new Promise<never>((_, reject) => {
 		childProcess.once('error', error => {
 			if (getErrorCode(error) === 'ENOENT') {
-				reject(new Error(`Failed to start isolated Anvil node: could not find Anvil executable '${DEFAULT_ANVIL_BIN}'. On Windows, Foundry usually installs to %USERPROFILE%\\.foundry\\bin\\anvil.exe. Set ANVIL_BIN to the full path if Anvil is not on PATH.`))
+				reject(new Error(`Failed to start isolated Anvil node: could not find Anvil executable '${anvilBinary}'. On Windows, Foundry usually installs to %USERPROFILE%\\.foundry\\bin\\anvil.exe. Set ANVIL_BIN to the full path if Anvil is not on PATH.`))
 				return
 			}
 			reject(error)
@@ -218,12 +236,14 @@ const createIsolatedAnvilNode = async ({ context, printTraces = false, startTime
 		const timeoutId = setTimeout(() => reject(new Error('Timed out waiting for Anvil to report its listening address.')), RPC_READY_TIMEOUT_MS)
 		childProcess.once('error', () => clearTimeout(timeoutId))
 		childProcess.once('exit', () => clearTimeout(timeoutId))
-		childProcess.stdout?.on('data', () => {
-			const rpcUrl = parseAnvilListeningRpcUrl(stdout)
+		const resolveListeningRpcUrl = () => {
+			const rpcUrl = parseAnvilListeningRpcUrl(`${stdout}\n${stderr}`)
 			if (rpcUrl === undefined) return
 			clearTimeout(timeoutId)
 			resolve(rpcUrl)
-		})
+		}
+		childProcess.stdout?.on('data', resolveListeningRpcUrl)
+		childProcess.stderr?.on('data', resolveListeningRpcUrl)
 	})
 
 	try {

@@ -7,6 +7,7 @@
         "@preact/signals": "2.0.1",
         "@zoltar/shared": "file:shared",
         "solc": "0.8.17",
+        "solc-0-8-17": "npm:solc@0.8.17",
         "tevm": "1.0.0-rc.151",
       },
       "devDependencies": {
@@ -1018,6 +1019,8 @@
 
     "solc": ["solc@0.8.17", "", { "dependencies": { "command-exists": "^1.2.8", "commander": "^8.1.0", "follow-redirects": "^1.12.1", "js-sha3": "0.8.0", "memorystream": "^0.3.1", "semver": "^5.5.0", "tmp": "0.0.33" }, "bin": { "solcjs": "solc.js" } }, "sha512-Dtidk2XtTTmkB3IKdyeg6wLYopJnBVxdoykN8oP8VY3PQjN16BScYoUJTXFm2OP7P0hXNAqWiJNmmfuELtLf8g=="],
 
+    "solc-0-8-17": ["solc@0.8.17", "", { "dependencies": { "command-exists": "^1.2.8", "commander": "^8.1.0", "follow-redirects": "^1.12.1", "js-sha3": "0.8.0", "memorystream": "^0.3.1", "semver": "^5.5.0", "tmp": "0.0.33" }, "bin": { "solcjs": "solc.js" } }, "sha512-Dtidk2XtTTmkB3IKdyeg6wLYopJnBVxdoykN8oP8VY3PQjN16BScYoUJTXFm2OP7P0hXNAqWiJNmmfuELtLf8g=="],
+
     "solc-typed-ast": ["solc-typed-ast@18.2.6", "", { "dependencies": { "axios": "^1.6.8", "commander": "^12.0.0", "decimal.js": "^10.4.3", "findup-sync": "^5.0.0", "fs-extra": "^11.2.0", "jsel": "^1.1.6", "semver": "^7.6.0", "solc": "0.8.25", "src-location": "^1.1.0", "web3-eth-abi": "^4.2.0" }, "bin": { "sol-ast-compile": "dist/bin/compile.js" } }, "sha512-JObIRpPYO4zvQkAgr3koBr5Du+IkYzVNofykZpGv/44iJ0VRsaEq/X+LrrFD0SDqFcnyYcBOPWDiOXwNOStKlg=="],
 
     "solidity-ast": ["solidity-ast@0.4.62", "", {}, "sha512-jSC7msQCkJXIzM8LlDjRZ5cif5w40g6THlXHFk3zchbL5dm3YLoBETvqPGo5KndYkftjhcs5kz1fnTu4d34lVQ=="],
@@ -1239,6 +1242,8 @@
     "rolldown/@oxc-project/types": ["@oxc-project/types@0.137.0", "", {}, "sha512-WT+Gb24i8hmvo85AIv2oEYouEXkRlKAlT9WaCa3TfLgNCN+GhrJOGZuIlMouAh38Qe4QOx26eUOVsq70qXrywA=="],
 
     "solc/semver": ["semver@5.7.2", "", { "bin": { "semver": "bin/semver" } }, "sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g=="],
+
+    "solc-0-8-17/semver": ["semver@5.7.2", "", { "bin": { "semver": "bin/semver" } }, "sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g=="],
 
     "solc-typed-ast/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 

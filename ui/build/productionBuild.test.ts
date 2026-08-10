@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -31,12 +30,13 @@ const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
-		const result = spawnSync('bun', ['run', 'ui:build:prod'], {
+		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
 			cwd: repositoryRootPath,
-			encoding: 'utf8',
+			stderr: 'pipe',
+			stdout: 'pipe',
 		})
-		if (result.status !== 0) {
-			throw new Error(`ui:build:prod failed\n${result.stdout}${result.stderr}`)
+		if (result.exitCode !== 0) {
+			throw new Error(`ui:build:prod failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
 		}
 	}
 
@@ -87,8 +87,8 @@ test('production javascript is self-contained for deploys', async () => {
 	expect(appBundle).toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
 	expect(workerBundle).not.toContain('./vendor/')
 	expect(workerBundle).not.toContain('./js/')
-	expect(appSourceMap.sources.some(source => source.startsWith('../../ts/'))).toBe(true)
-	expect(workerSourceMap.sources.some(source => source.startsWith('../../ts/'))).toBe(true)
+	expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
+	expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
 })
 
 test('production build can be served as static files', async () => {

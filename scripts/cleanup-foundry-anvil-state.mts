@@ -11,7 +11,7 @@ export type CleanupFoundryAnvilStateResult = {
 	readonly stateDirectory: string
 }
 
-export const getDefaultAnvilStateDirectory = (): string => join(homedir(), '.foundry', 'anvil', 'tmp')
+export const getDefaultAnvilStateDirectory = (): string => process.env['ZOLTAR_ANVIL_STATE_DIRECTORY']?.trim() || join(homedir(), '.foundry', 'anvil', 'tmp')
 
 const isMissingPathError = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 
