@@ -16,7 +16,7 @@ contract ShareTokenFactory {
 		shareToken = shareTokens[deploymentKey];
 		if (address(shareToken) != address(0)) return shareToken;
 
-		shareToken = new ShareToken{ salt: salt }(msg.sender, zoltar, questionId);
+		shareToken = new ShareToken{salt: salt}(msg.sender, zoltar, questionId);
 		shareTokens[deploymentKey] = shareToken;
 	}
 }

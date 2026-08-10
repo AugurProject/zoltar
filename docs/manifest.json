@@ -94,11 +94,11 @@
 		},
 		{
 			"path": "explanation/liquidations.html",
-			"title": "Liquidation economics",
-			"summary": "Why liquidation is punitive and how its incentives restore backing.",
+			"title": "Capacity and delegated liquidation",
+			"summary": "Dynamic capacity, liquidation roles, bounded receiver approvals, and reservation lifecycle.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["liquidation", "incentives", "solvency", "bad debt"]
+			"keywords": ["liquidation", "capacity", "operator", "receiver vault", "approval", "reservation", "bad debt"]
 		},
 		{
 			"path": "explanation/fees.html",

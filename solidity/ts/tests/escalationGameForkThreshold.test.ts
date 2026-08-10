@@ -8,11 +8,11 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { approveAndDepositRepToVault } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { depositToEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -20,6 +20,7 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_SecurityPool_SecurityPool,
 	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
 	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
@@ -49,6 +50,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let securityPoolAddresses: {
 		securityPool: Address
 		escalationGame: Address
+		priceOracleManagerAndOperatorQueuer: Address
 	}
 	let questionId: bigint
 
@@ -82,16 +84,17 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await createQuestion(client, questionData, outcomes)
 
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		await approveAndDepositRepToVault(client, 1000n * 10n ** 18n, questionId)
+		await approveAndDepositRepToVault(client, 10_000n * 10n ** 18n, questionId)
 
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	})
 
 	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {
-		const depositAmount = 1n * 10n ** 18n // 1 ether
+		const depositAmount = 100n * 10n ** 18n
 
 		// Advance time past the question's end date to allow escalation game deposit
 		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		// Deploy escalation game and deposit on Yes
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
@@ -212,13 +215,14 @@ describe('Escalation Game Fork Threshold Test', () => {
 	})
 
 	test('late unrelated fork migration cannot reprice a finalized winning deposit or create sweepable residual', async () => {
-		const depositAmount = 1000n * 10n ** 18n
-		const firstDeposit = depositAmount / 2n
+		const depositAmount = 10_000n * 10n ** 18n
+		const firstDeposit = (depositAmount * 3n) / 10n
 		const secondDeposit = depositAmount - firstDeposit
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attacker, depositAmount, questionId)
 
 		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondDeposit)
 		const configuredThreshold = await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame)
@@ -286,7 +290,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
-		const depositAmount = 1n * 10n ** 18n
+		const depositAmount = 100n * 10n ** 18n
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const initialTotalSupply = await getTotalTheoreticalSupplyAttoRep(client, repToken)
 		const approximateForkThreshold = initialTotalSupply / 10n / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
@@ -304,6 +308,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		})
 
 		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
 
 		assert.strictEqual(
@@ -313,10 +318,33 @@ describe('Escalation Game Fork Threshold Test', () => {
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
 			}),
-			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
-			'initial escalation deposit should match deployment config',
+			initialTotalSupply / 10_000_000n,
+			'initial escalation deposit should apply the theoretical-supply floor',
 		)
+		assert.strictEqual(await client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
+	})
+
+	test('rejects an escalation baseline that could exceed the exact supply-based minimum', async () => {
+		const infra = getInfraContractAddresses()
+		const deploymentData = encodeDeployData({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+			args: [
+				infra.securityPoolForker,
+				infra.zoltarQuestionData,
+				infra.escalationGameFactory,
+				infra.openOracle,
+				infra.zoltar,
+				infra.shareTokenFactory,
+				infra.uniformPriceDualCapBatchAuctionFactory,
+				infra.priceOracleManagerAndOperatorQueuerFactory,
+				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep + 1n,
+				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
+				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
+			],
+		})
+		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial escalation game deposit must equal 1 REP/)
 	})
 
 	test.each([

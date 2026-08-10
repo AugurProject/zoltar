@@ -124,6 +124,14 @@ body.docs-diagram-expanded {
 	min-height: 0;
 	align-items: center;
 	justify-content: center;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+
+.plot-figure-expanded > .plot-chart:focus-visible {
+	outline: 2px solid var(--blue, var(--accent, #176653));
+	outline-offset: -2px;
 }
 
 .plot-figure-expanded > .plot-chart > svg {
@@ -131,6 +139,26 @@ body.docs-diagram-expanded {
 	height: auto !important;
 	max-width: 100% !important;
 	max-height: 100% !important;
+}
+
+#fig-statoblast-oracle-flow.plot-figure-expanded > .plot-chart {
+	justify-content: flex-start;
+}
+
+#fig-statoblast-oracle-flow.plot-figure-expanded > .plot-chart > svg {
+	width: 58rem !important;
+	min-width: 58rem !important;
+	max-width: none !important;
+}
+
+#fig-liquidation-punitive-flow.plot-figure-expanded > .plot-chart {
+	justify-content: flex-start;
+}
+
+#fig-liquidation-punitive-flow.plot-figure-expanded > .plot-chart > svg {
+	width: 56.25rem !important;
+	min-width: 56.25rem !important;
+	max-width: none !important;
 }
 
 .plot-figure-expanded > .diagram-caption {
@@ -1900,6 +1928,10 @@ body.paper-statoblast .equation {
 	margin: 1.1rem 0;
 	padding: 0.5rem;
 	background: var(--code-bg);
+}
+body.paper-statoblast pre {
+	max-width: 100%;
+	overflow-x: auto;
 }
 body.paper-statoblast .equation math {
 	display: block;

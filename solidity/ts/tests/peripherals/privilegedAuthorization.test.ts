@@ -1,7 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCoverageCommitmentAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
@@ -9,7 +9,7 @@ import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFi
 describe('Peripherals: privileged authorization matrix', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
 	const assert: PeripheralsVaultAccountingFixture['assert'] = fixture.assert
-	const { createWriteClient, TEST_ADDRESSES, addressString, manipulatePriceOracleAndPerformOperation, OperationType, QuestionOutcome, depositToEscalationGame, getEscalationGameDeposits, repDeposit } = fixture
+	const { createWriteClient, TEST_ADDRESSES, addressString, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, OperationType, QuestionOutcome, depositToEscalationGame, getEscalationGameDeposits, repDeposit } = fixture
 	let client: PeripheralsVaultAccountingFixture['client']
 	let mockWindow: PeripheralsVaultAccountingFixture['mockWindow']
 	let securityPool: Address
@@ -131,7 +131,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 			backingUnitsDenominator: await getTotalRepBackingUnits(client, securityPool),
 			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
 			retentionRate: await getCurrentRetentionRate(client, securityPool),
-			totalCoverageCommitmentAttoEth: await getTotalCoverageCommitmentAttoEth(client, securityPool),
+			totalCapacityOwnershipAttoRep: await getTotalCapacityOwnershipAttoRep(client, securityPool),
 		})
 		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => {
 			const before = await readSnapshot()
@@ -157,18 +157,6 @@ describe('Peripherals: privileged authorization matrix', () => {
 					attacker.writeContract({
 						abi: peripherals_SecurityPool_SecurityPool.abi,
 						address: securityPool,
-						functionName: 'executeCoverageCommitmentUpdate',
-						args: [attacker.account.address, 0n],
-					}),
-				),
-			/Only coord/,
-		)
-		await assertUnauthorizedUnchanged(
-			() =>
-				writeContractAndWait(attacker, () =>
-					attacker.writeContract({
-						abi: peripherals_SecurityPool_SecurityPool.abi,
-						address: securityPool,
 						functionName: 'withdrawRepFromVault',
 						args: [client.account.address, 1n],
 					}),
@@ -182,15 +170,15 @@ describe('Peripherals: privileged authorization matrix', () => {
 						abi: peripherals_SecurityPool_SecurityPool.abi,
 						address: securityPool,
 						functionName: 'performLiquidation',
-						args: [attacker.account.address, client.account.address, 1n, 0n, 0n, 0n, 0n],
+						args: [1n, attacker.account.address, attacker.account.address, client.account.address, 1n, 0n, 0n, 0n, 0n, 10_000n, 0n],
 					}),
 				),
 			/Only coord/,
 		)
 
-		const authorizedCoverageCommitmentAttoEth = repDeposit / 5n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, authorizedCoverageCommitmentAttoEth)
-		assert.strictEqual(await getTotalCoverageCommitmentAttoEth(client, securityPool), authorizedCoverageCommitmentAttoEth)
+		const authorizedCapacityOwnershipAttoRep = repDeposit / 5n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, authorizedCapacityOwnershipAttoRep)
+		assert.strictEqual(await getTotalCapacityOwnershipAttoRep(client, securityPool), authorizedCapacityOwnershipAttoRep)
 
 		const rawFactory = await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -222,7 +210,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
 			totalRepBackingUnits: await getTotalRepBackingUnits(client, securityPool),
 			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
-			totalCoverageCommitmentAttoEth: await getTotalCoverageCommitmentAttoEth(client, securityPool),
+			totalCapacityOwnershipAttoRep: await getTotalCapacityOwnershipAttoRep(client, securityPool),
 			vault: await getSecurityVault(client, securityPool, attacker.account.address),
 		})
 		const calls = [
@@ -230,11 +218,11 @@ describe('Peripherals: privileged authorization matrix', () => {
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
 			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
-			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n] }) },
-			{ name: 'addFeeEligibleCoverageCommitmentAttoEth', data: encodeFunctionData({ abi: poolAbi, functionName: 'addFeeEligibleCoverageCommitmentAttoEth', args: [attacker.account.address, 1n] }) },
+			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 10_000n, 0n, 0n] }) },
+			{ name: 'addFeeEligibleCapacityOwnershipAttoRep', data: encodeFunctionData({ abi: poolAbi, functionName: 'addFeeEligibleCapacityOwnershipAttoRep', args: [attacker.account.address, 1n] }) },
 			{ name: 'setTotalRepBackingUnits', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalRepBackingUnits', args: [1n] }) },
 			{ name: 'setTotalSharesAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalSharesAttoShares', args: [1n] }) },
-			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n] }) },
+			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n, 0n] }) },
 			{ name: 'transferEth', data: encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }) },
 			{ name: 'authorizeChildPool', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }) },
 		]
@@ -248,6 +236,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 	test('pool-only escalation deposit and withdrawal selectors reject direct callers', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await manipulatePriceOracle(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 10n)
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPool)
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)

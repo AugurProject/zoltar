@@ -5,8 +5,9 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import {
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
-	NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
+	calculateMintingCapacityAttoEth,
 	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
@@ -23,7 +24,7 @@ import {
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
 	getVaultCollateralizationPercent,
-	hasRepBackedPoolWithNoActiveCoverageCommitment,
+	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
 } from '../../../features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '../../../features/markets/lib/scalarOutcome.js'
@@ -129,11 +130,18 @@ void describe('trading helpers', () => {
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 
-	void test('computes remaining mint capacity from fee-eligible coverage commitment and minted open interest', () => {
+	void test('computes remaining mint capacity from live ETH capacity and minted open interest', () => {
 		expect(getRemainingMintCapacity(10n, 4n)).toBe(6n)
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('converts REP capacity ownership into live ETH minting capacity', () => {
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(13_333_333_333_333_333_333n)
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(6_666_666_666_666_666_666n)
+		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBeUndefined()
 	})
 
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
@@ -167,20 +175,20 @@ void describe('trading helpers', () => {
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
 	})
 
-	void test('surfaces no active coverage commitment separately from unavailable quotes', () => {
-		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveCoverageCommitment')
+	void test('surfaces no active capacity ownership separately from unavailable quotes', () => {
+		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveCapacityOwnership')
 		expect(getCollateralizationDisplayState(TOKEN_PRECISION, undefined)).toBe('unavailable')
 		expect(getCollateralizationDisplayState(TOKEN_PRECISION, 150n * TOKEN_PRECISION)).toBe('value')
 	})
 
-	void test('returns zero percent when REP backing is zero but coverage commitment is active', () => {
+	void test('returns zero percent when REP backing is zero but capacity ownership is active', () => {
 		expect(getPoolCollateralizationPercent(0n, TOKEN_PRECISION, TOKEN_PRECISION)).toBe(0n)
 	})
 
-	void test('detects pools that have REP backing but no active coverage commitment', () => {
-		expect(hasRepBackedPoolWithNoActiveCoverageCommitment(20n * 10n ** 18n, 0n)).toBe(true)
-		expect(hasRepBackedPoolWithNoActiveCoverageCommitment(20n * 10n ** 18n, 1n)).toBe(false)
-		expect(hasRepBackedPoolWithNoActiveCoverageCommitment(0n, 0n)).toBe(false)
+	void test('detects pools that have REP backing but no active capacity ownership', () => {
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 0n)).toBe(true)
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 1n)).toBe(false)
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
 	})
 
 	void test('derives the max redeemable complete sets from wallet share balances', () => {
@@ -194,7 +202,7 @@ void describe('trading helpers', () => {
 	})
 
 	void test('suppresses only the targeted trading guard copy in the UI', () => {
-		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)).toBeUndefined()
 		expect(getTradingGuardDisplayMessage(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)).toBeUndefined()
 		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
 		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBe(MARKET_NOT_FINALIZED_MESSAGE)
@@ -213,7 +221,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Connect a wallet before minting complete sets.')
 
@@ -227,7 +235,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Select a pool before minting.')
 
@@ -241,9 +249,26 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
+	})
+
+	void test("blocks minting when the pool's REP price is stale", () => {
+		expect(
+			getTradingMintGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				settlementCollateralAttoEth: 1n,
+				ethBalanceAttoEth: 10n,
+				hasSelectedPool: true,
+				isOnActiveAppChain: true,
+				isPriceValid: false,
+				mintAmountInput: '1',
+				shareTokenSupplyAttoShares: 1n,
+				totalPoolHeldAttoRep: 10n,
+				mintingCapacityAttoEth: 10n,
+			}),
+		).toBe('Refresh the REP price before minting.')
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
@@ -257,7 +282,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: undefined,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Loading mint capacity.')
 
@@ -271,7 +296,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: 10n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('No mint capacity remaining.')
 
@@ -285,9 +310,9 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				feeEligibleCoverageCommitmentAttoEth: 0n,
+				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active coverage commitment.')
+		).toBe('No mint capacity. No active capacity ownership.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -299,7 +324,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: 'abc',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a valid mint amount.')
 
@@ -313,7 +338,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a mint amount greater than zero.')
 
@@ -327,7 +352,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0.3',
 				shareTokenSupplyAttoShares: 10n ** 18n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 10n ** 18n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Max mint capacity is 0.2 ETH.')
 
@@ -341,7 +366,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
 	})
@@ -357,7 +382,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
 	})
@@ -373,7 +398,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0.5',
 				shareTokenSupplyAttoShares: 10n ** 18n,
 				totalPoolHeldAttoRep: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBeUndefined()
 	})

@@ -38,9 +38,9 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 10n * 10n ** 18n,
 		repToken: REP_TOKEN_ADDRESS,
-		coverageCommitmentAttoEth: 0n,
+		capacityOwnershipAttoRep: 0n,
 		securityPoolAddress: SECURITY_POOL_ADDRESS,
-		totalCoverageCommitmentAttoEth: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		claimableFeesAttoEth: 0n,
 		universeId: 1n,
 		vaultAddress: WALLET_ADDRESS,
@@ -287,118 +287,6 @@ describe('useSecurityVaultOperations', () => {
 		await withdrawPromise
 
 		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
-	})
-
-	test('setCoverageCommitment blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {
-		const queueOracleManagerOperation = mock(async () => ({
-			action: 'queueSetCoverageCommitmentAttoEth' as const,
-			hash: '0x03' as const,
-		}))
-		const dependencies = createSecurityVaultOperationsDependencies({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 10n ** 18n,
-			})),
-			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: 0n,
-				currentWethBalanceAttoEth: 0n,
-				initialReportAmount2: 5n,
-				maximumInitialAttoWeth: 5n,
-				minimumToken1ReportAttoEth: 5n,
-				proposedRepPerEthPrice: 1n,
-				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 5n,
-			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 1n })),
-			queueOracleManagerOperation,
-		})
-		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			requireHookState(hookState).setSecurityVaultForm(current => ({
-				...current,
-				coverageCommitmentEthAmount: '1',
-				selectedVaultOwner: WALLET_ADDRESS,
-			}))
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).setCoverageCommitment()
-		})
-
-		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
-		await waitFor(() => {
-			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('fund the initial report')
-		})
-	})
-
-	test('setCoverageCommitment can stage a fresh attached operation without a currently valid price', async () => {
-		const queueOracleManagerOperation = mock(async () => ({
-			action: 'queueSetCoverageCommitmentAttoEth' as const,
-			hash: '0x03' as const,
-		}))
-
-		const dependencies = createSecurityVaultOperationsDependencies({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			depositRepToVaultToSecurityPool: mock(async () => {
-				throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
-			}),
-			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: 10n,
-				currentWethBalanceAttoEth: 10n,
-				initialReportAmount2: 10n,
-				maximumInitialAttoWeth: 10n,
-				minimumToken1ReportAttoEth: 10n,
-				proposedRepPerEthPrice: 1n,
-				reputationTokenAddress: REP_TOKEN_ADDRESS,
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 0n,
-			})),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 10n })),
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
-			queueOracleManagerOperation,
-			redeemRepFromVaultFromSecurityPool: mock(async () => {
-				throw new Error('redeemRepFromVaultFromSecurityPool should not be called in this test')
-			}),
-			redeemSecurityVaultFees: mock(async () => {
-				throw new Error('redeemSecurityVaultFees should not be called in this test')
-			}),
-			updateSecurityVaultFees: mock(async () => {
-				throw new Error('updateSecurityVaultFees should not be called in this test')
-			}),
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 30n,
-			})),
-			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
-		})
-		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			requireHookState(hookState).setSecurityVaultForm(current => ({
-				...current,
-				coverageCommitmentEthAmount: '1',
-				selectedVaultOwner: WALLET_ADDRESS,
-				stagedOperationTimeoutMinutes: '5',
-			}))
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).setCoverageCommitment()
-		})
-
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setCoverageCommitment', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
 	})
 
 	test('withdrawRep can stage a fresh attached operation without a currently valid price', async () => {

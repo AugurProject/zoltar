@@ -10,7 +10,9 @@
 	"protocolConfig": {
 		"forkBurnDivisor": "5",
 		"forkThresholdDivisor": "20",
-		"initialEscalationGameDepositAttoRep": "1000000000000000000"
+		"initialEscalationGameDepositAttoRep": "1000000000000000000",
+		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
+		"minimumVaultRepDepositAttoRep": "0"
 	},
 	"deploymentSteps": [
 		{
@@ -21,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x3a5D806f4f6a3a6833732055Dc75D159f27cc65d"
+			"address": "0xa1b8d4652a20bCD7E65bb98da08CF6DA43c43603"
 		},
 		{
 			"id": "weth",
@@ -51,12 +53,12 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0xF85EA17F6Dcb56D25Bf20bC8Bd6f32dc207C5743"
+			"address": "0x838DbfdFFEe6Fd2527f0050d3580Dbb3B16eD15A"
 		},
 		{
 			"id": "openOracle",
 			"label": "OpenOracle",
-			"address": "0x67C8B7D2488B8A1019D80426f03e3da8d6d12f4f"
+			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "zoltarQuestionData",
@@ -76,12 +78,12 @@
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0xCC7654cc798314A2D82126fD468b4250983015c9"
+			"address": "0x68796f0EB09077E71e8158130516f9BeFDe869BC"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xE36BBe2613FfCFbAaF0C92085A406a9fB48C192c"
+			"address": "0x5eaadC0C3847eEdb193601dc37280dE14146e33b"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -96,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x69D34c1a358c9E09c1F3Fa7b2cC4F5787562bf93"
+			"address": "0x783000515b2cE8A1a685d22Fc34D18f84df6C18C"
 		}
 	],
 	"derivedContracts": [

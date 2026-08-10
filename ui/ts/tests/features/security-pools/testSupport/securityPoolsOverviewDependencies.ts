@@ -1,5 +1,5 @@
 import { mock } from 'bun:test'
-import { zeroHash } from '@zoltar/shared/ethereum'
+import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { createSecurityPoolPageFromLoadedPools, type UseSecurityPoolsOverviewDependencies } from '../../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { OracleManagerDetails } from '../../../../types/contracts.js'
 
@@ -41,6 +41,34 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 			reputationTokenAddress: zeroHash as never,
 			requestedInitialAttoWeth: 0n,
 			wethShortfallAttoEth: 0n,
+		})),
+		loadLiquidationApproval: mock(async () => ({
+			registryAddress: zeroAddress,
+			params: {
+				securityPool: zeroAddress,
+				receiverVault: zeroAddress,
+				operator: zeroAddress,
+				targetVault: zeroAddress,
+				maxCumulativeDebtAttoEth: 0n,
+				maxDebtPerLiquidationAttoEth: 0n,
+				minPostLiquidationHealthFactorBps: 10_000n,
+				validAfter: 0n,
+				validUntil: 0n,
+				nonce: 0n,
+			},
+			availableDebtAttoEth: 0n,
+			reservedDebtAttoEth: 0n,
+			consumedDebtAttoEth: 0n,
+			minimumValidNonce: 0n,
+			revoked: false,
+		})),
+		loadSecurityPoolVaultSummary: mock(async (_securityPoolAddress, vaultAddress) => ({
+			openInterestAttoEth: 0n,
+			disputeStakedAttoRep: 0n,
+			vaultAttoRepBacking: 0n,
+			capacityOwnershipAttoRep: 0n,
+			claimableFeesAttoEth: 0n,
+			vaultAddress,
 		})),
 		loadOracleManagerDetails: mock(async () => defaultManagerDetails),
 		loadOracleManagerQueueOperationEthValue: mock(async () => 0n),

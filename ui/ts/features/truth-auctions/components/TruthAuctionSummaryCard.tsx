@@ -4,10 +4,10 @@ import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
-import { AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
-	auctionedCoverageCommitmentAttoEthDisplay?: ComponentChildren | undefined
+	auctionedCapacityOwnershipAttoRepDisplay?: ComponentChildren | undefined
 	badge: ComponentChildren
 	clearingPriceDisplay: ComponentChildren
 	displayedEthRaisedAttoEth: bigint
@@ -23,7 +23,7 @@ type TruthAuctionSummaryCardProps = {
 }
 
 export function TruthAuctionSummaryCard({
-	auctionedCoverageCommitmentAttoEthDisplay,
+	auctionedCapacityOwnershipAttoRepDisplay,
 	badge,
 	clearingPriceDisplay,
 	displayedEthRaisedAttoEth,
@@ -67,7 +67,7 @@ export function TruthAuctionSummaryCard({
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={commonCopy.starts}>{startedDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.clearingPrice}>{clearingPriceDisplay}</MetricField>
-					{auctionedCoverageCommitmentAttoEthDisplay === undefined ? undefined : <MetricField label={AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL}>{auctionedCoverageCommitmentAttoEthDisplay}</MetricField>}
+					{auctionedCapacityOwnershipAttoRepDisplay === undefined ? undefined : <MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedCapacityOwnershipAttoRepDisplay}</MetricField>}
 					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSizeAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={commonCopy.ends}>{endsDisplay}</MetricField>
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}

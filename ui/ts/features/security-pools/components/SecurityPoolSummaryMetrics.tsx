@@ -9,7 +9,7 @@ import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePri
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
+import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
@@ -21,28 +21,14 @@ type SecurityPoolSummaryMetricsProps = {
 	currentTimestamp?: bigint | undefined
 	metricVariant?: MetricGridVariant
 	pool: ListedSecurityPool
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'mock' | 'v3' | 'v4' | undefined
-	repPerEthSourceUrl: string | undefined
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
 	showUniverse?: boolean
 	variant?: 'embedded' | 'hero'
 }
 
-export function SecurityPoolSummaryMetrics({
-	children,
-	className = '',
-	currentTimestamp,
-	metricVariant = 'default',
-	pool,
-	repPerEthSource: _repPerEthSource,
-	repPerEthSourceUrl: _repPerEthSourceUrl,
-	showPoolAddress = false,
-	showTotalBacking = false,
-	showUniverse = false,
-	variant = 'embedded',
-}: SecurityPoolSummaryMetricsProps) {
+export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, showUniverse = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
@@ -68,7 +54,7 @@ export function SecurityPoolSummaryMetrics({
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
-					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
+					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 				</MetricField>
 				{children}
 			</MetricGrid>
@@ -110,15 +96,15 @@ export function SecurityPoolSummaryMetrics({
 					<ProgressMeter
 						className='security-pool-hero-meter'
 						label={securityPoolCopy.openInterestMinted}
-						maxValue={pool.totalCoverageCommitmentAttoEth}
+						maxValue={mintingCapacityAttoEth ?? 0n}
 						secondaryValue={
 							<span className='detail'>
 								{securityPoolCopy.maxLead}
-								<CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
+								{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 							</span>
 						}
 						tone={getToneRatioThreshold({
-							ratio: getVisualRatio({ value: pool.settlementCollateralAttoEth, maxValue: pool.totalCoverageCommitmentAttoEth }),
+							ratio: getVisualRatio({ value: pool.settlementCollateralAttoEth, maxValue: mintingCapacityAttoEth ?? 0n }),
 							successThreshold: 0.6,
 							warningThreshold: 0.85,
 						})}

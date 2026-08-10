@@ -1,7 +1,7 @@
 import { type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from '../lib/assert.js'
-import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from './core.js'
@@ -10,13 +10,15 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
 	settlementCollateralAttoEth: bigint
-	feeEligibleCoverageCommitmentAttoEth: bigint
+	feeEligibleCapacityOwnershipAttoRep: bigint
+	mintingCapacityAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
-	totalCoverageCommitmentAttoEth: bigint
+	totalCapacityOwnershipAttoRep: bigint
+	isPriceValid: boolean
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -35,13 +37,35 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 			address: securityPoolAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'getCurrentMintingCapacityAttoEth',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'priceOracleManagerAndOperatorQueuer',
+			address: securityPoolAddress,
+			args: [],
+		},
+	])
+	const [isPriceValid] = await readRequiredMulticall(client, [
+		{
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'isPriceValid',
+			address: priceOracleManagerAndOperatorQueuer,
+			args: [],
+		},
 	])
 	return {
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
-		feeEligibleCoverageCommitmentAttoEth: poolAccountingSnapshot.feeEligibleCoverageCommitmentAttoEth,
+		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
+		mintingCapacityAttoEth,
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
-		totalCoverageCommitmentAttoEth: poolAccountingSnapshot.totalCoverageCommitmentAttoEth,
+		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
+		isPriceValid,
 	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {

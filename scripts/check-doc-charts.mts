@@ -370,7 +370,8 @@ if (
 	!sharedDocsCssSource.includes('.plot-figure-diagram:not(.plot-figure-fit) > .plot-chart > svg') ||
 	!sharedDocsCssSource.includes('.plot-figure-expanded') ||
 	!runtimeSource.includes("new CustomEvent('docs:charts-rendered')") ||
-	!runtimeSource.includes('restoreDocumentFragment')
+	!runtimeSource.includes('restoreDocumentFragment') ||
+	!runtimeSource.includes("target.scrollIntoView({ behavior: 'instant', block: 'start' })")
 ) {
 	throw new Error('Documentation charts must reflow quantitative plots, expose fit/full-size diagram controls, and restore fragment targets after layout')
 }

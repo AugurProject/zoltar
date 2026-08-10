@@ -89,7 +89,6 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
 		onRedeemRepFromVault: () => undefined,
-		onSetCoverageCommitment: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
@@ -102,7 +101,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		securityVaultForm: {
 			depositAmount: '',
 			repWithdrawAmount: '',
-			coverageCommitmentEthAmount: '',
+			targetHealthFactor: '',
 			securityPoolAddress: '',
 			selectedVaultOwner: '',
 		},
@@ -186,7 +185,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -204,7 +203,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -226,8 +225,8 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		forkAuction: createForkAuctionProps(),
-		coverageCommitmentTransferEthAmount: '',
-		maximumCoverageCommitmentTransferAttoEth: undefined,
+		liquidationDebtEthAmount: '',
+		maximumLiquidationDebtAttoEth: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
@@ -645,7 +644,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
-		expect(contextQueries.queryByText('Total Coverage commitment')).toBeNull()
+		expect(contextQueries.queryByText('Total Capacity ownership')).toBeNull()
 		expect(contextQueries.getByText('Security Pool Address')).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')

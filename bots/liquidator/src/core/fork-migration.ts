@@ -13,12 +13,12 @@ export type VaultMigration = {
 }
 
 function hasVaultPosition(pool: PoolObservation) {
-	return pool.botVault.backingUnits > 0n || pool.botVault.coverageCommitmentAttoEth > 0n
+	return pool.botVault.backingUnits > 0n || pool.botVault.openInterestAttoEth > 0n
 }
 
 function hasBotStagedOperation(pool: PoolObservation) {
 	const vault = pool.botVault.address.toLowerCase()
-	return pool.stagedOperations.some(operation => operation.initiatorVault.toLowerCase() === vault || operation.targetVault.toLowerCase() === vault)
+	return pool.stagedOperations.some(operation => operation.operator.toLowerCase() === vault || operation.receiverVault.toLowerCase() === vault || operation.targetVault.toLowerCase() === vault)
 }
 
 export function isPoolExecutionEligible(pool: Pick<PoolObservation, 'approvedUniverse' | 'selected' | 'systemState'>) {

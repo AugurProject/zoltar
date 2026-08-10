@@ -26,6 +26,7 @@ import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.j
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
+	calculateMintingCapacityAttoEth,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
@@ -36,9 +37,9 @@ import {
 	convertSettlementCollateralAttoEthToAttoShares,
 	getTradingRedeemSharesGuardMessage,
 	hasUndefinedCompleteSetExchangeRate,
-	hasRepBackedPoolWithNoActiveCoverageCommitment,
+	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
-	NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 } from '../lib/trading.js'
 import { tryParseTradingAmountInput } from '../lib/marketForm.js'
@@ -102,6 +103,7 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, selectedPool?.lastOraclePrice, selectedPool?.statoblastSecurityMultiplierBps)
 	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(mintAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
@@ -113,7 +115,7 @@ export function TradingSection({
 		accountAddress: accountState.address,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
 		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
-		feeEligibleCoverageCommitmentAttoEth: selectedPool?.feeEligibleCoverageCommitmentAttoEth,
+		mintingCapacityAttoEth,
 		hasSelectedPool,
 		isOnActiveAppChain,
 		mintAmountInput: tradingForm.completeSetAmount,
@@ -146,7 +148,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isOnActiveAppChain,
 	})
-	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.feeEligibleCoverageCommitmentAttoEth, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
@@ -160,7 +162,7 @@ export function TradingSection({
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveCoverageCommitment(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCoverageCommitmentAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_COVERAGE_COMMITMENT_MESSAGE
+					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCapacityOwnershipAttoRep)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}
@@ -367,8 +369,8 @@ export function TradingSection({
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
-						<MetricField label={tradingCopy.coverageCommitmentAttoEthInUse}>
-							<CurrencyValue value={selectedPool.feeEligibleCoverageCommitmentAttoEth} suffix={commonCopy.eth} />
+						<MetricField label={tradingCopy.capacityOwnershipAttoRepInUse}>
+							<CurrencyValue value={selectedPool.feeEligibleCapacityOwnershipAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={tradingCopy.repBacking}>
 							<CurrencyValue value={selectedPool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />

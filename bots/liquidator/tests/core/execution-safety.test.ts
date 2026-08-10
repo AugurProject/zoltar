@@ -10,6 +10,7 @@ import {
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
 	conservativeStaleTopUp,
+	liquidationExecutionStep,
 	requireFinalizedTransactionReceipt,
 	planVaultMaintenance,
 	requirePendingStagedOperation,
@@ -58,14 +59,15 @@ function stagedOperationReceipt(success: boolean): TransactionReceipt {
 }
 
 function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
-	const initiator = getAddress('0x0000000000000000000000000000000000000020')
+	const operator = getAddress('0x0000000000000000000000000000000000000020')
 	const target = getAddress('0x0000000000000000000000000000000000000030')
-	const topics = encodeEventTopics({
+	const queuedTopics = encodeEventTopics({
 		abi: coordinatorAbi,
-		args: { initiatorVault: initiator, operationId: 1n, targetVault: target },
+		args: { operationId: 1n, operator, targetVault: target },
 		eventName: 'StagedOperationQueued',
 	})
-	if (topics.some(topic => topic === null)) throw new Error('Test event topics must not contain wildcards')
+	const routeTopics = encodeEventTopics({ abi: coordinatorAbi, args: { operationId: 1n, operator, receiverVault: operator }, eventName: 'LiquidationRouteStaged' })
+	if (queuedTopics.some(topic => topic === null) || routeTopics.some(topic => topic === null)) throw new Error('Test event topics must not contain wildcards')
 	return {
 		...stagedOperationReceipt(true),
 		logs: [
@@ -80,14 +82,31 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 						{ name: 'queuedAt', type: 'uint256' },
 						{ name: 'validForSeconds', type: 'uint256' },
 						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
-						{ name: 'snapshotTargetCoverageCommitmentAttoEth', type: 'uint256' },
+						{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256' },
+						{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256' },
+						{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256' },
 						{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
 						{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
 						{ name: 'isPendingSlot', type: 'bool' },
 					],
-					[0n, 10n, 1n, 60n, 10n, 10n, 10n, 10n, isPendingSlot],
+					[0n, 10n, 1n, 60n, 10n, 10n, 10n, 0n, 10n, 10n, isPendingSlot],
 				),
-				topics: topics.filter(topic => topic !== null),
+				topics: queuedTopics.filter(topic => topic !== null),
+			},
+			{
+				address: coordinator,
+				blockHash: `0x${'11'.repeat(32)}`,
+				blockNumber: 1n,
+				data: encodeAbiParameters(
+					[
+						{ name: 'targetVault', type: 'address' },
+						{ name: 'approvalId', type: 'bytes32' },
+						{ name: 'requestedDebtAttoEth', type: 'uint256' },
+						{ name: 'reservedDebtAttoEth', type: 'uint256' },
+					],
+					[target, `0x${'00'.repeat(32)}`, 10n, 0n],
+				),
+				topics: routeTopics.filter(topic => topic !== null),
 			},
 		],
 	}
@@ -172,18 +191,60 @@ describe('liquidator execution safety', () => {
 		).toThrow('maximumAttoRepPerPool')
 	})
 
+	test('deposits liquidation top-ups without capacity ownership and rescans before staging', () => {
+		const step = liquidationExecutionStep(100n * 10n ** 18n)
+		expect(step.kind).toBe('deposit-and-rescreen')
+		if (step.kind !== 'deposit-and-rescreen') throw new Error('Expected a deposit-and-rescreen step')
+		expect((100n * 10n ** 18n * 10_000n) / step.targetHealthFactorBps).toBe(0n)
+		expect(liquidationExecutionStep(0n)).toEqual({ kind: 'stage' })
+	})
+
+	test('preserves a prefund through the fresh scan and then stages the rescreened candidate', () => {
+		const wallet = getAddress('0x0000000000000000000000000000000000000020')
+		const pool = {
+			botVault: {
+				address: wallet,
+				backingUnits: 30n,
+				badDebtAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
+				claimableFeesAttoEth: 0n,
+				disputeStakedAttoRep: 0n,
+				openInterestAttoEth: 0n,
+				vaultAttoRepBacking: 30n,
+			},
+			isPriceValid: true,
+			lastPrice: 1n,
+			minimumVaultRepDepositAttoRep: 30n,
+			multiplierBps: 20_000n,
+		}
+		const strategy = {
+			allowAutomaticWithdrawals: true,
+			minimumRepWithdrawalAttoRep: 1n,
+			redeemFeesAboveAttoEth: 1n,
+			vaultTargetHealthBps: 12_500n,
+			vaultTopUpHealthBps: 11_000n,
+			vaultWithdrawHealthBps: 15_000n,
+		}
+		expect(planVaultMaintenance(pool, strategy, wallet, true, true)).toBeUndefined()
+		expect(liquidationExecutionStep(0n)).toEqual({ kind: 'stage' })
+	})
+
 	test('keeps fee redemption available when price-dependent maintenance is blocked', () => {
 		const wallet = getAddress('0x0000000000000000000000000000000000000020')
 		const pool = {
 			botVault: {
 				address: wallet,
-				coverageCommitmentAttoEth: 10n,
+				badDebtAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
+				openInterestAttoEth: 10n,
 				backingUnits: 0n,
 				vaultAttoRepBacking: 0n,
 				claimableFeesAttoEth: 2n,
+				disputeStakedAttoRep: 0n,
 			},
 			isPriceValid: false,
 			lastPrice: 0n,
+			minimumVaultRepDepositAttoRep: 1n,
 			multiplierBps: 20_000n,
 		}
 		const strategy = {
@@ -203,13 +264,17 @@ describe('liquidator execution safety', () => {
 		const pool = {
 			botVault: {
 				address: wallet,
-				coverageCommitmentAttoEth: 0n,
+				badDebtAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
+				openInterestAttoEth: 0n,
 				backingUnits: 0n,
 				vaultAttoRepBacking: 0n,
 				claimableFeesAttoEth: 0n,
+				disputeStakedAttoRep: 0n,
 			},
 			isPriceValid: false,
 			lastPrice: 0n,
+			minimumVaultRepDepositAttoRep: 1n,
 			multiplierBps: 20_000n,
 		}
 		const strategy = {
@@ -227,9 +292,9 @@ describe('liquidator execution safety', () => {
 	test('pre-funds stale liquidations against the configured higher price bound', () => {
 		expect(
 			conservativeStaleTopUp({
-				callerCoverageCommitmentAttoEth: 0n,
+				callerOpenInterestAttoEth: 0n,
 				callerAttoRep: 0n,
-				coverageCommitmentToTransferAttoEth: 10n * 10n ** 18n,
+				requestedDebtAttoEth: 10n * 10n ** 18n,
 				fallbackPrice: 0n,
 				minimumTopUp: 100n * 10n ** 18n,
 				multiplierBps: 20_000n,
@@ -243,13 +308,16 @@ describe('liquidator execution safety', () => {
 	test('rejects stale full closes whose post-queue REP acquisition has no hard ceiling', () => {
 		expect(() =>
 			assertStaleLiquidationExposureBound({
-				coverageCommitmentToTransferAttoEth: 1n,
+				requestedDebtAttoEth: 1n,
 				target: {
 					address: getAddress('0x0000000000000000000000000000000000000030'),
-					coverageCommitmentAttoEth: 1n,
+					badDebtAttoEth: 0n,
+					capacityOwnershipAttoRep: 1n,
+					openInterestAttoEth: 1n,
 					backingUnits: 10n,
 					vaultAttoRepBacking: 10n,
 					claimableFeesAttoEth: 0n,
+					disputeStakedAttoRep: 0n,
 				},
 			}),
 		).toThrow('cannot guarantee')
@@ -268,8 +336,8 @@ describe('liquidator execution safety', () => {
 	test('requires a stale liquidation to occupy the pending settlement slot', () => {
 		const initiator = getAddress('0x0000000000000000000000000000000000000020')
 		const target = getAddress('0x0000000000000000000000000000000000000030')
-		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(false), coordinator, initiator, target, 10n)).toThrow('pending settlement slot')
-		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(true), coordinator, initiator, target, 10n)).not.toThrow()
+		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(false), coordinator, initiator, initiator, target, 10n)).toThrow('pending settlement slot')
+		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(true), coordinator, initiator, initiator, target, 10n)).not.toThrow()
 	})
 
 	test('applies the persisted semantic receipt expectation during recovery', () => {
@@ -298,12 +366,17 @@ describe('liquidator execution safety', () => {
 					{
 						operationAmountAttoRepOrAttoEth: 1n,
 						id: 7n,
-						initiatorVault: getAddress('0x0000000000000000000000000000000000000020'),
+						liquidationApprovalId: `0x${'00'.repeat(32)}`,
 						isPendingSettlement: true,
 						operation: 0n,
+						operator: getAddress('0x0000000000000000000000000000000000000020'),
 						queuedAt: 1n,
+						receiverVault: getAddress('0x0000000000000000000000000000000000000020'),
+						reservedLiquidationDebtAttoEth: 0n,
 						snapshotTotalRepBackingUnits: 1n,
-						snapshotTargetCoverageCommitmentAttoEth: 1n,
+						snapshotTargetCapacityOwnershipAttoRep: 1n,
+						snapshotTargetDisputeStakedAttoRep: 0n,
+						snapshotTargetOpenInterestAttoEth: 1n,
 						snapshotTargetBackingUnits: 1n,
 						snapshotTotalPoolHeldAttoRep: 1n,
 						targetVault: getAddress('0x0000000000000000000000000000000000000030'),

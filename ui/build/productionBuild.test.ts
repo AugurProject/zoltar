@@ -875,7 +875,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
-			await driver.waitForBodyText('Vault REP backing and coverage commitment were migrated into the selected child universe.')
+			await driver.waitForBodyText('Vault REP backing and capacity ownership were migrated into the selected child universe.')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)

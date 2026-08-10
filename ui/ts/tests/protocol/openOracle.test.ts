@@ -3,10 +3,26 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { getOpenOracleAddress, getOpenOracleDisputeSwapToken, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
+import {
+	getOpenOracleAddress,
+	getOpenOracleDisputeSwapToken,
+	invalidateLiquidationApprovalNonce,
+	loadLiquidationApproval,
+	loadLiquidationApprovalRegistry,
+	loadOpenOracleReportDetails,
+	loadOpenOracleWithdrawableBalances,
+	loadOracleManagerDetails,
+	loadOpenOracleReportSummaries,
+	permitLiquidationApproval,
+	revokeLiquidationApproval,
+	setLiquidationApproval,
+	settleOracleReport,
+	withdrawOpenOracleBalance,
+	type LiquidationApprovalParams,
+} from '../../protocol/index.js'
+import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
-import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
+import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
@@ -187,7 +203,7 @@ describe('openOracle protocol client', () => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n, 60n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getActiveStagedOperations') {
@@ -201,11 +217,11 @@ describe('openOracle protocol client', () => {
 						previewOperationIds,
 						previewOperationIds.map(operationId => ({
 							operationAmountAttoRepOrAttoEth: operationId,
-							initiatorVault: vaultAddress,
+							operator: vaultAddress,
 							operation: 1,
 							queuedAt: 0n,
 							snapshotTotalRepBackingUnits: 0n,
-							snapshotTargetCoverageCommitmentAttoEth: 0n,
+							snapshotTargetCapacityOwnershipAttoRep: 0n,
 							snapshotTargetBackingUnits: 0n,
 							snapshotTotalPoolHeldAttoRep: 0n,
 							targetVault: vaultAddress,
@@ -216,11 +232,11 @@ describe('openOracle protocol client', () => {
 				if (request.functionName === 'getPendingOperationSlot') {
 					return {
 						operationAmountAttoRepOrAttoEth: 999n,
-						initiatorVault: vaultAddress,
+						operator: vaultAddress,
 						operation: 0,
 						queuedAt: 0n,
 						snapshotTotalRepBackingUnits: 0n,
-						snapshotTargetCoverageCommitmentAttoEth: 0n,
+						snapshotTargetCapacityOwnershipAttoRep: 0n,
 						snapshotTargetBackingUnits: 0n,
 						snapshotTotalPoolHeldAttoRep: 0n,
 						targetVault: alternateSecurityPoolAddress,
@@ -233,7 +249,19 @@ describe('openOracle protocol client', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
-		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationCostAttoEth', 'getRequestPriceCostAttoEth', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount'])
+		expect(requestedFunctionNames).toEqual([
+			'lastPrice',
+			'pendingOperationSlotId',
+			'getPendingSettlementOperationIds',
+			'MAX_PENDING_SETTLEMENT_OPERATIONS',
+			'pendingReportId',
+			'getQueuedOperationCostAttoEth',
+			'getRequestPriceCostAttoEth',
+			'isPriceValid',
+			'lastSettlementTimestamp',
+			'getActiveStagedOperationCount',
+			'settlementTime',
+		])
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
@@ -330,5 +358,82 @@ describe('openOracle protocol client', () => {
 		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, 7n, holder)).rejects.toThrow('wallet rejected withdrawal')
 		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, 7n, holder)).resolves.toMatchObject({ action: 'withdrawBalance' })
 		expect(withdrawalAttempts).toBe(2)
+	})
+
+	test('loads the liquidation approval registry and encodes approval lifecycle writes', async () => {
+		const coordinatorAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const registryAddress = getAddress('0x00000000000000000000000000000000000000a2')
+		const receiverVault = getAddress('0x00000000000000000000000000000000000000a3')
+		const operator = getAddress('0x00000000000000000000000000000000000000a4')
+		const securityPool = getAddress('0x00000000000000000000000000000000000000a5')
+		const params = {
+			securityPool,
+			receiverVault,
+			operator,
+			targetVault: zeroAddress,
+			maxCumulativeDebtAttoEth: 10n,
+			maxDebtPerLiquidationAttoEth: 2n,
+			minPostLiquidationHealthFactorBps: 12_000n,
+			validAfter: 1n,
+			validUntil: 100n,
+			nonce: 7n,
+		} satisfies LiquidationApprovalParams
+		const approvalId = toHex(9n, { size: 32 })
+		const signature = '0x1234' satisfies Hex
+		const readClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				expect(request.functionName).toBe('liquidationApprovalRegistry')
+				return registryAddress
+			},
+		})
+		await expect(loadLiquidationApprovalRegistry(readClient, coordinatorAddress)).resolves.toBe(registryAddress)
+		const approvalState = {
+			params,
+			availableDebtAttoEth: 8n,
+			reservedDebtAttoEth: 1n,
+			consumedDebtAttoEth: 1n,
+			revoked: false,
+		}
+		const approvalReadClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				switch (request.functionName) {
+					case 'liquidationApprovalRegistry':
+						return registryAddress
+					case 'getLiquidationApproval':
+						return approvalState
+					case 'minimumLiquidationApprovalNonce':
+						expect(request.args).toEqual([receiverVault])
+						return 9n
+					default:
+						throw new Error(`Unexpected approval read ${request.functionName}`)
+				}
+			},
+		})
+		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
+
+		const calls: { data: Hex; to: Address }[] = []
+		const writeClient = createMockWriteClient(request => {
+			if (request.data === undefined || request.to === undefined || request.to === null) throw new Error('Expected approval calldata and destination')
+			calls.push({ data: request.data, to: request.to })
+		})
+		await setLiquidationApproval(asWriteClient(writeClient), registryAddress, params)
+		await permitLiquidationApproval(asWriteClient(writeClient), registryAddress, params, signature)
+		await revokeLiquidationApproval(asWriteClient(writeClient), registryAddress, approvalId)
+		await invalidateLiquidationApprovalNonce(asWriteClient(writeClient), registryAddress, 9n)
+
+		expect(calls.map(call => call.to)).toEqual([registryAddress, registryAddress, registryAddress, registryAddress])
+		expect(
+			calls.map(
+				call =>
+					decodeFunctionData({
+						abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+						data: call.data,
+					}).functionName,
+			),
+		).toEqual(['setLiquidationApproval', 'permitLiquidationApproval', 'revokeLiquidationApproval', 'invalidateLiquidationApprovalNonce'])
 	})
 })

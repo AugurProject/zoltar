@@ -10,18 +10,18 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
-const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCoverageCommitmentAttoEth = 0n, feeEligibleCoverageCommitmentAttoEth = totalCoverageCommitmentAttoEth) => ({
+const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCapacityOwnershipAttoRep = 0n, feeEligibleCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep) => ({
 	settlementCollateralAttoEth,
 	currentRetentionRate: 0n,
-	feeEligibleCoverageCommitmentAttoEth,
+	feeEligibleCapacityOwnershipAttoRep,
 	feeIndex: 0n,
 	feeIndexRemainder: 0n,
 	lastUpdatedFeeAccumulator: 0n,
 	totalFeesOwedRemainder: 0n,
 	totalClaimableVaultFeesAttoEth: 0n,
-	totalCoverageCommitmentAttoEth,
+	totalCapacityOwnershipAttoRep,
 	unallocatedAccruedFeesAttoEth: 0n,
-	uncheckpointedFeeEligibleCoverageCommitmentAttoEth: 0n,
+	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
 })
 
 describe('securityPools protocol client', () => {
@@ -57,7 +57,7 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
+					return [0n, 10n, 7n * 10n ** 18n, 30n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -92,6 +92,8 @@ describe('securityPools protocol client', () => {
 		if (pool === undefined) throw new Error('Expected one security pool')
 
 		expect(pool.parent).toBe(zeroAddress)
+		expect(pool.minimumSecurityBondDebtAttoEth).toBe(7n * 10n ** 18n)
+		expect(pool.minimumVaultRepDepositAttoRep).toBe(30n * 10n ** 18n)
 		expect(pool.forkOutcome).toBe('none')
 		expect(pool.hasForkActivity).toBe(false)
 	})
@@ -104,7 +106,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -150,8 +152,8 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -215,8 +217,8 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -281,9 +283,11 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'settlementCollateralAttoEth') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					securityVaultSummaryBatchCount += 1
 					return contracts.map(contract => {
@@ -348,9 +352,11 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'settlementCollateralAttoEth') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					securityVaultSummaryMulticallCount += 1
 					return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
@@ -413,9 +419,11 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'settlementCollateralAttoEth') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					securityVaultSummaryMulticallCount += 1
 					return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
@@ -475,10 +483,12 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'settlementCollateralAttoEth') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, createPoolAccountingSnapshot(0n, 9n, 3n), 0n]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, createPoolAccountingSnapshot(0n, 9n, 3n), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'backingUnitsToAttoRep') return [5n]
+				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					const address = Reflect.get(firstContract, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
@@ -554,9 +564,9 @@ describe('securityPools protocol client', () => {
 		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
-		expect(selectedPool.feeEligibleCoverageCommitmentAttoEth).toBe(3n)
+		expect(selectedPool.feeEligibleCapacityOwnershipAttoRep).toBe(3n)
 		expect(selectedPool.totalPoolHeldAttoRep).toBe(5n)
-		expect(selectedPool.totalCoverageCommitmentAttoEth).toBe(9n)
+		expect(selectedPool.totalCapacityOwnershipAttoRep).toBe(9n)
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
@@ -573,7 +583,7 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n]
+				return request.contracts.length === 5 ? [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress] : [true]
 			}),
 		}
 
@@ -581,12 +591,14 @@ describe('securityPools protocol client', () => {
 
 		expect(capacity).toEqual({
 			settlementCollateralAttoEth: 11n,
-			feeEligibleCoverageCommitmentAttoEth: 17n,
+			feeEligibleCapacityOwnershipAttoRep: 17n,
+			mintingCapacityAttoEth: 55n,
 			shareTokenSupplyAttoShares: 22n,
 			totalPoolHeldAttoRep: 33n,
-			totalCoverageCommitmentAttoEth: 44n,
+			totalCapacityOwnershipAttoRep: 44n,
+			isPriceValid: true,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'isPriceValid'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
 	})
 })

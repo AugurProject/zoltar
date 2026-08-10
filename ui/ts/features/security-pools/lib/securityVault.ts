@@ -7,12 +7,20 @@ import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FO
 export { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS }
 
 export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
-export const MIN_COVERAGE_COMMITMENT_ATTO_ETH = 1n * 10n ** 18n
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
+
+export function parseTargetHealthFactorBps(value: string) {
+	const trimmed = value.trim()
+	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error('Target health factor must be a number with at most four decimal places')
+	const [whole = '', fraction = ''] = trimmed.split('.')
+	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
+	if (factorBps < BPS_DENOMINATOR) throw new Error('Target health factor must be at least 1.00×')
+	return factorBps
+}
 
 function getMigrationSecurityMultiplierBps(poolSecurityMultiplierBps: bigint) {
 	return BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2n
@@ -37,14 +45,14 @@ export function doesLoadedSecurityVaultMatchSelection({ accountAddress, security
 	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
-export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined) {
+export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
 	if (depositAmount === undefined || depositAmount <= 0n) return false
-	return (currentVaultRepBackingAttoRep ?? 0n) === 0n && depositAmount < MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP
+	return (currentVaultRepBackingAttoRep ?? 0n) === 0n && depositAmount < minimumVaultRepDepositAttoRep
 }
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
 	if (securityVaultDetails === undefined) return false
-	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.coverageCommitmentAttoEth > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n
+	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n
 }
 
 function divideBigintRoundUp(value: bigint, divisor: bigint) {
@@ -52,28 +60,28 @@ function divideBigintRoundUp(value: bigint, divisor: bigint) {
 	return (value + divisor - 1n) / divisor
 }
 
-function getCoverageCommitmentBackedRepFloor(coverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (coverageCommitmentAttoEth === undefined || coverageCommitmentAttoEth <= 0n) return 0n
+function getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
 	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
-	return divideBigintRoundUp(coverageCommitmentAttoEth * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
+	return divideBigintRoundUp(capacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
 }
 
-function getStrictCoverageCommitmentBackedRepMinimum(coverageCommitmentAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
-	if (coverageCommitmentAttoEth === undefined || coverageCommitmentAttoEth <= 0n) return 0n
+function getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
 	if (multiplierBps === undefined || multiplierBps <= 0n) return undefined
-	return (coverageCommitmentAttoEth * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
+	return (capacityOwnershipAttoRep * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
 }
 
-function getBackedCoverageCommitmentCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+function getBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (attoRepAmount === undefined || attoRepAmount <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
 	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return 0n
 	return (attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR) / (repPerEthPrice * statoblastSecurityMultiplierBps)
 }
 
-function getStrictlyBackedCoverageCommitmentCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+function getStrictlyBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
 	if (attoRepAmount === undefined || attoRepAmount <= 0n || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps <= 0n) return 0n
 	const numerator = attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR
 	return numerator === 0n ? 0n : (numerator - 1n) / (repPerEthPrice * multiplierBps)
@@ -83,33 +91,33 @@ export function getSecurityVaultWithdrawableRepAmount({
 	disputeStakedAttoRep = 0n,
 	vaultAttoRepBacking,
 	repPerEthPrice,
-	coverageCommitmentAttoEth,
+	capacityOwnershipAttoRep,
 	statoblastSecurityMultiplierBps,
 	totalPoolHeldAttoRep,
-	totalCoverageCommitmentAttoEth,
+	totalCapacityOwnershipAttoRep,
 }: {
 	vaultAttoRepBacking: bigint | undefined
 	disputeStakedAttoRep?: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	coverageCommitmentAttoEth: bigint | undefined
+	capacityOwnershipAttoRep: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	totalPoolHeldAttoRep?: bigint | undefined
-	totalCoverageCommitmentAttoEth?: bigint | undefined
+	totalCapacityOwnershipAttoRep?: bigint | undefined
 }) {
 	if (vaultAttoRepBacking === undefined) return undefined
 	if (disputeStakedAttoRep > 0n) return 0n
-	const requiredVaultAttoRep = getCoverageCommitmentBackedRepFloor(coverageCommitmentAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps)
+	const requiredVaultAttoRep = getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
 	if (requiredVaultAttoRep === undefined) return undefined
 	const associatedAttoRep = vaultAttoRepBacking + disputeStakedAttoRep
 	const ordinaryHeadroom = associatedAttoRep > requiredVaultAttoRep ? associatedAttoRep - requiredVaultAttoRep : 0n
-	const migrationRequiredRep = getStrictCoverageCommitmentBackedRepMinimum(coverageCommitmentAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+	const migrationRequiredRep = getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
 	if (migrationRequiredRep === undefined) return undefined
 	const migrationHeadroom = vaultAttoRepBacking > migrationRequiredRep ? vaultAttoRepBacking - migrationRequiredRep : 0n
 	const maxLocalWithdrawal = vaultAttoRepBacking < ordinaryHeadroom ? vaultAttoRepBacking : ordinaryHeadroom
 	let maxWithdrawableAttoRep = maxLocalWithdrawal
 	if (migrationHeadroom < maxWithdrawableAttoRep) maxWithdrawableAttoRep = migrationHeadroom
 	if (totalPoolHeldAttoRep !== undefined && totalPoolHeldAttoRep > 0n) {
-		const requiredPoolRep = getCoverageCommitmentBackedRepFloor(totalCoverageCommitmentAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps)
+		const requiredPoolRep = getCapacityOwnershipBackedRepFloor(totalCapacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
 		if (requiredPoolRep === undefined) return undefined
 		const maxGlobalWithdrawal = totalPoolHeldAttoRep > requiredPoolRep ? totalPoolHeldAttoRep - requiredPoolRep : 0n
 		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
@@ -117,35 +125,35 @@ export function getSecurityVaultWithdrawableRepAmount({
 	return maxWithdrawableAttoRep
 }
 
-export function getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-	currentCoverageCommitmentAttoEth,
+export function getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+	currentCapacityOwnershipAttoRep,
 	disputeStakedAttoRep = 0n,
 	vaultAttoRepBacking,
 	repPerEthPrice,
 	statoblastSecurityMultiplierBps,
 	totalPoolHeldAttoRep,
-	totalCoverageCommitmentAttoEth,
+	totalCapacityOwnershipAttoRep,
 }: {
-	currentCoverageCommitmentAttoEth?: bigint | undefined
+	currentCapacityOwnershipAttoRep?: bigint | undefined
 	disputeStakedAttoRep?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	totalPoolHeldAttoRep?: bigint | undefined
-	totalCoverageCommitmentAttoEth?: bigint | undefined
+	totalCapacityOwnershipAttoRep?: bigint | undefined
 }) {
-	const localCoverageCommitmentCeilingAttoEth = getBackedCoverageCommitmentCeiling((vaultAttoRepBacking ?? 0n) + disputeStakedAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-	const migrationCoverageCommitmentCeilingAttoEth = getStrictlyBackedCoverageCommitmentCeiling(vaultAttoRepBacking, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
-	let maxCoverageCommitmentAttoEthAmount = localCoverageCommitmentCeilingAttoEth
-	if (migrationCoverageCommitmentCeilingAttoEth < maxCoverageCommitmentAttoEthAmount) maxCoverageCommitmentAttoEthAmount = migrationCoverageCommitmentCeilingAttoEth
-	if (totalPoolHeldAttoRep !== undefined && totalCoverageCommitmentAttoEth !== undefined) {
-		const normalizedCurrentCoverageCommitmentAttoEth = currentCoverageCommitmentAttoEth ?? 0n
-		const otherVaultCoverageCommitmentAttoEth = totalCoverageCommitmentAttoEth > normalizedCurrentCoverageCommitmentAttoEth ? totalCoverageCommitmentAttoEth - normalizedCurrentCoverageCommitmentAttoEth : 0n
-		const globalCoverageCommitmentCeilingAttoEth = getBackedCoverageCommitmentCeiling(totalPoolHeldAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-		const remainingPoolCoverageCommitmentAttoEth = globalCoverageCommitmentCeilingAttoEth > otherVaultCoverageCommitmentAttoEth ? globalCoverageCommitmentCeilingAttoEth - otherVaultCoverageCommitmentAttoEth : 0n
-		maxCoverageCommitmentAttoEthAmount = maxCoverageCommitmentAttoEthAmount < remainingPoolCoverageCommitmentAttoEth ? maxCoverageCommitmentAttoEthAmount : remainingPoolCoverageCommitmentAttoEth
+	const localCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling((vaultAttoRepBacking ?? 0n) + disputeStakedAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+	const migrationCapacityOwnershipCeilingAttoRep = getStrictlyBackedCapacityOwnershipCeiling(vaultAttoRepBacking, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+	let maxCapacityOwnershipAttoRepAmount = localCapacityOwnershipCeilingAttoRep
+	if (migrationCapacityOwnershipCeilingAttoRep < maxCapacityOwnershipAttoRepAmount) maxCapacityOwnershipAttoRepAmount = migrationCapacityOwnershipCeilingAttoRep
+	if (totalPoolHeldAttoRep !== undefined && totalCapacityOwnershipAttoRep !== undefined) {
+		const normalizedCurrentCapacityOwnershipAttoRep = currentCapacityOwnershipAttoRep ?? 0n
+		const otherVaultCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep > normalizedCurrentCapacityOwnershipAttoRep ? totalCapacityOwnershipAttoRep - normalizedCurrentCapacityOwnershipAttoRep : 0n
+		const globalCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling(totalPoolHeldAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+		const remainingPoolCapacityOwnershipAttoRep = globalCapacityOwnershipCeilingAttoRep > otherVaultCapacityOwnershipAttoRep ? globalCapacityOwnershipCeilingAttoRep - otherVaultCapacityOwnershipAttoRep : 0n
+		maxCapacityOwnershipAttoRepAmount = maxCapacityOwnershipAttoRepAmount < remainingPoolCapacityOwnershipAttoRep ? maxCapacityOwnershipAttoRepAmount : remainingPoolCapacityOwnershipAttoRep
 	}
-	return maxCoverageCommitmentAttoEthAmount
+	return maxCapacityOwnershipAttoRepAmount
 }
 
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {

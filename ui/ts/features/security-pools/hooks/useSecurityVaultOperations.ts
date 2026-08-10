@@ -25,10 +25,10 @@ import { getErrorMessage, isRecoverableContractReadError } from '../../../lib/er
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { parseAddressInput } from '../../../lib/inputs.js'
-import { getDefaultSecurityVaultFormState, parseBigIntInput, parseEthAmountInput, parseRepAmountInput } from '../../markets/lib/marketForm.js'
+import { getDefaultSecurityVaultFormState, parseBigIntInput, parseRepAmountInput } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '../../../lib/required.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_COVERAGE_COMMITMENT_ATTO_ETH, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
@@ -53,12 +53,12 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint) => Promise<SecurityVaultActionResult>
+	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) => Promise<SecurityVaultActionResult>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
-	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'setCoverageCommitment' | 'withdrawRep', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
+	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
 	redeemRepFromVaultFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	redeemSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	updateSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
@@ -68,7 +68,7 @@ const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsD
 	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
-	depositRepToVaultToSecurityPool: async (client, securityPoolAddress, amount) => await depositRepToVaultToSecurityPool(client, securityPoolAddress, amount),
+	depositRepToVaultToSecurityPool: async (client, securityPoolAddress, amount, targetHealthFactorBps) => await depositRepToVaultToSecurityPool(client, securityPoolAddress, amount, targetHealthFactorBps),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadErc20Balance: async (tokenAddress, accountAddress) => await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
@@ -112,8 +112,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				return 'Approving REP'
 			case 'depositRepToVault':
 				return 'Depositing REP'
-			case 'queueSetCoverageCommitmentAttoEth':
-				return 'Setting coverage commitment'
 			case 'queueWithdrawRep':
 				return 'Withdrawing REP'
 			case 'redeemFees':
@@ -132,8 +130,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				return 'REP approved'
 			case 'depositRepToVault':
 				return 'REP deposited'
-			case 'queueSetCoverageCommitmentAttoEth':
-				return 'Coverage commitment set'
 			case 'queueWithdrawRep':
 				return 'REP withdrawal queued'
 			case 'redeemFees':
@@ -152,8 +148,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				return 'REP approval failed'
 			case 'depositRepToVault':
 				return 'REP deposit failed'
-			case 'queueSetCoverageCommitmentAttoEth':
-				return 'Coverage commitment update failed'
 			case 'queueWithdrawRep':
 				return 'REP withdrawal failed'
 			case 'redeemFees':
@@ -408,6 +402,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
 				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
+				const targetHealthFactorBps = parseTargetHealthFactorBps(snapshot.form.targetHealthFactor)
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
@@ -415,7 +410,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = currentRepBalanceAttoRep
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalanceAttoRep)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
-				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount)
+				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -425,49 +420,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return
 				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
-			},
-		)
-	}
-
-	const setCoverageCommitment = async () => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'queueSetCoverageCommitmentAttoEth',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
-				const amount = parseEthAmountInput(snapshot.form.coverageCommitmentEthAmount, 'Coverage commitment')
-				if (amount < 0n) throw new Error('Coverage commitment must be zero or a positive amount')
-				if (amount !== 0n && amount < MIN_COVERAGE_COMMITMENT_ATTO_ETH) throw new Error(`Coverage commitment must be zero or at least ${formatCurrencyBalance(MIN_COVERAGE_COMMITMENT_ATTO_ETH)} ETH`)
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
-				if (details === undefined) return undefined
-				const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
-				const funding = resolveOracleOperationEthFunding({
-					managerDetails,
-				})
-				const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted })
-				const walletBalanceAttoEth = funding?.costAttoEth === undefined || funding.costAttoEth === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
-				if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
-					await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this coverage commitment update', walletBalanceAttoEth)
-				}
-				const setCoverageCommitmentGuardMessage = getOracleRequestEthGuardMessage({
-					actionLabel: 'queue this coverage commitment update',
-					includeBuffer: funding?.includeBuffer === true,
-					requiredCostAttoEth: funding?.costAttoEth,
-					walletBalanceAttoEth,
-				})
-				if (setCoverageCommitmentGuardMessage !== undefined) throw new Error(setCoverageCommitmentGuardMessage)
-				if (!isCurrentSelection()) return undefined
-				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setCoverageCommitment', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
-				return {
-					action: 'queueSetCoverageCommitmentAttoEth',
-					hash: result.hash,
-					...(result.queuedOperation === undefined ? {} : { queuedOperation: result.queuedOperation }),
-					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
-				} satisfies SecurityVaultActionResult
-			},
-			'Failed to set coverage commitment',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 			},
 		)
 	}
@@ -601,7 +553,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		redeemRepFromVault,
 		securityVaultActiveAction: securityVaultActiveAction.value,
 		securityVaultFeedback: securityVaultFeedback.value,
-		setCoverageCommitment,
 		withdrawRep,
 		securityVaultRepApproval: repAllowanceLoader.signal.value,
 		securityVaultDetails: securityVaultDetails.value,

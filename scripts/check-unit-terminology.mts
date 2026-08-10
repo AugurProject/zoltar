@@ -8,7 +8,7 @@ const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'scripts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
 const legacyTerminology =
-	/free[ -]?rep|freerep|pool[ -]?ownership|poolOwnership|security[ -]?bond|securityBond|bond[ -]?allowance|bondAllowance|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
+	/pool[ -]?ownership|poolOwnership|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
 const missingAtomicSuffixIdentifiers =
 	/\b(?:ethBalance|wethBalance|requestPriceEthCost|getRequestPriceEthCost|getQueuedOperationEthCost|ethCost|queuedOperationEthCost|totalAccruedFees|requiredEthCost|walletEthBalance|liquidationMaxAmount|netProfitWeth|winningEth|candidateWinningEth|activeCumulativeEth|provisionalEthRaised|acceptedEth|profitBeforeGasWeth|wethRefund|expectedEth|initialWeth|pendingReportMaxSettlementBaseFee|calculateOracleMinimumWethReport|snapshotDenominator|snapshotPoolHeldRepBalanceAttoRep|snapshotPoolHeldRepBalanceBackingUnits)\b/
 const formattedAtomicStringField = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*string\b/
@@ -31,6 +31,10 @@ const ambiguousPoolHeldRepTerminology = /(?<!-)\bpool REP\b/i
 const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) collateral\b/i
 const uiEscrowAccountingAlias = /\b(?:escalationEscrowedAttoRep|connectedWalletEscrowedAttoRep)\b/
 const uiDirectRepTruthAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
+const docsDirectRepTruthAuctionClaimAlias = /\bbought locked REP and security commitments\b/i
+const invalidSecurityPoolInterfaceCapacityUnits = /Capacity ownership[^\n]*denominated in attoETH|REP backing units, commitments and fees use attoETH|addFeeEligibleCapacityOwnershipAttoRep\(address vault, uint256 amountAttoEth\)/
+const capacityOwnershipIdentifierWithAttoEthUnits = /\b(?:capacityOwnership|CapacityOwnership)[A-Za-z0-9]*AttoEth\b/
+const legacyLiquidatorCoverageModel = /\b(?:coverageCommitment|CoverageCommitment|totalCoverageCommitmentAttoEth|initiatorVault)\b|coverage commitment/i
 const uiLegacyDisputeStakeCopy = /\b(?:Total side stake|Your side stake|Total stake|Your stake|current stakes|escrow attributed to this vault)\b/i
 const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],
@@ -71,6 +75,10 @@ if (!missingAtomicSuffixIdentifiers.test('const initialWeth = 1n')) throw new Er
 if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new Error('Unit terminology checker negative fixture did not detect an ambiguous atomic scale constant')
 if (!vaultContainerActingAsCaller.test('the vault invokes migration')) throw new Error('Unit terminology checker negative fixture did not detect a vault container acting as a caller')
 if (!unsuffixedAtomicEthEquationSymbol.test('<math data-source="rawEthBalance = settlementCollateralAttoEth"><mi>rawEthBalance</mi></math>')) throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed attoETH equation symbol')
+if (!docsDirectRepTruthAuctionClaimAlias.test('participants claim their bought locked REP and security commitments')) throw new Error('Unit terminology checker negative fixture did not detect obsolete truth-auction settlement terminology')
+if (!invalidSecurityPoolInterfaceCapacityUnits.test('function addFeeEligibleCapacityOwnershipAttoRep(address vault, uint256 amountAttoEth)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in ISecurityPool')
+if (!capacityOwnershipIdentifierWithAttoEthUnits.test('const capacityOwnershipTransferAttoEth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an attoETH capacity-ownership identifier')
+if (!legacyLiquidatorCoverageModel.test('totalCoverageCommitmentAttoEth')) throw new Error('Unit terminology checker negative fixture did not detect the legacy liquidator coverage model')
 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {
@@ -103,6 +111,10 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 	if ((path.startsWith('docs/') || path.startsWith('ui/ts/copy/')) && ambiguousSettlementCollateralTerminology.test(source)) failures.push(`${path}: uses generic open-interest or parent collateral instead of settlement collateral`)
 	if (path.startsWith('ui/ts/') && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
 	if (path.startsWith('ui/ts/') && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
+	if (path === 'docs/explanation/statoblast.html' && docsDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction settlement as direct locked REP and undefined security commitments`)
+	if (path === 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol' && invalidSecurityPoolInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
+	if (path !== terminologyCheckPath && capacityOwnershipIdentifierWithAttoEthUnits.test(source)) failures.push(`${path}: uses attoETH units in a capacity-ownership identifier; use attoREP for ownership or an explicit debt/capacity-value name`)
+	if (path.startsWith('bots/liquidator/') && legacyLiquidatorCoverageModel.test(source)) failures.push(`${path}: uses the removed fixed-coverage liquidator model`)
 	if (path.startsWith('ui/ts/') && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)
 	if (pathSpecificForbidden.get(path)?.test(source)) failures.push(`${path}: contains an atomic or command identifier without canonical naming`)
 }

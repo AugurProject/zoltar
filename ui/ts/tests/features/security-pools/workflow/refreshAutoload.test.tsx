@@ -329,7 +329,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							coverageCommitmentEthAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},

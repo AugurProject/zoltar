@@ -31,9 +31,9 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 12n * 10n ** 18n,
 		repToken: zeroAddress,
-		coverageCommitmentAttoEth: 2n * 10n ** 18n,
+		capacityOwnershipAttoRep: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
-		totalCoverageCommitmentAttoEth: 3n * 10n ** 18n,
+		totalCapacityOwnershipAttoRep: 3n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
 		universeId: 1n,
 		vaultAddress: zeroAddress,
@@ -50,7 +50,6 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
 		onRedeemRepFromVault: () => undefined,
-		onSetCoverageCommitment: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
 		oracleManagerDetails: undefined,
@@ -64,7 +63,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		securityVaultForm: {
 			depositAmount: '',
 			repWithdrawAmount: '',
-			coverageCommitmentEthAmount: '',
+			targetHealthFactor: '',
 			securityPoolAddress: zeroAddress,
 			selectedVaultOwner: zeroAddress,
 		},
@@ -148,7 +147,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				coverageCommitmentAttoEth={2n * 10n ** 18n}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
 				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
@@ -168,7 +167,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				coverageCommitmentAttoEth={2n * 10n ** 18n}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
 				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
@@ -192,7 +191,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
 						selectedVaultOwner: zeroAddress,
 					},
@@ -205,7 +204,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
 		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
-		expect(documentQueries.queryByText('Refresh the vault before setting a coverage commitment.')).toBeNull()
+		expect(documentQueries.queryByText('Refresh the vault before setting a capacity ownership.')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 
@@ -233,7 +232,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						coverageCommitmentAttoEth: 0n,
+						capacityOwnershipAttoRep: 0n,
 						claimableFeesAttoEth: 1n * 10n ** 18n,
 					}),
 				})}
@@ -285,7 +284,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '1',
+						targetHealthFactor: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -305,49 +304,14 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
-	test('uses neutral missing-state copy when a coverage commitment update succeeds before manager state is visible', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					modalFirst: true,
-					oracleManagerDetails: createOracleManagerDetails({
-						isPriceValid: false,
-						pendingOperation: undefined,
-					}),
-					securityVaultForm: {
-						depositAmount: '1',
-						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '1',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
-					securityVaultResult: {
-						action: 'queueSetCoverageCommitmentAttoEth',
-						hash: '0x02',
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Set coverage commitment' }))
-		const dialog = documentQueries.getByRole('dialog', { name: 'Set coverage commitment' })
-		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
-		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
-	})
-
 	test('labels queued vault operation amounts with exact human units', async () => {
-		for (const queuedCase of [
-			{ action: 'queueWithdrawRep' as const, amountLabel: 'REP withdrawal', amountText: '5 REP', operation: 'withdrawRep' as const, openLabel: 'Withdraw REP' },
-			{ action: 'queueSetCoverageCommitmentAttoEth' as const, amountLabel: 'Coverage commitment', amountText: '5 ETH', operation: 'setCoverageCommitment' as const, openLabel: 'Set coverage commitment' },
-		]) {
+		for (const queuedCase of [{ action: 'queueWithdrawRep' as const, amountLabel: 'REP withdrawal', amountText: '5 REP', operation: 'withdrawRep' as const, openLabel: 'Withdraw REP' }]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityVaultSection
 					{...createSecurityVaultSectionProps({
 						modalFirst: true,
 						oracleManagerDetails: createOracleManagerDetails({
-							pendingOperation: { amount: 5n * 10n ** 18n, initiatorVault: zeroAddress, operation: queuedCase.operation, operationId: 7n, targetVault: zeroAddress },
+							pendingOperation: { amount: 5n * 10n ** 18n, operator: zeroAddress, operation: queuedCase.operation, operationId: 7n, targetVault: zeroAddress },
 							pendingOperationSlotId: 7n,
 							pendingSettlementOperationIds: [7n],
 						}),
@@ -439,8 +403,8 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const lifecycleReason = documentQueries.getByText('REP-backing deposits, REP withdrawals, and coverage-commitment updates are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
-		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set coverage commitment']) {
+		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
+		for (const actionLabel of ['Deposit REP', 'Withdraw REP']) {
 			const button = documentQueries.getByRole('button', { name: actionLabel })
 			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
 			expectTransactionButtonDisabled(document.body, actionLabel)
@@ -475,7 +439,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '1',
+						targetHealthFactor: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -501,7 +465,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '1',
+						targetHealthFactor: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: otherVaultAddress,
 					},
@@ -522,7 +486,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						coverageCommitmentAttoEth: 0n,
+						capacityOwnershipAttoRep: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
 					walletRepBalanceAttoRep: 0n,
@@ -545,7 +509,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						coverageCommitmentAttoEth: 0n,
+						capacityOwnershipAttoRep: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
 				})}
@@ -572,80 +536,66 @@ describe('SecurityVaultSection', () => {
 		).toBe(true)
 	})
 
-	test('fills the coverage commitment input from the backed Max amount', async () => {
-		const formChanges: Partial<SecurityVaultSectionProps['securityVaultForm']>[] = []
+	test('associates invalid target health factor guidance in embedded and modal deposit layouts', async () => {
+		for (const modalFirst of [false, true]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst,
+						securityVaultForm: {
+							depositAmount: '1',
+							repWithdrawAmount: '1',
+							targetHealthFactor: '',
+							securityPoolAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+					})}
+				/>,
+			)
+			const documentQueries = within(document.body)
+			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
+			const factorInput = scope.getByText('Target health factor').parentElement?.querySelector('input')
+			expect(factorInput).not.toBeNull()
+			const factorError = scope.getByText('Target health factor must be a number with at most four decimal places')
+			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
+			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
+			renderedComponent.cleanup()
+		}
+		cleanupRenderedComponent = undefined
+	})
+
+	test('uses the loaded pool minimum for a new-vault deposit', async () => {
+		const configuredMinimum = 30n * 10n ** 18n
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
-					onSecurityVaultFormChange: update => {
-						formChanges.push(update)
-					},
-					oracleManagerDetails: createOracleManagerDetails(),
+					accountState: createAccountState({ ethBalanceAttoEth: 1n, wethBalanceAttoEth: 0n }),
+					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({
-						vaultAttoRepBacking: 6n * 10n ** 18n,
-						coverageCommitmentAttoEth: 0n,
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
+						capacityOwnershipAttoRep: 0n,
+						claimableFeesAttoEth: 0n,
+						minimumVaultRepDepositAttoRep: configuredMinimum,
 					}),
+					securityVaultForm: {
+						depositAmount: '20',
+						repWithdrawAmount: '',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+					securityVaultRepApproval: { error: undefined, loading: false, value: configuredMinimum },
+					walletRepBalanceAttoRep: 100n * 10n ** 18n,
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-
-		const maxButton = documentQueries.getAllByRole('button', { name: 'Coverage commitment amount Max' })[0]
-		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('coverage commitment')
-		maxButton.focus()
-		expect(document.activeElement).toBe(maxButton)
-		fireEvent.click(maxButton)
-
-		expect(formChanges.at(-1)).toEqual({ coverageCommitmentEthAmount: '1.333333333333333333' })
-	})
-
-	test('allows setting the coverage commitment to zero', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					oracleManagerDetails: createOracleManagerDetails(),
-					securityVaultForm: {
-						depositAmount: '',
-						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '0',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
-	})
-
-	test('allows a non-zero coverage commitment when the oracle price is stale but fresh-report funding is available', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					accountState: createAccountState({
-						ethBalanceAttoEth: 2n * 10n ** 18n,
-					}),
-					oracleManagerDetails: {
-						...createOracleManagerDetails(),
-						isPriceValid: false,
-						requestPriceCostAttoEth: 1n,
-					},
-					securityVaultForm: {
-						depositAmount: '',
-						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '1',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expectTransactionButtonDisabled(documentQueries.getByRole('dialog', { name: 'Deposit REP' }), 'Deposit REP', 'New vaults require at least 30 REP in the first deposit.')
 	})
 
 	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
@@ -664,7 +614,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -687,7 +637,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -713,7 +663,7 @@ describe('SecurityVaultSection', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -723,7 +673,6 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Set coverage commitment', 'Need 1.2 more ETH in this wallet to queue this coverage commitment update.')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
 	})
 
@@ -744,7 +693,7 @@ describe('SecurityVaultSection', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -754,7 +703,6 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
@@ -797,26 +745,6 @@ describe('SecurityVaultSection', () => {
 		expect(document.body.textContent?.includes('This queued self-service operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
-	test('blocks non-zero coverage commitments below the minimum', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					oracleManagerDetails: createOracleManagerDetails(),
-					securityVaultForm: {
-						depositAmount: '',
-						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '0.5',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonDisabled(document.body, 'Set coverage commitment', 'Enter at least 1 ETH for a non-zero coverage commitment.')
-	})
-
 	test('does not render a local vault transaction status card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -847,7 +775,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						coverageCommitmentEthAmount: '1',
+						targetHealthFactor: '1',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -859,7 +787,6 @@ describe('SecurityVaultSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
 	})
 
@@ -871,7 +798,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -950,7 +877,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: '0x00000000000000000000000000000000000000a1',
 					},
@@ -978,7 +905,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '',
-						coverageCommitmentEthAmount: '',
+						targetHealthFactor: '',
 						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
 						selectedVaultOwner: zeroAddress,
 					},

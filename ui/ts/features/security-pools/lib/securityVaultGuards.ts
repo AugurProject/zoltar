@@ -2,14 +2,39 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
-import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_COVERAGE_COMMITMENT_ATTO_ETH, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
+import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
 
-export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, isDepositBelowMinimum, walletRepShortfallAttoRep }: { approvalSatisfied: boolean; depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; walletRepShortfallAttoRep: bigint | undefined }) {
+export function getTargetHealthFactorGuardMessage(targetHealthFactor: string) {
+	try {
+		parseTargetHealthFactorBps(targetHealthFactor)
+		return undefined
+	} catch (error) {
+		return error instanceof Error ? error.message : 'Enter a valid target health factor.'
+	}
+}
+
+export function getVaultDepositGuardMessage({
+	approvalSatisfied,
+	depositAmount,
+	isDepositBelowMinimum,
+	minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
+	targetHealthFactor = '1',
+	walletRepShortfallAttoRep,
+}: {
+	approvalSatisfied: boolean
+	depositAmount: bigint | undefined
+	isDepositBelowMinimum: boolean
+	minimumVaultRepDepositAttoRep?: bigint | undefined
+	targetHealthFactor?: string | undefined
+	walletRepShortfallAttoRep: bigint | undefined
+}) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
 	if (depositAmount <= 0n) return undefined
+	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor)
+	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatCurrencyBalance(walletRepShortfallAttoRep)} more REP in this wallet.`
-	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)} REP in the first deposit.`
+	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(minimumVaultRepDepositAttoRep)} REP in the first deposit.`
 	return undefined
 }
 
@@ -39,36 +64,6 @@ export function getVaultWithdrawGuardMessage({
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
-		includeBuffer: bufferRequiredEthCost,
-		requiredCostAttoEth,
-		walletBalanceAttoEth,
-	})
-	if (ethGuardMessage !== undefined) return ethGuardMessage
-	return undefined
-}
-
-export function getVaultSetCoverageCommitmentGuardMessage({
-	bufferRequiredEthCost = false,
-	maxCoverageCommitmentAttoEthAmount,
-	requiredCostAttoEth,
-	coverageCommitmentAttoEthAmount,
-	stagedOperationTimeoutMinutes,
-	walletBalanceAttoEth,
-}: {
-	bufferRequiredEthCost?: boolean | undefined
-	maxCoverageCommitmentAttoEthAmount: bigint | undefined
-	requiredCostAttoEth: bigint | undefined
-	coverageCommitmentAttoEthAmount: bigint | undefined
-	stagedOperationTimeoutMinutes: bigint | undefined
-	walletBalanceAttoEth: bigint | undefined
-}) {
-	if (coverageCommitmentAttoEthAmount === undefined || coverageCommitmentAttoEthAmount < 0n) return 'Enter a valid coverage commitment.'
-	if (coverageCommitmentAttoEthAmount !== 0n && coverageCommitmentAttoEthAmount < MIN_COVERAGE_COMMITMENT_ATTO_ETH) return `Enter at least ${formatCurrencyBalance(MIN_COVERAGE_COMMITMENT_ATTO_ETH)} ETH for a non-zero coverage commitment.`
-	if (maxCoverageCommitmentAttoEthAmount !== undefined && coverageCommitmentAttoEthAmount > maxCoverageCommitmentAttoEthAmount) return `Reduce the coverage commitment to ${formatCurrencyBalance(maxCoverageCommitmentAttoEthAmount)} ETH or less.`
-	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
-	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
-	const ethGuardMessage = getOracleRequestEthGuardMessage({
-		actionLabel: 'queue this coverage commitment update',
 		includeBuffer: bufferRequiredEthCost,
 		requiredCostAttoEth,
 		walletBalanceAttoEth,

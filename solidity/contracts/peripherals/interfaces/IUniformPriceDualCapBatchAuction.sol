@@ -10,43 +10,16 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 	}
 
 	/// @notice Lifecycle anchor. Timestamps use Unix seconds; ETH values use attoETH and REP values use attoREP.
-	event AuctionStarted(
-		uint256 startTimestamp,
-		uint256 endTimestamp,
-		uint256 attoEthRaiseCap,
-		uint256 maxAttoRepBeingSold,
-		uint256 minBidSizeAttoEth
-	);
+	event AuctionStarted(uint256 startTimestamp, uint256 endTimestamp, uint256 attoEthRaiseCap, uint256 maxAttoRepBeingSold, uint256 minBidSizeAttoEth);
 	/// @notice Stable per-tick bid identity and the resulting FIFO cumulative ETH position. ETH values use attoETH.
-	event BidSubmitted(
-		address indexed bidder,
-		int256 indexed tick,
-		uint256 indexed bidIndex,
-		uint256 bidAmountAttoEth,
-		uint256 cumulativeBidAtTickAttoEth
-	);
+	event BidSubmitted(address indexed bidder, int256 indexed tick, uint256 indexed bidIndex, uint256 bidAmountAttoEth, uint256 cumulativeBidAtTickAttoEth);
 	/// @notice Final aggregate clearing state; ETH fields use attoETH and REP fields use attoREP,
 	/// `grossAcceptedAttoEth` is the accepted ETH transferred to the owner, and `funded` distinguishes
 	/// cap-clearing from underfunded mode.
-	event AuctionFinalized(
-		int256 indexed clearingTick,
-		uint256 grossAcceptedAttoEth,
-		uint256 attoRepSold,
-		uint256 bidAtClearingTickAttoEth,
-		bool funded
-	);
+	event AuctionFinalized(int256 indexed clearingTick, uint256 grossAcceptedAttoEth, uint256 attoRepSold, uint256 bidAtClearingTickAttoEth, bool funded);
 	/// @notice One bid's complete settlement or pre-finalization refund. ETH fields use attoETH, REP fields use
 	/// attoREP, and `bidUsedAttoEth + refundAttoEth` equals `originalBidAmountAttoEth`.
-	event BidSettled(
-		address indexed bidder,
-		int256 indexed tick,
-		uint256 indexed bidIndex,
-		uint256 originalBidAmountAttoEth,
-		uint256 bidUsedAttoEth,
-		uint256 attoRepFilled,
-		uint256 refundAttoEth,
-		BidSettlementStatus status
-	);
+	event BidSettled(address indexed bidder, int256 indexed tick, uint256 indexed bidIndex, uint256 originalBidAmountAttoEth, uint256 bidUsedAttoEth, uint256 attoRepFilled, uint256 refundAttoEth, BidSettlementStatus status);
 	/// @notice A bounded-gas push refund that fails remains escrowed for later pull withdrawal.
 	event EthRefundDeferred(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth);
 	/// @notice A bidder's complete deferred ETH refund balance was cleared before its successful pull callback.
@@ -111,11 +84,7 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 		view
 		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth);
 
-	function withdrawBids(
-		address withdrawFor,
-		TickIndex[] calldata tickIndices,
-		uint256 proRataTotal
-	) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation);
+	function withdrawBids(address withdrawFor, TickIndex[] calldata tickIndices, uint256 proRataTotal) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation);
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 
