@@ -42,7 +42,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 						<UniverseLink universeId={pool.universeId} />
 					</MetricField>
 				) : undefined}
-				<MetricField label={securityPoolCopy.vaults}>{pool.vaultCount.toString()}</MetricField>
+				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
 				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
 				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeAttoEthPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>

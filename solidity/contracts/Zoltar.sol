@@ -19,7 +19,7 @@ contract Zoltar {
 	}
 
 	mapping(uint248 => Universe) public universes;
-	mapping(uint248 => uint256[]) public deployedChildOutcomeIndexes;
+	mapping(uint248 => uint256[]) private deployedChildOutcomeIndexes;
 	mapping(uint248 => uint256) private universeTheoreticalSupplies;
 	mapping(uint248 => uint256) private childUniverseTheoreticalSupplySnapshotsAttoRep;
 

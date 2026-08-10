@@ -119,7 +119,7 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 		'contract CoverageClassifierCalls {',
 		'    function execute(address vault, uint256 amount) external {',
 		'        token.safeTransfer(receiver, amount);',
-		'        _syncActiveVault(vault);',
+		'        _registerVault(vault);',
 		'        burnRep(repToken, msg.sender, amount);',
 		'        securityPool.configureVault(',
 		'            vault,',

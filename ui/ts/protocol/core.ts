@@ -33,9 +33,10 @@ export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'statu
 		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 	}
 
-export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
+export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts, blockNumber?: bigint): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({
 		allowFailure: false,
+		blockNumber,
 		contracts: contracts as readonly ContractFunctionParameters[],
 		multicallAddress: getMulticall3Address(),
 	})) as MulticallReturnType<TContracts, false>

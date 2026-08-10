@@ -198,11 +198,6 @@ library SecurityPoolUtils {
 		return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep;
 	}
 
-	function isLiquidationBeyondMinPriceDistance(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 openInterestAttoEth, uint256 poolSecurityMultiplierBps, uint256 currentPrice, uint256 minPriceDistanceBps) external pure returns (bool) {
-		return
-			_isLiquidationBeyondMinPriceDistance(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, poolSecurityMultiplierBps, currentPrice, minPriceDistanceBps);
-	}
-
 	function _isLiquidationBeyondMinPriceDistance(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 openInterestAttoEth, uint256 poolSecurityMultiplierBps, uint256 currentPrice, uint256 minPriceDistanceBps) internal pure returns (bool) {
 		if (minPriceDistanceBps == 0) return true;
 		if (openInterestAttoEth == 0 || currentPrice == 0) return false;

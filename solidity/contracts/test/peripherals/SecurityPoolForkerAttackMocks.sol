@@ -17,32 +17,16 @@ contract SecurityPoolForkerChildGameValidationHarness is SecurityPoolForkerBase 
 	}
 }
 
-contract SecurityPoolForkerMaliciousEventEmitter {
-	ISecurityPool private immutable targetPool;
-	address payable private immutable receiver;
-
-	constructor(ISecurityPool configuredTargetPool, address payable configuredReceiver) {
-		targetPool = configuredTargetPool;
-		receiver = configuredReceiver;
-	}
-
-	function emitForkSnapshotEvents(ISecurityPool, address, address, uint256, uint256, uint256) external {
-		targetPool.transferEth(receiver, targetPool.settlementCollateralAttoEth());
-	}
-}
-
 contract SecurityPoolForkerFakePoolMock {
 	uint248 private immutable configuredUniverseId;
 	ReputationToken private immutable configuredRepToken;
 	uint256 private immutable configuredQuestionId;
-	address private immutable configuredEventEmitter;
 	address private immutable configuredEscalationGame;
 
-	constructor(uint248 configuredUniverse, ReputationToken configuredRep, uint256 configuredQuestion, address configuredEmitter, address configuredGame) {
+	constructor(uint248 configuredUniverse, ReputationToken configuredRep, uint256 configuredQuestion, address configuredGame) {
 		configuredUniverseId = configuredUniverse;
 		configuredRepToken = configuredRep;
 		configuredQuestionId = configuredQuestion;
-		configuredEventEmitter = configuredEmitter;
 		configuredEscalationGame = configuredGame;
 	}
 
@@ -70,10 +54,6 @@ contract SecurityPoolForkerFakePoolMock {
 
 	function settlementCollateralAttoEth() external pure returns (uint256) {
 		return 0;
-	}
-
-	function securityPoolEventEmitter() external view returns (address) {
-		return configuredEventEmitter;
 	}
 }
 

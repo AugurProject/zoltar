@@ -32,6 +32,7 @@ function createDeferred<T>() {
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
+		badDebtAttoEth: 0n,
 		currentRetentionRate: 0n,
 		disputeStakedAttoRep: 0n,
 		managerAddress: MANAGER_ADDRESS,

@@ -42,8 +42,8 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
-	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
-	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
+	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
+	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
 	simulateContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => Promise<{ result: ContractFunctionResult<TAbi, TFunctionName> }>
 	transport: TTransport
 	waitForTransactionReceipt: (parameters: WaitForTransactionReceiptParameters) => Promise<TransactionReceipt>
@@ -291,7 +291,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${parameters.hash}" could not be found.`)
 			return normalizeReceipt(rawReceipt)
 		},
-		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => {
+		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => {
 			const calls: { allowFailure: boolean; callData: Hex; target: Address }[] = []
 			for (const contract of parameters.contracts) {
 				calls.push({
@@ -304,12 +304,16 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					target: contract.address,
 				})
 			}
-			const rawResult = (await readContractRaw(transport, {
-				abi: MULTICALL3_ABI,
-				address: parameters.multicallAddress,
-				args: [calls] as never,
-				functionName: 'aggregate3',
-			})) as {
+			const rawResult = (await readContractRaw(
+				transport,
+				{
+					abi: MULTICALL3_ABI,
+					address: parameters.multicallAddress,
+					args: [calls] as never,
+					functionName: 'aggregate3',
+				},
+				parameters.blockNumber,
+			)) as {
 				abiItem: AbiParameter
 				data: Hex
 			}
@@ -350,12 +354,12 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				return decodeFunctionOutput(abiItem, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},
-		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => {
-			const { abiItem, data } = await readContractRaw(transport, parameters)
+		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => {
+			const { abiItem, data } = await readContractRaw(transport, parameters, parameters.blockNumber)
 			return decodeFunctionOutput(abiItem, data) as ContractFunctionResult<TAbi, TFunctionName>
 		},
 		simulateContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => {
-			const { abiItem, data } = await readContractRaw(transport, parameters)
+			const { abiItem, data } = await readContractRaw(transport, parameters, parameters.blockNumber)
 			return {
 				result: decodeFunctionOutput(abiItem, data) as ContractFunctionResult<TAbi, TFunctionName>,
 			}

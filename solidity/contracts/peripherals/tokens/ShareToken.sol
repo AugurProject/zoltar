@@ -120,7 +120,7 @@ contract ShareToken is ERC1155, IShareToken {
 		remainingSupplyAttoShares = totalSupply(_tokenId);
 	}
 
-	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
+	function _getChildUniverseId(uint248 universeId, uint256 outcomeIndex) private pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
@@ -194,7 +194,7 @@ contract ShareToken is ERC1155, IShareToken {
 		uint248[] memory targetUniverseIds = new uint248[](targetOutcomeIndexesLength);
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint256 outcomeIndex = targetOutcomeIndexes[i];
-			uint248 targetUniverseId = getChildUniverseId(universeId, outcomeIndex);
+			uint248 targetUniverseId = _getChildUniverseId(universeId, outcomeIndex);
 			ISecurityPool targetPool = canonicalPoolByUniverse[targetUniverseId];
 			if (address(targetPool) == address(0x0)) {
 				require(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools');

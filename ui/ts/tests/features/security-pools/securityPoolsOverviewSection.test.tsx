@@ -935,14 +935,18 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const documentQueries = within(document.body)
 		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Preview deferred')).toBeNull()
 		expect(poolCardQueries.queryByText('2 vaults are registered. Open the pool to load individual vault details.')).toBeNull()
 		expect(poolCardQueries.queryByText('Vault preview unavailable.')).toBeNull()
-		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
-		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Vaults')
+		expect(poolCardQueries.queryByText('No known vaults in this pool.')).toBeNull()
+		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Known Vaults')
 		expect(vaultMetric?.querySelector('dd')?.textContent).toBe('2')
+		expect(documentQueries.getByLabelText('Known Vault Registry')).not.toBeNull()
+		expect(documentQueries.getByRole('option', { name: 'Has known vaults' })).not.toBeNull()
+		expect(documentQueries.getByRole('option', { name: 'No known vaults' })).not.toBeNull()
 	})
 
 	test('keeps browse pool cards focused on pool-level information', async () => {

@@ -110,6 +110,7 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 
 export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
+		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 0n,
 		managerAddress: zeroAddress,

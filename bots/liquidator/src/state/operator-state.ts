@@ -10,7 +10,7 @@ import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeM
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 export type PoolObservation = {
-	activeVaultCount: bigint
+	knownVaultCount: bigint
 	address: Address
 	approvedUniverse: boolean
 	botVault: VaultPosition
@@ -356,7 +356,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.centralizedMarket : undefined)
 			const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.marketConsensus : undefined)
 			return {
-				activeVaultCount: pool.activeVaultCount.toString(),
+				knownVaultCount: pool.knownVaultCount.toString(),
 				address: pool.address,
 				approvedUniverse: pool.approvedUniverse,
 				botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
