@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import './ERC20.sol';
+import './Constants.sol';
 
 contract GenesisReputationToken is ERC20 {
 	uint256 private immutable totalTheoreticalSupplyAttoRep;
@@ -21,6 +22,7 @@ contract GenesisReputationToken is ERC20 {
 			}
 			_mint(holder, balance);
 			supply += balance;
+			require(supply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
 		}
 		totalTheoreticalSupplyAttoRep = supply;
 	}

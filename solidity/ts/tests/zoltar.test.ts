@@ -65,6 +65,18 @@ describe('Contract Test Suite', () => {
 
 		const genesisUniverseData = await getUniverseData(client, 0n)
 		assert.strictEqual(BigInt(genesisUniverseData.reputationToken), GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
+		const seededBalances = await Promise.all(TEST_ADDRESSES.map(address => getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), addressString(address))))
+		const seededBalanceTotal = seededBalances.reduce((total, balance) => total + balance, 0n)
+		const actualSupply = await client.readContract({
+			abi: ReputationToken_ReputationToken.abi,
+			address: addressString(GENESIS_REPUTATION_TOKEN),
+			functionName: 'totalSupply',
+			args: [],
+		})
+		const theoreticalSupply = await getTotalTheoreticalSupplyAttoRep(client, addressString(GENESIS_REPUTATION_TOKEN))
+		assert.strictEqual(seededBalanceTotal, actualSupply, 'seeded REP balances should equal actual supply')
+		assert.strictEqual(actualSupply, theoreticalSupply, 'seeded REP actual and theoretical supply should match')
+		assert.ok(theoreticalSupply <= 11_000_000n * 10n ** 18n, 'seeded REP supply should remain within the protocol cap')
 	})
 
 	test('exposes configured fork economics', async () => {
@@ -218,6 +230,33 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
 			/Genesis REP missing supply: theoretical supply must be non-zero/,
+		)
+	})
+
+	test('constructor rejects genesis REP theoretical supply above the protocol maximum', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const deployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				stateDiff: {
+					[formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 11_000_000n * 10n ** 18n + 1n,
+				},
+			},
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
+			/Genesis REP exceeds maximum supply/,
 		)
 	})
 

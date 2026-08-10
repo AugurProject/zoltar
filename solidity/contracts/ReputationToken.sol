@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import './ERC20.sol';
+import './Constants.sol';
 
 contract ReputationToken is ERC20 {
 	uint256 private totalTheoreticalSupplyAttoRep;
@@ -20,6 +21,7 @@ contract ReputationToken is ERC20 {
 	}
 
 	function setMaxTheoreticalSupplyAttoRep(uint256 totalTheoreticalSupplyAttoRep_) external isZoltar {
+		require(totalTheoreticalSupplyAttoRep_ <= Constants.MAX_ATTO_REP, 'Theoretical supply exceeds maximum REP');
 		totalTheoreticalSupplyAttoRep = totalTheoreticalSupplyAttoRep_;
 		emit TheoreticalSupplySet(totalTheoreticalSupplyAttoRep);
 	}

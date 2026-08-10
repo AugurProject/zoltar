@@ -255,12 +255,13 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit) {
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		require(depositIndex < selectedOutcomeState.deposits.length, 'Bad deposit index');
-		deposit = selectedOutcomeState.deposits[depositIndex];
-		require(deposit.amountAttoRep > 0, 'Deposit settled');
-		selectedOutcomeState.deposits[depositIndex].amountAttoRep = 0;
-		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amountAttoRep, deposit.depositor);
+		require(depositIndex < selectedOutcomeState.localNodeIds.length, 'Bad deposit index');
+		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
+		require(!selectedOutcomeState.consumedParentDepositIndexes[stableParentDepositIndex], 'Deposit settled');
 		uint256 nodeId = selectedOutcomeState.localNodeIds[depositIndex];
+		Node storage node = nodes[nodeId];
+		deposit = Deposit(node.depositor, node.amountAttoRep, node.cumulativeAmountAttoRep);
+		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amountAttoRep, deposit.depositor);
 		_emitCarryDepositConsumed(outcomeIndex, deposit.depositor, deposit.amountAttoRep, nodes[nodeId].parentDepositIndex, nodeId, reason);
 	}
 

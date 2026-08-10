@@ -1526,19 +1526,11 @@ describe('Peripherals invariant harness', () => {
 		assert.strictEqual(activeVaults.includes(vaultB.account.address), false, 'fully exited vault should be removed from the active list')
 
 		const vaultCount = await getVaultCount(client, context.securityPool)
-		const historicalVaults = Array.from(await getVaults(client, context.securityPool, 0n, vaultCount + 1n))
-		const expectedActiveVaults: Address[] = []
-		for (const vaultAddress of historicalVaults) {
-			const vault = await getSecurityVault(client, context.securityPool, vaultAddress)
-			if (vault.repBackingUnits > 0n || vault.capacityOwnershipAttoRep > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n) {
-				expectedActiveVaults.push(vaultAddress)
-			}
-		}
-		strictEqualTypeSafe(BigInt(historicalVaults.length), vaultCount, 'historical vault page should match its append-only count')
-		assert.strictEqual(new Set(historicalVaults).size, historicalVaults.length, 'historical vault registry should not duplicate actors')
-		assert.ok(historicalVaults.includes(vaultB.account.address), 'a fully exited vault should remain in append-only history')
-		for (const activeVault of activeVaults) assert.ok(historicalVaults.includes(activeVault), 'every active vault should have a historical registry entry')
-		assert.deepStrictEqual(new Set(activeVaults), new Set(expectedActiveVaults), 'active vault enumeration should equal the historical vaults with live economic state')
+		const vaults = Array.from(await getVaults(client, context.securityPool, 0n, vaultCount + 1n))
+		strictEqualTypeSafe(vaultCount, activeVaultCount, 'vault count alias should match the active vault count')
+		assert.strictEqual(new Set(vaults).size, vaults.length, 'vault registry alias should not duplicate actors')
+		assert.strictEqual(vaults.includes(vaultB.account.address), false, 'a fully exited vault should be absent from the vault registry alias')
+		assert.deepStrictEqual(vaults, activeVaults, 'vault registry aliases should expose the same active vault ordering')
 	})
 
 	test('active vault history remains coherent when a direct own-fork claim consumes the last escrow', async () => {
