@@ -14,7 +14,7 @@ const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
 	const tokens: NodeOptionToken[] = []
 	let index = 0
 	while (index < nodeOptions.length) {
-		while (/\s/.test(nodeOptions[index] ?? '')) index += 1
+		while (nodeOptions[index] === ' ') index += 1
 		if (index >= nodeOptions.length) break
 		const start = index
 		let value = ''
@@ -39,7 +39,7 @@ const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
 				index += 1
 				continue
 			}
-			if (/\s/.test(character)) break
+			if (character === ' ') break
 			value += character
 			index += 1
 		}

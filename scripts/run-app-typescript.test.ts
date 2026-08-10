@@ -84,4 +84,23 @@ describe('application TypeScript process arguments', () => {
 		expect(output.title).toBe('kept q')
 		expect(output.heapLimit).toBeGreaterThanOrEqual(7168 * 1024 * 1024)
 	})
+
+	test('treats tabs as literal option content instead of heap delimiters', () => {
+		const nodeExecutablePath = Bun.which('node')
+		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript delimiter regression test')
+		const nodeOptions = '--title=a\t--max-old-space-size=7168'
+		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
+		expect(childNodeOptions).toBe(nodeOptions)
+		expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
+		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
+			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+		const output = JSON.parse(new TextDecoder().decode(result.stdout)) as { heapLimit: number; title: string }
+		expect(output.title).toBe('a\t--max-old-space-size=7168')
+		expect(output.heapLimit).toBeGreaterThanOrEqual(APPLICATION_TYPESCRIPT_HEAP_MB * 1024 * 1024)
+		expect(output.heapLimit).toBeLessThan(7168 * 1024 * 1024)
+	})
 })
