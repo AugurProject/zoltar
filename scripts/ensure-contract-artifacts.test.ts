@@ -52,8 +52,10 @@ test('ensure-contract-artifacts removes compiled outputs that can shadow shared 
 		await writeFile(path.join(sharedSourceRoot, 'oracleInitialReport.ts'), 'export const current = true\n')
 		await writeFile(path.join(sharedSourceRoot, 'oracleInitialReport.js'), 'export const stale = true\n')
 		await writeFile(path.join(sharedSourceRoot, 'oracleInitialReport.js.map'), '{}\n')
+		await writeFile(path.join(sharedSourceRoot, 'nested/generated.ts'), 'export const current = true\n')
 		await writeFile(path.join(sharedSourceRoot, 'nested/generated.d.ts'), 'export declare const stale: true\n')
 		await writeFile(path.join(sharedSourceRoot, 'nested/generated.d.ts.map'), '{}\n')
+		await writeFile(path.join(sharedSourceRoot, 'nested/standalone.d.ts'), 'export declare const sourceOnly: true\n')
 
 		await removeUnexpectedSharedSourceOutputs(repositoryRoot)
 
@@ -62,6 +64,7 @@ test('ensure-contract-artifacts removes compiled outputs that can shadow shared 
 		expect(await exists(path.join(sharedSourceRoot, 'oracleInitialReport.js.map'))).toBe(false)
 		expect(await exists(path.join(sharedSourceRoot, 'nested/generated.d.ts'))).toBe(false)
 		expect(await exists(path.join(sharedSourceRoot, 'nested/generated.d.ts.map'))).toBe(false)
+		expect(await exists(path.join(sharedSourceRoot, 'nested/standalone.d.ts'))).toBe(true)
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}
