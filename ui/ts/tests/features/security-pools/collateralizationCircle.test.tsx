@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
+import { getChromiumPath } from '../../../../build/chromiumPath.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
@@ -18,15 +19,6 @@ type GaugeFitResult = {
 	text: string
 	valueLeft: number
 	valueRight: number
-}
-
-function getChromiumPath() {
-	for (const commandName of ['chromium', 'chromium-browser', 'google-chrome']) {
-		const result = spawnSync('sh', ['-lc', `command -v ${commandName}`], { encoding: 'utf8' })
-		const commandPath = result.stdout.trim()
-		if (result.status === 0 && commandPath !== '') return commandPath
-	}
-	return undefined
 }
 
 function isGaugeFitResult(value: unknown): value is GaugeFitResult {

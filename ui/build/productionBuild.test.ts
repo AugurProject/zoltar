@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { getChromiumPath } from './chromiumPath.js'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
@@ -23,17 +24,6 @@ const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server | undefined
-
-function getChromiumPath() {
-	for (const commandName of ['chromium', 'chromium-browser', 'google-chrome']) {
-		const result = spawnSync('sh', ['-lc', `command -v ${commandName}`], {
-			encoding: 'utf8',
-		})
-		const commandPath = result.stdout.trim()
-		if (result.status === 0 && commandPath !== '') return commandPath
-	}
-	return undefined
-}
 
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = test

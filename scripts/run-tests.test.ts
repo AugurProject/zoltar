@@ -13,6 +13,7 @@ const runTestWrapper = async ({ homeDirectory, testFile, useExistingProductionBu
 		env: {
 			...process.env,
 			HOME: homeDirectory,
+			USERPROFILE: homeDirectory,
 			...(useExistingProductionBuild ? { ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' } : {}),
 		},
 		stderr: 'pipe',
