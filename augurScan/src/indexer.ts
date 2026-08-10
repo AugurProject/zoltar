@@ -32,6 +32,59 @@ export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirm
 
 export const requiresParentLookup = (nextBlock: bigint, startBlock: bigint): boolean => nextBlock > startBlock
 
+type TokenMetadataCalls = {
+	readonly decimals: () => Promise<number>
+	readonly name: () => Promise<string>
+	readonly symbol: () => Promise<string>
+}
+
+const unavailableMetadataErrors = new Set([
+	'AbiDecodingDataSizeInvalidError',
+	'AbiDecodingDataSizeTooSmallError',
+	'AbiDecodingZeroDataError',
+	'ContractFunctionRevertedError',
+	'ContractFunctionZeroDataError',
+	'IntegerOutOfRangeError',
+	'InvalidBytesLengthError',
+	'InvalidHexValueError',
+	'NegativeOffsetError',
+	'PositionOutOfBoundsError',
+	'RecursiveReadLimitExceededError',
+	'SizeExceedsPaddingSizeError',
+	'SizeOverflowError',
+	'SliceOffsetOutOfBoundsError',
+])
+
+const errorChainIncludes = (error: unknown, names: ReadonlySet<string>): boolean => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if ('name' in current && typeof current.name === 'string' && names.has(current.name)) return true
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
+}
+
+const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
+
+const metadataCall = async <T>(call: () => Promise<T>): Promise<T | undefined> => {
+	try {
+		return await call()
+	} catch (error) {
+		if (isUnavailableMetadataCall(error)) return undefined
+		throw error
+	}
+}
+
+export const readTokenMetadata = async (address: Address, blockNumber: bigint, calls: TokenMetadataCalls): Promise<TokenMetadata> => {
+	const decimals = await metadataCall(calls.decimals)
+	if (decimals === undefined || !Number.isSafeInteger(decimals) || decimals < 0 || decimals > 255)
+		return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+	const [name, symbol] = await Promise.all([metadataCall(calls.name), metadataCall(calls.symbol)])
+	return { address, decimals, ...(name === undefined ? {} : { name }), ...(symbol === undefined ? {} : { symbol }), readBlock: blockNumber }
+}
+
 const wait = (milliseconds: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve) => {
 		const timeout = setTimeout(resolve, milliseconds)
@@ -92,9 +145,18 @@ class ChainContinuityError extends Error {}
 class ChainConfigurationError extends Error {}
 class LeaseLostError extends Error {}
 
+export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, lookup: (blockNumber: bigint) => Promise<Hash>): Promise<void> => {
+	const observedHash = await lookup(number)
+	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
+}
+
+const databaseFailureMessage = 'Database request failed; retrying'
+const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
+
 export const safeIndexerFailure = (error: unknown): string => {
 	if (error instanceof ChainConfigurationError) return error.message
 	if (error instanceof ChainContinuityError) return 'The remote canonical chain changed while indexing; retrying'
+	if (errorChainIncludes(error, databaseFailureNames)) return databaseFailureMessage
 	return 'RPC request failed; retrying'
 }
 
@@ -162,9 +224,9 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				await seed(lease)
 				await runOwned(lease)
 			}
-		} catch (error) {
+		} catch {
 			try {
-				await failure(safeIndexerFailure(error), lease)
+				await failure(databaseFailureMessage, lease)
 			} catch (error) {
 				console.error(`Unable to record the indexer failure before retrying ownership (${error instanceof Error ? error.name : typeof error})`)
 				// A database outage can prevent status recording too; retry ownership regardless.
@@ -496,6 +558,7 @@ class NetworkIndexer {
 		}
 
 		const finalizedThrough = observedHead > this.#network.confirmationDepth ? observedHead - this.#network.confirmationDepth : 0n
+		await confirmCanonicalBlock(number, block.hash, async (blockNumber) => (await this.#client.getBlock({ blockNumber })).hash)
 		return {
 			contracts,
 			tokenMetadata,
@@ -515,17 +578,11 @@ class NetworkIndexer {
 	}
 
 	async #readTokenMetadata(address: Address, blockNumber: bigint): Promise<TokenMetadata> {
-		try {
-			const decimals = await this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber })
-			const [name, symbol] = await Promise.all([
-				this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber }).catch(() => undefined),
-				this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber }).catch(() => undefined),
-			])
-			return { address, decimals, ...(name === undefined ? {} : { name }), ...(symbol === undefined ? {} : { symbol }), readBlock: blockNumber }
-		} catch (error) {
-			console.error(`[${this.#network.id}] token metadata read failed for ${address} (${error instanceof Error ? error.name : typeof error})`)
-			return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
-		}
+		return await readTokenMetadata(address, blockNumber, {
+			decimals: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber }),
+			name: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber }),
+			symbol: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber }),
+		})
 	}
 }
 

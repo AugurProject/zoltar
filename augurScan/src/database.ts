@@ -29,6 +29,47 @@ export type IndexedBlock = {
 	readonly logs: readonly StoredLog[]
 }
 
+type StoredCheckpoint = {
+	readonly startBlock: bigint
+	readonly indexedBlock?: bigint
+	readonly indexedHash?: string
+}
+
+type RewindCheckpoint = {
+	readonly indexedBlock?: bigint
+	readonly indexedHash?: string
+}
+
+class DatabaseConsistencyError extends Error {
+	override name = 'DatabaseConsistencyError'
+}
+
+export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHash'>, checkpoint: StoredCheckpoint): void => {
+	if (checkpoint.indexedBlock === undefined) {
+		if (checkpoint.indexedHash !== undefined) throw new DatabaseConsistencyError('The database checkpoint has a block hash without a block number')
+		if (block.number !== checkpoint.startBlock)
+			throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the network must start at block ${checkpoint.startBlock}`)
+		return
+	}
+	if (checkpoint.indexedHash === undefined) throw new DatabaseConsistencyError('The database checkpoint has a block number without a block hash')
+	const expectedNumber = checkpoint.indexedBlock + 1n
+	if (block.number !== expectedNumber)
+		throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the next database checkpoint must be block ${expectedNumber}`)
+	if (block.parentHash !== checkpoint.indexedHash) throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
+}
+
+export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | undefined, checkpoint: RewindCheckpoint, targetIsCanonical: boolean): void => {
+	if (checkpoint.indexedBlock === undefined || checkpoint.indexedHash === undefined)
+		throw new DatabaseConsistencyError('Cannot rewind a network without a complete indexed checkpoint')
+	if (ancestor < -1n || ancestor >= checkpoint.indexedBlock)
+		throw new DatabaseConsistencyError('The rewind target must precede the current database checkpoint')
+	if (ancestor === -1n) {
+		if (ancestorHash !== undefined) throw new DatabaseConsistencyError('A full rewind must not specify an ancestor hash')
+		return
+	}
+	if (ancestorHash === undefined || !targetIsCanonical) throw new DatabaseConsistencyError('The rewind target is not a canonical stored block')
+}
+
 export type IndexerLease = {
 	readonly backendPid: number
 	readonly connection: ReservedSQL
@@ -90,6 +131,7 @@ export class ScannerDatabase {
 	}
 
 	async seedNetwork(network: NetworkConfig, lease?: IndexerLease): Promise<void> {
+		await lease?.assertHeld()
 		const sql = lease?.connection ?? this.sql
 		await sql.begin(async (transaction) => {
 			await transaction`
@@ -201,6 +243,22 @@ export class ScannerDatabase {
 	async rewind(chainId: number, ancestor: bigint, ancestorHash: Hash | undefined, lease: IndexerLease): Promise<void> {
 		await lease.assertHeld()
 		await lease.connection.begin(async (transaction) => {
+			const checkpointRows = await transaction`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+			const checkpoint = checkpointRows[0]
+			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before rewinding`)
+			const targetRows =
+				ancestor < 0n
+					? []
+					: await transaction`SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${ancestor.toString()} AND hash = ${ancestorHash ?? ''} AND canonical`
+			assertRewindTarget(
+				ancestor,
+				ancestorHash,
+				{
+					...(checkpoint['indexed_block'] === null ? {} : { indexedBlock: BigInt(String(checkpoint['indexed_block'])) }),
+					...(checkpoint['indexed_hash'] === null ? {} : { indexedHash: String(checkpoint['indexed_hash']) }),
+				},
+				targetRows.length === 1,
+			)
 			await transaction`UPDATE blocks SET canonical = false, finalized = false WHERE chain_id = ${chainId} AND number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE transactions SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE logs SET canonical = false, finalized = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
@@ -256,6 +314,14 @@ export class ScannerDatabase {
 	async storeBlock(chainId: number, block: IndexedBlock, lease: IndexerLease): Promise<void> {
 		await lease.assertHeld()
 		await lease.connection.begin(async (transaction) => {
+			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+			const checkpoint = checkpointRows[0]
+			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before indexing`)
+			assertBlockAppend(block, {
+				startBlock: BigInt(String(checkpoint['start_block'])),
+				...(checkpoint['indexed_block'] === null ? {} : { indexedBlock: BigInt(String(checkpoint['indexed_block'])) }),
+				...(checkpoint['indexed_hash'] === null ? {} : { indexedHash: String(checkpoint['indexed_hash']) }),
+			})
 			await transaction`
 				INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical, finalized)
 				VALUES (${chainId}, ${block.number.toString()}, ${block.hash}, ${block.parentHash}, ${block.timestamp}, true, ${block.number <= block.finalizedThrough})

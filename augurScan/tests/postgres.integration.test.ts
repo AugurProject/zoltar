@@ -1,6 +1,6 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { handleApi } from '../src/api.ts'
-import { type IndexedBlock, ScannerDatabase, type StoredTransaction } from '../src/database.ts'
+import { assertBlockAppend, assertRewindTarget, type IndexedBlock, ScannerDatabase, type StoredTransaction } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
 import { migrate } from '../src/migrate.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -77,6 +77,34 @@ const indexedBlock = (
 	}
 }
 
+describe('database checkpoint fencing', () => {
+	test('accepts only the configured first block or the direct checkpoint child', () => {
+		const parentHash = blockHash('parent')
+		const otherHash = blockHash('other')
+		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n })).not.toThrow()
+		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n, indexedHash: parentHash })).toThrow('block hash without a block number')
+		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n })).toThrow('must start at block 10')
+		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).not.toThrow()
+		expect(() => assertBlockAppend({ number: 12n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
+			'next database checkpoint must be block 11',
+		)
+		expect(() => assertBlockAppend({ number: 11n, parentHash: otherHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
+			'does not extend the current database checkpoint',
+		)
+	})
+
+	test('accepts only a prior canonical rewind target', () => {
+		const hash = blockHash('ancestor')
+		const checkpoint = { indexedBlock: 11n, indexedHash: blockHash('head') }
+		expect(() => assertRewindTarget(10n, hash, checkpoint, true)).not.toThrow()
+		expect(() => assertRewindTarget(-1n, undefined, checkpoint, false)).not.toThrow()
+		expect(() => assertRewindTarget(11n, hash, checkpoint, true)).toThrow('must precede')
+		expect(() => assertRewindTarget(10n, hash, checkpoint, false)).toThrow('not a canonical stored block')
+		expect(() => assertRewindTarget(-1n, hash, checkpoint, false)).toThrow('must not specify an ancestor hash')
+		expect(() => assertRewindTarget(10n, hash, { indexedBlock: 11n }, true)).toThrow('complete indexed checkpoint')
+	})
+})
+
 postgresTest('migrates, resumes, retains an orphan, and serves only its canonical replacement', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
@@ -142,6 +170,14 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		])
 		await database.storeBlock(chainId, first, writeLease)
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		const invalidParent = indexedBlock('block-two-invalid-parent', genesisHash)
+		await expect(database.storeBlock(chainId, invalidParent, writeLease)).rejects.toThrow('does not extend the current database checkpoint')
+		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		const incomplete = { ...indexedBlock('block-two-incomplete', first.hash, [], 'incomplete event'), transactions: [] }
+		await expect(database.storeBlock(chainId, incomplete, writeLease)).rejects.toThrow()
+		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		const rolledBackRows = await database.sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND hash = ${incomplete.hash}`
+		expect(rolledBackRows).toHaveLength(0)
 
 		const restarted = new ScannerDatabase(postgresUrl)
 		try {
