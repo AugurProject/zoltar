@@ -544,6 +544,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolUtils, /function calculateInitialEscalationDepositAttoRep\([\s\S]*theoreticalSupplyAttoRep \/ 10_000_000[\s\S]*supplyBasedDepositAttoRep < 1e18 \? 1e18 : supplyBasedDepositAttoRep/)
 	assert.match(securityPoolUtils, /function calculateMinimumVaultRepDepositAttoRep\([\s\S]*configuredMinimumAttoRep == 0 \? theoreticalSupplyAttoRep \/ 100_000 : configuredMinimumAttoRep/)
 	assert.match(securityPool, /minimumVaultRepDepositAttoRep = SecurityPoolUtils\.calculateMinimumVaultRepDepositAttoRep\([\s\S]*securityPoolFactory\.minimumVaultRepDepositAttoRep\(\)/)
+	assert.match(invariantsHtml, /id="esc-13"[\s\S]*max\(1 REP, theoretical REP supply \/ 10,000,000\)[\s\S]*clamps the live start bond to[\s\S]*nonDecisionThresholdAttoRep - 1/)
 	assert.match(securityPool, /deployEscalationGame\(\s*initialEscalationGameDepositAttoRep,\s*zoltar\.getNonDecisionThresholdAttoRep\(universeId\)\s*\)/)
 	assert.match(escalationGameFactory, /_nonDecisionThresholdAttoRep > 1[\s\S]*startBondAttoRep >= _nonDecisionThresholdAttoRep[\s\S]*startBondAttoRep = _nonDecisionThresholdAttoRep - 1/)
 	assert.match(contractInteractionReference, /On the first deposit, the live non-decision threshold must exceed one attoREP/)
