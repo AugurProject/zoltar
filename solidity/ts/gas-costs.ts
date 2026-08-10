@@ -19,7 +19,7 @@ import { createWriteClient, WriteClient, writeContractAndWait } from './testSupp
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n
 const repDepositAmount = 1_000n * 10n ** 18n
-const coverageCommitmentAttoEth = repDepositAmount / 4n
+const capacityOwnershipAttoRep = repDepositAmount / 4n
 const openInterestAmount = 100n * 10n ** 18n
 const reportBond = 1n * 10n ** 18n
 const questionOutcomes = ['Yes', 'No']
@@ -203,7 +203,7 @@ const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
 	await confirmTx(alice, depositRepToVault(alice, context.addresses.securityPool, repDepositAmount))
 	await confirmTx(bob, approveToken(bob, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
 	await confirmTx(bob, depositRepToVault(bob, context.addresses.securityPool, repDepositAmount))
-	await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+	await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 	await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 	await prepareEscalationFork(context)
 	await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
@@ -408,25 +408,6 @@ const scenarios: Scenario[] = [
 		},
 	},
 	{
-		section: '7. Coverage commitment',
-		label: 'queue vault coverage commitment change with stale price',
-		run: async () => {
-			const context = await setupPool('coverage commitment')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth))
-		},
-	},
-	{
-		section: '7. Coverage commitment',
-		label: 'set vault coverage commitment with valid price',
-		run: async () => {
-			const context = await setupPool('coverage commitment')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracle(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer)
-			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth))
-		},
-	},
-	{
 		section: '5. Vault Creation & Funding',
 		label: 'vault owner withdraws REP from vault with valid price',
 		run: async () => {
@@ -442,11 +423,11 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas queue liquidation')
 			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 			await confirmApproveAndDepositRepToVault(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
-			return await waitForGas(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, coverageCommitmentAttoEth))
+			return await waitForGas(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, capacityOwnershipAttoRep))
 		},
 	},
 	{
@@ -455,13 +436,13 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas execute liquidation')
 			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 			await confirmApproveAndDepositRepToVault(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
 			const initialReportPrice = (reportBond * coordinatorPricePrecision) / 10n ** 19n
 			const costAttoEth = await getRequestPriceCostAttoEth(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
-			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportPrice(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, coverageCommitmentAttoEth, defaultSelfOperationValidForSeconds, initialReportPrice, costAttoEth))
+			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportPrice(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, capacityOwnershipAttoRep, defaultSelfOperationValidForSeconds, initialReportPrice, costAttoEth))
 			const pendingReportId = await getPendingReportId(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
 			await anvil.advanceTime(DAY)
 			return await waitForGas(bob, openOracleSettle(bob, pendingReportId))
@@ -473,7 +454,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas create complete set')
 			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 			return await waitForGas(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 		},
 	},
@@ -483,7 +464,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas redeem complete set')
 			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			return await waitForGas(carol, redeemCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 		},
@@ -529,7 +510,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas redeem fees')
 			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, alice.account.address, coverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, alice.account.address, capacityOwnershipAttoRep)
 			await anvil.setTime((await anvil.getTime()) + 30n * DAY)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.setTime(context.questionData.endTime + 10_000n)

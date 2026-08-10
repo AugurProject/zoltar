@@ -12,6 +12,7 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { GlobalTransactionPresentation } from '../../../features/types.js'
+import type { LiquidationApprovalDetails } from '../../../types/contracts.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 type HarnessOptions = {
@@ -118,7 +119,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		loadOracleManagerQueueOperationEthValueDeferred.resolve(0n)
 		await queuePromise
 
-		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n)
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n, 0n, '0x0000000000000000000000000000000000000001', `0x${'00'.repeat(32)}`)
 	})
 
 	test('ignores stale modal errors after the user edits the form', async () => {
@@ -496,7 +497,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 				hash: '0x03' as const,
 				securityPoolAddress: zeroAddress,
 				stagedExecution: {
-					errorMessage: 'No gain',
+					errorMessage: 'Target debt',
 					operation: 'liquidation' as const,
 					operationId: 3n,
 					success: false,
@@ -531,10 +532,97 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
 		})
 		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toBe('This liquidation amount rounds to no transferable bundled position.')
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toBe('The target vault would fall below the minimum security-bond debt after liquidation.')
 		expect(presentedTransactions).toHaveLength(1)
 		expect(presentedTransactions[0]?.tone).toBe('error')
 		expect(presentedTransactions[0]?.title).toBe('Liquidation Failed')
-		expect(presentedTransactions[0]?.detail).toBe('This liquidation amount rounds to no transferable bundled position.')
+		expect(presentedTransactions[0]?.detail).toBe('The target vault would fall below the minimum security-bond debt after liquidation.')
+	})
+
+	test('ignores a stale approval response after the approval ID is replaced', async () => {
+		const firstApproval = createDeferred<LiquidationApprovalDetails>()
+		const secondApproval = createDeferred<LiquidationApprovalDetails>()
+		const firstApprovalId = `0x${'11'.repeat(32)}` as const
+		const secondApprovalId = `0x${'22'.repeat(32)}` as const
+		const createApproval = (nonce: bigint): LiquidationApprovalDetails => ({
+			registryAddress: zeroAddress,
+			params: {
+				securityPool: zeroAddress,
+				receiverVault: SECOND_WALLET_ADDRESS,
+				operator: WALLET_ADDRESS,
+				targetVault: zeroAddress,
+				maxCumulativeDebtAttoEth: 10n,
+				maxDebtPerLiquidationAttoEth: 5n,
+				minPostLiquidationHealthFactorBps: 10_000n,
+				validAfter: 0n,
+				validUntil: 2_000_000_000n,
+				nonce,
+			},
+			availableDebtAttoEth: 10n,
+			reservedDebtAttoEth: 0n,
+			consumedDebtAttoEth: 0n,
+			minimumValidNonce: 0n,
+			revoked: false,
+		})
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			loadLiquidationApproval: mock(async (_managerAddress, approvalId) => await (approvalId === firstApprovalId ? firstApproval.promise : secondApproval.promise)),
+		})
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			requireHookState(hookState).setLiquidationApprovalId(firstApprovalId)
+		})
+		const firstLoad = requireHookState(hookState).loadLiquidationApproval()
+		await act(() => {
+			requireHookState(hookState).setLiquidationApprovalId(secondApprovalId)
+		})
+		const secondLoad = requireHookState(hookState).loadLiquidationApproval()
+		secondApproval.resolve(createApproval(2n))
+		await act(async () => {
+			await secondLoad
+		})
+		firstApproval.resolve(createApproval(1n))
+		await act(async () => {
+			await firstLoad
+		})
+
+		expect(requireHookState(hookState).liquidationApprovalDetails?.params.nonce).toBe(2n)
+	})
+
+	test('loads delegated receiver vault state independently from the operator vault', async () => {
+		const loadSecurityPoolVaultSummary = mock(async (_securityPoolAddress: Address, vaultAddress: Address) => ({
+			openInterestAttoEth: 3n,
+			disputeStakedAttoRep: 4n,
+			vaultAttoRepBacking: 5n,
+			capacityOwnershipAttoRep: 6n,
+			claimableFeesAttoEth: 7n,
+			vaultAddress,
+		}))
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadSecurityPoolVaultSummary })
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			requireHookState(hookState).setLiquidationReceiverVault(SECOND_WALLET_ADDRESS)
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadLiquidationReceiverVaultSummary()
+		})
+
+		expect(loadSecurityPoolVaultSummary).toHaveBeenCalledWith(zeroAddress, SECOND_WALLET_ADDRESS)
+		expect(requireHookState(hookState).liquidationReceiverVaultSummaryResolved).toBe(true)
+		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.vaultAddress).toBe(SECOND_WALLET_ADDRESS)
+		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.capacityOwnershipAttoRep).toBe(6n)
 	})
 })

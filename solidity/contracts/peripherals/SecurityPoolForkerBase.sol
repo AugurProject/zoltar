@@ -16,11 +16,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		zoltar = _zoltar;
 	}
 
-	function _getEscalationDepositId(
-		ISecurityPool securityPool,
-		uint8 outcomeIndex,
-		uint256 parentDepositIndex
-	) internal view returns (bytes32) {
+	function _getEscalationDepositId(ISecurityPool securityPool, uint8 outcomeIndex, uint256 parentDepositIndex) internal view returns (bytes32) {
 		ISecurityPoolFactory factory = securityPool.securityPoolFactory();
 		bytes32 originId = factory.getSecurityPoolOriginId(securityPool);
 		return keccak256(abi.encode(factory, originId, outcomeIndex, parentDepositIndex));
@@ -41,17 +37,10 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 	}
 
 	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {
-		require(
-			address(childEscalationGame) == address(0x0) ||
-				address(childEscalationGame.securityPool()) == address(child),
-			'Child game'
-		);
+		require(address(childEscalationGame) == address(0x0) || address(childEscalationGame.securityPool()) == address(child), 'Child game');
 	}
 
-	function _finalizeAwaitingForkContinuationIfReady(
-		ISecurityPool child,
-		EscalationGame childEscalationGame
-	) internal {
+	function _finalizeAwaitingForkContinuationIfReady(ISecurityPool child, EscalationGame childEscalationGame) internal {
 		if (
 			address(childEscalationGame) == address(0x0) ||
 			child.systemState() != SystemState.Operational ||
@@ -68,11 +57,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 	}
 
-	function _initializeChildForkedEscalationGameIfNeeded(
-		ISecurityPool parent,
-		ISecurityPool child,
-		EscalationGame childEscalationGame
-	) internal virtual returns (EscalationGame) {
+	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal virtual returns (EscalationGame) {
 		_validateChildEscalationGame(child, childEscalationGame);
 		EscalationGame parentEscalationGame = parent.escalationGame();
 		if (
@@ -83,26 +68,13 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		) {
 			EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[parent];
 			require(snapshot.initialized, 'Fork snapshot missing');
-			child.initializeForkCarrySnapshotWithResolutionBalances(
-				address(parentEscalationGame),
-				forkDataByPool[parent].escalationSnapshotId,
-				snapshot.carryPeaks,
-				snapshot.carryLeafCounts,
-				snapshot.carryTotalsAttoRep,
-				snapshot.resolutionBalancesAttoRep,
-				snapshot.nullifierRoots
-			);
+			child.initializeForkCarrySnapshotWithResolutionBalances(address(parentEscalationGame), forkDataByPool[parent].escalationSnapshotId, snapshot.carryPeaks, snapshot.carryLeafCounts, snapshot.carryTotalsAttoRep, snapshot.resolutionBalancesAttoRep, snapshot.nullifierRoots);
 		}
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 		return childEscalationGame;
 	}
 
-	function _initializeOwnForkRepBuckets(
-		ISecurityPool parent,
-		uint256 vaultRepAtForkAttoRep,
-		uint256 escalationChildRepAtForkAttoRep,
-		uint256 escalationSourceAttoRep
-	) internal {
+	function _initializeOwnForkRepBuckets(ISecurityPool parent, uint256 vaultRepAtForkAttoRep, uint256 escalationChildRepAtForkAttoRep, uint256 escalationSourceAttoRep) internal {
 		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[parent];
 		repBuckets.vaultRepAtForkAttoRep = vaultRepAtForkAttoRep;
 		repBuckets.escalationChildRepAtForkAttoRep = escalationChildRepAtForkAttoRep;

@@ -6,6 +6,7 @@ import type {
 	DeploymentStepId,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
+	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
 	MarketCreationResult,
@@ -109,7 +110,7 @@ export type VaultMetricGridProps = {
 	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	coverageCommitmentAttoEth: bigint | undefined
+	capacityOwnershipAttoRep: bigint | undefined
 	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
@@ -263,8 +264,8 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 
 type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
-	coverageCommitmentTransferEthAmount: string
-	maximumCoverageCommitmentTransferAttoEth: bigint | undefined
+	liquidationDebtEthAmount: string
+	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -277,7 +278,20 @@ type LiquidationModalStateProps = {
 	securityPoolOverviewError: string | undefined
 	securityPoolLiquidationError: string | undefined
 	liquidationTargetVault: string
+	liquidationReceiverVault?: string | undefined
+	liquidationApprovalId?: string | undefined
+	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
+	liquidationApprovalError?: string | undefined
+	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
+	liquidationReceiverVaultSummaryError?: string | undefined
+	liquidationReceiverVaultSummaryResolved?: boolean | undefined
+	loadingLiquidationApproval?: boolean | undefined
+	loadingLiquidationReceiverVaultSummary?: boolean | undefined
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
+	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
+	onLoadLiquidationApproval?: (() => void) | undefined
+	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
@@ -354,7 +368,6 @@ export type SecurityVaultRouteContentProps = {
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
 	onRedeemRepFromVault: () => void
-	onSetCoverageCommitment: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
@@ -380,7 +393,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
 	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
-	selectedPoolTotalCoverageCommitmentAttoEth?: bigint | undefined
+	selectedPoolTotalCapacityOwnershipAttoRep?: bigint | undefined
 	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean

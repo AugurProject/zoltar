@@ -16,8 +16,8 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
-		const coverageCommitmentAttoEth = 25n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, reportedRepEthPrice)
+		const capacityOwnershipAttoRep = 25n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 

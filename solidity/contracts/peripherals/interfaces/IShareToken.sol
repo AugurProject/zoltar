@@ -14,39 +14,14 @@ interface IShareToken {
 	function canonicalPoolByUniverse(uint248 universeId) external view returns (ISecurityPool);
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external;
-	function burnTokenIdAndGetRemainingSupply(
-		uint256 _tokenId,
-		address _owner
-	) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares);
-	function totalSupplyForOutcome(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome
-	) external view returns (uint256 totalSupplyAttoShares);
+	function burnTokenIdAndGetRemainingSupply(uint256 _tokenId, address _owner) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares);
+	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) external view returns (uint256 totalSupplyAttoShares);
 	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupplyAttoShares);
-	function balanceOfOutcome(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome,
-		address _account
-	) external view returns (uint256 balanceAttoShares);
-	function balanceOfShares(
-		uint248 _universeId,
-		address _account
-	) external view returns (uint256[3] memory balancesAttoShares);
-	function getMigratedShareAmountAttoShares(
-		uint256 fromId,
-		uint248 targetUniverseId,
-		address account
-	) external view returns (uint256);
-	function getTokenId(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome
-	) external pure returns (uint256 _tokenId);
-	function getTokenIds(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome[] calldata _outcomes
-	) external pure returns (uint256[] memory _tokenIds);
-	function unpackTokenId(
-		uint256 _tokenId
-	) external pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome);
+	function balanceOfOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome, address _account) external view returns (uint256 balanceAttoShares);
+	function balanceOfShares(uint248 _universeId, address _account) external view returns (uint256[3] memory balancesAttoShares);
+	function getMigratedShareAmountAttoShares(uint256 fromId, uint248 targetUniverseId, address account) external view returns (uint256);
+	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) external pure returns (uint256 _tokenId);
+	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] calldata _outcomes) external pure returns (uint256[] memory _tokenIds);
+	function unpackTokenId(uint256 _tokenId) external pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome);
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external;
 }

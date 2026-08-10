@@ -20,7 +20,7 @@ const localUnresolvedPrincipalAbi = [
 
 const CARRY_PROOF_GAS_LIMIT = 3_000_000n
 const RECURSIVE_ANCESTOR_CHECK_GAS_LIMIT = 8_000_000n
-const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 26_000_000n
+const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 30_000_000n
 
 describe('Peripherals: escalation migration', () => {
 	const fixture = usePeripheralsEscalationMigrationFixture()
@@ -124,9 +124,14 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, securityPool), false, 'bounded continuation progress should complete')
 	}
 
+	async function refreshCurrentPrice() {
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+	}
+
 	test('unfunded vault escalation deposit exposes REP too low and rolls back game deployment and pool state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const unfundedVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const readDepositGuardState = async () => ({
@@ -143,6 +148,7 @@ describe('Peripherals: escalation migration', () => {
 	test('unresolved migration rejects forks without unresolved deposits and preserves parent and child state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const externalForkQuestion = {
 			...questionData,
@@ -174,6 +180,7 @@ describe('Peripherals: escalation migration', () => {
 	test('external fork escalation claims expose Own fork required and preserve unresolved deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
@@ -209,6 +216,7 @@ describe('Peripherals: escalation migration', () => {
 	test('forked escalation claim exposes Child not migrating after the selected child activates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
@@ -246,6 +254,7 @@ describe('Peripherals: escalation migration', () => {
 	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
 		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -277,13 +286,14 @@ describe('Peripherals: escalation migration', () => {
 	test('resolved escalation withdrawal rejects mixed-vault batches and rolls back every deposit and vault mutation', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingVault, repDeposit, questionId)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 14n * 10n ** 18n)
-		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 10n * 10n ** 18n)
-		await depositToEscalationGame(losingVault, securityPoolAddresses.securityPool, QuestionOutcome.No, 20n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
+		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
+		await depositToEscalationGame(losingVault, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
 		await mockWindow.advanceTime(60n * DAY)
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'mixed-vault withdrawal setup must resolve to yes')
 
@@ -306,8 +316,9 @@ describe('Peripherals: escalation migration', () => {
 	test('optional vault migration clears unresolved parent dispute-staked REP accounting without creating child escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCoverageCommitmentAttoEth = reportBond * 2n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		await refreshCurrentPrice()
+		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const unresolvedDeposit = reportBond
@@ -370,12 +381,15 @@ describe('Peripherals: escalation migration', () => {
 	test('optional vault migration clears aggregate parent totals without copying them into child vault state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const depositCount = 65
 		const totalUnresolvedDeposit = BigInt(depositCount) * reportBond
+		const minimumRemainingVaultRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 100_000n
+		const requiredVaultRep = totalUnresolvedDeposit + minimumRemainingVaultRep
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
-		if (vaultRepBeforeTopUp < totalUnresolvedDeposit) {
-			await approveAndDepositRepToVault(client, totalUnresolvedDeposit - vaultRepBeforeTopUp, questionId)
+		if (vaultRepBeforeTopUp < requiredVaultRep) {
+			await approveAndDepositRepToVault(client, requiredVaultRep - vaultRepBeforeTopUp, questionId)
 		}
 		for (let index = 0; index < depositCount; index += 1) {
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -415,6 +429,7 @@ describe('Peripherals: escalation migration', () => {
 	test('own-fork unresolved migration rejects after the child branch is already priced', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -449,8 +464,9 @@ describe('Peripherals: escalation migration', () => {
 	test('own-fork unresolved migration expires without moving the vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCoverageCommitmentAttoEth = reportBond * 2n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		await refreshCurrentPrice()
+		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -477,8 +493,9 @@ describe('Peripherals: escalation migration', () => {
 	test('external-fork unresolved migration expires without requiring another user to process it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCoverageCommitmentAttoEth = reportBond * 2n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		await refreshCurrentPrice()
+		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -511,6 +528,7 @@ describe('Peripherals: escalation migration', () => {
 	test('in-window external unresolved migration requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -535,6 +553,7 @@ describe('Peripherals: escalation migration', () => {
 	test('migrateVaultWithUnresolvedEscalation clears parent escrow as dust when the child allocation rounds to zero', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -582,6 +601,7 @@ describe('Peripherals: escalation migration', () => {
 	test('non-own fork claims rely on the continuation snapshot without replaying local deposits or vault escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -622,6 +642,7 @@ describe('Peripherals: escalation migration', () => {
 	test('an unrelated fork carries dispute-staked REP 1:1 and burns the winner haircut only when the child settles', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(losingClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
@@ -691,6 +712,7 @@ describe('Peripherals: escalation migration', () => {
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -738,6 +760,7 @@ describe('Peripherals: escalation migration', () => {
 	test('late children retain the canonical fork snapshot after an own-fork parent claim', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
@@ -763,6 +786,7 @@ describe('Peripherals: escalation migration', () => {
 	test('a vault materializes its entitlement only in child universes it selects', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const parentInvalidState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Invalid)
 		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -790,7 +814,7 @@ describe('Peripherals: escalation migration', () => {
 		assert.deepStrictEqual(entitlementAfterYes[2], [false, true, false], 'only the selected yes child should be marked materialized')
 		const parentVaultAfterExport = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVaultAfterExport.repBackingUnits, 0n, 'the parent vault should have no remaining REP backing after migration')
-		strictEqualTypeSafe(parentVaultAfterExport.coverageCommitmentAttoEth, 0n, 'the parent vault should have no remaining coverage commitment after migration')
+		strictEqualTypeSafe(parentVaultAfterExport.capacityOwnershipAttoRep, 0n, 'the parent vault should have no remaining capacity ownership after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
 		const activeParentVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
 		const activeParentVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeParentVaultCount)
@@ -833,6 +857,7 @@ describe('Peripherals: escalation migration', () => {
 	test('selected branches share parent game totals while materializing only the selecting vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const otherClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(otherClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -879,6 +904,7 @@ describe('Peripherals: escalation migration', () => {
 	test('claimForkedEscalationDeposits requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const winningDeposit = reportBond
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(relayerClient, repDeposit, questionId)
@@ -896,6 +922,7 @@ describe('Peripherals: escalation migration', () => {
 	test('claimForkedEscalationDeposits requires an actual universe fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const nonDecisionThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * nonDecisionThresholdAttoRep)
 
@@ -915,6 +942,7 @@ describe('Peripherals: escalation migration', () => {
 	test('an underfunded child remains incomplete instead of scaling per-vault escalation claims', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -975,6 +1003,7 @@ describe('Peripherals: escalation migration', () => {
 	test('large unresolved continuation migration snapshots carry totals without replaying imported deposit indexes', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const nonDecisionThresholdAttoRep = (await getZoltarForkThreshold(client, genesisUniverse)) / 2n
 		const capacity = nonDecisionThresholdAttoRep / reportBond
@@ -1015,6 +1044,7 @@ describe('Peripherals: escalation migration', () => {
 	test('external-fork continuation resumes without migrating another vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
@@ -1051,7 +1081,7 @@ describe('Peripherals: escalation migration', () => {
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childCostDuringMigration = await getEscalationGameTotalCost(client, childEscalationGame)
-		approximatelyEqual(childCostDuringMigration, parentCostAtFork, 100000000000000n, 'the child continuation game should inherit the fork-time cost snapshot')
+		approximatelyEqual(childCostDuringMigration, parentCostAtFork, reportBond / 10_000n, 'the child continuation game should inherit the fork-time cost snapshot')
 
 		await mockWindow.advanceTime(3n * DAY)
 		strictEqualTypeSafe(await getEscalationGameTotalCost(client, childEscalationGame), childCostDuringMigration, 'continuation cost should stay frozen while the child is still in fork migration')
@@ -1107,6 +1137,7 @@ describe('Peripherals: escalation migration', () => {
 	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1193,6 +1224,7 @@ describe('Peripherals: escalation migration', () => {
 	test("multiple migrated winners settle in reverse order without using another vault owner's logical entitlement", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
@@ -1274,6 +1306,7 @@ describe('Peripherals: escalation migration', () => {
 	test('a directly claimed parent deposit is invalid in every current and late child while its same-outcome remainder stays claimable', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstYesDeposit = forkThresholdAttoRep / 3n
 		const secondYesDeposit = forkThresholdAttoRep - firstYesDeposit
@@ -1397,6 +1430,7 @@ describe('Peripherals: escalation migration', () => {
 	test('forked continuation deposits can migrate again after a second unrelated fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -1471,6 +1505,7 @@ describe('Peripherals: escalation migration', () => {
 	test('an unrelated continuation with an inherited threshold tie can trigger its own fork without a synthetic deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -1550,6 +1585,7 @@ describe('Peripherals: escalation migration', () => {
 	test('own-fork unresolved preparation on a continuation child includes inherited carried escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -1587,12 +1623,13 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.addStateOverrides({
 			[childRepToken]: {
 				stateDiff: {
-					[childBalanceSlot]: childForkThreshold * 3n,
+					[childBalanceSlot]: childForkThreshold * 4n,
 				},
 			},
 		})
 		await approveToken(client, childRepToken, yesSecurityPool.securityPool)
 		await depositRepToVault(client, yesSecurityPool.securityPool, childForkThreshold * 3n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, childForkThreshold)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.No, childForkThreshold)
 		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)
@@ -1616,6 +1653,7 @@ describe('Peripherals: escalation migration', () => {
 	test('many unresolved continuation deposits survive multiple unrelated forks recursively', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const recursiveDepositCount = 6n
 		const depositIndexes: bigint[] = []
@@ -1687,6 +1725,7 @@ describe('Peripherals: escalation migration', () => {
 	test('cannot refund an active escalation deposit before zoltar forks', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -1696,6 +1735,7 @@ describe('Peripherals: escalation migration', () => {
 	test("third parties can permissionlessly settle another vault owner's resolved escalation deposits", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)

@@ -5,9 +5,5 @@ import { ISecurityPool } from './ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 
 interface ISecurityPoolForkerChildEscalationGameInitializer {
-	function initializeChildForkedEscalationGameIfNeeded(
-		ISecurityPool parent,
-		ISecurityPool child,
-		EscalationGame childEscalationGame
-	) external returns (EscalationGame);
+	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) external returns (EscalationGame);
 }

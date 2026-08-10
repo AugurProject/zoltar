@@ -9,7 +9,7 @@ import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/c
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -18,7 +18,6 @@ import {
 	OperationType,
 	executeStagedOperation,
 	getActiveStagedOperationCount,
-	getActiveStagedOperations,
 	getIsPriceValid,
 	getLastPrice,
 	getOpenOracleExtraData,
@@ -92,22 +91,6 @@ const findExecutedStagedOperationLogs = (logs: TransactionReceiptLogs) =>
 			}
 		})
 		.filter(log => log?.eventName === 'ExecutedStagedOperation')
-
-const findPendingOperationRecoveryConsumedLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'PendingOperationRecoveryConsumed')
 
 const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -188,7 +171,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	const repDeposit = 1000n * 10n ** 18n
+	const repDeposit = 10_000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let priceOracle: Address
@@ -299,7 +282,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await createQuestion(client, questionData, outcomes)
 		questionId = getQuestionId(questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		await approveAndDepositRepToVault(client, repDeposit, questionId)
+		await approveAndDepositRepToVault(client, repDeposit, questionId, statoblastSecurityMultiplierBps)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 		securityPool = addresses.securityPool
@@ -308,7 +291,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, targetVault, amount, validForSeconds, value)
 	const fillPendingSettlementOperationList = async (costAttoEth: bigint, queuedOperationCostAttoEth: bigint, validForSeconds: bigint) => {
 		for (let index = 0; index < 4; index++) {
-			await queueStagedOperation(OperationType.SetCoverageCommitment, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? costAttoEth : queuedOperationCostAttoEth)
+			await queueStagedOperation(OperationType.WithdrawRep, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? costAttoEth : queuedOperationCostAttoEth)
 		}
 	}
 
@@ -319,7 +302,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(forceRepEthPriceTo, 10n ** 18n, 'test helper expects the coordinator default initial report price')
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		const settleHash = await openOracleSettle(client, pendingReportId)
-		const settleReceipt = await client.waitForTransactionReceipt({ hash: settleHash })
+		const settleReceipt = await client.waitForTransactionReceipt({
+			hash: settleHash,
+		})
 		return { pendingReportId, settleReceipt }
 	}
 
@@ -402,12 +387,27 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (replayed === undefined || replayed.checkpointReason === undefined) throw new Error(`${context}: coordinator state checkpoint was not replayed`)
 		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
 			getPendingReportId(client, priceOracle),
-			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'pendingReportSponsor', address: priceOracle, args: [] }),
+			client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'pendingReportSponsor',
+				address: priceOracle,
+				args: [],
+			}),
 			getPendingOperationSlotId(client, priceOracle),
 			getPendingReportMaxSettlementBaseFee(client, priceOracle),
 			getLastPrice(client, priceOracle),
-			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', address: priceOracle, args: [] }),
-			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter', address: priceOracle, args: [] }),
+			client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'lastSettlementTimestamp',
+				address: priceOracle,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'stagedOperationCounter',
+				address: priceOracle,
+				args: [],
+			}),
 			getActiveStagedOperationCount(client, priceOracle),
 			getPendingSettlementOperationCount(client, priceOracle),
 		])
@@ -439,8 +439,18 @@ describe('Price Oracle Refund Security Tests', () => {
 				type: 'function',
 			},
 		] as const
-		const targetPriceErrorForDispute = await client.readContract({ abi: sizingConfigurationAbi, functionName: 'targetPriceErrorForDispute', address: priceOracle, args: [] })
-		const openOracleSecurityMultiplierBps = await client.readContract({ abi: sizingConfigurationAbi, functionName: 'openOracleSecurityMultiplierBps', address: priceOracle, args: [] })
+		const targetPriceErrorForDispute = await client.readContract({
+			abi: sizingConfigurationAbi,
+			functionName: 'targetPriceErrorForDispute',
+			address: priceOracle,
+			args: [],
+		})
+		const openOracleSecurityMultiplierBps = await client.readContract({
+			abi: sizingConfigurationAbi,
+			functionName: 'openOracleSecurityMultiplierBps',
+			address: priceOracle,
+			args: [],
+		})
 		assert.strictEqual(targetPriceErrorForDispute, 500000n, 'the initial target price error should be five percent')
 		assert.strictEqual(openOracleSecurityMultiplierBps, 100000n, 'the initial Open Oracle Security multiplier should be ten times gas cost')
 
@@ -461,7 +471,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(reportMeta.token2.toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN).toLowerCase(), 'REP should be the price-expressing token2 side')
 
 		const baseFeeAttoEthPerGas = 30n * 10n ** 9n
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFeeAttoEthPerGas.toString(16)}`] })
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
+		})
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const sizedForBaseFee = await client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -469,14 +482,20 @@ describe('Price Oracle Refund Security Tests', () => {
 			address: priceOracle,
 			args: [],
 		})
-		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
+		assert.strictEqual(
+			sizedForBaseFee,
+			calculateOracleMinimumWethReportAttoEth({
+				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+				baseFeeAttoEthPerGas,
+			}),
+			'the on-chain WETH calculation should match the shared integer formula',
+		)
 	})
 
 	test('coordinator adds priority-fee security to the open-interest-dependent initial report', async () => {
 		const openInterest = 100n * 10n ** 18n + 1n
 		const expectedOpenInterestMinimum = (openInterest + 99n) / 100n
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, openInterest, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth)
+		await requestPrice(client, priceOracle)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await createCompleteSet(client, securityPool, openInterest)
 
@@ -637,12 +656,18 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
 		const requestBaseFeeAttoEthPerGas = 45n * 10n ** 9n
 		const proposedRepPerEthPrice = 1000n * 10n ** 18n
-		const maximumMinimumWethReport = calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas })
+		const maximumMinimumWethReport = calculateOracleMinimumWethReportAttoEth({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
+		})
 		await wrapWeth(client, maximumMinimumWethReport)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`] })
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
+		})
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const requestMinimumWethReport = await client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -673,14 +698,38 @@ describe('Price Oracle Refund Security Tests', () => {
 		tunedArgs[8] = tunedOpenOracleSecurityMultiplierBps
 		const tunedCoordinator = await deployContract(encodeOracleCoordinatorDeployData(tunedArgs))
 
-		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'targetPriceErrorForDispute', address: tunedCoordinator, args: [] }), tunedTargetPriceError)
-		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'openOracleSecurityMultiplierBps', address: tunedCoordinator, args: [] }), tunedOpenOracleSecurityMultiplierBps)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'targetPriceErrorForDispute',
+				address: tunedCoordinator,
+				args: [],
+			}),
+			tunedTargetPriceError,
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'openOracleSecurityMultiplierBps',
+				address: tunedCoordinator,
+				args: [],
+			}),
+			tunedOpenOracleSecurityMultiplierBps,
+		)
 
 		const baseFeeAttoEthPerGas = 30n * 10n ** 9n
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFeeAttoEthPerGas.toString(16)}`] })
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
+		})
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		assert.strictEqual(
-			await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'minimumToken1ReportAttoEth', address: tunedCoordinator, args: [] }),
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'minimumToken1ReportAttoEth',
+				address: tunedCoordinator,
+				args: [],
+			}),
 			calculateOracleMinimumWethReportAttoEth({
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				baseFeeAttoEthPerGas,
@@ -753,7 +802,10 @@ describe('Price Oracle Refund Security Tests', () => {
 			maxSettlementBaseFeeMultiplierBps,
 			minLiquidationPriceDistanceBps,
 		]
-		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
+		const invalidRiskParameterCases: Array<{
+			args: OracleCoordinatorConstructorArgs
+			message: RegExp
+		}> = [
 			{
 				args: [...baseArgs.slice(0, 6), 0n, ...baseArgs.slice(7)] as OracleCoordinatorConstructorArgs,
 				message: /initial priority fee zero/i,
@@ -867,7 +919,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			}),
 			/Initial oracle price zero/,
 		)
-		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No pending oracle price request can be recovered/)
+		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No report to recover/)
 		await assert.rejects(
 			client.writeContract({
 				abi: coordinatorAbi,
@@ -888,7 +940,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'openOracleCallback',
 				args: [1n, 1n, 1n, 0n, zeroAddress, zeroAddress],
 			}),
-			/Oracle callback report id does not match the pending request/,
+			/Oracle report mismatch/,
 		)
 
 		await assert.rejects(
@@ -939,10 +991,10 @@ describe('Price Oracle Refund Security Tests', () => {
 			})
 
 		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Staged operation amount must be non-zero/)
-		await assert.rejects(stage(OperationType.SetCoverageCommitment, client.account.address, 0n, 0n), /Staged operation timeout must be positive/)
-		await assert.rejects(stage(OperationType.SetCoverageCommitment, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n), /Staged operation timeout exceeds the maximum allowed/)
-		await assert.rejects(stage(OperationType.SetCoverageCommitment, otherVault, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Self operation target mismatch/)
-		await assert.rejects(stage(OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Caller bad/)
+		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, 0n), /Staged operation timeout must be positive/)
+		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n), /Staged operation timeout exceeds the maximum allowed/)
+		await assert.rejects(stage(OperationType.WithdrawRep, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Self operation target mismatch/)
+		await assert.rejects(stage(OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Receiver is target/)
 		await assert.rejects(
 			client.writeContract({
 				abi: coordinatorAbi,
@@ -953,9 +1005,23 @@ describe('Price Oracle Refund Security Tests', () => {
 			/Staged operation unavailable/,
 		)
 
-		const counterBefore = await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] })
-		await assert.rejects(stage(OperationType.SetCoverageCommitment, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Not enough ETH was provided to request a fresh oracle price/)
-		assert.strictEqual(await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] }), counterBefore, 'underfunded staging should roll back its operation record')
+		const counterBefore = await client.readContract({
+			abi: coordinatorAbi,
+			address: priceOracle,
+			functionName: 'stagedOperationCounter',
+			args: [],
+		})
+		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Not enough ETH was provided to request a fresh oracle price/)
+		assert.strictEqual(
+			await client.readContract({
+				abi: coordinatorAbi,
+				address: priceOracle,
+				functionName: 'stagedOperationCounter',
+				args: [],
+			}),
+			counterBefore,
+			'underfunded staging should roll back its operation record',
+		)
 
 		const minimumInitialWeth = await client.readContract({
 			abi: coordinatorAbi,
@@ -966,7 +1032,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await wrapWeth(client, minimumInitialWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
-		await stage(OperationType.SetCoverageCommitment, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, await getRequestPriceCostAttoEth(client, priceOracle))
+		await stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, await getRequestPriceCostAttoEth(client, priceOracle))
 		await assert.rejects(
 			client.writeContract({
 				abi: coordinatorAbi,
@@ -998,7 +1064,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const initialRepReport = (initialWethReport * proposedRepPerEthPrice + oraclePricePrecision - 1n) / oraclePricePrecision
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 
-		await executeThroughRejectingReceiver(receiver, WETH_ADDRESS, encodeFunctionData({ abi: peripherals_WETH9_WETH9.abi, functionName: 'deposit', args: [] }), initialWethReport)
+		await executeThroughRejectingReceiver(
+			receiver,
+			WETH_ADDRESS,
+			encodeFunctionData({
+				abi: peripherals_WETH9_WETH9.abi,
+				functionName: 'deposit',
+				args: [],
+			}),
+			initialWethReport,
+		)
 		const repTransferHash = await client.writeContract({
 			abi: ReputationToken_ReputationToken.abi,
 			address: addressString(GENESIS_REPUTATION_TOKEN),
@@ -1060,7 +1135,12 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, receiver), wethBefore, 'failed direct refund must restore sponsor WETH')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver), repBefore, 'failed direct refund must restore sponsor REP')
 
-		const stagedCounterBefore = await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] })
+		const stagedCounterBefore = await client.readContract({
+			abi: coordinatorAbi,
+			address: priceOracle,
+			functionName: 'stagedOperationCounter',
+			args: [],
+		})
 		await assert.rejects(
 			executeThroughRejectingReceiver(
 				receiver,
@@ -1068,14 +1148,23 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: coordinatorAbi,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetCoverageCommitment, receiver, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedRepPerEthPrice, initialWethReport],
+					args: [OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedRepPerEthPrice, initialWethReport],
 				}),
 				costAttoEth + 1n,
 			),
 			/Oracle coordinator failed to return unused ETH/,
 		)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'failed staged refund must roll back the pending report')
-		assert.strictEqual(await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] }), stagedCounterBefore, 'failed staged refund must roll back the staged operation')
+		assert.strictEqual(
+			await client.readContract({
+				abi: coordinatorAbi,
+				address: priceOracle,
+				functionName: 'stagedOperationCounter',
+				args: [],
+			}),
+			stagedCounterBefore,
+			'failed staged refund must roll back the staged operation',
+		)
 		assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 0n, 'failed staged refund must leave no active operation')
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, receiver), wethBefore, 'failed staged refund must restore sponsor WETH')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver), repBefore, 'failed staged refund must restore sponsor REP')
@@ -1208,7 +1297,9 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${expectedSettlementBaseFeeCap.toString(16)}`],
 		})
 		const acceptedHash = await openOracleSettleWithGasPrice(client, acceptedReportId, expectedSettlementBaseFeeCap)
-		const acceptedReceipt = await client.waitForTransactionReceipt({ hash: acceptedHash })
+		const acceptedReceipt = await client.waitForTransactionReceipt({
+			hash: acceptedHash,
+		})
 		assert.strictEqual(findPriceReportRejectedLog(acceptedReceipt.logs), undefined, 'settlement at the exact basefee cap should not be rejected')
 		assert.ok(findPriceReportedLog(acceptedReceipt.logs) !== undefined, 'settlement at the exact basefee cap should report the accepted price')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement at the exact basefee cap should validate the price')
@@ -1224,7 +1315,9 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${rejectedSettlementBaseFee.toString(16)}`],
 		})
 		const rejectedHash = await openOracleSettleWithGasPrice(client, rejectedReportId, rejectedSettlementBaseFee)
-		const rejectedReceipt = await client.waitForTransactionReceipt({ hash: rejectedHash })
+		const rejectedReceipt = await client.waitForTransactionReceipt({
+			hash: rejectedHash,
+		})
 		const rejectedLog = findPriceReportRejectedLog(rejectedReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 		assert.strictEqual(findPriceReportedLog(rejectedReceipt.logs), undefined, 'settlement one attoETH above the basefee cap must not report a price')
@@ -1297,7 +1390,9 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
 		})
 		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, requestBaseFeeAttoEthPerGas)
-		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const settlementReceipt = await client.waitForTransactionReceipt({
+			hash: settlementHash,
+		})
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
@@ -1373,7 +1468,9 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
 		})
 		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, baseFeeAttoEthPerGas)
-		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const settlementReceipt = await client.waitForTransactionReceipt({
+			hash: settlementHash,
+		})
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
@@ -1382,8 +1479,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('oracle settlement rejects a saturated dispute-history counter', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const stagedCoverageCommitmentAttoEth = repDeposit / 4n
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, stagedCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		const eventState = await loadOpenOracleEventState(client, reportId)
@@ -1410,26 +1506,26 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'settle',
 			args: [reportId, getOpenOracleGameTuple(saturatedPreimage.game), getOpenOracleHelperTuple(saturatedPreimage.helper)],
 		})
-		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const settlementReceipt = await client.waitForTransactionReceipt({
+			hash: settlementHash,
+		})
 		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
 		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 		assert.strictEqual(rejectedLog.args.reason, 'Counter saturated', 'saturation should be distinguishable from an uneconomic final report')
 		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'a saturated history counter must not publish a price')
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'saturated settlement should clear the pending report')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'saturated settlement must leave the cached price invalid')
-		assert.strictEqual(findExecutedStagedOperationLog(settlementReceipt.logs), undefined, 'saturated settlement must not execute the staged operation')
-		assert.strictEqual(await getPendingOperationSlotId(client, priceOracle), 1n, 'saturated settlement should preserve the compatibility pending-operation slot')
-		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n], 'saturated settlement should leave the operation queued for a later valid price path')
-		assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 1n, 'saturated settlement should leave the queued operation active')
-		assert.strictEqual((await getStagedOperation(client, priceOracle, 1n))[1], client.account.address, 'saturated settlement must not consume the queued operation')
-		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).coverageCommitmentAttoEth, 0n, 'coverage commitment')
+		assert.strictEqual(findExecutedStagedOperationLog(settlementReceipt.logs)?.args.success, false, 'saturated settlement should terminally fail the staged operation')
+		assert.strictEqual(await getPendingOperationSlotId(client, priceOracle), 0n, 'saturated settlement should clear the pending-operation slot')
+		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [], 'saturated settlement should clear the pending batch')
+		assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 0n, 'saturated settlement should consume the queued operation')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, 1n))[1], zeroAddress, 'saturated settlement must terminally consume the queued operation')
+		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n, 'failed settlement must not change capacity ownership')
 	})
 
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const unsafeCoverageCommitmentAttoEth = repDeposit / 4n
-
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, unsafeCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const pendingMaxSettlementBaseFee = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
@@ -1445,9 +1541,14 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x1'] })
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: ['0x1'],
+		})
 		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
-		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const settlementReceipt = await client.waitForTransactionReceipt({
+			hash: settlementHash,
+		})
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		await assertCoordinatorReplayMatchesStorage(settlementReceipt.logs, 'rejected report')
 
@@ -1463,9 +1564,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(isPriceValid, false, 'high-basefee settlement must not validate the price')
 		assert.strictEqual(pendingReportIdAfterSettlement, 0n, 'high-basefee settlement should clear the stale pending report')
 		assert.strictEqual(pendingMaxSettlementBaseFeeAfterSettlement, 0n, 'high-basefee settlement should clear the basefee guard')
-		assert.strictEqual(pendingOperationSlotId, 1n, 'high-basefee settlement should leave the auto-execute slot pending for a future valid price')
-		assert.strictEqual(stagedOperation[1], client.account.address, 'high-basefee settlement must not consume staged operations')
-		assert.strictEqual(vault.coverageCommitmentAttoEth, 0n, 'coverage commitment')
+		assert.strictEqual(pendingOperationSlotId, 0n, 'high-basefee settlement should clear the pending slot')
+		assert.strictEqual(stagedOperation[1], zeroAddress, 'high-basefee settlement must consume staged operations')
+		assert.strictEqual(vault.capacityOwnershipAttoRep, repDeposit / 2n, 'failed settlement must not change capacity ownership')
 		assert.strictEqual(rejectedLog.args.reportId, pendingReportId, 'PriceReportRejected should identify the rejected report')
 		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'PriceReportRejected should expose the rejection reason')
 		assert.strictEqual(rejectedLog.args.pendingReportId, pendingReportIdAfterSettlement, 'PriceReportRejected should expose the cleared pending report id')
@@ -1529,6 +1630,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('capacity and missing-game guards expose exact reasons without mutating pool or vault state', async () => {
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
 		const tokenIds = await Promise.all(
 			[0n, 1n, 2n].map(
@@ -1554,6 +1656,12 @@ describe('Price Oracle Refund Security Tests', () => {
 			vault: await getSecurityVault(client, securityPool, client.account.address),
 		})
 		const stateBefore = await readGuardState()
+		const mintingCapacityAttoEth = await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'getCurrentMintingCapacityAttoEth',
+			args: [],
+		})
 
 		await assert.rejects(
 			client.writeContract({
@@ -1561,7 +1669,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				address: securityPool,
 				functionName: 'createCompleteSet',
 				args: [],
-				value: 1n,
+				value: mintingCapacityAttoEth + 1n,
 			}),
 			/Over capacity/,
 		)
@@ -1579,160 +1687,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.deepStrictEqual(await readGuardState(), stateBefore, 'missing-game withdrawal must preserve pool and vault state')
 	})
 
-	test('minimum vault REP and coverage commitment failures expose their exact dynamic reasons and roll back', async () => {
-		const underfundedVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const depositAmount = 1n
-		await approveToken(underfundedVaultClient, repToken, securityPool)
-		const depositStateBefore = {
-			poolRep: await getERC20Balance(client, repToken, securityPool),
-			vault: await getSecurityVault(client, securityPool, underfundedVaultClient.account.address),
-			vaultAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
-		}
-		await assert.rejects(depositRepToVault(underfundedVaultClient, securityPool, depositAmount), /Vault REP below minimum/)
-		assert.deepStrictEqual(
-			{
-				poolRep: await getERC20Balance(client, repToken, securityPool),
-				vault: await getSecurityVault(client, securityPool, underfundedVaultClient.account.address),
-				vaultAttoRep: await getERC20Balance(client, repToken, underfundedVaultClient.account.address),
-			},
-			depositStateBefore,
-			'minimum-REP rejection must roll back the token transfer and vault accounting',
-		)
-
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const belowMinimumCoverageCommitmentAttoEth = 1n
-		const vaultBefore = await getSecurityVault(client, securityPool, client.account.address)
-
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, belowMinimumCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
-
-		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
-
-		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
-		const stagedOperation = await getStagedOperation(client, priceOracle, 1n)
-		const executionLog = findExecutedStagedOperationLog(settleReceipt.logs)
-		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation log for minimum coverage commitment failure')
-
-		assert.strictEqual(pendingOperationSlotId, 0n, 'failed auto-executed operations should clear the pending slot')
-		assert.strictEqual(stagedOperation[1], zeroAddress, 'failed staged operations should be consumed after their first execution attempt')
-		assert.strictEqual(stagedOperation[3], belowMinimumCoverageCommitmentAttoEth, 'failed staged operations should retain their record for auditability')
-		assert.strictEqual(executionLog.args.success, false, 'minimum coverage commitment failure must be reported as unsuccessful')
-		assert.strictEqual(executionLog.args.errorMessage, 'Commitment min', 'minimum coverage commitment failure must expose its exact dynamic reason')
-		assert.deepStrictEqual(await getSecurityVault(client, securityPool, client.account.address), vaultBefore, 'coverage commitment')
-
-		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /Staged operation unavailable/)
-	})
-
-	test('coverage commitment', async () => {
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const readFinancialState = async () => ({
-			poolRep: await getERC20Balance(client, repToken, securityPool),
-			totalCoverageCommitmentAttoEth: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: securityPool,
-				functionName: 'totalCoverageCommitmentAttoEth',
-				args: [],
-			}),
-			vault: await getSecurityVault(client, securityPool, client.account.address),
-			vaultAttoRep: await getERC20Balance(client, repToken, client.account.address),
-		})
-
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const overBackedCoverageCommitmentAttoEth = repDeposit
-		const coverageCommitmentAttoEthStateBefore = await readFinancialState()
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, overBackedCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
-		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
-		const coverageCommitmentAttoEthExecutionLog = findExecutedStagedOperationLog(settleReceipt.logs)
-		if (coverageCommitmentAttoEthExecutionLog === undefined) throw new Error('coverage commitment')
-
-		assert.strictEqual(coverageCommitmentAttoEthExecutionLog.args.success, false, 'coverage commitment')
-		assert.strictEqual(coverageCommitmentAttoEthExecutionLog.args.errorMessage, 'Vault commitment', 'over-backed coverage commitment must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readFinancialState(), coverageCommitmentAttoEthStateBefore, 'coverage commitment')
-
-		const liquidationBoundaryCoverageCommitmentAttoEth = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
-		const unsafeCoverageCommitmentAttoEth = liquidationBoundaryCoverageCommitmentAttoEth + 1n
-		const unsafeCoverageCommitmentAttoEthHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, unsafeCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		const unsafeCoverageCommitmentAttoEthReceipt = await client.waitForTransactionReceipt({ hash: unsafeCoverageCommitmentAttoEthHash })
-		const unsafeCoverageCommitmentAttoEthExecutionLog = findExecutedStagedOperationLog(unsafeCoverageCommitmentAttoEthReceipt.logs)
-		if (unsafeCoverageCommitmentAttoEthExecutionLog === undefined) throw new Error('coverage commitment')
-
-		assert.strictEqual(unsafeCoverageCommitmentAttoEthExecutionLog.args.success, false, 'coverage commitment')
-		assert.strictEqual(unsafeCoverageCommitmentAttoEthExecutionLog.args.errorMessage, 'Vault commitment', 'multiplier-adjusted coverage commitment failure must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readFinancialState(), coverageCommitmentAttoEthStateBefore, 'coverage commitment')
-
-		const validCoverageCommitmentAttoEth = liquidationBoundaryCoverageCommitmentAttoEth
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, validCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).coverageCommitmentAttoEth, validCoverageCommitmentAttoEth, 'coverage commitment')
-		const withdrawalStateBefore = await readFinancialState()
-		const withdrawalHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit - validCoverageCommitmentAttoEth + 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
-		const withdrawalExecutionLog = findExecutedStagedOperationLog(withdrawalReceipt.logs)
-		if (withdrawalExecutionLog === undefined) throw new Error('missing ExecutedStagedOperation log for vault bond failure')
-
-		assert.strictEqual(withdrawalExecutionLog.args.success, false, 'withdrawing REP below the active bond backing must fail')
-		assert.strictEqual(withdrawalExecutionLog.args.errorMessage, 'Vault backing insufficient', 'under-backed withdrawal must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readFinancialState(), withdrawalStateBefore, 'vault bond failure must roll back REP balances and aggregate and per-vault accounting')
-	})
-
-	test('coverage commitment', async () => {
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyCoverageCommitmentAttoEth = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
-		const increasedPrice = 2n * 10n ** 18n
-
-		await approveToken(counterpartyClient, repToken, securityPool)
-		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
-		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetCoverageCommitment, counterpartyClient.account.address, counterpartyCoverageCommitmentAttoEth)
-		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
-
-		const guardedVaults = [client.account.address, counterpartyClient.account.address]
-		const stateBefore = await readPoolGuardState(guardedVaults)
-		const locallyBackedCoverageCommitmentAttoEth = repDeposit / 10n
-		const updateHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, locallyBackedCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		const updateReceipt = await client.waitForTransactionReceipt({ hash: updateHash })
-		const executionLog = findExecutedStagedOperationLog(updateReceipt.logs)
-		if (executionLog === undefined) throw new Error('coverage commitment')
-
-		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
-		assert.strictEqual(executionLog.args.success, false, 'coverage commitment')
-		assert.strictEqual(executionLog.args.errorMessage, 'Pool commitment', 'aggregate coverage commitment failure must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'coverage commitment')
-	})
-
-	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyCoverageCommitmentAttoEth = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
-		const increasedPrice = 4n * 10n ** 18n
-
-		await approveToken(counterpartyClient, repToken, securityPool)
-		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
-		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetCoverageCommitment, counterpartyClient.account.address, counterpartyCoverageCommitmentAttoEth)
-		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
-
-		const guardedVaults = [client.account.address, counterpartyClient.account.address]
-		const stateBefore = await readPoolGuardState(guardedVaults)
-		const withdrawalAmount = repDeposit / 4n
-		const withdrawalHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, withdrawalAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
-		const executionLog = findExecutedStagedOperationLog(withdrawalReceipt.logs)
-		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation log for aggregate withdrawal failure')
-
-		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
-		assert.strictEqual(executionLog.args.success, false, 'an unencumbered vault withdrawal must fail when aggregate pool backing is insufficient')
-		assert.strictEqual(executionLog.args.errorMessage, 'Unknown error', 'aggregate withdrawal failure must expose the compact data-free pool guard')
-		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate withdrawal failure must roll back both vaults, complete pool accounting, backingUnits, and REP balances')
-	})
-
 	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const callerCoverageCommitmentAttoEth = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const escrowAmount = (repDeposit * 3n) / 5n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
 		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetCoverageCommitment, client.account.address, callerCoverageCommitmentAttoEth)
 		await mockWindow.setTime(questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 
@@ -1740,35 +1701,15 @@ describe('Price Oracle Refund Security Tests', () => {
 		const stateBefore = await readPoolGuardState(guardedVaults)
 		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the local bond failure must exercise first-deposit game deployment')
 
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault backing insufficient/)
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault (backing insufficient|REP below minimum)/)
 		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'local bond failure must roll back game deployment, both vaults, pool accounting, backingUnits, REP, and escrow')
-	})
-
-	test('escalation deposit aggregate bond failure rolls back game deployment and escrow accounting', async () => {
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyCoverageCommitmentAttoEth = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
-		const increasedPrice = 4n * 10n ** 18n
-		const escrowAmount = repDeposit / 4n
-
-		await approveToken(counterpartyClient, repToken, securityPool)
-		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
-		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetCoverageCommitment, counterpartyClient.account.address, counterpartyCoverageCommitmentAttoEth)
-		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
-
-		const guardedVaults = [client.account.address, counterpartyClient.account.address]
-		const stateBefore = await readPoolGuardState(guardedVaults)
-		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the aggregate bond failure must exercise first-deposit game deployment')
-
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /execution reverted/)
-		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate bond failure must roll back game deployment, both vaults, pool accounting, backingUnits, REP, and escrow')
 	})
 
 	test('escalation deposit minimum REP failure rolls back game deployment and escrow accounting', async () => {
 		const remainingDust = 9n * 10n ** 18n
 		const escrowAmount = repDeposit - remainingDust
 		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
 
 		const guardedVaults = [client.account.address]
 		const stateBefore = await readPoolGuardState(guardedVaults)
@@ -1779,9 +1720,8 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('rejecting complete-set redeemer exposes ETH failed and restores every accounting mutation', async () => {
-		const coverageCommitmentAttoEth = 2n * 10n ** 18n
 		const collateral = 1n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth)
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		const receiver = await deployContract(
 			encodeDeployData({
 				abi: rejectingEthReceiverArtifact.abi,
@@ -1844,14 +1784,16 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('only the pending report sponsor can queue more operations while settlement is pending', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const sponsorCoverageCommitmentAttoEth = repDeposit / 4n
-		const counterpartyCoverageCommitmentAttoEth = repDeposit / 5n
+		const sponsorCapacityOwnershipAttoRep = repDeposit / 4n
+		const counterpartyCapacityOwnershipAttoRep = repDeposit / 5n
 
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
 
-		const sponsorRequestHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, sponsorCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
-		const sponsorRequestReceipt = await client.waitForTransactionReceipt({ hash: sponsorRequestHash })
+		const sponsorRequestHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, sponsorCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
+		const sponsorRequestReceipt = await client.waitForTransactionReceipt({
+			hash: sponsorRequestHash,
+		})
 		await assertCoordinatorReplayMatchesStorage(sponsorRequestReceipt.logs, 'sponsored report request')
 
 		const pendingReportIdBeforeJoin = await getPendingReportId(client, priceOracle)
@@ -1861,7 +1803,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetCoverageCommitment, counterpartyClient.account.address, counterpartyCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, counterpartyCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
@@ -1872,7 +1814,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				},
 			)
 
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, counterpartyCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationCostAttoEth)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, counterpartyCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationCostAttoEth)
 
 		const pendingReportIdAfterJoin = await getPendingReportId(client, priceOracle)
 
@@ -1885,11 +1827,11 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('rolling OpenOracle disputes extend sponsor exclusivity without corrupting the pending operation queue', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const sponsorCoverageCommitmentAttoEth = repDeposit / 4n
-		const sponsorCoverageCommitmentAttoEthAfterDispute = repDeposit / 5n
+		const sponsorCapacityOwnershipAttoRep = repDeposit / 4n
+		const sponsorCapacityOwnershipAttoRepAfterDispute = repDeposit / 5n
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, sponsorCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth, 1000n)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.WithdrawRep, client.account.address, sponsorCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth, 1000n)
 
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
@@ -1943,20 +1885,19 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetCoverageCommitment, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			}),
 			/Only the pending report sponsor can queue more operations until settlement/,
 		)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, sponsorCoverageCommitmentAttoEthAfterDispute, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, sponsorCapacityOwnershipAttoRepAfterDispute, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n, 2n], 'the original sponsor should retain queue append rights after a dispute')
 
 		await mockWindow.setTime(reportStatusAfterDispute.reportTimestamp + reportMeta.settlementTime - 1n)
 		await openOracleSettle(client, reportId)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'settlement should clear the disputed pending report')
 		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [], 'settlement should consume the undamaged pending queue')
-		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).coverageCommitmentAttoEth, sponsorCoverageCommitmentAttoEthAfterDispute, 'queued sponsor operations should execute in order after the final settlement')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + sponsorRepPayout, 'settlement callback should pay the dispute proceeds to the original sponsor')
+		assert.ok((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) > sponsorRepBalanceAfterRequest + sponsorRepPayout, 'settlement callback should pay the dispute proceeds and execute the sponsor withdrawals')
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAttoEthAfterRequest, 'settlement callback should not invent a sponsor WETH payout')
 		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'settlement callback should drain the coordinator REP credit to its sentinel')
 		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'settlement callback should leave the coordinator WETH sentinel intact')
@@ -1978,7 +1919,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetCoverageCommitment, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
@@ -2002,9 +1943,8 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('expired pending auto-execute slots do not block later valid oracle settlements', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const unsafeCoverageCommitmentAttoEth = repDeposit * 10n
 
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, unsafeCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
@@ -2019,7 +1959,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(isPriceValid, true, 'a valid report should settle even when its pending auto-execute slot expired')
 		assert.strictEqual(pendingOperationSlotId, 0n, 'expired pending auto-execute slots should be cleared during callback')
 		assert.strictEqual(stagedOperation[1], zeroAddress, 'expired pending auto-execute operations should be consumed')
-		assert.strictEqual(vault.coverageCommitmentAttoEth, 0n, 'expired pending operations must not execute during later valid settlement')
+		assert.strictEqual(vault.capacityOwnershipAttoRep, repDeposit / 2n, 'expired pending operations must not change deposit-derived capacity ownership')
 	})
 
 	test('failed OpenOracle settlement callbacks do not leave the coordinator permanently pending', async () => {
@@ -2042,7 +1982,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), pendingState.game.currentAmount1 + 1n, 'failed callback settlement should credit the coordinator WETH balance')
 
 		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
-		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
+		const recoveryReceipt = await client.waitForTransactionReceipt({
+			hash: recoveryHash,
+		})
 		await assertCoordinatorReplayMatchesStorage(recoveryReceipt.logs, 'pending report recovery')
 
 		const pendingReportIdAfterRecovery = await getPendingReportId(client, priceOracle)
@@ -2078,13 +2020,12 @@ describe('Price Oracle Refund Security Tests', () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		await requestPriceWithValue(client, priceOracle, costAttoEth)
 
-		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /Pending oracle report has not settled/)
+		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /Report not settled/)
 	})
 
 	test('failed callback recovery clears the auto-execute slot so staged operations can request a fresh report', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const firstCoverageCommitmentAttoEth = repDeposit / 4n
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, firstCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
@@ -2095,7 +2036,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingOperationSlotIdAfterSettlement, 1n, 'failed callbacks should leave the original operation in the auto-execute slot until recovery')
 
 		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
-		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
+		const recoveryReceipt = await client.waitForTransactionReceipt({
+			hash: recoveryHash,
+		})
 
 		const pendingReportIdAfterRecovery = await getPendingReportId(client, priceOracle)
 		const pendingOperationSlotIdAfterRecovery = await getPendingOperationSlotId(client, priceOracle)
@@ -2105,147 +2048,21 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear the failed report')
 		assert.strictEqual(pendingOperationSlotIdAfterRecovery, 0n, 'recovery should clear the stale auto-execute slot')
 		assert.strictEqual(recoveredStagedOperation[1], zeroAddress, 'recovery should consume the operation whose callback could not complete')
-		assert.strictEqual(vault.coverageCommitmentAttoEth, 0n, 'coverage commitment')
+		assert.strictEqual(vault.capacityOwnershipAttoRep, repDeposit / 2n, 'failed callback recovery must not change capacity ownership')
 		const recoveryLog = findPendingReportRecoveredLog(recoveryReceipt.logs)
 		if (recoveryLog === undefined) throw new Error('missing PendingReportRecovered log')
 		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
 		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
 		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFeeAttoEthPerGas, 0n, 'PendingReportRecovered should expose the cleared basefee guard')
-		const recoveryConsumedLog = findPendingOperationRecoveryConsumedLog(recoveryReceipt.logs)
-		assert.strictEqual(recoveryConsumedLog?.args.operationId, 1n, 'recovery should emit the consumed operation id')
-		assert.strictEqual(recoveryConsumedLog?.args.operation, BigInt(OperationType.SetCoverageCommitment), 'recovery should emit the consumed operation type')
-
-		const secondCoverageCommitmentAttoEth = repDeposit / 5n
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, secondCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
+		const recoveryExecutionLog = findExecutedStagedOperationLog(recoveryReceipt.logs)
+		assert.strictEqual(recoveryExecutionLog?.args.operationId, 1n, 'recovery should emit the terminally consumed operation id')
+		assert.strictEqual(recoveryExecutionLog?.args.operation, BigInt(OperationType.WithdrawRep), 'recovery should emit the terminally consumed operation type')
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
 		const nextPendingReportId = await getPendingReportId(client, priceOracle)
 		const nextPendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 
 		assert.ok(nextPendingReportId > pendingReportId, 'a new staged operation should be able to fund a fresh report after recovery')
 		assert.strictEqual(nextPendingOperationSlotId, 2n, 'the new staged operation should become the next auto-execute slot')
-	})
-
-	test('settlement auto-executes a bounded pending operation list and leaves overflow manual', async () => {
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
-		const firstCoverageCommitmentAttoEth = repDeposit / 4n
-		const secondCoverageCommitmentAttoEth = repDeposit / 5n
-		const thirdCoverageCommitmentAttoEth = repDeposit / 6n
-		const fourthCoverageCommitmentAttoEth = repDeposit / 7n
-		const fifthCoverageCommitmentAttoEth = repDeposit / 8n
-		const queuedOperationLogs: TransactionReceiptLogs[number][] = []
-		const queueOperation = async (coverageCommitmentAttoEth: bigint, value: bigint) => {
-			const transactionHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, value)
-			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-			queuedOperationLogs.push(...receipt.logs)
-		}
-
-		await queueOperation(firstCoverageCommitmentAttoEth, costAttoEth)
-		await queueOperation(secondCoverageCommitmentAttoEth, queuedOperationCostAttoEth)
-		await queueOperation(thirdCoverageCommitmentAttoEth, queuedOperationCostAttoEth)
-		await queueOperation(fourthCoverageCommitmentAttoEth, queuedOperationCostAttoEth)
-		await queueOperation(fifthCoverageCommitmentAttoEth, 0n)
-
-		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
-		const pendingReportId = await getPendingReportId(client, priceOracle)
-		const pendingReportExtraData = await getOpenOracleExtraData(client, pendingReportId)
-		const pendingSettlementOperationCount = await getPendingSettlementOperationCount(client, priceOracle)
-		const pendingSettlementOperationIds = await getPendingSettlementOperationIds(client, priceOracle)
-		const activeStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
-		const [operationIds, activeOperations] = await getActiveStagedOperations(client, priceOracle, 0n, 5n)
-		assert.strictEqual(pendingOperationSlotId, 1n, 'first queued self operation should remain the compatibility pending slot')
-		assert.strictEqual(pendingReportExtraData.callbackGasLimit, ORACLE_SETTLEMENT_GAS * 4, 'oracle report callback gas should cover the full pending settlement list')
-		assert.strictEqual(pendingSettlementOperationCount, 4n, 'pending settlement operation count should cap the auto-execute list')
-		assert.deepStrictEqual(Array.from(pendingSettlementOperationIds), [1n, 2n, 3n, 4n], 'pending settlement operations should stay in queue order')
-		assert.strictEqual(activeStagedOperationCount, 5n, 'active staged operation count should track pending and manual operations')
-		assert.deepStrictEqual(Array.from(operationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should enumerate newest queued operations first')
-		assert.strictEqual(activeOperations[0]?.operationAmountAttoRepOrAttoEth, fifthCoverageCommitmentAttoEth, 'newest overflow operation should retain its amount')
-		assert.strictEqual(activeOperations[1]?.operationAmountAttoRepOrAttoEth, fourthCoverageCommitmentAttoEth, 'newest pending operation should retain its amount')
-		assert.strictEqual(activeOperations[2]?.operationAmountAttoRepOrAttoEth, thirdCoverageCommitmentAttoEth, 'middle pending operation should retain its amount')
-		assert.strictEqual(activeOperations[3]?.operationAmountAttoRepOrAttoEth, secondCoverageCommitmentAttoEth, 'older pending operation should retain its amount')
-		assert.strictEqual(activeOperations[4]?.operationAmountAttoRepOrAttoEth, firstCoverageCommitmentAttoEth, 'oldest pending operation should retain its amount')
-
-		const { pendingReportId: settledReportId, settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
-		await assertCoordinatorReplayMatchesStorage([...queuedOperationLogs, ...settleReceipt.logs], 'reported price and staged execution')
-		const priceReportedLog = findPriceReportedLog(settleReceipt.logs)
-		if (priceReportedLog === undefined) throw new Error('missing PriceReported log')
-		const lastPrice = await getLastPrice(client, priceOracle)
-		const lastSettlementTimestamp = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastSettlementTimestamp',
-			address: priceOracle,
-			args: [],
-		})
-		assert.strictEqual(settledReportId, pendingReportId, 'settled report should match the pending report')
-		assert.strictEqual(priceReportedLog.args.reportId, settledReportId, 'PriceReported should identify the settled report')
-		assert.strictEqual(priceReportedLog.args.price, lastPrice, 'PriceReported should expose the updated price')
-		assert.strictEqual(priceReportedLog.args.lastSettlementTimestamp, lastSettlementTimestamp, 'PriceReported should expose the updated settlement timestamp')
-		const pendingOperationSlotIdAfterSettlement = await getPendingOperationSlotId(client, priceOracle)
-		const pendingSettlementOperationCountAfterSettlement = await getPendingSettlementOperationCount(client, priceOracle)
-		const updatedActiveStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
-		const [remainingOperationIds, remainingOperations] = await getActiveStagedOperations(client, priceOracle, 0n, 5n)
-
-		const stagedOperation1 = await getStagedOperation(client, priceOracle, 1n)
-		const stagedOperation2 = await getStagedOperation(client, priceOracle, 2n)
-		const stagedOperation3 = await getStagedOperation(client, priceOracle, 3n)
-		const stagedOperation4 = await getStagedOperation(client, priceOracle, 4n)
-		const stagedOperation5 = await getStagedOperation(client, priceOracle, 5n)
-		const vaultAfterSettlement = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(pendingOperationSlotIdAfterSettlement, 0n, 'settlement should clear the compatibility pending slot after auto-executing pending operations')
-		assert.strictEqual(pendingSettlementOperationCountAfterSettlement, 0n, 'settlement should clear the pending operation list after auto-execution')
-		assert.strictEqual(stagedOperation1[1], zeroAddress, 'first pending operation should be consumed after oracle settlement')
-		assert.strictEqual(stagedOperation2[1], zeroAddress, 'second pending operation should be consumed after oracle settlement')
-		assert.strictEqual(stagedOperation3[1], zeroAddress, 'third pending operation should be consumed after oracle settlement')
-		assert.strictEqual(stagedOperation4[1], zeroAddress, 'fourth pending operation should be consumed after oracle settlement')
-		assert.strictEqual(stagedOperation5[1], client.account.address, 'overflow operation should remain staged for manual execution')
-		assert.strictEqual(stagedOperation5[3], fifthCoverageCommitmentAttoEth, 'overflow operation should retain its requested amount until manual execution')
-		assert.strictEqual(vaultAfterSettlement.coverageCommitmentAttoEth, fourthCoverageCommitmentAttoEth, 'pending settlement operations should execute in queue order')
-		assert.strictEqual(updatedActiveStagedOperationCount, 1n, 'active staged operation count should leave only the overflow operation')
-		assert.deepStrictEqual(Array.from(remainingOperationIds), [5n], 'active staged operations should keep the overflow operation active')
-		assert.strictEqual(remainingOperations[0]?.operationAmountAttoRepOrAttoEth, fifthCoverageCommitmentAttoEth, 'overflow operation should stay in the active preview')
-		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement should leave a fresh price available for manual overflow execution')
-
-		await executeStagedOperation(client, priceOracle, 5n)
-		const finalActiveStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
-		const finalVault = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(finalActiveStagedOperationCount, 0n, 'manual overflow execution should consume the final active operation')
-		assert.strictEqual(finalVault.coverageCommitmentAttoEth, fifthCoverageCommitmentAttoEth, 'coverage commitment')
-	})
-
-	test('many immediate operations reuse one cached price without opening additional reports', async () => {
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const initialCoverageCommitmentAttoEth = repDeposit / 4n
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, initialCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
-		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
-
-		const settledPrice = await getLastPrice(client, priceOracle)
-		const settlementTimestamp = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastSettlementTimestamp',
-			address: priceOracle,
-			args: [],
-		})
-		const immediateCoverageCommitmentsAttoEth = Array.from({ length: 12 }, (_, index) => repDeposit / BigInt(index + 5))
-
-		for (const coverageCommitmentAttoEth of immediateCoverageCommitmentsAttoEth) {
-			await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, coverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-			const vaultAfterOperation = await getSecurityVault(client, securityPool, client.account.address)
-			assert.strictEqual(vaultAfterOperation.coverageCommitmentAttoEth, coverageCommitmentAttoEth, 'each immediate operation should execute in transaction order against the cached price')
-			assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'a valid cached price should execute immediately without opening another report')
-			assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 0n, 'each immediate operation should be consumed in its transaction')
-		}
-
-		const finalCoverageCommitmentAttoEth = immediateCoverageCommitmentsAttoEth.at(-1)
-		if (finalCoverageCommitmentAttoEth === undefined) throw new Error('coverage commitment')
-		const finalVault = await getSecurityVault(client, securityPool, client.account.address)
-		const finalSettlementTimestamp = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastSettlementTimestamp',
-			address: priceOracle,
-			args: [],
-		})
-		assert.strictEqual(finalVault.coverageCommitmentAttoEth, finalCoverageCommitmentAttoEth, 'immediate operations should execute in transaction order against the cached price')
-		assert.strictEqual(await getLastPrice(client, priceOracle), settledPrice, 'immediate operations should not mutate the accepted cached price')
-		assert.strictEqual(finalSettlementTimestamp, settlementTimestamp, 'immediate operations should not manufacture additional oracle settlements')
 	})
 
 	test('empty-vault withdrawals cannot occupy pending oracle settlement slots', async () => {
@@ -2278,7 +2095,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('pending withdrawals that become zero-effect during execution fail without blocking the successful withdrawal', async () => {
 		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const availableRep = repDeposit / 2n
+		const availableRep = repDeposit
 		await approveAndDepositRepToVault(withdrawalClient, availableRep, questionId)
 		const costAttoEth = await getRequestPriceCostAttoEth(withdrawalClient, priceOracle)
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(withdrawalClient, priceOracle)
@@ -2302,40 +2119,14 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(secondStagedOperation[1], zeroAddress, 'zero-effect pending withdrawal should be consumed')
 	})
 
-	test('liquidations too close to the threshold are rejected even when the oracle price is valid', async () => {
-		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
-		const targetCoverageCommitmentAttoEth = 75n * 10n ** 18n
-		const coverageCommitmentTransferAttoEth = 10n * 10n ** 18n
-		const nearThresholdPrice = 7n * 10n ** 18n
-		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-
-		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
-		await depositRepToVault(liquidatorClient, securityPool, repDeposit)
-
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetCoverageCommitment, client.account.address, targetCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
-		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
-		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
-
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, coverageCommitmentTransferAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, nearThresholdPrice, costAttoEth)
-		await handleOracleReporting(client, mockWindow, priceOracle, nearThresholdPrice)
-
-		const targetVault = await getSecurityVault(client, securityPool, client.account.address)
-		const liquidatorVault = await getSecurityVault(client, securityPool, liquidatorClient.account.address)
-		const stagedOperation = await getStagedOperation(client, priceOracle, 2n)
-
-		assert.strictEqual(targetVault.coverageCommitmentAttoEth, targetCoverageCommitmentAttoEth, 'coverage commitment')
-		assert.strictEqual(liquidatorVault.coverageCommitmentAttoEth, 0n, 'near-threshold liquidations must not transfer coverage commitment to the liquidator vault')
-		assert.strictEqual(stagedOperation[1], zeroAddress, 'near-threshold liquidation attempts should be consumed as failed staged operations')
-	})
-
 	test('staged operations can only be executed once', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
-		const successfulCoverageCommitmentAttoEth = repDeposit / 4n
+		const successfulCapacityOwnershipAttoRep = repDeposit / 4n
 		const manualOperationId = 5n
 
 		await fillPendingSettlementOperationList(costAttoEth, queuedOperationCostAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
-		await queueStagedOperation(OperationType.SetCoverageCommitment, client.account.address, successfulCoverageCommitmentAttoEth, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await queueStagedOperation(OperationType.WithdrawRep, client.account.address, successfulCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await executeStagedOperation(client, priceOracle, manualOperationId)
@@ -2345,7 +2136,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('non-liquidation staged operations require the initiator vault as target', async () => {
 		const otherVault = addressString(TEST_ADDRESSES[1])
-		const nonLiquidationOperations = [OperationType.WithdrawRep, OperationType.SetCoverageCommitment]
+		const nonLiquidationOperations = [OperationType.WithdrawRep]
 
 		for (const operation of nonLiquidationOperations) {
 			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /Self operation target mismatch/)
@@ -2367,7 +2158,9 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const expiredExecutionHash = await executeStagedOperation(client, priceOracle, manualOperationId)
 		const expiredOperation = await getStagedOperation(client, priceOracle, manualOperationId)
-		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
+		const expiredExecutionReceipt = await client.waitForTransactionReceipt({
+			hash: expiredExecutionHash,
+		})
 		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
 		if (executionLog === undefined) throw new Error('missing expired liquidation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired liquidation should be consumed after execution attempt')
@@ -2384,19 +2177,21 @@ describe('Price Oracle Refund Security Tests', () => {
 		const manualOperationId = 5n
 
 		await fillPendingSettlementOperationList(costAttoEth, queuedOperationCostAttoEth, selfOperationTimeoutSeconds)
-		await queueStagedOperation(OperationType.SetCoverageCommitment, client.account.address, 1n, selfOperationTimeoutSeconds)
+		await queueStagedOperation(OperationType.WithdrawRep, client.account.address, 1n, selfOperationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(selfOperationTimeoutSeconds + 1n)
 
 		const expiredExecutionHash = await executeStagedOperation(client, priceOracle, manualOperationId)
 		const expiredOperation = await getStagedOperation(client, priceOracle, manualOperationId)
-		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
+		const expiredExecutionReceipt = await client.waitForTransactionReceipt({
+			hash: expiredExecutionHash,
+		})
 		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
 		if (executionLog === undefined) throw new Error('missing expired self-operation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
 		assert.strictEqual(executionLog.args.operationId, manualOperationId)
-		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.SetCoverageCommitment))
+		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.WithdrawRep))
 		assert.strictEqual(executionLog.args.success, false)
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})

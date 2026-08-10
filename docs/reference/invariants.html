@@ -558,7 +558,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Anyone may trigger permissionless settlement, but the caller cannot choose its beneficiary. Each transfer or REP-backing-unit credit goes only to the vault, bidder, depositor, or share holder recorded for that claim.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP remains pool-held while the corresponding REP backing units and coverage commitment are credited to Bob's vault.</p>
+							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP remains pool-held while the corresponding REP backing units and capacity ownership are credited to Bob's vault.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -707,8 +707,8 @@
 						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Tracked complete-set collateral never exceeds total coverage commitment. New complete sets additionally use only vault-assigned, fee-eligible coverage commitment as capacity, so an unclaimed truth-auction allocation cannot secure new open interest. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral.</div>
-							<p class="invariant-example"><strong>Example:</strong> With 10 ETH of coverage commitment, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH.</p>
+							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. Total ownership includes any unclaimed truth-auction allocation, so that allocation can provide minting headroom before it becomes fee-eligible. Existing open interest is not deleted when later repricing lowers live capacity, so this is not a continuous collateral-below-capacity invariant. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
+							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A later REP price change can lower capacity below 9 ETH without changing the existing open interest or ownership records.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -732,8 +732,8 @@
 						<summary><code>BAL-04</code><span class="invariant-title">REP coverage boundaries</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At the latest valid REP-per-ETH price, setting a coverage commitment requires the affected vault to remain non-liquidatable and the aggregate pool totals to independently pass the same two health tests. Associated REP may equal coverage commitment times the pool multiplier because ordinary liquidation requires a strict shortfall. For positive coverage commitment, pool-held vault REP backing must be strictly greater than coverage commitment times the effective pool-held vault REP backing multiplier: the greater of the halfway migration multiplier and the 10,500-BPS liquidation-award reserve. Equality is unsafe. Later REP withdrawals and escalation deposits preserve both boundaries for the affected vault and aggregate pool.</div>
-							<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH with a 2× pool multiplier and a 1.5× migration multiplier, a 1 ETH coverage commitment may have exactly 200 associated REP, but it needs more than 150 pool-held vault REP backing. Exactly 150 pool-held vault REP backing is unsafe. Both the vault and aggregate totals must pass this example.</p>
+							<div class="invariant-property">A REP withdrawal or escalation deposit must leave the affected vault and aggregate pool totals independently passing both live open-interest health branches. A delegated liquidation receiver must pass both branches after accepting debt; liquidation does not require the unhealthy target to become healthy. Subsequent repricing may make an existing position unhealthy without deleting its open interest, enabling liquidation rather than retroactively reverting the price change. The associated-REP branch may count locally dispute-staked REP; the free-REP branch counts only pool-held vault REP and uses at least the 10,500-BPS liquidation-award reserve. Required backing rounds upward. A delegated receiver's factor of 10,000 is exactly the protocol minimum, and any higher approved factor multiplies both branches at execution.</div>
+							<p class="invariant-example"><strong>Example:</strong> A receiver approved at 12,000 BPS must retain 1.2× the upward-rounded associated-REP requirement and 1.2× the upward-rounded free-REP requirement after accepting live debt. Passing only one branch is insufficient.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -746,7 +746,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Coverage commitment and withdrawal checks</a>
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Capacity ownership and withdrawal checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -829,12 +829,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible coverage commitment equals summed live vault coverage commitment, and uncheckpointed coverage commitment equals coverage commitment whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated coverage commitments remain pending outside those pool aggregates. A <code>PoolForked</code>
-								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total coverage commitment equals fee-eligible coverage commitment plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction coverage commitment exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
+								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible capacity ownership equals summed live vault capacity ownership, and uncheckpointed capacity ownership equals capacity ownership whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated capacity ownerships remain pending outside those pool aggregates. A <code>PoolForked</code>
+								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total capacity ownership equals fee-eligible capacity ownership plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction capacity ownership exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
 								<a href="../explanation/truth-auctions.html#clearing">auction settlement specification</a>
 								defines that zero-purchase allocation rule.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Migrating one of two 3 ETH vault coverage commitments leaves the parent's frozen 6 ETH total unchanged and records 3 ETH as pending in the child. With purchased REP, claims move the remaining 3 ETH from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remaining 3 ETH stays unassigned and ineligible.</p>
+							<p class="invariant-example"><strong>Example:</strong> Migrating one of two vaults that each own 3 REP of capacity leaves the parent's frozen 6 REP total unchanged and records 3 REP as pending in the child. With purchased REP, claims move the remaining 3 REP from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remainder stays unassigned and ineligible.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1034,8 +1034,8 @@
 						<summary><code>VAULT-02</code><span class="invariant-title">Liquidation conservation and freshness</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A liquidation transfers rather than creates aggregate REP backing units. It moves only coverage commitment whose complete fixed 5%-bonus award is funded by target pool-held vault REP backing. Escalation claims, accrued fees, and pool-held vault REP backing surplus always remain with the target vault. A maximum request records untransferred residual coverage commitment as bad debt and removes it from active and fee-eligible coverage commitment without minting REP backing units or diluting another vault owner. The resulting liquidator must meet coverage rules whenever coverage commitment moves; the target may remain unhealthy so repeated bounded liquidations can finish the job. Execution rejects changed target REP backing units or coverage commitment and then re-evaluates health from live balances. See <a href="../explanation/liquidations.html#queue-semantics">Queued Execution</a> for the canonical stale-quote lifecycle.</div>
-							<p class="invariant-example"><strong>Example:</strong> If the target adds REP after a liquidation is staged, execution rejects the stale snapshot. A keeper may quote the new state, but cannot receive the newly assigned REP backing under the stale quote.</p>
+							<div class="invariant-property">A liquidation transfers rather than creates aggregate REP backing units and capacity ownership, and total capacity ownership across target and receiver is conserved exactly. A nominal debt quote is bounded by the request, target open interest, and the amount whose complete REP award the target can fund. Proportional ownership is rounded downward; moved debt is the receiver's exact live open-interest increase and is bounded by that quote. A delegated route additionally bounds moved debt by its staged approval reservation; the self-receiving route has no approval reservation. On a full-target request, target-local bad debt is target open interest minus exact moved debt, so it may include an award-unfunded slice and integer-allocation residue. Because vault open interest is independently derived with upward rounding, exact before-and-after vault debt deltas are not a conservation identity. Unmatched ownership, escalation claims, accrued fees, and pool-held REP surplus remain with the target. Execution rejects changed target snapshots, enforces the receiver's live post-transfer health factor, and every delegated terminal path consumes or releases its reservation exactly once.</div>
+							<p class="invariant-example"><strong>Example:</strong> If the target or receiver changes after staging, execution may fail safely and release the full reservation. The operator receives no ownership merely for submitting the transaction.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1061,7 +1061,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">An escalation claim is permanently bound to the depositor committed in its carry leaf and has no transfer path or parent-OI migration power. Liquidation cannot read, move, or acquire it. Final settlement pays the committed depositor after proof verification and replay protection.</div>
-							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's coverage commitment leaves every escalation claim unchanged, and locking that claim cannot increase the OI routed to any child.</p>
+							<p class="invariant-example"><strong>Example:</strong> Moving half a vault's capacity ownership leaves every escalation claim unchanged, and locking that claim cannot increase the OI routed to any child.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1085,7 +1085,7 @@
 						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The historical vault registry is append-only and unique. Its active index is a unique subset of that history. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, coverage commitment, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
+							<div class="invariant-property">The historical vault registry is append-only and unique. Its active index is a unique subset of that history. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, capacity ownership, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
 							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in both active and historical pagination until optional vault cleanup synchronizes and prunes it.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1144,7 +1144,7 @@
 						<summary><code>FORK-02</code><span class="invariant-title">Immutable fork snapshot</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">When the parent first enters fork mode, it captures fork time, collateral, REP buckets, total REP backing units, escalation state, and coverage commitment exactly once. Those immutable values are the common basis for every child of that fork.</div>
+							<div class="invariant-property">When the parent first enters fork mode, it captures fork time, collateral, REP buckets, total REP backing units, escalation state, and capacity ownership exactly once. Those immutable values are the common basis for every child of that fork.</div>
 							<p class="invariant-example"><strong>Example:</strong> REP sent unsolicited to the parent after fork mode begins cannot change the REP snapshot used to initialize a later-created No child.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1269,7 +1269,7 @@
 						<summary><code>FORK-07</code><span class="invariant-title">Single-use non-escrowed vault migration</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Vault migration credits one child and clears the corresponding parent REP backing units and coverage commitment before reuse. It checkpoints and retains claimable fees in the parent vault while routing proportional settlement collateral separately at pool level.</div>
+							<div class="invariant-property">Vault migration credits one child and clears the corresponding parent REP backing units and capacity ownership before reuse. It checkpoints and retains claimable fees in the parent vault while routing proportional settlement collateral separately at pool level.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Alice migrates her non-escrowed vault accounting to the Yes child, a second migration call cannot credit the same parent REP backing units to the No child.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1726,7 +1726,7 @@
 						<summary><code>ESC-13</code><span class="invariant-title">Non-decision threshold and live start-bond arithmetic</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For a positive fork threshold <code>F</code>, non-decision requires <code>⌈F / 2⌉</code> REP on two outcomes. Therefore the two threshold balances total at least <code>F</code>, while one attoREP less on both outcomes totals strictly less than <code>F</code>. The configured start bond is at least 1 REP and a new origin requires the live non-decision threshold to exceed it. If an existing pool's live threshold later falls to or below that configured bond, ordinary game deployment uses <code>nonDecisionThresholdAttoRep - 1</code>, provided the threshold exceeds one attoREP.</div>
+							<div class="invariant-property">For a positive fork threshold <code>F</code>, non-decision requires <code>⌈F / 2⌉</code> REP on two outcomes. Therefore the two threshold balances total at least <code>F</code>, while one attoREP less on both outcomes totals strictly less than <code>F</code>. At pool construction, the configured start bond is <code>max(1 REP, theoretical REP supply / 10,000,000)</code>, and a new origin requires the live non-decision threshold to exceed it. If an existing pool's live threshold later falls to or below that configured bond, ordinary game deployment clamps the live start bond to <code>nonDecisionThresholdAttoRep - 1</code>, provided the threshold exceeds one attoREP.</div>
 							<p class="invariant-example"><strong>Example:</strong> If <code>F = 5</code>, non-decision requires 3 REP on two outcomes, so the two balances hold 6 REP; balances of 2 and 2 remain below the 5 REP fork threshold.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1787,7 +1787,7 @@
 				<h2>REP/ETH Oracle Operations</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
-					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, coverage commitment changes, pool assets, or cumulative operations that use an accepted price.</p>
+					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, capacity ownership changes, pool assets, or cumulative operations that use an accepted price.</p>
 					<p>The protocol also makes no bounded-liveness claim for a pending sponsor lane. Every valid dispute restarts settlement, incurs transaction execution, and must fund the contract-specified replacement position. Under ordinary non-dust parameters, protocol fees and the required position also accumulate; before the escalation halt, integer flooring can leave dust-sized rounds unchanged. A participant willing and able to keep submitting and funding disputes may therefore delay unrelated users without a coordinator-level deadline. This paid, capital-unbounded pause is intentional and is not a violation of a Zoltar liveness invariant.</p>
 					<p>Security review should verify the correction-profit calculation, report accounting, dispute access, and the stated inclusion assumption. A concrete bypass of the required position or fee, capital reuse, invalid deadline transition, or cache-conformance failure remains a finding. The mere absence of a report-notional bound or absolute pending-report duration does not.</p>
 				</div>
@@ -1897,8 +1897,8 @@
 						<summary><code>ORA-05</code><span class="invariant-title">Staged operation targets</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Withdrawals and coverage commitment changes target the initiating vault; liquidations target another vault and fail when the protected snapshot becomes stale.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice can stage her own REP withdrawal, but a staged liquidation names Bob and fails if Bob changes his coverage commitment before execution.</p>
+							<div class="invariant-property">Withdrawals target the initiating vault. Liquidations name separate operator, receiver, and target roles; the receiver must differ from the target, while the operator may equal either. A liquidation fails when the protected target REP-backing-unit or capacity-ownership snapshot becomes stale.</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice can stage her own REP withdrawal. A liquidation operator can target Bob, but its receiver cannot be Bob; execution fails if Bob changes his REP backing units or capacity ownership after staging.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2078,7 +2078,7 @@
 						<summary><code>AUC-03</code><span class="invariant-title">Single-use bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Each bid is settled or refunded at most once; claimed state is set before an external ETH refund. The best-effort push is gas-bounded, and any rejected, reverted, or gas-exhausted positive refund is moved to bidder-specific pull escrow without reverting the bid's REP or coverage commitment settlement.</div>
+							<div class="invariant-property">Each bid is settled or refunded at most once; claimed state is set before an external ETH refund. The best-effort push is gas-bounded, and any rejected, reverted, or gas-exhausted positive refund is moved to bidder-specific pull escrow without reverting the bid's REP or capacity ownership settlement.</div>
 							<p class="invariant-example"><strong>Example:</strong> A bidder whose refund callback reenters, rejects ETH, or consumes its complete callback budget cannot withdraw the same bid a second time or starve the remaining settlement because the bid is already marked claimed and the push is gas-bounded; deferred ETH remains available through <code>withdrawPendingEthRefund</code>.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2102,8 +2102,8 @@
 						<summary><code>AUC-04</code><span class="invariant-title">Claim-order independence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, and coverage commitment results independent of post-finalization claim order.</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and coverage commitment as Bob claiming before Alice.</p>
+							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, and capacity ownership results independent of post-finalization claim order.</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and capacity ownership as Bob claiming before Alice.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2150,8 +2150,8 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated coverage commitment to the bid's recorded vault. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps coverage commitment rounding independent of claim order. A winning dust bid still receives a positive fixed-position coverage commitment share when its REP allocation rounds to zero.</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid; the claim adds the REP backing units and deterministic coverage commitment share assigned to that bid while the purchased REP remains pool-held. If a dust bid's REP share is zero but its coverage commitment share is positive, claiming that bid alone still credits the coverage commitment.</p>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated capacity ownership to the bid's recorded vault. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero.</div>
+							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid; the claim adds the REP backing units and deterministic capacity ownership share assigned to that bid while the purchased REP remains pool-held. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

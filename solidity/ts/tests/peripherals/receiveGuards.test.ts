@@ -76,8 +76,8 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-		const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
@@ -124,8 +124,8 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-		const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)

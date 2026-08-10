@@ -2,11 +2,7 @@
 pragma solidity 0.8.35;
 
 contract OwnForkEscalationClaimHarness {
-	function previewOwnForkEscalationBackingUnitsToCredit(
-		uint256 childRepAmountAttoRep,
-		uint256 childBackingUnitsDenominator,
-		uint256 auctionableAttoRepAtFork
-	) external pure returns (uint256 backingUnitsToCredit) {
+	function previewOwnForkEscalationBackingUnitsToCredit(uint256 childRepAmountAttoRep, uint256 childBackingUnitsDenominator, uint256 auctionableAttoRepAtFork) external pure returns (uint256 backingUnitsToCredit) {
 		require(auctionableAttoRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
 		require(childRepAmountAttoRep > 0, 'Own-fork child REP amount must be positive');
 		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
@@ -15,11 +11,7 @@ contract OwnForkEscalationClaimHarness {
 			auctionableAttoRepAtFork;
 	}
 
-	function previewOwnForkEscalationBackingUnitsSequence(
-		uint256[] calldata childRepAmountsAttoRep,
-		uint256 childBackingUnitsDenominator,
-		uint256 auctionableAttoRepAtFork
-	) external pure returns (uint256[] memory backingUnitsCredits, uint256 totalBackingUnitsClaimed) {
+	function previewOwnForkEscalationBackingUnitsSequence(uint256[] calldata childRepAmountsAttoRep, uint256 childBackingUnitsDenominator, uint256 auctionableAttoRepAtFork) external pure returns (uint256[] memory backingUnitsCredits, uint256 totalBackingUnitsClaimed) {
 		require(auctionableAttoRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
 		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
 		backingUnitsCredits = new uint256[](childRepAmountsAttoRep.length);
@@ -37,11 +29,7 @@ contract OwnForkEscalationClaimHarness {
 		totalBackingUnitsClaimed = backingUnitsClaimed;
 	}
 
-	function previewOwnForkEscalationSettlementCollateralSequence(
-		uint256[] calldata childRepAmountsAttoRep,
-		uint256 parentSettlementCollateralAtForkAttoEth,
-		uint256 auctionableAttoRepAtFork
-	)
+	function previewOwnForkEscalationSettlementCollateralSequence(uint256[] calldata childRepAmountsAttoRep, uint256 parentSettlementCollateralAtForkAttoEth, uint256 auctionableAttoRepAtFork)
 		external
 		pure
 		returns (

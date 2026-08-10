@@ -6,7 +6,7 @@ type ForkDataView = {
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	migratedAttoRep: bigint
-	auctionedCoverageCommitmentAttoEth: bigint
+	auctionedCapacityOwnershipAttoRep: bigint
 	escalationElapsedAtFork: bigint
 	escalationStartBondAtForkAttoRep: bigint
 	escalationNonDecisionThresholdAtForkAttoRep: bigint
@@ -16,14 +16,14 @@ type ForkDataView = {
 }
 
 export function requireForkDataView(value: unknown): ForkDataView {
-	const [auctionableAttoRepAtFork, truthAuctionAddress, truthAuctionStartedAt, migratedAttoRep, auctionedCoverageCommitmentAttoEth, escalationElapsedAtFork, escalationStartBondAtForkAttoRep, escalationNonDecisionThresholdAtForkAttoRep, forkOwnSecurityPool, unresolvedEscalationAtFork, forkOutcomeIndex] =
+	const [auctionableAttoRepAtFork, truthAuctionAddress, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, escalationElapsedAtFork, escalationStartBondAtForkAttoRep, escalationNonDecisionThresholdAtForkAttoRep, forkOwnSecurityPool, unresolvedEscalationAtFork, forkOutcomeIndex] =
 		requireTupleValue(value, 11, 'security pool fork data')
 	return {
 		auctionableAttoRepAtFork: requireBigintValue(auctionableAttoRepAtFork, 'security pool fork data auctionable REP at fork'),
 		truthAuctionAddress: requireAddressValue(truthAuctionAddress, 'security pool fork data truth auction address'),
 		truthAuctionStartedAt: requireBigintValue(truthAuctionStartedAt, 'security pool fork data truth auction start time'),
 		migratedAttoRep: requireBigintValue(migratedAttoRep, 'security pool fork data migrated REP'),
-		auctionedCoverageCommitmentAttoEth: requireBigintValue(auctionedCoverageCommitmentAttoEth, 'security pool fork data auctioned coverage commitment'),
+		auctionedCapacityOwnershipAttoRep: requireBigintValue(auctionedCapacityOwnershipAttoRep, 'security pool fork data auctioned capacity ownership'),
 		escalationElapsedAtFork: requireBigintValue(escalationElapsedAtFork, 'security pool fork data escalation elapsed at fork'),
 		escalationStartBondAtForkAttoRep: requireBigintValue(escalationStartBondAtForkAttoRep, 'security pool fork data escalation start bond at fork'),
 		escalationNonDecisionThresholdAtForkAttoRep: requireBigintValue(escalationNonDecisionThresholdAtForkAttoRep, 'security pool fork data escalation non-decision threshold at fork'),

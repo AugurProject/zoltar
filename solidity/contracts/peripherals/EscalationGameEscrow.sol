@@ -7,32 +7,16 @@ import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.s
 import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameEscrow is EscalationGameCarry {
-	function getLocalUnresolvedPrincipalByVaultAndOutcome(
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome
-	) external view returns (uint256) {
+	function getLocalUnresolvedPrincipalByVaultAndOutcome(address vault, BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(outcome)];
 	}
 
-	function recordForkedEscrowForOutcome(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 sourcePrincipalAttoRep,
-		uint256 childRepAmountAttoRep
-	) external onlySecurityPoolOrForker {
-		_delegateDepositCall(
-			abi.encodeCall(
-				EscalationGameDepositDelegate.recordForkedEscrowForOutcome,
-				(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep)
-			)
-		);
+	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external onlySecurityPoolOrForker {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.recordForkedEscrowForOutcome, (depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep)));
 	}
 
-	function getForkedEscrowByVaultAndOutcome(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome
-	)
+	function getForkedEscrowByVaultAndOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome)
 		external
 		view
 		returns (
@@ -52,23 +36,15 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		);
 	}
 
-	function exportVaultUnresolvedTotals(
-		address vault,
-		address repReceiver
-	) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcomeAttoRep) {
+	function exportVaultUnresolvedTotals(address vault, address repReceiver) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcomeAttoRep) {
 		return _exportVaultUnresolvedTotals(vault, repReceiver, true);
 	}
 
-	function exportVaultUnresolvedTotalsWithoutTransfer(
-		address vault
-	) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcomeAttoRep) {
+	function exportVaultUnresolvedTotalsWithoutTransfer(address vault) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcomeAttoRep) {
 		return _exportVaultUnresolvedTotals(vault, address(0x0), false);
 	}
 
-	function exportForkedEscrowByOutcome(
-		address vault,
-		address repReceiver
-	)
+	function exportForkedEscrowByOutcome(address vault, address repReceiver)
 		external
 		onlySecurityPoolOrForker
 		returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep)
@@ -77,9 +53,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return _exportForkedEscrowByOutcome(vault, repReceiver, true);
 	}
 
-	function exportForkedEscrowByOutcomeWithoutTransfer(
-		address vault
-	)
+	function exportForkedEscrowByOutcomeWithoutTransfer(address vault)
 		external
 		onlySecurityPoolOrForker
 		returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep)
@@ -95,11 +69,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		}
 	}
 
-	function _exportVaultUnresolvedTotals(
-		address vault,
-		address repReceiver,
-		bool transferRep
-	) private returns (uint256[3] memory principalByOutcomeAttoRep) {
+	function _exportVaultUnresolvedTotals(address vault, address repReceiver, bool transferRep) private returns (uint256[3] memory principalByOutcomeAttoRep) {
 		require(vault != address(0x0), 'Vault is zero');
 		require(!localUnresolvedTotalsExportedByVault[vault], 'Vault totals exported');
 		localUnresolvedTotalsExportedByVault[vault] = true;
@@ -110,24 +80,14 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			principalToTransferAttoRep += principal;
 			delete localUnresolvedPrincipalByVaultAndOutcome[vault][outcomeIndex];
 		}
-		emit VaultUnresolvedTotalsExported(
-			vault,
-			repReceiver,
-			principalByOutcomeAttoRep,
-			principalToTransferAttoRep,
-			transferRep
-		);
+		emit VaultUnresolvedTotalsExported(vault, repReceiver, principalByOutcomeAttoRep, principalToTransferAttoRep, transferRep);
 		if (principalToTransferAttoRep == 0) return principalByOutcomeAttoRep;
 		_consumeUnresolvedRepForVault(vault, principalToTransferAttoRep);
 		_consumeEscrowedRepForOwner(vault, principalToTransferAttoRep);
 		if (transferRep) _safeTransferRep(repReceiver, principalToTransferAttoRep);
 	}
 
-	function _exportForkedEscrowByOutcome(
-		address vault,
-		address repReceiver,
-		bool transferRep
-	) private returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep) {
+	function _exportForkedEscrowByOutcome(address vault, address repReceiver, bool transferRep) private returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep) {
 		require(vault != address(0x0), 'Vault is zero');
 		uint256 totalChildRepToTransferAttoRep;
 		bool exported;
@@ -146,14 +106,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			exported = true;
 		}
 		if (exported) {
-			emit ForkedEscrowExported(
-				vault,
-				repReceiver,
-				sourcePrincipalByOutcomeAttoRep,
-				childRepByOutcomeAttoRep,
-				totalChildRepToTransferAttoRep,
-				transferRep
-			);
+			emit ForkedEscrowExported(vault, repReceiver, sourcePrincipalByOutcomeAttoRep, childRepByOutcomeAttoRep, totalChildRepToTransferAttoRep, transferRep);
 		}
 		if (totalChildRepToTransferAttoRep == 0) return (sourcePrincipalByOutcomeAttoRep, childRepByOutcomeAttoRep);
 		_consumeEscrowedRepForOwner(vault, totalChildRepToTransferAttoRep);

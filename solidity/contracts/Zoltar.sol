@@ -29,71 +29,21 @@ contract Zoltar {
 	}
 	mapping(address => mapping(uint248 => AddressRepMigration)) private migrationRepBalances; // userAddress -> fromUniverse
 
-	event UniverseForked(
-		address indexed forker,
-		uint248 indexed universeId,
-		uint256 indexed questionId,
-		uint256 forkTime,
-		uint256 forkThresholdAttoRep,
-		uint256 migrationRepBalanceAttoRep,
-		uint256 universeTheoreticalSupplyAttoRep
-	);
-	event DeployChild(
-		address deployer,
-		uint248 indexed universeId,
-		uint256 indexed outcomeIndex,
-		uint248 indexed childUniverseId,
-		ReputationToken childReputationToken,
-		uint256 childUniverseTheoreticalSupplyAttoRep
-	);
-	event MigrationRepAdded(
-		address indexed migrator,
-		uint248 indexed universeId,
-		uint256 amountAttoRep,
-		uint256 migrationRepBalanceAttoRep,
-		uint256 universeTheoreticalSupplyAttoRep
-	);
-	event MigrationRepSplit(
-		address indexed migrator,
-		address recipient,
-		uint248 indexed universeId,
-		uint256 outcomeIndex,
-		uint248 indexed childUniverseId,
-		uint256 amountAttoRep,
-		uint256 childMigrationRepAmountAttoRep
-	);
-	event UniverseInitialized(
-		uint248 indexed universeId,
-		uint256 forkTime,
-		uint256 forkQuestionId,
-		uint256 forkingOutcomeIndex,
-		ReputationToken reputationToken,
-		uint248 indexed parentUniverseId,
-		uint256 universeTheoreticalSupplyAttoRep
-	);
-	event RepBurned(
-		address indexed burner,
-		uint248 indexed universeId,
-		uint256 amountAttoRep,
-		uint256 universeTheoreticalSupplyAttoRep
-	);
+	event UniverseForked(address indexed forker, uint248 indexed universeId, uint256 indexed questionId, uint256 forkTime, uint256 forkThresholdAttoRep, uint256 migrationRepBalanceAttoRep, uint256 universeTheoreticalSupplyAttoRep);
+	event DeployChild(address deployer, uint248 indexed universeId, uint256 indexed outcomeIndex, uint248 indexed childUniverseId, ReputationToken childReputationToken, uint256 childUniverseTheoreticalSupplyAttoRep);
+	event MigrationRepAdded(address indexed migrator, uint248 indexed universeId, uint256 amountAttoRep, uint256 migrationRepBalanceAttoRep, uint256 universeTheoreticalSupplyAttoRep);
+	event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep);
+	event UniverseInitialized(uint248 indexed universeId, uint256 forkTime, uint256 forkQuestionId, uint256 forkingOutcomeIndex, ReputationToken reputationToken, uint248 indexed parentUniverseId, uint256 universeTheoreticalSupplyAttoRep);
+	event RepBurned(address indexed burner, uint248 indexed universeId, uint256 amountAttoRep, uint256 universeTheoreticalSupplyAttoRep);
 
 	uint256 public immutable forkThresholdDivisor;
 	uint256 public immutable forkBurnDivisor;
 	ReputationToken public immutable genesisReputationToken;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(
-		ZoltarQuestionData _zoltarQuestionData,
-		ReputationToken _genesisReputationToken,
-		uint256 _forkThresholdDivisor,
-		uint256 _forkBurnDivisor
-	) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, ReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
-		require(
-			_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR,
-			'Zoltar fork burn divisor must be at least five'
-		);
+		require(_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR, 'Zoltar fork burn divisor must be at least five');
 		require(address(_genesisReputationToken).code.length != 0, 'Genesis REP token address must contain code');
 		zoltarQuestionData = _zoltarQuestionData;
 		genesisReputationToken = _genesisReputationToken;
@@ -146,10 +96,7 @@ contract Zoltar {
 		// than binding them to a specific universe. Any ended question can force a fork
 		// in any unforked universe, and downstream protocols are expected to enforce any
 		// stricter universe/question relationship they require.
-		require(
-			zoltarQuestionData.questionCreatedTimestamp(questionId) > 0,
-			'Question does not exist in ZoltarQuestionData'
-		);
+		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist in ZoltarQuestionData');
 		uint256 endTime = zoltarQuestionData.getQuestionEndDate(questionId);
 		require(block.timestamp >= endTime, 'Question has not ended, so it cannot force a fork yet');
 		universes[universeId].forkTime = block.timestamp;
@@ -163,15 +110,7 @@ contract Zoltar {
 		childUniverseTheoreticalSupplySnapshotsAttoRep[universeId] =
 			universeTheoreticalSupplies[universeId] + migrationRepBalanceAttoRep;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
-		emit UniverseForked(
-			msg.sender,
-			universeId,
-			questionId,
-			universes[universeId].forkTime,
-			forkThresholdAttoRep,
-			migrationRepBalanceAttoRep,
-			universeTheoreticalSupplies[universeId]
-		);
+		emit UniverseForked(msg.sender, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
 	// Burns REP without creating migration credit. Escalation games use this path
@@ -207,45 +146,20 @@ contract Zoltar {
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so child universes are unavailable');
-		require(
-			!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex),
-			'Malformed outcome index for the universe fork question'
-		);
+		require(!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex), 'Malformed outcome index for the universe fork question');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
 		// Prevent overwriting an existing child universe
-		require(
-			address(universes[childUniverseId].reputationToken) == address(0),
-			'Child universe already deployed for this outcome'
-		);
-		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(
-			address(this)
-		);
+		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed for this outcome');
+		ReputationToken childReputationToken = new ReputationToken{salt: bytes32(uint256(childUniverseId))}(address(this));
 		uint256 childUniverseTheoreticalSupplyAttoRep = childUniverseTheoreticalSupplySnapshotsAttoRep[universeId];
 		childReputationToken.setMaxTheoreticalSupplyAttoRep(childUniverseTheoreticalSupplyAttoRep);
 		universeTheoreticalSupplies[childUniverseId] = childUniverseTheoreticalSupplyAttoRep;
-		universes[childUniverseId] = Universe(
-			0,
-			universe.forkQuestionId,
-			outcomeIndex,
-			childReputationToken,
-			universeId
-		);
+		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
-		emit DeployChild(
-			msg.sender,
-			universeId,
-			outcomeIndex,
-			childUniverseId,
-			childReputationToken,
-			childUniverseTheoreticalSupplyAttoRep
-		);
+		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken, childUniverseTheoreticalSupplyAttoRep);
 	}
 
-	function getDeployedChildUniverses(
-		uint248 universeId,
-		uint256 startIndex,
-		uint256 count
-	)
+	function getDeployedChildUniverses(uint248 universeId, uint256 startIndex, uint256 count)
 		external
 		view
 		returns (uint256[] memory outcomeIndexes, uint248[] memory childUniverseIds, Universe[] memory childUniverses)
@@ -280,13 +194,7 @@ contract Zoltar {
 		_burnRep(universe.reputationToken, msg.sender, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep += amountAttoRep;
-		emit MigrationRepAdded(
-			msg.sender,
-			universeId,
-			amountAttoRep,
-			migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep,
-			universeTheoreticalSupplies[universeId]
-		);
+		emit MigrationRepAdded(msg.sender, universeId, amountAttoRep, migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		Universe memory universe = universes[universeId];
@@ -294,12 +202,7 @@ contract Zoltar {
 		splitRepInternal(universeId, amountAttoRep, msg.sender, outcomeIndexes);
 	}
 
-	function splitRepInternal(
-		uint248 universeId,
-		uint256 amountAttoRep,
-		address recipient,
-		uint256[] memory outcomeIndexes
-	) private {
+	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, address recipient, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
 		// Fork migration intentionally duplicates the holder's migration balance across the
 		// selected child universes. For example, splitting 1 parent-universe REP into the
@@ -308,37 +211,19 @@ contract Zoltar {
 		// migration balance before child-universe REP is minted.
 		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
 			uint256 outcomeIndex = outcomeIndexes[i];
-			require(
-				!zoltarQuestionData.isMalformedAnswerOption(questionId, outcomeIndex),
-				'Malformed outcome index for the fork migration question'
-			);
+			require(!zoltarQuestionData.isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed outcome index for the fork migration question');
 			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
 			if (address(universes[childUniverseId].reputationToken) == address(0x0))
 				deployChild(universeId, outcomeIndex);
 			migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] +=
 				amountAttoRep;
-			require(
-				migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] <=
-					migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep,
-				'Cannot migrate more than internal balance: requested child REP exceeds sender migration REP'
-			);
+			require(migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] <= migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, 'Cannot migrate more than internal balance: requested child REP exceeds sender migration REP');
 			universes[childUniverseId].reputationToken.mint(recipient, amountAttoRep);
-			emit MigrationRepSplit(
-				msg.sender,
-				recipient,
-				universeId,
-				outcomeIndex,
-				childUniverseId,
-				amountAttoRep,
-				migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]
-			);
+			emit MigrationRepSplit(msg.sender, recipient, universeId, outcomeIndex, childUniverseId, amountAttoRep, migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]);
 		}
 	}
 
-	function getMigrationRepBalanceAttoRep(
-		address migrator,
-		uint248 universeId
-	) public view returns (uint256 migrationRepBalanceAttoRep) {
+	function getMigrationRepBalanceAttoRep(address migrator, uint248 universeId) public view returns (uint256 migrationRepBalanceAttoRep) {
 		return migrationRepBalances[migrator][universeId].migrationRepBalanceAttoRep;
 	}
 }

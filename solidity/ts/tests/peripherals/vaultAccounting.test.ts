@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { peripherals_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
 
 const depositRepToVaultEvent = {
@@ -12,6 +12,8 @@ const depositRepToVaultEvent = {
 	name: 'RepDepositedToVault',
 	type: 'event',
 } as const
+
+const MAX_UINT256 = 2n ** 256n - 1n
 
 describe('Peripherals: vault accounting', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
@@ -106,11 +108,7 @@ describe('Peripherals: vault accounting', () => {
 	})
 
 	const withdrawRepAcrossFreshOracleRounds = async (vaultClient: PeripheralsVaultAccountingFixture['client'], amount: bigint) => {
-		for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
-			const withdrawalAmount = withdrawalIndex === 4n ? amount : amount / 5n
-			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, vaultClient.account.address, withdrawalAmount, reportedRepEthPrice)
-			if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
-		}
+		await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, vaultClient.account.address, amount, reportedRepEthPrice)
 	}
 
 	test('can deposit rep and withdraw it', async () => {
@@ -144,6 +142,22 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(depositArgs.attoRepAmount, depositAmount, 'event should include the deposited REP amount')
 		strictEqualTypeSafe(depositArgs.repBackingUnits, vault.repBackingUnits, 'event should include updated vault backingUnits')
 		strictEqualTypeSafe(depositArgs.totalRepBackingUnits, totalRepBackingUnits, 'event should include updated REP backing units denominator')
+	})
+
+	test('supports a backing-only REP top-up without changing capacity ownership', async () => {
+		const emptyReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const minimumVaultRepDepositAttoRep = await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPoolAddresses.securityPool,
+			args: [],
+			functionName: 'minimumVaultRepDepositAttoRep',
+		})
+		await transferRepToAddress(client, emptyReceiver.account.address, minimumVaultRepDepositAttoRep)
+		await approveToken(emptyReceiver, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await depositRepToVault(emptyReceiver, securityPoolAddresses.securityPool, minimumVaultRepDepositAttoRep, MAX_UINT256)
+		const receiverVault = await getSecurityVault(client, securityPoolAddresses.securityPool, emptyReceiver.account.address)
+		strictEqualTypeSafe(receiverVault.capacityOwnershipAttoRep, 0n, 'backing-only top-up must not add capacity ownership')
+		assert.ok(receiverVault.repBackingUnits > 0n, 'standalone minimum top-up should initialize REP backing units')
 	})
 
 	test('zero-fee redemption emits no redemption checkpoint and does not call the recipient', async () => {
@@ -329,6 +343,7 @@ describe('Peripherals: vault accounting', () => {
 		assert.ok(totalRepBackingUnits > 0n, 'totalRepBackingUnits was zero')
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		const vaultBeforeDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const walletRepBeforeDeposit = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -390,6 +405,7 @@ describe('Peripherals: vault accounting', () => {
 
 		// Resetting to endTime makes the next transaction execute at endTime + 1, the first valid second.
 		await mockWindow.setTime(endTime)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -405,18 +421,23 @@ describe('Peripherals: vault accounting', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
-		const firstWinningDeposit = 5n * 10n ** 18n
-		const secondWinningDeposit = 5n * 10n ** 18n
-		const thirdWinningDeposit = 5n * 10n ** 18n
-		const fourthWinningDeposit = 2n * 10n ** 18n
-		const losingDeposit = 10n * 10n ** 18n
+		const firstWinningDeposit = 5n * escalationDepositUnit
+		const secondWinningDeposit = 5n * escalationDepositUnit
+		const thirdWinningDeposit = 5n * escalationDepositUnit
+		const fourthWinningDeposit = 2n * escalationDepositUnit
+		const losingDeposit = 10n * escalationDepositUnit
 		const totalWinningPrincipal = firstWinningDeposit + secondWinningDeposit + thirdWinningDeposit + fourthWinningDeposit
 		const totalPrincipalLocked = totalWinningPrincipal + losingDeposit
 		const expectedBindingCapital = losingDeposit
-		const expectedRewardEligibleCap = 15n * 10n ** 18n
-		const expectedRewardBonusPool = 6n * 10n ** 18n
-		const expectedGrossWinningPayout = 23n * 10n ** 18n
+		const expectedRewardEligibleCap = 15n * escalationDepositUnit
+		const expectedRewardBonusPool = 6n * escalationDepositUnit
+		const expectedGrossWinningPayout = 23n * escalationDepositUnit
 		const expectedWinnerProfit = expectedGrossWinningPayout - totalWinningPrincipal
 		const expectedResidualHaircut = totalPrincipalLocked - expectedGrossWinningPayout
 
@@ -463,7 +484,7 @@ describe('Peripherals: vault accounting', () => {
 		)
 		assert.deepStrictEqual(
 			winningClaimLogs.map(log => log?.args.amountToWithdrawAttoRep),
-			[7n * 10n ** 18n, 7n * 10n ** 18n, 7n * 10n ** 18n, 2n * 10n ** 18n],
+			[7n * escalationDepositUnit, 7n * escalationDepositUnit, 7n * escalationDepositUnit, 2n * escalationDepositUnit],
 			'multi-claim events should expose each new payout value',
 		)
 		assert.ok(
@@ -474,11 +495,11 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(expectedBindingCapital, losingDeposit, 'single losing side should set the binding capital in this scenario')
 		strictEqualTypeSafe(expectedRewardEligibleCap, expectedBindingCapital + expectedBindingCapital / 2n, 'reward-eligible cap should extend 50% beyond binding capital')
 		strictEqualTypeSafe(expectedRewardBonusPool, (expectedBindingCapital * 3n) / 5n, 'binding-capital reward pool should equal the unburned 60% share')
-		strictEqualTypeSafe(expectedGrossWinningPayout, 7n * 10n ** 18n + 7n * 10n ** 18n + 7n * 10n ** 18n + 2n * 10n ** 18n, 'gross winning payout should match the pooled reward schedule')
+		strictEqualTypeSafe(expectedGrossWinningPayout, 7n * escalationDepositUnit + 7n * escalationDepositUnit + 7n * escalationDepositUnit + 2n * escalationDepositUnit, 'gross winning payout should match the pooled reward schedule')
 		strictEqualTypeSafe(expectedWinnerProfit, expectedGrossWinningPayout - totalWinningPrincipal, 'winner profit should equal payout minus winning principal')
 		strictEqualTypeSafe(winningClaimAmount, expectedGrossWinningPayout, 'winning withdrawals should emit the expected gross payout across all reward-eligible deposits')
-		strictEqualTypeSafe(totalPrincipalLocked - totalWinningPrincipal, losingDeposit, 'losing side should contribute 10 REP of principal')
-		strictEqualTypeSafe(expectedResidualHaircut, 4n * 10n ** 18n, '40% of the 10 REP binding-capital region should remain as slashed residual in the pool')
+		strictEqualTypeSafe(totalPrincipalLocked - totalWinningPrincipal, losingDeposit, 'losing side should contribute ten escalation-deposit units of principal')
+		strictEqualTypeSafe(expectedResidualHaircut, 4n * escalationDepositUnit, '40% of the binding-capital region should remain as slashed residual in the pool')
 		strictEqualTypeSafe(vaultAfterWithdrawal.disputeStakedAttoRep, 0n, 'winning withdrawals should unlock all deposited REP')
 	})
 
@@ -488,9 +509,14 @@ describe('Peripherals: vault accounting', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
-		const winningDeposit = 20n * 10n ** 18n
-		const losingDeposit = 10n * 10n ** 18n
+		const winningDeposit = 20n * escalationDepositUnit
+		const losingDeposit = 10n * escalationDepositUnit
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
 		await mockWindow.advanceTime(60n * DAY)
@@ -515,6 +541,7 @@ describe('Peripherals: vault accounting', () => {
 
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 
 		const lockedDeposit = 100n * 10n ** 18n
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
@@ -542,6 +569,7 @@ describe('Peripherals: vault accounting', () => {
 		await approveAndDepositRepToVault(escrowedVault, repDeposit, questionId)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(escrowedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, escrowedVault.account.address, 0n)
 		const lockedDeposit = 100n * 10n ** 18n
 		await depositToEscalationGame(escrowedVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 		const vaultBeforeWithdrawAttempt = await getSecurityVault(escrowedVault, securityPoolAddresses.securityPool, escrowedVault.account.address)
@@ -582,6 +610,10 @@ describe('Peripherals: vault accounting', () => {
 		const vaultRepBackingBeforeDonationAttoRep = await getVaultRepClaim(client.account.address)
 		await mockWindow.setTime(endTime + 10000n)
 		await transferRepToAddress(benefactorClient, securityPoolAddresses.securityPool, repDeposit)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escrowAmount = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBackingAfterDonationAttoRep = await getVaultRepClaim(client.account.address)
@@ -589,13 +621,13 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(vaultBeforeEscrow.repBackingUnits, vaultBeforeDonation.repBackingUnits, 'a direct pool-held REP donation must not mint REP backing units')
 		assert.ok(vaultRepBackingAfterDonationAttoRep > vaultRepBackingBeforeDonationAttoRep, 'unchanged REP backing units must convert to more vault REP backing after a pool-held REP donation')
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escrowAmount)
 
 		const vaultAfterEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const totalRepAfterEscrow = (await getVaultRepClaim(client.account.address)) + vaultAfterEscrow.disputeStakedAttoRep
 
 		assert.ok(totalRepAfterEscrow <= totalRepBeforeEscrow, 'moving REP into escalation should not increase the vaults total economic position after pool appreciation')
-		strictEqualTypeSafe(vaultAfterEscrow.disputeStakedAttoRep, reportBond, 'the escrowed REP principal should match the deposited escalation amount exactly')
+		strictEqualTypeSafe(vaultAfterEscrow.disputeStakedAttoRep, escrowAmount, 'the escrowed REP principal should match the deposited escalation amount exactly')
 	})
 
 	test('depositToEscalationGame rechecks the local bond against the post-escrow REP balance', async () => {
@@ -610,38 +642,27 @@ describe('Peripherals: vault accounting', () => {
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const backingUnitsToEscrow = (escrowAmount * totalRepBackingUnits + totalRepBeforeEscrow - 1n) / totalRepBeforeEscrow
 		const expectedRepAfterEscrow = ((vaultBeforeEscrow.repBackingUnits - backingUnitsToEscrow) * (totalRepBeforeEscrow - escrowAmount)) / totalRepBackingUnits
-		const targetCoverageCommitmentAttoEth = expectedRepAfterEscrow + 1n
+		const targetCapacityOwnershipAttoRep = expectedRepAfterEscrow + 1n
 
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, targetCoverageCommitmentAttoEth)
-		await manipulatePriceOracleAndPerformOperation(secondVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, secondVault.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, targetCapacityOwnershipAttoRep)
+		await manipulatePriceOracleAndPerformOperation(secondVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondVault.account.address, 0n)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		assert.ok(vaultBeforeEscrow.repBackingUnits > 0n, 'target vault should already be funded')
-		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetCoverageCommitmentAttoEth, 'the pool-wide bond should still be satisfied after escrow')
-		assert.ok(expectedRepAfterEscrow < targetCoverageCommitmentAttoEth, 'coverage commitment')
+		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetCapacityOwnershipAttoRep, 'the pool-wide bond should still be satisfied after escrow')
+		assert.ok(expectedRepAfterEscrow < targetCapacityOwnershipAttoRep, 'capacity ownership')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escrowAmount)
 		const vaultAfterEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.ok(vaultAfterEscrow.disputeStakedAttoRep >= escrowAmount, 'the escrowed REP should be accepted when the post-transfer denominator keeps the vault above its bond threshold')
-		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.repBackingUnits)) >= targetCoverageCommitmentAttoEth, 'the remaining claim should still satisfy the local bond after escrow')
+		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.repBackingUnits)) >= targetCapacityOwnershipAttoRep, 'the remaining claim should still satisfy the local bond after escrow')
 	})
 
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
 		await finalizeQuestionAsYesWithoutFork()
 
 		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved, so staged operations are unavailable/)
-	})
-
-	test('coverage commitment', async () => {
-		const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, 0n)
-
-		const vaultAfterClearingCoverageCommitmentAttoEth = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(vaultAfterClearingCoverageCommitmentAttoEth.coverageCommitmentAttoEth, 0n, 'setting the coverage commitment to zero should succeed')
 	})
 
 	test('withdrawFromEscalationGame gives later safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
@@ -654,12 +675,18 @@ describe('Peripherals: vault accounting', () => {
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, firstWinner.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
-		const firstWinningDeposit = 20n * 10n ** 18n
-		const secondWinningDeposit = 14n * 10n ** 18n
-		const losingDeposit = 20n * 10n ** 18n
-		const expectedFirstWinnerPayout = 28n * 10n ** 18n
-		const expectedSecondWinnerPayout = 18n * 10n ** 18n
+		const firstWinningDeposit = 20n * escalationDepositUnit
+		const secondWinningDeposit = 14n * escalationDepositUnit
+		const losingDeposit = 20n * escalationDepositUnit
+		const expectedFirstWinnerPayout = 28n * escalationDepositUnit
+		const expectedSecondWinnerPayout = 18n * escalationDepositUnit
 
 		// This explicitly documents the intended same-side ordering rule: once the first winner has
 		// filled the binding-capital region, the later deposit only earns bonus on its overlap with
@@ -721,12 +748,18 @@ describe('Peripherals: vault accounting', () => {
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, firstWinner.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
-		const firstWinningDeposit = 14n * 10n ** 18n
-		const secondWinningDeposit = 10n * 10n ** 18n
-		const losingDeposit = 20n * 10n ** 18n
-		const expectedFirstWinnerPayout = 21n * 10n ** 18n
-		const expectedSecondWinnerPayout = 15n * 10n ** 18n
+		const firstWinningDeposit = 14n * escalationDepositUnit
+		const secondWinningDeposit = 10n * escalationDepositUnit
+		const losingDeposit = 20n * escalationDepositUnit
+		const expectedFirstWinnerPayout = 21n * escalationDepositUnit
+		const expectedSecondWinnerPayout = 15n * escalationDepositUnit
 
 		await depositToEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
@@ -781,9 +814,14 @@ describe('Peripherals: vault accounting', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escalationDepositUnit + 1n)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, escalationDepositUnit)
 
 		const aliceDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const bobDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
@@ -825,6 +863,7 @@ describe('Peripherals: vault accounting', () => {
 	test('withdrawFromEscalationGame rejects wrong outcome after normal resolution', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
@@ -835,6 +874,7 @@ describe('Peripherals: vault accounting', () => {
 	test('winning escalation settlement cannot be processed twice and unsettled deposit discovery updates accordingly', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
@@ -855,6 +895,7 @@ describe('Peripherals: vault accounting', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -885,6 +926,7 @@ describe('Peripherals: vault accounting', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
@@ -918,6 +960,10 @@ describe('Peripherals: vault accounting', () => {
 		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, statoblastSecurityMultiplierBps)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		for (const addresses of [securityPoolAddresses, secondSecurityPoolAddresses]) {
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+			await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+		}
 
 		const firstWinningDeposit = 2n * reportBond
 		const interveningDeposit = 3n * reportBond

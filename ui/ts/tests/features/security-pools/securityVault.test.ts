@@ -7,7 +7,7 @@ import { parseOptionalRepAmountInput, parseRepAmountInput } from '../../../featu
 import {
 	doesLoadedSecurityVaultMatchSelection,
 	getOracleManagerPriceValidUntilTimestamp,
-	getSecurityVaultMaxCoverageCommitmentAttoEthAmount,
+	getSecurityVaultMaxCapacityOwnershipAttoRepAmount,
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
@@ -49,9 +49,9 @@ void describe('security vault helpers', () => {
 			totalRepBackingUnits: 1n,
 			vaultAttoRepBacking: 1n,
 			repToken: zeroAddress,
-			coverageCommitmentAttoEth: 0n,
+			capacityOwnershipAttoRep: 0n,
 			securityPoolAddress,
-			totalCoverageCommitmentAttoEth: 0n,
+			totalCapacityOwnershipAttoRep: 0n,
 			claimableFeesAttoEth: 0n,
 			universeId: 1n,
 			vaultAddress,
@@ -124,6 +124,8 @@ void describe('security vault helpers', () => {
 		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(1n, 1n)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, 5n * 10n ** 17n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(0n, 19n * 10n ** 18n, 20n * 10n ** 18n)).toBe(true)
+		expect(isSecurityVaultDepositBelowMinimum(0n, 20n * 10n ** 18n, 20n * 10n ** 18n)).toBe(false)
 	})
 
 	void test('requires matching valid oracle manager details for queued vault actions', () => {
@@ -162,20 +164,20 @@ void describe('security vault helpers', () => {
 		expect(isOracleManagerPriceUsable({ ...details, isPriceValid: false }, 399n)).toBe(false)
 	})
 
-	void test('caps max coverage commitment by both vault backing and remaining pool backing', () => {
+	void test('caps max capacity ownership by both vault backing and remaining pool backing', () => {
 		expect(
-			getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-				currentCoverageCommitmentAttoEth: 1n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 1n * 10n ** 18n,
 				vaultAttoRepBacking: 12n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 9n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
 			}),
 		).toBe(500_000_000_000_000_000n)
 		expect(
-			getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-				currentCoverageCommitmentAttoEth: 0n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 0n,
 				vaultAttoRepBacking: 6n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
@@ -203,10 +205,10 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: undefined,
 				repPerEthPrice: 0n,
-				coverageCommitmentAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCoverageCommitmentAttoEth: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(undefined)
 		expect(
@@ -214,71 +216,71 @@ void describe('security vault helpers', () => {
 				disputeStakedAttoRep: 1n,
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
-				coverageCommitmentAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCoverageCommitmentAttoEth: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(0n)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
-				coverageCommitmentAttoEth: 0n,
+				capacityOwnershipAttoRep: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCoverageCommitmentAttoEth: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(10n * 10n ** 18n)
 	})
 
-	void test('caps max coverage commitment by local backing and empty global context', () => {
+	void test('caps max capacity ownership by local backing and empty global context', () => {
 		expect(
-			getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
 				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				currentCoverageCommitmentAttoEth: 10n * 10n ** 18n,
+				currentCapacityOwnershipAttoRep: 10n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 		).toBe(5n * 10n ** 18n)
 	})
 
-	void test('coverage commitment', () => {
+	void test('capacity ownership', () => {
 		const vaultAttoRepBacking = 10n * 10n ** 18n
 		const repPerEthPrice = 3n * 10n ** 18n
 		const statoblastSecurityMultiplierBps = 20_000n
-		const maxCoverageCommitmentAttoEth = getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-			currentCoverageCommitmentAttoEth: 0n,
+		const maxCapacityOwnershipAttoRep = getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+			currentCapacityOwnershipAttoRep: 0n,
 			vaultAttoRepBacking,
 			repPerEthPrice,
 			statoblastSecurityMultiplierBps,
 		})
 
-		expect(maxCoverageCommitmentAttoEth).toBe(1_666_666_666_666_666_666n)
-		if (maxCoverageCommitmentAttoEth === undefined) throw new Error('coverage commitment')
-		expect(maxCoverageCommitmentAttoEth * repPerEthPrice * statoblastSecurityMultiplierBps <= vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
-		expect((maxCoverageCommitmentAttoEth + 1n) * repPerEthPrice * statoblastSecurityMultiplierBps > vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
+		expect(maxCapacityOwnershipAttoRep).toBe(1_666_666_666_666_666_666n)
+		if (maxCapacityOwnershipAttoRep === undefined) throw new Error('capacity ownership')
+		expect(maxCapacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps <= vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
+		expect((maxCapacityOwnershipAttoRep + 1n) * repPerEthPrice * statoblastSecurityMultiplierBps > vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
 	})
 
-	void test('coverage commitment', () => {
+	void test('capacity ownership', () => {
 		expect(
-			getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-				currentCoverageCommitmentAttoEth: 15n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 15n * 10n ** 18n,
 				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 50n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 30n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 30n * 10n ** 18n,
 			}),
 		).toBe(10n * 10n ** 18n)
 		expect(
-			getSecurityVaultMaxCoverageCommitmentAttoEthAmount({
-				currentCoverageCommitmentAttoEth: 40n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 40n * 10n ** 18n,
 				vaultAttoRepBacking: 50n * 10n ** 18n,
 				repPerEthPrice: 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 40n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 40n * 10n ** 18n,
 			}),
 		).toBe(5n * 10n ** 18n)
 	})
@@ -288,23 +290,23 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				coverageCommitmentAttoEth: 3n * 10n ** 18n,
+				capacityOwnershipAttoRep: 3n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
 			}),
 		).toBe(2_000_000_000_000_000_000n)
 	})
 
-	void test('coverage commitment', () => {
+	void test('capacity ownership', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				coverageCommitmentAttoEth: 1n * 10n ** 18n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 50n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 1n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n,
 			}),
 		).toBe(6_000_000_000_000_000_000n)
 
@@ -312,10 +314,10 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 5n * 10n ** 18n,
-				coverageCommitmentAttoEth: 10n * 10n ** 18n,
+				capacityOwnershipAttoRep: 10n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 100n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 20n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 20n * 10n ** 18n,
 			}),
 		).toBe(0n)
 	})
@@ -325,17 +327,17 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
-				coverageCommitmentAttoEth: 1n * 10n ** 18n + 1n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 1n * 10n ** 18n + 1n,
+				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
 			}),
 		).toBe(3_999_999_999_999_999_994n)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
-				coverageCommitmentAttoEth: 1n * 10n ** 18n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: undefined,
 			}),
 		).toBe(undefined)
@@ -346,7 +348,7 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n,
 				repPerEthPrice: 10n ** 18n,
-				coverageCommitmentAttoEth: 1n,
+				capacityOwnershipAttoRep: 1n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 		).toBe(8n)
@@ -354,7 +356,7 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n,
 				repPerEthPrice: 10n ** 18n,
-				coverageCommitmentAttoEth: 2n,
+				capacityOwnershipAttoRep: 2n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 		).toBe(6n)

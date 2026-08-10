@@ -15,6 +15,16 @@
 			"outcomes": ["StagedOperationQueued", "ExecutedStagedOperation", "no pending report is created", "the staged operation is consumed; active count returns to its prior value"]
 		},
 		{
+			"trigger": "requestPriceIfNeededAndStageLiquidation",
+			"preconditions": ["receiver differs from target", "delegated route has a valid bounded approval through latest execution"],
+			"outcomes": ["LiquidationApprovalReserved for a delegated route", "LiquidationRouteStaged", "StagedOperationQueued", "immediate execution with a fresh cache or attachment to the pending callback batch"]
+		},
+		{
+			"trigger": "requestPriceIfNeededAndStageLiquidation",
+			"preconditions": ["stale-cache", "pending-report", "pending callback batch is full"],
+			"outcomes": ["LiquidationApprovalReserved for a delegated route", "the liquidation remains active outside the bounded callback batch", "the operation and its reservation remain available for later permissionless execution or expiry cleanup"]
+		},
+		{
 			"trigger": "requestPriceIfNeededAndStageOperation",
 			"preconditions": ["stale-cache", "no-pending-report", "caller supplies request bounty"],
 			"outcomes": ["StagedOperationQueued", "PriceRequested", "pending report exists", "operation is in the pending callback batch"]
@@ -27,23 +37,33 @@
 		{
 			"trigger": "openOracleCallback",
 			"preconditions": ["pending-report"],
-			"outcomes": ["pending report fields are cleared before report validation", "PriceReported or PriceReportRejected", "accepted callback updates the cache and executes only the bounded pending batch", "rejected callback leaves active operations for later execution or replacement"]
+			"outcomes": ["pending report fields are cleared before report validation", "PriceReported or PriceReportRejected", "accepted callback updates the cache and executes the bounded pending batch", "rejected callback terminally consumes the attached batch and releases delegated-liquidation reservations"]
 		},
 		{
 			"trigger": "recoverSettledPendingReport",
 			"preconditions": ["recoveryEligibility"],
-			"outcomes": ["PendingReportRecovered", "PendingOperationRecoveryConsumed when a pending slot exists", "pending report fields are cleared", "the single call consumes the pending operation; there is no intermediate recovery state"]
+			"outcomes": ["PendingReportRecovered", "ExecutedStagedOperation failure for each live attached operation", "pending report fields are cleared", "all attached operations are consumed and delegated-liquidation reservations are released"]
 		},
 		{
 			"trigger": "executeStagedOperation",
 			"preconditions": ["fresh-cache", "operation exists"],
 			"outcomes": ["ExecutedStagedOperation", "exactly one operation is consumed", "active count becomes prior count minus one"]
+		},
+		{
+			"trigger": "executeStagedOperation",
+			"preconditions": ["operation exists", "operation is expired", "cache may be stale"],
+			"outcomes": ["ExecutedStagedOperation failure", "operation is consumed without requiring a valid price", "delegated-liquidation reservation is released"]
+		},
+		{
+			"trigger": "expireStagedOperation",
+			"preconditions": ["operation exists", "operation is expired"],
+			"outcomes": ["ExecutedStagedOperation failure", "operation is consumed without requiring a valid price", "delegated-liquidation reservation is released"]
 		}
 	],
-	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "PendingOperationRecoveryConsumed", "StagedOperationQueued", "StagedOperationDisputeStakedRepSnapshotted", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
+	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
 	"checkpointReasons": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" },
 	"enumValues": {
-		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetCoverageCommitment" },
+		"OperationType": { "0": "Liquidation", "1": "WithdrawRep" },
 		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
 	},
 	"eventDeclarations": {
@@ -53,9 +73,8 @@
 		"PriceReportRejected": "PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
 		"PriceReported": "PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)",
 		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
-		"PendingOperationRecoveryConsumed": "PendingOperationRecoveryConsumed(uint256 indexed operationId, uint8 operation)",
-		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed initiatorVault, address indexed targetVault, uint256 operationAmountAttoRepOrAttoEth, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCoverageCommitmentAttoEth, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
-		"StagedOperationDisputeStakedRepSnapshotted": "StagedOperationDisputeStakedRepSnapshotted(uint256 indexed operationId, uint256 snapshotTargetDisputeStakedAttoRep)",
+		"LiquidationRouteStaged": "LiquidationRouteStaged(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth)",
+		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed operator, address indexed targetVault, uint256 operationAmountAttoRepOrAttoEth, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTargetOpenInterestAttoEth, uint256 snapshotTargetDisputeStakedAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
 		"ExecutedStagedOperation": "ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)",
 		"CoordinatorStateCheckpoint": "CoordinatorStateCheckpoint(uint8 reason, uint256 indexed reportId, uint256 indexed operationId, uint256 pendingReportId, address pendingReportSponsor, uint256 pendingOperationSlotId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp, uint256 stagedOperationCounter, uint256 activeStagedOperationCount, uint256 pendingSettlementOperationCount)"
 	},
@@ -71,6 +90,7 @@
 		"disputeDelay": "view",
 		"escalationHaltMultiplierBps": "view",
 		"executeStagedOperation": "nonpayable",
+		"expireStagedOperation": "nonpayable",
 		"feePercentage": "view",
 		"gasConsumedOpenOracleReportPrice": "view",
 		"gasConsumedSettlement": "view",
@@ -95,6 +115,7 @@
 		"openOracleCallback": "nonpayable",
 		"openOracleSecurityMultiplierBps": "view",
 		"pendingOperationSlotId": "view",
+		"liquidationApprovalRegistry": "view",
 		"pendingReportId": "view",
 		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "view",
 		"pendingReportSponsor": "view",
@@ -104,8 +125,10 @@
 		"reputationToken": "view",
 		"requestPrice": "payable",
 		"requestPriceIfNeededAndStageOperation": "payable",
+		"requestPriceIfNeededAndStageLiquidation": "payable",
 		"securityPool": "view",
 		"setRepEthPrice": "nonpayable",
+		"setLiquidationApprovalRegistry": "nonpayable",
 		"setSecurityPool": "nonpayable",
 		"settlementTime": "view",
 		"stagedOperationCounter": "view",
@@ -117,6 +140,7 @@
 	},
 	"functionSignatures": {
 		"executeStagedOperation": "executeStagedOperation(uint256)",
+		"expireStagedOperation": "expireStagedOperation(uint256)",
 		"getActiveStagedOperations": "getActiveStagedOperations(uint256,uint256)",
 		"getPendingOperationSlot": "getPendingOperationSlot()",
 		"getQueuedOperationCostAttoEth": "getQueuedOperationCostAttoEth()",
@@ -124,10 +148,12 @@
 		"recoverSettledPendingReport": "recoverSettledPendingReport()",
 		"requestPrice": "requestPrice(uint256,uint256)",
 		"requestPriceIfNeededAndStageOperation": "requestPriceIfNeededAndStageOperation(uint8,address,uint256,uint256,uint256,uint256)",
+		"requestPriceIfNeededAndStageLiquidation": "requestPriceIfNeededAndStageLiquidation(address,address,uint256,bytes32,uint256,uint256,uint256)",
+		"setLiquidationApprovalRegistry": "setLiquidationApprovalRegistry(address)",
 		"setRepEthPrice": "setRepEthPrice(uint256)",
 		"setSecurityPool": "setSecurityPool(address)",
 		"stagedOperations": "stagedOperations(uint256)"
 	},
 	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly.",
-	"operationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetCoverageCommitment" }
+	"operationType": { "0": "Liquidation", "1": "WithdrawRep" }
 }

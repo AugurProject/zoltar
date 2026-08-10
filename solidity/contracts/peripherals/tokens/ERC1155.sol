@@ -60,10 +60,7 @@ contract ERC1155 is IERC1155 {
 		@param ids IDs of the tokens
 		@return Balances for each account and token id pair
 	*/
-	function balanceOfBatch(
-		address[] memory accounts,
-		uint256[] memory ids
-	) public view virtual returns (uint256[] memory) {
+	function balanceOfBatch(address[] memory accounts, uint256[] memory ids) public view virtual returns (uint256[] memory) {
 		require(accounts.length == ids.length, 'ERC1155: accounts and IDs arrays must have the same length');
 
 		uint256[] memory batchBalances = new uint256[](accounts.length);
@@ -122,21 +119,12 @@ contract ERC1155 is IERC1155 {
 
 	function _transferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal {
 		require(to != address(0), 'ERC1155: transfer target address must be non-zero');
-		require(
-			from == msg.sender || isApprovedForAll(from, msg.sender) == true,
-			'ERC1155: caller needs operator approval for third-party transfers'
-		);
+		require(from == msg.sender || isApprovedForAll(from, msg.sender) == true, 'ERC1155: caller needs operator approval for third-party transfers');
 
 		_internalTransferFrom(from, to, id, value, data);
 	}
 
-	function _internalTransferFrom(
-		address from,
-		address to,
-		uint256 id,
-		uint256 value,
-		bytes memory data
-	) internal virtual {
+	function _internalTransferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal virtual {
 		_balances[id][from] = _balances[id][from] - value;
 		_balances[id][to] = _balances[id][to] + value;
 
@@ -165,52 +153,26 @@ contract ERC1155 is IERC1155 {
 		@param ids IDs of each token type
 		@param values Transfer amounts per token type
 	*/
-	function safeBatchTransferFrom(
-		address from,
-		address to,
-		uint256[] calldata ids,
-		uint256[] calldata values
-	) external {
+	function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata values) external {
 		_batchTransferFrom(from, to, ids, values, '');
 	}
 
-	function safeBatchTransferFrom(
-		address from,
-		address to,
-		uint256[] calldata ids,
-		uint256[] calldata values,
-		bytes calldata data
-	) external {
+	function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external {
 		_batchTransferFrom(from, to, ids, values, data);
 	}
 
-	function _batchTransferFrom(
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values,
-		bytes memory data
-	) internal {
+	function _batchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal {
 		require(ids.length == values.length, 'ERC1155: batch transfer IDs and values arrays must have the same length');
 		if (ids.length == 0) {
 			return;
 		}
 		require(to != address(0), 'ERC1155: batch transfer target address must be non-zero');
-		require(
-			from == msg.sender || isApprovedForAll(from, msg.sender) == true,
-			'ERC1155: caller needs operator approval for third-party batch transfers'
-		);
+		require(from == msg.sender || isApprovedForAll(from, msg.sender) == true, 'ERC1155: caller needs operator approval for third-party batch transfers');
 
 		_internalBatchTransferFrom(from, to, ids, values, data);
 	}
 
-	function _internalBatchTransferFrom(
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values,
-		bytes memory data
-	) internal virtual {
+	function _internalBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal virtual {
 		for (uint256 i = 0; i < ids.length; ++i) {
 			uint256 id = ids[i];
 			uint256 value = values[i];
@@ -230,12 +192,7 @@ contract ERC1155 is IERC1155 {
 		_batchTransferFrom(from, to, ids, values, '');
 	}
 
-	function _internalBatchTransferFrom(
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values
-	) internal virtual {
+	function _internalBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values) internal virtual {
 		_internalBatchTransferFrom(from, to, ids, values, '');
 	}
 
@@ -306,20 +263,10 @@ contract ERC1155 is IERC1155 {
 		emit TransferBatch(msg.sender, account, address(0), ids, values);
 	}
 
-	function _doSafeTransferAcceptanceCheck(
-		address operator,
-		address from,
-		address to,
-		uint256 id,
-		uint256 value,
-		bytes memory data
-	) private {
+	function _doSafeTransferAcceptanceCheck(address operator, address from, address to, uint256 id, uint256 value, bytes memory data) private {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155Received(operator, from, id, value, data) returns (bytes4 response) {
-			require(
-				response == ERC1155_RECEIVED_SELECTOR,
-				'ERC1155: receiver rejected tokens by returning an unexpected single-transfer selector'
-			);
+			require(response == ERC1155_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens by returning an unexpected single-transfer selector');
 		} catch Error(string memory) {
 			revert('ERC1155: receiver rejected tokens during single-transfer acceptance check');
 		} catch Panic(uint256) {
@@ -329,20 +276,10 @@ contract ERC1155 is IERC1155 {
 		}
 	}
 
-	function _doSafeBatchTransferAcceptanceCheck(
-		address operator,
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values,
-		bytes memory data
-	) private {
+	function _doSafeBatchTransferAcceptanceCheck(address operator, address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) private {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, values, data) returns (bytes4 response) {
-			require(
-				response == ERC1155_BATCH_RECEIVED_SELECTOR,
-				'ERC1155: receiver rejected tokens by returning an unexpected batch-transfer selector'
-			);
+			require(response == ERC1155_BATCH_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens by returning an unexpected batch-transfer selector');
 		} catch Error(string memory) {
 			revert('ERC1155: receiver rejected tokens during batch-transfer acceptance check');
 		} catch Panic(uint256) {
