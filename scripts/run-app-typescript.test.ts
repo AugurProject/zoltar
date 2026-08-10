@@ -103,4 +103,20 @@ describe('application TypeScript process arguments', () => {
 		expect(output.heapLimit).toBeGreaterThanOrEqual(APPLICATION_TYPESCRIPT_HEAP_MB * 1024 * 1024)
 		expect(output.heapLimit).toBeLessThan(7168 * 1024 * 1024)
 	})
+
+	test('preserves malformed heap options so Node reports them', () => {
+		const nodeExecutablePath = Bun.which('node')
+		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript malformed-option regression test')
+		for (const nodeOptions of ['--max-old-space-size="7168', '--max-old-space-size']) {
+			const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
+			expect(childNodeOptions).toBe(nodeOptions)
+			expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
+			const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', ''], {
+				env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
+			expect(result.exitCode).not.toBe(0)
+		}
+	})
 })

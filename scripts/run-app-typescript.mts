@@ -6,6 +6,7 @@ const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../node_modules/typescript/bi
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size(?:=([0-9]+))?$/
 
 type NodeOptionToken = {
+	readonly isValid: boolean
 	readonly raw: string
 	readonly value: string
 }
@@ -43,7 +44,7 @@ const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
 			value += character
 			index += 1
 		}
-		tokens.push({ raw: nodeOptions.slice(start, index), value })
+		tokens.push({ isValid: !inDoubleQuotes, raw: nodeOptions.slice(start, index), value })
 	}
 	return tokens
 }
@@ -53,11 +54,13 @@ const getExplicitHeapLimitMb = (nodeOptions: string | undefined): string | undef
 	const tokens = tokenizeNodeOptions(nodeOptions)
 	let explicitHeapLimitMb: string | undefined
 	for (let index = 0; index < tokens.length; index += 1) {
-		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(tokens[index]?.value ?? '')
+		const token = tokens[index]
+		if (token === undefined || !token.isValid) continue
+		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) continue
 		const inlineValue = match[1]
 		if (inlineValue !== undefined) explicitHeapLimitMb = inlineValue
-		else if (/^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
+		else if (tokens[index + 1]?.isValid === true && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
 			explicitHeapLimitMb = tokens[index + 1]?.value
 			index += 1
 		}
@@ -72,12 +75,21 @@ export const getApplicationTypeScriptNodeOptions = (existingNodeOptions: string 
 	for (let index = 0; index < tokens.length; index += 1) {
 		const token = tokens[index]
 		if (token === undefined) continue
+		if (!token.isValid) {
+			retainedTokens.push(token.raw)
+			continue
+		}
 		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) {
 			retainedTokens.push(token.raw)
 			continue
 		}
-		if (match[1] === undefined && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) index += 1
+		if (match[1] !== undefined) continue
+		if (tokens[index + 1]?.isValid === true && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
+			index += 1
+			continue
+		}
+		retainedTokens.push(token.raw)
 	}
 	if (retainedTokens.length === 0) return undefined
 	return retainedTokens.join(' ')
