@@ -1,4 +1,4 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
@@ -215,6 +215,34 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 		zeroSalt: ZERO_SALT,
 	}).getInfraContractAddresses()
+}
+
+type BootstrapDescendantAddresses = {
+	[id: string]: Address
+	escalationGameProofVerifier: Address
+	liquidationApprovalRegistryDeployer: Address
+	liquidationApprovalRegistryImplementation: Address
+	priceCoordinatorDeploymentWorker: Address
+}
+
+export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
+	const infrastructure = getInfraContractAddresses(profile)
+	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
+	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
+	return {
+		liquidationApprovalRegistryDeployer,
+		liquidationApprovalRegistryImplementation: getCreateAddress({ from: liquidationApprovalRegistryDeployer, nonce: 1n }),
+		priceCoordinatorDeploymentWorker: getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }),
+		escalationGameCreationCodePartOne: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 2n }),
+		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
+		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
+		securityPoolDeployer,
+		securityPoolDeploymentWorker: getCreateAddress({ from: securityPoolDeployer, nonce: 2n }),
+		securityPoolEventEmitter: getCreateAddress({ from: securityPoolDeployer, nonce: 1n }),
+		securityPoolForkerEscalationGameForkerDelegate: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 2n }),
+		securityPoolForkerEventEmitter: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 3n }),
+		securityPoolForkerVaultMigrationDelegate: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 1n }),
+	}
 }
 
 export function getOpenOracleAddress() {
