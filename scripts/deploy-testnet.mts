@@ -6,7 +6,7 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
-import { CANONICAL_DEPLOYER_RAW_GAS_PRICE, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/ts/protocol/deployment.ts'
+import { CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
@@ -14,12 +14,43 @@ import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CO
 
 const DEFAULT_CHAIN_ID = 11_155_111
 export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '100'
-export const DEFAULT_MAX_TOTAL_COST_ETH = '10'
+export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
 const CANCUN_CAPABILITY_PROBE = '0x6000600060005e600160005d60005c60005260206000f3'
 const CANCUN_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
 const MAX_SIGNABLE_TRANSACTION_GAS = 30_000_000n
+// These per-step ceilings are based on fresh Osaka Anvil deployments, increased
+// by roughly 50%, rounded upward, and capped only where the signer itself caps a
+// transaction at 30M gas. Canonical deployer entries cover their optional atomic
+// funding transaction; their fixed raw-transaction cost is added separately.
+export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
+	arachnidCreate2Deployer: 500_000n,
+	permit2: 3_250_000n,
+	proxyDeployer: 500_000n,
+	uniswapV3Factory: 8_500_000n,
+	uniswapV3Quoter: 3_000_000n,
+	uniswapV3SwapRouter: 4_250_000n,
+	uniswapV4PoolManager: 8_000_000n,
+	uniswapV4Quoter: 2_250_000n,
+	deploymentStatusOracle: 1_000_000n,
+	weth: 1_000_000n,
+	reputationToken: 1_250_000n,
+	multicall3: 1_250_000n,
+	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
+	scalarOutcomes: 250_000n,
+	securityPoolUtils: 2_000_000n,
+	openOracle: 4_250_000n,
+	zoltarQuestionData: 2_750_000n,
+	zoltar: 4_250_000n,
+	shareTokenFactory: 5_500_000n,
+	priceOracleManagerAndOperatorQueuerFactory: 30_000_000n,
+	securityPoolForker: 16_250_000n,
+	escalationGameClaimDelegate: 1_250_000n,
+	escalationGameFactory: 14_250_000n,
+	securityPoolFactory: 30_000_000n,
+}
+const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
@@ -69,6 +100,19 @@ function option(name: string, argv = process.argv.slice(2)) {
 	return argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
 }
 
+function assignment(name: string, argv: readonly string[]) {
+	const prefixes = [`${name}=`, `--${name}=`]
+	for (const argument of argv) {
+		const prefix = prefixes.find(candidate => argument.startsWith(candidate))
+		if (prefix !== undefined) return argument.slice(prefix.length)
+	}
+	return undefined
+}
+
+function commandLineValue(optionName: string, assignmentName: string, argv: readonly string[]) {
+	return option(optionName, [...argv]) ?? assignment(assignmentName, argv)
+}
+
 export function parseChainId(value: string | undefined) {
 	if (value === undefined) return DEFAULT_CHAIN_ID
 	if (!/^[1-9]\d*$/.test(value)) throw new Error('CHAIN_ID must be a canonical positive decimal integer without leading zeros')
@@ -116,6 +160,16 @@ export function parseMaxFeePerGas(value: string | undefined) {
 
 export function parseMaxTotalCost(value: string | undefined) {
 	return parsePositiveUnits(value, DEFAULT_MAX_TOTAL_COST_ETH, 18, 'MAX_TOTAL_COST_ETH')
+}
+
+export function parseDeploymentCommandLine(argv = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env) {
+	return {
+		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
+		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-gwei', 'MAX_FEE_PER_GAS_GWEI', argv) ?? environment['MAX_FEE_PER_GAS_GWEI']),
+		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
+		privateKey: parsePrivateKey(environment['PRIVATE_KEY']),
+		rpcUrl: parseRpcUrl(commandLineValue('rpc-url', 'RPC_URL', argv) ?? environment['RPC_URL']),
+	}
 }
 
 function isPrivateKey(value: string | undefined): value is Hex {
@@ -341,6 +395,31 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 	return results
 }
 
+export async function preflightDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, gasAllowances: Readonly<Record<string, bigint>>, maxFeePerGas: bigint, maxTotalCost: bigint) {
+	const completed = new Set<string>()
+	const missingStepIds: string[] = []
+	let estimatedGas = 0n
+	let estimatedCostAttoEth = 0n
+	for (const step of steps) {
+		const missingDependency = step.dependencies.find(dependency => !completed.has(dependency))
+		if (missingDependency !== undefined) throw new Error(`${step.label} requires incomplete deployment step ${missingDependency}`)
+		const installed = await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address }))
+		completed.add(step.id)
+		if (installed) continue
+		const gasAllowance = gasAllowances[step.id]
+		if (gasAllowance === undefined) throw new Error(`Deployment step ${step.id} has no conservative gas allowance`)
+		if (gasAllowance <= 0n) throw new Error(`Deployment step ${step.id} has an invalid conservative gas allowance`)
+		missingStepIds.push(step.id)
+		estimatedGas += gasAllowance
+		estimatedCostAttoEth += gasAllowance * maxFeePerGas
+		if (CANONICAL_DEPLOYER_STEP_IDS.has(step.id)) estimatedCostAttoEth += CANONICAL_DEPLOYER_RAW_TRANSACTION_COST
+	}
+	if (estimatedCostAttoEth > maxTotalCost) {
+		throw new Error(`Deployment preflight estimated upper-bound cost ${formatEther(estimatedCostAttoEth)} ETH for ${missingStepIds.length.toString()} missing steps, above MAX_TOTAL_COST_ETH ${formatEther(maxTotalCost)}; no funding or deployment transaction was attempted`)
+	}
+	return { estimatedCostAttoEth, estimatedGas, missingStepIds }
+}
+
 async function assertProxyCode(client: CodeReader) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code === undefined || code === '0x') return
@@ -400,10 +479,15 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	await assertCanonicalCreate2DeployerCode(client)
 	await assertProxyCode(client)
 	const authorizedMaxFeePerGas = parameters.maxFeePerGas ?? parseMaxFeePerGas(undefined)
+	const authorizedMaxTotalCost = parameters.maxTotalCost ?? parseMaxTotalCost(undefined)
 	const [canonicalCreate2Code, proxyCode] = await Promise.all([client.getCode({ address: ARACHNID_CREATE2_DEPLOYER_ADDRESS }), client.getCode({ address: PROXY_DEPLOYER_ADDRESS })])
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!hasCode(canonicalCreate2Code) || !hasCode(proxyCode))) {
 		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
+	const log = parameters.log ?? console.log
+	const plan = createCompleteDeploymentPlan(profile, uniswap)
+	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost)
+	log(`preflight missing=${estimate.missingStepIds.length.toString()} estimated_upper_bound=${formatEther(estimate.estimatedCostAttoEth)} ETH max_total=${formatEther(authorizedMaxTotalCost)} ETH fee_ceiling=${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`)
 	if (!hasCode(proxyCode)) {
 		const activity = await getProxyDeployerActivity(client)
 		if (activity.pending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
@@ -416,9 +500,8 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 		}
 	}
 
-	const log = parameters.log ?? console.log
 	log(`network chain=${chainId.toString()} deployer=${client.account.address}`)
-	const results = await runDeploymentPlan(createCompleteDeploymentPlan(profile, uniswap), client, log)
+	const results = await runDeploymentPlan(plan, client, log)
 	await assertProxyCode(client)
 	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile)
 	await writeGitHubSummary(chainId, client.account.address, results)
@@ -430,10 +513,14 @@ function printHelp() {
 
 PRIVATE_KEY=0x... RPC_URL=https://... bun run deploy:testnet -- [options]
 
+PRIVATE_KEY must be set in the environment. RPC and cost limits can be passed as
+uppercase assignments after --, for example:
+  bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
+
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
   --max-fee-per-gas-gwei=100  Rejects higher RPC fee suggestions
-  --max-total-cost-eth=10     Caps worst-case fees and transaction value
+  --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
 Custom testnets receive the same deterministic WETH and genesis REP deployment
 used by Sepolia. The RPC must support Cancun, EIP-1559, and the canonical
@@ -446,11 +533,7 @@ async function main() {
 		printHelp()
 		return
 	}
-	const rpcUrl = parseRpcUrl(option('rpc-url') ?? process.env['RPC_URL'])
-	const chainId = parseChainId(option('chain-id') ?? process.env['CHAIN_ID'])
-	const privateKey = parsePrivateKey(process.env['PRIVATE_KEY'])
-	const maxFeePerGas = parseMaxFeePerGas(option('max-fee-per-gas-gwei') ?? process.env['MAX_FEE_PER_GAS_GWEI'])
-	const maxTotalCost = parseMaxTotalCost(option('max-total-cost-eth') ?? process.env['MAX_TOTAL_COST_ETH'])
+	const { chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
 	await deployTestnet({ chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
 }
 

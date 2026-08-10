@@ -8,23 +8,26 @@ import {
 	assertRequiredEvmCompatible,
 	assertEip1559Compatible,
 	assertNoPendingDeployerTransactions,
+	CONSERVATIVE_DEPLOYMENT_GAS,
 	createBudgetedTransactionSender,
 	createCompleteDeploymentPlan,
 	createDeploymentBudget,
 	deployTestnet,
+	parseDeploymentCommandLine,
 	parseChainId,
 	parseMaxFeePerGas,
 	parseMaxTotalCost,
 	parsePrivateKey,
 	parseRpcUrl,
+	preflightDeploymentPlan,
 	runDeploymentPlan,
 } from './deploy-testnet.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
-const FIRST_HASH = '0x0101010101010101010101010101010101010101010101010101010101010101'
-const SECOND_HASH = '0x0202020202020202020202020202020202020202020202020202020202020202'
+const FIRST_HASH: Hex = '0x0101010101010101010101010101010101010101010101010101010101010101'
+const SECOND_HASH: Hex = '0x0202020202020202020202020202020202020202020202020202020202020202'
 
 describe('testnet deployment inputs', () => {
 	test('defaults the chain ID to Sepolia and requires an explicitly selected RPC', () => {
@@ -59,12 +62,27 @@ describe('testnet deployment inputs', () => {
 	test('parses positive fee and total deployment limits', () => {
 		expect(parseMaxFeePerGas(undefined)).toBe(100_000_000_000n)
 		expect(parseMaxFeePerGas('1.5')).toBe(1_500_000_000n)
-		expect(parseMaxTotalCost(undefined)).toBe(10_000_000_000_000_000_000n)
+		expect(parseMaxTotalCost(undefined)).toBe(20_000_000_000_000_000_000n)
 		expect(parseMaxTotalCost('0.25')).toBe(250_000_000_000_000_000n)
 		for (const value of ['', '0', '-1', 'not-a-number']) {
 			expect(() => parseMaxFeePerGas(value)).toThrow('MAX_FEE_PER_GAS_GWEI')
 			expect(() => parseMaxTotalCost(value)).toThrow('MAX_TOTAL_COST_ETH')
 		}
+	})
+
+	test('accepts RPC and cost limits as uppercase command-line assignments', () => {
+		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		expect(
+			parseDeploymentCommandLine(['RPC_URL=https://rpc.example.test', 'MAX_FEE_PER_GAS_GWEI=42', '--MAX_TOTAL_COST_ETH=7.5'], {
+				PRIVATE_KEY: privateKey,
+			}),
+		).toEqual({
+			chainId: 11_155_111,
+			maxFeePerGas: 42_000_000_000n,
+			maxTotalCost: 7_500_000_000_000_000_000n,
+			privateKey,
+			rpcUrl: 'https://rpc.example.test/',
+		})
 	})
 
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
@@ -240,6 +258,66 @@ describe('testnet deployment transaction authorization', () => {
 })
 
 describe('testnet deployment plan', () => {
+	test('rejects an unaffordable retry before invoking any deployment', async () => {
+		let deployCalled = false
+		const steps = [
+			{
+				address: FIRST_ADDRESS,
+				dependencies: [],
+				deploy: async () => {
+					deployCalled = true
+					return FIRST_HASH
+				},
+				expectedRuntimeCodeHash: keccak256('0x01'),
+				id: 'first',
+				label: 'First',
+			},
+			{
+				address: SECOND_ADDRESS,
+				dependencies: ['first'],
+				deploy: async () => {
+					deployCalled = true
+					return SECOND_HASH
+				},
+				expectedRuntimeCodeHash: keccak256('0x02'),
+				id: 'second',
+				label: 'Second',
+			},
+		] as const
+
+		await expect(preflightDeploymentPlan(steps, { getCode: async ({ address }) => (address === FIRST_ADDRESS ? '0x01' : undefined) }, { first: 1_000n, second: 2_000n }, 10n, 19_999n)).rejects.toThrow('estimated upper-bound cost')
+		expect(deployCalled).toBe(false)
+	})
+
+	test('estimates only missing retry steps and returns a deliberately padded upper bound', async () => {
+		const estimate = await preflightDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => FIRST_HASH,
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'first',
+					label: 'First',
+				},
+				{
+					address: SECOND_ADDRESS,
+					dependencies: ['first'],
+					deploy: async () => SECOND_HASH,
+					expectedRuntimeCodeHash: keccak256('0x02'),
+					id: 'second',
+					label: 'Second',
+				},
+			],
+			{ getCode: async ({ address }) => (address === FIRST_ADDRESS ? '0x01' : undefined) },
+			{ first: 1_000n, second: 2_000n },
+			10n,
+			20_000n,
+		)
+
+		expect(estimate).toEqual({ estimatedCostAttoEth: 20_000n, estimatedGas: 2_000n, missingStepIds: ['second'] })
+	})
+
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
 		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
 		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
@@ -287,6 +365,7 @@ describe('testnet deployment plan', () => {
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
+			expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 			for (const dependency of step.dependencies) expect(indexById.get(dependency)).toBeLessThan(index)
 		}
 		expect(plan.find(step => step.id === 'openOracle')?.dependencies).toContain('permit2')

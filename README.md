@@ -97,22 +97,32 @@ Use a dedicated testnet account funded with enough testnet ETH to finish the
 remaining deployment.
 
 ```bash
-RPC_URL=https://... \
-MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=10 \
-bun run deploy:testnet
+bun run deploy:testnet -- \
+RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
 ```
 
 The chain ID defaults to Sepolia (`11155111`). Set `CHAIN_ID` for any other EVM
 testnet that supports the protocol's required Cancun opcodes and Osaka `CLZ`
 opcode; chain ID `1` is intentionally rejected. Older pre-Cancun or pre-Osaka
 chains cannot execute the pinned protocol and Uniswap V4 bytecode. The fee ceiling
-defaults to 100 gwei and the worst-case transaction fee and value budget defaults
-to 10 testnet ETH. This is an authorization ceiling, not an estimate: each local
-command or workflow run starts a fresh budget, so every retry authorizes the
-selected amount again. Before funding or signing, the command verifies the
-selected chain, required EVM opcodes, EIP-1559 support, fee limits, and acceptance
-of the fixed canonical legacy deployer transactions. A network that rejects those
-transactions must provide both canonical deployers as predeploys.
+defaults to 100 gwei and the total-cost authorization defaults to 20 testnet ETH.
+`RPC_URL`, `MAX_FEE_PER_GAS_GWEI`, and `MAX_TOTAL_COST_ETH` can be passed as the
+uppercase command arguments shown above, as lowercase `--rpc-url=...` style
+options, or as environment variables. `PRIVATE_KEY` remains environment-only so
+it is not exposed in command history.
+
+Before funding or signing, the command verifies the selected chain, required EVM
+opcodes, EIP-1559 support, fee limits, and acceptance of the fixed canonical
+legacy deployer transactions. It then identifies every missing step and calculates
+a deliberately conservative upper-bound cost at the selected fee ceiling. The
+allowances are about 50% above measured deployment gas and rounded upward; the
+largest deployments use the signer's 30-million-gas transaction ceiling. Missing
+canonical deployers also include their fixed raw-transaction cost and an allowance
+for atomic funding. If the estimate exceeds `MAX_TOTAL_COST_ETH`, the command exits
+before any funding or deployment transaction. The per-transaction budget remains
+active as a second guard. Each retry estimates only contracts that are still
+missing. A network that rejects the canonical transactions must provide both
+canonical deployers as predeploys.
 
 The command validates each expected runtime, skips deterministic addresses only
 when their code matches, fails closed when an address contains different code,
