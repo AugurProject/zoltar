@@ -15,7 +15,7 @@ test('Chromium discovery is shell-independent and accepts Windows executable pat
 })
 
 test('Chromium discovery returns undefined when no candidate is on PATH', () => {
-	expect(getChromiumPath({ which: () => null })).toBeUndefined()
+	expect(getChromiumPath({ platform: 'linux', which: () => null })).toBeUndefined()
 })
 
 test('Chromium discovery finds standard Windows browser installations outside PATH', () => {
