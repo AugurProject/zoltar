@@ -2,7 +2,7 @@
 
 import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
-import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address } from '@zoltar/shared/ethereum'
+import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../protocol/deploymentHelpers.js'
@@ -12,7 +12,7 @@ import { createInitialTransactionTrayState, markTransactionPrepared, markTransac
 import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib/sepoliaDeploymentConfig.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle } from '../../contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '../../contractArtifact.js'
 import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
 
 const require = createRequire(new URL('../../../../package.json', import.meta.url))
@@ -136,6 +136,57 @@ describe('contract deployment internals', () => {
 			} finally {
 				resetEnvironment()
 			}
+		}
+	})
+
+	test('provides exact runtime verification for every mainnet deployment step', () => {
+		const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
+		expect(steps.filter(step => step.expectedRuntimeCodeHash === undefined).map(step => step.id)).toEqual([])
+	})
+
+	test('loads mainnet status with exact code verification and deploys a non-proxy step', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
+			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+			const scalarStep = steps.find(step => step.id === 'scalarOutcomes')
+			if (oracleStep === undefined || scalarStep === undefined) throw new Error('Expected mainnet oracle and scalar deployment steps')
+			const oracleRuntimeCode = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}` as Hex
+			const scalarRuntimeCode = `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}` as Hex
+			const snapshot = await loadDeploymentStatusOracleSnapshot(
+				createMockReadClient({
+					getCode: async ({ address }) => {
+						if (address === oracleStep.address) return oracleRuntimeCode
+						if (address === PROXY_DEPLOYER_ADDRESS) return PROXY_DEPLOYER_RUNTIME_CODE
+						throw new Error(`Unexpected mainnet status code address: ${address}`)
+					},
+					readContract: async ({ functionName }) => {
+						if (functionName === 'getDeploymentMask') return 1n as never
+						throw new Error(`Unexpected mainnet status read: ${functionName}`)
+					},
+				}) as ReadClient,
+			)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
+
+			let transactionTarget: Address | null | undefined
+			const transactionHash = `0x${'8'.repeat(64)}` as Hash
+			expect(
+				await scalarStep.deploy(
+					asWriteClient({
+						getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
+						sendTransaction: async request => {
+							transactionTarget = request.to
+							return transactionHash
+						},
+						waitForTransactionReceipt: async () => hashReceipt('success'),
+					}),
+				),
+			).toBe(transactionHash)
+			expect(transactionTarget).toBe(PROXY_DEPLOYER_ADDRESS)
+			expect(scalarStep.expectedRuntimeCodeHash).toBe(keccak256(scalarRuntimeCode))
+		} finally {
+			resetEnvironment()
 		}
 	})
 

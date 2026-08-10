@@ -56,6 +56,23 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Record<De
 	zoltar: '0x9b797edc92fcdede36c51e21c1c74475241b5ca4f0a67a21ccb8b13f55bf3c3f',
 	zoltarQuestionData: '0x2bbf78668b76b95ae32ce1e524cad6a17b708a9acb4e55c02a4411953ba70515',
 }
+const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
+	escalationGameClaimDelegate: '0x9409a4d3d433df7b0d52a1eb46d4c55b07abf2b615517e6071e1a020ada81c3c',
+	escalationGameFactory: '0x5d4a56e53f2630b67558a2b971f77513a17baf96a107f8bb50e960aff7d032f8',
+	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
+	openOracle: '0x665aa24c6bb92eb4df9ddcd4823e7aa93c680f74acbcb2e1134207fbba8def77',
+	priceOracleManagerAndOperatorQueuerFactory: '0x0195845335bef91a0723899fcaffff817f8096cf0cd1610f2c3018f7ba0f912b',
+	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
+	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
+	securityPoolFactory: '0x4b415e64dd6bae94f2b762c97f07d8ddb9eb90002b25bfbc984c3a8b3f8927c8',
+	securityPoolForker: '0x8f3867f423272c72fe78c84dc36e4c9a3fb3b6f1319fc8d335149335738aad79',
+	securityPoolUtils: '0x24e747f6929ab80119abc343a5509457eb6d743deaf41029796898f0a5c47420',
+	shareTokenFactory: '0xe1b2a05563d61c10731c905dfab3e36725ea500b360236ff47b43530b89a485b',
+	uniformPriceDualCapBatchAuctionFactory: '0xec6a9ccf60f42f0d31bf091162b96b49983b15a65a5a669f9df8024fff4b1504',
+	zoltar: '0xcd492d724f7c0672cd4c51edab4315cd07a043bb65d83c3e49938f9e58c9daa4',
+	zoltarQuestionData: '0x2bbf78668b76b95ae32ce1e524cad6a17b708a9acb4e55c02a4411953ba70515',
+}
 const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
 	{
 		inputs: [
@@ -526,7 +543,9 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return steps.map(step => ({
 		...step,
-		...(profile.id === 'sepolia' || step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'sepolia' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'mainnet' ? { expectedRuntimeCodeHash: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'simulation' && step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.proxyDeployer } : {}),
 		...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
 	}))
 }
