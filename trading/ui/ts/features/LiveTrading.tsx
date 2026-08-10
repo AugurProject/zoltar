@@ -242,8 +242,9 @@ function parsedUniverseId(selectedUniverseId: string | undefined) {
 	if (selectedUniverseId === undefined) return undefined
 	try {
 		return BigInt(selectedUniverseId)
-	} catch {
-		return undefined
+	} catch (error) {
+		if (error instanceof SyntaxError) return undefined
+		throw error
 	}
 }
 

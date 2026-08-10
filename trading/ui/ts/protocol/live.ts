@@ -584,8 +584,9 @@ async function loadAllSecurityPoolDeployments(client: PublicClient, configuratio
 		async anchor => {
 			try {
 				return (await client.getBlock({ blockNumber: anchor.blockNumber })).hash === anchor.blockHash
-			} catch {
-				return false
+			} catch (error) {
+				if (error instanceof Error) return false
+				throw error
 			}
 		},
 		async (start, count, anchor) => {
