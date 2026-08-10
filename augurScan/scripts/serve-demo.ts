@@ -7,7 +7,8 @@ const server = Bun.serve({
 		const url = new URL(request.url)
 		if (url.pathname === '/api/v1/stream') {
 			const emitReorg = url.searchParams.get('reorg') === '1'
-			let timer: ReturnType<typeof setInterval> | undefined
+			const emitBurst = url.searchParams.get('burst') === '1'
+			let timer: ReturnType<typeof setTimeout> | undefined
 			let sequence = 0
 			const stream = new ReadableStream({
 				start(controller) {
@@ -20,11 +21,12 @@ const server = Bun.serve({
 									: `id: ${sequence}\nevent: block\ndata: ${JSON.stringify({ chainId: 1, blockNumber: 23_184_712 + sequence, sequence })}\n\n`,
 							),
 						)
+						timer = setTimeout(send, emitBurst && sequence < 10 ? 150 : 2_500)
 					}
-					timer = setInterval(send, 2_500)
+					timer = setTimeout(send, emitBurst ? 150 : 2_500)
 				},
 				cancel() {
-					if (timer !== undefined) clearInterval(timer)
+					if (timer !== undefined) clearTimeout(timer)
 				},
 			})
 			return new Response(stream, {
