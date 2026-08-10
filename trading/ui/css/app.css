@@ -45,6 +45,7 @@ a {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+select:focus-visible,
 summary:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 3px;
@@ -167,6 +168,34 @@ nav a[aria-current="page"] {
 	justify-content: flex-end;
 	align-items: center;
 	gap: 0.65rem;
+}
+.universe-selector {
+	display: grid;
+	gap: 0.2rem;
+	color: var(--muted);
+	font:
+		9px / 1.2 ui-monospace,
+		monospace;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.universe-selector select {
+	min-width: 150px;
+	max-width: 230px;
+	height: 36px;
+	padding: 0 1.8rem 0 0.65rem;
+	border: 1px solid var(--line-strong);
+	border-radius: 4px;
+	background: var(--surface-raised);
+	color: var(--text);
+	font:
+		11px / 1 ui-monospace,
+		monospace;
+	text-transform: none;
+}
+.universe-selector select:disabled {
+	cursor: wait;
+	opacity: 0.65;
 }
 .network-pill {
 	display: flex;
@@ -1003,6 +1032,10 @@ footer {
 		font-size: 9px;
 		line-height: 1.2;
 	}
+	.universe-selector select {
+		min-width: 125px;
+		max-width: 160px;
+	}
 	.wallet-context {
 		display: none;
 	}
@@ -1031,6 +1064,10 @@ footer {
 }
 
 @media (max-width: 520px) {
+	.site-chrome {
+		isolation: isolate;
+		background: #090d12;
+	}
 	.demo-banner,
 	.runtime-banner {
 		align-items: flex-start;
@@ -1040,9 +1077,19 @@ footer {
 	}
 	.site-header {
 		padding: 0.75rem 1rem 0;
+		background: #090d12;
+		backdrop-filter: none;
 	}
 	.header-actions .wallet-button {
 		padding: 0.55rem;
+	}
+	.header-actions {
+		gap: 0.35rem;
+	}
+	.universe-selector select {
+		min-width: 116px;
+		max-width: 132px;
+		height: 44px;
 	}
 	.brand small {
 		display: none;

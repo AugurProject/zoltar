@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoAttoEthToAttoShares, demoMarket, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -50,7 +50,6 @@ export function MarketList({ market }: { market: DemoMarket }) {
 						<h2>
 							<a href='#/market'>{market.question}</a>
 						</h2>
-						<p>{market.universe}</p>
 					</div>
 					<div class='market-row__price'>{initialized ? <ProbabilityBar yesPercent={yesPercent} /> : <p class='muted'>Conditional price available after initialization.</p>}</div>
 					<dl class='market-row__metrics'>
@@ -313,7 +312,6 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 					<span class='section-kicker'>SecurityPool position</span>
 					<h2>{market.question}</h2>
 				</div>
-				<Status tone='neutral'>{market.universe}</Status>
 			</div>
 			<dl class='fact-list'>
 				<div>
@@ -326,12 +324,6 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 					<dt>ShareToken</dt>
 					<dd>
 						<AddressValue value={market.shareToken} />
-					</dd>
-				</div>
-				<div>
-					<dt>Universe</dt>
-					<dd>
-						{market.universe} · {market.universeId.toString()}
 					</dd>
 				</div>
 				<div>
@@ -386,21 +378,17 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 }
 
 export function Portfolio({ market }: { market: DemoMarket }) {
-	const otherMarket = market.pool === demoMarket('truth-auction').pool ? demoMarket('baseline') : demoMarket('truth-auction')
-	const otherBalances = { yes: 125n * 10n ** 18n, no: 310n * 10n ** 18n, invalid: 400n * 10n ** 18n, lp: 75n * 10n ** 18n }
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
 					<span class='eyebrow'>Positions grouped by SecurityPool</span>
 					<h1>Portfolio</h1>
-					<p>Every balance is shown under the pool and universe that minted its outcome shares.</p>
 				</div>
 				<Status tone='neutral'>Simulated account</Status>
 			</header>
 			<div class='portfolio-groups'>
 				<DemoPortfolioGroup market={market} balances={demoWalletBalances} />
-				<DemoPortfolioGroup market={otherMarket} balances={otherBalances} />
 			</div>
 		</main>
 	)

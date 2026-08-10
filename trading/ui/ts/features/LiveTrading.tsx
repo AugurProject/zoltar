@@ -9,10 +9,11 @@ import {
 	approveLpRouter,
 	approveRouter,
 	connectWallet,
+	createSecurityPoolDeploymentIndex,
 	createTradingPublicClient,
 	createTradingWalletClient,
-	discoverAllLiveMarkets,
-	discoverLiveMarketPage,
+	discoverAllLiveMarketsInUniverse,
+	discoverLiveUniverseMarketPage,
 	loadLiveBalances,
 	liveBalancesForMarket,
 	marketAcceptsNewRisk,
@@ -36,6 +37,7 @@ import {
 	type LiveMarket,
 	type MarketLifecycle,
 	type SettlementOperation,
+	type SecurityPoolDeployment,
 	type ShareOutcome,
 } from '../protocol/live.ts'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.ts'
@@ -154,10 +156,8 @@ function MarketShareIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' |
 				</dd>
 			</div>
 			<div>
-				<dt>Universe / question</dt>
-				<dd>
-					{market.universeId.toString()} / {market.questionId.toString()}
-				</dd>
+				<dt>Question ID</dt>
+				<dd>{market.questionId.toString()}</dd>
 			</div>
 			<div>
 				<dt>Outcome token IDs</dt>
@@ -233,7 +233,35 @@ export function settlementBalanceLabel(balanceState: BalanceState, balance: bigi
 	return formatShareAmount(balance)
 }
 
-export function LiveTrading({ route, configuration, configurationError, onWorkflowLockChange }: { route: string; configuration: DeploymentConfiguration | undefined; configurationError: string | undefined; onWorkflowLockChange(locked: boolean): void }) {
+export function filterMarketsByUniverse(markets: readonly LiveMarket[], selectedUniverseId: string | undefined) {
+	if (selectedUniverseId === undefined) return []
+	return markets.filter(market => market.universeId.toString() === selectedUniverseId)
+}
+
+function parsedUniverseId(selectedUniverseId: string | undefined) {
+	if (selectedUniverseId === undefined) return undefined
+	try {
+		return BigInt(selectedUniverseId)
+	} catch {
+		return undefined
+	}
+}
+
+export function LiveTrading({
+	route,
+	configuration,
+	configurationError,
+	selectedUniverseId,
+	onUniversesChange = () => undefined,
+	onWorkflowLockChange,
+}: {
+	route: string
+	configuration: DeploymentConfiguration | undefined
+	configurationError: string | undefined
+	selectedUniverseId?: string | undefined
+	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	onWorkflowLockChange(locked: boolean): void
+}) {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	const [selectedPool, setSelectedPool] = useState<Address>()
 	const [account, setAccount] = useState<Address>()
@@ -260,6 +288,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	const [discoveryError, setDiscoveryError] = useState<string>()
 	const [marketPage, setMarketPage] = useState({ start: 0n, total: 0n, previousStart: undefined as bigint | undefined, nextStart: undefined as bigint | undefined })
 	const marketListRef = useRef<HTMLElement>(null)
+	const deploymentIndex = useRef(createSecurityPoolDeploymentIndex<SecurityPoolDeployment, { blockNumber: bigint; blockHash: Hash }>()).current
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
 	const previousRoute = useRef(route)
 	const marketDetailRef = useRef<HTMLElement>(null)
@@ -288,7 +317,9 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		},
 		[onWorkflowLockChange],
 	)
-	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
+	const visibleMarkets = filterMarketsByUniverse(markets, selectedUniverseId)
+	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
+	const selected = visibleMarkets.find(market => market.pool === selectedPool) ?? visibleMarkets[0]
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
@@ -325,13 +356,15 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			const client = configuredClient(nextConfiguration)
 			await validateLiveDeployment(client, nextConfiguration)
 			if (!discoveryRequests.isCurrent(request)) return
-			const discovered = route === 'portfolio' ? await discoverAllLiveMarkets(client, nextConfiguration) : await discoverLiveMarketPage(client, nextConfiguration, requestedStart)
+			const requestedUniverseId = parsedUniverseId(selectedUniverseId)
+			const discovered = route === 'portfolio' ? await discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, deploymentIndex) : await discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, deploymentIndex)
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, positionWorkflowLockedRef.current, liquidityWorkflowLockedRef.current)) {
 				setDiscoveryState('ready')
 				return
 			}
 			setMarkets(discovered.markets)
+			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId)
 			setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			setSelectedPool(currentPool => marketSelectionAfterDiscovery(discovered.markets, currentPool, requestedStart === marketPage.start))
 			setDiscoveryState('ready')
@@ -387,7 +420,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			return
 		}
 		void refresh(configuration, 0n)
-	}, [configuration, configurationError])
+	}, [configuration, configurationError, selectedUniverseId])
 
 	useEffect(() => {
 		if (positionWorkflowLockedRef.current) return
@@ -458,7 +491,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			setPortfolioBalanceError(undefined)
 			return
 		}
-		const emptyEntries = markets.map(market => ({ market, balances: undefined, error: market.loadError }))
+		const emptyEntries = visibleMarkets.map(market => ({ market, balances: undefined, error: market.loadError }))
 		setPortfolioEntries(emptyEntries)
 		if (configuration === undefined || account === undefined) {
 			setPortfolioBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
@@ -468,7 +501,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		setPortfolioBalanceState('loading')
 		setPortfolioBalanceError(undefined)
 		const client = configuredClient(configuration)
-		void mapWithConcurrency(markets, 6, async (market, index) => {
+		void mapWithConcurrency(visibleMarkets, 6, async (market, index) => {
 			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
 			let entry: PortfolioBalanceEntry
 			try {
@@ -492,7 +525,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				setPortfolioBalanceError(error instanceof Error ? error.message : 'Portfolio balance refresh failed')
 			})
 		return () => portfolioBalanceRequests.invalidate()
-	}, [account, configuration, markets, portfolioBalanceRequests, portfolioRefreshNonce, route, walletContextInvalidated])
+	}, [account, configuration, markets, portfolioBalanceRequests, portfolioRefreshNonce, route, selectedUniverseId, walletContextInvalidated])
 
 	useEffect(() => {
 		const request = balanceRequests.begin()
@@ -763,8 +796,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			</main>
 		)
 	let discoveryContent
-	if (discoveryState === 'loading' && markets.length === 0) discoveryContent = <p role='status'>Discovering SecurityPools from the configured factory…</p>
-	else if (discoveryState === 'error' && markets.length === 0)
+	if (discoveryState === 'loading' && visibleMarkets.length === 0) discoveryContent = <p role='status'>Discovering SecurityPools from the configured factory…</p>
+	else if (discoveryState === 'error' && visibleMarkets.length === 0)
 		discoveryContent = (
 			<div>
 				<p class='error' role='alert'>
@@ -775,9 +808,9 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				</button>
 			</div>
 		)
-	else if (markets.length === 0) discoveryContent = <p>No SecurityPools are deployed on this configured chain.</p>
+	else if (visibleMarkets.length === 0) discoveryContent = <p>No SecurityPools are deployed in the selected universe.</p>
 	else {
-		const marketButtons = markets.map(market => (
+		const marketButtons = visibleMarkets.map(market => (
 			<button
 				key={market.pool}
 				class='live-market-button'
@@ -797,9 +830,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				}}
 			>
 				<strong>{market.title}</strong>
-				<span>
-					{statusLabel(market, nowSeconds)} · universe {market.universeId.toString()}
-				</span>
+				<span>{statusLabel(market, nowSeconds)}</span>
 				<code>{shortAddress(market.pool)}</code>
 			</button>
 		))
@@ -843,14 +874,14 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							Refresh
 						</button>
 					</div>
-					{discoveryState === 'loading' && markets.length === 0 ? <p role='status'>Discovering SecurityPools…</p> : null}
+					{discoveryState === 'loading' && visibleMarkets.length === 0 ? <p role='status'>Discovering SecurityPools…</p> : null}
 					{discoveryState === 'error' ? (
 						<p class='error' role='alert'>
 							SecurityPool discovery failed: {discoveryError}
 						</p>
 					) : null}
-					{discoveryState === 'ready' && markets.length === 0 ? <p>No SecurityPools are deployed on this configured chain.</p> : null}
-					{discoveryState === 'error' ? null : <LivePortfolio entries={portfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <p>No SecurityPools are deployed in the selected universe.</p> : null}
+					{discoveryState === 'error' ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
 				</section>
 			</main>
 		)
@@ -888,7 +919,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								Previous pools
 							</button>
 							<span>
-								{(marketPage.start + 1n).toString()}–{(marketPage.start + BigInt(markets.length)).toString()} of {marketPage.total.toString()}
+								{(marketPage.start + 1n).toString()}–{(marketPage.start + BigInt(visibleMarkets.length)).toString()} of {marketPage.total.toString()}
 							</span>
 							<button class='secondary-action' disabled={marketPage.nextStart === undefined || discoveryState === 'loading' || workflowLocked} onClick={() => loadMarketPage(marketPage.nextStart)}>
 								Next pools
@@ -906,7 +937,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								</button>
 								<div class='section-heading'>
 									<div>
-										<span class='section-kicker'>Exact pool and branch</span>
+										<span class='section-kicker'>SecurityPool</span>
 										<h2>{selected.title}</h2>
 									</div>
 									<Status tone='warn'>Market data unavailable</Status>
@@ -926,7 +957,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 							</button>
 							<div class='section-heading'>
 								<div>
-									<span class='section-kicker'>Exact pool and branch</span>
+									<span class='section-kicker'>SecurityPool</span>
 									<h2>{selected.title}</h2>
 								</div>
 								<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
@@ -944,10 +975,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 									<dd>{selected.pair === undefined ? 'Not created' : <AddressValue value={selected.pair} />}</dd>
 								</div>
 								<div>
-									<dt>Universe / question</dt>
-									<dd>
-										{selected.universeId.toString()} / {selected.questionId.toString()}
-									</dd>
+									<dt>Question ID</dt>
+									<dd>{selected.questionId.toString()}</dd>
 								</div>
 								<div>
 									<dt>Question end</dt>
@@ -1561,7 +1590,6 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	return (
 		<div class='portfolio-groups' aria-busy={balanceState === 'loading'}>
-			<p>Balances are grouped by the SecurityPool and universe that minted their outcome shares.</p>
 			{balanceState === 'disconnected' ? <p>Connect a wallet to load the positions for these SecurityPools.</p> : null}
 			{balanceState === 'loading' ? <p role='status'>Loading balances separately for each SecurityPool…</p> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? 'Portfolio balances could not be loaded.'} retry={retryBalances} /> : null}
@@ -1573,7 +1601,7 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 							<span class='section-kicker'>SecurityPool position</span>
 							<h3>{entry.market.title}</h3>
 						</div>
-						<Status tone={entry.error === undefined ? 'neutral' : 'warn'}>{entry.error === undefined ? `Universe ${entry.market.universeId.toString()}` : 'Balance unavailable'}</Status>
+						{entry.error === undefined ? null : <Status tone='warn'>Balance unavailable</Status>}
 					</div>
 					<dl class='metrics'>
 						<MarketShareIdentityRows market={entry.market} />

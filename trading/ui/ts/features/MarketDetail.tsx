@@ -375,10 +375,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						</div>
 						<dl class='fact-list'>
 							<div>
-								<dt>Universe</dt>
-								<dd>{market.universe}</dd>
-							</div>
-							<div>
 								<dt>Ends</dt>
 								<dd>{market.endTime}</dd>
 							</div>

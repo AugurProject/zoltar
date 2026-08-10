@@ -22,6 +22,7 @@ import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoE
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
 import {
 	collateMarketDiscoveryResults,
+	createSecurityPoolDeploymentIndex,
 	liveBalancesForMarket,
 	marketAcceptsNewRisk,
 	marketDiscoveryPage,
@@ -32,6 +33,8 @@ import {
 	minimumAfterSlippage,
 	retainApprovedMaximum,
 	retainApprovedMinimum,
+	refreshSecurityPoolDeploymentIndex,
+	selectUniverseDeployments,
 	settlementAvailability,
 	shareBalanceScope,
 	type LiveMarket,
@@ -204,6 +207,123 @@ describe('standalone trading UI model', () => {
 		expect(marketDiscoveryPage(51n, 99n)).toEqual({ start: 50n, count: 1n, previousStart: 25n, nextStart: undefined })
 		expect(marketDiscoveryPage(0n)).toEqual({ start: 0n, count: 0n, previousStart: undefined, nextStart: undefined })
 		expect(() => marketDiscoveryPage(1n, -1n)).toThrow('Invalid market discovery page')
+	})
+
+	test('enumerates universes while selecting pools from only one universe', () => {
+		const deployments = [
+			{ universeId: 1n, pool: 'first' },
+			{ universeId: 2n, pool: 'child' },
+			{ universeId: 1n, pool: 'second' },
+		]
+		const firstUniverseDeployments = [
+			{ universeId: 1n, pool: 'first' },
+			{ universeId: 1n, pool: 'second' },
+		]
+		expect(selectUniverseDeployments(deployments, 1n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
+		expect(selectUniverseDeployments(deployments, 99n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
+		expect(selectUniverseDeployments([], undefined)).toEqual({ universeIds: [], selectedUniverseId: undefined, selectedDeployments: [] })
+	})
+
+	test('increments the deployment index without rereading known registry ranges', async () => {
+		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
+		let total = 5n
+		let anchor = 'block-1'
+		const deployments = Array.from({ length: 7 }, (_value, position) => ({ universeId: position < 3 ? 1n : 2n, pool: `pool-${position}` }))
+		const rangeReads: Array<{ start: bigint; count: bigint }> = []
+		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
+			rangeReads.push({ start, count })
+			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
+		}
+		const loadSnapshot = async () => ({ anchor, total })
+		const isAnchorCanonical = async () => true
+		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
+		expect(rangeReads).toEqual([
+			{ start: 0n, count: 2n },
+			{ start: 2n, count: 2n },
+			{ start: 4n, count: 1n },
+		])
+		rangeReads.length = 0
+		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
+		expect(rangeReads).toEqual([])
+		rangeReads.length = 0
+		total = 7n
+		anchor = 'block-2'
+		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments)
+		expect(rangeReads).toEqual([{ start: 5n, count: 2n }])
+	})
+
+	test('serializes deployment-index waiters without duplicate appends', async () => {
+		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
+		const deployments = Array.from({ length: 5 }, (_value, position) => ({ universeId: 1n, pool: `pool-${position}` }))
+		let releaseFirstRange: () => void = () => undefined
+		let announceFirstRange: () => void = () => undefined
+		const firstRangeStarted = new Promise<void>(resolve => {
+			announceFirstRange = resolve
+		})
+		const firstRangeGate = new Promise<void>(resolve => {
+			releaseFirstRange = resolve
+		})
+		let activeRangeReads = 0
+		let maximumActiveRangeReads = 0
+		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
+			activeRangeReads += 1
+			maximumActiveRangeReads = Math.max(maximumActiveRangeReads, activeRangeReads)
+			if (start === 0n) {
+				announceFirstRange()
+				await firstRangeGate
+			}
+			await Promise.resolve()
+			activeRangeReads -= 1
+			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
+		}
+		const isAnchorCanonical = async () => true
+		const first = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-1', total: 2n }), isAnchorCanonical, loadRange, 5n)
+		await firstRangeStarted
+		const second = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-2', total: 4n }), isAnchorCanonical, loadRange, 5n)
+		const third = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-3', total: 5n }), isAnchorCanonical, loadRange, 5n)
+		releaseFirstRange()
+		await Promise.all([first, second, third])
+		expect(maximumActiveRangeReads).toBe(1)
+		expect(index.deployments).toEqual(deployments)
+	})
+
+	test('reloads the deployment index after an equal-count registry replacement', async () => {
+		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
+		let deployments = [
+			{ universeId: 1n, pool: 'parent' },
+			{ universeId: 2n, pool: 'orphaned-child' },
+		]
+		let canonicalAnchor = 'block-1'
+		const loadRange = async (start: bigint, count: bigint, _anchor: string) => deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
+		const isAnchorCanonical = async (candidate: string) => candidate === canonicalAnchor
+		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
+		deployments = [
+			{ universeId: 3n, pool: 'canonical-parent' },
+			{ universeId: 2n, pool: 'orphaned-child' },
+		]
+		canonicalAnchor = 'block-2'
+		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
+	})
+
+	test('accepts a canonical registry snapshot when the chain tip advances during loading', async () => {
+		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
+		const deployments = [{ universeId: 1n, pool: 'parent' }]
+		let tip = 'block-1'
+		const canonicalAnchors = new Set(['block-1', 'block-2'])
+		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
+			tip = 'block-2'
+			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
+		}
+		const result = await refreshSecurityPoolDeploymentIndex(
+			index,
+			'chain:factory',
+			async () => ({ anchor: tip, total: 1n }),
+			async anchor => canonicalAnchors.has(anchor),
+			loadRange,
+		)
+		expect(tip).toBe('block-2')
+		expect(result).toEqual(deployments)
+		expect(index.anchor).toBe('block-1')
 	})
 
 	test('bounds asynchronous portfolio work while preserving registry order', async () => {

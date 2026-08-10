@@ -76,6 +76,7 @@ export function demoMarket(scenario: string): DemoMarket {
 	let universeId = 1n
 	if (scenario === 'truth-auction') universeId = 2n
 	if (scenario === 'max-token-ids') universeId = (1n << 248n) - 1n
+	if (scenario === 'max-token-ids-alt') universeId = (1n << 248n) - 2n
 	const common = {
 		id: 'eth-10k-2027',
 		question: 'Will ETH trade above $10,000 before 1 January 2027?',

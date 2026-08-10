@@ -63,14 +63,14 @@ describe('live portfolio scope', () => {
 			cleanupRendered = rendered.cleanup
 			expect(rendered.container.textContent).toContain(pool)
 			expect(rendered.container.textContent).toContain(shareToken)
-			expect(rendered.container.textContent).toContain('7 / 9')
+			expect(rendered.container.textContent).toContain('Question ID9')
 			expect(rendered.container.textContent).toContain('INVALID 1792 · YES 1793 · NO 1794')
 			expect(rendered.container.textContent).not.toContain('0 shares')
 			if (state === 'error') expect(rendered.container.textContent).toContain('RPC unavailable')
 		})
 	}
 
-	test('renders separate balance groups for each exact SecurityPool and universe', async () => {
+	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
 		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
 		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
@@ -88,21 +88,22 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(secondPool)
-		expect(rendered.container.textContent).toContain('7 / 9')
-		expect(rendered.container.textContent).toContain('8 / 10')
+		expect(rendered.container.textContent).toContain('Question ID9')
+		expect(rendered.container.textContent).toContain('Question ID10')
 		expect(rendered.container.textContent).toContain('1 shares')
 		expect(rendered.container.textContent).toContain('4 shares')
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
+		expect(rendered.container.textContent).not.toContain('Balances are grouped by SecurityPool')
 	})
 
-	test('shows demo balances as separate pool positions instead of a wallet total', async () => {
+	test('shows demo balances only for the globally selected universe', async () => {
 		const rendered = await renderIntoDocument(<Portfolio market={demoMarket('baseline')} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
-		expect(rendered.container.textContent).toContain('Genesis universe')
-		expect(rendered.container.textContent).toContain('Child universe · YES branch')
+		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(1)
+		expect(rendered.container.textContent).not.toContain('Genesis universe')
+		expect(rendered.container.textContent).not.toContain('Child universe · YES branch')
 		expect(rendered.container.textContent).not.toContain('Total YES')
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 	})

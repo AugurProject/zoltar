@@ -57,12 +57,57 @@ function networkToneClass(scenario: string, demo: boolean, liveDeploymentStatus:
 	return ''
 }
 
+export type UniverseOption = Readonly<{ id: string; label: string; accessibleLabel?: string }>
+
+export function UniverseSelector({ options, selectedId, disabled, onChange }: { options: readonly UniverseOption[]; selectedId: string | undefined; disabled: boolean; onChange(selectedId: string): void }) {
+	const selected = options.find(option => option.id === selectedId)
+	return (
+		<label class='universe-selector'>
+			<span>Universe</span>
+			<select aria-label='Universe' title={selected?.accessibleLabel ?? selected?.label} value={selectedId ?? ''} disabled={disabled || options.length === 0} onChange={event => onChange(event.currentTarget.value)}>
+				{options.length === 0 ? (
+					<option value=''>Unavailable</option>
+				) : (
+					options.map(option => (
+						<option key={option.id} value={option.id} aria-label={option.accessibleLabel ?? option.label} title={option.accessibleLabel ?? option.label}>
+							{option.label}
+						</option>
+					))
+				)}
+			</select>
+		</label>
+	)
+}
+
+function demoUniverseChoices(scenario: string) {
+	const choices = scenario === 'max-token-ids' ? [demoMarket(scenario), demoMarket('max-token-ids-alt'), demoMarket('baseline'), demoMarket('truth-auction')] : [demoMarket(scenario), demoMarket('baseline'), demoMarket('truth-auction')]
+	return choices.filter((market, index) => choices.findIndex(candidate => candidate.universeId === market.universeId) === index)
+}
+
+export function compactUniverseId(universeId: string) {
+	if (universeId.length <= 18) return universeId
+	return `${universeId.slice(0, 3)}…${universeId.slice(-3)}`
+}
+
+function demoUniverseLabel(market: ReturnType<typeof demoMarket>) {
+	if (market.universeId === 1n && market.universe === 'Genesis universe') return 'Genesis'
+	if (market.universeId === 1n && market.universe === 'Parent universe · forked') return 'Parent · forked'
+	if (market.universeId === 2n && market.universe === 'Child universe · YES branch') return 'YES child'
+	return `ID ${compactUniverseId(market.universeId.toString())}`
+}
+
 export function App() {
+	const query = new URLSearchParams(window.location.search)
+	const demo = query.get('demo') === '1'
+	const scenario = query.get('scenario') ?? 'baseline'
+	const initialDemoMarket = demoMarket(scenario)
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
 	const [workflowLocked, setWorkflowLocked] = useState(false)
+	const [selectedUniverseId, setSelectedUniverseId] = useState<string | undefined>(demo ? initialDemoMarket.universeId.toString() : undefined)
+	const [liveUniverseOptions, setLiveUniverseOptions] = useState<readonly UniverseOption[]>([])
 	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
 	routeRef.current = route
@@ -71,10 +116,25 @@ export function App() {
 		workflowLockedRef.current = locked
 		setWorkflowLocked(locked)
 	}, [])
-	const query = new URLSearchParams(window.location.search)
-	const demo = query.get('demo') === '1'
-	const scenario = query.get('scenario') ?? 'baseline'
-	const market = demoMarket(scenario)
+	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => {
+		const options = universeIds.map(universeId => {
+			const id = universeId.toString()
+			return { id, label: `ID ${compactUniverseId(id)}`, accessibleLabel: `Universe ID ${id}` }
+		})
+		setLiveUniverseOptions(options)
+		setSelectedUniverseId(current => {
+			if (current !== undefined && options.some(option => option.id === current)) return current
+			return authoritativeSelection?.toString()
+		})
+	}, [])
+	const demoMarkets = demoUniverseChoices(scenario)
+	const demoUniverseOptions = demoMarkets.map(choice => {
+		const id = choice.universeId.toString()
+		return { id, label: demoUniverseLabel(choice), accessibleLabel: choice.universeId === 1n || choice.universeId === 2n ? choice.universe : `Universe ID ${id}` }
+	})
+	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
+	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
+	const showUniverseSelector = route !== 'help' && route !== 'developer'
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
@@ -121,7 +181,7 @@ export function App() {
 	if (!demo) {
 		if (route === 'help') content = <Help />
 		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
-		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} onWorkflowLockChange={updateWorkflowLock} />
+		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} selectedUniverseId={selectedUniverseId} onUniversesChange={updateLiveUniverses} onWorkflowLockChange={updateWorkflowLock} />
 	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
@@ -186,6 +246,7 @@ export function App() {
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>
 						{demo ? <span class='wallet-context'>0x8ba1…ba72</span> : null}
+						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
 					</div>
 				</header>
 			</div>

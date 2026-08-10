@@ -74,6 +74,7 @@ await command('Runtime.enable')
 await command('Log.enable')
 const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity ceiling') === true && document.body.textContent?.includes('Available minting capacity') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); return !['binary shares for', 'invalid is insurance', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei'].some(phrase => text.includes(phrase)); })()`
+const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Universe'`
 const scenarios = [
 	{
 		name: 'disconnected-market-list',
@@ -84,13 +85,13 @@ const scenarios = [
 	},
 	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },
-	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion})` },
+	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion}) && (${universeSelectorAssertion})` },
 	{
 		name: 'market-list-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const exactPoolVisible = document.body.textContent?.includes('SecurityPool used by this AMM') === true; const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const capacityFactsVisible = ${capacityFactsAssertion}; if (!exactPoolVisible || !capacityFactsVisible || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, capacityFactsVisible, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
+		assertExpression: `(() => { const exactPoolVisible = document.body.textContent?.includes('SecurityPool used by this AMM') === true; const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const selectorHeight = document.querySelector('.universe-selector select')?.getBoundingClientRect().height ?? 0; const capacityFactsVisible = ${capacityFactsAssertion}; if (!exactPoolVisible || !capacityFactsVisible || selectorHeight < 44 || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, capacityFactsVisible, selectorHeight, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
@@ -158,35 +159,42 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=baseline#/portfolio',
-		assertExpression: `(() => { const text = document.body.textContent ?? ''; const checks = { twoPoolGroups: document.querySelectorAll('[data-portfolio-pool]').length === 2, groupedHeading: text.includes('Positions grouped by SecurityPool'), parentUniverse: text.includes('Genesis universe'), childUniverse: text.includes('Child universe · YES branch'), noRepeatedScopeFooter: !text.includes('These balances and LP claims belong only'), noLiveRpc: !text.includes('live RPC'), noBalanceScope: !text.includes('Balance scope'), noValidResolutionSlogan: !text.includes('Trade valid-resolution outcomes'), noInvalidReserveSlogan: !text.includes('INVALID is insurance, not a traded reserve'), noDerivedFrom: !text.includes('Derived from') }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(() => { const text = document.body.textContent ?? ''; const mainText = document.querySelector('main')?.textContent ?? ''; const checks = { oneSelectedUniversePool: document.querySelectorAll('[data-portfolio-pool]').length === 1, groupedHeading: text.includes('Positions grouped by SecurityPool'), selector: ${universeSelectorAssertion}, noRepeatedUniverse: !mainText.includes('Genesis universe') && !mainText.includes('Child universe'), noRepeatedScopeFooter: !text.includes('These balances and LP claims belong only'), noLiveRpc: !text.includes('live RPC'), noBalanceScope: !text.includes('Balance scope'), noValidResolutionSlogan: !text.includes('Trade valid-resolution outcomes'), noInvalidReserveSlogan: !text.includes('INVALID is insurance, not a traded reserve'), noDerivedFrom: !text.includes('Derived from') }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'portfolio-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/portfolio',
-		assertExpression: `document.querySelectorAll('[data-portfolio-pool]').length === 2 && !document.body.textContent?.includes('Balance scope') && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `document.querySelectorAll('[data-portfolio-pool]').length === 1 && !document.body.textContent?.includes('Balance scope') && document.querySelector('.universe-selector select')?.getBoundingClientRect().height === 44 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{
-		name: 'portfolio-second-pool-mobile',
+		name: 'portfolio-child-universe-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/portfolio',
-		assertExpression: `document.body.textContent?.includes('Child universe · YES branch') === true && document.querySelectorAll('[data-portfolio-pool]').length === 2 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
-		scrollY: 1_200,
+		evaluate: `(() => { const select = document.querySelector('.universe-selector select'); if (!(select instanceof HTMLSelectElement)) return false; select.value = '2'; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
+		assertExpression: `document.querySelector('.universe-selector select')?.value === '2' && document.querySelectorAll('[data-portfolio-pool]').length === 1 && document.querySelector('main')?.textContent?.includes('0x4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{
 		name: 'portfolio-max-token-ids-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=max-token-ids#/portfolio',
-		assertExpression: `document.body.textContent?.includes('${((1n << 256n) - 256n).toString()}') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `(() => { const selector = document.querySelector('.universe-selector select'); const label = document.querySelector('.universe-selector > span'); const longOptions = selector instanceof HTMLSelectElement ? [...selector.options].filter(option => option.value.length > 18) : []; return document.body.textContent?.includes('${((1n << 256n) - 256n).toString()}') === true && selector?.value === '${((1n << 248n) - 1n).toString()}' && selector?.selectedOptions[0]?.textContent?.includes('…') === true && selector?.selectedOptions[0]?.getAttribute('aria-label') === 'Universe ID ${((1n << 248n) - 1n).toString()}' && longOptions.length === 2 && longOptions[0]?.textContent !== longOptions[1]?.textContent && label?.textContent === 'Universe' && label.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 		scrollY: 240,
 	},
 	{ name: 'ended', width: 1440, height: 900, path: '/?demo=1&scenario=ended#/market', assertExpression: `document.body.textContent?.includes('Trading closed') === true && document.body.textContent?.includes('Waiting for input') !== true` },
 	{ name: 'truth-auction', width: 1440, height: 900, path: '/?demo=1&scenario=truth-auction#/market' },
 	{ name: 'truth-auction-liquidity', width: 1440, height: 900, path: '/?demo=1&scenario=truth-auction#/liquidity' },
-	{ name: 'truth-auction-liquidity-mobile', width: 390, height: 844, path: '/?demo=1&scenario=truth-auction#/liquidity', scrollY: 420 },
+	{
+		name: 'truth-auction-liquidity-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=truth-auction#/liquidity',
+		scrollY: 420,
+		postScrollAssertExpression: `(() => { const chrome = document.querySelector('.site-chrome'); const header = document.querySelector('.site-header'); if (!(chrome instanceof HTMLElement) || !(header instanceof HTMLElement)) return false; const chromeStyle = getComputedStyle(chrome); const headerStyle = getComputedStyle(header); return chromeStyle.isolation === 'isolate' && headerStyle.backdropFilter === 'none' && headerStyle.backgroundColor === 'rgb(9, 13, 18)' })()`,
+	},
 	{ name: 'forked-mobile', width: 390, height: 844, path: '/?demo=1&scenario=forked#/market' },
 	{ name: 'resolved-invalid', width: 1440, height: 900, path: '/?demo=1&scenario=resolved-invalid#/market' },
 	{
@@ -255,6 +263,11 @@ try {
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })
 			await Bun.sleep(300)
+		}
+		if ('postScrollAssertExpression' in scenario) {
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.postScrollAssertExpression, returnByValue: true })
+			const result = evaluated.result
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Post-scroll browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 		}
 		const result = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
 		if (typeof result.data !== 'string') throw new Error(`Screenshot data missing for ${scenario.name}`)

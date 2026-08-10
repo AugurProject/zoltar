@@ -402,7 +402,7 @@ export function marketDiscoveryPage(total: bigint, requestedStart = 0n, pageSize
 	}
 }
 
-type SecurityPoolDeployment = Readonly<{
+export type SecurityPoolDeployment = Readonly<{
 	securityPool: Address
 	shareToken: Address
 	universeId: bigint
@@ -515,22 +515,126 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	}
 }
 
-export async function discoverLiveMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedStart = 0n, pageSize = 25n) {
-	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount' })
-	const page = marketDiscoveryPage(count, requestedStart, pageSize)
-	if (page.count === 0n) return { ...page, total: count, markets: [] }
-	const deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [page.start, page.count] })
-	const results = await Promise.allSettled(deployments.map(async deployment => await loadLiveMarket(client, configuration, deployment)))
-	return { ...page, total: count, markets: collateMarketDiscoveryResults(deployments, results, configuration.feeBps) }
+export type SecurityPoolDeploymentIndex<Deployment, Anchor> = {
+	key: string | undefined
+	deployments: Deployment[]
+	anchor: Anchor | undefined
+	pending: Promise<void> | undefined
 }
 
-export async function discoverAllLiveMarkets(client: PublicClient, configuration: DeploymentConfiguration, pageSize = 25n) {
-	const total = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount' })
-	const ranges = marketDiscoveryRanges(total, pageSize)
-	const deploymentPages = await mapWithConcurrency(ranges, 4, async range => await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [range.start, range.count] }))
-	const deployments = deploymentPages.flat()
-	const results = await settleWithConcurrency(deployments, 6, async deployment => await loadLiveMarket(client, configuration, deployment))
-	return { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, markets: collateMarketDiscoveryResults(deployments, results, configuration.feeBps) }
+export function createSecurityPoolDeploymentIndex<Deployment, Anchor>(): SecurityPoolDeploymentIndex<Deployment, Anchor> {
+	return { key: undefined, deployments: [], anchor: undefined, pending: undefined }
+}
+
+export async function refreshSecurityPoolDeploymentIndex<Deployment, Anchor>(
+	index: SecurityPoolDeploymentIndex<Deployment, Anchor>,
+	key: string,
+	loadSnapshot: () => Promise<Readonly<{ anchor: Anchor; total: bigint }>>,
+	isAnchorCanonical: (anchor: Anchor) => Promise<boolean>,
+	loadRange: (start: bigint, count: bigint, anchor: Anchor) => Promise<readonly Deployment[]>,
+	pageSize = 25n,
+) {
+	if (pageSize <= 0n) throw new Error('Invalid market discovery range')
+	const previous = index.pending
+	let snapshot: Deployment[] = []
+	const refresh = (async () => {
+		if (previous !== undefined) await previous.catch(() => undefined)
+		if (index.key !== key) {
+			index.key = key
+			index.deployments = []
+			index.anchor = undefined
+		}
+		if (index.anchor !== undefined && !(await isAnchorCanonical(index.anchor))) {
+			index.deployments = []
+			index.anchor = undefined
+		}
+		const { anchor, total } = await loadSnapshot()
+		if (total < BigInt(index.deployments.length)) index.deployments = []
+		const knownCount = BigInt(index.deployments.length)
+		const ranges = marketDiscoveryRanges(total - knownCount, pageSize).map(range => ({ start: knownCount + range.start, count: range.count }))
+		const pages = await mapWithConcurrency(ranges, 4, async range => await loadRange(range.start, range.count, anchor))
+		const appended = pages.flat()
+		if (BigInt(appended.length) !== total - knownCount) throw new Error('SecurityPool deployment registry returned an incomplete range')
+		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment registry changed during discovery')
+		index.deployments.push(...appended)
+		index.anchor = anchor
+		snapshot = index.deployments.slice()
+	})()
+	index.pending = refresh
+	try {
+		await refresh
+	} finally {
+		if (index.pending === refresh) index.pending = undefined
+	}
+	return snapshot
+}
+
+type RegistryBlockAnchor = Readonly<{ blockNumber: bigint; blockHash: Hash }>
+
+async function loadAllSecurityPoolDeployments(client: PublicClient, configuration: DeploymentConfiguration, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>, pageSize = 25n) {
+	return await refreshSecurityPoolDeploymentIndex(
+		index,
+		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}`,
+		async () => {
+			const anchor = await latestBlockIdentity(client)
+			const parameters = { abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockHash: anchor.blockHash } satisfies { abi: typeof securityPoolFactoryAbi; address: Address; functionName: 'securityPoolDeploymentCount'; blockHash: Hash }
+			const total = await client.readContract(parameters)
+			return { anchor, total }
+		},
+		async anchor => {
+			try {
+				return (await client.getBlock({ blockNumber: anchor.blockNumber })).hash === anchor.blockHash
+			} catch {
+				return false
+			}
+		},
+		async (start, count, anchor) => {
+			const parameters = { abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockHash: anchor.blockHash } satisfies {
+				abi: typeof securityPoolFactoryAbi
+				address: Address
+				functionName: 'securityPoolDeploymentsRange'
+				args: readonly [bigint, bigint]
+				blockHash: Hash
+			}
+			return await client.readContract(parameters)
+		},
+		pageSize,
+	)
+}
+
+export function selectUniverseDeployments<Deployment extends Readonly<{ universeId: bigint }>>(deployments: readonly Deployment[], requestedUniverseId: bigint | undefined) {
+	const seen = new Set<string>()
+	const universeIds: bigint[] = []
+	for (const deployment of deployments) {
+		const key = deployment.universeId.toString()
+		if (seen.has(key)) continue
+		seen.add(key)
+		universeIds.push(deployment.universeId)
+	}
+	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const selectedDeployments = selectedUniverseId === undefined ? [] : deployments.filter(deployment => deployment.universeId === selectedUniverseId)
+	return { universeIds, selectedUniverseId, selectedDeployments }
+}
+
+export async function discoverLiveUniverseMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
+	const deployments = await loadAllSecurityPoolDeployments(client, configuration, index, pageSize)
+	const { universeIds, selectedUniverseId, selectedDeployments } = selectUniverseDeployments(deployments, requestedUniverseId)
+	const page = marketDiscoveryPage(BigInt(selectedDeployments.length), requestedStart, pageSize)
+	const pageEnd = page.start + page.count
+	const pageDeployments = selectedDeployments.filter((_deployment, index) => {
+		const position = BigInt(index)
+		return position >= page.start && position < pageEnd
+	})
+	const results = await Promise.allSettled(pageDeployments.map(async deployment => await loadLiveMarket(client, configuration, deployment)))
+	return { ...page, total: BigInt(selectedDeployments.length), markets: collateMarketDiscoveryResults(pageDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }
+}
+
+export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
+	const deployments = await loadAllSecurityPoolDeployments(client, configuration, index, pageSize)
+	const { universeIds, selectedUniverseId, selectedDeployments } = selectUniverseDeployments(deployments, requestedUniverseId)
+	const results = await settleWithConcurrency(selectedDeployments, 6, async deployment => await loadLiveMarket(client, configuration, deployment))
+	const total = BigInt(selectedDeployments.length)
+	return { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, markets: collateMarketDiscoveryResults(selectedDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }
 }
 
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address, routerAddress: Address): Promise<LiveBalances> {
