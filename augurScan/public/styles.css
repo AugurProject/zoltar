@@ -862,7 +862,7 @@ button[aria-busy="true"]:disabled {
 		monospace;
 }
 .live-update-region {
-	min-height: 37px;
+	min-height: 60px;
 	display: flex;
 	justify-content: flex-end;
 	margin-bottom: 0.75rem;
@@ -899,8 +899,8 @@ button[aria-busy="true"]:disabled {
 
 .live-change-marker {
 	position: absolute;
-	top: 0.35rem;
-	right: 0.35rem;
+	top: 0;
+	left: 50%;
 	z-index: 2;
 	display: inline-flex;
 	width: max-content;
@@ -910,6 +910,8 @@ button[aria-busy="true"]:disabled {
 	border-radius: 4px;
 	font: 700 0.54rem / 1 var(--mono);
 	letter-spacing: 0.04em;
+	pointer-events: none;
+	transform: translate(-50%, -50%);
 	text-transform: uppercase;
 }
 
